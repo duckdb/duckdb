@@ -110,7 +110,7 @@ public:
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Build an ART from a sorted chunk.
-	bool Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *node, idx_t start_idx, idx_t end_idx, idx_t depth);
+	bool Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_t start_idx, idx_t end_idx, idx_t depth);
 	//! Build ARTs from sorted chunks and merge them.
 	bool BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
 

@@ -97,7 +97,7 @@ void Leaf::Remove(row_t row_id) {
 	}
 }
 
-void Leaf::Merge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+void Leaf::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
 
 	if (l_node->type == NodeType::NLeaf) {
 		Leaf::MergeNLeafNLeaf(l_node, r_node);
@@ -106,7 +106,7 @@ void Leaf::Merge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth
 	}
 }
 
-void Leaf::MergeNLeafNLeaf(Node *l_node, Node *r_node) {
+void Leaf::MergeNLeafNLeaf(Node *&l_node, Node *&r_node) {
 
 	Leaf *l_n = (Leaf *)l_node;
 	Leaf *r_n = (Leaf *)r_node;
@@ -125,7 +125,7 @@ void Leaf::MergeNLeafNLeaf(Node *l_node, Node *r_node) {
 	}
 }
 
-void Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+void Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
 
 	// merging any leaf with another node always looks like this
 	// because by our construction a key cannot be contained in another key

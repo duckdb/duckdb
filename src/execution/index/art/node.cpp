@@ -289,15 +289,29 @@ BlockPointer SwizzleablePointer::Serialize(ART &art, duckdb::MetaBlockWriter &wr
 	}
 }
 
-void Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+void SwapNodes(Node *&l_node, Node *&r_node) {
+	auto l_node_temp = l_node;
+	l_node = r_node;
+	r_node = l_node_temp;
+}
+
+void Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
 
 	// TODO: go over this code and see where I do need to delete stuff
 	// TODO: especially when I am creating/growing nodes
 	// TODO: I also might want to delete r_art/r_node in the process
 
+	if (!l_node) {
+		l_node = r_node;
+		r_node = nullptr;
+		return;
+	}
+
 	// make sure that this node has a shorter or equal prefix length than other_node
 	if (l_node->prefix_length > r_node->prefix_length) {
-		Node::ResolvePrefixesAndMerge(r_art, l_art, r_node, l_node, depth);
+		// TODO: not really sure that this will work with the ART references
+		SwapNodes(l_node, r_node);
+		Node::ResolvePrefixesAndMerge(r_art, l_art, l_node, r_node, depth);
 		return;
 	}
 
@@ -352,15 +366,17 @@ void Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *l_node, Node *r
 	}
 }
 
-void Node::Merge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+void Node::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
 
 	// always try to merge the smaller node into the bigger node
 	// because maybe there is enough free space in the bigger node to fit the smaller one
 	// without too much recursion
 
-	// make sure that l_node has the bigger node type
 	if (l_node->type < r_node->type) {
-		Merge(r_art, l_art, r_node, l_node, depth);
+		// swap subtrees to ensure that l_node has the bigger node type
+		// TODO: not really sure that this will work with the ART references
+		SwapNodes(l_node, r_node);
+		Merge(r_art, l_art, l_node, r_node, depth);
 		return;
 	}
 
@@ -395,7 +411,7 @@ void Node::Merge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth
 }
 
 template <class R_NODE_TYPE>
-void Node::MergeNodeWithNode16OrNode4(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+void Node::MergeNodeWithNode16OrNode4(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
 
 	R_NODE_TYPE *r_n = (R_NODE_TYPE *)r_node;
 
@@ -406,7 +422,7 @@ void Node::MergeNodeWithNode16OrNode4(ART &l_art, ART &r_art, Node *l_node, Node
 	}
 }
 
-void Node::MergeNodeWithNode48(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+void Node::MergeNodeWithNode48(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
 
 	Node48 *r_n = (Node48 *)r_node;
 
@@ -420,7 +436,7 @@ void Node::MergeNodeWithNode48(ART &l_art, ART &r_art, Node *l_node, Node *r_nod
 	}
 }
 
-void Node::MergeNodeWithNode256(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+void Node::MergeNodeWithNode256(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
 
 	for (idx_t i = 0; i < 256; i++) {
 		if (r_node->GetChildPos(i) != DConstants::INVALID_INDEX) {
@@ -432,15 +448,16 @@ void Node::MergeNodeWithNode256(ART &l_art, ART &r_art, Node *l_node, Node *r_no
 	}
 }
 
-void Node::MergeByte(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth, idx_t &l_child_pos, idx_t &r_pos,
-                     uint8_t &key_byte) {
+void Node::MergeByte(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, idx_t &l_child_pos,
+                     idx_t &r_pos, uint8_t &key_byte) {
 
 	auto r_child = r_node->GetChild(r_art, r_pos);
 	if (l_child_pos == DConstants::INVALID_INDEX) {
 		Node::InsertChildNode(l_node, key_byte, r_child);
 	} else {
 		// recurse
-		Node::ResolvePrefixesAndMerge(l_art, r_art, l_node->GetChild(l_art, l_child_pos), r_child, depth + 1);
+		auto l_child = l_node->GetChild(l_art, l_child_pos);
+		Node::ResolvePrefixesAndMerge(l_art, r_art, l_child, r_child, depth + 1);
 	}
 }
 

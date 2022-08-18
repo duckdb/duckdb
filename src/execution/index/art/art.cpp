@@ -223,13 +223,13 @@ struct BuildARTOffsets {
 	data_t byte;
 };
 
-bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *node, idx_t start_idx, idx_t end_idx,
+bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_t start_idx, idx_t end_idx,
                 idx_t depth) {
 
 	// we reached a leaf
 	if (keys[start_idx] == keys[end_idx]) {
 
-		auto num_row_ids = end_idx - start_idx;
+		auto num_row_ids = end_idx - start_idx + 1;
 
 		// check for possible constraint violation
 		if ((IsUnique() || IsPrimary()) && num_row_ids != 1) {
@@ -247,25 +247,23 @@ bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *node, idx_t
 
 	} else { // create a new node and recurse
 
-		// we will find at least one offsets entry, otherwise we'd have reached a leaf
+		// we will find at least two offset entries, otherwise we'd have reached a leaf
 		vector<BuildARTOffsets> offsets;
 		auto prefix_start = depth;
-		while (true) {
-
-			idx_t offset = start_idx;
-			for (idx_t i = start_idx + 1; i <= end_idx; i++) {
-				if (keys[i - 1]->data[depth] != keys[i]->data[depth]) {
-					BuildARTOffsets entry(offset, i - 1, keys[i - 1]->data[depth]);
-					offsets.push_back(entry);
-					offset = i;
-				}
-			}
-
-			if (!offsets.empty()) {
-				break;
-			}
+		while (keys[start_idx]->data[depth] == keys[end_idx]->data[depth]) {
 			depth++;
 		}
+
+		idx_t offset = start_idx;
+		for (idx_t i = start_idx + 1; i <= end_idx; i++) {
+			if (keys[i - 1]->data[depth] != keys[i]->data[depth]) {
+				BuildARTOffsets entry(offset, i - 1, keys[i - 1]->data[depth]);
+				offsets.push_back(entry);
+				offset = i;
+			}
+		}
+		BuildARTOffsets entry(offset, end_idx, keys[end_idx]->data[depth]);
+		offsets.push_back(entry);
 
 		auto prefix_length = depth - prefix_start;
 		if (offsets.size() < 5) {
@@ -284,9 +282,9 @@ bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *node, idx_t
 		// recurse on each offset
 		for (idx_t i = 0; i < offsets.size(); i++) {
 			Node *child_node = nullptr;
-			auto constraint_violation = Build(keys, row_ids, child_node, offsets[i].start, offsets[i].end, depth + 1);
+			auto no_violation = Build(keys, row_ids, child_node, offsets[i].start, offsets[i].end, depth + 1);
 			Node::InsertChildNode(node, offsets[i].byte, child_node);
-			if (constraint_violation) {
+			if (!no_violation) {
 				return false;
 			}
 		}
@@ -299,6 +297,7 @@ bool ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &all
 	auto payload_types = logical_types;
 	payload_types.emplace_back(LogicalType::ROW_TYPE);
 
+	auto temp_art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
 	for (;;) {
 		DataChunk ordered_chunk;
 		ordered_chunk.Initialize(allocator, payload_types);
@@ -326,13 +325,17 @@ bool ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &all
 
 		// build the ART of this chunk
 		auto art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
-		if (!Build(keys, row_identifiers, art->tree, 0, ordered_chunk.size() - 1, 0)) {
-			// TODO: abort and delete the ART that was build so far
-		}
+		auto no_violation = Build(keys, row_identifiers, art->tree, 0, ordered_chunk.size() - 1, 0);
 
-		// TODO: merge art into this art
+		// merge art into temp_art
+		ART::Merge(*temp_art, *art);
+
+		if (!no_violation) {
+			// TODO: delete temp_art
+		}
 	}
 
+	ART::Merge(*this, *temp_art);
 	return true;
 }
 

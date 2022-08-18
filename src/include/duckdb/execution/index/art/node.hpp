@@ -108,19 +108,19 @@ public:
 	static void Erase(Node *&node, idx_t pos, ART &art);
 
 	//! Resolve the prefixes of two nodes and then merge r_node into l_node
-	static void ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth);
+	static void ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth);
 	//! Merge r_node into l_node, they have matching prefixes
-	static void Merge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth);
+	static void Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth);
 
 	//! Merge Node with Node16 or Node4
 	template <class R_NODE_TYPE>
-	static void MergeNodeWithNode16OrNode4(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth);
+	static void MergeNodeWithNode16OrNode4(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth);
 	//! Merge Node with Node48
-	static void MergeNodeWithNode48(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth);
+	static void MergeNodeWithNode48(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth);
 	//! Merge Node with Node256
-	static void MergeNodeWithNode256(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth);
+	static void MergeNodeWithNode256(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth);
 	//! Merge a specific byte of two nodes and its possible children
-	static void MergeByte(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth, idx_t &l_child_pos,
+	static void MergeByte(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, idx_t &l_child_pos,
 	                      idx_t &r_pos, uint8_t &key_byte);
 
 protected:
