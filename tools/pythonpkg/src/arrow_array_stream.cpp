@@ -37,18 +37,20 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
 	py::handle arrow_obj_handle(factory->arrow_object);
+	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");
+	auto table_class = py::module::import("pyarrow.lib").attr("Table");
+	auto record_batch_reader_class = py::module::import("pyarrow.lib").attr("RecordBatchReader");
 
 	py::object scanner;
-	py::object arrow_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_dataset");
-	auto py_object_type = string(py::str(arrow_obj_handle.get_type().attr("__name__")));
-	if (py_object_type == "Table") {
+	py::object arrow_scanner = scanner_class.attr("from_dataset");
+	if (py::isinstance(arrow_obj_handle, table_class)) {
 		auto arrow_dataset = py::module_::import("pyarrow.dataset").attr("dataset");
 		auto dataset = arrow_dataset(arrow_obj_handle);
 		scanner = ProduceScanner(arrow_scanner, dataset, parameters, factory->config);
-	} else if (py_object_type == "RecordBatchReader") {
+	} else if (py::isinstance(arrow_obj_handle, record_batch_reader_class)) {
 		py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
 		scanner = ProduceScanner(arrow_batch_scanner, arrow_obj_handle, parameters, factory->config);
-	} else if (py_object_type == "Scanner") {
+	} else if (py::isinstance(arrow_obj_handle, scanner_class)) {
 		// If it's a scanner we have to turn it to a record batch reader, and then a scanner again since we can't stack
 		// scanners on arrow Otherwise pushed-down projections and filters will disappear like tears in the rain
 		auto record_batches = arrow_obj_handle.attr("to_reader")();
@@ -69,9 +71,9 @@ void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowS
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
+	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");
 	py::handle arrow_obj_handle(factory->arrow_object);
-	auto py_object_type = string(py::str(arrow_obj_handle.get_type().attr("__name__")));
-	if (py_object_type == "Scanner") {
+	if (py::isinstance(arrow_obj_handle, scanner_class)) {
 		auto obj_schema = arrow_obj_handle.attr("projected_schema");
 		auto export_to_c = obj_schema.attr("_export_to_c");
 		export_to_c((uint64_t)&schema);

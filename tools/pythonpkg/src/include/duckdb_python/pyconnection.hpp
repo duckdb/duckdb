@@ -43,6 +43,10 @@ public:
 public:
 	explicit DuckDBPyConnection() {
 	}
+
+public:
+	//! Try importing a python module, storing the result in m
+	static bool TryImportModule(const string &module_name, py::handle &m, bool required = false);
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 
@@ -132,7 +136,8 @@ public:
 	//! Caches and provides an interface to get frequently used modules+subtypes
 	static shared_ptr<PythonImportCache> import_cache;
 
-	static bool IsAcceptedArrowObject(string &py_object_type);
+	static bool IsPandasDataframe(const py::object &object);
+	static bool IsAcceptedArrowObject(const py::object &object);
 
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();
