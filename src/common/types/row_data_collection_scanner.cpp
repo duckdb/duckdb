@@ -249,6 +249,9 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 	chunk.Verify();
 	total_scanned += scanned;
 
+	//	Switch to a new set of pinned blocks
+	read_state.pinned_blocks.swap(pinned_blocks);
+
 	if (flush) {
 		// Release blocks we have passed.
 		for (idx_t i = 0; i < read_state.block_idx; ++i) {

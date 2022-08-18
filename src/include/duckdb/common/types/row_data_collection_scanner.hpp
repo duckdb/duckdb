@@ -37,6 +37,9 @@ public:
 
 		BufferHandle data_handle;
 		BufferHandle heap_handle;
+
+		// We must pin ALL blocks we are going to gather from
+		vector<BufferHandle> pinned_blocks;
 	};
 
 	//! Ensure that heap blocks correspond to row blocks
