@@ -37,7 +37,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 	// iterate in insertion order: start with the tail
 	state.current = allocator.GetTail();
 	while (state.current) {
-		state.start = state.current->data->get();
+		state.start = state.current->data.get();
 		state.end = state.start + state.current->current_position;
 		while (state.start < state.end) {
 			UndoFlags type = Load<UndoFlags>(state.start);
@@ -57,7 +57,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::It
 	// iterate in insertion order: start with the tail
 	state.current = allocator.GetTail();
 	while (state.current) {
-		state.start = state.current->data->get();
+		state.start = state.current->data.get();
 		state.end =
 		    state.current == end_state.current ? end_state.start : state.start + state.current->current_position;
 		while (state.start < state.end) {
@@ -81,7 +81,7 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 	// iterate in reverse insertion order: start with the head
 	auto current = allocator.GetHead();
 	while (current) {
-		data_ptr_t start = current->data->get();
+		data_ptr_t start = current->data.get();
 		data_ptr_t end = start + current->current_position;
 		// create a vector with all nodes in this chunk
 		vector<pair<UndoFlags, data_ptr_t>> nodes;

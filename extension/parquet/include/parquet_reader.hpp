@@ -10,6 +10,10 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -32,7 +36,6 @@ class FileMetaData;
 namespace duckdb {
 class Allocator;
 class ClientContext;
-class ChunkCollection;
 class BaseStatistics;
 class TableFilterSet;
 

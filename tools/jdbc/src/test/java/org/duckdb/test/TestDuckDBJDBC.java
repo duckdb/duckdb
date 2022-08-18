@@ -329,6 +329,54 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_timestamp_ms() throws Exception {
+		String expectedString = "2022-08-17 12:11:10.999";
+		String sql = "SELECT '2022-08-17T12:11:10.999'::TIMESTAMP_MS as ts_ms";
+		assert_timestamp_match(sql, expectedString, "TIMESTAMP_MS");
+	}
+
+	public static void test_timestamp_ns() throws Exception {
+		String expectedString = "2022-08-17 12:11:10.999999";
+		String sql = "SELECT '2022-08-17T12:11:10.999999999'::TIMESTAMP_NS as ts_ns";
+		assert_timestamp_match(sql, expectedString, "TIMESTAMP_NS");
+	}
+
+	public static void test_timestamp_s() throws Exception {
+		String expectedString = "2022-08-17 12:11:10";
+		String sql = "SELECT '2022-08-17T12:11:10'::TIMESTAMP_S as ts_s";
+		assert_timestamp_match(sql, expectedString, "TIMESTAMP_S");
+	}
+
+	private static void assert_timestamp_match(String fetchSql, String expectedString, String expectedTypeName) throws Exception {
+		String originalTzProperty = System.getProperty("user.timezone");
+		TimeZone originalTz = TimeZone.getDefault();
+		try {
+			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+			System.setProperty("user.timezone", "UTC");
+			Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			Statement stmt = conn.createStatement();
+
+			ResultSet rs = stmt.executeQuery(fetchSql);
+			assertTrue(rs.next());
+			Timestamp actual = rs.getTimestamp(1);
+
+			Timestamp expected = Timestamp.valueOf(expectedString);
+
+			assertEquals(expected.getTime(), actual.getTime());
+			assertEquals(expected.getNanos(), actual.getNanos());
+
+			assertEquals(Types.TIMESTAMP, rs.getMetaData().getColumnType(1));
+			assertEquals(expectedTypeName, rs.getMetaData().getColumnTypeName(1));
+
+			rs.close();
+			stmt.close();
+			conn.close();
+		} finally {
+			TimeZone.setDefault(originalTz);
+			System.setProperty("user.timezone", originalTzProperty);
+		}
+	}
+
 	public static void test_timestamp_tz() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();

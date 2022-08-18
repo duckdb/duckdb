@@ -43,7 +43,6 @@ public:
 
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &GetUnionPipelines(Executor &executor);
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &GetChildPipelines(Executor &executor);
-	unordered_map<Pipeline *, vector<Pipeline *>> &GetChildDependencies(Executor &executor);
 
 	PhysicalOperator *GetPipelineSource(Pipeline &pipeline);
 	PhysicalOperator *GetPipelineSink(Pipeline &pipeline);
@@ -95,6 +94,8 @@ public:
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;
+	//! Whether or not the pipeline has been initialized
+	atomic<bool> initialized;
 	//! The source of this pipeline
 	PhysicalOperator *source;
 	//! The chain of intermediate operators

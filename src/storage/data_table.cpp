@@ -5,8 +5,10 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/sort/sort.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/expression_binder/check_binder.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -165,6 +167,29 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 		current_row_group = (RowGroup *)current_row_group->next.get();
 	}
 
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
+}
+
+// Alter column to add new constraint
+DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Constraint> constraint)
+    : info(parent.info), db(parent.db), total_rows(parent.total_rows.load()), row_groups(parent.row_groups),
+      is_root(true) {
+
+	lock_guard<mutex> parent_lock(parent.append_lock);
+	for (auto &column_def : parent.column_definitions) {
+		column_definitions.emplace_back(column_def.Copy());
+	}
+	for (idx_t i = 0; i < column_definitions.size(); i++) {
+		column_stats.push_back(parent.column_stats[i]);
+	}
+
+	// Verify the new constraint against current persistent/local data
+	VerifyNewConstraint(context, parent, constraint.get());
+
+	// Get the local data ownership from old dt
+	auto &transaction = Transaction::GetTransaction(context);
+	transaction.storage.MoveStorage(&parent, this);
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
 }
@@ -601,6 +626,59 @@ static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bf
 	VerifyForeignKeyConstraint(bfk, context, chunk, false);
 }
 
+void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, const Constraint *constraint) {
+	if (constraint->type != ConstraintType::NOT_NULL) {
+		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
+	}
+	// scan the original table, check if there's any null value
+	auto &not_null_constraint = (NotNullConstraint &)*constraint;
+	auto &transaction = Transaction::GetTransaction(context);
+	vector<LogicalType> scan_types;
+	scan_types.push_back(parent.column_definitions[not_null_constraint.index].Type());
+	DataChunk scan_chunk;
+	auto &allocator = Allocator::Get(context);
+	scan_chunk.Initialize(allocator, scan_types);
+
+	CreateIndexScanState state;
+	vector<column_t> cids;
+	cids.push_back(not_null_constraint.index);
+	// Use ScanCreateIndex to scan the latest committed data
+	InitializeCreateIndexScan(state, cids);
+	while (true) {
+		scan_chunk.Reset();
+		ScanCreateIndex(state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		if (scan_chunk.size() == 0) {
+			break;
+		}
+		// Check constraint
+		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
+			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
+			                          column_definitions[not_null_constraint.index].GetName());
+		}
+	}
+
+	TableScanState scan_state;
+	scan_state.column_ids.push_back(not_null_constraint.index);
+	scan_state.max_row = total_rows;
+
+	// For local storage
+	transaction.storage.InitializeScan(&parent, scan_state.local_state, nullptr);
+	if (scan_state.local_state.GetStorage()) {
+		while (scan_state.local_state.chunk_index <= scan_state.local_state.max_index) {
+			scan_chunk.Reset();
+			transaction.storage.Scan(scan_state.local_state, scan_state.column_ids, scan_chunk);
+			if (scan_chunk.size() == 0) {
+				break;
+			}
+			// Check constraint
+			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
+				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
+				                          column_definitions[not_null_constraint.index].GetName());
+			}
+		}
+	}
+}
+
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_columns = unordered_set<column_t>();
@@ -961,8 +1039,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	result.Initialize(Allocator::Get(db), types);
 
 	row_group->InitializeScanWithOffset(state.row_group_scan_state, row_group_vector_idx);
-	row_group->ScanCommitted(state.row_group_scan_state, result,
-	                         TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES);
+	row_group->ScanCommitted(state.row_group_scan_state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 	result.Slice(sel, count);
 
 	info->indexes.Scan([&](Index &index) {
@@ -1258,9 +1335,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions) {
 	auto &allocator = Allocator::Get(db);
 
-	DataChunk result;
-	result.Initialize(allocator, index->logical_types);
-
+	// intermediate holds the scanned chunk from the table scan
 	DataChunk intermediate;
 	vector<LogicalType> intermediate_types;
 	auto column_ids = index->column_ids;
@@ -1272,9 +1347,32 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
 	intermediate.Initialize(allocator, intermediate_types);
 
+	DataChunk key_chunk;
+	key_chunk.Initialize(allocator, index->logical_types);
+
 	// initialize an index scan
 	CreateIndexScanState state;
 	InitializeCreateIndexScan(state, column_ids);
+
+	// ordering of the entries of the index
+	vector<BoundOrderByNode> orders;
+	for (idx_t i = 0; i < index->logical_types.size(); i++) {
+		auto col_expr = make_unique_base<Expression, BoundReferenceExpression>(index->logical_types[i], i);
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, move(col_expr));
+	}
+
+	// row layout of the global sort state
+	RowLayout payload_layout;
+	auto payload_types = index->logical_types;
+	payload_types.emplace_back(LogicalType::ROW_TYPE);
+	payload_layout.Initialize(payload_types);
+
+	// initialize global and local sort state
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto global_sort_state_ptr = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
+	auto &global_sort_state = *global_sort_state_ptr;
+	LocalSortState local_sort_state;
+	local_sort_state.Initialize(global_sort_state, buffer_manager);
 
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
@@ -1286,22 +1384,41 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 		index->InitializeLock(lock);
 		ExpressionExecutor executor(allocator, expressions);
 		while (true) {
+
 			intermediate.Reset();
+			key_chunk.Reset();
+
 			// scan a new chunk from the table to index
 			ScanCreateIndex(state, intermediate, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
 			if (intermediate.size() == 0) {
 				// finished scanning for index creation
-				// release all locks
 				break;
 			}
-			// resolve the expressions for this chunk
-			executor.Execute(intermediate, result);
 
-			// insert into the index
-			if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {
-				throw ConstraintException(
-				    "Cant create unique index, table contains duplicate data on indexed column(s)");
+			// resolve the expressions for this chunk
+			executor.Execute(intermediate, key_chunk);
+
+			// create the payload chunk
+			DataChunk payload_chunk;
+			payload_chunk.InitializeEmpty(payload_types);
+			for (idx_t i = 0; i < index->logical_types.size(); i++) {
+				payload_chunk.data[i].Reference(key_chunk.data[i]);
 			}
+			payload_chunk.data[payload_types.size() - 1].Reference(intermediate.data[intermediate.ColumnCount() - 1]);
+			payload_chunk.SetCardinality(intermediate.size());
+
+			// sink the chunks into the local sort state
+			local_sort_state.SinkChunk(key_chunk, payload_chunk);
+		}
+
+		// add local state to global state, which sorts the data
+		global_sort_state.AddLocalState(local_sort_state);
+		global_sort_state.PrepareMergePhase();
+
+		// scan the sorted row data and build the index from it
+		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+		if (!index->BuildAndMerge(lock, scanner, allocator)) {
+			throw ConstraintException("Can't create unique index, table contains duplicate data on indexed column(s)");
 		}
 	}
 	info->indexes.AddIndex(move(index));

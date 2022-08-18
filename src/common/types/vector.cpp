@@ -403,7 +403,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 }
 
-Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
+Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	const Vector *vector = &v_p;
 	idx_t index = index_p;
 	bool finished = false;
@@ -492,7 +492,8 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 		case PhysicalType::INT128:
 			return Value::DECIMAL(((hugeint_t *)data)[index], width, scale);
 		default:
-			throw InternalException("Widths bigger than 38 are not supported");
+			throw InternalException("Physical type '%s' has a width bigger than 38, which is not supported",
+			                        TypeIdToString(type.InternalType()));
 		}
 	}
 	case LogicalTypeId::ENUM: {
@@ -558,6 +559,15 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	default:
 		throw InternalException("Unimplemented type for value access");
 	}
+}
+
+Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
+	auto value = GetValueInternal(v_p, index_p);
+	// set the alias of the type to the correct value, if there is a type alias
+	if (v_p.GetType().HasAlias()) {
+		value.type().SetAlias(v_p.GetType().GetAlias());
+	}
+	return value;
 }
 
 Value Vector::GetValue(idx_t index) const {

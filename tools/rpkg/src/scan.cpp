@@ -240,7 +240,7 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 	auto sexp_offset = operator_data.offset + operator_data.position;
 	D_ASSERT(sexp_offset + this_count <= bind_data.row_count);
 
-	for (R_xlen_t out_col_idx = 0; out_col_idx < output.ColumnCount(); out_col_idx++) {
+	for (R_xlen_t out_col_idx = 0; out_col_idx < R_xlen_t(output.ColumnCount()); out_col_idx++) {
 		auto &v = output.data[out_col_idx];
 		auto src_df_col_idx = operator_data.column_ids[out_col_idx];
 

@@ -39,12 +39,16 @@ public:
 	DUCKDB_API TaskScheduler &GetScheduler();
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
+	DUCKDB_API void Invalidate();
+	DUCKDB_API bool IsInvalidated();
 
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
+
+	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
 private:
 	void Initialize(const char *path, DBConfig *config);
@@ -59,6 +63,8 @@ private:
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
+	//! Set to true if a fatal exception has occurred
+	bool is_invalidated = false;
 };
 
 //! The database object. This object holds the catalog and all the

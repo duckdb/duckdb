@@ -90,7 +90,7 @@ private:
 
 class RowGroupScanState {
 public:
-	RowGroupScanState(TableScanState &parent_p) : parent(parent_p), vector_index(0), max_row(0) {
+	RowGroupScanState(TableScanState &parent_p) : parent(parent_p), row_group(nullptr), vector_index(0), max_row(0) {
 	}
 
 	//! The parent scan state

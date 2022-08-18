@@ -530,19 +530,21 @@ opt_sample_func:
 tablesample_entry:
 	opt_sample_func '(' sample_count ')' opt_repeatable_clause
 				{
-					$$ = makeSampleOptions($3, $1, $5, @1);
+					int seed = $5;
+					$$ = makeSampleOptions($3, $1, &seed, @1);
 				}
 	| sample_count
 		{
-			$$ = makeSampleOptions($1, NULL, -1, @1);
+			$$ = makeSampleOptions($1, NULL, NULL, @1);
 		}
 	| sample_count '(' ColId ')'
 		{
-			$$ = makeSampleOptions($1, $3, -1, @1);
+			$$ = makeSampleOptions($1, $3, NULL, @1);
 		}
 	| sample_count '(' ColId ',' ICONST ')'
 		{
-			$$ = makeSampleOptions($1, $3, $5, @1);
+			int seed = $5;
+			$$ = makeSampleOptions($1, $3, &seed, @1);
 		}
 	;
 

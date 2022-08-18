@@ -4,7 +4,7 @@
 #include "duckdb/common/algorithm.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -13,8 +13,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class LimitPercentGlobalState : public GlobalSinkState {
 public:
-	explicit LimitPercentGlobalState(Allocator &allocator, const PhysicalLimitPercent &op)
-	    : current_offset(0), data(allocator) {
+	explicit LimitPercentGlobalState(ClientContext &context, const PhysicalLimitPercent &op)
+	    : current_offset(0), data(context, op.GetTypes()) {
 		if (!op.limit_expression) {
 			this->limit_percent = op.limit_percent;
 			is_limit_percent_delimited = true;
@@ -33,14 +33,14 @@ public:
 	idx_t current_offset;
 	double limit_percent;
 	idx_t offset;
-	ChunkCollection data;
+	ColumnDataCollection data;
 
 	bool is_limit_percent_delimited = false;
 	bool is_offset_delimited = false;
 };
 
 unique_ptr<GlobalSinkState> PhysicalLimitPercent::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<LimitPercentGlobalState>(Allocator::Get(context), *this);
+	return make_unique<LimitPercentGlobalState>(context, *this);
 }
 
 SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
@@ -85,23 +85,26 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 //===--------------------------------------------------------------------===//
 class LimitPercentOperatorState : public GlobalSourceState {
 public:
-	LimitPercentOperatorState() : chunk_idx(0), limit(DConstants::INVALID_INDEX), current_offset(0) {
+	explicit LimitPercentOperatorState(const PhysicalLimitPercent &op)
+	    : limit(DConstants::INVALID_INDEX), current_offset(0) {
+		auto &gstate = (LimitPercentGlobalState &)*op.sink_state;
+		gstate.data.InitializeScan(scan_state);
 	}
 
-	idx_t chunk_idx;
+	ColumnDataScanState scan_state;
 	idx_t limit;
 	idx_t current_offset;
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimitPercent::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<LimitPercentOperatorState>();
+	return make_unique<LimitPercentOperatorState>(*this);
 }
 
 void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                    LocalSourceState &lstate) const {
 	auto &gstate = (LimitPercentGlobalState &)*sink_state;
 	auto &state = (LimitPercentOperatorState &)gstate_p;
-	auto &limit_percent = gstate.limit_percent;
+	auto &percent_limit = gstate.limit_percent;
 	auto &offset = gstate.offset;
 	auto &limit = state.limit;
 	auto &current_offset = state.current_offset;
@@ -111,10 +114,10 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 		if (count > 0) {
 			count += offset;
 		}
-		if (limit_percent < 0 || limit_percent > 100) {
+		if (Value::IsNan(percent_limit) || percent_limit < 0 || percent_limit > 100) {
 			throw OutOfRangeException("Limit percent out of range, should be between 0% and 100%");
 		}
-		double limit_dbl = limit_percent / 100 * count;
+		double limit_dbl = percent_limit / 100 * count;
 		if (limit_dbl > count) {
 			limit = count;
 		} else {
@@ -125,15 +128,14 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 		}
 	}
 
-	if (current_offset >= limit || state.chunk_idx >= gstate.data.ChunkCount()) {
+	if (current_offset >= limit) {
+		return;
+	}
+	if (!gstate.data.Scan(state.scan_state, chunk)) {
 		return;
 	}
 
-	DataChunk &input = gstate.data.GetChunk(state.chunk_idx);
-	state.chunk_idx++;
-	if (PhysicalLimit::HandleOffset(input, current_offset, 0, limit)) {
-		chunk.Reference(input);
-	}
+	PhysicalLimit::HandleOffset(chunk, current_offset, 0, limit);
 }
 
 } // namespace duckdb

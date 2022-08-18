@@ -41,7 +41,7 @@ data_ptr_t ArenaAllocator::Allocate(idx_t len) {
 		head = move(new_chunk);
 	}
 	D_ASSERT(head->current_position + len <= head->maximum_size);
-	auto result = head->data->get() + head->current_position;
+	auto result = head->data.get() + head->current_position;
 	head->current_position += len;
 	return result;
 }

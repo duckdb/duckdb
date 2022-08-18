@@ -9,6 +9,7 @@ namespace duckdb {
 LimitRelation::LimitRelation(shared_ptr<Relation> child_p, int64_t limit, int64_t offset)
     : Relation(child_p->context, RelationType::PROJECTION_RELATION), limit(limit), offset(offset),
       child(move(child_p)) {
+	D_ASSERT(child.get() != this);
 }
 
 unique_ptr<QueryNode> LimitRelation::GetQueryNode() {

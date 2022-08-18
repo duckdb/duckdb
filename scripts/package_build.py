@@ -26,6 +26,8 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'mbedtls')]
     includes += [os.path.join('third_party', 'mbedtls', 'include')]
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
+    includes += [os.path.join('third_party', 'jaro_winkler')]
+    includes += [os.path.join('third_party', 'jaro_winkler', 'details')]
     return includes
 
 def third_party_sources():
