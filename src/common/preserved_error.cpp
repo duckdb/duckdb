@@ -29,6 +29,16 @@ const string &PreservedError::Message() {
 	return final_message;
 }
 
+void PreservedError::Throw(const string &prepended_message) const {
+	D_ASSERT(initialized);
+	if (!prepended_message.empty()) {
+		string new_message = prepended_message + raw_message;
+		Exception::ThrowAsTypeWithMessage(type, new_message);
+	} else {
+		Exception::ThrowAsTypeWithMessage(type, raw_message);
+	}
+}
+
 const ExceptionType &PreservedError::Type() const {
 	D_ASSERT(initialized);
 	return this->type;
@@ -37,56 +47,6 @@ const ExceptionType &PreservedError::Type() const {
 PreservedError &PreservedError::AddToMessage(const string &prepended_message) {
 	raw_message = prepended_message + raw_message;
 	return *this;
-}
-
-Exception PreservedError::ToException(const string &prepended_message) const {
-	string message = prepended_message + this->raw_message;
-	switch (type) {
-	case ExceptionType::OUT_OF_RANGE:
-		return OutOfRangeException(message);
-	case ExceptionType::CONVERSION:
-		return ConversionException(message); //FIXME: make a separation between Conversion/Cast exception?
-	case ExceptionType::INVALID_TYPE:
-		return InvalidTypeException(message);
-	case ExceptionType::MISMATCH_TYPE:
-		return TypeMismatchException(message);
-	case ExceptionType::TRANSACTION:
-		return TransactionException(message);
-	case ExceptionType::NOT_IMPLEMENTED:
-		return NotImplementedException(message);
-	case ExceptionType::CATALOG:
-		return CatalogException(message);
-	case ExceptionType::CONNECTION:
-		return ConnectionException(message);
-	case ExceptionType::PARSER:
-		return ParserException(message);
-	case ExceptionType::PERMISSION:
-		return PermissionException(message);
-	case ExceptionType::SYNTAX:
-		return SyntaxException(message);
-	case ExceptionType::CONSTRAINT:
-		return ConstraintException(message);
-	case ExceptionType::BINDER:
-		return BinderException(message);
-	case ExceptionType::IO:
-		return IOException(message);
-	case ExceptionType::SERIALIZATION:
-		return SerializationException(message);
-	case ExceptionType::INTERRUPT:
-		return InterruptException();
-	case ExceptionType::INTERNAL:
-		return InternalException(message);
-	case ExceptionType::INVALID_INPUT:
-		return InvalidInputException(message);
-	case ExceptionType::OUT_OF_MEMORY:
-		return OutOfMemoryException(message);
-	case ExceptionType::PARAMETER_NOT_ALLOWED:
-		return ParameterNotAllowedException(message);
-	case ExceptionType::PARAMETER_NOT_RESOLVED:
-		return ParameterNotResolvedException();
-	default:
-		return Exception(type, message);
-	}
 }
 
 PreservedError::operator bool() const {

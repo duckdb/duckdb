@@ -211,7 +211,7 @@ idx_t ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *o
 	PreservedError error;
 	idx_t result_count;
 	if (!TryFetchChunk(result, chunk_size, out, result_count, error)) {
-		throw error.ToException();
+		error.Throw();
 	}
 	return result_count;
 }

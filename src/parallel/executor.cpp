@@ -481,7 +481,7 @@ void Executor::ThrowException() {
 void Executor::ThrowExceptionInternal() { // LCOV_EXCL_START
 	D_ASSERT(!exceptions.empty());
 	auto &entry = exceptions[0];
-	throw entry.ToException();
+	entry.Throw();
 } // LCOV_EXCL_STOP
 
 void Executor::Flush(ThreadContext &tcontext) {

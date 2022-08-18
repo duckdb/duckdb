@@ -2,147 +2,157 @@ import duckdb
 import pandas as pd
 import pytest
 
+closed = lambda: pytest.raises(duckdb.ConnectionException, match='Connection has already been closed')
+no_result_set = lambda: pytest.raises(duckdb.InvalidInputException, match='No open result set')
+
 class TestRuntimeError(object):
     def test_fetch_error(self):
         con = duckdb.connect()
         con.execute("create table tbl as select 'hello' i")
-        with pytest.raises(duckdb.InvalidInputException):
+        with pytest.raises(duckdb.ConversionException):
             con.execute("select i::int from tbl").fetchall()
 
-    #def test_df_error(self):
-    #    con = duckdb.connect()
-    #    con.execute("create table tbl as select 'hello' i")
-    #    with pytest.raises(duckdb.ConversionException):
-    #        con.execute("select i::int from tbl").df()
+    def test_df_error(self):
+        con = duckdb.connect()
+        con.execute("create table tbl as select 'hello' i")
+        with pytest.raises(duckdb.ConversionException):
+            con.execute("select i::int from tbl").df()
 
-    #def test_arrow_error(self):
-    #    pytest.importorskip('pyarrow')
+    def test_arrow_error(self):
+        pytest.importorskip('pyarrow')
 
-    #    con = duckdb.connect()
-    #    con.execute("create table tbl as select 'hello' i")
-    #    with pytest.raises(duckdb.InvalidInputException):
-    #        con.execute("select i::int from tbl").arrow()
+        con = duckdb.connect()
+        con.execute("create table tbl as select 'hello' i")
+        with pytest.raises(duckdb.ConversionException):
+            con.execute("select i::int from tbl").arrow()
 
-    #def test_register_error(self):
-    #    con = duckdb.connect()
-    #    py_obj = "this is a string"
-    #    with pytest.raises(duckdb.InvalidInputException, match='Python Object str not suitable to be registered as a view'):
-    #        con.register(py_obj, "v")
+    def test_register_error(self):
+        con = duckdb.connect()
+        py_obj = "this is a string"
+        with pytest.raises(duckdb.InvalidInputException, match='Python Object str not suitable to be registered as a view'):
+            con.register(py_obj, "v")
 
-    #def test_arrow_fetch_table_error(self):
-    #    pytest.importorskip('pyarrow')
+    def test_arrow_fetch_table_error(self):
+        pytest.importorskip('pyarrow')
 
-    #    con = duckdb.connect()
-    #    arrow_object = con.execute("select 1").arrow()
-    #    arrow_relation = con.from_arrow(arrow_object)
-    #    res = arrow_relation.execute()
-    #    res.close()
-    #    with pytest.raises(duckdb.InvalidInputException, match='There is no query result'):
-    #        res.fetch_arrow_table()
+        con = duckdb.connect()
+        arrow_object = con.execute("select 1").arrow()
+        arrow_relation = con.from_arrow(arrow_object)
+        res = arrow_relation.execute()
+        res.close()
+        with pytest.raises(duckdb.InvalidInputException, match='There is no query result'):
+            res.fetch_arrow_table()
 
-    #def test_arrow_record_batch_reader_error(self):
-    #    pytest.importorskip('pyarrow')
+    def test_arrow_record_batch_reader_error(self):
+        pytest.importorskip('pyarrow')
 
-    #    con = duckdb.connect()
-    #    arrow_object = con.execute("select 1").arrow()
-    #    arrow_relation = con.from_arrow(arrow_object)
-    #    res = arrow_relation.execute()
-    #    res.close()
-    #    with pytest.raises(duckdb.ProgrammingError, match='There is no query result'):
-    #        res.fetch_arrow_reader(1)
+        con = duckdb.connect()
+        arrow_object = con.execute("select 1").arrow()
+        arrow_relation = con.from_arrow(arrow_object)
+        res = arrow_relation.execute()
+        res.close()
+        with pytest.raises(duckdb.ProgrammingError, match='There is no query result'):
+            res.fetch_arrow_reader(1)
 
-    #def test_relation_fetchall_error(self):
-    #    conn = duckdb.connect()
-    #    df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
-    #    conn.execute("create view x as select * from df_in")
-    #    rel = conn.query("select * from x")
-    #    del df_in
-    #    with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
-    #        rel.fetchall()
+    def test_relation_fetchall_error(self):
+        conn = duckdb.connect()
+        df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
+        conn.execute("create view x as select * from df_in")
+        rel = conn.query("select * from x")
+        del df_in
+        with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
+            rel.fetchall()
 
-    #def test_relation_fetchall_execute(self):
-    #    conn = duckdb.connect()
-    #    df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
-    #    conn.execute("create view x as select * from df_in")
-    #    rel = conn.query("select * from x")
-    #    del df_in
-    #    with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
-    #        rel.execute()
+    def test_relation_fetchall_execute(self):
+        conn = duckdb.connect()
+        df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
+        conn.execute("create view x as select * from df_in")
+        rel = conn.query("select * from x")
+        del df_in
+        with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
+            rel.execute()
 
-    #def test_relation_query_error(self):
-    #    conn = duckdb.connect()
-    #    df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
-    #    conn.execute("create view x as select * from df_in")
-    #    rel = conn.query("select * from x")
-    #    del df_in
-    #    with pytest.raises(RuntimeError):
-    #        rel.query("bla", "select * from bla")
+    def test_relation_query_error(self):
+        conn = duckdb.connect()
+        df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
+        conn.execute("create view x as select * from df_in")
+        rel = conn.query("select * from x")
+        del df_in
+        with pytest.raises(duckdb.CatalogException, match='Table with name df_in does not exist'):
+            rel.query("bla", "select * from bla")
 
-    #def test_conn_broken_statement_error(self):
-    #    conn = duckdb.connect()
-    #    df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
-    #    conn.execute("create view x as select * from df_in")
-    #    del df_in
-    #    with pytest.raises(duckdb.InvalidInputException):
-    #        conn.execute("select 1; select * from x; select 3;")
+    def test_conn_broken_statement_error(self):
+        conn = duckdb.connect()
+        df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
+        conn.execute("create view x as select * from df_in")
+        del df_in
+        with pytest.raises(duckdb.InvalidInputException):
+            conn.execute("select 1; select * from x; select 3;")
 
-    #def test_conn_prepared_statement_error(self):
-    #    conn = duckdb.connect()
-    #    conn.execute("create table integers (a integer, b integer)")
-    #    with pytest.raises(RuntimeError, match='Prepared statement needs 2 parameters, 1 given'):
-    #        conn.execute("select * from integers where a =? and b=?",[1])
+    def test_conn_prepared_statement_error(self):
+        conn = duckdb.connect()
+        conn.execute("create table integers (a integer, b integer)")
+        with pytest.raises(duckdb.InvalidInputException, match='Prepared statement needs 2 parameters, 1 given'):
+            conn.execute("select * from integers where a =? and b=?",[1])
 
-    #def test_closed_conn_exceptions(self):
-    #    conn = duckdb.connect()
-    #    conn.close()
-    #    df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
+    def test_closed_conn_exceptions(self):
+        conn = duckdb.connect()
+        conn.close()
+        df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
 
-    #    with closed():
-    #        conn.register("bla",df_in)
+        with closed():
+            conn.register("bla",df_in)
 
-    #    with closed():
-    #        conn.from_query("select 1")
+        with closed():
+            conn.from_query("select 1")
 
-    #    with closed():
-    #        conn.table("bla")
+        with closed():
+            conn.table("bla")
 
-    #    with closed():
-    #        conn.table("bla")
+        with closed():
+            conn.table("bla")
 
-    #    with closed():
-    #        conn.view("bla")
+        with closed():
+            conn.view("bla")
 
-    #    with closed():
-    #        conn.values("bla")
+        with closed():
+            conn.values("bla")
 
-    #    with closed():
-    #        conn.table_function("bla")
+        with closed():
+            conn.table_function("bla")
 
-    #    with closed():
-    #        conn.from_df("bla")
+        with closed():
+            conn.from_df("bla")
 
-    #    with closed():
-    #        conn.from_csv_auto("bla")
+        with closed():
+            conn.from_csv_auto("bla")
 
-    #    with closed():
-    #        conn.from_parquet("bla")
+        with closed():
+            conn.from_parquet("bla")
 
-    #    with closed():
-    #        conn.from_arrow("bla")
+        with closed():
+            conn.from_arrow("bla")
 
-    #def test_missing_result_from_conn_exceptions(self):
-    #    conn = duckdb.connect()
+    def test_missing_result_from_conn_exceptions(self):
+        conn = duckdb.connect()
 
-    #    conn.fetchone()
+        with no_result_set():
+            conn.fetchone()
 
-    #    conn.fetchall()
+        with no_result_set():
+            conn.fetchall()
 
-    #    conn.fetchnumpy()
+        with no_result_set():
+            conn.fetchnumpy()
 
-    #    conn.fetchdf()
+        with no_result_set():
+            conn.fetchdf()
 
-    #    conn.fetch_df_chunk()
+        with no_result_set():
+            conn.fetch_df_chunk()
 
-    #    conn.fetch_arrow_table()
+        with no_result_set():
+            conn.fetch_arrow_table()
 
-    #    conn.fetch_record_batch()
+        with no_result_set():
+            conn.fetch_record_batch()

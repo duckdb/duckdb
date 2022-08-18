@@ -222,7 +222,7 @@ struct RegisterTask : public Task {
 				std::this_thread::yield();
 			}
 			if (jsargs.error) {
-				throw jsargs.error.ToException();
+				jsargs.error.Throw();
 			}
 		};
 

@@ -221,20 +221,17 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 		if (executor.HasError()) {
 			executor.ThrowException();
 		}
-		auto p = std::current_exception();
-		std::rethrow_exception(p);
+		throw;
 	} catch (std::exception &ex) {
 		if (executor.HasError()) {
 			executor.ThrowException();
 		}
-		auto p = std::current_exception();
-		std::rethrow_exception(p);
+		throw;
 	} catch (...) {
 		if (executor.HasError()) {
 			executor.ThrowException();
 		}
-		auto p = std::current_exception();
-		std::rethrow_exception(p);
+		throw;
 	} // LCOV_EXCL_STOP
 }
 

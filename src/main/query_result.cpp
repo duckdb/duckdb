@@ -21,7 +21,7 @@ BaseQueryResult::~BaseQueryResult() {
 
 void BaseQueryResult::ThrowError(const string &prepended_message) const {
 	D_ASSERT(HasError());
-	throw error.ToException(prepended_message);
+	error.Throw(prepended_message);
 }
 
 void BaseQueryResult::SetError(PreservedError error) {

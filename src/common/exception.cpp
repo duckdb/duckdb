@@ -114,14 +114,12 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
-void Exception::ThrowAsInnerType(const Exception& exception) {
-	auto& type = exception.type;
-	auto& message = exception.raw_message_;
+void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message) {
 	switch (type) {
 	case ExceptionType::OUT_OF_RANGE:
 		throw OutOfRangeException(message);
 	case ExceptionType::CONVERSION:
-		throw ConversionException(message); //FIXME: make a separation between Conversion/Cast exception?
+		throw ConversionException(message); // FIXME: make a separation between Conversion/Cast exception?
 	case ExceptionType::INVALID_TYPE:
 		throw InvalidTypeException(message);
 	case ExceptionType::MISMATCH_TYPE:
