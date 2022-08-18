@@ -285,7 +285,7 @@ bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *node, idx_t
 		for (idx_t i = 0; i < offsets.size(); i++) {
 			Node *child_node = nullptr;
 			auto constraint_violation = Build(keys, row_ids, child_node, offsets[i].start, offsets[i].end, depth + 1);
-			Node::InsertLeaf(node, offsets[i].byte, child_node);
+			Node::InsertChildNode(node, offsets[i].byte, child_node);
 			if (constraint_violation) {
 				return false;
 			}
