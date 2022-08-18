@@ -690,33 +690,17 @@ bool DuckDBPyConnection::TryImportModule(const string &module_name, py::handle &
 }
 
 bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
-	py::handle pandas_module;
-	if (!TryImportModule("pandas", pandas_module)) {
-		return false;
-	}
-	return py::isinstance(object, pandas_module.attr("DataFrame"));
-}
-
-static bool IsAcceptedArrowDatasetObject(const py::object &object) {
-	py::handle arrow_module;
-	if (!DuckDBPyConnection::TryImportModule("pyarrow.dataset", arrow_module)) {
-		return false;
-	}
-	bool is_fs_dataset = py::isinstance(object, arrow_module.attr("FileSystemDataset"));
-	bool is_memory_dataset = py::isinstance(object, arrow_module.attr("InMemoryDataset"));
-	bool is_scanner = py::isinstance(object, arrow_module.attr("Scanner"));
-	return is_fs_dataset || is_memory_dataset || is_scanner;
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return import_cache.pandas.DataFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
-	py::handle arrow_module;
-	if (!TryImportModule("pyarrow", arrow_module)) {
-		return false;
-	}
-	bool is_table = py::isinstance(object, arrow_module.attr("lib").attr("Table"));
-	bool is_record_batch_reader = py::isinstance(object, arrow_module.attr("lib").attr("RecordBatchReader"));
-	bool is_dataset_object = IsAcceptedArrowDatasetObject(object);
-	return is_table || is_record_batch_reader || is_dataset_object;
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return import_cache.arrow.lib.Table.IsInstance(object) ||
+	       import_cache.arrow.lib.RecordBatchReader.IsInstance(object) ||
+	       import_cache.arrow.dataset.FileSystemDataset.IsInstance(object) ||
+	       import_cache.arrow.dataset.InMemoryDataset.IsInstance(object) ||
+	       import_cache.arrow.dataset.Scanner.IsInstance(object);
 }
 
 unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
