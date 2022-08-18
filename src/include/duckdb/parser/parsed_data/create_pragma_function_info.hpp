@@ -15,23 +15,20 @@ namespace duckdb {
 
 struct CreatePragmaFunctionInfo : public CreateFunctionInfo {
 	explicit CreatePragmaFunctionInfo(PragmaFunction function)
-	    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY) {
-		functions.push_back(move(function));
-		this->name = function.name;
+	    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(function.name) {
+		name = function.name;
+		functions.AddFunction(move(function));
 	}
-	CreatePragmaFunctionInfo(string name, vector<PragmaFunction> functions_)
-	    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(move(functions_)) {
+	CreatePragmaFunctionInfo(string name, PragmaFunctionSet functions_)
+	    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(functions_) {
 		this->name = name;
-		for (auto &function : functions) {
-			function.name = name;
-		}
 	}
 
-	vector<PragmaFunction> functions;
+	PragmaFunctionSet functions;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreatePragmaFunctionInfo>(functions[0].name, functions);
+		auto result = make_unique<CreatePragmaFunctionInfo>(functions.name, functions);
 		CopyProperties(*result);
 		return move(result);
 	}

@@ -7,8 +7,6 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/value.hpp"
 
-#include <limits>
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//

@@ -14,6 +14,9 @@
 namespace duckdb {
 
 class LogicalExplain : public LogicalOperator {
+	LogicalExplain(ExplainType explain_type)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type) {};
+
 public:
 	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type) {
@@ -24,6 +27,10 @@ public:
 	string physical_plan;
 	string logical_plan_unopt;
 	string logical_plan_opt;
+
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	void ResolveTypes() override {

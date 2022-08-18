@@ -15,7 +15,7 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	if (bound_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(stmt.stmt_location, error));
 	}
-	auto &bound_function = entry->functions[bound_idx];
+	auto bound_function = entry->functions.GetFunctionByOffset(bound_idx);
 	if (!bound_function.function) {
 		throw BinderException("PRAGMA function does not have a function specified");
 	}

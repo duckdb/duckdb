@@ -75,6 +75,8 @@ void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	                   StructPackStats);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.serialize = VariableReturnBindData::Serialize;
+	fun.deserialize = VariableReturnBindData::Deserialize;
 	set.AddFunction(fun);
 	fun.name = "row";
 	set.AddFunction(fun);

@@ -1,3 +1,4 @@
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
@@ -161,6 +162,19 @@ unique_ptr<Expression> BoundCastExpression::Copy() {
 	auto copy = make_unique<BoundCastExpression>(child->Copy(), return_type, try_cast);
 	copy->CopyProperties(*this);
 	return move(copy);
+}
+
+void BoundCastExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(*child);
+	writer.WriteSerializable(return_type);
+	writer.WriteField(try_cast);
+}
+
+unique_ptr<Expression> BoundCastExpression::Deserialize(ExpressionDeserializationState &state, FieldReader &reader) {
+	auto child = reader.ReadRequiredSerializable<Expression>(state.gstate);
+	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto try_cast = reader.ReadRequired<bool>();
+	return make_unique<BoundCastExpression>(move(child), move(target_type), try_cast);
 }
 
 } // namespace duckdb

@@ -94,8 +94,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         py::arg("aggregation_columns"))
 	    .def("describe", &DuckDBPyRelation::Describe,
 	         "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
-	    .def("union", &DuckDBPyRelation::Union,
-	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("except_", &DuckDBPyRelation::Except,
 	         "Create the set except of this relation object with another relation object in other_rel",
 	         py::arg("other_rel"))
@@ -149,7 +147,7 @@ bool DuckDBPyRelation::IsTableLike(const py::object obj) {
 	return py::isinstance(obj, import_cache.protocol.table());
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const data_frame &df, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, DuckDBPyConnection *conn) {
 	return conn->FromDF(df);
 }
 
@@ -215,7 +213,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 	return projected_relation;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(const data_frame &df, const string &expr,
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(const DataFrame &df, const string &expr,
                                                          DuckDBPyConnection *conn) {
 	return conn->FromDF(df)->Project(expr);
 }
@@ -228,7 +226,7 @@ py::str DuckDBPyRelation::GetAlias() {
 	return py::str(string(rel->GetAlias()));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AliasDF(const data_frame &df, const string &expr,
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AliasDF(const DataFrame &df, const string &expr,
                                                        DuckDBPyConnection *conn) {
 	return conn->FromDF(df)->SetAlias(expr);
 }
@@ -237,7 +235,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const string &expr) {
 	return make_unique<DuckDBPyRelation>(rel->Filter(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(const data_frame &df, const string &expr,
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(const DataFrame &df, const string &expr,
                                                         DuckDBPyConnection *conn) {
 	return conn->FromDF(df)->Filter(expr);
 }
@@ -246,7 +244,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Limit(int64_t n, int64_t offset) 
 	return make_unique<DuckDBPyRelation>(rel->Limit(n, offset));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(const data_frame &df, int64_t n, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(const DataFrame &df, int64_t n, DuckDBPyConnection *conn) {
 	return conn->FromDF(df)->Limit(n);
 }
 
@@ -254,7 +252,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Order(const string &expr) {
 	return make_unique<DuckDBPyRelation>(rel->Order(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::OrderDf(const data_frame &df, const string &expr,
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::OrderDf(const DataFrame &df, const string &expr,
                                                        DuckDBPyConnection *conn) {
 	return conn->FromDF(df)->Order(expr);
 }
@@ -418,7 +416,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns
 	return GenericWindowFunction("min", aggr_columns);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(const data_frame &df, const string &expr,
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(const DataFrame &df, const string &expr,
                                                            const string &groups, DuckDBPyConnection *conn) {
 	return conn->FromDF(df)->Aggregate(expr, groups);
 }
@@ -427,11 +425,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
 	return make_unique<DuckDBPyRelation>(rel->Distinct());
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const data_frame &df, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const DataFrame &df, DuckDBPyConnection *conn) {
 	return conn->FromDF(df)->Distinct();
 }
 
-data_frame DuckDBPyRelation::ToDF() {
+DataFrame DuckDBPyRelation::ToDF() {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
@@ -467,7 +465,7 @@ py::object DuckDBPyRelation::Fetchall() {
 	return res->Fetchall();
 }
 
-py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
+duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
@@ -479,7 +477,7 @@ py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	return res->FetchArrowTable(batch_size);
 }
 
-py::object DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
+duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
@@ -522,7 +520,7 @@ void DuckDBPyRelation::WriteCsv(const string &file) {
 	rel->WriteCSV(file);
 }
 
-void DuckDBPyRelation::WriteCsvDF(const data_frame &df, const string &file, DuckDBPyConnection *conn) {
+void DuckDBPyRelation::WriteCsvDF(const DataFrame &df, const string &file, DuckDBPyConnection *conn) {
 	return conn->FromDF(df)->WriteCsv(file);
 }
 
@@ -559,7 +557,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
 	return res;
 }
 
-unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(const data_frame &df, const string &view_name,
+unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(const DataFrame &df, const string &view_name,
                                                      const string &sql_query, DuckDBPyConnection *conn) {
 	return conn->FromDF(df)->Query(view_name, sql_query);
 }

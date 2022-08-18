@@ -3,7 +3,9 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/function/function_serialization.hpp"
 
 namespace duckdb {
 
@@ -72,6 +74,24 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	                                                  move(new_bind_info), distinct);
 	copy->CopyProperties(*this);
 	return move(copy);
+}
+
+void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteField(distinct);
+	writer.WriteOptional(filter);
+	FunctionSerializer::Serialize<AggregateFunction>(writer, function, return_type, children, bind_info.get());
+}
+
+unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeserializationState &state,
+                                                             FieldReader &reader) {
+	auto distinct = reader.ReadRequired<bool>();
+	auto filter = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	vector<unique_ptr<Expression>> children;
+	unique_ptr<FunctionData> bind_info;
+	auto function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+	    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
+
+	return make_unique<BoundAggregateExpression>(function, move(children), move(filter), move(bind_info), distinct);
 }
 
 } // namespace duckdb

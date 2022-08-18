@@ -16,24 +16,24 @@ namespace duckdb {
 
 struct CreateScalarFunctionInfo : public CreateFunctionInfo {
 	explicit CreateScalarFunctionInfo(ScalarFunction function)
-	    : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY) {
-		this->name = function.name;
-		functions.push_back(function);
+	    : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY), functions(function.name) {
+		name = function.name;
+		functions.AddFunction(move(function));
 	}
 	explicit CreateScalarFunctionInfo(ScalarFunctionSet set)
-	    : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY), functions(move(set.functions)) {
-		this->name = set.name;
-		for (auto &func : functions) {
-			func.name = set.name;
+	    : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY), functions(move(set)) {
+		name = functions.name;
+		for (auto &func : functions.functions) {
+			func.name = functions.name;
 		}
 	}
 
-	vector<ScalarFunction> functions;
+	ScalarFunctionSet functions;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
 		ScalarFunctionSet set(name);
-		set.functions = functions;
+		set.functions = functions.functions;
 		auto result = make_unique<CreateScalarFunctionInfo>(move(set));
 		CopyProperties(*result);
 		return move(result);
