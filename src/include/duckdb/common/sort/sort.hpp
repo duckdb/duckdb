@@ -108,7 +108,7 @@ public:
 	//! Sort the data accumulated so far
 	void Sort(GlobalSortState &global_sort_state, bool reorder_heap);
 	//! Concatenate the blocks held by a RowDataCollection into a single block
-	unique_ptr<RowDataBlock> ConcatenateBlocks(RowDataCollection &row_data);
+	static unique_ptr<RowDataBlock> ConcatenateBlocks(RowDataCollection &row_data);
 
 private:
 	//! Sorts the data in the newly created SortedBlock

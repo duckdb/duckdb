@@ -60,8 +60,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 	idx_t block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
 	block_collection = make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size);
 	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
-	swizzled_block_collection = block_collection->CopyEmpty();
-	swizzled_string_heap = string_heap->CopyEmpty();
+	swizzled_block_collection = block_collection->CloneEmpty();
+	swizzled_string_heap = string_heap->CloneEmpty();
 }
 
 JoinHashTable::~JoinHashTable() {
