@@ -38,9 +38,9 @@ public:
 	                                               FieldReader &reader) {
 		double_t value;
 		if (reader.GetSource().GetVersion() >= MINIMUM_VERSION_FOR_FLOAT) {
-			value = reader.ReadField(0.0);
+			value = reader.ReadField(-1.2);
 		} else {
-			value = reader.ReadField<int32_t>(0);
+			value = reader.ReadField<int32_t>(-1);
 		}
 		return make_unique_base<LogicalOperator, NewOperator>(value);
 	}

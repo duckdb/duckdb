@@ -104,7 +104,7 @@ public:
 	}
 
 	//! Returns the version of serialization that readers are expected to use
-	uint32_t GetVersion() {
+	uint64_t GetVersion() {
 		return version;
 	}
 
