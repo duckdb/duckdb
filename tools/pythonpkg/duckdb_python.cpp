@@ -154,9 +154,6 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.def("write_csv", &DuckDBPyRelation::WriteCsvDF, "Write the Data.Frame df to a CSV file in file_name",
 	      py::arg("df"), py::arg("file_name"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 
-	m.def("is_table_like", &DuckDBPyRelation::IsTableLike, "Checks if it looks like a table using a protocol",
-	      py::arg("obj"));
-
 	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
 	auto clean_default_connection = []() {
 		DuckDBPyConnection::Cleanup();

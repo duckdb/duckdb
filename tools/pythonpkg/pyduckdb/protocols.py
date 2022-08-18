@@ -1,7 +1,6 @@
 from typing import Protocol, runtime_checkable
 
-
 @runtime_checkable
-class TableLike(Protocol):
+class Placeholder(Protocol):
     def read(self):
         pass
