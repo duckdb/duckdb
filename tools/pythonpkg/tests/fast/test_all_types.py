@@ -2,6 +2,7 @@ import duckdb
 import pandas as pd
 import numpy as np
 import datetime
+import math
 from decimal import Decimal
 from uuid import UUID
 
@@ -17,7 +18,6 @@ all_types = get_all_types()
 
 # we need to write our own equality function that considers nan==nan for testing purposes
 def recursive_equality(o1, o2):
-    import math
     if o1 == o2:
         return True
     if type(o1) != type(o2):
