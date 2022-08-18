@@ -216,6 +216,126 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	}
 }
 
+struct BuildARTOffsets {
+	BuildARTOffsets(idx_t start_p, idx_t end_p, data_t byte_p) : start(start_p), end(end_p), byte(byte_p) {};
+	idx_t start;
+	idx_t end;
+	data_t byte;
+};
+
+bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *node, idx_t start_idx, idx_t end_idx,
+                idx_t depth) {
+
+	// we reached a leaf
+	if (keys[start_idx] == keys[end_idx]) {
+
+		auto num_row_ids = end_idx - start_idx;
+
+		// check for possible constraint violation
+		if ((IsUnique() || IsPrimary()) && num_row_ids != 1) {
+			return false;
+		}
+
+		// new row ids of this leaf
+		auto new_row_ids = unique_ptr<row_t[]>(new row_t[num_row_ids]);
+		for (idx_t i = 0; i < num_row_ids; i++) {
+			new_row_ids[i] = row_ids[start_idx + i];
+		}
+
+		// TODO: is move fine here? I don't think that I need these again? Or maybe on constraint violation?
+		node = new Leaf(move(keys[start_idx]), move(new_row_ids), num_row_ids);
+
+	} else { // create a new node and recurse
+
+		// we will find at least one offsets entry, otherwise we'd have reached a leaf
+		vector<BuildARTOffsets> offsets;
+		auto prefix_start = depth;
+		while (true) {
+
+			idx_t offset = start_idx;
+			for (idx_t i = start_idx + 1; i <= end_idx; i++) {
+				if (keys[i - 1]->data[depth] != keys[i]->data[depth]) {
+					BuildARTOffsets entry(offset, i - 1, keys[i - 1]->data[depth]);
+					offsets.push_back(entry);
+					offset = i;
+				}
+			}
+
+			if (!offsets.empty()) {
+				break;
+			}
+			depth++;
+		}
+
+		auto prefix_length = depth - prefix_start;
+		if (offsets.size() < 5) {
+			node = new Node4(prefix_length);
+		} else if (offsets.size() < 17) {
+			node = new Node16(prefix_length);
+		} else if (offsets.size() < 49) {
+			node = new Node48(prefix_length);
+		} else {
+			node = new Node256(prefix_length);
+		}
+
+		node->prefix_length = prefix_length;
+		memcpy(node->prefix.get(), &keys[start_idx]->data[prefix_start], prefix_length);
+
+		// recurse on each offset
+		for (idx_t i = 0; i < offsets.size(); i++) {
+			Node *child_node = nullptr;
+			auto constraint_violation = Build(keys, row_ids, child_node, offsets[i].start, offsets[i].end, depth + 1);
+			Node::InsertLeaf(node, offsets[i].byte, child_node);
+			if (constraint_violation) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+bool ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) {
+
+	auto payload_types = logical_types;
+	payload_types.emplace_back(LogicalType::ROW_TYPE);
+
+	for (;;) {
+		DataChunk ordered_chunk;
+		ordered_chunk.Initialize(allocator, payload_types);
+		ordered_chunk.SetCardinality(0);
+		scanner.Scan(ordered_chunk);
+		if (ordered_chunk.size() == 0) {
+			break;
+		}
+
+		// get the key chunk and the row_ids vector
+		DataChunk chunk_row_ids;
+		ordered_chunk.Split(chunk_row_ids, ordered_chunk.ColumnCount() - 1);
+		auto &row_ids = chunk_row_ids.data[0];
+
+		D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
+		D_ASSERT(logical_types[0] == ordered_chunk.data[0].GetType());
+
+		// generate the keys for the given input
+		vector<unique_ptr<Key>> keys;
+		GenerateKeys(ordered_chunk, keys);
+
+		// prepare the row_ids
+		row_ids.Flatten(ordered_chunk.size());
+		auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
+
+		// build the ART of this chunk
+		auto art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
+		if (!Build(keys, row_identifiers, art->tree, 0, ordered_chunk.size() - 1, 0)) {
+			// TODO: abort and delete the ART that was build so far
+		}
+
+		// TODO: merge art into this art
+	}
+
+	return true;
+}
+
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
@@ -310,13 +430,16 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 
 		Key &existing_key = *leaf->value;
 		uint32_t new_prefix_length = 0;
-		// Leaf node is already there, update row_id vector
+
+		// Leaf node is already there (its key matches the current key), update row_id vector
 		if (depth + new_prefix_length == existing_key.len && existing_key.len == key.len) {
 			return InsertToLeaf(*leaf, row_id);
 		}
+
+		//
 		while (existing_key[depth + new_prefix_length] == key[depth + new_prefix_length]) {
 			new_prefix_length++;
-			// Leaf node is already there, update row_id vector
+			// Leaf node is already there (its key matches the current key), update row_id vector
 			if (depth + new_prefix_length == existing_key.len && existing_key.len == key.len) {
 				return InsertToLeaf(*leaf, row_id);
 			}

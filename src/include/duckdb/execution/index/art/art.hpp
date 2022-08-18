@@ -11,9 +11,11 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/sort/sort.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
@@ -22,7 +24,6 @@
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 struct IteratorEntry {
@@ -107,6 +108,11 @@ public:
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert data into the index.
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+
+	//! Build an ART from a sorted chunk.
+	bool Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *node, idx_t start_idx, idx_t end_idx, idx_t depth);
+	//! Build ARTs from sorted chunks and merge them.
+	bool BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
 
 	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
 	//! Search Equal used for Joins that do not need to fetch data
