@@ -677,18 +677,6 @@ void DuckDBPyConnection::Cleanup() {
 	import_cache.reset();
 }
 
-bool DuckDBPyConnection::TryImportModule(const string &module_name, py::handle &m, bool required) {
-	try {
-		m = py::module::import(module_name.c_str());
-		return true;
-	} catch (py::error_already_set &e) {
-		if (required) {
-			throw InvalidInputException("Missing required module '%s'", module_name);
-		}
-		return false;
-	}
-}
-
 bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	return import_cache.pandas.DataFrame.IsInstance(object);

@@ -45,8 +45,6 @@ public:
 	}
 
 public:
-	//! Try importing a python module, storing the result in m
-	static bool TryImportModule(const string &module_name, py::handle &m, bool required = false);
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 
