@@ -117,7 +117,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_STRUCT,
 	// map type, only useful as logical type
 	DUCKDB_TYPE_MAP,
-	// duckdb_hugeint
+	// UUID data type
 	DUCKDB_TYPE_UUID,
 	// const char*
 	DUCKDB_TYPE_JSON,
