@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/function/function_serialization.hpp"
 
 namespace duckdb {
 
@@ -71,4 +72,23 @@ void BoundFunctionExpression::Verify() const {
 	D_ASSERT(!function.name.empty());
 }
 
+void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
+	D_ASSERT(!function.name.empty());
+	D_ASSERT(return_type == function.return_type);
+	writer.WriteField(is_operator);
+	FunctionSerializer::Serialize<ScalarFunction>(writer, function, return_type, children, bind_info.get());
+}
+
+unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializationState &state,
+                                                            FieldReader &reader) {
+	auto is_operator = reader.ReadRequired<bool>();
+	vector<unique_ptr<Expression>> children;
+	unique_ptr<FunctionData> bind_info;
+	auto function = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
+	    reader, state, CatalogType::SCALAR_FUNCTION_ENTRY, children, bind_info);
+
+	auto return_type = function.return_type;
+	return make_unique<BoundFunctionExpression>(move(return_type), move(function), move(children), move(bind_info),
+	                                            is_operator);
+}
 } // namespace duckdb

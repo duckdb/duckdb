@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/serializer/buffered_deserializer.hpp"
 
 namespace duckdb {
 
@@ -54,10 +55,11 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		this->plan = nullptr;
 		parameters_resolved = false;
 	}
-
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;
 	properties.bound_all_parameters = parameters_resolved;
+
+	Planner::VerifyPlan(context, plan, &bound_parameters.parameters);
 
 	// set up a map of parameter number -> value entries
 	for (auto &kv : bound_parameters.parameters) {
@@ -112,11 +114,74 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::EXTENSION_STATEMENT:
 	case StatementType::PREPARE_STATEMENT:
 	case StatementType::EXECUTE_STATEMENT:
+	case StatementType::LOGICAL_PLAN_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
 		throw NotImplementedException("Cannot plan statement of type %s!", StatementTypeToString(statement->type));
 	}
+}
+
+static bool OperatorSupportsSerialization(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_PREPARE:
+	case LogicalOperatorType::LOGICAL_EXECUTE:
+	case LogicalOperatorType::LOGICAL_ALTER:
+	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
+	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
+	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
+	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
+	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
+	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
+	case LogicalOperatorType::LOGICAL_DROP:
+	case LogicalOperatorType::LOGICAL_PRAGMA:
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
+	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
+	case LogicalOperatorType::LOGICAL_EXPLAIN:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+	case LogicalOperatorType::LOGICAL_LOAD:
+	case LogicalOperatorType::LOGICAL_VACUUM:
+		// unsupported (for now)
+		return false;
+	default:
+		break;
+	}
+	for (auto &child : op.children) {
+		if (!OperatorSupportsSerialization(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
+	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
+		return;
+	}
+	//! SELECT only for now
+	if (!OperatorSupportsSerialization(*op)) {
+		return;
+	}
+
+	BufferedSerializer serializer;
+	try {
+		op->Serialize(serializer);
+	} catch (NotImplementedException &ex) {
+		// ignore for now (FIXME)
+		return;
+	}
+	auto data = serializer.GetData();
+	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+
+	PlanDeserializationState state(context);
+	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
+	if (map) {
+		*map = move(state.parameter_data);
+	}
+	op = move(new_plan);
 }
 
 } // namespace duckdb

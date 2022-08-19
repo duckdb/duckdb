@@ -23,6 +23,6 @@ public:
 	}
 
 	//! The scalar functions
-	vector<ScalarFunction> functions;
+	ScalarFunctionSet functions;
 };
 } // namespace duckdb

@@ -154,7 +154,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		throw BinderException(binder.FormatError(aggr, error));
 	}
 	// found a matching function!
-	auto &bound_function = func->functions[best_function];
+	auto bound_function = func->functions.GetFunctionByOffset(best_function);
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	auto order_bys = make_unique<BoundOrderModifier>();

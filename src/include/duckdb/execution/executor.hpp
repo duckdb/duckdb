@@ -141,8 +141,6 @@ private:
 	//! Unlike union pipelines, child pipelines should be run AFTER their dependencies are completed
 	//! i.e. they should be run after the dependencies are completed, but before finalize is called on the sink
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> child_pipelines;
-	//! Dependencies of child pipelines
-	unordered_map<Pipeline *, vector<Pipeline *>> child_dependencies;
 
 	//! The last pending execution result (if any)
 	PendingExecutionResult execution_result;

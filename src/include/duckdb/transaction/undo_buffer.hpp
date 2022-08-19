@@ -48,6 +48,7 @@ public:
 	void Rollback() noexcept;
 
 private:
+	ClientContext &context;
 	ArenaAllocator allocator;
 
 private:

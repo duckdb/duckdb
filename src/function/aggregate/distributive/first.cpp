@@ -212,8 +212,7 @@ struct FirstVectorFunction {
 
 template <class T, bool LAST, bool SKIP_NULLS>
 static AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
-	auto agg = AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction<LAST, SKIP_NULLS>>(type, type);
-	return agg;
+	return AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction<LAST, SKIP_NULLS>>(type, type);
 }
 
 template <bool LAST, bool SKIP_NULLS>
@@ -269,16 +268,15 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 	case LogicalTypeId::INTERVAL:
 		return GetFirstAggregateTemplated<interval_t, LAST, SKIP_NULLS>(type);
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB: {
-		auto agg = AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
-		                                                       FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
-		return agg;
-	}
+	case LogicalTypeId::BLOB:
+		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
+		                                                   FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
 	case LogicalTypeId::DECIMAL: {
 		type.Verify();
 		AggregateFunction function = GetDecimalFirstFunction<LAST, SKIP_NULLS>(type);
 		function.arguments[0] = type;
 		function.return_type = type;
+		// TODO set_key here?
 		return function;
 	}
 	default: {
