@@ -14,7 +14,7 @@
 #include "duckdb.hpp"
 
 #ifndef DUCKDB_PYTHON_LIB_NAME
-#define DUCKDB_PYTHON_LIB_NAME duckdb.__init__
+#define DUCKDB_PYTHON_LIB_NAME duckdb
 #endif
 
 namespace py = pybind11;
