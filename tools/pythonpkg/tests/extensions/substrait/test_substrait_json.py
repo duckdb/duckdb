@@ -17,6 +17,6 @@ def test_substrait_json(require):
         
     # Test closed connection
     connection.close()
-    with pytest.raises(RuntimeError, match="connection closed"):
+    with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
         connection.get_substrait_json("select * from integers limit 5")
 

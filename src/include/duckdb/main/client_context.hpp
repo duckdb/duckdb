@@ -269,7 +269,7 @@ public:
 	shared_ptr<ClientContext> GetContext() {
 		auto actual_context = client_context.lock();
 		if (!actual_context) {
-			throw std::runtime_error("This connection is closed");
+			throw ConnectionException("Connection has already been closed");
 		}
 		return actual_context;
 	}
