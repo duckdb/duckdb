@@ -31,6 +31,11 @@ struct CreateCollationInfo : public CreateInfo {
 	//! speeds up processing.
 	bool not_required_for_equality;
 
+protected:
+	void SerializeInternal(Serializer &) const override {
+		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(type));
+	}
+
 public:
 	unique_ptr<CreateInfo> Copy() const override {
 		auto result = make_unique<CreateCollationInfo>(name, function, combinable, not_required_for_equality);

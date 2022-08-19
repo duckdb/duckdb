@@ -404,7 +404,7 @@ jobs:
           export LD_LIBRARY_PATH=${GITHUB_WORKSPACE}/openssl-1.0.2o/lib
           ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --with-openssl=${GITHUB_WORKSPACE}/openssl-1.0.2o --prefix=${GITHUB_WORKSPACE}/debug-build
           make -j
-          make install        
+          make install
 
       - name: Install Python Test Dependencies
         shell: bash

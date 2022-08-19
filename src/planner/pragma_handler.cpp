@@ -67,7 +67,7 @@ string PragmaHandler::HandlePragma(SQLStatement *statement) { // PragmaInfo &inf
 	if (bound_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(error);
 	}
-	auto &bound_function = entry->functions[bound_idx];
+	auto bound_function = entry->functions.GetFunctionByOffset(bound_idx);
 	if (bound_function.query) {
 		QueryErrorContext error_context(statement, statement->stmt_location);
 		Binder::BindNamedParameters(bound_function.named_parameters, info.named_parameters, error_context,

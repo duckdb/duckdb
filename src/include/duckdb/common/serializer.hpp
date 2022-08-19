@@ -85,20 +85,21 @@ public:
 		ReadData((data_ptr_t)&value, sizeof(T));
 		return value;
 	}
-	template <class T>
-	void ReadList(vector<unique_ptr<T>> &list) {
+
+	template <class T, typename... ARGS>
+	void ReadList(vector<unique_ptr<T>> &list, ARGS &&...args) {
 		auto select_count = Read<uint32_t>();
 		for (uint32_t i = 0; i < select_count; i++) {
-			auto child = T::Deserialize(*this);
+			auto child = T::Deserialize(*this, std::forward<ARGS>(args)...);
 			list.push_back(move(child));
 		}
 	}
 
-	template <class T, class RETURN_TYPE = T>
-	unique_ptr<RETURN_TYPE> ReadOptional() {
+	template <class T, class RETURN_TYPE = T, typename... ARGS>
+	unique_ptr<RETURN_TYPE> ReadOptional(ARGS &&...args) {
 		auto has_entry = Read<bool>();
 		if (has_entry) {
-			return T::Deserialize(*this);
+			return T::Deserialize(*this, std::forward<ARGS>(args)...);
 		}
 		return nullptr;
 	}

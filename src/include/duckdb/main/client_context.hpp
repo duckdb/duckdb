@@ -223,8 +223,6 @@ private:
 
 	unique_ptr<ClientContextLock> LockContext();
 
-	bool UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function, CreateScalarFunctionInfo *new_info);
-
 	void BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction);
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
 	PreservedError EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);

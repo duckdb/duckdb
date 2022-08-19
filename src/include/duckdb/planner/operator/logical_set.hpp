@@ -25,6 +25,10 @@ public:
 	Value value;
 	SetScope scope;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BOOLEAN);

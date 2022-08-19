@@ -32,6 +32,10 @@ public:
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
 protected:
 	vector<ColumnBinding> GetColumnBindings() override {
 		if (return_chunk) {

@@ -40,6 +40,8 @@ public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
 	bool Equals(const TableFilter &other) const override;
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<TableFilter> Deserialize(FieldReader &source);
 };
 
 class ConjunctionAndFilter : public ConjunctionFilter {
@@ -50,6 +52,8 @@ public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
 	bool Equals(const TableFilter &other) const override;
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<TableFilter> Deserialize(FieldReader &source);
 };
 
 } // namespace duckdb
