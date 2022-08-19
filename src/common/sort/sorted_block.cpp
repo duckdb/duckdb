@@ -65,7 +65,7 @@ void SortedData::Unswizzle() {
 	for (idx_t i = 0; i < data_blocks.size(); i++) {
 		auto &data_block = data_blocks[i];
 		auto &heap_block = heap_blocks[i];
-		D_ASSERT(!data_block.block->IsSwizzled());
+		D_ASSERT(data_block.block->IsSwizzled());
 		auto data_handle_p = buffer_manager.Pin(data_block.block);
 		auto heap_handle_p = buffer_manager.Pin(heap_block.block);
 		RowOperations::UnswizzlePointers(layout, data_handle_p.Ptr(), heap_handle_p.Ptr(), data_block.count);
