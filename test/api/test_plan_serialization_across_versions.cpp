@@ -74,7 +74,7 @@ private:
 };
 
 template <typename S, typename T, typename V>
-static void test_helper(const V version_compatible_value, const uint64_t sourceVersion, S *source_factory(double),
+static void test_helper(const V version_compatible_value, const uint64_t sourceVersion, S *source_factory(V),
                         const uint64_t targetVersion,
                         unique_ptr<LogicalOperator> target_deserialize(ClientContext &, LogicalOperatorType,
                                                                        FieldReader &)) {
@@ -84,6 +84,7 @@ static void test_helper(const V version_compatible_value, const uint64_t sourceV
 	serializer.SetVersion(min(sourceVersion, targetVersion));
 	serializer.Write(serializer.GetVersion());
 	unique_ptr<S> write_op(source_factory(version_compatible_value));
+	INFO("source value: " << write_op->value);
 	FieldWriter writer(serializer);
 	write_op->Serialize(writer);
 	writer.Finalize();
@@ -94,26 +95,27 @@ static void test_helper(const V version_compatible_value, const uint64_t sourceV
 	FieldReader reader(deserializer);
 	auto read_op = target_deserialize(*con.context, LogicalOperatorType::LOGICAL_DUMMY_SCAN, reader);
 	reader.Finalize();
+	INFO("target value: " << ((T *)read_op.get())->value);
 
 	REQUIRE(version_compatible_value == Approx(((T *)read_op.get())->value));
 }
 
 TEST_CASE("Test serializing / deserializing on the same version", "[serialization]") {
 	const uint64_t NEW_VERSION = 3;
-	test_helper<NewOperator, NewOperator>(
-	    1.1, NEW_VERSION, [](double d) { return new NewOperator(d); }, NEW_VERSION, NewOperator::Deserialize);
+	test_helper<NewOperator, NewOperator, double_t>(
+	    1.1, NEW_VERSION, [](double_t d) { return new NewOperator(d); }, NEW_VERSION, NewOperator::Deserialize);
 }
 
 TEST_CASE("Test serializing / deserializing from new to old", "[serialization]") {
 	const uint64_t NEW_VERSION = 3;
 	const uint64_t OLD_VERSION = 1;
-	test_helper<NewOperator, OldOperator>(
-	    1.0, NEW_VERSION, [](double d) { return new NewOperator(d); }, OLD_VERSION, OldOperator::Deserialize);
+	test_helper<NewOperator, OldOperator, double_t>(
+	    1.0, NEW_VERSION, [](double_t d) { return new NewOperator(d); }, OLD_VERSION, OldOperator::Deserialize);
 }
 
 TEST_CASE("Test serializing / deserializing from old to new", "[serialization]") {
 	const uint64_t NEW_VERSION = 3;
 	const uint64_t OLD_VERSION = 1;
-	test_helper<OldOperator, NewOperator>(
-	    1, OLD_VERSION, [](double d) { return new OldOperator(d); }, NEW_VERSION, NewOperator::Deserialize);
+	test_helper<OldOperator, NewOperator, int32_t>(
+	    1, OLD_VERSION, [](int32_t d) { return new OldOperator(d); }, NEW_VERSION, NewOperator::Deserialize);
 }
