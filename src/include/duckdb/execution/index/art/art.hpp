@@ -121,7 +121,7 @@ public:
 	BlockPointer Serialize(duckdb::MetaBlockWriter &writer) override;
 
 	//! Merge two ARTs
-	static void Merge(ART &l_art, ART &r_art);
+	static bool Merge(ART &l_art, ART &r_art);
 
 private:
 	//! Insert a row id into a leaf node

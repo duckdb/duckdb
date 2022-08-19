@@ -1,5 +1,7 @@
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/index.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include <cstring>
 
 namespace duckdb {
@@ -97,16 +99,15 @@ void Leaf::Remove(row_t row_id) {
 	}
 }
 
-void Leaf::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
+bool Leaf::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
 
 	if (l_node->type == NodeType::NLeaf) {
-		Leaf::MergeNLeafNLeaf(l_node, r_node);
-	} else {
-		Leaf::MergeNodeNLeaf(l_art, r_art, l_node, r_node, depth);
+		return Leaf::MergeNLeafNLeaf(l_art, l_node, r_node);
 	}
+	return Leaf::MergeNodeNLeaf(l_art, r_art, l_node, r_node, depth);
 }
 
-void Leaf::MergeNLeafNLeaf(Node *&l_node, Node *&r_node) {
+bool Leaf::MergeNLeafNLeaf(ART &l_art, Node *&l_node, Node *&r_node) {
 
 	Leaf *l_n = (Leaf *)l_node;
 	Leaf *r_n = (Leaf *)r_node;
@@ -123,9 +124,14 @@ void Leaf::MergeNLeafNLeaf(Node *&l_node, Node *&r_node) {
 			l_n->Insert(r_n->GetRowId(i));
 		}
 	}
+
+	if ((l_art.IsUnique() || l_art.IsPrimary()) && l_n->num_elements > 1) {
+		return false;
+	}
+	return true;
 }
 
-void Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
+bool Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
 
 	// merging any leaf with another node always looks like this
 	// because by our construction a key cannot be contained in another key
@@ -139,11 +145,12 @@ void Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, 
 
 	if (child_pos == DConstants::INVALID_INDEX) {
 		Node::InsertChildNode(l_node, value[depth], r_node);
-	} else {
-		// recurse
-		auto child_node = l_node->GetChild(l_art, child_pos);
-		Node::ResolvePrefixesAndMerge(l_art, r_art, child_node, r_node, depth + 1);
+		r_node = nullptr;
+		return true;
 	}
+	// recurse
+	auto child_node = l_node->GetChild(l_art, child_pos);
+	return Leaf::Merge(l_art, r_art, child_node, r_node, depth + 1);
 }
 
 } // namespace duckdb

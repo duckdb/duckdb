@@ -1358,7 +1358,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 	vector<BoundOrderByNode> orders;
 	for (idx_t i = 0; i < index->logical_types.size(); i++) {
 		auto col_expr = make_unique_base<Expression, BoundReferenceExpression>(index->logical_types[i], i);
-		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, move(col_expr));
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, move(col_expr));
 	}
 
 	// row layout of the global sort state
@@ -1416,9 +1416,12 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 		global_sort_state.PrepareMergePhase();
 
 		// scan the sorted row data and build the index from it
-		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
-		if (!index->BuildAndMerge(lock, scanner, allocator)) {
-			throw ConstraintException("Can't create unique index, table contains duplicate data on indexed column(s)");
+		if (!global_sort_state.sorted_blocks.empty()) {
+			PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+			if (!index->BuildAndMerge(lock, scanner, allocator)) {
+				throw ConstraintException(
+				    "Can't create unique index, table contains duplicate data on indexed column(s)");
+			}
 		}
 	}
 	info->indexes.AddIndex(move(index));

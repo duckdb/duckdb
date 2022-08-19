@@ -226,8 +226,14 @@ struct BuildARTOffsets {
 bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_t start_idx, idx_t end_idx,
                 idx_t depth) {
 
+	// test if we reached a leaf
+	auto prefix_start = depth;
+	while (keys[start_idx]->len != depth && keys[start_idx]->data[depth] == keys[end_idx]->data[depth]) {
+		depth++;
+	}
+
 	// we reached a leaf
-	if (keys[start_idx] == keys[end_idx]) {
+	if (depth == keys[start_idx]->len) {
 
 		auto num_row_ids = end_idx - start_idx + 1;
 
@@ -242,18 +248,12 @@ bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_
 			new_row_ids[i] = row_ids[start_idx + i];
 		}
 
-		// TODO: is move fine here? I don't think that I need these again? Or maybe on constraint violation?
 		node = new Leaf(move(keys[start_idx]), move(new_row_ids), num_row_ids);
 
 	} else { // create a new node and recurse
 
 		// we will find at least two offset entries, otherwise we'd have reached a leaf
 		vector<BuildARTOffsets> offsets;
-		auto prefix_start = depth;
-		while (keys[start_idx]->data[depth] == keys[end_idx]->data[depth]) {
-			depth++;
-		}
-
 		idx_t offset = start_idx;
 		for (idx_t i = start_idx + 1; i <= end_idx; i++) {
 			if (keys[i - 1]->data[depth] != keys[i]->data[depth]) {
@@ -297,6 +297,8 @@ bool ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &all
 	auto payload_types = logical_types;
 	payload_types.emplace_back(LogicalType::ROW_TYPE);
 
+	bool no_violation;
+	auto skipped_all_nulls = false;
 	auto temp_art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
 	for (;;) {
 		DataChunk ordered_chunk;
@@ -319,19 +321,36 @@ bool ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &all
 		vector<unique_ptr<Key>> keys;
 		GenerateKeys(ordered_chunk, keys);
 
+		idx_t start_idx = 0;
+		if (!skipped_all_nulls) {
+			for (idx_t i = 0; i < keys.size(); i++) {
+				if (keys[i]) {
+					start_idx = i;
+					skipped_all_nulls = true;
+					break;
+				}
+			}
+		}
+
+		if (!skipped_all_nulls) {
+			continue;
+		}
+
 		// prepare the row_ids
 		row_ids.Flatten(ordered_chunk.size());
 		auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 
 		// build the ART of this chunk
 		auto art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
-		auto no_violation = Build(keys, row_identifiers, art->tree, 0, ordered_chunk.size() - 1, 0);
+		no_violation = Build(keys, row_identifiers, art->tree, start_idx, ordered_chunk.size() - 1, 0);
+		if (!no_violation) {
+			return false;
+		}
 
 		// merge art into temp_art
-		ART::Merge(*temp_art, *art);
-
+		no_violation = ART::Merge(*temp_art, *art);
 		if (!no_violation) {
-			// TODO: delete temp_art
+			return false;
 		}
 	}
 
@@ -1061,8 +1080,8 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 }
 
-void ART::Merge(ART &l_art, ART &r_art) {
-	Node::ResolvePrefixesAndMerge(l_art, r_art, l_art.tree, r_art.tree, 0);
+bool ART::Merge(ART &l_art, ART &r_art) {
+	return Node::ResolvePrefixesAndMerge(l_art, r_art, l_art.tree, r_art.tree, 0);
 }
 
 } // namespace duckdb

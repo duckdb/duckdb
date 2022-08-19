@@ -35,7 +35,7 @@ public:
 
 	//! Insert a new child node at key_byte into the Node4
 	static void Insert(Node *&node, uint8_t key_byte, Node *new_child);
-	//! Remove Leaf from Node4
+	//! Erase the child at pos and (if necessary) merge with last child
 	static void Erase(Node *&node, int pos, ART &art);
 };
 } // namespace duckdb
