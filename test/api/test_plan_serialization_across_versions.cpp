@@ -86,13 +86,18 @@ static void test_helper(const V version_compatible_value, const uint64_t sourceV
 	unique_ptr<S> write_op(source_factory(version_compatible_value));
 	INFO("source value: " << write_op->value);
 	FieldWriter writer(serializer);
+	double_t temp = 2.1;
+	writer.WriteField(temp);
 	write_op->Serialize(writer);
 	writer.Finalize();
 
 	auto data = serializer.GetData();
 	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
 	deserializer.SetVersion(deserializer.Read<uint64_t>());
+	INFO("target version: " << deserializer.GetVersion());
 	FieldReader reader(deserializer);
+	temp = reader.template ReadField(5.5);
+	INFO("extra read value " << temp);
 	auto read_op = target_deserialize(*con.context, LogicalOperatorType::LOGICAL_DUMMY_SCAN, reader);
 	reader.Finalize();
 	INFO("target value: " << ((T *)read_op.get())->value);
