@@ -108,7 +108,8 @@ public:
 	static void Erase(Node *&node, idx_t pos, ART &art);
 
 	//! Resolve the prefixes of two nodes and then merge r_node into l_node
-	static bool ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth);
+	static bool ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
+	                                    Node *&r_node_parent, idx_t r_node_pos);
 	//! Merge r_node into l_node, they have matching prefixes
 	static bool Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth);
 

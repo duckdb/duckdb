@@ -295,7 +295,8 @@ void SwapNodes(Node *&l_node, Node *&r_node) {
 	r_node = l_node_temp;
 }
 
-bool Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
+bool Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
+                                   Node *&r_node_parent, idx_t r_node_pos) {
 
 	if (!l_node) {
 		l_node = r_node;
@@ -311,7 +312,7 @@ bool Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *
 	// make sure that r_node has the longer (or equally long) prefix
 	if (l_node->prefix_length > r_node->prefix_length) {
 		SwapNodes(l_node, r_node);
-		return Node::ResolvePrefixesAndMerge(r_art, l_art, l_node, r_node, depth);
+		return Node::ResolvePrefixesAndMerge(r_art, l_art, l_node, r_node, depth, r_node_parent, r_node_pos);
 	}
 
 	// get first mismatch position
@@ -338,17 +339,17 @@ bool Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *
 		// test if the next byte (mismatch_pos) in r_node (longer prefix) exists in l_node
 		auto child_pos = l_node->GetChildPos(r_node->prefix[mismatch_pos]);
 		if (child_pos == DConstants::INVALID_INDEX) {
-			// TODO: check if code coverage reaches this line
-			// TODO: if it is reached (which it should if I am not wrong...)
-			// TODO: I think there should be an error, we need the parent of r_node here and call
-			// TODO: r_node_parent->ReplaceChildPointer(r_pos, nullptr);
 			Node::InsertChildNode(l_node, r_node->prefix[mismatch_pos], r_node);
+			if (r_node_parent) {
+				r_node_parent->ReplaceChildPointer(r_node_pos, nullptr);
+			}
 			r_node = nullptr;
 			return true;
 		}
 
 		auto child_node = l_node->GetChild(l_art, child_pos);
-		return Node::ResolvePrefixesAndMerge(l_art, r_art, child_node, r_node, depth + mismatch_pos);
+		return Node::ResolvePrefixesAndMerge(l_art, r_art, child_node, r_node, depth + mismatch_pos, r_node_parent,
+		                                     r_node_pos);
 	}
 
 	// prefixes differ, create new node and insert both nodes as children
@@ -369,6 +370,9 @@ bool Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *
 	memmove(r_node->prefix.get(), r_node->prefix.get() + mismatch_pos + 1, r_node->prefix_length);
 
 	l_node = new_node;
+	if (r_node_parent) {
+		r_node_parent->ReplaceChildPointer(r_node_pos, nullptr);
+	}
 	r_node = nullptr;
 	return true;
 }
@@ -404,6 +408,7 @@ bool Node::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t dep
 		return Leaf::Merge(l_art, r_art, l_node, r_node, depth);
 	}
 	}
+	throw InternalException("Invalid node type for right node in merge.");
 }
 
 template <class R_NODE_TYPE>
@@ -464,7 +469,7 @@ bool Node::MergeByte(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t
 	}
 	// recurse
 	auto l_child = l_node->GetChild(l_art, l_child_pos);
-	return Node::ResolvePrefixesAndMerge(l_art, r_art, l_child, r_child, depth + 1);
+	return Node::ResolvePrefixesAndMerge(l_art, r_art, l_child, r_child, depth + 1, r_node, r_pos);
 }
 
 } // namespace duckdb
