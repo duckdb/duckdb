@@ -96,13 +96,46 @@ static void test_helper(const V version_compatible_value, const uint64_t sourceV
 	deserializer.SetVersion(deserializer.Read<uint64_t>());
 	INFO("target version: " << deserializer.GetVersion());
 	FieldReader reader(deserializer);
-	temp = reader.template ReadField(5.5);
+	temp = reader.ReadField(5.5);
 	INFO("extra read value " << temp);
 	auto read_op = target_deserialize(*con.context, LogicalOperatorType::LOGICAL_DUMMY_SCAN, reader);
 	reader.Finalize();
 	INFO("target value: " << ((T *)read_op.get())->value);
 
 	REQUIRE(version_compatible_value == Approx(((T *)read_op.get())->value));
+}
+
+TEST_CASE("Test direct double serialization", "[serialization]") {
+	double_t temp = 2.1;
+	BufferedSerializer serializer;
+	serializer.Write(temp);
+	auto data = serializer.GetData();
+	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+	double_t res = deserializer.Read<double_t>();
+	INFO("temp: " << temp);
+	INFO("res: " << res);
+	INFO(" size_of(double_t) " << sizeof(double_t));
+
+	REQUIRE(temp == Approx(res));
+}
+
+TEST_CASE("Test fieldwriter double serialization", "[serialization]") {
+	double_t temp = 2.1;
+	BufferedSerializer serializer;
+	FieldWriter writer(serializer);
+	writer.WriteField(temp);
+	writer.Finalize();
+	auto data = serializer.GetData();
+	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+	FieldReader reader(deserializer);
+	double_t res = reader.ReadField(5.5);
+	reader.Finalize();
+
+	INFO("temp: " << temp);
+	INFO("res: " << res);
+	INFO(" size_of(double_t) " << sizeof(double_t));
+
+	REQUIRE(temp == Approx(res));
 }
 
 TEST_CASE("Test serializing / deserializing on the same version", "[serialization]") {
