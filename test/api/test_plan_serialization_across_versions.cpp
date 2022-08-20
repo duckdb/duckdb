@@ -115,6 +115,7 @@ TEST_CASE("Test direct double serialization", "[serialization]") {
 	INFO("temp: " << temp);
 	INFO("res: " << res);
 	INFO(" size_of(double_t) " << sizeof(double_t));
+	INFO(" size_of(1.2) " << sizeof(1.2));
 
 	REQUIRE(temp == Approx(res));
 }
@@ -133,7 +134,28 @@ TEST_CASE("Test fieldwriter double serialization", "[serialization]") {
 
 	INFO("temp: " << temp);
 	INFO("res: " << res);
-	INFO(" size_of(double_t) " << sizeof(double_t));
+	INFO("size_of(double_t): " << sizeof(double_t));
+	INFO("size_of(1.2): " << sizeof(1.2));
+
+	REQUIRE(temp == Approx(res));
+}
+
+TEST_CASE("Test fieldwriter explicit double serialization", "[serialization]") {
+	double_t temp = 2.1;
+	BufferedSerializer serializer;
+	FieldWriter writer(serializer);
+	writer.WriteField(temp);
+	writer.Finalize();
+	auto data = serializer.GetData();
+	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+	FieldReader reader(deserializer);
+	double_t res = reader.ReadField<double_t>(5.5);
+	reader.Finalize();
+
+	INFO("temp: " << temp);
+	INFO("res: " << res);
+	INFO("size_of(double_t): " << sizeof(double_t));
+	INFO("size_of(1.2): " << sizeof(1.2));
 
 	REQUIRE(temp == Approx(res));
 }
