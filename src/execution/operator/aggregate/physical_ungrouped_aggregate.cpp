@@ -9,6 +9,9 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 #include "duckdb/parallel/event.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/algorithm.hpp"
+#include <functional>
 
 namespace duckdb {
 
@@ -17,11 +20,13 @@ DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<
     : child_executor(allocator), payload_chunk(), indices(move(indices)) {
 	const idx_t aggregate_count = aggregates.size();
 
-	grouped_aggregate_data.resize(aggregate_count);
-	radix_tables.resize(aggregate_count);
-	radix_states.resize(aggregate_count);
-	grouping_sets.resize(aggregate_count);
-	distinct_output_chunks.resize(aggregate_count);
+	idx_t table_amount = CreateTableIndexMap(aggregates);
+
+	grouped_aggregate_data.resize(table_amount);
+	radix_tables.resize(table_amount);
+	radix_states.resize(table_amount);
+	grouping_sets.resize(table_amount);
+	distinct_output_chunks.resize(table_amount);
 
 	vector<LogicalType> payload_types;
 	for (idx_t i = 0; i < aggregate_count; i++) {
@@ -35,17 +40,24 @@ DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<
 		if (!aggregate.distinct) {
 			continue;
 		}
+		D_ASSERT(table_map.count(i));
+		idx_t table_idx = table_map[i];
+		if (radix_tables[table_idx] != nullptr) {
+			//! Table is already initialized
+			continue;
+		}
 		//! Populate the group with the children of the aggregate
 		for (size_t set_idx = 0; set_idx < aggregate.children.size(); set_idx++) {
-			grouping_sets[i].insert(set_idx);
+			grouping_sets[table_idx].insert(set_idx);
 		}
 		// Create the hashtable for the aggregate
-		grouped_aggregate_data[i] = make_unique<GroupedAggregateData>();
-		grouped_aggregate_data[i]->InitializeDistinct(aggregates[i]);
-		radix_tables[i] = make_unique<RadixPartitionedHashTable>(grouping_sets[i], *grouped_aggregate_data[i]);
+		grouped_aggregate_data[table_idx] = make_unique<GroupedAggregateData>();
+		grouped_aggregate_data[table_idx]->InitializeDistinct(aggregates[i]);
+		radix_tables[table_idx] =
+		    make_unique<RadixPartitionedHashTable>(grouping_sets[table_idx], *grouped_aggregate_data[table_idx]);
 
-		auto &radix_table = *radix_tables[i];
-		radix_states[i] = radix_table.GetGlobalSinkState(client);
+		auto &radix_table = *radix_tables[table_idx];
+		radix_states[table_idx] = radix_table.GetGlobalSinkState(client);
 
 		vector<LogicalType> chunk_types;
 		for (auto &child_p : aggregate.children) {
@@ -53,12 +65,66 @@ DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<
 		}
 
 		// This is used in Finalize to get the data from the radix table
-		distinct_output_chunks[i] = make_unique<DataChunk>();
-		distinct_output_chunks[i]->Initialize(client, chunk_types);
+		distinct_output_chunks[table_idx] = make_unique<DataChunk>();
+		distinct_output_chunks[table_idx]->Initialize(client, chunk_types);
 	}
 	if (!payload_types.empty()) {
 		payload_chunk.Initialize(allocator, payload_types);
 	}
+}
+
+using aggr_ref_t = std::reference_wrapper<BoundAggregateExpression>;
+
+struct FindMatchingAggregate : public std::unary_function<aggr_ref_t, bool> {
+	explicit FindMatchingAggregate(const aggr_ref_t &aggr) : aggr_r(aggr) {
+	}
+	bool operator()(const aggr_ref_t other_r) {
+		auto &other = other_r.get();
+		auto &aggr = aggr_r.get();
+		if (other.children.size() != aggr.children.size()) {
+			return false;
+		}
+		if (!Expression::Equals(aggr.filter.get(), other.filter.get())) {
+			return false;
+		}
+		for (idx_t i = 0; i < aggr.children.size(); i++) {
+			auto &other_child = (BoundReferenceExpression &)*other.children[i];
+			auto &aggr_child = (BoundReferenceExpression &)*aggr.children[i];
+			if (other_child.index != aggr_child.index) {
+				return false;
+			}
+		}
+		return true;
+	}
+	const aggr_ref_t aggr_r;
+};
+
+idx_t DistinctAggregateData::CreateTableIndexMap(const vector<unique_ptr<Expression>> &aggregates) {
+	vector<aggr_ref_t> table_inputs;
+
+	D_ASSERT(table_map.empty());
+	for (auto &agg_idx : indices) {
+		D_ASSERT(agg_idx < aggregates.size());
+		auto &aggregate = (BoundAggregateExpression &)*aggregates[agg_idx];
+
+		auto matching_inputs =
+		    std::find_if(table_inputs.begin(), table_inputs.end(), FindMatchingAggregate(std::ref(aggregate)));
+		if (matching_inputs != table_inputs.end()) {
+			//! Assign the existing table to the aggregate
+			idx_t found_idx = std::distance(table_inputs.begin(), matching_inputs);
+			table_map[agg_idx] = found_idx;
+			continue;
+		}
+		//! Create a new table and assign its index to the aggregate
+		table_map[agg_idx] = table_inputs.size();
+		table_inputs.push_back(std::ref(aggregate));
+	}
+	//! Every distinct aggregate needs to be assigned an index
+	D_ASSERT(table_map.size() == indices.size());
+	//! There can not be more tables then there are distinct aggregates
+	D_ASSERT(table_inputs.size() <= indices.size());
+
+	return table_inputs.size();
 }
 
 bool DistinctAggregateData::AnyDistinct() const {
@@ -70,7 +136,7 @@ const vector<idx_t> &DistinctAggregateData::Indices() const {
 }
 
 bool DistinctAggregateData::IsDistinct(idx_t index) const {
-	bool is_distinct = !radix_tables.empty() && radix_tables[index] != nullptr;
+	bool is_distinct = !radix_tables.empty() && table_map.count(index);
 #ifdef DEBUG
 	//! Make sure that if it is distinct, it's also in the indices
 	//! And if it's not distinct, that it's also not in the indices
@@ -229,8 +295,13 @@ public:
 		radix_states.resize(aggregate_cnt);
 
 		for (auto &idx : distinct_indices) {
-			auto &radix_table = *data.radix_tables[idx];
-			radix_states[idx] = radix_table.GetLocalSinkState(context);
+			idx_t table_idx = data.table_map[idx];
+			if (data.radix_tables[table_idx] == nullptr) {
+				// This aggregate has identical input as another aggregate, so no table is created for it
+				continue;
+			}
+			auto &radix_table = *data.radix_tables[table_idx];
+			radix_states[table_idx] = radix_table.GetLocalSinkState(context);
 		}
 	}
 };
@@ -256,10 +327,14 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 	for (auto &idx : distinct_indices) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[idx];
 
-		D_ASSERT(distinct_aggregate_data.radix_tables[idx]);
-		auto &radix_table = *distinct_aggregate_data.radix_tables[idx];
-		auto &radix_global_sink = *distinct_aggregate_data.radix_states[idx];
-		auto &radix_local_sink = *sink.radix_states[idx];
+		idx_t table_idx = distinct_aggregate_data.table_map[idx];
+		if (!distinct_aggregate_data.radix_tables[table_idx]) {
+			continue;
+		}
+		D_ASSERT(distinct_aggregate_data.radix_tables[table_idx]);
+		auto &radix_table = *distinct_aggregate_data.radix_tables[table_idx];
+		auto &radix_global_sink = *distinct_aggregate_data.radix_states[table_idx];
+		auto &radix_local_sink = *sink.radix_states[table_idx];
 
 		if (aggregate.filter) {
 			// Apply the filter before inserting into the hashtable
@@ -347,13 +422,12 @@ void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, Glob
 	if (!distinct_aggregate_data) {
 		return;
 	}
-	auto &distinct_indices = distinct_aggregate_data->Indices();
-	for (auto &idx : distinct_indices) {
-		//! aggregate is distinct, can't be calculated yet
-		D_ASSERT(distinct_aggregate_data->radix_tables[idx]);
-		auto &radix_table = *distinct_aggregate_data->radix_tables[idx];
-		auto &radix_global_sink = *distinct_aggregate_data->radix_states[idx];
-		auto &radix_local_sink = *source.radix_states[idx];
+	auto table_amount = distinct_aggregate_data->radix_tables.size();
+	for (idx_t table_idx = 0; table_idx < table_amount; table_idx++) {
+		D_ASSERT(distinct_aggregate_data->radix_tables[table_idx]);
+		auto &radix_table = *distinct_aggregate_data->radix_tables[table_idx];
+		auto &radix_global_sink = *distinct_aggregate_data->radix_states[table_idx];
+		auto &radix_local_sink = *source.radix_states[table_idx];
 
 		radix_table.Combine(context, radix_global_sink, radix_local_sink);
 	}
@@ -421,7 +495,6 @@ public:
 		expression_executor_input.SetCardinality(0);
 
 		for (idx_t i = 0; i < aggregates.size(); i++) {
-			auto &radix_table_p = distinct_aggregate_data.radix_tables[i];
 			auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 
 			// Forward the payload idx
@@ -432,8 +505,10 @@ public:
 			if (!distinct_aggregate_data.IsDistinct(i)) {
 				continue;
 			}
-
-			auto &output_chunk = *distinct_aggregate_data.distinct_output_chunks[i];
+			D_ASSERT(distinct_aggregate_data.table_map.count(i));
+			auto table_idx = distinct_aggregate_data.table_map[i];
+			auto &radix_table_p = distinct_aggregate_data.radix_tables[table_idx];
+			auto &output_chunk = *distinct_aggregate_data.distinct_output_chunks[table_idx];
 
 			//! Create global and local state for the hashtable
 			auto global_source_state = radix_table_p->GetGlobalSourceState(context);
@@ -443,8 +518,9 @@ public:
 			while (true) {
 				payload_chunk.Reset();
 				output_chunk.Reset();
-				radix_table_p->GetData(temp_exec_context, output_chunk, *distinct_aggregate_data.radix_states[i],
-				                       *global_source_state, *local_source_state);
+				radix_table_p->GetData(temp_exec_context, output_chunk,
+				                       *distinct_aggregate_data.radix_states[table_idx], *global_source_state,
+				                       *local_source_state);
 				if (output_chunk.size() == 0) {
 					break;
 				}
@@ -540,12 +616,9 @@ public:
 		auto &distinct_data = *gstate.distinct_data;
 
 		vector<unique_ptr<Task>> tasks;
-		for (idx_t i = 0; i < distinct_data.radix_tables.size(); i++) {
-			if (!distinct_data.radix_tables[i]) {
-				continue;
-			}
-			distinct_data.radix_tables[i]->ScheduleTasks(pipeline->executor, shared_from_this(),
-			                                             *distinct_data.radix_states[i], tasks);
+		for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
+			distinct_data.radix_tables[table_idx]->ScheduleTasks(pipeline->executor, shared_from_this(),
+			                                                     *distinct_data.radix_states[table_idx], tasks);
 		}
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
@@ -571,13 +644,9 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 	expression_executor_input.SetCardinality(0);
 
 	bool any_partitioned = false;
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &radix_table_p = distinct_aggregate_data.radix_tables[i];
-		if (!radix_table_p) {
-			continue;
-		}
-		D_ASSERT(distinct_aggregate_data.IsDistinct(i));
-		auto &radix_state = *distinct_aggregate_data.radix_states[i];
+	for (idx_t table_idx = 0; table_idx < distinct_aggregate_data.radix_tables.size(); table_idx++) {
+		auto &radix_table_p = distinct_aggregate_data.radix_tables[table_idx];
+		auto &radix_state = *distinct_aggregate_data.radix_states[table_idx];
 		bool partitioned = radix_table_p->Finalize(context, radix_state);
 		if (partitioned) {
 			any_partitioned = true;
