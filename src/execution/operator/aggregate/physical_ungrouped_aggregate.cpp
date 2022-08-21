@@ -75,7 +75,7 @@ DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<
 
 using aggr_ref_t = std::reference_wrapper<BoundAggregateExpression>;
 
-struct FindMatchingAggregate : public std::unary_function<aggr_ref_t, bool> {
+struct FindMatchingAggregate {
 	explicit FindMatchingAggregate(const aggr_ref_t &aggr) : aggr_r(aggr) {
 	}
 	bool operator()(const aggr_ref_t other_r) {
