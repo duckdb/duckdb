@@ -202,10 +202,10 @@ struct AggregateState {
 	vector<idx_t> counts;
 };
 
-class SimpleAggregateGlobalState : public GlobalSinkState {
+class UngroupedAggregateGlobalState : public GlobalSinkState {
 public:
-	SimpleAggregateGlobalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
-	                           ClientContext &client)
+	UngroupedAggregateGlobalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
+	                              ClientContext &client)
 	    : state(aggregates), finished(false) {
 
 		vector<idx_t> indices;
@@ -235,13 +235,13 @@ public:
 	unique_ptr<DistinctAggregateData> distinct_data;
 };
 
-class SimpleAggregateLocalState : public LocalSinkState {
+class UngroupedAggregateLocalState : public LocalSinkState {
 public:
-	SimpleAggregateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
-	                          const vector<LogicalType> &child_types, GlobalSinkState &gstate_p,
-	                          ExecutionContext &context)
+	UngroupedAggregateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
+	                             const vector<LogicalType> &child_types, GlobalSinkState &gstate_p,
+	                             ExecutionContext &context)
 	    : state(aggregates), child_executor(allocator), payload_chunk(), filter_set() {
-		auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
+		auto &gstate = (UngroupedAggregateGlobalState &)gstate_p;
 
 		InitializeDistinctAggregates(gstate, context);
 
@@ -278,7 +278,7 @@ public:
 	void Reset() {
 		payload_chunk.Reset();
 	}
-	void InitializeDistinctAggregates(const SimpleAggregateGlobalState &gstate, ExecutionContext &context) {
+	void InitializeDistinctAggregates(const UngroupedAggregateGlobalState &gstate, ExecutionContext &context) {
 
 		if (!gstate.distinct_data) {
 			return;
@@ -307,20 +307,20 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<SimpleAggregateGlobalState>(Allocator::Get(context), aggregates, context);
+	return make_unique<UngroupedAggregateGlobalState>(Allocator::Get(context), aggregates, context);
 }
 
 unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	D_ASSERT(sink_state);
 	auto &gstate = *sink_state;
-	return make_unique<SimpleAggregateLocalState>(Allocator::Get(context.client), aggregates, children[0]->GetTypes(),
-	                                              gstate, context);
+	return make_unique<UngroupedAggregateLocalState>(Allocator::Get(context.client), aggregates,
+	                                                 children[0]->GetTypes(), gstate, context);
 }
 
 void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                               DataChunk &input) const {
-	auto &sink = (SimpleAggregateLocalState &)lstate;
-	auto &global_sink = (SimpleAggregateGlobalState &)state;
+	auto &sink = (UngroupedAggregateLocalState &)lstate;
+	auto &global_sink = (UngroupedAggregateGlobalState &)state;
 	D_ASSERT(global_sink.distinct_data);
 	auto &distinct_aggregate_data = *global_sink.distinct_data;
 	auto &distinct_indices = distinct_aggregate_data.Indices();
@@ -352,8 +352,8 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 
 SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
                                                 LocalSinkState &lstate, DataChunk &input) const {
-	auto &sink = (SimpleAggregateLocalState &)lstate;
-	auto &gstate = (SimpleAggregateGlobalState &)state;
+	auto &sink = (UngroupedAggregateLocalState &)lstate;
+	auto &gstate = (UngroupedAggregateGlobalState &)state;
 
 	// perform the aggregation inside the local state
 	sink.Reset();
@@ -415,8 +415,8 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 
 void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, GlobalSinkState &state,
                                                  LocalSinkState &lstate) const {
-	auto &global_sink = (SimpleAggregateGlobalState &)state;
-	auto &source = (SimpleAggregateLocalState &)lstate;
+	auto &global_sink = (UngroupedAggregateGlobalState &)state;
+	auto &source = (UngroupedAggregateLocalState &)lstate;
 	auto &distinct_aggregate_data = global_sink.distinct_data;
 
 	if (!distinct_aggregate_data) {
@@ -435,8 +435,8 @@ void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, Glob
 
 void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkState &state,
                                          LocalSinkState &lstate) const {
-	auto &gstate = (SimpleAggregateGlobalState &)state;
-	auto &source = (SimpleAggregateLocalState &)lstate;
+	auto &gstate = (UngroupedAggregateGlobalState &)state;
+	auto &source = (UngroupedAggregateLocalState &)lstate;
 	D_ASSERT(!gstate.finished);
 
 	// finalize: combine the local state into the global state
@@ -470,7 +470,7 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 
 class DistinctAggregateFinalizeTask : public ExecutorTask {
 public:
-	DistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, SimpleAggregateGlobalState &state_p,
+	DistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, UngroupedAggregateGlobalState &state_p,
 	                              ClientContext &context, const PhysicalUngroupedAggregate &op)
 	    : ExecutorTask(executor), event(move(event_p)), gstate(state_p), context(context), op(op) {
 	}
@@ -572,7 +572,7 @@ public:
 
 private:
 	shared_ptr<Event> event;
-	SimpleAggregateGlobalState &gstate;
+	UngroupedAggregateGlobalState &gstate;
 	ClientContext &context;
 	const PhysicalUngroupedAggregate &op;
 };
@@ -580,12 +580,12 @@ private:
 // TODO: Create tasks and run these in parallel instead of doing this all in Schedule, single threaded
 class DistinctAggregateFinalizeEvent : public Event {
 public:
-	DistinctAggregateFinalizeEvent(const PhysicalUngroupedAggregate &op_p, SimpleAggregateGlobalState &gstate_p,
+	DistinctAggregateFinalizeEvent(const PhysicalUngroupedAggregate &op_p, UngroupedAggregateGlobalState &gstate_p,
 	                               Pipeline *pipeline_p, ClientContext &context)
 	    : Event(pipeline_p->executor), op(op_p), gstate(gstate_p), pipeline(pipeline_p), context(context) {
 	}
 	const PhysicalUngroupedAggregate &op;
-	SimpleAggregateGlobalState &gstate;
+	UngroupedAggregateGlobalState &gstate;
 	Pipeline *pipeline;
 	ClientContext &context;
 
@@ -601,13 +601,13 @@ public:
 
 class DistinctCombineFinalizeEvent : public Event {
 public:
-	DistinctCombineFinalizeEvent(const PhysicalUngroupedAggregate &op_p, SimpleAggregateGlobalState &gstate_p,
+	DistinctCombineFinalizeEvent(const PhysicalUngroupedAggregate &op_p, UngroupedAggregateGlobalState &gstate_p,
 	                             Pipeline *pipeline_p, ClientContext &client)
 	    : Event(pipeline_p->executor), op(op_p), gstate(gstate_p), pipeline(pipeline_p), client(client) {
 	}
 
 	const PhysicalUngroupedAggregate &op;
-	SimpleAggregateGlobalState &gstate;
+	UngroupedAggregateGlobalState &gstate;
 	Pipeline *pipeline;
 	ClientContext &client;
 
@@ -631,7 +631,7 @@ public:
 
 SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
                                                               GlobalSinkState &gstate_p) const {
-	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
+	auto &gstate = (UngroupedAggregateGlobalState &)gstate_p;
 	D_ASSERT(gstate.distinct_data);
 	auto &distinct_aggregate_data = *gstate.distinct_data;
 	auto &payload_chunk = distinct_aggregate_data.payload_chunk;
@@ -666,7 +666,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 
 SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                       GlobalSinkState &gstate_p) const {
-	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
+	auto &gstate = (UngroupedAggregateGlobalState &)gstate_p;
 
 	if (gstate.distinct_data) {
 		return FinalizeDistinct(pipeline, event, context, gstate_p);
@@ -680,16 +680,16 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class SimpleAggregateState : public GlobalSourceState {
+class UngroupedAggregateState : public GlobalSourceState {
 public:
-	SimpleAggregateState() : finished(false) {
+	UngroupedAggregateState() : finished(false) {
 	}
 
 	bool finished;
 };
 
 unique_ptr<GlobalSourceState> PhysicalUngroupedAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<SimpleAggregateState>();
+	return make_unique<UngroupedAggregateState>();
 }
 
 void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<unique_ptr<Expression>> &aggregates) {
@@ -708,8 +708,8 @@ void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<un
 
 void PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                          LocalSourceState &lstate) const {
-	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
-	auto &state = (SimpleAggregateState &)gstate_p;
+	auto &gstate = (UngroupedAggregateGlobalState &)*sink_state;
+	auto &state = (UngroupedAggregateState &)gstate_p;
 	D_ASSERT(gstate.finished);
 	if (state.finished) {
 		return;
