@@ -66,6 +66,35 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 		return RType::NUMERIC;
 	} else if (TYPEOF(v) == STRSXP) {
 		return RType::STRING;
+	} else if (TYPEOF(v) == VECSXP) {
+		if (Rf_inherits(v, "blob")) {
+			return RType::BLOB;
+		}
+
+		R_xlen_t len = Rf_length(v);
+		R_xlen_t i = 0;
+		for (; i < len; ++i) {
+			auto elt = VECTOR_ELT(v, i);
+			if (TYPEOF(elt) == RAWSXP) {
+				break;
+			}
+			if (elt != R_NilValue) {
+				return RType::UNKNOWN;
+			}
+		}
+
+		if (i == len) {
+			return RType::LIST_OF_NULLS;
+		}
+
+		for (; i < len; ++i) {
+			auto elt = VECTOR_ELT(v, i);
+			if (TYPEOF(elt) != RAWSXP && elt != R_NilValue) {
+				return RType::UNKNOWN;
+			}
+		}
+
+		return RType::BLOB;
 	}
 	return RType::UNKNOWN;
 }
