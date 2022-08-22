@@ -65,7 +65,6 @@ class TestSimpleDBAPI(object):
     def test_fetchmany_too_many(self, duckdb_cursor):
         truth_value = len(duckdb_cursor.execute('select * from integers').fetchall())
         duckdb_cursor.execute('select * from integers')
-        list_of_results = []
         res = duckdb_cursor.fetchmany(truth_value * 5)
         assert(len(res) == truth_value)
         assert_result_equal(res)
