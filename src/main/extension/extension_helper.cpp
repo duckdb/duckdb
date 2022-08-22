@@ -1,9 +1,10 @@
 #include "duckdb/main/extension_helper.hpp"
+
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/windows.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/windows.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 #if defined(BUILD_ICU_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define ICU_STATICALLY_LOADED true
@@ -65,6 +66,13 @@
 #define JSON_STATICALLY_LOADED false
 #endif
 
+#if defined(BUILD_HASH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+#define HASH_STATICALLY_LOADED true
+#include "hash-extension.hpp"
+#else
+#define HASH_STATICALLY_LOADED false
+#endif
+
 #if defined(BUILD_EXCEL_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "excel-extension.hpp"
 #endif
@@ -87,6 +95,7 @@ static DefaultExtension internal_extensions[] = {
     {"fts", "Adds support for Full-Text Search Indexes", FTS_STATICALLY_LOADED},
     {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", HTTPFS_STATICALLY_LOADED},
     {"json", "Adds support for JSON operations", JSON_STATICALLY_LOADED},
+    {"hash", "Adds support for popular hash functions", HASH_STATICALLY_LOADED},
     {"sqlite_scanner", "Adds support for reading SQLite database files", false},
     {"postgres_scanner", "Adds support for reading from a Postgres database", false},
     {nullptr, nullptr, false}};
@@ -107,8 +116,8 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 // Load Statically Compiled Extension
 //===--------------------------------------------------------------------===//
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet",   "icu",        "tpch", "tpcds", "fts",     "httpfs",
-	                                  "substrait", "visualizer", "json", "excel", "sqlsmith"};
+	unordered_set<string> extensions {"parquet",   "icu",        "tpch", "tpcds", "fts",      "httpfs",
+	                                  "substrait", "visualizer", "json", "excel", "sqlsmith", "hash"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -197,6 +206,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		db.LoadExtension<JSONExtension>();
 #else
 		// json extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "hash") {
+#if HASH_STATICALLY_LOADED
+		db.LoadExtension<HashExtension>();
+#else
+		// hash extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "excel") {
