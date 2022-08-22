@@ -185,3 +185,16 @@ statement ok
 DROP TABLE t2;
 
 endloop
+
+# testing really long strings
+
+statement ok
+CREATE TABLE long_str AS SELECT range % 4 g, repeat(range::VARCHAR, 10000) i FROM range (10);
+
+query II
+SELECT g, list_count(LIST(i)) FROM long_str GROUP BY g ORDER BY g
+----
+0	3
+1	3
+2	2
+3	2
