@@ -4,11 +4,63 @@ import numpy
 import pandas
 
 
+def assert_result_equal(result):
+    assert result == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (None,)], "Incorrect result returned"
+
+
 class TestSimpleDBAPI(object):
     def test_regular_selection(self, duckdb_cursor):
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchall()
-        assert result == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (None,)], "Incorrect result returned"
+        assert_result_equal(result)
+
+    def test_fetchmany_default(self, duckdb_cursor):
+        # Get truth-value
+        truth_value = len(duckdb_cursor.execute("select * from integers").fetchall())
+
+        duckdb_cursor.execute('Select * from integers')
+        # by default 'size' is 1
+        arraysize = 1
+        list_of_results = []
+        while (True):
+            res = duckdb_cursor.fetchmany()
+            assert(isinstance(res, list))
+            list_of_results.extend(res)
+            if (len(res) < arraysize):
+                break
+        assert(len(list_of_results) == truth_value)
+        assert_result_equal(list_of_results)
+
+    def test_fetchmany(self, duckdb_cursor):
+        # Get truth value
+        truth_value = len(duckdb_cursor.execute("select * from integers").fetchall())
+        duckdb_cursor.execute('select * from integers')
+        list_of_results = []
+        arraysize = 3
+        expected_iteration_count = (int)(truth_value / arraysize) + (1 if truth_value % arraysize else 0)
+        iteration_count = 0
+        print("truth_value:",truth_value)
+        print("expected_iteration_count:",expected_iteration_count)
+        while (True):
+            print(iteration_count)
+            res = duckdb_cursor.fetchmany(3)
+            print(res)
+            iteration_count += 1
+            assert(isinstance(res, list))
+            list_of_results.extend(res)
+            if (len(res) < arraysize):
+                break
+        assert(iteration_count == expected_iteration_count)
+        assert(len(list_of_results) == truth_value)
+        assert_result_equal(list_of_results)
+
+    def test_fetchmany_too_many(self, duckdb_cursor):
+        truth_value = len(duckdb_cursor.execute('select * from integers').fetchall())
+        duckdb_cursor.execute('select * from integers')
+        list_of_results = []
+        res = duckdb_cursor.fetchmany(truth_value * 5)
+        assert(len(res) == truth_value)
+        assert_result_equal(res)
 
     def test_numpy_selection(self, duckdb_cursor):
         duckdb_cursor.execute('SELECT * FROM integers')
