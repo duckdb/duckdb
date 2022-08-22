@@ -137,8 +137,4 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 	other.Clear();
 }
 
-unique_ptr<RowDataCollection> RowDataCollection::CloneEmpty(bool keep_pinned_p = false) {
-	return make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size, keep_pinned_p);
-}
-
 } // namespace duckdb

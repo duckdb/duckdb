@@ -83,7 +83,6 @@ public:
 	                           const SelectionVector *sel = FlatVector::IncrementalSelectionVector());
 
 	void Merge(RowDataCollection &other);
-	unique_ptr<RowDataCollection> CloneEmpty(bool keep_pinned_p);
 
 	void Clear() {
 		blocks.clear();
