@@ -36,10 +36,10 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              PhysicalOperatorType type)
     : PhysicalOperator(type, move(types), estimated_cardinality), grouping_sets(move(grouping_sets_p)) {
 	// get a list of all aggregates to be computed
-	const idx_t groups_amount = groups_p.size();
+	const idx_t group_count = groups_p.size();
 	if (grouping_sets.empty()) {
 		GroupingSet set;
-		for (idx_t i = 0; i < groups_amount; i++) {
+		for (idx_t i = 0; i < group_count; i++) {
 			set.insert(i);
 		}
 		grouping_sets.push_back(move(set));

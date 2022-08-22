@@ -286,8 +286,8 @@ void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, Glob
 	if (!distinct_aggregate_data) {
 		return;
 	}
-	auto table_amount = distinct_aggregate_data->radix_tables.size();
-	for (idx_t table_idx = 0; table_idx < table_amount; table_idx++) {
+	auto table_count = distinct_aggregate_data->radix_tables.size();
+	for (idx_t table_idx = 0; table_idx < table_count; table_idx++) {
 		D_ASSERT(distinct_aggregate_data->radix_tables[table_idx]);
 		auto &radix_table = *distinct_aggregate_data->radix_tables[table_idx];
 		auto &radix_global_sink = *distinct_aggregate_data->radix_states[table_idx];

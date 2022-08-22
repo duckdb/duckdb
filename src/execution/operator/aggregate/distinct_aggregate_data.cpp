@@ -10,13 +10,13 @@ DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<
     : child_executor(allocator), payload_chunk(), indices(move(indices)) {
 	const idx_t aggregate_count = aggregates.size();
 
-	idx_t table_amount = CreateTableIndexMap(aggregates);
+	idx_t table_count = CreateTableIndexMap(aggregates);
 
-	grouped_aggregate_data.resize(table_amount);
-	radix_tables.resize(table_amount);
-	radix_states.resize(table_amount);
-	grouping_sets.resize(table_amount);
-	distinct_output_chunks.resize(table_amount);
+	grouped_aggregate_data.resize(table_count);
+	radix_tables.resize(table_count);
+	radix_states.resize(table_count);
+	grouping_sets.resize(table_count);
+	distinct_output_chunks.resize(table_count);
 
 	vector<LogicalType> payload_types;
 	for (idx_t i = 0; i < aggregate_count; i++) {
@@ -142,4 +142,4 @@ bool DistinctAggregateData::IsDistinct(idx_t index) const {
 	return is_distinct;
 }
 
-} //namespace duckdb
+} // namespace duckdb
