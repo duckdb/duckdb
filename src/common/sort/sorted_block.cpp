@@ -65,9 +65,11 @@ void SortedData::Unswizzle() {
 	for (idx_t i = 0; i < data_blocks.size(); i++) {
 		auto &data_block = data_blocks[i];
 		auto &heap_block = heap_blocks[i];
+		D_ASSERT(data_block.block->IsSwizzled());
 		auto data_handle_p = buffer_manager.Pin(data_block.block);
 		auto heap_handle_p = buffer_manager.Pin(heap_block.block);
 		RowOperations::UnswizzlePointers(layout, data_handle_p.Ptr(), heap_handle_p.Ptr(), data_block.count);
+		data_block.block->SetSwizzling("SortedData::Unswizzle");
 		state.heap_blocks.push_back(move(heap_block));
 		state.pinned_blocks.push_back(move(heap_handle_p));
 	}
@@ -283,7 +285,9 @@ void SBScanState::SetIndices(idx_t block_idx_to, idx_t entry_idx_to) {
 
 PayloadScanner::PayloadScanner(SortedData &sorted_data, GlobalSortState &global_sort_state, bool flush_p)
     : sorted_data(sorted_data), read_state(global_sort_state.buffer_manager, global_sort_state),
-      total_count(sorted_data.Count()), global_sort_state(global_sort_state), total_scanned(0), flush(flush_p) {
+      total_count(sorted_data.Count()), total_scanned(0), flush(flush_p),
+      unswizzling(!sorted_data.layout.AllConstant() && global_sort_state.external) {
+	ValidateUnscannedBlock();
 }
 
 PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, bool flush_p)
@@ -293,9 +297,16 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, bool flush_p)
 PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx)
     : sorted_data(*global_sort_state.sorted_blocks[0]->payload_data),
       read_state(global_sort_state.buffer_manager, global_sort_state),
-      total_count(sorted_data.data_blocks[block_idx].count), global_sort_state(global_sort_state), total_scanned(0),
-      flush(false) {
+      total_count(sorted_data.data_blocks[block_idx].count), total_scanned(0), flush(false),
+      unswizzling(!sorted_data.layout.AllConstant() && global_sort_state.external) {
 	read_state.SetIndices(block_idx, 0);
+	ValidateUnscannedBlock();
+}
+
+void PayloadScanner::ValidateUnscannedBlock() const {
+	if (unswizzling && read_state.block_idx < sorted_data.data_blocks.size()) {
+		D_ASSERT(sorted_data.data_blocks[read_state.block_idx].block->IsSwizzled());
+	}
 }
 
 void PayloadScanner::Scan(DataChunk &chunk) {
@@ -308,6 +319,9 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 	if (flush) {
 		for (idx_t i = 0; i < read_state.block_idx; i++) {
 			sorted_data.data_blocks[i].block = nullptr;
+			if (unswizzling) {
+				sorted_data.heap_blocks[i].block = nullptr;
+			}
 		}
 	}
 	const idx_t &row_width = sorted_data.layout.GetRowWidth();
@@ -326,14 +340,16 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 			row_ptr += row_width;
 		}
 		// Unswizzle the offsets back to pointers (if needed)
-		if (!sorted_data.layout.AllConstant() && global_sort_state.external) {
+		if (unswizzling) {
 			RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle.Ptr(), next);
+			sorted_data.data_blocks[read_state.block_idx].block->SetSwizzling("PayloadScanner::Scan");
 		}
 		// Update state indices
 		read_state.entry_idx += next;
 		if (read_state.entry_idx == data_block.count) {
 			read_state.block_idx++;
 			read_state.entry_idx = 0;
+			ValidateUnscannedBlock();
 		}
 		scanned += next;
 	}

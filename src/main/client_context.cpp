@@ -315,7 +315,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		return result;
 	}
 #ifdef DEBUG
-	plan->Verify();
+	plan->Verify(*this);
 #endif
 	if (config.enable_optimizer) {
 		profiler.StartPhase("optimizer");
@@ -325,7 +325,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		profiler.EndPhase();
 
 #ifdef DEBUG
-		plan->Verify();
+		plan->Verify(*this);
 #endif
 	}
 
@@ -667,7 +667,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
 		auto &db = DatabaseInstance::GetDatabase(*this);
-		db.Invalidate();
+		if (!config.query_verification_enabled) {
+			db.Invalidate();
+		}
 		result = make_unique<PendingQueryResult>(ex.what());
 	} catch (std::exception &ex) {
 		// other types of exceptions do invalidate the current transaction
@@ -1085,6 +1087,9 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 			result += name + ":\n" + results[i]->ToString();
 			return result;
 		} // LCOV_EXCL_STOP
+		if (!results[0]->success) {
+			continue;
+		}
 		string error;
 		if (!ColumnDataCollection::ResultEquals(results[0]->Collection(), results[i]->Collection(),
 		                                        error)) { // LCOV_EXCL_START
@@ -1099,36 +1104,14 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	return "";
 }
 
-bool ClientContext::UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function,
-                                                CreateScalarFunctionInfo *new_info) {
-	if (new_info->functions.empty()) {
-		throw InternalException("Registering function without scalar function definitions!");
-	}
-	bool need_rewrite_entry = false;
-	idx_t size_new_func = new_info->functions.size();
-	for (idx_t exist_idx = 0; exist_idx < existing_function->functions.size(); ++exist_idx) {
-		bool can_add = true;
-		for (idx_t new_idx = 0; new_idx < size_new_func; ++new_idx) {
-			if (new_info->functions[new_idx].Equal(existing_function->functions[exist_idx])) {
-				can_add = false;
-				break;
-			}
-		}
-		if (can_add) {
-			new_info->functions.push_back(existing_function->functions[exist_idx]);
-			need_rewrite_entry = true;
-		}
-	}
-	return need_rewrite_entry;
-}
-
 void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	RunFunctionInTransaction([&]() {
 		auto &catalog = Catalog::GetCatalog(*this);
 		auto existing_function = (ScalarFunctionCatalogEntry *)catalog.GetEntry(
 		    *this, CatalogType::SCALAR_FUNCTION_ENTRY, info->schema, info->name, true);
 		if (existing_function) {
-			if (UpdateFunctionInfoFromEntry(existing_function, (CreateScalarFunctionInfo *)info)) {
+			auto new_info = (CreateScalarFunctionInfo *)info;
+			if (new_info->functions.MergeFunctionSet(existing_function->functions)) {
 				// function info was updated from catalog entry, rewrite is needed
 				info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 			}

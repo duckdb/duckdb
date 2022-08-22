@@ -503,7 +503,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 		auto &mask = FlatVector::Validity(src_vec);
 		for (size_t row_idx = 0; row_idx < n; row_idx++) {
 			if (!mask.RowIsValid(row_idx)) {
-				SET_VECTOR_ELT(dest, dest_offset + row_idx, Rf_ScalarLogical(NA_LOGICAL));
+				SET_VECTOR_ELT(dest, dest_offset + row_idx, R_NilValue);
 			} else {
 				SEXP rawval = NEW_RAW(src_ptr[row_idx].GetSize());
 				if (!rawval) {
