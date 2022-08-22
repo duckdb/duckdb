@@ -211,6 +211,7 @@ struct HugeIntBitCntOperator {
 	static inline TR Operation(TA input) {
 		using TU = typename std::make_unsigned<int64_t>::type;
 		TR count = 0;
+
 		for (auto value = TU(input.upper); value; ++count) {
 			value &= (value - 1);
 		}
