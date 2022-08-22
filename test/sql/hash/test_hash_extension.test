@@ -1,0 +1,16 @@
+# name: test/sql/hash/test_hash_extension.test
+# description: Test the hash functions in the hash extension
+# group: [hash]
+
+require hash
+
+query T
+SELECT xxHash32('Hello, world!');
+----
+834093149
+
+
+query T
+SELECT xxHash64('Hello, world!');
+----
+17691043854468224118
