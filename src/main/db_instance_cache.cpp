@@ -10,6 +10,9 @@ string GetDBAbsolutePath(const string &database) {
 		// this is a memory db, just return it.
 		return database;
 	}
+	if (FileSystem::IsPathAbsolute(database)) {
+		return database;
+	}
 	return FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), database);
 }
 

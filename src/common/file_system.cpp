@@ -46,6 +46,14 @@ FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
 	return ClientData::Get(context).file_opener.get();
 }
 
+bool FileSystem::IsPathAbsolute(const string &path) {
+	auto path_separator = FileSystem::PathSeparator();
+	if (path.rfind(path_separator, 0) == 0) {
+		return true;
+	}
+	return false;
+}
+
 #ifndef _WIN32
 string FileSystem::PathSeparator() {
 	return "/";
