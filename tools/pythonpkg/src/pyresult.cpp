@@ -208,11 +208,15 @@ py::object DuckDBPyResult::Fetchone() {
 py::list DuckDBPyResult::Fetchmany(idx_t size) {
 	py::list res;
 	for (idx_t i = 0; i < size; i++) {
-		auto fres = Fetchone();
-		if (fres.is_none()) {
+		try {
+			auto fres = Fetchone();
+			if (fres.is_none()) {
+				break;
+			}
+			res.append(fres);
+		} catch (InvalidInputException &e) {
 			break;
 		}
-		res.append(fres);
 	}
 	return res;
 }
