@@ -58,7 +58,7 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, 
       memory_per_thread(0) {
 	D_ASSERT(orders.size() == 1);
 
-	// Set external (can be force with the PRAGMA)
+	// Set external (can be forced with the PRAGMA)
 	auto &config = ClientConfig::GetConfig(context);
 	global_sort_state.external = config.force_external;
 	memory_per_thread = PhysicalRangeJoin::GetMaxThreadMemory(context);
@@ -305,6 +305,7 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &
 	if (!sorted_data.layout.AllConstant() && state.external) {
 		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle.Ptr(),
 		                                 addr_count);
+		sorted_data.data_blocks[read_state.block_idx].block->SetSwizzling("PhysicalRangeJoin::SliceSortedPayload");
 	}
 
 	// Deserialize the payload data

@@ -42,7 +42,7 @@ dbQuoteLiteral__duckdb_connection <- function(conn, x, ...) {
         if (is.null(x)) {
           "NULL"
         } else if (is.raw(x)) {
-          paste0("X'", paste(format(x), collapse = ""), "'")
+          paste0("'", paste0("\\x", format(x), collapse = ""), "'")
         } else {
           stop("Lists must contain raw vectors or NULL", call. = FALSE)
         }
