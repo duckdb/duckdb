@@ -34,6 +34,8 @@ public:
 
 	py::object Fetchone();
 
+	py::list Fetchmany(idx_t size);
+
 	py::list Fetchall();
 
 	py::dict FetchNumpy();

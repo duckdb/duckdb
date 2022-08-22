@@ -21,6 +21,8 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("description", &DuckDBPyResult::Description)
 	    .def("close", &DuckDBPyResult::Close)
 	    .def("fetchone", &DuckDBPyResult::Fetchone, "Fetch a single row as a tuple")
+	    .def("fetchmany", &DuckDBPyResult::Fetchmany, "Fetch the next set of rows as a list of tuples",
+	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyResult::Fetchall, "Fetch all rows as a list of tuples")
 	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy,
 	         "Fetch all rows as a Python dict mapping each column to one numpy arrays")
@@ -203,9 +205,9 @@ py::object DuckDBPyResult::Fetchone() {
 	return move(res);
 }
 
-py::list DuckDBPyResult::Fetchall() {
+py::list DuckDBPyResult::Fetchmany(idx_t size) {
 	py::list res;
-	while (true) {
+	for (idx_t i = 0; i < size; i++) {
 		auto fres = Fetchone();
 		if (fres.is_none()) {
 			break;
@@ -214,6 +216,11 @@ py::list DuckDBPyResult::Fetchall() {
 	}
 	return res;
 }
+
+py::list DuckDBPyResult::Fetchall() {
+	return Fetchmany(STANDARD_VECTOR_SIZE);
+}
+
 py::dict DuckDBPyResult::FetchNumpy() {
 	return FetchNumpyInternal();
 }
