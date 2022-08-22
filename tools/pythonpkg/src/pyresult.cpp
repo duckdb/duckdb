@@ -218,7 +218,15 @@ py::list DuckDBPyResult::Fetchmany(idx_t size) {
 }
 
 py::list DuckDBPyResult::Fetchall() {
-	return Fetchmany(STANDARD_VECTOR_SIZE);
+	py::list res;
+	while (true) {
+		auto fres = Fetchone();
+		if (fres.is_none()) {
+			break;
+		}
+		res.append(fres);
+	}
+	return res;
 }
 
 py::dict DuckDBPyResult::FetchNumpy() {
