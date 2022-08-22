@@ -20,8 +20,9 @@
 namespace duckdb {
 
 static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function) {
-	return table_function.functions.size() == 1 && table_function.functions[0].arguments.size() == 1 &&
-	       table_function.functions[0].arguments[0].id() == LogicalTypeId::TABLE;
+	auto fun = table_function.functions.GetFunctionByOffset(0);
+	return table_function.functions.Size() == 1 && fun.arguments.size() == 1 &&
+	       fun.arguments[0].id() == LogicalTypeId::TABLE;
 }
 
 bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
@@ -148,6 +149,10 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		}
 	}
 	auto get = make_unique<LogicalGet>(bind_index, table_function, move(bind_data), return_types, return_names);
+	get->parameters = parameters;
+	get->named_parameters = named_parameters;
+	get->input_table_types = input_table_types;
+	get->input_table_names = input_table_names;
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, *get);
 	return move(get);
@@ -216,7 +221,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	if (best_function_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(ref, error));
 	}
-	auto &table_function = function->functions[best_function_idx];
+	auto table_function = function->functions.GetFunctionByOffset(best_function_idx);
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);

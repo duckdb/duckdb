@@ -25,6 +25,10 @@ public:
 	bool use_tmp_file;
 	bool is_file_and_exists;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BIGINT);

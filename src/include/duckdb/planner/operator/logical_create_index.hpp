@@ -34,6 +34,10 @@ public:
 	//! Unbound expressions to be used in the optimizer
 	vector<unique_ptr<Expression>> unbound_expressions;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BIGINT);

@@ -27,6 +27,13 @@ struct ListAggregatesBindData : public FunctionData {
 		auto &other = (const ListAggregatesBindData &)other_p;
 		return stype == other.stype && aggr_expr->Equals(other.aggr_expr.get());
 	}
+	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
+		throw NotImplementedException("FIXME: list aggr serialize");
+	}
+	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	                                            ScalarFunction &bound_function) {
+		throw NotImplementedException("FIXME: list aggr deserialize");
+	}
 };
 
 ListAggregatesBindData::ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p)
@@ -204,10 +211,8 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 		}
 
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-
 			// states vector is full, update
 			if (states_idx == STANDARD_VECTOR_SIZE) {
-
 				// update the aggregate state(s)
 				Vector slice = Vector(child_vector, sel_vector, states_idx);
 				aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
@@ -312,20 +317,33 @@ static void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 template <bool IS_AGGR = false>
-static unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                           const LogicalType &list_child_type,
-                                                           AggregateFunction &aggr_function) {
+static unique_ptr<FunctionData>
+ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_function, const LogicalType &list_child_type,
+                           AggregateFunction &aggr_function, vector<unique_ptr<Expression>> &arguments) {
 
 	// create the child expression and its type
 	vector<unique_ptr<Expression>> children;
 	auto expr = make_unique<BoundConstantExpression>(Value(list_child_type));
 	children.push_back(move(expr));
+	// push any extra arguments into the list aggregate bind
+	if (arguments.size() > 2) {
+		for (idx_t i = 2; i < arguments.size(); i++) {
+			children.push_back(move(arguments[i]));
+		}
+		arguments.resize(2);
+	}
 
 	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, aggr_function, move(children));
 	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]);
 
 	if (IS_AGGR) {
 		bound_function.return_type = bound_aggr_function->function.return_type;
+	}
+	// check if the aggregate function consumed all the extra input arguments
+	if (bound_aggr_function->children.size() > 1) {
+		throw InvalidInputException(
+		    "Aggregate function %s is not supported for list_aggr: extra arguments were not removed during bind",
+		    bound_aggr_function->ToString());
 	}
 
 	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
@@ -345,7 +363,6 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 
 	string function_name = "histogram";
 	if (IS_AGGR) { // get the name of the aggregate function
-
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("Aggregate function name must be a constant");
 		}
@@ -370,31 +387,34 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	string error;
 	vector<LogicalType> types;
 	types.push_back(list_child_type);
+	// push any extra arguments into the type list
+	for (idx_t i = 2; i < arguments.size(); i++) {
+		types.push_back(arguments[i]->return_type);
+	}
 	auto best_function_idx = Function::BindFunction(func->name, func->functions, types, error);
 	if (best_function_idx == DConstants::INVALID_INDEX) {
-		throw BinderException("No matching aggregate function");
+		throw BinderException("No matching aggregate function\n%s", error);
 	}
 
 	// found a matching function, bind it as an aggregate
-	auto &best_function = func->functions[best_function_idx];
-
+	auto best_function = func->functions.GetFunctionByOffset(best_function_idx);
 	if (IS_AGGR) {
-		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, list_child_type, best_function);
+		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, list_child_type, best_function, arguments);
 	}
 
 	// create the unordered map histogram function
 	D_ASSERT(best_function.arguments.size() == 1);
 	auto key_type = best_function.arguments[0];
 	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(key_type);
-	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, list_child_type, aggr_function);
+	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, list_child_type, aggr_function, arguments);
 }
 
 static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 
 	// the list column and the name of the aggregate function
-	D_ASSERT(bound_function.arguments.size() == 2);
-	D_ASSERT(arguments.size() == 2);
+	D_ASSERT(bound_function.arguments.size() >= 2);
+	D_ASSERT(arguments.size() >= 2);
 
 	return ListAggregatesBind<true>(context, bound_function, arguments);
 }
@@ -423,6 +443,9 @@ ScalarFunction ListAggregateFun::GetFunction() {
 	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
 	                             ListAggregateFunction, ListAggregateBind);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	result.varargs = LogicalType::ANY;
+	result.serialize = ListAggregatesBindData::Serialize;
+	result.deserialize = ListAggregatesBindData::Deserialize;
 	return result;
 }
 

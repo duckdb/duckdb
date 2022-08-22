@@ -8,11 +8,11 @@ namespace duckdb {
 
 // aggregate state export
 struct ExportAggregateBindData : public FunctionData {
-	AggregateFunction &aggr;
+	AggregateFunction aggr;
 	idx_t state_size;
 
-	explicit ExportAggregateBindData(AggregateFunction &aggr_p, idx_t state_size_p)
-	    : aggr(aggr_p), state_size(state_size_p) {
+	explicit ExportAggregateBindData(AggregateFunction aggr_p, idx_t state_size_p)
+	    : aggr(move(aggr_p)), state_size(state_size_p) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -207,7 +207,7 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name, error);
 	}
-	auto &bound_aggr = aggr->functions[best_function];
+	auto bound_aggr = aggr->functions.GetFunctionByOffset(best_function);
 	if (bound_aggr.return_type != state_type.return_type || bound_aggr.arguments != state_type.bound_argument_types) {
 		throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
 	}
@@ -249,6 +249,24 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 	return aggregate->Equals(other.aggregate.get());
 }
 
+static void ExportStateAggregateSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+                                          const AggregateFunction &function) {
+	throw NotImplementedException("FIXME: export state serialize");
+}
+static unique_ptr<FunctionData> ExportStateAggregateDeserialize(ClientContext &context, FieldReader &reader,
+                                                                AggregateFunction &bound_function) {
+	throw NotImplementedException("FIXME: export state deserialize");
+}
+
+static void ExportStateScalarSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+                                       const ScalarFunction &function) {
+	throw NotImplementedException("FIXME: export state serialize");
+}
+static unique_ptr<FunctionData> ExportStateScalarDeserialize(ClientContext &context, FieldReader &reader,
+                                                             ScalarFunction &bound_function) {
+	throw NotImplementedException("FIXME: export state deserialize");
+}
+
 unique_ptr<BoundAggregateExpression>
 ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggregate) {
 	auto &bound_function = child_aggregate->function;
@@ -284,6 +302,8 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
 	                      /* can't propagate statistics */ nullptr, nullptr);
 	export_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	export_function.serialize = ExportStateAggregateSerialize;
+	export_function.deserialize = ExportStateAggregateDeserialize;
 
 	return make_unique<BoundAggregateExpression>(export_function, move(child_aggregate->children),
 	                                             move(child_aggregate->filter), move(export_bind_data),
@@ -294,6 +314,8 @@ ScalarFunction ExportAggregateFunction::GetFinalize() {
 	auto result = ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
 	                             AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	result.serialize = ExportStateScalarSerialize;
+	result.deserialize = ExportStateScalarDeserialize;
 	return result;
 }
 
@@ -302,6 +324,8 @@ ScalarFunction ExportAggregateFunction::GetCombine() {
 	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
 	                   AggregateStateCombine, BindAggregateState, nullptr, nullptr, InitCombineState);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	result.serialize = ExportStateScalarSerialize;
+	result.deserialize = ExportStateScalarDeserialize;
 	return result;
 }
 

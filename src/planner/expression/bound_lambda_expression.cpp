@@ -39,4 +39,8 @@ unique_ptr<Expression> BoundLambdaExpression::Copy() {
 	return move(copy);
 }
 
+void BoundLambdaExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

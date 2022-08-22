@@ -108,6 +108,12 @@ CREATE TABLE decimals(d DECIMAL(3, 2));
 statement ok
 INSERT INTO decimals VALUES ('0.1'), ('0.2');
 
+query I
+SELECT d + 10000 FROM decimals;
+----
+10000.1
+10000.2
+
 query II
 SELECT d + '0.1'::DECIMAL, d + 10000 FROM decimals;
 ----

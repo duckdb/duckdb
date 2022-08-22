@@ -20,18 +20,21 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	py::class_<DuckDBPyResult>(m, "DuckDBPyResult", py::module_local())
 	    .def("description", &DuckDBPyResult::Description)
 	    .def("close", &DuckDBPyResult::Close)
-	    .def("fetchone", &DuckDBPyResult::Fetchone)
-	    .def("fetchall", &DuckDBPyResult::Fetchall)
-	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy)
-	    .def("fetchdf", &DuckDBPyResult::FetchDF)
-	    .def("fetch_df", &DuckDBPyResult::FetchDF)
-	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
-	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table",
+	    .def("fetchone", &DuckDBPyResult::Fetchone, "Fetch a single row as a tuple")
+	    .def("fetchall", &DuckDBPyResult::Fetchall, "Fetch all rows as a list of tuples")
+	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy,
+	         "Fetch all rows as a Python dict mapping each column to one numpy arrays")
+	    .def("df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetchdf", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetch_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk, "Fetch a chunk of rows as a pandas DataFrame",
+	         py::arg("num_of_vectors") = 1)
+	    .def("arrow", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
+	         py::arg("chunk_size") = 1000000)
+	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
 	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
-	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"))
-	    .def("arrow", &DuckDBPyResult::FetchArrowTable, py::arg("chunk_size") = 1000000)
-	    .def("df", &DuckDBPyResult::FetchDF);
+	         "Fetch all rows as an Arrow Record Batch Reader", py::arg("approx_batch_size"));
 
 	PyDateTime_IMPORT;
 }
@@ -312,7 +315,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	return res;
 }
 
-void DuckDBPyResult::ChangeToTZType(data_frame &df) {
+void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
 			// first localize to UTC then convert to timezone_config
@@ -322,19 +325,19 @@ void DuckDBPyResult::ChangeToTZType(data_frame &df) {
 	}
 }
 
-data_frame DuckDBPyResult::FrameFromNumpy(const py::handle &o) {
-	auto df = py::cast<data_frame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+DataFrame DuckDBPyResult::FrameFromNumpy(const py::handle &o) {
+	auto df = py::cast<DataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
 	return df;
 }
 
-data_frame DuckDBPyResult::FetchDF() {
+DataFrame DuckDBPyResult::FetchDF() {
 	timezone_config = QueryResult::GetConfigTimezone(*result);
 	return FrameFromNumpy(FetchNumpyInternal());
 }
 
-data_frame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
+DataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
 	if (timezone_config.empty()) {
 		timezone_config = QueryResult::GetConfigTimezone(*result);
 	}
@@ -373,7 +376,7 @@ py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	return std::move(batches);
 }
 
-py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
+duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("There is no query result");
 	}
@@ -393,10 +396,10 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	py::list batches = FetchAllArrowChunks(chunk_size);
 
 	// We return an Arrow Table
-	return from_batches_func(batches, schema_obj);
+	return py::cast<duckdb::pyarrow::Table>(from_batches_func(batches, schema_obj));
 }
 
-py::object DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
+duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("There is no query result");
 	}
@@ -406,7 +409,7 @@ py::object DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
 	//! We have to construct an Arrow Array Stream
 	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), chunk_size);
 	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
-	return record_batch_reader;
+	return py::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {
