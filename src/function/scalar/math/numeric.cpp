@@ -199,8 +199,8 @@ struct BitCntOperator {
 	static inline TR Operation(TA input) {
 		using TU = typename std::make_unsigned<TA>::type;
 		TR count = 0;
-		for (auto value = TU(input); value > 0; value >>= 1) {
-			count += TR(value & 1);
+		for (auto value = TU(input); value; ++count) {
+			value &= (value - 1);
 		}
 		return count;
 	}
@@ -211,11 +211,11 @@ struct HugeIntBitCntOperator {
 	static inline TR Operation(TA input) {
 		using TU = typename std::make_unsigned<int64_t>::type;
 		TR count = 0;
-		for (auto value = TU(input.upper); value > 0; value >>= 1) {
-			count += TR(value & 1);
+		for (auto value = TU(input.upper); value; ++count) {
+			value &= (value - 1);
 		}
-		for (auto value = input.lower; value > 0; value >>= 1) {
-			count += TR(value & 1);
+		for (auto value = TU(input.lower); value; ++count) {
+			value &= (value - 1);
 		}
 		return count;
 	}
