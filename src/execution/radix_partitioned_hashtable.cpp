@@ -26,7 +26,7 @@ void RadixPartitionedHashTable::SetGroupingValues() {
 RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const GroupedAggregateData &op_p)
     : grouping_set(grouping_set_p), op(op_p) {
 
-	auto groups_count = op.GroupsCount();
+	auto groups_count = op.GroupCount();
 	for (idx_t i = 0; i < groups_count; i++) {
 		if (grouping_set.find(i) == grouping_set.end()) {
 			null_groups.push_back(i);
@@ -436,11 +436,11 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 		ConstantVector::SetNull(chunk.data[null_group], true);
 	}
 	for (idx_t col_idx = 0; col_idx < op.aggregates.size(); col_idx++) {
-		chunk.data[op.GroupsCount() + col_idx].Reference(lstate.scan_chunk.data[group_types.size() + col_idx]);
+		chunk.data[op.GroupCount() + col_idx].Reference(lstate.scan_chunk.data[group_types.size() + col_idx]);
 	}
 	D_ASSERT(op.grouping_functions.size() == grouping_values.size());
 	for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
-		chunk.data[op.GroupsCount() + op.aggregates.size() + i].Reference(grouping_values[i]);
+		chunk.data[op.GroupCount() + op.aggregates.size() + i].Reference(grouping_values[i]);
 	}
 }
 

@@ -38,7 +38,7 @@ public:
 	vector<BoundAggregateExpression *> bindings;
 
 public:
-	idx_t GroupsCount() const {
+	idx_t GroupCount() const {
 		return groups.size();
 	}
 
