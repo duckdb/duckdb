@@ -1,11 +1,12 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
 
-AlterInfo::AlterInfo(AlterType type, string schema_p, string name_p)
-    : type(type), if_exists(false), schema(move(schema_p)), name(move(name_p)) {
+AlterInfo::AlterInfo(AlterType type, string schema_p, string name_p, bool if_exists)
+    : type(type), if_exists(if_exists), schema(move(schema_p)), name(move(name_p)) {
 }
 
 AlterInfo::~AlterInfo() {
@@ -42,8 +43,8 @@ unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 // ChangeOwnershipInfo
 //===--------------------------------------------------------------------===//
 ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, string entry_schema_p, string entry_name_p,
-                                         string owner_schema_p, string owner_name_p)
-    : AlterInfo(AlterType::CHANGE_OWNERSHIP, move(entry_schema_p), move(entry_name_p)),
+                                         string owner_schema_p, string owner_name_p, bool if_exists)
+    : AlterInfo(AlterType::CHANGE_OWNERSHIP, move(entry_schema_p), move(entry_name_p), if_exists),
       entry_catalog_type(entry_catalog_type), owner_schema(move(owner_schema_p)), owner_name(move(owner_name_p)) {
 }
 
@@ -52,7 +53,8 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
-	return make_unique_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, schema, name, owner_schema, owner_name);
+	return make_unique_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, schema, name, owner_schema, owner_name,
+	                                                        if_exists);
 }
 
 void ChangeOwnershipInfo::Serialize(FieldWriter &writer) const {

@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/parse_info.hpp"
-#include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
 
@@ -26,7 +26,7 @@ enum class AlterType : uint8_t {
 enum AlterForeignKeyType : uint8_t { AFT_ADD = 0, AFT_DELETE = 1 };
 
 struct AlterInfo : public ParseInfo {
-	AlterInfo(AlterType type, string schema, string name);
+	AlterInfo(AlterType type, string schema, string name, bool if_exists = false);
 	~AlterInfo() override;
 
 	AlterType type;
@@ -50,7 +50,7 @@ public:
 //===--------------------------------------------------------------------===//
 struct ChangeOwnershipInfo : public AlterInfo {
 	ChangeOwnershipInfo(CatalogType entry_catalog_type, string entry_schema, string entry_name, string owner_schema,
-	                    string owner_name);
+	                    string owner_name, bool if_exists = false);
 
 	// Catalog type refers to the entry type, since this struct is usually built from an
 	// ALTER <TYPE> <schema>.<name> OWNED BY <owner_schema>.<owner_name> statement
