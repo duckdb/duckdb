@@ -277,7 +277,7 @@ public:
 	void Partition(JoinHashTable &global_ht);
 
 	//! Delete blocks that belong to the current partitioned HT
-	void UnFinalize();
+	void Reset();
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize();
 	//! Probe whatever we can, sink the rest into a thread-local HT

@@ -6,6 +6,125 @@
 
 namespace duckdb {
 
+// Master
+// void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block_collection,
+//                                               RowDataCollection &swizzled_string_heap,
+//                                               RowDataCollection &block_collection, RowDataCollection &string_heap,
+//                                               const RowLayout &layout) {
+//	if (block_collection.count == 0) {
+//		return;
+//	}
+//
+//	if (layout.AllConstant()) {
+//		// No heap blocks! Just merge fixed-size data
+//		swizzled_block_collection.Merge(block_collection);
+//		return;
+//	}
+//
+//	// We create one heap block per data block and swizzle the pointers
+//	D_ASSERT(string_heap.keep_pinned == swizzled_string_heap.keep_pinned);
+//	auto &buffer_manager = block_collection.buffer_manager;
+//	auto &heap_blocks = string_heap.blocks;
+//	idx_t heap_block_idx = 0;
+//	idx_t heap_block_remaining = heap_blocks[heap_block_idx]->count;
+//	for (auto &data_block : block_collection.blocks) {
+//		if (heap_block_remaining == 0) {
+//			heap_block_remaining = heap_blocks[++heap_block_idx]->count;
+//		}
+//
+//		// Pin the data block and swizzle the pointers within the rows
+//		auto data_handle = buffer_manager.Pin(data_block->block);
+//		auto data_ptr = data_handle.Ptr();
+//		if (!string_heap.keep_pinned) {
+//			D_ASSERT(!data_block->block->IsSwizzled());
+//			RowOperations::SwizzleColumns(layout, data_ptr, data_block->count);
+//			data_block->block->SetSwizzling(nullptr);
+//		}
+//		// At this point the data block is pinned and the heap pointer is valid
+//		// so we can copy heap data as needed
+//
+//		// We want to copy as little of the heap data as possible, check how the data and heap blocks line up
+//		if (heap_block_remaining >= data_block->count) {
+//			// Easy: current heap block contains all strings for this data block, just copy (reference) the block
+//			swizzled_string_heap.blocks.emplace_back(heap_blocks[heap_block_idx]->Copy());
+//			swizzled_string_heap.blocks.back()->count = data_block->count;
+//
+//			// Swizzle the heap pointer if we are not pinning the heap
+//			auto &heap_block = swizzled_string_heap.blocks.back()->block;
+//			auto heap_handle = buffer_manager.Pin(heap_block);
+//			if (!swizzled_string_heap.keep_pinned) {
+//				auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset());
+//				auto heap_offset = heap_ptr - heap_handle.Ptr();
+//				RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, data_block->count, heap_offset);
+//			} else {
+//				swizzled_string_heap.pinned_blocks.emplace_back(move(heap_handle));
+//			}
+//
+//			// Update counter
+//			heap_block_remaining -= data_block->count;
+//		} else {
+//			// Strings for this data block are spread over the current heap block and the next (and possibly more)
+//			if (string_heap.keep_pinned) {
+//				// The heap is changing underneath the data block,
+//				// so swizzle the string pointers to make them portable.
+//				RowOperations::SwizzleColumns(layout, data_ptr, data_block->count);
+//			}
+//			idx_t data_block_remaining = data_block->count;
+//			vector<std::pair<data_ptr_t, idx_t>> ptrs_and_sizes;
+//			idx_t total_size = 0;
+//			const auto base_row_ptr = data_ptr;
+//			while (data_block_remaining > 0) {
+//				if (heap_block_remaining == 0) {
+//					heap_block_remaining = heap_blocks[++heap_block_idx]->count;
+//				}
+//				auto next = MinValue<idx_t>(data_block_remaining, heap_block_remaining);
+//
+//				// Figure out where to start copying strings, and how many bytes we need to copy
+//				auto heap_start_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset());
+//				auto heap_end_ptr =
+//				    Load<data_ptr_t>(data_ptr + layout.GetHeapOffset() + (next - 1) * layout.GetRowWidth());
+//				idx_t size = heap_end_ptr - heap_start_ptr + Load<uint32_t>(heap_end_ptr);
+//				ptrs_and_sizes.emplace_back(heap_start_ptr, size);
+//				D_ASSERT(size <= heap_blocks[heap_block_idx]->byte_offset);
+//
+//				// Swizzle the heap pointer
+//				RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_start_ptr, next, total_size);
+//				total_size += size;
+//
+//				// Update where we are in the data and heap blocks
+//				data_ptr += next * layout.GetRowWidth();
+//				data_block_remaining -= next;
+//				heap_block_remaining -= next;
+//			}
+//
+//			// Finally, we allocate a new heap block and copy data to it
+//			swizzled_string_heap.blocks.emplace_back(
+//			    make_unique<RowDataBlock>(buffer_manager, MaxValue<idx_t>(total_size, (idx_t)Storage::BLOCK_SIZE), 1));
+//			auto new_heap_handle = buffer_manager.Pin(swizzled_string_heap.blocks.back()->block);
+//			auto new_heap_ptr = new_heap_handle.Ptr();
+//			if (swizzled_string_heap.keep_pinned) {
+//				// Since the heap blocks are pinned, we can unswizzle the data again.
+//				swizzled_string_heap.pinned_blocks.emplace_back(move(new_heap_handle));
+//				RowOperations::UnswizzlePointers(layout, base_row_ptr, new_heap_ptr, data_block->count);
+//				RowOperations::UnswizzleHeapPointer(layout, base_row_ptr, new_heap_ptr, data_block->count);
+//			}
+//			for (auto &ptr_and_size : ptrs_and_sizes) {
+//				memcpy(new_heap_ptr, ptr_and_size.first, ptr_and_size.second);
+//				new_heap_ptr += ptr_and_size.second;
+//			}
+//		}
+//	}
+//
+//	// We're done with variable-sized data, now just merge the fixed-size data
+//	swizzled_block_collection.Merge(block_collection);
+//	D_ASSERT(swizzled_block_collection.blocks.size() == swizzled_string_heap.blocks.size());
+//
+//	// Update counts and cleanup
+//	swizzled_string_heap.count = string_heap.count;
+//	string_heap.Clear();
+//}
+
+// Merged with master
 void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &dst_block_collection,
                                                RowDataCollection &dst_string_heap,
                                                RowDataCollection &src_block_collection,
@@ -21,7 +140,6 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &dst_block_coll
 	}
 
 	// If input data does not have keep_pinned, it should already be aligned
-	// TODO if input is not keep_pinned, but output is, then we should be able to go back and forth
 	D_ASSERT(src_string_heap.keep_pinned);
 
 	// We create one heap block per data block and swizzle the pointers
@@ -66,10 +184,8 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &dst_block_coll
 			heap_block_remaining -= src_data_block->count;
 		} else {
 			// Strings for this data block are spread over the current heap block and the next (and possibly more)
-			if (src_string_heap.keep_pinned) {
-				// The heap is changing underneath the data block, so swizzle the string pointers to make them portable
-				RowOperations::SwizzleColumns(layout, data_ptr, src_data_block->count);
-			}
+			// The heap is changing underneath the data block, so swizzle the string pointers to make them portable
+			RowOperations::SwizzleColumns(layout, data_ptr, src_data_block->count);
 
 			idx_t data_block_remaining = src_data_block->count;
 			vector<std::pair<data_ptr_t, idx_t>> ptrs_and_sizes;
@@ -99,11 +215,13 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &dst_block_coll
 				heap_block_remaining -= next;
 			}
 
-			// Finally, we allocate a new heap block and copy data to it
+			// Finally, we allocate a new heap block
 			dst_string_heap.blocks.emplace_back(
 			    make_unique<RowDataBlock>(buffer_manager, MaxValue<idx_t>(total_size, (idx_t)Storage::BLOCK_SIZE), 1));
 			auto &dst_heap_block = *dst_string_heap.blocks.back();
 			dst_heap_block.count = src_data_block->count;
+
+			// ...  and copy data to it
 			auto new_heap_handle = buffer_manager.Pin(dst_heap_block.block);
 			auto new_heap_ptr = new_heap_handle.Ptr();
 			for (auto &ptr_and_size : ptrs_and_sizes) {

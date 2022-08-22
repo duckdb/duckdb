@@ -123,6 +123,7 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 		temp.entry_size = other.entry_size;
 		temp.blocks = move(other.blocks);
 	}
+	other.Clear();
 
 	lock_guard<mutex> write_lock(rdc_lock);
 	count += temp.count;
@@ -134,7 +135,6 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 	for (auto &handle : temp.pinned_blocks) {
 		pinned_blocks.emplace_back(move(handle));
 	}
-	other.Clear();
 }
 
 } // namespace duckdb

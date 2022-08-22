@@ -79,7 +79,7 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		auto &info = correlated_mark_join_info;
 		lock_guard<mutex> mj_lock(info.mj_lock);
 		has_null = has_null || other.has_null;
-		if (!correlated_mark_join_info.correlated_types.empty()) {
+		if (!info.correlated_types.empty()) {
 			auto &other_info = other.correlated_mark_join_info;
 			info.correlated_counts->Combine(*other_info.correlated_counts);
 		}
@@ -998,7 +998,7 @@ void JoinHashTable::Partition(JoinHashTable &global_ht) {
 	global_ht.Merge(*this);
 }
 
-void JoinHashTable::UnFinalize() {
+void JoinHashTable::Reset() {
 	pinned_handles.clear();
 	block_collection->Clear();
 	string_heap->Clear();
@@ -1012,7 +1012,7 @@ bool JoinHashTable::PrepareExternalFinalize() {
 	}
 
 	if (finalized) {
-		UnFinalize();
+		Reset();
 	}
 
 	// Determine how many partitions we can do next (at least one)
