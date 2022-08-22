@@ -66,6 +66,12 @@ private:
 	DataFrame FrameFromNumpy(const py::handle &o);
 
 	void ChangeToTZType(DataFrame &df);
+
+	unique_ptr<DataChunk> FetchNext(QueryResult &result);
+	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
+
+private:
+	bool result_closed = false;
 };
 
 } // namespace duckdb

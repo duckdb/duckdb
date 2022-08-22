@@ -159,7 +159,11 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	}
 }
 
-unique_ptr<DataChunk> FetchNext(QueryResult &result) {
+unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
+	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
+		result_closed = true;
+		return nullptr;
+	}
 	auto chunk = result.Fetch();
 	if (!result.success) {
 		throw std::runtime_error(result.error);
@@ -167,7 +171,11 @@ unique_ptr<DataChunk> FetchNext(QueryResult &result) {
 	return chunk;
 }
 
-unique_ptr<DataChunk> FetchNextRaw(QueryResult &result) {
+unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &result) {
+	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
+		result_closed = true;
+		return nullptr;
+	}
 	auto chunk = result.FetchRaw();
 	if (!result.success) {
 		throw std::runtime_error(result.error);
@@ -208,15 +216,11 @@ py::object DuckDBPyResult::Fetchone() {
 py::list DuckDBPyResult::Fetchmany(idx_t size) {
 	py::list res;
 	for (idx_t i = 0; i < size; i++) {
-		try {
-			auto fres = Fetchone();
-			if (fres.is_none()) {
-				break;
-			}
-			res.append(fres);
-		} catch (InvalidInputException &e) {
+		auto fres = Fetchone();
+		if (fres.is_none()) {
 			break;
 		}
+		res.append(fres);
 	}
 	return res;
 }
