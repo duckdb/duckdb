@@ -1,59 +1,80 @@
 #include "duckdb/common/types/row_data_collection_scanner.hpp"
 
-#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block_collection,
-                                               RowDataCollection &swizzled_string_heap,
-                                               RowDataCollection &block_collection, RowDataCollection &string_heap,
-                                               const RowLayout &layout) {
-	if (block_collection.count == 0) {
+void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &dst_block_collection,
+                                               RowDataCollection &dst_string_heap,
+                                               RowDataCollection &src_block_collection,
+                                               RowDataCollection &src_string_heap, const RowLayout &layout) {
+	if (src_block_collection.count == 0) {
 		return;
 	}
 
 	if (layout.AllConstant()) {
 		// No heap blocks! Just merge fixed-size data
-		swizzled_block_collection.Merge(block_collection);
+		dst_block_collection.Merge(src_block_collection);
 		return;
 	}
 
+	// If input data does not have keep_pinned, it should already be aligned
+	// TODO if input is not keep_pinned, but output is, then we should be able to go back and forth
+	D_ASSERT(src_string_heap.keep_pinned);
+
 	// We create one heap block per data block and swizzle the pointers
-	auto &buffer_manager = block_collection.buffer_manager;
-	auto &heap_blocks = string_heap.blocks;
+	auto &buffer_manager = src_block_collection.buffer_manager;
+	auto &heap_blocks = src_string_heap.blocks;
 	idx_t heap_block_idx = 0;
 	idx_t heap_block_remaining = heap_blocks[heap_block_idx]->count;
-	for (auto &data_block : block_collection.blocks) {
+	for (auto &src_data_block : src_block_collection.blocks) {
 		if (heap_block_remaining == 0) {
 			heap_block_remaining = heap_blocks[++heap_block_idx]->count;
 		}
 
 		// Pin the data block and swizzle the pointers within the rows
-		auto data_handle = buffer_manager.Pin(data_block->block);
+		auto data_handle = buffer_manager.Pin(src_data_block->block);
 		auto data_ptr = data_handle.Ptr();
-		RowOperations::SwizzleColumns(layout, data_ptr, data_block->count);
 
 		// We want to copy as little of the heap data as possible, check how the data and heap blocks line up
-		if (heap_block_remaining >= data_block->count) {
+		if (heap_block_remaining >= src_data_block->count) {
 			// Easy: current heap block contains all strings for this data block, just copy (reference) the block
-			swizzled_string_heap.blocks.emplace_back(heap_blocks[heap_block_idx]->Copy());
-			swizzled_string_heap.blocks.back()->count = data_block->count;
+			dst_string_heap.blocks.emplace_back(heap_blocks[heap_block_idx]->Copy());
+			auto &dst_heap_block = *dst_string_heap.blocks.back();
+			dst_heap_block.count = src_data_block->count;
 
-			// Swizzle the heap pointer
-			auto heap_handle = buffer_manager.Pin(swizzled_string_heap.blocks.back()->block);
-			auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset());
-			auto heap_offset = heap_ptr - heap_handle.Ptr();
-			RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, data_block->count, heap_offset);
+			// Swizzle the heap pointer if we are not pinning the heap
+			auto heap_handle = buffer_manager.Pin(dst_heap_block.block);
+			if (dst_string_heap.keep_pinned) {
+				// Destination data needs valid pointers too, keep block pinned
+				dst_string_heap.pinned_blocks.emplace_back(move(heap_handle));
+			} else {
+				// Destination data needs blocks to be spillable, swizzle pointers within the rows
+				D_ASSERT(!src_data_block->block->IsSwizzled());
+				RowOperations::SwizzleColumns(layout, data_ptr, src_data_block->count);
+				src_data_block->block->SetSwizzling(nullptr);
+
+				// Now swizzle the heap pointer
+				auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset());
+				auto heap_offset = heap_ptr - heap_handle.Ptr();
+				RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, src_data_block->count, heap_offset);
+			}
 
 			// Update counter
-			heap_block_remaining -= data_block->count;
+			heap_block_remaining -= src_data_block->count;
 		} else {
 			// Strings for this data block are spread over the current heap block and the next (and possibly more)
-			idx_t data_block_remaining = data_block->count;
+			if (src_string_heap.keep_pinned) {
+				// The heap is changing underneath the data block, so swizzle the string pointers to make them portable
+				RowOperations::SwizzleColumns(layout, data_ptr, src_data_block->count);
+			}
+
+			idx_t data_block_remaining = src_data_block->count;
 			vector<std::pair<data_ptr_t, idx_t>> ptrs_and_sizes;
 			idx_t total_size = 0;
+			const auto base_row_ptr = data_ptr;
 			while (data_block_remaining > 0) {
 				if (heap_block_remaining == 0) {
 					heap_block_remaining = heap_blocks[++heap_block_idx]->count;
@@ -79,24 +100,32 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block
 			}
 
 			// Finally, we allocate a new heap block and copy data to it
-			swizzled_string_heap.blocks.emplace_back(
+			dst_string_heap.blocks.emplace_back(
 			    make_unique<RowDataBlock>(buffer_manager, MaxValue<idx_t>(total_size, (idx_t)Storage::BLOCK_SIZE), 1));
-			auto new_heap_handle = buffer_manager.Pin(swizzled_string_heap.blocks.back()->block);
+			auto &dst_heap_block = *dst_string_heap.blocks.back();
+			dst_heap_block.count = src_data_block->count;
+			auto new_heap_handle = buffer_manager.Pin(dst_heap_block.block);
 			auto new_heap_ptr = new_heap_handle.Ptr();
 			for (auto &ptr_and_size : ptrs_and_sizes) {
 				memcpy(new_heap_ptr, ptr_and_size.first, ptr_and_size.second);
 				new_heap_ptr += ptr_and_size.second;
 			}
+
+			if (dst_string_heap.keep_pinned) {
+				// Destination needs valid pointers
+				RowOperations::UnswizzlePointers(layout, base_row_ptr, new_heap_ptr, src_data_block->count);
+				dst_string_heap.pinned_blocks.emplace_back(move(new_heap_handle));
+			}
 		}
 	}
 
 	// We're done with variable-sized data, now just merge the fixed-size data
-	swizzled_block_collection.Merge(block_collection);
-	D_ASSERT(swizzled_block_collection.blocks.size() == swizzled_string_heap.blocks.size());
+	dst_block_collection.Merge(src_block_collection);
+	D_ASSERT(dst_block_collection.blocks.size() == dst_string_heap.blocks.size());
 
 	// Update counts and cleanup
-	swizzled_string_heap.count = string_heap.count;
-	string_heap.Clear();
+	dst_string_heap.count = src_string_heap.count;
+	src_string_heap.Clear();
 }
 
 void RowDataCollectionScanner::ScanState::PinData() {
@@ -121,11 +150,28 @@ void RowDataCollectionScanner::ScanState::PinData() {
 RowDataCollectionScanner::RowDataCollectionScanner(RowDataCollection &rows_p, RowDataCollection &heap_p,
                                                    const RowLayout &layout_p, bool external_p, bool flush_p)
     : rows(rows_p), heap(heap_p), layout(layout_p), read_state(*this), total_count(rows.count), total_scanned(0),
-      external(external_p), flush(flush_p) {
+      external(external_p), flush(flush_p), unswizzling(!layout.AllConstant() && external && !heap.keep_pinned) {
 
-	if (!layout.AllConstant() && external) {
+	if (unswizzling) {
 		D_ASSERT(rows.blocks.size() == heap.blocks.size());
 	}
+
+	ValidateUnscannedBlock();
+}
+
+void RowDataCollectionScanner::SwizzleBlock(RowDataBlock &data_block, RowDataBlock &heap_block) {
+	// Pin the data block and swizzle the pointers within the rows
+	D_ASSERT(!data_block.block->IsSwizzled());
+	auto data_handle = rows.buffer_manager.Pin(data_block.block);
+	auto data_ptr = data_handle.Ptr();
+	RowOperations::SwizzleColumns(layout, data_ptr, data_block.count);
+	data_block.block->SetSwizzling(nullptr);
+
+	// Swizzle the heap pointers
+	auto heap_handle = heap.buffer_manager.Pin(heap_block.block);
+	auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset());
+	auto heap_offset = heap_ptr - heap_handle.Ptr();
+	RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, data_block.count, heap_offset);
 }
 
 void RowDataCollectionScanner::ReSwizzle() {
@@ -133,27 +179,23 @@ void RowDataCollectionScanner::ReSwizzle() {
 		return;
 	}
 
-	if (layout.AllConstant() || !external) {
-		// No heap blocks!
+	if (!unswizzling) {
+		// No swizzled blocks!
 		return;
 	}
 
 	D_ASSERT(rows.blocks.size() == heap.blocks.size());
+	for (idx_t i = 0; i < rows.blocks.size(); ++i) {
+		auto &data_block = rows.blocks[i];
+		if (data_block->block && !data_block->block->IsSwizzled()) {
+			SwizzleBlock(*data_block, *heap.blocks[i]);
+		}
+	}
+}
 
-	// We create one heap block per data block and swizzle the pointers
-	idx_t heap_block_idx = 0;
-	for (auto &data_block : rows.blocks) {
-		// Pin the data block and swizzle the pointers within the rows
-		auto data_handle = rows.buffer_manager.Pin(data_block->block);
-		auto data_ptr = data_handle.Ptr();
-		RowOperations::SwizzleColumns(layout, data_ptr, data_block->count);
-
-		// Swizzle the heap pointers
-		auto &heap_block = heap.blocks[heap_block_idx++];
-		auto heap_handle = heap.buffer_manager.Pin(heap_block->block);
-		auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset());
-		auto heap_offset = heap_ptr - heap_handle.Ptr();
-		RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, data_block->count, heap_offset);
+void RowDataCollectionScanner::ValidateUnscannedBlock() const {
+	if (unswizzling && read_state.block_idx < rows.blocks.size()) {
+		D_ASSERT(rows.blocks[read_state.block_idx]->block->IsSwizzled());
 	}
 }
 
@@ -163,19 +205,14 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 		chunk.SetCardinality(count);
 		return;
 	}
-	// Eagerly delete references to blocks that we've passed
-	if (flush) {
-		for (idx_t i = 0; i < read_state.block_idx; ++i) {
-			rows.blocks[i]->block = nullptr;
-			if (!layout.AllConstant() && external) {
-				heap.blocks[i]->block = nullptr;
-			}
-		}
-	}
+
 	const idx_t &row_width = layout.GetRowWidth();
 	// Set up a batch of pointers to scan data from
 	idx_t scanned = 0;
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
+
+	// We must pin ALL blocks we are going to gather from
+	vector<BufferHandle> pinned_blocks;
 	while (scanned < count) {
 		read_state.PinData();
 		auto &data_block = rows.blocks[read_state.block_idx];
@@ -188,14 +225,22 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 			row_ptr += row_width;
 		}
 		// Unswizzle the offsets back to pointers (if needed)
-		if (!layout.AllConstant() && external) {
+		if (unswizzling) {
 			RowOperations::UnswizzlePointers(layout, data_ptr, read_state.heap_handle.Ptr(), next);
+			rows.blocks[read_state.block_idx]->block->SetSwizzling("RowDataCollectionScanner::Scan");
 		}
 		// Update state indices
 		read_state.entry_idx += next;
 		if (read_state.entry_idx == data_block->count) {
+			// Pin completed blocks so we don't lose them
+			pinned_blocks.emplace_back(rows.buffer_manager.Pin(data_block->block));
+			if (unswizzling) {
+				auto &heap_block = heap.blocks[read_state.block_idx];
+				pinned_blocks.emplace_back(heap.buffer_manager.Pin(heap_block->block));
+			}
 			read_state.block_idx++;
 			read_state.entry_idx = 0;
+			ValidateUnscannedBlock();
 		}
 		scanned += next;
 	}
@@ -209,6 +254,27 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 	chunk.SetCardinality(count);
 	chunk.Verify();
 	total_scanned += scanned;
+
+	//	Switch to a new set of pinned blocks
+	read_state.pinned_blocks.swap(pinned_blocks);
+
+	if (flush) {
+		// Release blocks we have passed.
+		for (idx_t i = 0; i < read_state.block_idx; ++i) {
+			rows.blocks[i]->block = nullptr;
+			if (unswizzling) {
+				heap.blocks[i]->block = nullptr;
+			}
+		}
+	} else if (unswizzling) {
+		// Reswizzle blocks we have passed so they can be flushed safely.
+		for (idx_t i = 0; i < read_state.block_idx; ++i) {
+			auto &data_block = rows.blocks[i];
+			if (data_block->block && !data_block->block->IsSwizzled()) {
+				SwizzleBlock(*data_block, *heap.blocks[i]);
+			}
+		}
+	}
 }
 
 } // namespace duckdb

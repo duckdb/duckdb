@@ -234,6 +234,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// build out the buffer space
 	Vector addresses(LogicalType::POINTER);
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
+	const auto prev_rows_blocks = block_collection->blocks.size();
 	auto handles = block_collection->Build(added_count, key_locations, nullptr, current_sel);
 
 	// hash the keys and obtain an entry in the list
@@ -279,6 +280,13 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 	RowOperations::Scatter(source_chunk, source_data.data(), layout, addresses, *string_heap, *current_sel,
 	                       added_count);
+
+	if (!layout.AllConstant()) {
+		D_ASSERT(string_heap->keep_pinned);
+		for (size_t i = prev_rows_blocks; i < block_collection->blocks.size(); ++i) {
+			block_collection->blocks[i]->block->SetSwizzling("JoinHashTable::Build");
+		}
+	}
 }
 
 template <bool PARALLEL>

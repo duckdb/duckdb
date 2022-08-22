@@ -74,6 +74,8 @@ public:
 	vector<unique_ptr<RowDataBlock>> blocks;
 	//! The blocks that this collection currently has pinned
 	vector<BufferHandle> pinned_blocks;
+	//! Whether the blocks should stay pinned (necessary for e.g. a heap)
+	const bool keep_pinned;
 
 public:
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
@@ -109,9 +111,6 @@ public:
 
 private:
 	mutex rdc_lock;
-
-	//! Whether the blocks should stay pinned (necessary for e.g. a heap)
-	const bool keep_pinned;
 
 	//! Copying is not allowed
 	RowDataCollection(const RowDataCollection &) = delete;
