@@ -16,7 +16,7 @@ namespace duckdb {
 class VectorBuffer;
 
 struct SelectionData {
-	explicit SelectionData(idx_t count);
+	DUCKDB_API explicit SelectionData(idx_t count);
 
 	unique_ptr<sel_t[]> owned_data;
 };

@@ -110,7 +110,7 @@ private:
 //! Note that there is a cost to doing so (several atomic operations will be performed on allocation/free).
 //! As such this class should be used primarily for larger allocations.
 struct BufferAllocator {
-	static Allocator &Get(ClientContext &context);
+	DUCKDB_API static Allocator &Get(ClientContext &context);
 };
 
 } // namespace duckdb

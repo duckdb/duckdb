@@ -20,7 +20,7 @@ public:
 	//! Convert a hugeint object to a string
 	static string ToString(hugeint_t input);
 
-	template <class T>
+	DUCKDB_API template <class T>
 	static bool TryCast(hugeint_t input, T &result);
 
 	template <class T>
