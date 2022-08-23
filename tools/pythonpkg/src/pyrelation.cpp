@@ -5,6 +5,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/vector_conversion.hpp"
 #include "duckdb_python/pandas_type.hpp"
+#include "duckdb/main/relation/query_relation.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
@@ -528,16 +530,27 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
-unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
+	auto view_relation = CreateView(view_name);
+	auto all_dependencies = rel->GetAllDependencies();
+	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
+
+	Parser parser(rel->context.GetContext()->GetParserOptions());
+	parser.ParseQuery(sql_query);
+	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT) {
+		return make_unique<DuckDBPyRelation>(make_shared<QueryRelation>(
+		    rel->context.GetContext(), unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0])),
+		    "query_relation"));
+	}
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
 		res->result = rel->Query(view_name, sql_query);
+		if (res->result != nullptr) {
+			res->Fetchall();
+		}
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
-	}
-	return res;
+	return make_unique<DuckDBPyRelation>(rel);
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
@@ -554,7 +567,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(const DataFrame &df, const string &view_name,
                                                      const string &sql_query, DuckDBPyConnection *conn) {
-	return conn->FromDF(df)->Query(view_name, sql_query);
+	return conn->FromDF(df)->Query(view_name, sql_query)->Execute();
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
