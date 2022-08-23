@@ -20,12 +20,12 @@
 
 #define JEMALLOC_NO_DEMANGLE
 #ifdef JEMALLOC_JET
-//#  undef JEMALLOC_IS_MALLOC
-//#  define JEMALLOC_N(n) jet_##n
-//#  include "jemalloc/internal/public_namespace.h"
-//#  define JEMALLOC_NO_RENAME
-//#  include "jemalloc/jemalloc.h"
-//#  undef JEMALLOC_NO_RENAME
+#  undef JEMALLOC_IS_MALLOC
+#  define JEMALLOC_N(n) jet_##n
+#  include "jemalloc/internal/public_namespace.h"
+#  define JEMALLOC_NO_RENAME
+#  include "jemalloc/jemalloc.h"
+#  undef JEMALLOC_NO_RENAME
 #else
 #  define JEMALLOC_N(n) je_##n
 #  include "jemalloc/jemalloc.h"
@@ -49,11 +49,11 @@
  * possible.
  */
 #ifndef JEMALLOC_NO_PRIVATE_NAMESPACE
-//#  ifndef JEMALLOC_JET
-//#    include "jemalloc/internal/private_namespace.h"
-//#  else
-//#    include "jemalloc/internal/private_namespace_jet.h"
-//#  endif
+#  ifndef JEMALLOC_JET
+#    include "jemalloc/internal/private_namespace.h"
+#  else
+#    include "jemalloc/internal/private_namespace_jet.h"
+#  endif
 #endif
 #include "jemalloc/internal/test_hooks.h"
 

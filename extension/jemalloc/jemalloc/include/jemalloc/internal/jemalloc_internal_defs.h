@@ -17,7 +17,7 @@ namespace duckdb_jemalloc {
  * present on the system.
  */
 /* #undef JEMALLOC_OVERRIDE___LIBC_CALLOC */
-//#define JEMALLOC_OVERRIDE___LIBC_FREE
+// #define JEMALLOC_OVERRIDE___LIBC_FREE
 //#define JEMALLOC_OVERRIDE___LIBC_MALLOC
 /* #undef JEMALLOC_OVERRIDE___LIBC_MEMALIGN */
 //#define JEMALLOC_OVERRIDE___LIBC_REALLOC
@@ -51,14 +51,20 @@ namespace duckdb_jemalloc {
 #define JEMALLOC_C11_ATOMICS 
 
 /* Defined if GCC __atomic atomics are available. */
+#ifndef _MSC_VER
 #define JEMALLOC_GCC_ATOMIC_ATOMICS
+#endif
 /* and the 8-bit variant support. */
 #define JEMALLOC_GCC_U8_ATOMIC_ATOMICS
 
 /* Defined if GCC __sync atomics are available. */
+#ifndef _MSC_VER
 #define JEMALLOC_GCC_SYNC_ATOMICS
+#endif
 /* and the 8-bit variant support. */
+#ifndef _MSC_VER
 #define JEMALLOC_GCC_U8_SYNC_ATOMICS
+#endif
 
 /*
  * Defined if __builtin_clz() and __builtin_clzl() are available.
@@ -242,9 +248,18 @@ namespace duckdb_jemalloc {
  * ffs*() functions to use for bitmapping.  Don't use these directly; instead,
  * use ffs_*() from util.h.
  */
+#ifdef _MSC_VER
+} // namespace duckdb_jemalloc
+#include "msvc_compat/strings.h"
+namespace duckdb_jemalloc {
+#define JEMALLOC_INTERNAL_FFSLL ffsll
+#define JEMALLOC_INTERNAL_FFSL  ffsl
+#define JEMALLOC_INTERNAL_FFS   ffs
+#else
 #define JEMALLOC_INTERNAL_FFSLL __builtin_ffsll
-#define JEMALLOC_INTERNAL_FFSL __builtin_ffsl
-#define JEMALLOC_INTERNAL_FFS __builtin_ffs
+#define JEMALLOC_INTERNAL_FFSL  __builtin_ffsl
+#define JEMALLOC_INTERNAL_FFS   __builtin_ffs
+#endif
 
 /*
  * popcount*() functions to use for bitmapping.
@@ -366,7 +381,9 @@ namespace duckdb_jemalloc {
 #define LG_SIZEOF_INT 2
 
 // Include limits, so we can try to figure out the size of a long
+} // namespace duckdb_jemalloc
 #include <limits.h>
+namespace duckdb_jemalloc {
 
 /* sizeof(long) == 2^LG_SIZEOF_LONG. */
 #if ULONG_MAX > UINT_MAX
