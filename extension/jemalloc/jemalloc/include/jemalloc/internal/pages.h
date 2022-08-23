@@ -1,7 +1,7 @@
 #ifndef JEMALLOC_INTERNAL_PAGES_EXTERNS_H
 #define JEMALLOC_INTERNAL_PAGES_EXTERNS_H
 
-#include <cstdint>
+#include "jemalloc/internal/jemalloc_internal_decls.h"
 
 namespace duckdb_jemalloc {
 

@@ -62,12 +62,14 @@
 #ifndef SSIZE_MAX
 #  define SSIZE_MAX	((ssize_t)(SIZE_T_MAX >> 1))
 #endif
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <stddef.h>
+
+#include <cstdarg>
+#include <cstdbool>
+#include <cstdio>
+#include <cstdlib>
+#include <cstdint>
+#include <cstddef>
+
 #ifndef offsetof
 #  define offsetof(type, member)	((size_t)&(((type *)NULL)->member))
 #endif

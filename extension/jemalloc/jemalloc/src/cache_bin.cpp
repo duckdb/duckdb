@@ -1,5 +1,5 @@
-#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/jemalloc_internal_includes.h"
+#include "jemalloc/internal/jemalloc_preamble.h"
 
 #include "jemalloc/internal/bit_util.h"
 #include "jemalloc/internal/cache_bin.h"

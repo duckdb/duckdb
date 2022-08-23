@@ -3,8 +3,7 @@
 
 #include "jemalloc/internal/ehooks.h"
 #include "jemalloc/internal/emap.h"
-
-#include <cstdint>
+#include "jemalloc/internal/jemalloc_internal_decls.h"
 
 namespace duckdb_jemalloc {
 

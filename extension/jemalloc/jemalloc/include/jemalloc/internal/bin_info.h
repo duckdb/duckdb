@@ -1,6 +1,7 @@
 #ifndef JEMALLOC_INTERNAL_BIN_INFO_H
 #define JEMALLOC_INTERNAL_BIN_INFO_H
 
+#include "jemalloc/internal/jemalloc_internal_decls.h"
 #include "jemalloc/internal/bitmap.h"
 
 namespace duckdb_jemalloc {

@@ -2,8 +2,10 @@ cmake_minimum_required(VERSION 2.8.12)
 
 project(JEMallocExtension)
 
-include_directories(jemalloc/include)
 include_directories(include)
+include_directories(jemalloc/include)
+
+
 add_subdirectory(jemalloc)
 
 set(JEMALLOC_EXTENSION_FILES jemalloc-extension.cpp ${JEMALLOC_OBJECT_FILES})

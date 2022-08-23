@@ -1,6 +1,16 @@
 #ifndef JEMALLOC_H_
 #define JEMALLOC_H_
 
+#include <cstdlib>
+#include <cstdbool>
+#include <cstdint>
+#include <limits.h>
+#ifdef _MSC_VER
+#include "msvc_compat/strings.h"
+#else
+#include <strings.h>
+#endif
+
 namespace duckdb_jemalloc {
 
 //#ifdef __cplusplus
@@ -93,12 +103,6 @@ namespace duckdb_jemalloc {
 #define je_valloc                                            je_valloc
 #define je_malloc_size                                       je_malloc_size
 #endif
-
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <limits.h>
-#include <strings.h>
 
 #define JEMALLOC_VERSION           "5.3.0-0-g54eaed1d8b56b1aa528be3bdd1877e59c56fa90c"
 #define JEMALLOC_VERSION_MAJOR     5
