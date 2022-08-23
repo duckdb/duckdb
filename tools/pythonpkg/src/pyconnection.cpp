@@ -42,6 +42,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("query"), py::arg("parameters") = py::list())
 	    .def("close", &DuckDBPyConnection::Close, "Close the connection")
 	    .def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
+	    .def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
+	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
 	    .def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute")
 	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
@@ -484,6 +486,13 @@ py::object DuckDBPyConnection::FetchOne() {
 		throw std::runtime_error("no open result set");
 	}
 	return result->Fetchone();
+}
+
+py::list DuckDBPyConnection::FetchMany(idx_t size) {
+	if (!result) {
+		throw InvalidInputException("No open result set");
+	}
+	return result->Fetchmany(size);
 }
 
 py::list DuckDBPyConnection::FetchAll() {
