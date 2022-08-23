@@ -5,6 +5,9 @@
 //#include <cstdbool>
 //#include <cstdint>
 //#include <climits>
+
+#define DLLEXPORT
+
 #ifdef _MSC_VER
 #include "msvc_compat/strings.h"
 #else

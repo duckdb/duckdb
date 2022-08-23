@@ -90,13 +90,13 @@ namespace duckdb_jemalloc {
 // #define JEMALLOC_HAVE_ISSETUGID
 
 /* Defined if pthread_atfork(3) is available. */
-#define JEMALLOC_HAVE_PTHREAD_ATFORK 
+//#define JEMALLOC_HAVE_PTHREAD_ATFORK 
 
 /* Defined if pthread_setname_np(3) is available. */
 /* #undef JEMALLOC_HAVE_PTHREAD_SETNAME_NP */
 
 /* Defined if pthread_getname_np(3) is available. */
-#define JEMALLOC_HAVE_PTHREAD_GETNAME_NP 
+//#define JEMALLOC_HAVE_PTHREAD_GETNAME_NP 
 
 /* Defined if pthread_get_name_np(3) is available. */
 /* #undef JEMALLOC_HAVE_PTHREAD_GET_NAME_NP */
@@ -339,7 +339,7 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_MADVISE_NOCORE */
 
 /* Defined if mprotect(2) is available. */
-#define JEMALLOC_HAVE_MPROTECT 
+//#define JEMALLOC_HAVE_MPROTECT 
 
 /*
  * Defined if transparent huge pages (THPs) are supported via the

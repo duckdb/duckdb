@@ -1033,8 +1033,8 @@ prof_leakcheck(const prof_cnt_t *cnt_all, size_t leak_ngctx) {
 		uint64_t curobjs = (uint64_t)round(((double)cnt_all->curobjs) *
 		    scale_factor);
 
-		malloc_printf("<jemalloc>: Leak approximation summary: ~%"FMTu64
-		    " byte%s, ~%"FMTu64" object%s, >= %zu context%s\n",
+		malloc_printf("<jemalloc>: Leak approximation summary: ~%" FMTu64
+		    " byte%s, ~%" FMTu64 " object%s, >= %zu context%s\n",
 		    curbytes, (curbytes != 1) ? "s" : "", curobjs, (curobjs !=
 		    1) ? "s" : "", leak_ngctx, (leak_ngctx != 1) ? "s" : "");
 		malloc_printf(

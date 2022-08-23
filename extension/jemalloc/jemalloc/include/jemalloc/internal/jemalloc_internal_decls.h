@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_DECLS_H
 #define JEMALLOC_INTERNAL_DECLS_H
 
+#include "jemalloc/internal/jemalloc_internal_defs.h"
+
 #include <math.h>
 #ifdef _WIN32
 #  include <windows.h>
