@@ -456,8 +456,8 @@ py::object DuckDBPyRelation::Fetchmany(idx_t size) {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->Fetchmany(size);
 }
