@@ -34,11 +34,13 @@ public:
 	void Remove(row_t row_id);
 
 	//! Merge Node with NLeaf
-	static bool Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth);
+	static bool Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&r_node_parent,
+	                  idx_t r_node_pos);
 	//! Merge two NLeaf nodes
 	static bool MergeNLeafNLeaf(ART &l_art, Node *&l_node, Node *&r_node);
 	//! Merge non-leaf Node with NLeaf
-	static bool MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth);
+	static bool MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&r_node_parent,
+	                           idx_t r_node_pos);
 
 	BlockPointer SerializeLeaf(duckdb::MetaBlockWriter &writer);
 

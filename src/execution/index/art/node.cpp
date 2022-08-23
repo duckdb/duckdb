@@ -300,13 +300,16 @@ bool Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *
 
 	if (!l_node) {
 		l_node = r_node;
+		if (r_node_parent) {
+			r_node_parent->ReplaceChildPointer(r_node_pos, nullptr);
+		}
 		r_node = nullptr;
 		return true;
 	}
 
 	// leaves have no prefixes
 	if (l_node->type == NodeType::NLeaf || r_node->type == NodeType::NLeaf) {
-		return Node::Merge(r_art, l_art, l_node, r_node, depth);
+		return Node::Merge(r_art, l_art, l_node, r_node, depth, r_node_parent, r_node_pos);
 	}
 
 	// make sure that r_node has the longer (or equally long) prefix
@@ -326,7 +329,7 @@ bool Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *
 
 	// no prefix or same prefix
 	if (mismatch_pos == l_node->prefix_length && l_node->prefix_length == r_node->prefix_length) {
-		return Node::Merge(l_art, r_art, l_node, r_node, depth + mismatch_pos);
+		return Node::Merge(l_art, r_art, l_node, r_node, depth + mismatch_pos, r_node_parent, r_node_pos);
 	}
 
 	if (mismatch_pos == l_node->prefix_length) {
@@ -377,7 +380,8 @@ bool Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *
 	return true;
 }
 
-bool Node::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth) {
+bool Node::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&r_node_parent,
+                 idx_t r_node_pos) {
 
 	// always try to merge the smaller node into the bigger node
 	// because maybe there is enough free space in the bigger node to fit the smaller one
@@ -386,27 +390,20 @@ bool Node::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t dep
 	if (l_node->type < r_node->type) {
 		// swap subtrees to ensure that l_node has the bigger node type
 		SwapNodes(l_node, r_node);
-		return Node::Merge(r_art, l_art, l_node, r_node, depth);
+		return Node::Merge(r_art, l_art, l_node, r_node, depth, r_node_parent, r_node_pos);
 	}
 
 	switch (r_node->type) {
-	case NodeType::N256: {
+	case NodeType::N256:
 		return Node::MergeNodeWithNode256(l_art, r_art, l_node, r_node, depth);
-	}
-	case NodeType::N48: {
+	case NodeType::N48:
 		return Node::MergeNodeWithNode48(l_art, r_art, l_node, r_node, depth);
-	}
-	case NodeType::N16: {
+	case NodeType::N16:
 		return Node::MergeNodeWithNode16OrNode4<Node16>(l_art, r_art, l_node, r_node, depth);
-	}
-	case NodeType::N4: {
+	case NodeType::N4:
 		return Node::MergeNodeWithNode16OrNode4<Node4>(l_art, r_art, l_node, r_node, depth);
-	}
-	case NodeType::NLeaf: {
-		// leaf - leaf
-		// node - leaf
-		return Leaf::Merge(l_art, r_art, l_node, r_node, depth);
-	}
+	case NodeType::NLeaf:
+		return Leaf::Merge(l_art, r_art, l_node, r_node, depth, r_node_parent, r_node_pos);
 	}
 	throw InternalException("Invalid node type for right node in merge.");
 }
