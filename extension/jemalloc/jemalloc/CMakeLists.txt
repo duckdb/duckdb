@@ -1,14 +1,3 @@
-#target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_NO_PRIVATE_NAMESPACE)
-#target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_NO_RENAME)
-#
-#if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-#    target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_DEBUG)
-#endif ()
-
-# Need to include this so that RTLD_NEXT is defined
-#target_compile_options(duckdb_jemalloc PRIVATE -D_GNU_SOURCE)
-# TODO: not sure if needed anymore, seems to have something to do with JEMALLOC_BACKGROUND_THREAD
-
 include_directories(include)
 
 add_library(jemalloc OBJECT
@@ -74,6 +63,13 @@ add_library(jemalloc OBJECT
         src/ticker.cpp
         src/tsd.cpp
         src/witness.cpp)
+
+target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_NO_PRIVATE_NAMESPACE)
+target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_NO_RENAME)
+
+if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_DEBUG)
+endif ()
 
 set(JEMALLOC_OBJECT_FILES
         ${JEMALLOC_OBJECT_FILES} $<TARGET_OBJECTS:jemalloc>
