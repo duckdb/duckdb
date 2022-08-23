@@ -97,62 +97,58 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	    .export_values();
 
 	m.def("values", &DuckDBPyRelation::Values, "Create a relation object from the passed values", py::arg("values"),
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("connection") = py::none());
 	m.def("from_query", &DuckDBPyRelation::FromQuery, "Create a relation object from the given SQL query",
-	      py::arg("query"), py::arg("alias") = "query_relation",
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
 	m.def("query", &DuckDBPyRelation::RunQuery,
 	      "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
 	      "run the query as-is.",
-	      py::arg("query"), py::arg("alias") = "query_relation",
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
 	m.def("from_csv_auto", &DuckDBPyRelation::FromCsvAuto, "Creates a relation object from the CSV file in file_name",
-	      py::arg("file_name"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("file_name"), py::arg("connection") = py::none());
 	m.def("from_substrait", &DuckDBPyRelation::FromSubstrait, "Creates a query object from the substrait plan",
-	      py::arg("proto"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("proto"), py::arg("connection") = py::none());
 	m.def("get_substrait", &DuckDBPyRelation::GetSubstrait, "Serialize a query object to protobuf", py::arg("query"),
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("connection") = py::none());
 	m.def("get_substrait_json", &DuckDBPyRelation::GetSubstraitJSON, "Serialize a query object to protobuf",
-	      py::arg("query"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("query"), py::arg("connection") = py::none());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,
 	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"),
-	      py::arg("binary_as_string"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("binary_as_string"), py::arg("connection") = py::none());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquetDefault,
 	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"),
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("connection") = py::none());
 	m.def("df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"),
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("connection") = py::none());
 	m.def("from_df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"),
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("connection") = py::none());
 	m.def("from_arrow", &DuckDBPyRelation::FromArrow, "Create a relation object from an Arrow object",
-	      py::arg("arrow_object"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("arrow_object"), py::arg("connection") = py::none());
 	m.def("arrow", &DuckDBPyRelation::FromArrow, "Create a relation object from an Arrow object",
-	      py::arg("arrow_object"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("arrow_object"), py::arg("connection") = py::none());
 	m.def("filter", &DuckDBPyRelation::FilterDf, "Filter the Data.Frame df by the filter in filter_expr", py::arg("df"),
-	      py::arg("filter_expr"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("filter_expr"), py::arg("connection") = py::none());
 	m.def("project", &DuckDBPyRelation::ProjectDf, "Project the Data.Frame df by the projection in project_expr",
-	      py::arg("df"), py::arg("project_expr"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("df"), py::arg("project_expr"), py::arg("connection") = py::none());
 	m.def("alias", &DuckDBPyRelation::AliasDF, "Create a relation from Data.Frame df with the passed alias",
-	      py::arg("df"), py::arg("alias"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("df"), py::arg("alias"), py::arg("connection") = py::none());
 	m.def("order", &DuckDBPyRelation::OrderDf, "Reorder the Data.Frame df by order_expr", py::arg("df"),
-	      py::arg("order_expr"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("order_expr"), py::arg("connection") = py::none());
 	m.def("aggregate", &DuckDBPyRelation::AggregateDF,
 	      "Compute the aggregate aggr_expr by the optional groups group_expr on Data.frame df", py::arg("df"),
-	      py::arg("aggr_expr"), py::arg("group_expr") = "",
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("aggr_expr"), py::arg("group_expr") = "", py::arg("connection") = py::none());
 	m.def("distinct", &DuckDBPyRelation::DistinctDF, "Compute the distinct rows from Data.Frame df ", py::arg("df"),
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("connection") = py::none());
 	m.def("limit", &DuckDBPyRelation::LimitDF, "Retrieve the first n rows from the Data.Frame df", py::arg("df"),
-	      py::arg("n"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("n"), py::arg("connection") = py::none());
 
 	m.def("query_df", &DuckDBPyRelation::QueryDF,
 	      "Run the given SQL query in sql_query on the view named virtual_table_name that contains the content of "
 	      "Data.Frame df",
-	      py::arg("df"), py::arg("virtual_table_name"), py::arg("sql_query"),
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("df"), py::arg("virtual_table_name"), py::arg("sql_query"), py::arg("connection") = py::none());
 
 	m.def("write_csv", &DuckDBPyRelation::WriteCsvDF, "Write the Data.Frame df to a CSV file in file_name",
-	      py::arg("df"), py::arg("file_name"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("df"), py::arg("file_name"), py::arg("connection") = py::none());
 
 	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
 	auto clean_default_connection = []() {
