@@ -124,6 +124,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
 	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row as a tuple")
+	    .def("fetchmany", &DuckDBPyRelation::Fetchmany, "Execute and fetch the next set of rows as a list of tuples",
+	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows as a list of tuples")
 	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
 	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
@@ -446,6 +448,18 @@ py::object DuckDBPyRelation::Fetchone() {
 		throw std::runtime_error(res->result->error);
 	}
 	return res->Fetchone();
+}
+
+py::object DuckDBPyRelation::Fetchmany(idx_t size) {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (!res->result->success) {
+		throw std::runtime_error(res->result->error);
+	}
+	return res->Fetchmany(size);
 }
 
 py::object DuckDBPyRelation::Fetchall() {
