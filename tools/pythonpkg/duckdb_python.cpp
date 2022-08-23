@@ -97,7 +97,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	    .export_values();
 
 	m.def("values", &DuckDBPyRelation::Values, "Create a relation object from the passed values", py::arg("values"),
-	      py::arg("connection") = py::none());
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_query", &DuckDBPyRelation::FromQuery, "Create a relation object from the given SQL query",
 	      py::arg("query"), py::arg("alias") = "query_relation",
 	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());

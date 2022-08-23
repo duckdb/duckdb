@@ -289,6 +289,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
+	if (params.is_none()) {
+		params = py::list();
+	}
+	if (!py::hasattr(params, "__len__")) {
+		throw InvalidInputException("Type of object passed to parameter 'values' has to be <list>");
+	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
 }

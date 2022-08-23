@@ -51,7 +51,7 @@ public:
 	                                           DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list(),
-	                                           py::object conn = py::none());
+	                                           DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias,
 	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
