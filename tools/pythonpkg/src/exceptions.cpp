@@ -35,6 +35,15 @@ void RegisterExceptions(const py::module &m) {
 	// The base class is mapped to Error in python to somewhat match the DBAPI 2.0 specifications
 	auto warning_class = py::register_exception<Warning>(m, "Warning").ptr();
 	auto error = py::register_exception<Exception>(m, "Error").ptr();
+	// FIXME: missing DatabaseError
+
+	// order of declaration matters, and this needs to be checked last
+	py::register_exception<StandardException>(m, "StandardException", error);
+	// Unknown
+	py::register_exception<FatalException>(m, "FatalException", error);
+	py::register_exception<InterruptException>(m, "InterruptException", error);
+	py::register_exception<PermissionException>(m, "PermissionException", error);
+	py::register_exception<SequenceException>(m, "SequenceException", error);
 
 	// DataError
 	auto data_error = py::register_exception<DataError>(m, "DataError", error).ptr();
@@ -50,8 +59,9 @@ void RegisterExceptions(const py::module &m) {
 	auto operational_error = py::register_exception<OperationalError>(m, "OperationalError", error).ptr();
 	py::register_exception<TransactionException>(m, "TransactionException", operational_error);
 	py::register_exception<OutOfMemoryException>(m, "OutOfMemoryException", operational_error);
+	py::register_exception<ConnectionException>(m, "ConnectionException", operational_error);
 	// no object size error
-	// no null pointer error
+	// no null pointer errors
 	py::register_exception<IOException>(m, "IOException", operational_error);
 	py::register_exception<SerializationException>(m, "SerializationException", operational_error);
 
@@ -63,7 +73,7 @@ void RegisterExceptions(const py::module &m) {
 	auto internal_error = py::register_exception<InternalError>(m, "InternalError", error).ptr();
 	py::register_exception<InternalException>(m, "InternalException", internal_error);
 
-	// ProgrammingError
+	//// ProgrammingError
 	auto programming_error = py::register_exception<ProgrammingError>(m, "ProgrammingError", error).ptr();
 	py::register_exception<ParserException>(m, "ParserException", programming_error);
 	py::register_exception<SyntaxException>(m, "SyntaxException", programming_error);
@@ -76,12 +86,5 @@ void RegisterExceptions(const py::module &m) {
 	// NotSupportedError
 	auto not_supported_error = py::register_exception<NotSupportedError>(m, "NotSupportedError", error).ptr();
 	py::register_exception<NotImplementedException>(m, "NotImplementedException", not_supported_error);
-
-	// Unknown
-	py::register_exception<FatalException>(m, "FatalException", error);
-	py::register_exception<InterruptException>(m, "InterruptException", error);
-	py::register_exception<PermissionException>(m, "PermissionException", error);
-	py::register_exception<SequenceException>(m, "SequenceException", error);
-	py::register_exception<StandardException>(m, "StandardException", error);
 }
 } // namespace duckdb

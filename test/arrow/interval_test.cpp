@@ -51,13 +51,13 @@ std::unique_ptr<duckdb::QueryResult> FromArrow(int32_t month, int64_t day_time_m
 TEST_CASE("Test Interval", "[arrow]") {
 	//! Test Conversion
 	auto result = FromArrow(1, 1000);
-	REQUIRE(result->success);
+	REQUIRE(!result->HasError());
 	REQUIRE(CHECK_COLUMN(result, 0, {"00:00:01"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"1 month"}));
 
 	//! Test Nulls
 	result = FromArrow(0, 0, true);
-	REQUIRE(result->success);
+	REQUIRE(!result->HasError());
 	REQUIRE(CHECK_COLUMN(result, 0, {nullptr}));
 	REQUIRE(CHECK_COLUMN(result, 1, {nullptr}));
 }

@@ -17,7 +17,7 @@ public:
 	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result, idx_t batch_size);
 	ArrowArrayStream stream;
 	unique_ptr<QueryResult> result;
-	std::string last_error;
+	PreservedError last_error;
 	idx_t batch_size;
 	vector<LogicalType> column_types;
 	vector<string> column_names;
