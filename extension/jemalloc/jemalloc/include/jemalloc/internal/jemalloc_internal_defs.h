@@ -382,7 +382,7 @@ namespace duckdb_jemalloc {
 
 // Include limits, so we can try to figure out the size of a long
 } // namespace duckdb_jemalloc
-#include <limits.h>
+#include <climits>
 namespace duckdb_jemalloc {
 
 /* sizeof(long) == 2^LG_SIZEOF_LONG. */

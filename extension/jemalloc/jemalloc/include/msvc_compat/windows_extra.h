@@ -3,7 +3,7 @@
 
 namespace duckdb_jemalloc {
 
-#include <errno.h>
+#include <cerrno>
 
 } // namespace duckdb_jemalloc
 

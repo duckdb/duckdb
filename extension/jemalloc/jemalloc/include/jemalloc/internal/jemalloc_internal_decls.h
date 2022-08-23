@@ -55,7 +55,7 @@
 #endif
 #include <sys/types.h>
 
-#include <limits.h>
+#include <climits>
 #ifndef SIZE_T_MAX
 #  define SIZE_T_MAX	SIZE_MAX
 #endif
@@ -63,17 +63,17 @@
 #  define SSIZE_MAX	((ssize_t)(SIZE_T_MAX >> 1))
 #endif
 
-#include <cstdarg>
-#include <cstdbool>
-#include <cstdio>
-#include <cstdlib>
-#include <cstdint>
-#include <cstddef>
+//#include <cstdarg>
+//#include <cstdbool>
+//#include <cstdio>
+//#include <cstdlib>
+//#include <cstdint>
+//#include <cstddef>
 
 #ifndef offsetof
 #  define offsetof(type, member)	((size_t)&(((type *)NULL)->member))
 #endif
-#include <string.h>
+#include <cstring>
 
 #ifdef _MSC_VER
 #include "msvc_compat/strings.h"

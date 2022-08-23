@@ -25,7 +25,7 @@ namespace duckdb_jemalloc {
 #  define FMTuPTR FMTPTR_PREFIX "u"
 #  define FMTxPTR FMTPTR_PREFIX "x"
 #else
-#  include <inttypes.h>
+#  include <cinttypes>
 #  define FMTd32 PRId32
 #  define FMTu32 PRIu32
 #  define FMTx32 PRIx32

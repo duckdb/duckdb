@@ -53,6 +53,7 @@
 #    include "jemalloc/internal/private_namespace.h"
 #  else
 #    include "jemalloc/internal/private_namespace_jet.h"
+#include "jemalloc/internal/priva"
 #  endif
 #endif
 #include "jemalloc/internal/test_hooks.h"

@@ -1,10 +1,10 @@
-#pragma once
+//#pragma once
 
-#include <cstdlib>
+//#include <cstdlib>
 #include <cstdbool>
 #include <cstdint>
 
-#include <limits.h>
+#include <climits>
 
 #ifdef _MSC_VER
 #include "msvc_compat/strings.h"

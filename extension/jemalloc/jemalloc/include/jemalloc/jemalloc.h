@@ -1,10 +1,10 @@
 #ifndef JEMALLOC_H_
 #define JEMALLOC_H_
 
-#include <cstdlib>
-#include <cstdbool>
-#include <cstdint>
-#include <limits.h>
+//#include <cstdlib>
+//#include <cstdbool>
+//#include <cstdint>
+//#include <climits>
 #ifdef _MSC_VER
 #include "msvc_compat/strings.h"
 #else
