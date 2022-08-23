@@ -547,6 +547,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 		py::gil_scoped_release release;
 		res->result = rel->Query(view_name, sql_query);
 		if (res->result != nullptr) {
+			if (res->result->HasError()) {
+				res->result->ThrowError();
+			}
 			res->Fetchall();
 		}
 	}
