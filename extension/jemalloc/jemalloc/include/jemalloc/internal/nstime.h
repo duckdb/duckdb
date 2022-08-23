@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_NSTIME_H
 #define JEMALLOC_INTERNAL_NSTIME_H
 
+#include "jemalloc/internal/assert.h"
+
 namespace duckdb_jemalloc {
 
 /* Maximum supported number of seconds (~584 years). */

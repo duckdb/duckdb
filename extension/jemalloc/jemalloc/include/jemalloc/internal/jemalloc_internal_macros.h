@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_MACROS_H
 #define JEMALLOC_INTERNAL_MACROS_H
 
+#include "jemalloc/jemalloc_macros.h"
+
 #ifdef JEMALLOC_DEBUG
 #  define JEMALLOC_ALWAYS_INLINE static inline
 #else

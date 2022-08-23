@@ -1,9 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_MALLOC_IO_H
 #define JEMALLOC_INTERNAL_MALLOC_IO_H
 
+#include "jemalloc/internal/jemalloc_internal_decls.h"
 #include "jemalloc/internal/jemalloc_internal_types.h"
-
-#include <cstdarg>
 
 namespace duckdb_jemalloc {
 

@@ -201,7 +201,7 @@
  * The number of size classes that are a multiple of the page size.
  *
  * Here are the first few bases that have a page-sized SC.
- *
+ *SC_NSIZES
  *      lg(base) |     base | highest SC | page-multiple SCs
  * --------------|------------------------------------------
  *   LG_PAGE - 1 | PAGE / 2 |       PAGE | 1
@@ -343,7 +343,7 @@ struct sc_data_s {
 	/* True if the sc_data_t has been initialized (for debugging only). */
 	bool initialized;
 
-	sc_t sc[SC_NSIZES];
+	sc_t sc[];
 };
 
 size_t reg_size_compute(int lg_base, int lg_delta, int ndelta);

@@ -3,6 +3,7 @@
 
 #define UTIL_INLINE static inline
 
+#include "jemalloc_internal_defs.h"
 #include "jemalloc_internal_macros.h"
 
 namespace duckdb_jemalloc {

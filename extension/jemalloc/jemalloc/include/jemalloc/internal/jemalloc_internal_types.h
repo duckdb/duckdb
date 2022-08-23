@@ -118,9 +118,13 @@ typedef enum malloc_init_e malloc_init_t;
 #    define alloca _alloca
 #  else
 #    ifdef JEMALLOC_HAS_ALLOCA_H
+} // namespace duckdb_jemalloc
 #      include <alloca.h>
+namespace duckdb_jemalloc {
 #    else
-#      include <stdlib.h>
+} // namespace duckdb_jemalloc
+#      include <cstdlib>
+namespace duckdb_jemalloc {
 #    endif
 #  endif
 #  define VARIABLE_ARRAY(type, name, count) \

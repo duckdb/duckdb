@@ -2,6 +2,7 @@
 #define JEMALLOC_INTERNAL_ARENA_TYPES_H
 
 #include "jemalloc/internal/sc.h"
+#include "jemalloc/jemalloc_typedefs.h"
 
 /* Default decay times in milliseconds. */
 #define DIRTY_DECAY_MS_DEFAULT	ZD(10 * 1000)

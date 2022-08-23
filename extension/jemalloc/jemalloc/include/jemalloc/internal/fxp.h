@@ -1,6 +1,9 @@
 #ifndef JEMALLOC_INTERNAL_FXP_H
 #define JEMALLOC_INTERNAL_FXP_H
 
+#include "jemalloc/internal/assert.h"
+#include "jemalloc/internal/malloc_io.h"
+
 namespace duckdb_jemalloc {
 
 /*
