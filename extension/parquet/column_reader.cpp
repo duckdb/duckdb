@@ -248,6 +248,16 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const char *
 		break;
 	}
 	case CompressionCodec::SNAPPY: {
+		{
+			size_t uncompressed_size = 0;
+			auto res = duckdb_snappy::GetUncompressedLength(src, src_size, &uncompressed_size);
+			if (!res) {
+				throw std::runtime_error("Snappy decompression failure");
+			}
+			if (uncompressed_size != (size_t)dst_size) {
+				throw std::runtime_error("Snappy decompression failure: Uncompressed data size mismatch");
+			}
+		}
 		auto res = duckdb_snappy::RawUncompress(src, src_size, dst);
 		if (!res) {
 			throw std::runtime_error("Snappy decompression failure");
