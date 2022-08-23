@@ -13,38 +13,17 @@
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
 enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
+
 class ART;
 class Node;
-
-struct SwizzleablePointer {
-	~SwizzleablePointer();
-	SwizzleablePointer(duckdb::MetaBlockReader &reader);
-	SwizzleablePointer() : pointer(0) {};
-
-	uint64_t pointer;
-
-	//! Transforms from Node* to uint64_t
-	SwizzleablePointer &operator=(const Node *ptr);
-	friend bool operator!=(const SwizzleablePointer &s_ptr, const uint64_t &ptr);
-
-public:
-	//! Extracts block info from swizzled pointer
-	BlockPointer GetSwizzledBlockInfo();
-	//! Checks if pointer is swizzled
-	bool IsSwizzled();
-	//! Deletes the underlying object (if necessary) and set the pointer to null_ptr
-	void Reset();
-	//! Unswizzle the pointer (if possible)
-	Node *Unswizzle(ART &art);
-
-	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer);
-};
+class SwizzleablePointer;
 
 struct InternalType {
-	InternalType(Node *n);
+	explicit InternalType(Node *n);
 	void Set(uint8_t *key_p, uint16_t key_size_p, SwizzleablePointer *children_p, uint16_t children_size_p);
 	uint8_t *key;
 	uint16_t key_size;
@@ -57,18 +36,16 @@ public:
 	static const uint8_t EMPTY_MARKER = 48;
 
 public:
-	Node(NodeType type, size_t compressed_prefix_size);
+	explicit Node(NodeType type);
+
 	virtual ~Node() {
 	}
-
-	//! length of the compressed path (prefix)
-	uint32_t prefix_length;
 	//! number of non-null children
 	uint16_t count;
 	//! node type
 	NodeType type;
 	//! compressed path (prefix)
-	unique_ptr<uint8_t[]> prefix;
+	Prefix prefix;
 
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if not
 	//! exists
@@ -100,22 +77,16 @@ public:
 	//! Replaces the pointer
 	virtual void ReplaceChildPointer(idx_t pos, Node *node);
 
-	//! Compare the key with the prefix of the node, return the number matching bytes
-	static uint32_t PrefixMismatch(Node *node, Key &key, uint64_t depth);
 	//! Insert leaf into inner node
 	static void InsertLeaf(Node *&node, uint8_t key, Node *new_node);
 	//! Erase entry from node
 	static void Erase(Node *&node, idx_t pos, ART &art);
 
-protected:
-	//! Copies the prefix from the source to the destination node
-	static void CopyPrefix(Node *src, Node *dst);
-
 private:
 	//! Serialize Internal Nodes
 	BlockPointer SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, InternalType &internal_type);
 	//! Deserialize Internal Nodes
-	void DeserializeInternal(duckdb::MetaBlockReader &reader, uint32_t prefix_length_p);
+	void DeserializeInternal(duckdb::MetaBlockReader &reader);
 };
 
 } // namespace duckdb

@@ -1,0 +1,21 @@
+# name: test/sql/types/struct/struct_pack_list.test
+# description: Test struct case statement
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SELECT a from (SELECT STRUCT_PACK(a := 42, b := 43) as a) as t
+
+statement ok
+SELECT a from (SELECT STRUCT_PACK(a := NULL, b := 43) as a) as t
+
+statement ok
+SELECT a from (SELECT STRUCT_PACK(a := NULL) as a) as t
+
+statement ok
+SELECT a from (SELECT STRUCT_PACK(a := i, b := i) as a FROM range(10000) tbl(i)) as t
+
+statement ok
+SELECT a from (SELECT STRUCT_PACK(a := LIST_VALUE(1,2,3), b := i) as a FROM range(10000) tbl(i)) as t

@@ -37,6 +37,7 @@ import org.duckdb.DuckDBDriver;
 import org.duckdb.DuckDBTimestamp;
 import org.duckdb.DuckDBColumnType;
 import org.duckdb.DuckDBResultSetMetaData;
+import org.duckdb.JsonNode;
 
 public class TestDuckDBJDBC {
 
@@ -2270,6 +2271,33 @@ public class TestDuckDBJDBC {
 
 		rowSet.next();
 		assertEquals(rowSet.getInt(1), 1);
+	}
+
+	public static void test_json() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+
+		try (Statement stmt = conn.createStatement()) {
+			ResultSet rs = stmt.executeQuery("select [1, 5]::JSON");
+
+			rs.next();
+
+			JsonNode jsonNode = (JsonNode) rs.getObject(1);
+
+			assertTrue(jsonNode.isArray());
+
+			assertEquals(jsonNode.toString(), "[1, 5]");
+		}
+
+		try (Statement stmt = conn.createStatement()) {
+			ResultSet rs = stmt.executeQuery("select \'hello\'::JSON");
+
+			rs.next();
+
+			JsonNode jsonNode = (JsonNode) rs.getObject(1);
+
+			assertTrue(jsonNode.isString());
+			assertEquals(jsonNode.toString(), "hello");
+		}
 	}
 
 	public static void main(String[] args) throws Exception {

@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -15,6 +16,18 @@ void LogicalWindow::ResolveTypes() {
 	for (auto &expr : expressions) {
 		types.push_back(expr->return_type);
 	}
+}
+
+void LogicalWindow::Serialize(FieldWriter &writer) const {
+	writer.WriteField(window_index);
+	writer.WriteSerializableList<Expression>(expressions);
+}
+
+unique_ptr<LogicalOperator> LogicalWindow::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto window_index = reader.ReadRequired<idx_t>();
+	auto result = make_unique<LogicalWindow>(window_index);
+	result->expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
+	return move(result);
 }
 
 } // namespace duckdb

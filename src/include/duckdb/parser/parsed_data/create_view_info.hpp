@@ -38,6 +38,30 @@ public:
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 		return move(result);
 	}
+
+	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &deserializer) {
+		auto result = make_unique<CreateViewInfo>();
+		result->DeserializeBase(deserializer);
+
+		FieldReader reader(deserializer);
+		result->view_name = reader.ReadRequired<string>();
+		result->aliases = reader.ReadRequiredList<string>();
+		result->types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+		result->query = reader.ReadOptional<SelectStatement>(nullptr);
+		reader.Finalize();
+
+		return result;
+	}
+
+protected:
+	void SerializeInternal(Serializer &serializer) const override {
+		FieldWriter writer(serializer);
+		writer.WriteString(view_name);
+		writer.WriteList<string>(aliases);
+		writer.WriteRegularSerializableList(types);
+		writer.WriteOptional(query);
+		writer.Finalize();
+	}
 };
 
 } // namespace duckdb

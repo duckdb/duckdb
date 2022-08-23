@@ -11,6 +11,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/common/preserved_error.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -23,7 +24,7 @@ public:
 	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
 	                             string query, idx_t n_param);
 	//! Create a prepared statement that was not successfully prepared
-	DUCKDB_API explicit PreparedStatement(string error);
+	DUCKDB_API explicit PreparedStatement(PreservedError error);
 
 	DUCKDB_API ~PreparedStatement();
 
@@ -37,11 +38,15 @@ public:
 	//! Whether or not the statement was successfully prepared
 	bool success;
 	//! The error message (if success = false)
-	string error;
+	PreservedError error;
 	//! The amount of bound parameters
 	idx_t n_param;
 
 public:
+	//! Returns the stored error message
+	const string &GetError();
+	//! Returns whether or not an error occurred
+	bool HasError() const;
 	//! Returns the number of columns in the result
 	idx_t ColumnCount();
 	//! Returns the statement type of the underlying prepared statement object

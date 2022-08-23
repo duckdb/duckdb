@@ -44,7 +44,7 @@ void IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &serializer) {
 	writer.Finalize();
 }
 
-unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source) {
+unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
 	// Here we deserialize the index metadata in the following order:
 	// root block, root offset, schema name, table name, index name, sql, index type, index constraint type, expression
 	// list.

@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-Node16::Node16(size_t compression_length) : Node(NodeType::N16, compression_length) {
+Node16::Node16() : Node(NodeType::N16) {
 	memset(key, 16, sizeof(key));
 }
 
@@ -75,13 +75,13 @@ void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
 		n->count++;
 	} else {
 		// Grow to Node48
-		auto new_node = new Node48(n->prefix_length);
+		auto new_node = new Node48();
 		for (idx_t i = 0; i < node->count; i++) {
 			new_node->child_index[n->key[i]] = i;
 			new_node->children[i] = n->children[i];
 			n->children[i] = nullptr;
 		}
-		CopyPrefix(n, new_node);
+		new_node->prefix = move(n->prefix);
 		new_node->count = node->count;
 		delete node;
 		node = new_node;
@@ -110,13 +110,13 @@ void Node16::Erase(Node *&node, int pos, ART &art) {
 
 	if (node->count <= 3) {
 		// Shrink node
-		auto new_node = new Node4(n->prefix_length);
+		auto new_node = new Node4();
 		for (unsigned i = 0; i < n->count; i++) {
 			new_node->key[new_node->count] = n->key[i];
 			new_node->children[new_node->count++] = n->children[i];
 			n->children[i] = nullptr;
 		}
-		CopyPrefix(n, new_node);
+		new_node->prefix = move(n->prefix);
 		delete node;
 		node = new_node;
 	}

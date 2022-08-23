@@ -68,7 +68,7 @@ public:
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
-	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source);
+	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source, ClientContext &context);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
 

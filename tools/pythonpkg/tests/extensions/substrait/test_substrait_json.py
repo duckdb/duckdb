@@ -12,16 +12,11 @@ def test_substrait_json(require):
     assert json == expected_result
 
     # Test broken query
-    try:
-        connection.get_substrait_json("select * from p limit 5").fetchone()[0]
-    except Exception as  error:
-        print (type(error))
-
-    with pytest.raises(RuntimeError, match="Table with name p does not exist!"):
+    with pytest.raises(duckdb.CatalogException, match="Table with name p does not exist!"):
         connection.get_substrait_json("select * from p limit 5").fetchone()[0]
         
     # Test closed connection
     connection.close()
-    with pytest.raises(RuntimeError, match="connection closed"):
+    with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
         connection.get_substrait_json("select * from integers limit 5")
 
