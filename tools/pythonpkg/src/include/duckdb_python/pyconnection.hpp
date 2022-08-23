@@ -125,7 +125,7 @@ public:
 
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 

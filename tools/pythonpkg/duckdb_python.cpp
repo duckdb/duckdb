@@ -82,7 +82,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.def("connect", &DuckDBPyConnection::Connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
-	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg("config") = py::dict());
+	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg("config") = py::none());
 	m.def("tokenize", PyTokenize,
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
 	      "used for e.g. syntax highlighting",
@@ -97,7 +97,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	    .export_values();
 
 	m.def("values", &DuckDBPyRelation::Values, "Create a relation object from the passed values", py::arg("values"),
-	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("connection") = py::none());
 	m.def("from_query", &DuckDBPyRelation::FromQuery, "Create a relation object from the given SQL query",
 	      py::arg("query"), py::arg("alias") = "query_relation",
 	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());

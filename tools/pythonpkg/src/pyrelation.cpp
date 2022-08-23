@@ -148,8 +148,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, DuckD
 	return conn->FromDF(df);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, DuckDBPyConnection *conn) {
-	return conn->Values(std::move(values));
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, py::object conn) {
+	static const auto connection_type = py::module::import("duckdb").attr("DuckDBPyConnection");
+	if (conn.is_none()) {
+		conn = py::module::import("duckdb").attr("default_connection");
+	}
+	if (!py::isinstance(conn, connection_type)) {
+		throw InvalidInputException("Type of object passed to parameter 'connection' has to be <DuckDBPyConnection>");
+	}
+	auto conn_p = (DuckDBPyConnection*)conn.ptr();
+	return conn_p->Values(std::move(values));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, const string &alias,
@@ -456,8 +464,8 @@ py::object DuckDBPyRelation::Fetchmany(idx_t size) {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->Fetchmany(size);
 }
