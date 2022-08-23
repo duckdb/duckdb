@@ -242,40 +242,40 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 
 	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
 
-	switch (chunk->meta_data.codec) {
+	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_block->ptr,
+	                   page_hdr.compressed_page_size, (char *)block->ptr, page_hdr.uncompressed_page_size);
+}
+
+void ColumnReader::DecompressInternal(CompressionCodec::type codec, const char *src, idx_t src_size, char *dst,
+                                      idx_t dst_size) {
+	switch (codec) {
 	case CompressionCodec::UNCOMPRESSED:
 		D_ASSERT(false);
 		break;
 	case CompressionCodec::GZIP: {
 		MiniZStream s;
-
-		s.Decompress((const char *)compressed_block->ptr, page_hdr.compressed_page_size, (char *)block->ptr,
-		             page_hdr.uncompressed_page_size);
-
+		s.Decompress(src, src_size, dst, dst_size);
 		break;
 	}
 	case CompressionCodec::SNAPPY: {
-		auto res = duckdb_snappy::RawUncompress((const char *)compressed_block->ptr, page_hdr.compressed_page_size,
-		                                        (char *)block->ptr);
+		auto res = duckdb_snappy::RawUncompress(src, src_size, dst);
 		if (!res) {
-			throw std::runtime_error("Decompression failure");
+			throw std::runtime_error("Snappy decompression failure");
 		}
 		break;
 	}
 	case CompressionCodec::ZSTD: {
-		auto res = duckdb_zstd::ZSTD_decompress((char *)block->ptr, page_hdr.uncompressed_page_size,
-		                                        (const char *)compressed_block->ptr, page_hdr.compressed_page_size);
-		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)page_hdr.uncompressed_page_size) {
+		auto res = duckdb_zstd::ZSTD_decompress(dst, dst_size, src, src_size);
+		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)dst_size) {
 			throw std::runtime_error("ZSTD Decompression failure");
 		}
 		break;
 	}
-
 	default: {
 		std::stringstream codec_name;
-		codec_name << chunk->meta_data.codec;
+		codec_name << codec;
 		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, gzip or snappy");
+		                         "\". Supported options are uncompressed, gzip, snappy or zstd");
 		break;
 	}
 	}
