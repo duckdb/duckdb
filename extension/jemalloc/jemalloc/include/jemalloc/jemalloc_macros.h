@@ -5,7 +5,12 @@
 #include <cstdint>
 
 #include <limits.h>
+
+#ifdef _MSC_VER
+#include "msvc_compat/strings.h"
+#else
 #include <strings.h>
+#endif
 
 namespace duckdb_jemalloc {
 

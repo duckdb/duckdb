@@ -1,6 +1,10 @@
 #ifndef JEMALLOC_PREAMBLE_H
 #define JEMALLOC_PREAMBLE_H
 
+#include <cstdint>
+#include <cstdarg>
+#include <cstdbool>
+
 #include "jemalloc/internal/jemalloc_internal_defs.h"
 #include "jemalloc/internal/jemalloc_internal_decls.h"
 

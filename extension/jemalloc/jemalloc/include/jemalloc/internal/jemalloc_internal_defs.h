@@ -229,7 +229,14 @@ namespace duckdb_jemalloc {
  * Used to mark unreachable code to quiet "end of non-void" compiler warnings.
  * Don't use this directly; instead use unreachable() from util.h
  */
+#ifdef _MSC_VER
+[[noreturn]] __forceinline void msvc_unreachable() {
+	__assume(false);
+}
+#define JEMALLOC_INTERNAL_UNREACHABLE msvc_unreachable
+#else
 #define JEMALLOC_INTERNAL_UNREACHABLE __builtin_unreachable
+#endif
 
 /*
  * ffs*() functions to use for bitmapping.  Don't use these directly; instead,
