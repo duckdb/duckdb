@@ -109,6 +109,9 @@ public:
 	DUCKDB_API unique_ptr<UnifiedVectorFormat[]> ToUnifiedFormat();
 
 	DUCKDB_API void Slice(const SelectionVector &sel_vector, idx_t count);
+
+	//! Slice all Vectors from other.data[i] to data[i + 'col_offset']
+	//! Turning all Vectors into Dictionary Vectors, using 'sel'
 	DUCKDB_API void Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
 
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
