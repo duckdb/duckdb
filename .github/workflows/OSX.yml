@@ -165,7 +165,6 @@ jobs:
           post_install: rm build/release/src/libduckdb*
           run_tests: 0
           out_of_tree_ext: 1
-          substrait: 1
           static_link_build: 1
           osx_universal: 1
 

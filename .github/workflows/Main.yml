@@ -41,7 +41,6 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_PARQUET: 1
-      BUILD_SUBSTRAIT_EXTENSION: 1
       GEN: ninja
 
     steps:

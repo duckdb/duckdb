@@ -132,7 +132,6 @@ jobs:
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         static_link_build: 1
         treat_warn_as_error: 0
-        substrait: 1
 
     - uses: actions/upload-artifact@v2
       with:
@@ -338,7 +337,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install numpy pytest pandas mypy psutil google-cloud-storage
+        run: pip install numpy pytest pandas mypy psutil
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
