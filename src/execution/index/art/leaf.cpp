@@ -99,13 +99,14 @@ void Leaf::Remove(row_t row_id) {
 	}
 }
 
-bool Leaf::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&r_node_parent,
-                 idx_t r_node_pos) {
+bool Leaf::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
+                 idx_t l_node_pos, Node *&r_node_parent, idx_t r_node_pos) {
 
 	if (l_node->type == NodeType::NLeaf) {
 		return Leaf::MergeNLeafNLeaf(l_art, l_node, r_node);
 	}
-	return Leaf::MergeNodeNLeaf(l_art, r_art, l_node, r_node, depth, r_node_parent, r_node_pos);
+	return Leaf::MergeNodeNLeaf(l_art, r_art, l_node, r_node, depth, l_node_parent, l_node_pos, r_node_parent,
+	                            r_node_pos);
 }
 
 bool Leaf::MergeNLeafNLeaf(ART &l_art, Node *&l_node, Node *&r_node) {
@@ -132,8 +133,8 @@ bool Leaf::MergeNLeafNLeaf(ART &l_art, Node *&l_node, Node *&r_node) {
 	return true;
 }
 
-bool Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&r_node_parent,
-                          idx_t r_node_pos) {
+bool Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
+                          idx_t l_node_pos, Node *&r_node_parent, idx_t r_node_pos) {
 
 	// merging any leaf with another node always looks like this
 	// because by our construction a key cannot be contained in another key
@@ -147,6 +148,9 @@ bool Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, 
 
 	if (child_pos == DConstants::INVALID_INDEX) {
 		Node::InsertChildNode(l_node, value[depth], r_node);
+		if (l_node_parent) {
+			l_node_parent->ReplaceChildPointer(l_node_pos, l_node);
+		}
 		if (r_node_parent) {
 			r_node_parent->ReplaceChildPointer(r_node_pos, nullptr);
 		}
@@ -155,7 +159,7 @@ bool Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, 
 	}
 	// recurse
 	auto child_node = l_node->GetChild(l_art, child_pos);
-	return Leaf::Merge(l_art, r_art, child_node, r_node, depth + 1, r_node_parent, r_node_pos);
+	return Leaf::Merge(l_art, r_art, child_node, r_node, depth + 1, l_node, child_pos, r_node_parent, r_node_pos);
 }
 
 } // namespace duckdb

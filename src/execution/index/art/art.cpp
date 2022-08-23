@@ -1082,7 +1082,7 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 
 bool ART::Merge(ART &l_art, ART &r_art) {
 	Node *null_parent = nullptr;
-	return Node::ResolvePrefixesAndMerge(l_art, r_art, l_art.tree, r_art.tree, 0, null_parent, 0);
+	return Node::ResolvePrefixesAndMerge(l_art, r_art, l_art.tree, r_art.tree, 0, null_parent, 0, null_parent, 0);
 }
 
 } // namespace duckdb
