@@ -193,39 +193,46 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
 	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
-	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
-	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
-	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
-	auto possibly_compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
-	trans.read((uint8_t *)block->ptr, uncompressed_bytes);
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
-		trans.read(((uint8_t *)block->ptr) + uncompressed_bytes, possibly_compressed_bytes);
+		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+			throw std::runtime_error("Page size mismatch");
+		}
+		trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
 		return;
 	}
 
-	ResizeableBuffer compressed_bytes_buffer(reader.allocator, possibly_compressed_bytes);
-	trans.read((uint8_t *)compressed_bytes_buffer.ptr, possibly_compressed_bytes);
+	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
+	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
+	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
+	trans.read((uint8_t *)block->ptr, uncompressed_bytes);
 
-	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_bytes_buffer.ptr,
-	                   possibly_compressed_bytes, (char *)block->ptr + uncompressed_bytes,
+	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
+	ResizeableBuffer compressed_buffer(reader.allocator, compressed_bytes);
+	trans.read((uint8_t *)compressed_buffer.ptr, compressed_bytes);
+
+	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr,
+	                   compressed_bytes, (char *)block->ptr + uncompressed_bytes,
 					   page_hdr.uncompressed_page_size - uncompressed_bytes);
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
-	auto compressed_block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.compressed_page_size + 1);
-	trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
+	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
-		move(block, compressed_block);
+		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+			throw std::runtime_error("Page size mismatch");
+		}
+		trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
 		return;
 	}
 
-	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
+	ResizeableBuffer compressed_buffer(reader.allocator, page_hdr.compressed_page_size + 1);
+	trans.read((uint8_t *)compressed_buffer.ptr, page_hdr.compressed_page_size);
 
-	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_block->ptr,
+	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr,
 	                   page_hdr.compressed_page_size, (char *)block->ptr, page_hdr.uncompressed_page_size);
 }
 
