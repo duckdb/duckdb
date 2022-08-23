@@ -99,17 +99,16 @@ void Leaf::Remove(row_t row_id) {
 	}
 }
 
-bool Leaf::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
+void Leaf::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
                  idx_t l_node_pos, Node *&r_node_parent, idx_t r_node_pos) {
 
 	if (l_node->type == NodeType::NLeaf) {
 		return Leaf::MergeNLeafNLeaf(l_art, l_node, r_node);
 	}
-	return Leaf::MergeNodeNLeaf(l_art, r_art, l_node, r_node, depth, l_node_parent, l_node_pos, r_node_parent,
-	                            r_node_pos);
+	Leaf::MergeNodeNLeaf(l_art, r_art, l_node, r_node, depth, l_node_parent, l_node_pos, r_node_parent, r_node_pos);
 }
 
-bool Leaf::MergeNLeafNLeaf(ART &l_art, Node *&l_node, Node *&r_node) {
+void Leaf::MergeNLeafNLeaf(ART &l_art, Node *&l_node, Node *&r_node) {
 
 	Leaf *l_n = (Leaf *)l_node;
 	Leaf *r_n = (Leaf *)r_node;
@@ -128,12 +127,11 @@ bool Leaf::MergeNLeafNLeaf(ART &l_art, Node *&l_node, Node *&r_node) {
 	}
 
 	if ((l_art.IsUnique() || l_art.IsPrimary()) && l_n->num_elements > 1) {
-		return false;
+		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
-	return true;
 }
 
-bool Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
+void Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
                           idx_t l_node_pos, Node *&r_node_parent, idx_t r_node_pos) {
 
 	// merging any leaf with another node always looks like this
@@ -155,11 +153,11 @@ bool Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, 
 			r_node_parent->ReplaceChildPointer(r_node_pos, nullptr);
 		}
 		r_node = nullptr;
-		return true;
+		return;
 	}
 	// recurse
 	auto child_node = l_node->GetChild(l_art, child_pos);
-	return Leaf::Merge(l_art, r_art, child_node, r_node, depth + 1, l_node, child_pos, r_node_parent, r_node_pos);
+	Leaf::Merge(l_art, r_art, child_node, r_node, depth + 1, l_node, child_pos, r_node_parent, r_node_pos);
 }
 
 } // namespace duckdb

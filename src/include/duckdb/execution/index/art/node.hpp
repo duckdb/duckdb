@@ -108,24 +108,24 @@ public:
 	static void Erase(Node *&node, idx_t pos, ART &art);
 
 	//! Resolve the prefixes of two nodes and then merge r_node into l_node
-	static bool ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
+	static void ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
 	                                    Node *&l_node_parent, idx_t l_node_pos, Node *&r_node_parent, idx_t r_node_pos);
 	//! Merge r_node into l_node, they have matching prefixes
-	static bool Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
+	static void Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
 	                  idx_t l_node_pos, Node *&r_node_parent, idx_t r_node_pos);
 
 	//! Merge Node with Node16 or Node4
 	template <class R_NODE_TYPE>
-	static bool MergeNodeWithNode16OrNode4(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
+	static void MergeNodeWithNode16OrNode4(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
 	                                       Node *&l_node_parent, idx_t l_node_pos);
 	//! Merge Node with Node48
-	static bool MergeNodeWithNode48(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
+	static void MergeNodeWithNode48(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
 	                                Node *&l_node_parent, idx_t l_node_pos);
 	//! Merge Node with Node256
-	static bool MergeNodeWithNode256(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
+	static void MergeNodeWithNode256(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
 	                                 Node *&l_node_parent, idx_t l_node_pos);
 	//! Merge a specific byte of two nodes and its possible children
-	static bool MergeByte(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, idx_t &l_child_pos,
+	static void MergeByte(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, idx_t &l_child_pos,
 	                      idx_t &r_pos, uint8_t &key_byte, Node *&l_node_parent, idx_t l_node_pos);
 
 protected:

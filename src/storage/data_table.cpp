@@ -1418,10 +1418,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 		// scan the sorted row data and build the index from it
 		if (!global_sort_state.sorted_blocks.empty()) {
 			PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
-			if (!index->BuildAndMerge(lock, scanner, allocator)) {
-				throw ConstraintException(
-				    "Can't create unique index, table contains duplicate data on indexed column(s)");
-			}
+			index->BuildAndMerge(lock, scanner, allocator);
 		}
 	}
 	info->indexes.AddIndex(move(index));

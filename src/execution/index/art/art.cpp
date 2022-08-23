@@ -223,7 +223,7 @@ struct BuildARTOffsets {
 	data_t byte;
 };
 
-bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_t start_idx, idx_t end_idx,
+void ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_t start_idx, idx_t end_idx,
                 idx_t depth) {
 
 	// test if we reached a leaf
@@ -239,7 +239,7 @@ bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_
 
 		// check for possible constraint violation
 		if ((IsUnique() || IsPrimary()) && num_row_ids != 1) {
-			return false;
+			throw ConstraintException("New data contains duplicates on indexed column(s)");
 		}
 
 		// new row ids of this leaf
@@ -282,22 +282,17 @@ bool ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_
 		// recurse on each offset
 		for (idx_t i = 0; i < offsets.size(); i++) {
 			Node *child_node = nullptr;
-			auto no_violation = Build(keys, row_ids, child_node, offsets[i].start, offsets[i].end, depth + 1);
+			Build(keys, row_ids, child_node, offsets[i].start, offsets[i].end, depth + 1);
 			Node::InsertChildNode(node, offsets[i].byte, child_node);
-			if (!no_violation) {
-				return false;
-			}
 		}
 	}
-	return true;
 }
 
-bool ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) {
+void ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) {
 
 	auto payload_types = logical_types;
 	payload_types.emplace_back(LogicalType::ROW_TYPE);
 
-	bool no_violation;
 	auto skipped_all_nulls = false;
 	auto temp_art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
 	for (;;) {
@@ -332,7 +327,15 @@ bool ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &all
 			}
 		}
 
+		if (start_idx != 0 && IsPrimary()) {
+			throw ConstraintException("NULLs in new data violate the primary key constraint of the index");
+		}
+
 		if (!skipped_all_nulls) {
+			if (IsPrimary()) {
+				// chunk consists only of NULLs
+				throw ConstraintException("NULLs in new data violate the primary key constraint of the index");
+			}
 			continue;
 		}
 
@@ -342,20 +345,17 @@ bool ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &all
 
 		// build the ART of this chunk
 		auto art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
-		no_violation = Build(keys, row_identifiers, art->tree, start_idx, ordered_chunk.size() - 1, 0);
-		if (!no_violation) {
-			return false;
-		}
+		Build(keys, row_identifiers, art->tree, start_idx, ordered_chunk.size() - 1, 0);
 
 		// merge art into temp_art
-		no_violation = ART::Merge(*temp_art, *art);
-		if (!no_violation) {
-			return false;
-		}
+		ART::Merge(*temp_art, *art);
 	}
 
+	// FIXME: currently this code is only used for index creation, so we can assume that there are no
+	// FIXME: duplicate violations between the existing index and the new data
+	// FIXME: instead of throwing exceptions in the merge code we need to do a 'cold' merge first
+	// FIXME: that does not change the tree but checks for violations (if IsPrimary or IsUnique)
 	ART::Merge(*this, *temp_art);
-	return true;
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
@@ -1080,9 +1080,9 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 }
 
-bool ART::Merge(ART &l_art, ART &r_art) {
+void ART::Merge(ART &l_art, ART &r_art) {
 	Node *null_parent = nullptr;
-	return Node::ResolvePrefixesAndMerge(l_art, r_art, l_art.tree, r_art.tree, 0, null_parent, 0, null_parent, 0);
+	Node::ResolvePrefixesAndMerge(l_art, r_art, l_art.tree, r_art.tree, 0, null_parent, 0, null_parent, 0);
 }
 
 } // namespace duckdb

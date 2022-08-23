@@ -110,9 +110,9 @@ public:
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Build an ART from a sorted chunk.
-	bool Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_t start_idx, idx_t end_idx, idx_t depth);
+	void Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_t start_idx, idx_t end_idx, idx_t depth);
 	//! Build ARTs from sorted chunks and merge them.
-	bool BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
+	void BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
 
 	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
 	//! Search Equal used for Joins that do not need to fetch data
@@ -121,7 +121,7 @@ public:
 	BlockPointer Serialize(duckdb::MetaBlockWriter &writer) override;
 
 	//! Merge two ARTs
-	static bool Merge(ART &l_art, ART &r_art);
+	static void Merge(ART &l_art, ART &r_art);
 
 private:
 	//! Insert a row id into a leaf node

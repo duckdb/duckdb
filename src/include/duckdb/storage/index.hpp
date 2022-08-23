@@ -81,7 +81,7 @@ public:
 	//! Insert data into the index. Does not lock the index.
 	virtual bool Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
 	//! Build an index from sorted chunks of keys.
-	virtual bool BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) = 0;
+	virtual void BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) = 0;
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(const vector<column_t> &column_ids) const;
