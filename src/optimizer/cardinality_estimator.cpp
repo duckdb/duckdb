@@ -472,7 +472,10 @@ idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t colum
 		if (comparison_filter.comparison_type != ExpressionType::COMPARE_EQUAL) {
 			continue;
 		}
-		auto column_count = base_stats->GetDistinctCount();
+		auto column_count = 0;
+		if (base_stats) {
+			column_count = base_stats->GetDistinctCount();
+		}
 		auto filtered_card = cardinality;
 		// column_count = 0 when there is no column count (i.e parquet scans)
 		if (column_count > 0) {
@@ -498,7 +501,10 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 		}
 		auto comparison_filter = (ConstantFilter &)*child_filter;
 		if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
-			auto column_count = base_stats->GetDistinctCount();
+			auto column_count = cardinality_after_filters;
+			if (base_stats) {
+				column_count = base_stats->GetDistinctCount();
+			}
 			auto increment = MaxValue<idx_t>(((cardinality + column_count - 1) / column_count), 1);
 			if (has_equality_filter) {
 				cardinality_after_filters += increment;
