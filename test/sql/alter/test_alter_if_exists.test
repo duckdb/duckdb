@@ -5,3 +5,86 @@
 # sequence does not exist
 statement ok
 ALTER SEQUENCE IF EXISTS seq OWNED BY x;
+
+# Add column to non-existing table
+statement ok
+ALTER TABLE IF EXISTS t0 ADD COLUMN c0 INT;
+
+# Add column if not exists to non-existing table
+statement ok
+ALTER TABLE IF EXISTS t0 ADD COLUMN IF NOT EXISTS c0 int;
+
+statement ok
+CREATE TABLE t0 (c0 INT);
+
+# Alter existing table add column if not exist
+statement ok
+ALTER TABLE t0 ADD COLUMN IF NOT EXISTS c0 int;
+
+# Alter existing table with existing column
+statement error
+ALTER TABLE t0 ADD COLUMN c0 int;
+
+# Alter existing table with new column
+statement ok
+ALTER TABLE t0 ADD COLUMN c1 int;
+
+# Alter existing table with new column if not exists
+statement ok
+ALTER TABLE t0 ADD COLUMN IF NOT EXISTS c2 int;
+
+# Drop existing column if not exists
+statement ok
+ALTER TABLE IF EXISTS t1 DROP COLUMN IF EXISTS c3;
+
+statement ok
+ALTER TABLE IF EXISTS t0 DROP COLUMN if EXISTS c3;
+
+statement error
+ALTER TABLE t1 DROP COLUMN IF EXISTS c3;
+
+statement error
+ALTER TABLE t1 DROP COLUMN c3;
+
+statement error
+ALTER TABLE t0 DROP COLUMN c3;
+
+statement ok
+ALTER TABLE t0 DROP COLUMN IF EXISTS c3
+
+statement error
+ALTER TABLE IF EXISTS t0 DROP COLUMN c3
+
+# Change type of column if exists
+statement ok
+ALTER TABLE IF EXISTS t1 ALTER COLUMN c0 TYPE varchar;
+
+# Not supported for ALTER COLUMN
+statement error
+ALTER TABLE IF EXISTS t1 ALTER COLUMN IF EXISTS c0 TYPE varchar;
+
+# 'rowid' pseudo-column
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+ALTER TABLE unit DROP COLUMN IF EXISTS rowid;
+
+statement ok
+ALTER TABLE unit ADD COLUMN rowid INTEGER;
+
+statement ok
+ALTER TABLE unit DROP COLUMN IF EXISTS rowid;
+
+statement ok
+ALTER TABLE unit ADD COLUMN IF NOT EXISTS rowid INTEGER;
+
+statement ok
+ALTER TABLE unit ADD COLUMN IF NOT EXISTS rowid INTEGER;
+
+statement ok
+ALTER TABLE unit DROP COLUMN rowid;
+
+query I
+SELECT rowid FROM unit;
+----

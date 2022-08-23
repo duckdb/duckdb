@@ -28,7 +28,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 		// get the old name and the new name
 		string old_name = stmt->subname;
 		string new_name = stmt->newname;
-		info = make_unique<RenameColumnInfo>(schema, table, old_name, new_name);
+		info = make_unique<RenameColumnInfo>(schema, table, stmt->missing_ok, old_name, new_name);
 		break;
 	}
 	case duckdb_libpgquery::PG_OBJECT_TABLE: {
@@ -45,7 +45,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 			schema = stmt->relation->schemaname;
 		}
 		string new_name = stmt->newname;
-		info = make_unique<RenameTableInfo>(schema, table, new_name);
+		info = make_unique<RenameTableInfo>(schema, table, stmt->missing_ok, new_name);
 		break;
 	}
 
@@ -63,7 +63,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 			schema = stmt->relation->schemaname;
 		}
 		string new_name = stmt->newname;
-		info = make_unique<RenameViewInfo>(schema, view, new_name);
+		info = make_unique<RenameViewInfo>(schema, view, stmt->missing_ok, new_name);
 		break;
 	}
 	case duckdb_libpgquery::PG_OBJECT_DATABASE:
