@@ -604,7 +604,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	auto &context = *con.context;
 	auto &catalog = Catalog::GetCatalog(context);
 
-	if (catalog.GetEntry<TableFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "parquet_scan")) {
+	if (catalog.GetEntry<TableFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "parquet_scan", true)) {
 		throw InvalidInputException("Parquet extension is either already loaded or built-in");
 	}
 
