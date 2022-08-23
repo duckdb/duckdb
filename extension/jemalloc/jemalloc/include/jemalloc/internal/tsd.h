@@ -1,11 +1,11 @@
 #ifndef JEMALLOC_INTERNAL_TSD_H
 #define JEMALLOC_INTERNAL_TSD_H
 
+#include "jemalloc/internal/jemalloc_internal_decls.h"
 #include "jemalloc/internal/activity_callback.h"
 #include "jemalloc/internal/arena_types.h"
 #include "jemalloc/internal/assert.h"
 #include "jemalloc/internal/bin_types.h"
-#include "jemalloc/internal/jemalloc_internal_decls.h"
 #include "jemalloc/internal/jemalloc_internal_externs.h"
 #include "jemalloc/internal/peak.h"
 #include "jemalloc/internal/prof_types.h"
@@ -15,6 +15,7 @@
 #include "jemalloc/internal/tcache_structs.h"
 #include "jemalloc/internal/util.h"
 #include "jemalloc/internal/witness.h"
+#include "jemalloc/internal/tsd_types.h"
 
 namespace duckdb_jemalloc {
 

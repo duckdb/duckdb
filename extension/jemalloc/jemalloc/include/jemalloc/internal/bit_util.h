@@ -2,6 +2,7 @@
 #define JEMALLOC_INTERNAL_BIT_UTIL_H
 
 #include "jemalloc/internal/assert.h"
+#include "jemalloc/internal/util.h"
 
 /* Sanity check. */
 #if !defined(JEMALLOC_INTERNAL_FFSLL) || !defined(JEMALLOC_INTERNAL_FFSL) \

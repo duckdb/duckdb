@@ -1,9 +1,9 @@
 #ifndef JEMALLOC_INTERNAL_GUARD_H
 #define JEMALLOC_INTERNAL_GUARD_H
 
+#include "jemalloc/internal/jemalloc_internal_decls.h"
 #include "jemalloc/internal/ehooks.h"
 #include "jemalloc/internal/emap.h"
-#include "jemalloc/internal/jemalloc_internal_decls.h"
 
 namespace duckdb_jemalloc {
 

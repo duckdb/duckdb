@@ -5,6 +5,7 @@
 #include "jemalloc/internal/pages.h"
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/util.h"
+#include "jemalloc/internal/assert.h"
 
 namespace duckdb_jemalloc {
 

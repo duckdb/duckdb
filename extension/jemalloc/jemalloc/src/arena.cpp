@@ -1,6 +1,5 @@
-#include "jemalloc/internal/jemalloc_internal_includes.h"
 #include "jemalloc/internal/jemalloc_preamble.h"
-#include "jemalloc/internal/jemalloc_internal_decls.h"
+#include "jemalloc/internal/jemalloc_internal_includes.h"
 
 #include "jemalloc/internal/assert.h"
 #include "jemalloc/internal/decay.h"

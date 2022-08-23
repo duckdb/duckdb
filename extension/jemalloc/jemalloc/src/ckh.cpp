@@ -34,9 +34,8 @@
  * respectively.
  *
  ******************************************************************************/
-#include "jemalloc/internal/jemalloc_internal_includes.h"
 #include "jemalloc/internal/jemalloc_preamble.h"
-#include "jemalloc/internal/jemalloc_internal_decls.h"
+#include "jemalloc/internal/jemalloc_internal_includes.h"
 
 #include "jemalloc/internal/ckh.h"
 

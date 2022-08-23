@@ -5,7 +5,6 @@ project(JEMallocExtension)
 include_directories(include)
 include_directories(jemalloc/include)
 
-
 add_subdirectory(jemalloc)
 
 set(JEMALLOC_EXTENSION_FILES jemalloc-extension.cpp ${JEMALLOC_OBJECT_FILES})
