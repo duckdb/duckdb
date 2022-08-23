@@ -1,5 +1,6 @@
 #include "duckdb/verification/statement_verifier.hpp"
 
+#include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/verification/copied_statement_verifier.hpp"
@@ -110,13 +111,16 @@ bool StatementVerifier::Run(
 	context.config.force_external = ForceExternal();
 	try {
 		auto result = run(query, move(statement));
-		if (!result->success) {
+		if (result->HasError()) {
 			failed = true;
 		}
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
+	} catch (const Exception &ex) {
+		failed = true;
+		materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
 	} catch (std::exception &ex) {
 		failed = true;
-		materialized_result = make_unique<MaterializedQueryResult>(ex.what());
+		materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
 	}
 	context.interrupted = false;
 
@@ -126,13 +130,13 @@ bool StatementVerifier::Run(
 string StatementVerifier::CompareResults(const StatementVerifier &other) {
 	D_ASSERT(type == VerificationType::ORIGINAL);
 	string error;
-	if (materialized_result->success != other.materialized_result->success) { // LCOV_EXCL_START
+	if (materialized_result->HasError() != other.materialized_result->HasError()) { // LCOV_EXCL_START
 		string result = other.name + " statement differs from original result!\n";
 		result += "Original Result:\n" + materialized_result->ToString();
 		result += other.name + ":\n" + other.materialized_result->ToString();
 		return result;
 	} // LCOV_EXCL_STOP
-	if (!materialized_result->success) {
+	if (materialized_result->HasError()) {
 		return "";
 	}
 	if (!ColumnDataCollection::ResultEquals(materialized_result->Collection(), other.materialized_result->Collection(),

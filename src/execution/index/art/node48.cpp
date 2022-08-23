@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-Node48::Node48(size_t compression_length) : Node(NodeType::N48, compression_length) {
+Node48::Node48() : Node(NodeType::N48) {
 	for (idx_t i = 0; i < 256; i++) {
 		child_index[i] = Node::EMPTY_MARKER;
 	}
@@ -74,7 +74,7 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 		n->count++;
 	} else {
 		// Grow to Node256
-		auto new_node = new Node256(n->prefix_length);
+		auto new_node = new Node256();
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->children[i] = n->children[n->child_index[i]];
@@ -82,7 +82,7 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 			}
 		}
 		new_node->count = n->count;
-		CopyPrefix(n, new_node);
+		new_node->prefix = move(n->prefix);
 		delete node;
 		node = new_node;
 		Node256::Insert(node, key_byte, child);
@@ -99,8 +99,8 @@ void Node48::Erase(Node *&node, int pos, ART &art) {
 	n->child_index[pos] = Node::EMPTY_MARKER;
 	n->count--;
 	if (node->count <= 12) {
-		auto new_node = new Node16(n->prefix_length);
-		CopyPrefix(n, new_node);
+		auto new_node = new Node16();
+		new_node->prefix = move(n->prefix);
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->key[new_node->count] = i;

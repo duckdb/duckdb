@@ -12,6 +12,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
+#include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
 
 namespace duckdb {
 
@@ -32,30 +33,12 @@ public:
 	                      vector<vector<idx_t>> grouping_functions, idx_t estimated_cardinality,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
-	//! The groups
-	vector<unique_ptr<Expression>> groups;
 	//! The grouping sets
 	vector<GroupingSet> grouping_sets;
-	//! The aggregates that have to be computed
-	vector<unique_ptr<Expression>> aggregates;
-	//! The set of GROUPING functions
-	vector<vector<idx_t>> grouping_functions;
-
-	//! Whether or not any aggregation is DISTINCT
-	bool any_distinct;
-
-	//! The group types
-	vector<LogicalType> group_types;
-	//! The payload types
-	vector<LogicalType> payload_types;
-	//! The aggregate return types
-	vector<LogicalType> aggregate_return_types;
+	GroupedAggregateData grouped_aggregate_data;
 
 	//! The radix partitioned hash tables (one per grouping set)
 	vector<RadixPartitionedHashTable> radix_tables;
-
-	//! Pointers to the aggregates
-	vector<BoundAggregateExpression *> bindings;
 
 	unordered_map<Expression *, size_t> filter_indexes;
 

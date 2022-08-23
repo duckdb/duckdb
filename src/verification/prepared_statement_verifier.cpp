@@ -1,5 +1,6 @@
 #include "duckdb/verification/prepared_statement_verifier.hpp"
 
+#include "duckdb/common/preserved_error.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
@@ -79,20 +80,22 @@ bool PreparedStatementVerifier::Run(
 	// execute the prepared statements
 	try {
 		auto prepare_result = run(string(), move(prepare_statement));
-		if (!prepare_result->success) {
-			throw std::runtime_error("Failed prepare during verify: " + prepare_result->error);
+		if (prepare_result->HasError()) {
+			prepare_result->ThrowError("Failed prepare during verify: ");
 		}
 		auto execute_result = run(string(), move(execute_statement));
-		if (!execute_result->success) {
-			throw std::runtime_error("Failed execute during verify: " + execute_result->error);
+		if (execute_result->HasError()) {
+			prepare_result->ThrowError("Failed execute during verify: ");
 		}
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(execute_result));
-	} catch (std::exception &ex) {
-		if (!StringUtil::Contains(ex.what(), "Parameter Not Allowed Error")) {
-			materialized_result = make_unique<MaterializedQueryResult>(ex.what());
-		} else {
-			failed = true;
+	} catch (const Exception &ex) {
+		if (ex.type != ExceptionType::PARAMETER_NOT_ALLOWED) {
+			materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
 		}
+		failed = true;
+	} catch (std::exception &ex) {
+		materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
+		failed = true;
 	}
 	run(string(), move(dealloc_statement));
 	context.interrupted = false;

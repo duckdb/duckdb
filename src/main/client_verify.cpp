@@ -1,10 +1,12 @@
+#include "duckdb/common/preserved_error.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
 
 namespace duckdb {
 
-string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement) {
+PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string &query,
+                                          unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
 
@@ -85,7 +87,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 			RunStatementInternal(lock, explain_q, move(explain_stmt), false, false);
 		} catch (std::exception &ex) { // LCOV_EXCL_START
 			interrupted = false;
-			return "EXPLAIN failed but query did not (" + string(ex.what()) + ")";
+			return PreservedError("EXPLAIN failed but query did not (" + string(ex.what()) + ")");
 		} // LCOV_EXCL_STOP
 	}
 
@@ -96,15 +98,14 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 
 	// Now compare the results
 	// The results of all runs should be identical
-	string result;
 	for (auto &verifier : statement_verifiers) {
-		result = original->CompareResults(*verifier);
+		auto result = original->CompareResults(*verifier);
 		if (!result.empty()) {
-			return result;
+			return PreservedError(result);
 		}
 	}
 
-	return result;
+	return PreservedError();
 }
 
 } // namespace duckdb

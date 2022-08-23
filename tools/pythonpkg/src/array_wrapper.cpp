@@ -176,7 +176,7 @@ struct StringConvert {
 			                                      start_pos);
 			break;
 		default:
-			throw std::runtime_error("Unsupported typekind for Python Unicode Compact decode");
+			throw NotImplementedException("Unsupported typekind constant '%d' for Python Unicode Compact decode", kind);
 		}
 		return result;
 	}
@@ -495,7 +495,7 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 		type_width = sizeof(PyObject *);
 		break;
 	default:
-		throw std::runtime_error("Unsupported type " + type.ToString() + " for DuckDB -> NumPy conversion");
+		throw NotImplementedException("Unsupported type \"%s\" for DuckDB -> NumPy conversion", type.ToString());
 	}
 }
 
@@ -572,7 +572,7 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 		}
 	} break;
 	default:
-		throw std::runtime_error("unsupported type " + type.ToString());
+		throw NotImplementedException("Unsupported type \"%s\"", type.ToString());
 	}
 	array = py::array(py::dtype(dtype), capacity);
 	data = (data_ptr_t)array.mutable_data();
@@ -717,7 +717,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 
 	default:
-		throw std::runtime_error("unsupported type " + input.GetType().ToString());
+		throw NotImplementedException("Unsupported type \"%s\"", input.GetType().ToString());
 	}
 	if (may_have_null) {
 		requires_mask = true;
