@@ -427,10 +427,10 @@ void WindowLocalSinkState::Group(WindowGlobalSinkState &gstate) {
 	}
 
 	auto &payload_data = *ungrouped->local_sort->payload_data;
-	auto rows = payload_data.CloneEmpty();
+	auto rows = payload_data.CloneEmpty(payload_data.keep_pinned);
 
 	auto &payload_heap = *ungrouped->local_sort->payload_heap;
-	auto heap = payload_heap.CloneEmpty();
+	auto heap = payload_heap.CloneEmpty(payload_heap.keep_pinned);
 
 	RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, payload_data, payload_heap, payload_layout);
 	RowDataCollectionScanner scanner(*rows, *heap, payload_layout, true);
@@ -1741,8 +1741,8 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		partition_mask.SetValidUnsafe(0);
 		order_mask.SetValidUnsafe(0);
 		//	No partition - align the heap blocks with the row blocks
-		rows = gstate.rows->CloneEmpty();
-		heap = gstate.strings->CloneEmpty();
+		rows = gstate.rows->CloneEmpty(gstate.rows->keep_pinned);
+		heap = gstate.strings->CloneEmpty(gstate.rows->keep_pinned);
 		RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, *gstate.rows, *gstate.strings, layout);
 		external = true;
 	} else if (hash_bin < gstate.hash_groups.size() && gstate.hash_groups[hash_bin]) {

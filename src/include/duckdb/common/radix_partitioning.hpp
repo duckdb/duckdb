@@ -45,14 +45,6 @@ public:
 		return 1 << radix_bits;
 	}
 
-	//! Initialize histogram for "radix_bits"
-	static unique_ptr<idx_t[]> InitializeHistogram(idx_t radix_bits);
-	//! Update histogram given a vector of hashes
-	static void UpdateHistogram(const UnifiedVectorFormat &hash_data, const idx_t count, const bool has_rsel,
-	                            idx_t histogram[], idx_t radix_bits);
-	//! Reduce a histogram from a certain number of radix bits to a lower number
-	static unique_ptr<idx_t[]> ReduceHistogram(const idx_t histogram_from[], idx_t radix_bits_from,
-	                                           idx_t radix_bits_to);
 	//! Partition the data in block_collection/string_heap to multiple partitions
 	static void Partition(BufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
 	                      RowDataCollection &block_collection, RowDataCollection &string_heap,

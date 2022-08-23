@@ -95,58 +95,6 @@ RETURN_TYPE DoubleRadixBitsSwitch1(idx_t radix_bits_1, idx_t radix_bits_2, ARGS 
 	}
 }
 
-unique_ptr<idx_t[]> RadixPartitioning::InitializeHistogram(idx_t radix_bits) {
-	auto result = unique_ptr<idx_t[]>(new idx_t[1 << radix_bits]);
-	memset(result.get(), 0, (1 << radix_bits) * sizeof(idx_t));
-	return result;
-}
-
-struct UpdateHistogramFunctor {
-	template <idx_t radix_bits>
-	static void Operation(const UnifiedVectorFormat &hash_data, const idx_t count, const bool has_rsel,
-	                      idx_t histogram[]) {
-		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
-
-		const auto hashes = (hash_t *)hash_data.data;
-		if (has_rsel) {
-			for (idx_t i = 0; i < count; i++) {
-				auto idx = hash_data.sel->get_index(i);
-				histogram[CONSTANTS::ApplyMask(hashes[idx])]++;
-			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				histogram[CONSTANTS::ApplyMask(hashes[i])]++;
-			}
-		}
-	}
-};
-
-void RadixPartitioning::UpdateHistogram(const UnifiedVectorFormat &hash_data, const idx_t count, const bool has_rsel,
-                                        idx_t histogram[], idx_t radix_bits) {
-	return RadixBitsSwitch<UpdateHistogramFunctor, void>(radix_bits, hash_data, count, has_rsel, histogram);
-}
-
-struct ReduceHistogramFunctor {
-	template <idx_t radix_bits_from, idx_t radix_bits_to>
-	static unique_ptr<idx_t[]> Operation(const idx_t histogram_from[]) {
-		using CONSTANTS_FROM = RadixPartitioningConstants<radix_bits_from>;
-		using CONSTANTS_TO = RadixPartitioningConstants<radix_bits_to>;
-
-		auto result = RadixPartitioning::InitializeHistogram(radix_bits_to);
-		auto histogram_to = result.get();
-		for (idx_t i = 0; i < CONSTANTS_FROM::NUM_PARTITIONS; i++) {
-			histogram_to[CONSTANTS_TO::ApplyMask(i)] += histogram_from[i];
-		}
-		return result;
-	}
-};
-
-unique_ptr<idx_t[]> RadixPartitioning::ReduceHistogram(const idx_t histogram_from[], idx_t radix_bits_from,
-                                                       idx_t radix_bits_to) {
-	return DoubleRadixBitsSwitch1<ReduceHistogramFunctor, unique_ptr<idx_t[]>>(radix_bits_from, radix_bits_to,
-	                                                                           histogram_from);
-}
-
 template <idx_t radix_bits>
 static void InitPartitions(BufferManager &buffer_manager, vector<unique_ptr<RowDataCollection>> &partition_collections,
                            RowDataBlock *partition_blocks[], vector<BufferHandle> &partition_handles,
