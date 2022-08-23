@@ -188,8 +188,6 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 }
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
-	// FIXME this is copied from the other prepare, merge the decomp part
-
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
@@ -201,32 +199,17 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	auto possibly_compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 	trans.read((uint8_t *)block->ptr, uncompressed_bytes);
 
-	switch (chunk->meta_data.codec) {
-	case CompressionCodec::UNCOMPRESSED:
+	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		trans.read(((uint8_t *)block->ptr) + uncompressed_bytes, possibly_compressed_bytes);
-		break;
-
-	case CompressionCodec::SNAPPY: {
-		// TODO move allocation outta here
-		ResizeableBuffer compressed_bytes_buffer(reader.allocator, possibly_compressed_bytes);
-		trans.read((uint8_t *)compressed_bytes_buffer.ptr, possibly_compressed_bytes);
-
-		auto res = duckdb_snappy::RawUncompress((const char *)compressed_bytes_buffer.ptr, possibly_compressed_bytes,
-		                                        ((char *)block->ptr) + uncompressed_bytes);
-		if (!res) {
-			throw std::runtime_error("Decompression failure");
-		}
-		break;
+		return;
 	}
 
-	default: {
-		std::stringstream codec_name;
-		codec_name << chunk->meta_data.codec;
-		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, gzip or snappy");
-		break;
-	}
-	}
+	ResizeableBuffer compressed_bytes_buffer(reader.allocator, possibly_compressed_bytes);
+	trans.read((uint8_t *)compressed_bytes_buffer.ptr, possibly_compressed_bytes);
+
+	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_bytes_buffer.ptr,
+	                   possibly_compressed_bytes, (char *)block->ptr + uncompressed_bytes,
+					   page_hdr.uncompressed_page_size - uncompressed_bytes);
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
