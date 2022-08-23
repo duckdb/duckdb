@@ -177,6 +177,8 @@ public:
 
 	py::object Fetchone();
 
+	py::object Fetchmany(idx_t size);
+
 	py::object Fetchall();
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);

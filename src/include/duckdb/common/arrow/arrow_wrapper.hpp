@@ -9,6 +9,7 @@
 #pragma once
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/preserved_error.hpp"
 
 //! Here we have the internal duckdb classes that interact with Arrow's Internal Header (i.e., duckdb/commons/arrow.hpp)
 namespace duckdb {
@@ -56,10 +57,10 @@ public:
 class ArrowUtil {
 public:
 	static bool TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &result_count,
-	                          string &error);
+	                          PreservedError &error);
 	static idx_t FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out);
 
 private:
-	static bool TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &out, string &error);
+	static bool TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &out, PreservedError &error);
 };
 } // namespace duckdb

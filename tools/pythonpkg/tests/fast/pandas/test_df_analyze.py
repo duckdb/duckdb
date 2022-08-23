@@ -44,5 +44,5 @@ class TestResolveObjectColumns(object):
 		data = [1000008, 6, 9, [4], [1], 6]
 		df = create_generic_dataframe(data)
 		# Sample size is too low to detect the mismatch, exception is raised when trying to convert
-		with pytest.raises(Exception, match="Invalid Input Error: Failed to cast value: Unimplemented type for cast"):
+		with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
 			roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()

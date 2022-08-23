@@ -123,7 +123,7 @@ void WriteData(duckdb_column *column, ColumnDataCollection &source, const vector
 }
 
 duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result, duckdb_column *column, idx_t col) {
-	D_ASSERT(result.success);
+	D_ASSERT(!result.HasError());
 	auto &collection = result.Collection();
 	idx_t row_count = collection.Count();
 	column->__deprecated_nullmask = (bool *)duckdb_malloc(sizeof(bool) * collection.Count());
@@ -253,7 +253,7 @@ duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result_p, duckdb_re
 	D_ASSERT(result_p);
 	if (!out) {
 		// no result to write to, only return the status
-		return result.success ? DuckDBSuccess : DuckDBError;
+		return !result.HasError() ? DuckDBSuccess : DuckDBError;
 	}
 
 	memset(out, 0, sizeof(duckdb_result));
@@ -264,9 +264,9 @@ duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result_p, duckdb_re
 	result_data->result_set_type = CAPIResultSetType::CAPI_RESULT_TYPE_NONE;
 	out->internal_data = result_data;
 
-	if (!result.success) {
+	if (result.HasError()) {
 		// write the error message
-		out->__deprecated_error_message = (char *)result.error.c_str();
+		out->__deprecated_error_message = (char *)result.GetError().c_str();
 		return DuckDBError;
 	}
 	// copy the data
@@ -281,7 +281,7 @@ bool deprecated_materialize_result(duckdb_result *result) {
 		return false;
 	}
 	auto result_data = (duckdb::DuckDBResultData *)result->internal_data;
-	if (!result_data->result->success) {
+	if (result_data->result->HasError()) {
 		return false;
 	}
 	if (result_data->result_set_type == CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
@@ -452,7 +452,7 @@ const char *duckdb_result_error(duckdb_result *result) {
 		return nullptr;
 	}
 	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
-	return result_data.result->success ? nullptr : result_data.result->error.c_str();
+	return !result_data.result->HasError() ? nullptr : result_data.result->GetError().c_str();
 }
 
 idx_t duckdb_result_chunk_count(duckdb_result result) {
