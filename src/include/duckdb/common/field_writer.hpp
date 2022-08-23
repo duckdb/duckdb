@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/set.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include <type_traits>
 
@@ -17,8 +18,8 @@ class BufferedSerializer;
 
 class FieldWriter {
 public:
-	FieldWriter(Serializer &serializer);
-	~FieldWriter();
+	DUCKDB_API FieldWriter(Serializer &serializer);
+	DUCKDB_API ~FieldWriter();
 
 public:
 	template <class T>
@@ -52,6 +53,16 @@ public:
 		AddField();
 		Write<uint32_t>(elements.size());
 		for (auto &element : elements) {
+			Write<T>(element);
+		}
+	}
+
+	// vector<bool> yay
+	template <class T, class CONTAINER_TYPE = vector<T>>
+	void WriteListNoReference(const CONTAINER_TYPE &elements) {
+		AddField();
+		Write<uint32_t>(elements.size());
+		for (auto element : elements) {
 			Write<T>(element);
 		}
 	}
@@ -90,7 +101,7 @@ public:
 	}
 
 	// Called after all fields have been written. Should always be called.
-	void Finalize();
+	DUCKDB_API void Finalize();
 
 	Serializer &GetSerializer() {
 		return *buffer;
@@ -106,7 +117,7 @@ private:
 		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}
 
-	void WriteData(const_data_ptr_t buffer, idx_t write_size);
+	DUCKDB_API void WriteData(const_data_ptr_t buffer, idx_t write_size);
 
 private:
 	Serializer &serializer;
@@ -127,6 +138,9 @@ public:
 
 	void SetRemainingData(idx_t remaining_data);
 	idx_t RemainingData();
+	Deserializer &GetRoot() {
+		return root;
+	}
 
 private:
 	Deserializer &root;
@@ -135,8 +149,8 @@ private:
 
 class FieldReader {
 public:
-	FieldReader(Deserializer &source);
-	~FieldReader();
+	DUCKDB_API FieldReader(Deserializer &source);
+	DUCKDB_API ~FieldReader();
 
 public:
 	template <class T>
@@ -170,6 +184,7 @@ public:
 		AddField();
 		auto result_count = source.Read<uint32_t>();
 		vector<T> result;
+		result.reserve(result_count);
 		for (idx_t i = 0; i < result_count; i++) {
 			result.push_back(source.Read<T>());
 		}
@@ -177,14 +192,29 @@ public:
 	}
 
 	template <class T>
-	unique_ptr<T> ReadOptional(unique_ptr<T> default_value) {
+	set<T> ReadRequiredSet() {
+		if (field_count >= max_field_count) {
+			// field is not there, throw an exception
+			throw SerializationException("Attempting to read a required field, but field is missing");
+		}
+		AddField();
+		auto result_count = source.Read<uint32_t>();
+		set<T> result;
+		for (idx_t i = 0; i < result_count; i++) {
+			result.insert(source.Read<T>());
+		}
+		return result;
+	}
+
+	template <class T, typename... ARGS>
+	unique_ptr<T> ReadOptional(unique_ptr<T> default_value, ARGS &&...args) {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
 			return default_value;
 		}
 		// field is there, read the actual value
 		AddField();
-		return source.template ReadOptional<T>();
+		return source.template ReadOptional<T>(std::forward<ARGS>(args)...);
 	}
 
 	template <class T, class RETURN_TYPE = unique_ptr<T>>
@@ -212,7 +242,7 @@ public:
 	template <class T, class RETURN_TYPE = unique_ptr<T>>
 	RETURN_TYPE ReadRequiredSerializable() {
 		if (field_count >= max_field_count) {
-			// field is not there, read the default value
+			// field is not there, throw an exception
 			throw SerializationException("Attempting to read mandatory field, but field is missing");
 		}
 		// field is there, read the actual value
@@ -223,7 +253,7 @@ public:
 	template <class T, class RETURN_TYPE = unique_ptr<T>, typename... ARGS>
 	RETURN_TYPE ReadRequiredSerializable(ARGS &&...args) {
 		if (field_count >= max_field_count) {
-			// field is not there, read the default value
+			// field is not there, throw an exception
 			throw SerializationException("Attempting to read mandatory field, but field is missing");
 		}
 		// field is there, read the actual value
@@ -231,10 +261,10 @@ public:
 		return T::Deserialize(source, std::forward<ARGS>(args)...);
 	}
 
-	template <class T, class RETURN_TYPE = unique_ptr<T>>
-	vector<RETURN_TYPE> ReadRequiredSerializableList() {
+	template <class T, class RETURN_TYPE = unique_ptr<T>, typename... ARGS>
+	vector<RETURN_TYPE> ReadRequiredSerializableList(ARGS &&...args) {
 		if (field_count >= max_field_count) {
-			// field is not there, read the default value
+			// field is not there, throw an exception
 			throw SerializationException("Attempting to read mandatory field, but field is missing");
 		}
 		// field is there, read the actual value
@@ -243,10 +273,11 @@ public:
 
 		vector<RETURN_TYPE> result;
 		for (idx_t i = 0; i < result_count; i++) {
-			result.push_back(T::Deserialize(source));
+			result.push_back(T::Deserialize(source, std::forward<ARGS>(args)...));
 		}
 		return result;
 	}
+
 	void ReadBlob(data_ptr_t result, idx_t read_size) {
 		if (field_count >= max_field_count) {
 			// field is not there, throw an exception
@@ -258,7 +289,7 @@ public:
 	}
 
 	//! Called after all fields have been read. Should always be called.
-	void Finalize();
+	DUCKDB_API void Finalize();
 
 	Deserializer &GetSource() {
 		return source;

@@ -24,6 +24,11 @@ struct CreateCopyFunctionInfo : public CreateInfo {
 	//! The table function
 	CopyFunction function;
 
+protected:
+	void SerializeInternal(Serializer &) const override {
+		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(type));
+	}
+
 public:
 	unique_ptr<CreateInfo> Copy() const override {
 		auto result = make_unique<CreateCopyFunctionInfo>(function);

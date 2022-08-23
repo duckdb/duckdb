@@ -87,7 +87,7 @@
       [1] 00 00 00 61
       
       $blob[[3]]
-      [1] NA
+      NULL
       
       
       $small_enum

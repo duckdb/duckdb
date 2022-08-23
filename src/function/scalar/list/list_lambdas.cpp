@@ -18,6 +18,13 @@ struct ListLambdaBindData : public FunctionData {
 public:
 	bool Equals(const FunctionData &other_p) const override;
 	unique_ptr<FunctionData> Copy() const override;
+	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
+		throw NotImplementedException("FIXME: list lambda serialize");
+	}
+	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	                                            ScalarFunction &bound_function) {
+		throw NotImplementedException("FIXME: list lambda deserialize");
+	}
 };
 
 ListLambdaBindData::ListLambdaBindData(const LogicalType &stype_p, unique_ptr<Expression> lambda_expr_p)
@@ -306,10 +313,7 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
-		bound_function.arguments.pop_back();
-		bound_function.arguments[0] = LogicalType(LogicalTypeId::UNKNOWN);
-		bound_function.return_type = LogicalType::SQLNULL;
-		return nullptr;
+		throw ParameterNotResolvedException();
 	}
 
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
@@ -341,7 +345,6 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
-
 	bound_function.return_type = arguments[0]->return_type;
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }
@@ -351,6 +354,8 @@ void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("list_transform", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
 	                   LogicalType::LIST(LogicalType::ANY), ListTransformFunction, ListTransformBind, nullptr, nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.serialize = ListLambdaBindData::Serialize;
+	fun.deserialize = ListLambdaBindData::Deserialize;
 	set.AddFunction(fun);
 
 	fun.name = "array_transform";
@@ -366,6 +371,8 @@ void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("list_filter", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
 	                   LogicalType::LIST(LogicalType::ANY), ListFilterFunction, ListFilterBind, nullptr, nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.serialize = ListLambdaBindData::Serialize;
+	fun.deserialize = ListLambdaBindData::Deserialize;
 	set.AddFunction(fun);
 
 	fun.name = "array_filter";

@@ -1,5 +1,6 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/transaction.hpp"
@@ -13,6 +14,8 @@
 #include "duckdb/main/client_config.hpp"
 
 #include "duckdb/common/mutex.hpp"
+
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -341,13 +344,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
 				// use an index scan!
 				bind_data.is_index_scan = true;
-				get.function.name = "index_scan";
-				get.function.init_local = nullptr;
-				get.function.init_global = IndexScanInitGlobal;
-				get.function.function = IndexScanFunction;
-				get.function.table_scan_progress = nullptr;
-				get.function.get_batch_index = nullptr;
-				get.function.filter_pushdown = false;
+				get.function = TableScanFunction::GetIndexScanFunction();
 			} else {
 				bind_data.result_ids.clear();
 			}
@@ -363,6 +360,53 @@ string TableScanToString(const FunctionData *bind_data_p) {
 	return result;
 }
 
+static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
+	auto &bind_data = (TableScanBindData &)*bind_data_p;
+
+	D_ASSERT(bind_data.chunk_count == 0);
+	writer.WriteString(bind_data.table->schema->name);
+	writer.WriteString(bind_data.table->name);
+	writer.WriteField<bool>(bind_data.is_index_scan);
+	writer.WriteList<row_t>(bind_data.result_ids);
+}
+
+static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, FieldReader &reader,
+                                                     TableFunction &function) {
+	auto schema_name = reader.ReadRequired<string>();
+	auto table_name = reader.ReadRequired<string>();
+	auto is_index_scan = reader.ReadRequired<bool>();
+	auto result_ids = reader.ReadRequiredList<row_t>();
+
+	auto &catalog = Catalog::GetCatalog(context);
+	auto catalog_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema_name, table_name);
+	if (!catalog_entry || catalog_entry->type != CatalogType::TABLE_ENTRY) {
+		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
+	}
+
+	auto result = make_unique<TableScanBindData>((TableCatalogEntry *)catalog_entry);
+	result->is_index_scan = is_index_scan;
+	result->result_ids = move(result_ids);
+	return move(result);
+}
+
+TableFunction TableScanFunction::GetIndexScanFunction() {
+	TableFunction scan_function("index_scan", {}, IndexScanFunction);
+	scan_function.init_local = nullptr;
+	scan_function.init_global = IndexScanInitGlobal;
+	scan_function.statistics = TableScanStatistics;
+	scan_function.dependency = TableScanDependency;
+	scan_function.cardinality = TableScanCardinality;
+	scan_function.pushdown_complex_filter = nullptr;
+	scan_function.to_string = TableScanToString;
+	scan_function.table_scan_progress = nullptr;
+	scan_function.get_batch_index = nullptr;
+	scan_function.projection_pushdown = true;
+	scan_function.filter_pushdown = false;
+	scan_function.serialize = TableScanSerialize;
+	scan_function.deserialize = TableScanDeserialize;
+	return scan_function;
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -376,6 +420,8 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_batch_index = TableScanGetBatchIndex;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
+	scan_function.serialize = TableScanSerialize;
+	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;
 }
 
@@ -385,6 +431,18 @@ TableCatalogEntry *TableScanFunction::GetTableEntry(const TableFunction &functio
 	}
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	return bind_data.table;
+}
+
+void TableScanFunction::RegisterFunction(BuiltinFunctions &set) {
+	TableFunctionSet table_scan_set("seq_scan");
+	table_scan_set.AddFunction(GetFunction());
+	set.AddFunction(move(table_scan_set));
+
+	set.AddFunction(GetIndexScanFunction());
+}
+
+void BuiltinFunctions::RegisterTableScanFunctions() {
+	TableScanFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb

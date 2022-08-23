@@ -148,7 +148,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	auto order_count = reader.ReadRequired<uint32_t>();
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < order_count; i++) {
-		expr->orders.push_back(OrderByNode::Deserialize((source)));
+		expr->orders.push_back(OrderByNode::Deserialize(source));
 	}
 	expr->start = reader.ReadRequired<WindowBoundary>();
 	expr->end = reader.ReadRequired<WindowBoundary>();

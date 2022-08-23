@@ -56,7 +56,7 @@ public:
 	unique_ptr<DataChunk> FetchChunk();
 
 	//! Push a new error
-	void PushError(ExceptionType type, const string &exception);
+	void PushError(PreservedError exception);
 	//! True if an error has been thrown
 	bool HasError();
 	//! Throw the exception that was pushed using PushError.
@@ -122,7 +122,7 @@ private:
 	//! The producer of this query
 	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
-	vector<pair<ExceptionType, string>> exceptions;
+	vector<PreservedError> exceptions;
 	//! List of events
 	vector<shared_ptr<Event>> events;
 	//! The query profiler
@@ -141,8 +141,6 @@ private:
 	//! Unlike union pipelines, child pipelines should be run AFTER their dependencies are completed
 	//! i.e. they should be run after the dependencies are completed, but before finalize is called on the sink
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> child_pipelines;
-	//! Dependencies of child pipelines
-	unordered_map<Pipeline *, vector<Pipeline *>> child_dependencies;
 
 	//! The last pending execution result (if any)
 	PendingExecutionResult execution_result;

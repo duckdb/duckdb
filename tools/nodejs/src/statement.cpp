@@ -40,8 +40,8 @@ struct PrepareTask : public Task {
 		Napi::HandleScope scope(env);
 
 		auto cb = callback.Value();
-		if (!statement.statement->success) {
-			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
+		if (statement.statement->HasError()) {
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error.Message())});
 			return;
 		}
 		cb.MakeCallback(statement.Value(), {env.Null(), statement.Value()});
@@ -253,7 +253,7 @@ struct RunPreparedTask : public Task {
 	void DoWork() override {
 		auto &statement = Get<Statement>();
 		// ignorant folk arrive here without caring about the prepare callback error
-		if (!statement.statement || !statement.statement->success) {
+		if (!statement.statement || statement.statement->HasError()) {
 			return;
 		}
 
@@ -271,12 +271,12 @@ struct RunPreparedTask : public Task {
 			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, "statement was finalized")});
 			return;
 		}
-		if (!statement.statement->success) {
-			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
+		if (statement.statement->HasError()) {
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->GetError())});
 			return;
 		}
-		if (!result->success) {
-			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, result->error)});
+		if (result->HasError()) {
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, result->GetError())});
 			return;
 		}
 
@@ -346,7 +346,7 @@ struct RunQueryTask : public Task {
 
 	void DoWork() override {
 		auto &statement = Get<Statement>();
-		if (!statement.statement || !statement.statement->success) {
+		if (!statement.statement || statement.statement->HasError()) {
 			return;
 		}
 
@@ -360,10 +360,10 @@ struct RunQueryTask : public Task {
 
 		if (!statement.statement) {
 			deferred.Reject(Utils::CreateError(env, "statement was finalized"));
-		} else if (!statement.statement->success) {
-			deferred.Reject(Utils::CreateError(env, statement.statement->error));
-		} else if (!result->success) {
-			deferred.Reject(Utils::CreateError(env, result->error));
+		} else if (statement.statement->HasError()) {
+			deferred.Reject(Utils::CreateError(env, statement.statement->GetError()));
+		} else if (result->HasError()) {
+			deferred.Reject(Utils::CreateError(env, result->GetError()));
 		} else {
 			auto db = statement.connection_ref->database_ref->Value();
 			auto query_result = QueryResult::constructor.New({db});

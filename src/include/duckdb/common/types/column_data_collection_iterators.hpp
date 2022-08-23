@@ -79,12 +79,8 @@ private:
 	};
 
 public:
-	DUCKDB_API ColumnDataRowIterator begin() {
-		return ColumnDataRowIterator(&collection);
-	}
-	DUCKDB_API ColumnDataRowIterator end() {
-		return ColumnDataRowIterator(nullptr);
-	}
+	DUCKDB_API ColumnDataRowIterator begin();
+	DUCKDB_API ColumnDataRowIterator end();
 };
 
 } // namespace duckdb

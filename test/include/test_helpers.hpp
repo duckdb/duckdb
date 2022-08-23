@@ -40,7 +40,7 @@ bool NO_FAIL(QueryResult &result);
 bool NO_FAIL(unique_ptr<QueryResult> result);
 
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
-#define REQUIRE_FAIL(result)    REQUIRE(!(result)->success)
+#define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())
 
 #define COMPARE_CSV(result, csv, header)                                                                               \
 	{                                                                                                                  \

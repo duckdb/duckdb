@@ -11,16 +11,16 @@ class TestPythonResult(object):
         rel = connection.table("integers")
         res = rel.aggregate("sum(i)").execute()
         res.close()
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='result closed'):
             res.fetchone()
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='result closed'):
             res.fetchall()
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='result closed'):
             res.fetchnumpy()
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='There is no query result'):
             res.fetch_arrow_table()
-        with pytest.raises(Exception):
-            res.fetch_arrow_reader()
+        with pytest.raises(duckdb.InvalidInputException, match='There is no query result'):
+            res.fetch_arrow_reader(1)
 
     def test_result_describe_types(self, duckdb_cursor):
         connection = duckdb.connect('')
