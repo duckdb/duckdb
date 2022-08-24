@@ -61,7 +61,6 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
-      BUILD_REST: 1
       BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
