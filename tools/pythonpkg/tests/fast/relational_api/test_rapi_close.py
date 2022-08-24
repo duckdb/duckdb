@@ -109,6 +109,8 @@ class TestRAPICloseConnRel(object):
 			rel.cummin("")
 		with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
 			rel.describe()
+		with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
+			rel.fetchnumpy()
 		con = duckdb.connect()
 		con.execute("CREATE TABLE items(item VARCHAR, value DECIMAL(10,2), count INTEGER)")
 		con.execute("INSERT INTO items VALUES ('jeans', 20.0, 1), ('hammer', 42.2, 2)")
