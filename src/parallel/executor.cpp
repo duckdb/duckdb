@@ -123,6 +123,8 @@ void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline
 
 	auto &event_map = event_data.event_map;
 	auto parent_entry = event_map.find(parent);
+	D_ASSERT(parent_entry != event_map.end());
+
 	PipelineEventStack stack;
 	stack.pipeline_event = pipeline_event.get();
 	stack.pipeline_finish_event = parent_entry->second.pipeline_finish_event;
@@ -214,6 +216,7 @@ void Executor::ScheduleEvents() {
 }
 
 void Executor::ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events) {
+	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> child_pipelines;
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> union_pipelines;
 	ScheduleEventData event_data(pipelines, child_pipelines, union_pipelines, events, false);
 	ScheduleEventsInternal(event_data);

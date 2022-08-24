@@ -257,12 +257,12 @@ void MergeSorter::ComputeMerge(const idx_t &count, bool left_smaller[]) {
 	while (compared < count) {
 		// Move to the next block (if needed)
 		if (l.block_idx < l_sorted_block.radix_sorting_data.size() &&
-		    l.entry_idx == l_sorted_block.radix_sorting_data[l.block_idx].count) {
+		    l.entry_idx == l_sorted_block.radix_sorting_data[l.block_idx]->count) {
 			l.block_idx++;
 			l.entry_idx = 0;
 		}
 		if (r.block_idx < r_sorted_block.radix_sorting_data.size() &&
-		    r.entry_idx == r_sorted_block.radix_sorting_data[r.block_idx].count) {
+		    r.entry_idx == r_sorted_block.radix_sorting_data[r.block_idx]->count) {
 			r.block_idx++;
 			r.entry_idx = 0;
 		}
@@ -281,8 +281,8 @@ void MergeSorter::ComputeMerge(const idx_t &count, bool left_smaller[]) {
 			right->PinRadix(r.block_idx);
 			r_radix_ptr = right->RadixPtr();
 		}
-		const idx_t &l_count = !l_done ? l_sorted_block.radix_sorting_data[l.block_idx].count : 0;
-		const idx_t &r_count = !r_done ? r_sorted_block.radix_sorting_data[r.block_idx].count : 0;
+		const idx_t &l_count = !l_done ? l_sorted_block.radix_sorting_data[l.block_idx]->count : 0;
+		const idx_t &r_count = !r_done ? r_sorted_block.radix_sorting_data[r.block_idx]->count : 0;
 		// Compute the merge
 		if (sort_layout.all_constant) {
 			// All sorting columns are constant size
@@ -340,23 +340,23 @@ void MergeSorter::MergeRadix(const idx_t &count, const bool left_smaller[]) {
 	data_ptr_t l_ptr;
 	data_ptr_t r_ptr;
 
-	RowDataBlock *result_block = &result->radix_sorting_data.back();
+	RowDataBlock *result_block = result->radix_sorting_data.back().get();
 	auto result_handle = buffer_manager.Pin(result_block->block);
 	data_ptr_t result_ptr = result_handle.Ptr() + result_block->count * sort_layout.entry_size;
 
 	idx_t copied = 0;
 	while (copied < count) {
 		// Move to the next block (if needed)
-		if (l.block_idx < l_blocks.size() && l.entry_idx == l_blocks[l.block_idx].count) {
+		if (l.block_idx < l_blocks.size() && l.entry_idx == l_blocks[l.block_idx]->count) {
 			// Delete reference to previous block
-			l_blocks[l.block_idx].block = nullptr;
+			l_blocks[l.block_idx]->block = nullptr;
 			// Advance block
 			l.block_idx++;
 			l.entry_idx = 0;
 		}
-		if (r.block_idx < r_blocks.size() && r.entry_idx == r_blocks[r.block_idx].count) {
+		if (r.block_idx < r_blocks.size() && r.entry_idx == r_blocks[r.block_idx]->count) {
 			// Delete reference to previous block
-			r_blocks[r.block_idx].block = nullptr;
+			r_blocks[r.block_idx]->block = nullptr;
 			// Advance block
 			r.block_idx++;
 			r.entry_idx = 0;
@@ -365,12 +365,12 @@ void MergeSorter::MergeRadix(const idx_t &count, const bool left_smaller[]) {
 		const bool r_done = r.block_idx == r_blocks.size();
 		// Pin the radix sortable blocks
 		if (!l_done) {
-			l_block = &l_blocks[l.block_idx];
+			l_block = l_blocks[l.block_idx].get();
 			left->PinRadix(l.block_idx);
 			l_ptr = l.RadixPtr();
 		}
 		if (!r_done) {
-			r_block = &r_blocks[r.block_idx];
+			r_block = r_blocks[r.block_idx].get();
 			r.PinRadix(r.block_idx);
 			r_ptr = r.RadixPtr();
 		}
@@ -379,14 +379,14 @@ void MergeSorter::MergeRadix(const idx_t &count, const bool left_smaller[]) {
 		// Copy using computed merge
 		if (!l_done && !r_done) {
 			// Both sides have data - merge
-			MergeRows(l_ptr, l.entry_idx, l_count, r_ptr, r.entry_idx, r_count, result_block, result_ptr,
+			MergeRows(l_ptr, l.entry_idx, l_count, r_ptr, r.entry_idx, r_count, *result_block, result_ptr,
 			          sort_layout.entry_size, left_smaller, copied, count);
 		} else if (r_done) {
 			// Right side is exhausted
-			FlushRows(l_ptr, l.entry_idx, l_count, result_block, result_ptr, sort_layout.entry_size, copied, count);
+			FlushRows(l_ptr, l.entry_idx, l_count, *result_block, result_ptr, sort_layout.entry_size, copied, count);
 		} else {
 			// Left side is exhausted
-			FlushRows(r_ptr, r.entry_idx, r_count, result_block, result_ptr, sort_layout.entry_size, copied, count);
+			FlushRows(r_ptr, r.entry_idx, r_count, *result_block, result_ptr, sort_layout.entry_size, copied, count);
 		}
 	}
 	// Reset block indices
@@ -406,7 +406,7 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 
 	const auto &layout = result_data.layout;
 	const idx_t row_width = layout.GetRowWidth();
-	const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
+	const idx_t heap_pointer_offset = layout.GetHeapOffset();
 
 	// Left and right row data to merge
 	data_ptr_t l_ptr;
@@ -416,7 +416,7 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 	data_ptr_t r_heap_ptr;
 
 	// Result rows to write to
-	RowDataBlock *result_data_block = &result_data.data_blocks.back();
+	RowDataBlock *result_data_block = result_data.data_blocks.back().get();
 	auto result_data_handle = buffer_manager.Pin(result_data_block->block);
 	data_ptr_t result_data_ptr = result_data_handle.Ptr() + result_data_block->count * row_width;
 	// Result heap to write to (if needed)
@@ -424,7 +424,7 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 	BufferHandle result_heap_handle;
 	data_ptr_t result_heap_ptr;
 	if (!layout.AllConstant() && state.external) {
-		result_heap_block = &result_data.heap_blocks.back();
+		result_heap_block = result_data.heap_blocks.back().get();
 		result_heap_handle = buffer_manager.Pin(result_heap_block->block);
 		result_heap_ptr = result_heap_handle.Ptr() + result_heap_block->byte_offset;
 	}
@@ -432,21 +432,21 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 	idx_t copied = 0;
 	while (copied < count) {
 		// Move to new data blocks (if needed)
-		if (l.block_idx < l_data.data_blocks.size() && l.entry_idx == l_data.data_blocks[l.block_idx].count) {
+		if (l.block_idx < l_data.data_blocks.size() && l.entry_idx == l_data.data_blocks[l.block_idx]->count) {
 			// Delete reference to previous block
-			l_data.data_blocks[l.block_idx].block = nullptr;
+			l_data.data_blocks[l.block_idx]->block = nullptr;
 			if (!layout.AllConstant() && state.external) {
-				l_data.heap_blocks[l.block_idx].block = nullptr;
+				l_data.heap_blocks[l.block_idx]->block = nullptr;
 			}
 			// Advance block
 			l.block_idx++;
 			l.entry_idx = 0;
 		}
-		if (r.block_idx < r_data.data_blocks.size() && r.entry_idx == r_data.data_blocks[r.block_idx].count) {
+		if (r.block_idx < r_data.data_blocks.size() && r.entry_idx == r_data.data_blocks[r.block_idx]->count) {
 			// Delete reference to previous block
-			r_data.data_blocks[r.block_idx].block = nullptr;
+			r_data.data_blocks[r.block_idx]->block = nullptr;
 			if (!layout.AllConstant() && state.external) {
-				r_data.heap_blocks[r.block_idx].block = nullptr;
+				r_data.heap_blocks[r.block_idx]->block = nullptr;
 			}
 			// Advance block
 			r.block_idx++;
@@ -463,33 +463,33 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 			r.PinData(r_data);
 			r_ptr = r.DataPtr(r_data);
 		}
-		const idx_t &l_count = !l_done ? l_data.data_blocks[l.block_idx].count : 0;
-		const idx_t &r_count = !r_done ? r_data.data_blocks[r.block_idx].count : 0;
+		const idx_t &l_count = !l_done ? l_data.data_blocks[l.block_idx]->count : 0;
+		const idx_t &r_count = !r_done ? r_data.data_blocks[r.block_idx]->count : 0;
 		// Perform the merge
 		if (layout.AllConstant() || !state.external) {
 			// If all constant size, or if we are doing an in-memory sort, we do not need to touch the heap
 			if (!l_done && !r_done) {
 				// Both sides have data - merge
-				MergeRows(l_ptr, l.entry_idx, l_count, r_ptr, r.entry_idx, r_count, result_data_block, result_data_ptr,
+				MergeRows(l_ptr, l.entry_idx, l_count, r_ptr, r.entry_idx, r_count, *result_data_block, result_data_ptr,
 				          row_width, left_smaller, copied, count);
 			} else if (r_done) {
 				// Right side is exhausted
-				FlushRows(l_ptr, l.entry_idx, l_count, result_data_block, result_data_ptr, row_width, copied, count);
+				FlushRows(l_ptr, l.entry_idx, l_count, *result_data_block, result_data_ptr, row_width, copied, count);
 			} else {
 				// Left side is exhausted
-				FlushRows(r_ptr, r.entry_idx, r_count, result_data_block, result_data_ptr, row_width, copied, count);
+				FlushRows(r_ptr, r.entry_idx, r_count, *result_data_block, result_data_ptr, row_width, copied, count);
 			}
 		} else {
 			// External sorting with variable size data. Pin the heap blocks too
 			if (!l_done) {
 				l_heap_ptr = l.BaseHeapPtr(l_data) + Load<idx_t>(l_ptr + heap_pointer_offset);
 				D_ASSERT(l_heap_ptr - l.BaseHeapPtr(l_data) >= 0);
-				D_ASSERT((idx_t)(l_heap_ptr - l.BaseHeapPtr(l_data)) < l_data.heap_blocks[l.block_idx].byte_offset);
+				D_ASSERT((idx_t)(l_heap_ptr - l.BaseHeapPtr(l_data)) < l_data.heap_blocks[l.block_idx]->byte_offset);
 			}
 			if (!r_done) {
 				r_heap_ptr = r.BaseHeapPtr(r_data) + Load<idx_t>(r_ptr + heap_pointer_offset);
 				D_ASSERT(r_heap_ptr - r.BaseHeapPtr(r_data) >= 0);
-				D_ASSERT((idx_t)(r_heap_ptr - r.BaseHeapPtr(r_data)) < r_data.heap_blocks[r.block_idx].byte_offset);
+				D_ASSERT((idx_t)(r_heap_ptr - r.BaseHeapPtr(r_data)) < r_data.heap_blocks[r.block_idx]->byte_offset);
 			}
 			// Both the row and heap data need to be dealt with
 			if (!l_done && !r_done) {
@@ -499,7 +499,7 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 				data_ptr_t result_data_ptr_copy = result_data_ptr;
 				idx_t copied_copy = copied;
 				// Merge row data
-				MergeRows(l_ptr, l_idx_copy, l_count, r_ptr, r_idx_copy, r_count, result_data_block,
+				MergeRows(l_ptr, l_idx_copy, l_count, r_ptr, r_idx_copy, r_count, *result_data_block,
 				          result_data_ptr_copy, row_width, left_smaller, copied_copy, count);
 				const idx_t merged = copied_copy - copied;
 				// Compute the entry sizes and number of heap bytes that will be copied
@@ -518,9 +518,9 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 					    l_smaller * Load<uint32_t>(l_heap_ptr_copy) + r_smaller * Load<uint32_t>(r_heap_ptr_copy);
 					D_ASSERT(entry_size >= sizeof(uint32_t));
 					D_ASSERT(l_heap_ptr_copy - l.BaseHeapPtr(l_data) + l_smaller * entry_size <=
-					         l_data.heap_blocks[l.block_idx].byte_offset);
+					         l_data.heap_blocks[l.block_idx]->byte_offset);
 					D_ASSERT(r_heap_ptr_copy - r.BaseHeapPtr(r_data) + r_smaller * entry_size <=
-					         r_data.heap_blocks[r.block_idx].byte_offset);
+					         r_data.heap_blocks[r.block_idx]->byte_offset);
 					l_heap_ptr_copy += l_smaller * entry_size;
 					r_heap_ptr_copy += r_smaller * entry_size;
 					copy_bytes += entry_size;
@@ -553,12 +553,12 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 				copied += merged;
 			} else if (r_done) {
 				// Right side is exhausted - flush left
-				FlushBlobs(layout, l_count, l_ptr, l.entry_idx, l_heap_ptr, result_data_block, result_data_ptr,
-				           result_heap_block, result_heap_handle, result_heap_ptr, copied, count);
+				FlushBlobs(layout, l_count, l_ptr, l.entry_idx, l_heap_ptr, *result_data_block, result_data_ptr,
+				           *result_heap_block, result_heap_handle, result_heap_ptr, copied, count);
 			} else {
 				// Left side is exhausted - flush right
-				FlushBlobs(layout, r_count, r_ptr, r.entry_idx, r_heap_ptr, result_data_block, result_data_ptr,
-				           result_heap_block, result_heap_handle, result_heap_ptr, copied, count);
+				FlushBlobs(layout, r_count, r_ptr, r.entry_idx, r_heap_ptr, *result_data_block, result_data_ptr,
+				           *result_heap_block, result_heap_handle, result_heap_ptr, copied, count);
 			}
 			D_ASSERT(result_data_block->count == result_heap_block->count);
 		}
@@ -570,10 +570,10 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 }
 
 void MergeSorter::MergeRows(data_ptr_t &l_ptr, idx_t &l_entry_idx, const idx_t &l_count, data_ptr_t &r_ptr,
-                            idx_t &r_entry_idx, const idx_t &r_count, RowDataBlock *target_block,
+                            idx_t &r_entry_idx, const idx_t &r_count, RowDataBlock &target_block,
                             data_ptr_t &target_ptr, const idx_t &entry_size, const bool left_smaller[], idx_t &copied,
                             const idx_t &count) {
-	const idx_t next = MinValue(count - copied, target_block->capacity - target_block->count);
+	const idx_t next = MinValue(count - copied, target_block.capacity - target_block.count);
 	idx_t i;
 	for (i = 0; i < next && l_entry_idx < l_count && r_entry_idx < r_count; i++) {
 		const bool &l_smaller = left_smaller[copied + i];
@@ -588,15 +588,15 @@ void MergeSorter::MergeRows(data_ptr_t &l_ptr, idx_t &l_entry_idx, const idx_t &
 		r_ptr += r_smaller * entry_size;
 	}
 	// Update counts
-	target_block->count += i;
+	target_block.count += i;
 	copied += i;
 }
 
 void MergeSorter::FlushRows(data_ptr_t &source_ptr, idx_t &source_entry_idx, const idx_t &source_count,
-                            RowDataBlock *target_block, data_ptr_t &target_ptr, const idx_t &entry_size, idx_t &copied,
+                            RowDataBlock &target_block, data_ptr_t &target_ptr, const idx_t &entry_size, idx_t &copied,
                             const idx_t &count) {
 	// Compute how many entries we can fit
-	idx_t next = MinValue(count - copied, target_block->capacity - target_block->count);
+	idx_t next = MinValue(count - copied, target_block.capacity - target_block.count);
 	next = MinValue(next, source_count - source_entry_idx);
 	// Copy them all in a single memcpy
 	const idx_t copy_bytes = next * entry_size;
@@ -605,17 +605,17 @@ void MergeSorter::FlushRows(data_ptr_t &source_ptr, idx_t &source_entry_idx, con
 	source_ptr += copy_bytes;
 	// Update counts
 	source_entry_idx += next;
-	target_block->count += next;
+	target_block.count += next;
 	copied += next;
 }
 
 void MergeSorter::FlushBlobs(const RowLayout &layout, const idx_t &source_count, data_ptr_t &source_data_ptr,
-                             idx_t &source_entry_idx, data_ptr_t &source_heap_ptr, RowDataBlock *target_data_block,
-                             data_ptr_t &target_data_ptr, RowDataBlock *target_heap_block,
+                             idx_t &source_entry_idx, data_ptr_t &source_heap_ptr, RowDataBlock &target_data_block,
+                             data_ptr_t &target_data_ptr, RowDataBlock &target_heap_block,
                              BufferHandle &target_heap_handle, data_ptr_t &target_heap_ptr, idx_t &copied,
                              const idx_t &count) {
 	const idx_t row_width = layout.GetRowWidth();
-	const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
+	const idx_t heap_pointer_offset = layout.GetHeapOffset();
 	idx_t source_entry_idx_copy = source_entry_idx;
 	data_ptr_t target_data_ptr_copy = target_data_ptr;
 	idx_t copied_copy = copied;
@@ -628,7 +628,7 @@ void MergeSorter::FlushBlobs(const RowLayout &layout, const idx_t &source_count,
 	data_ptr_t source_heap_ptr_copy = source_heap_ptr;
 	for (idx_t i = 0; i < flushed; i++) {
 		// Store base heap offset in the row data
-		Store<idx_t>(target_heap_block->byte_offset + copy_bytes, target_data_ptr + heap_pointer_offset);
+		Store<idx_t>(target_heap_block.byte_offset + copy_bytes, target_data_ptr + heap_pointer_offset);
 		target_data_ptr += row_width;
 		// Compute entry size and add to total
 		auto entry_size = Load<uint32_t>(source_heap_ptr_copy);
@@ -637,13 +637,13 @@ void MergeSorter::FlushBlobs(const RowLayout &layout, const idx_t &source_count,
 		copy_bytes += entry_size;
 	}
 	// Reallocate result heap block size (if needed)
-	if (target_heap_block->byte_offset + copy_bytes > target_heap_block->capacity) {
-		idx_t new_capacity = target_heap_block->byte_offset + copy_bytes;
-		buffer_manager.ReAllocate(target_heap_block->block, new_capacity);
-		target_heap_block->capacity = new_capacity;
-		target_heap_ptr = target_heap_handle.Ptr() + target_heap_block->byte_offset;
+	if (target_heap_block.byte_offset + copy_bytes > target_heap_block.capacity) {
+		idx_t new_capacity = target_heap_block.byte_offset + copy_bytes;
+		buffer_manager.ReAllocate(target_heap_block.block, new_capacity);
+		target_heap_block.capacity = new_capacity;
+		target_heap_ptr = target_heap_handle.Ptr() + target_heap_block.byte_offset;
 	}
-	D_ASSERT(target_heap_block->byte_offset + copy_bytes <= target_heap_block->capacity);
+	D_ASSERT(target_heap_block.byte_offset + copy_bytes <= target_heap_block.capacity);
 	// Copy the heap data in one go
 	memcpy(target_heap_ptr, source_heap_ptr, copy_bytes);
 	target_heap_ptr += copy_bytes;
@@ -651,9 +651,9 @@ void MergeSorter::FlushBlobs(const RowLayout &layout, const idx_t &source_count,
 	source_entry_idx += flushed;
 	copied += flushed;
 	// Update result indices and pointers
-	target_heap_block->count += flushed;
-	target_heap_block->byte_offset += copy_bytes;
-	D_ASSERT(target_heap_block->byte_offset <= target_heap_block->capacity);
+	target_heap_block.count += flushed;
+	target_heap_block.byte_offset += copy_bytes;
+	D_ASSERT(target_heap_block.byte_offset <= target_heap_block.capacity);
 }
 
 } // namespace duckdb

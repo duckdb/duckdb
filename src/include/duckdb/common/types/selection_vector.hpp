@@ -61,15 +61,15 @@ public:
 		sel_vector = other.sel_vector;
 	}
 
-	void set_index(idx_t idx, idx_t loc) {
+	inline void set_index(idx_t idx, idx_t loc) {
 		sel_vector[idx] = loc;
 	}
-	void swap(idx_t i, idx_t j) {
+	inline void swap(idx_t i, idx_t j) {
 		sel_t tmp = sel_vector[i];
 		sel_vector[i] = sel_vector[j];
 		sel_vector[j] = tmp;
 	}
-	idx_t get_index(idx_t idx) const {
+	inline idx_t get_index(idx_t idx) const {
 		return sel_vector ? sel_vector[idx] : idx;
 	}
 	sel_t *data() {
@@ -86,7 +86,7 @@ public:
 	string ToString(idx_t count = 0) const;
 	void Print(idx_t count = 0) const;
 
-	sel_t &operator[](idx_t index) {
+	inline sel_t &operator[](idx_t index) const {
 		return sel_vector[index];
 	}
 

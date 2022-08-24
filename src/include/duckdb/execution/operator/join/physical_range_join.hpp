@@ -65,7 +65,7 @@ public:
 		}
 
 		inline idx_t BlockSize(idx_t i) const {
-			return global_sort_state.sorted_blocks[0]->radix_sorting_data[i].count;
+			return global_sort_state.sorted_blocks[0]->radix_sorting_data[i]->count;
 		}
 
 		void Combine(LocalSortedTable &ltable);

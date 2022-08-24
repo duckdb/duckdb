@@ -39,8 +39,8 @@ public:
 	//! Layout of this data
 	const RowLayout layout;
 	//! Data and heap blocks
-	vector<RowDataBlock> data_blocks;
-	vector<RowDataBlock> heap_blocks;
+	vector<unique_ptr<RowDataBlock>> data_blocks;
+	vector<unique_ptr<RowDataBlock>> heap_blocks;
 	//! Whether the pointers in this sorted data are swizzled
 	bool swizzled;
 
@@ -76,7 +76,7 @@ public:
 
 public:
 	//! Radix/memcmp sortable data
-	vector<RowDataBlock> radix_sorting_data;
+	vector<unique_ptr<RowDataBlock>> radix_sorting_data;
 	//! Variable sized sorting data
 	unique_ptr<SortedData> blob_sorting_data;
 	//! Payload data
