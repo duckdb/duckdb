@@ -186,13 +186,7 @@ void Node::Erase(Node *&node, idx_t pos, ART &art) {
 	}
 }
 
-void SwapNodes(Node *&l_node, Node *&r_node) {
-	auto l_node_temp = l_node;
-	l_node = r_node;
-	r_node = l_node_temp;
-}
-
-void Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
+void Node::ResolvePrefixesAndMerge(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth,
                                    Node *&l_node_parent, idx_t l_node_pos, Node *&r_node_parent, idx_t r_node_pos) {
 
 	if (!l_node) {
@@ -209,9 +203,21 @@ void Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *
 
 	// make sure that r_node has the longer (or equally long) prefix
 	if (l_node->prefix.Size() > r_node->prefix.Size()) {
-		SwapNodes(l_node, r_node);
-		return Node::ResolvePrefixesAndMerge(r_art, l_art, l_node, r_node, depth, l_node_parent, l_node_pos,
-		                                     r_node_parent, r_node_pos);
+
+		auto temp_art = l_art;
+		l_art = r_art;
+		r_art = temp_art;
+
+		auto temp_node = l_node;
+		l_node = r_node;
+		r_node = temp_node;
+
+		if (l_node_parent) {
+			l_node_parent->ReplaceChildPointer(l_node_pos, l_node);
+		}
+		if (r_node_parent) {
+			r_node_parent->ReplaceChildPointer(r_node_pos, r_node);
+		}
 	}
 
 	// get first mismatch position
@@ -254,7 +260,7 @@ void Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *
 			return;
 		}
 
-		auto child_node = l_node->GetChild(l_art, child_pos);
+		auto child_node = l_node->GetChild(*l_art, child_pos);
 		return Node::ResolvePrefixesAndMerge(l_art, r_art, child_node, r_node, depth + mismatch_pos, l_node, child_pos,
 		                                     r_node_parent, r_node_pos);
 	}
@@ -283,7 +289,7 @@ void Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *&l_node, Node *
 	r_node = nullptr;
 }
 
-void Node::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
+void Node::Merge(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
                  idx_t l_node_pos, Node *&r_node_parent, idx_t r_node_pos) {
 
 	// always try to merge the smaller node into the bigger node
@@ -292,8 +298,21 @@ void Node::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t dep
 
 	if (l_node->type < r_node->type) {
 		// swap subtrees to ensure that l_node has the bigger node type
-		SwapNodes(l_node, r_node);
-		return Node::Merge(r_art, l_art, l_node, r_node, depth, l_node_parent, l_node_pos, r_node_parent, r_node_pos);
+
+		auto temp_art = l_art;
+		l_art = r_art;
+		r_art = temp_art;
+
+		auto temp_node = l_node;
+		l_node = r_node;
+		r_node = temp_node;
+
+		if (l_node_parent) {
+			l_node_parent->ReplaceChildPointer(l_node_pos, l_node);
+		}
+		if (r_node_parent) {
+			r_node_parent->ReplaceChildPointer(r_node_pos, r_node);
+		}
 	}
 
 	switch (r_node->type) {
@@ -314,7 +333,7 @@ void Node::Merge(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t dep
 }
 
 template <class R_NODE_TYPE>
-void Node::MergeNodeWithNode16OrNode4(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth,
+void Node::MergeNodeWithNode16OrNode4(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth,
                                       Node *&l_node_parent, idx_t l_node_pos) {
 
 	R_NODE_TYPE *r_n = (R_NODE_TYPE *)r_node;
@@ -326,7 +345,7 @@ void Node::MergeNodeWithNode16OrNode4(ART &l_art, ART &r_art, Node *&l_node, Nod
 	}
 }
 
-void Node::MergeNodeWithNode48(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
+void Node::MergeNodeWithNode48(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
                                idx_t l_node_pos) {
 
 	Node48 *r_n = (Node48 *)r_node;
@@ -341,7 +360,7 @@ void Node::MergeNodeWithNode48(ART &l_art, ART &r_art, Node *&l_node, Node *&r_n
 	}
 }
 
-void Node::MergeNodeWithNode256(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
+void Node::MergeNodeWithNode256(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
                                 idx_t l_node_pos) {
 
 	for (idx_t i = 0; i < 256; i++) {
@@ -354,10 +373,10 @@ void Node::MergeNodeWithNode256(ART &l_art, ART &r_art, Node *&l_node, Node *&r_
 	}
 }
 
-void Node::MergeByte(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t depth, idx_t &l_child_pos,
+void Node::MergeByte(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth, idx_t &l_child_pos,
                      idx_t &r_pos, uint8_t &key_byte, Node *&l_node_parent, idx_t l_node_pos) {
 
-	auto r_child = r_node->GetChild(r_art, r_pos);
+	auto r_child = r_node->GetChild(*r_art, r_pos);
 	if (l_child_pos == DConstants::INVALID_INDEX) {
 		Node::InsertChildNode(l_node, key_byte, r_child);
 		if (l_node_parent) {
@@ -367,7 +386,7 @@ void Node::MergeByte(ART &l_art, ART &r_art, Node *&l_node, Node *&r_node, idx_t
 		return;
 	}
 	// recurse
-	auto l_child = l_node->GetChild(l_art, l_child_pos);
+	auto l_child = l_node->GetChild(*l_art, l_child_pos);
 	Node::ResolvePrefixesAndMerge(l_art, r_art, l_child, r_child, depth + 1, l_node, l_child_pos, r_node, r_pos);
 }
 

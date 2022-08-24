@@ -336,14 +336,14 @@ void ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &all
 		Build(keys, row_identifiers, art->tree, start_idx, ordered_chunk.size() - 1, 0);
 
 		// merge art into temp_art
-		ART::Merge(*temp_art, *art);
+		ART::Merge(temp_art.get(), art.get());
 	}
 
 	// FIXME: currently this code is only used for index creation, so we can assume that there are no
 	// FIXME: duplicate violations between the existing index and the new data
 	// FIXME: instead of throwing exceptions in the merge code we need to do a 'cold' merge first
 	// FIXME: that does not change the tree but checks for violations (if IsPrimary or IsUnique)
-	ART::Merge(*this, *temp_art);
+	ART::Merge(this, temp_art.get());
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
@@ -868,9 +868,9 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 }
 
-void ART::Merge(ART &l_art, ART &r_art) {
+void ART::Merge(ART *l_art, ART *r_art) {
 	Node *null_parent = nullptr;
-	Node::ResolvePrefixesAndMerge(l_art, r_art, l_art.tree, r_art.tree, 0, null_parent, 0, null_parent, 0);
+	Node::ResolvePrefixesAndMerge(l_art, r_art, l_art->tree, r_art->tree, 0, null_parent, 0, null_parent, 0);
 }
 
 } // namespace duckdb
