@@ -24,6 +24,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/external_dependencies.hpp"
+#include "duckdb/common/preserved_error.hpp"
 
 namespace duckdb {
 class Appender;
@@ -180,7 +181,7 @@ public:
 private:
 	//! Parse statements and resolve pragmas from a query
 	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result,
-	                     string &error);
+	                     PreservedError &error);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    PendingQueryParameters parameters, bool verify = true);
@@ -190,7 +191,7 @@ private:
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
-	string VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement);
+	PreservedError VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -224,7 +225,7 @@ private:
 
 	void BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction);
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
-	string EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
+	PreservedError EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
 
 	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, PendingQueryResult &result);
 
@@ -266,7 +267,7 @@ public:
 	shared_ptr<ClientContext> GetContext() {
 		auto actual_context = client_context.lock();
 		if (!actual_context) {
-			throw std::runtime_error("This connection is closed");
+			throw ConnectionException("Connection has already been closed");
 		}
 		return actual_context;
 	}

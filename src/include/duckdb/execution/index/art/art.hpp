@@ -23,30 +23,9 @@
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/execution/index/art/iterator.hpp"
 
 namespace duckdb {
-struct IteratorEntry {
-	IteratorEntry() {
-	}
-	IteratorEntry(Node *node, idx_t pos) : node(node), pos(pos) {
-	}
-
-	Node *node = nullptr;
-	idx_t pos = 0;
-};
-
-struct Iterator {
-	//! The current Leaf Node, valid if depth>0
-	Leaf *node = nullptr;
-	//! The current depth
-	int32_t depth = 0;
-	//! Stack, the size is determined at runtime
-	vector<IteratorEntry> stack;
-
-	bool start = false;
-
-	void SetEntry(idx_t depth, IteratorEntry entry);
-};
 
 struct ARTIndexScanState : public IndexScanState {
 	ARTIndexScanState() : checked(false), result_index(0) {
@@ -123,32 +102,17 @@ private:
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
 	void Erase(Node *&node, Key &key, unsigned depth, row_t row_id);
 
-	//! Check if the key of the leaf is equal to the searched key
-	bool LeafMatches(Node *node, Key &key, unsigned depth);
-
 	//! Find the node with a matching key, optimistic version
 	Node *Lookup(Node *node, Key &key, unsigned depth);
-
-	//! Find the first node that is bigger (or equal to) a specific key
-	bool Bound(Node *node, Key &key, Iterator &iterator, bool inclusive);
-
-	//! Gets next node for range queries
-	bool IteratorNext(Iterator &iter);
 
 	bool SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
 	                      vector<row_t> &result_ids);
 
-	template <bool HAS_BOUND, bool INCLUSIVE>
-	bool IteratorScan(ARTIndexScanState *state, Iterator *it, Key *upper_bound, idx_t max_count,
-	                  vector<row_t> &result_ids);
-
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 
 	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);
-
-	Leaf &FindMinimum(Iterator &it, Node &node);
 };
 
 } // namespace duckdb

@@ -102,6 +102,10 @@ struct RowOperations {
 	//! Swizzles the base pointer of each row to offset within heap block
 	static void SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
 	                               const idx_t count, const idx_t base_offset = 0);
+	//! Copies 'count' heap rows that are pointed to by the rows at 'row_ptr' to 'heap_ptr' and swizzles the pointers
+	static void CopyHeapAndSwizzle(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+	                               data_ptr_t heap_ptr, const idx_t count);
+
 	//! Unswizzles the base offset within heap block the rows to pointers
 	static void UnswizzleHeapPointer(const RowLayout &layout, const data_ptr_t base_row_ptr,
 	                                 const data_ptr_t base_heap_ptr, const idx_t count);

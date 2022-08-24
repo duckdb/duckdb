@@ -56,7 +56,7 @@ public:
 	unique_ptr<DataChunk> FetchChunk();
 
 	//! Push a new error
-	void PushError(ExceptionType type, const string &exception);
+	void PushError(PreservedError exception);
 	//! True if an error has been thrown
 	bool HasError();
 	//! Throw the exception that was pushed using PushError.
@@ -122,7 +122,7 @@ private:
 	//! The producer of this query
 	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
-	vector<pair<ExceptionType, string>> exceptions;
+	vector<PreservedError> exceptions;
 	//! List of events
 	vector<shared_ptr<Event>> events;
 	//! The query profiler

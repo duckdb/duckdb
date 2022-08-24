@@ -5,10 +5,29 @@
 
 namespace duckdb {
 
-RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const PhysicalHashAggregate &op_p)
+// compute the GROUPING values
+// for each parameter to the GROUPING clause, we check if the hash table groups on this particular group
+// if it does, we return 0, otherwise we return 1
+// we then use bitshifts to combine these values
+void RadixPartitionedHashTable::SetGroupingValues() {
+	auto &grouping_functions = op.GetGroupingFunctions();
+	for (auto &grouping : grouping_functions) {
+		int64_t grouping_value = 0;
+		for (idx_t i = 0; i < grouping.size(); i++) {
+			if (grouping_set.find(grouping[i]) == grouping_set.end()) {
+				// we don't group on this value!
+				grouping_value += 1 << (grouping.size() - (i + 1));
+			}
+		}
+		grouping_values.push_back(Value::BIGINT(grouping_value));
+	}
+}
+
+RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const GroupedAggregateData &op_p)
     : grouping_set(grouping_set_p), op(op_p) {
 
-	for (idx_t i = 0; i < op.groups.size(); i++) {
+	auto groups_count = op.GroupCount();
+	for (idx_t i = 0; i < groups_count; i++) {
 		if (grouping_set.find(i) == grouping_set.end()) {
 			null_groups.push_back(i);
 		}
@@ -25,20 +44,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 		D_ASSERT(entry < op.group_types.size());
 		group_types.push_back(op.group_types[entry]);
 	}
-	// compute the GROUPING values
-	// for each parameter to the GROUPING clause, we check if the hash table groups on this particular group
-	// if it does, we return 0, otherwise we return 1
-	// we then use bitshifts to combine these values
-	for (auto &grouping : op.grouping_functions) {
-		int64_t grouping_value = 0;
-		for (idx_t i = 0; i < grouping.size(); i++) {
-			if (grouping_set.find(grouping[i]) == grouping_set.end()) {
-				// we don't group on this value!
-				grouping_value += 1 << (grouping.size() - (i + 1));
-			}
-		}
-		grouping_values.push_back(Value::BIGINT(grouping_value));
-	}
+	SetGroupingValues();
 }
 
 //===--------------------------------------------------------------------===//
@@ -430,11 +436,11 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 		ConstantVector::SetNull(chunk.data[null_group], true);
 	}
 	for (idx_t col_idx = 0; col_idx < op.aggregates.size(); col_idx++) {
-		chunk.data[op.groups.size() + col_idx].Reference(lstate.scan_chunk.data[group_types.size() + col_idx]);
+		chunk.data[op.GroupCount() + col_idx].Reference(lstate.scan_chunk.data[group_types.size() + col_idx]);
 	}
 	D_ASSERT(op.grouping_functions.size() == grouping_values.size());
 	for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
-		chunk.data[op.groups.size() + op.aggregates.size() + i].Reference(grouping_values[i]);
+		chunk.data[op.GroupCount() + op.aggregates.size() + i].Reference(grouping_values[i]);
 	}
 }
 

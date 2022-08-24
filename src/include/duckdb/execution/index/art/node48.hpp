@@ -8,12 +8,13 @@
 
 #pragma once
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 
 namespace duckdb {
 
 class Node48 : public Node {
 public:
-	explicit Node48(size_t compression_length);
+	explicit Node48();
 	uint8_t child_index[256];
 
 	SwizzleablePointer children[48];

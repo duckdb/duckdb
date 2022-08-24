@@ -17,8 +17,24 @@ namespace duckdb {
 
 //! The Serialize class is a base class that can be used to serializing objects into a binary buffer
 class Serializer {
+private:
+	uint64_t version = 0L;
+
 public:
 	virtual ~Serializer() {
+	}
+
+	//! Sets the version of the serialization that writers are expected to use
+	//! The version is mostly the most recent one, unless modifying old data or streaming to
+	//! an older version
+	void SetVersion(uint64_t v) {
+		D_ASSERT(this->version == 0); // version can only be set once
+		this->version = v;
+	}
+
+	//! Returns the version of serialization that writers are expected to use
+	uint64_t GetVersion() {
+		return version;
 	}
 
 	virtual void WriteData(const_data_ptr_t buffer, idx_t write_size) = 0;
@@ -72,8 +88,24 @@ public:
 //! The Deserializer class assists in deserializing a binary blob back into an
 //! object
 class Deserializer {
+private:
+	uint64_t version = 0L;
+
 public:
 	virtual ~Deserializer() {
+	}
+
+	//! Sets the version of the serialization that readers are expected to use
+	//! The version is mostly the most recent one, unless reading old data or streaming from
+	//! an older version
+	void SetVersion(uint64_t v) {
+		D_ASSERT(this->version == 0); // version can only be set once
+		this->version = v;
+	}
+
+	//! Returns the version of serialization that readers are expected to use
+	uint64_t GetVersion() {
+		return version;
 	}
 
 	//! Reads [read_size] bytes into the buffer

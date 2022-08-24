@@ -1,0 +1,23 @@
+# name: test/sql/join/external/external_join_many_duplicates.test_slow
+# description: Test external join with many duplicates in build side
+# group: [external]
+
+statement ok
+pragma verify_external
+
+# 10M build side with many useless duplicates (stress tests the compare-and-swap pointer table construction)
+statement ok
+create table t1 as select range % 4 i from range(10000000)
+
+# insert the stuff we'll actually be matching into the build side
+statement ok
+insert into t1 select range from range(1000, 2000)
+
+# 100M probe side
+statement ok
+create table t2 as select range i from range(1000, 100000000)
+
+query T
+select count(*) from t1 join t2 using (i)
+----
+1000

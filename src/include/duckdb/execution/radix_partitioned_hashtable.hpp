@@ -11,6 +11,7 @@
 #include "duckdb/execution/partitionable_hashtable.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
 
 namespace duckdb {
 class BufferManager;
@@ -21,11 +22,11 @@ class Task;
 
 class RadixPartitionedHashTable {
 public:
-	RadixPartitionedHashTable(GroupingSet &grouping_set, const PhysicalHashAggregate &op);
+	RadixPartitionedHashTable(GroupingSet &grouping_set, const GroupedAggregateData &op);
 
 	GroupingSet &grouping_set;
 	vector<idx_t> null_groups;
-	const PhysicalHashAggregate &op;
+	const GroupedAggregateData &op;
 
 	vector<LogicalType> group_types;
 	//! how many groups can we have in the operator before we switch to radix partitioning
@@ -56,6 +57,9 @@ public:
 
 	static void SetMultiScan(GlobalSinkState &state);
 	bool ForceSingleHT(GlobalSinkState &state) const;
+
+private:
+	void SetGroupingValues();
 };
 
 } // namespace duckdb

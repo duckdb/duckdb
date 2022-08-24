@@ -34,47 +34,19 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              vector<GroupingSet> grouping_sets_p,
                                              vector<vector<idx_t>> grouping_functions_p, idx_t estimated_cardinality,
                                              PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types), estimated_cardinality), groups(move(groups_p)),
-      grouping_sets(move(grouping_sets_p)), grouping_functions(move(grouping_functions_p)), any_distinct(false) {
+    : PhysicalOperator(type, move(types), estimated_cardinality), grouping_sets(move(grouping_sets_p)) {
 	// get a list of all aggregates to be computed
-	for (auto &expr : groups) {
-		group_types.push_back(expr->return_type);
-	}
+	const idx_t group_count = groups_p.size();
 	if (grouping_sets.empty()) {
 		GroupingSet set;
-		for (idx_t i = 0; i < group_types.size(); i++) {
+		for (idx_t i = 0; i < group_count; i++) {
 			set.insert(i);
 		}
 		grouping_sets.push_back(move(set));
 	}
-	vector<LogicalType> payload_types_filters;
-	for (auto &expr : expressions) {
-		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
-		D_ASSERT(expr->IsAggregate());
-		auto &aggr = (BoundAggregateExpression &)*expr;
-		bindings.push_back(&aggr);
+	grouped_aggregate_data.InitializeGroupby(move(groups_p), move(expressions), move(grouping_functions_p));
 
-		if (aggr.distinct) {
-			any_distinct = true;
-		}
-
-		aggregate_return_types.push_back(aggr.return_type);
-		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
-		}
-		if (aggr.filter) {
-			payload_types_filters.push_back(aggr.filter->return_type);
-		}
-		if (!aggr.function.combine) {
-			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
-		}
-		aggregates.push_back(move(expr));
-	}
-
-	for (const auto &pay_filters : payload_types_filters) {
-		payload_types.push_back(pay_filters);
-	}
-
+	auto &aggregates = grouped_aggregate_data.aggregates;
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
@@ -96,7 +68,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	}
 
 	for (auto &grouping_set : grouping_sets) {
-		radix_tables.emplace_back(grouping_set, *this);
+		radix_tables.emplace_back(grouping_set, grouped_aggregate_data);
 	}
 }
 
@@ -118,8 +90,9 @@ public:
 class HashAggregateLocalState : public LocalSinkState {
 public:
 	HashAggregateLocalState(const PhysicalHashAggregate &op, ExecutionContext &context) {
-		if (!op.payload_types.empty()) {
-			aggregate_input_chunk.InitializeEmpty(op.payload_types);
+		auto &payload_types = op.grouped_aggregate_data.payload_types;
+		if (!payload_types.empty()) {
+			aggregate_input_chunk.InitializeEmpty(payload_types);
 		}
 
 		radix_states.reserve(op.radix_tables.size());
@@ -155,6 +128,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 
 	DataChunk &aggregate_input_chunk = llstate.aggregate_input_chunk;
 
+	auto &aggregates = grouped_aggregate_data.aggregates;
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
@@ -305,6 +279,8 @@ void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
 
 string PhysicalHashAggregate::ParamsToString() const {
 	string result;
+	auto &groups = grouped_aggregate_data.groups;
+	auto &aggregates = grouped_aggregate_data.aggregates;
 	for (idx_t i = 0; i < groups.size(); i++) {
 		if (i > 0) {
 			result += "\n";

@@ -305,7 +305,7 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &
 	if (!sorted_data.layout.AllConstant() && state.external) {
 		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle.Ptr(),
 		                                 addr_count);
-		sorted_data.data_blocks[read_state.block_idx].block->SetSwizzling("PhysicalRangeJoin::SliceSortedPayload");
+		sorted_data.data_blocks[read_state.block_idx]->block->SetSwizzling("PhysicalRangeJoin::SliceSortedPayload");
 	}
 
 	// Deserialize the payload data

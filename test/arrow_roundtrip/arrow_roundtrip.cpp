@@ -119,7 +119,7 @@ public:
 void RunArrowComparison(Connection &con, const string &query, bool big_result = false) {
 	// run the query
 	auto initial_result = con.Query(query);
-	if (!initial_result->success) {
+	if (initial_result->HasError()) {
 		initial_result->Print();
 		FAIL();
 	}
@@ -139,9 +139,9 @@ void RunArrowComparison(Connection &con, const string &query, bool big_result = 
 	// run the arrow scan over the result
 	auto arrow_result = con.TableFunction("arrow_scan", params)->Execute();
 	REQUIRE(arrow_result->type == QueryResultType::MATERIALIZED_RESULT);
-	if (!arrow_result->success) {
+	if (arrow_result->HasError()) {
 		printf("-------------------------------------\n");
-		printf("Arrow round-trip query error: %s\n", arrow_result->error.c_str());
+		printf("Arrow round-trip query error: %s\n", arrow_result->GetError().c_str());
 		printf("-------------------------------------\n");
 		printf("Query: %s\n", query.c_str());
 		printf("-------------------------------------\n");

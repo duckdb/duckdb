@@ -5,6 +5,9 @@
 require tpch
 
 statement ok
+pragma verify_external
+
+statement ok
 CALL dbgen(sf=1);
 
 loop i 1 9
