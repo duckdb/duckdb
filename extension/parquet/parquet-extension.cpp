@@ -167,7 +167,7 @@ public:
 	                                                   column_t column_index) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 
-		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+		if (IsRowIdColumnId(column_index)) {
 			return nullptr;
 		}
 

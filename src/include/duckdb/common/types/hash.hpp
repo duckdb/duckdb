@@ -33,7 +33,7 @@ inline hash_t murmurhash32(uint32_t x) {
 }
 
 template <class T>
-DUCKDB_API hash_t Hash(T value) {
+hash_t Hash(T value) {
 	return murmurhash32(value);
 }
 

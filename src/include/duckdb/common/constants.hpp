@@ -72,6 +72,9 @@ typedef idx_t column_t;
 typedef idx_t storage_t;
 //! Special value used to signify the ROW ID of a table
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_ID;
+DUCKDB_API bool IsRowIdColumnId(column_t column_id) {
+	return column_id == COLUMN_IDENTIFIER_ROW_ID;
+};
 
 //! The maximum row identifier used in tables
 extern const row_t MAX_ROW_ID;
