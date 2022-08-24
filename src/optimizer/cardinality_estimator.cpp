@@ -518,13 +518,18 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 	return cardinality_after_filters;
 }
 
+
+
 idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters) {
 	idx_t cardinality_after_filters = cardinality;
 	auto get = GetLogicalGet(op);
-
+	unique_ptr<BaseStatistics> column_statistics;
 	for (auto &it : table_filters->filters) {
-		auto &table_scan_bind_data = (TableScanBindData &)*get->bind_data;
-		auto column_statistics = get->function.statistics(context, &table_scan_bind_data, it.first);
+		column_statistics = nullptr;
+		if (get->bind_data && get->function.name.compare("arrow_scan") != 0) {
+			auto &table_scan_bind_data = (TableScanBindData &)*get->bind_data;
+			column_statistics = get->function.statistics(context, &table_scan_bind_data, it.first);
+		}
 		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
 			auto &filter = (ConjunctionAndFilter &)*it.second;
 			idx_t cardinality_with_and_filter =
