@@ -1742,7 +1742,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		order_mask.SetValidUnsafe(0);
 		//	No partition - align the heap blocks with the row blocks
 		rows = gstate.rows->CloneEmpty(gstate.rows->keep_pinned);
-		heap = gstate.strings->CloneEmpty(gstate.rows->keep_pinned);
+		heap = gstate.strings->CloneEmpty(gstate.strings->keep_pinned);
 		RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, *gstate.rows, *gstate.strings, layout);
 		external = true;
 	} else if (hash_bin < gstate.hash_groups.size() && gstate.hash_groups[hash_bin]) {
