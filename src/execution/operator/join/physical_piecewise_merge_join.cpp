@@ -212,6 +212,7 @@ public:
 	DataChunk rhs_keys;
 	DataChunk rhs_input;
 	ExpressionExecutor rhs_executor;
+	BufferHandle payload_heap_handle;
 
 public:
 	void ResolveJoinKeys(DataChunk &input) {
@@ -561,8 +562,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			for (idx_t c = 0; c < state.lhs_payload.ColumnCount(); ++c) {
 				chunk.data[c].Slice(state.lhs_payload.data[c], left_info.result, result_count);
 			}
-			SliceSortedPayload(chunk, right_info.state, right_info.block_idx, right_info.result, result_count,
-			                   left_cols);
+			state.payload_heap_handle = SliceSortedPayload(chunk, right_info.state, right_info.block_idx,
+			                                               right_info.result, result_count, left_cols);
 			chunk.SetCardinality(result_count);
 
 			auto sel = FlatVector::IncrementalSelectionVector();

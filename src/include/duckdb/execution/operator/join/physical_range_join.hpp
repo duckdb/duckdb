@@ -95,8 +95,10 @@ public:
 
 public:
 	// Gather the result values and slice the payload columns to those values.
-	static void SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
-	                               const SelectionVector &result, const idx_t result_count, const idx_t left_cols = 0);
+	// Returns a buffer handle to the pinned heap block (if any)
+	static BufferHandle SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
+	                                       const SelectionVector &result, const idx_t result_count,
+	                                       const idx_t left_cols = 0);
 	// Apply a tail condition to the current selection
 	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
 	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);
