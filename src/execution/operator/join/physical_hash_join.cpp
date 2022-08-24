@@ -49,9 +49,30 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
-	HashJoinGlobalSinkState() : finalized(false), scanned_data(false) {
+	HashJoinGlobalSinkState(const PhysicalHashJoin &op, ClientContext &context)
+	    : finalized(false), scanned_data(false) {
+		hash_table = op.InitializeHashTable(context);
+
+		// for perfect hash join
+		perfect_join_executor = make_unique<PerfectHashJoinExecutor>(op, *hash_table, op.perfect_join_statistics);
+		// for external hash join
+		external = op.can_go_external && ClientConfig::GetConfig(context).force_external;
+		// memory usage per thread scales with max mem / num threads
+		double max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
+		double num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+		// HT may not exceed 60% of memory
+		max_ht_size = max_memory * 0.6;
+		sink_memory_per_thread = max_ht_size / num_threads;
+		// Set probe types
+		const auto &payload_types = op.children[0]->types;
+		probe_types.insert(probe_types.end(), op.condition_types.begin(), op.condition_types.end());
+		probe_types.insert(probe_types.end(), payload_types.begin(), payload_types.end());
+		probe_types.emplace_back(LogicalType::HASH);
 	}
 
+	void ScheduleFinalize(Pipeline &pipeline, Event &event);
+
+public:
 	//! Global HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
 	//! The perfect hash join executor (if any)
@@ -79,7 +100,9 @@ public:
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
-	HashJoinLocalSinkState(Allocator &allocator, const PhysicalHashJoin &op) : build_executor(allocator) {
+	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context)
+	    : build_executor(Allocator::Get(context)) {
+		auto &allocator = Allocator::Get(context);
 		if (!op.right_projection_map.empty()) {
 			build_chunk.Initialize(allocator, op.build_types);
 		}
@@ -87,6 +110,8 @@ public:
 			build_executor.AddExpression(*cond.right);
 		}
 		join_keys.Initialize(allocator, op.condition_types);
+
+		hash_table = op.InitializeHashTable(context);
 	}
 
 public:
@@ -146,35 +171,11 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 }
 
 unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &context) const {
-	auto state = make_unique<HashJoinGlobalSinkState>();
-	state->hash_table = InitializeHashTable(context);
-
-	// for perfect hash join
-	state->perfect_join_executor =
-	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
-	// for external hash join
-	state->external = can_go_external && ClientConfig::GetConfig(context).force_external;
-	// memory usage per thread scales with max mem / num threads
-	double max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
-	double num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	// HT may not exceed 60% of memory
-	state->max_ht_size = max_memory * 0.6;
-	state->sink_memory_per_thread = state->max_ht_size / num_threads;
-	// Set probe types
-	auto &probe_types = state->probe_types;
-	const auto &payload_types = children[0]->types;
-	probe_types.insert(probe_types.end(), condition_types.begin(), condition_types.end());
-	probe_types.insert(probe_types.end(), payload_types.begin(), payload_types.end());
-	probe_types.emplace_back(LogicalType::HASH);
-
-	return move(state);
+	return make_unique<HashJoinGlobalSinkState>(*this, context);
 }
 
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) const {
-	auto &allocator = Allocator::Get(context.client);
-	auto state = make_unique<HashJoinLocalSinkState>(allocator, *this);
-	state->hash_table = InitializeHashTable(context.client);
-	return move(state);
+	return make_unique<HashJoinLocalSinkState>(*this, context.client);
 }
 
 SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
@@ -303,9 +304,9 @@ public:
 	static constexpr const idx_t PARALLEL_CONSTRUCT_COUNT = 262144;
 };
 
-void ScheduleFinalize(Pipeline &pipeline, Event &event, HashJoinGlobalSinkState &sink) {
-	sink.hash_table->InitializePointerTable();
-	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, sink);
+void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
+	hash_table->InitializePointerTable();
+	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, *this);
 	event.InsertEvent(move(new_event));
 }
 
@@ -355,7 +356,7 @@ public:
 	void FinishEvent() override {
 		local_hts.clear();
 		sink.hash_table->PrepareExternalFinalize();
-		ScheduleFinalize(pipeline, *this, sink);
+		sink.ScheduleFinalize(pipeline, *this);
 	}
 };
 
@@ -389,7 +390,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
 		sink.perfect_join_executor.reset();
-		ScheduleFinalize(pipeline, event, sink);
+		sink.ScheduleFinalize(pipeline, event);
 	}
 	sink.finalized = true;
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {

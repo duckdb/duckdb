@@ -34,6 +34,9 @@ public:
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
 	                 PerfectHashJoinStats join_state);
 
+	//! Initialize HT for this operator
+	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
+
 	vector<idx_t> right_projection_map;
 	//! The types of the keys
 	vector<LogicalType> condition_types;
@@ -94,10 +97,6 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
-
-private:
-	//! Initialize HT for this operator
-	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
 };
 
 } // namespace duckdb
