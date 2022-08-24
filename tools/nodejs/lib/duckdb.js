@@ -296,7 +296,7 @@ Connection.prototype.register_bulk;
  */
 Connection.prototype.unregister;
 
-default_connection = function (o) {
+var default_connection = function (o) {
     if (o.default_connection == undefined) {
         o.default_connection = new duckdb.Connection(o);
     }
