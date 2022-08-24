@@ -33,14 +33,15 @@ reader = csv.reader(open(args.extensions))
 # This skips the first row (i.e., the header) of the CSV file.
 next(reader)
 for row in reader:
-    if len(row) != 3:
+    if len(row) != 4:
         raise ValueError('Row malformed' + str(row))
 
     name = row[0].strip()
     url = row[1].strip()
     commit = row[2].strip()
+    build_on_windows = row[3].strip()
 
-    if len(name) == 0 or len(url) == 0 or len(commit) != 40:
+    if len(name) == 0 or len(url) == 0 or len(commit) != 40 or len(build_on_windows) == 0 :
        raise ValueError('Row malformed' + str(row))
 
     tasks+= [{'name' : row[0], 'url' : row[1], 'commit' : row[2], 'build_on_windows' : row[3]}]
