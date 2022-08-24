@@ -124,12 +124,12 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	if (!initial_load && StringUtil::Contains(DUCKDB_TEST_REMOTE_INSTALL, extension)) {
 		Connection con(db);
 		auto result = con.Query("INSTALL " + extension);
-		if (!result->success) {
+		if (result->HasError()) {
 			result->Print();
 			return ExtensionLoadResult::EXTENSION_UNKNOWN;
 		}
 		result = con.Query("LOAD " + extension);
-		if (!result->success) {
+		if (result->HasError()) {
 			result->Print();
 			return ExtensionLoadResult::EXTENSION_UNKNOWN;
 		}

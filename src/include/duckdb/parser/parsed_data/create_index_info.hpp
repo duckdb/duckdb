@@ -34,20 +34,13 @@ struct CreateIndexInfo : public CreateInfo {
 
 	vector<idx_t> column_ids;
 
+protected:
+	void SerializeInternal(Serializer &serializer) const override;
+
 public:
-	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateIndexInfo>();
-		CopyProperties(*result);
-		result->index_type = index_type;
-		result->index_name = index_name;
-		result->constraint_type = constraint_type;
-		result->table = unique_ptr_cast<TableRef, BaseTableRef>(table->Copy());
-		for (auto &expr : expressions) {
-			result->expressions.push_back(expr->Copy());
-		}
-		result->column_ids = column_ids;
-		return move(result);
-	}
+	unique_ptr<CreateInfo> Copy() const override;
+
+	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

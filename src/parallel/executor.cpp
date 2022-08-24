@@ -451,12 +451,12 @@ vector<LogicalType> Executor::GetTypes() {
 	return physical_plan->GetTypes();
 }
 
-void Executor::PushError(ExceptionType type, const string &exception) {
+void Executor::PushError(PreservedError exception) {
 	lock_guard<mutex> elock(executor_lock);
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupted = true;
 	// push the exception onto the stack
-	exceptions.emplace_back(type, exception);
+	exceptions.push_back(move(exception));
 }
 
 bool Executor::HasError() {
@@ -472,30 +472,7 @@ void Executor::ThrowException() {
 void Executor::ThrowExceptionInternal() { // LCOV_EXCL_START
 	D_ASSERT(!exceptions.empty());
 	auto &entry = exceptions[0];
-	switch (entry.first) {
-	case ExceptionType::TRANSACTION:
-		throw TransactionException(entry.second);
-	case ExceptionType::CATALOG:
-		throw CatalogException(entry.second);
-	case ExceptionType::PARSER:
-		throw ParserException(entry.second);
-	case ExceptionType::BINDER:
-		throw BinderException(entry.second);
-	case ExceptionType::INTERRUPT:
-		throw InterruptException();
-	case ExceptionType::FATAL:
-		throw FatalException(entry.second);
-	case ExceptionType::INTERNAL:
-		throw InternalException(entry.second);
-	case ExceptionType::IO:
-		throw IOException(entry.second);
-	case ExceptionType::CONSTRAINT:
-		throw ConstraintException(entry.second);
-	case ExceptionType::CONVERSION:
-		throw ConversionException(entry.second);
-	default:
-		throw Exception(entry.second);
-	}
+	entry.Throw();
 } // LCOV_EXCL_STOP
 
 void Executor::Flush(ThreadContext &tcontext) {

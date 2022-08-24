@@ -72,7 +72,7 @@ void ScanPandasMasked(PandasColumnBindData &bind_data, idx_t count, idx_t offset
 
 template <class T>
 bool ValueIsNull(T value) {
-	throw std::runtime_error("unsupported type for ValueIsNull");
+	throw InvalidInputException("Unsupported type for ValueIsNull");
 }
 
 template <>
@@ -350,14 +350,15 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 						    DecodePythonUnicode<Py_UCS4>(PyUnicode_4BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
 						break;
 					default:
-						throw std::runtime_error("Unsupported typekind for Python Unicode Compact decode");
+						throw NotImplementedException(
+						    "Unsupported typekind constant %d for Python Unicode Compact decode", kind);
 					}
 				} else if (ascii_obj->state.kind == PyUnicode_WCHAR_KIND) {
-					throw std::runtime_error("Unsupported: decode not ready legacy string");
+					throw InvalidInputException("Unsupported: decode not ready legacy string");
 				} else if (!PyUnicode_IS_COMPACT(unicode_obj) && ascii_obj->state.kind != PyUnicode_WCHAR_KIND) {
-					throw std::runtime_error("Unsupported: decode ready legacy string");
+					throw InvalidInputException("Unsupported: decode ready legacy string");
 				} else {
-					throw std::runtime_error("Unsupported string type: no clue what this string is");
+					throw InvalidInputException("Unsupported string type: no clue what this string is");
 				}
 			}
 		}
@@ -381,7 +382,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 	}
 
 	default:
-		throw std::runtime_error("Unsupported dtype num " + to_string((uint8_t)bind_data.pandas_type));
+		throw NotImplementedException("Unsupported pandas type");
 	}
 }
 
@@ -394,7 +395,7 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 	// TODO support masked arrays as well
 	// TODO support dicts of numpy arrays as well
 	if (py::len(df_columns) == 0 || py::len(df_types) == 0 || py::len(df_columns) != py::len(df_types)) {
-		throw std::runtime_error("Need a DataFrame with at least one column");
+		throw InvalidInputException("Need a DataFrame with at least one column");
 	}
 	py::array column_attributes = df.attr("columns").attr("values");
 
