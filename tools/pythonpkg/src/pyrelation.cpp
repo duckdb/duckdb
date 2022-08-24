@@ -127,6 +127,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("fetchmany", &DuckDBPyRelation::Fetchmany, "Execute and fetch the next set of rows as a list of tuples",
 	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows as a list of tuples")
+	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
+	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
 	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
 	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
@@ -456,8 +458,8 @@ py::object DuckDBPyRelation::Fetchmany(idx_t size) {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->Fetchmany(size);
 }
@@ -472,6 +474,18 @@ py::object DuckDBPyRelation::Fetchall() {
 		res->result->ThrowError();
 	}
 	return res->Fetchall();
+}
+
+py::dict DuckDBPyRelation::FetchNumpy() {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (res->result->HasError()) {
+		res->result->ThrowError();
+	}
+	return res->FetchNumpy();
 }
 
 duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
