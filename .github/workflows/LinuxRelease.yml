@@ -35,7 +35,6 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
-      BUILD_REST: 1
       BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
@@ -60,7 +59,6 @@ jobs:
       shell: bash
       run: |
         python3.7 tools/shell/shell-test.py build/release/duckdb
-        python3.7 tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
@@ -79,9 +77,8 @@ jobs:
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
-        zip -j duckdb_rest-linux-amd64.zip build/release/tools/rest/duckdb_rest_server
         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
-        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar duckdb_odbc-linux-amd64.zip
+        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip  duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar duckdb_odbc-linux-amd64.zip
 
     - uses: actions/upload-artifact@v2
       with:
