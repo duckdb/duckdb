@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/join/physical_join.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/operator/join/physical_join.hpp"
 
 namespace duckdb {
 class ColumnDataCollection;
@@ -31,6 +31,10 @@ public:
 	//! Construct the remainder of a Full Outer Join based on which tuples in the RHS found no match
 	static void ConstructFullOuterJoinResult(bool *found_match, ColumnDataCollection &input, DataChunk &result,
 	                                         ColumnDataScanState &scan_state);
+
+	bool IsOrderPreserving() const override {
+		return false;
+	}
 };
 
 } // namespace duckdb

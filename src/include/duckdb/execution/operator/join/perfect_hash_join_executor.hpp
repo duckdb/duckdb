@@ -15,8 +15,8 @@
 
 namespace duckdb {
 
-class PhysicalHashJoinState;
-class HashJoinGlobalState;
+class HashJoinOperatorState;
+class HashJoinGlobalSinkState;
 class PhysicalHashJoin;
 
 struct PerfectHashJoinStats {

@@ -167,5 +167,6 @@ class TestArrowDictionary(object):
         arrow_table = pa.Table.from_arrays([dict_array],['a'])
         rel = duckdb.from_arrow(arrow_table)
         print (rel.execute().fetchall())
-        result = [(None,), (datetime.datetime(2001, 9, 25, 0, 0),), (datetime.datetime(2006, 11, 14, 0, 0),), (datetime.datetime(2012, 5, 15, 0, 0),), (None,)] * 1000
-        assert rel.execute().fetchall() == result
+        expected = [(None,), (datetime.datetime(2001, 9, 25, 0, 0),), (datetime.datetime(2006, 11, 14, 0, 0),), (datetime.datetime(2012, 5, 15, 0, 0),), (None,)] * 1000
+        result = rel.execute().fetchall()
+        assert result == expected

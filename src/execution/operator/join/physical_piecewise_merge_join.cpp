@@ -340,7 +340,7 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 		// get the biggest value from the RHS chunk
 		MergeJoinPinSortingBlock(rread, r_block_idx);
 
-		auto &rblock = rread.sb->radix_sorting_data[r_block_idx];
+		auto &rblock = *rread.sb->radix_sorting_data[r_block_idx];
 		const auto r_not_null =
 		    SortedBlockNotNull(right_base, rblock.count, rstate.table->count - rstate.table->has_null);
 		if (r_not_null == 0) {
@@ -538,7 +538,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		const auto lhs_not_null = lhs_table.count - lhs_table.has_null;
 		BlockMergeInfo left_info(*state.lhs_global_state, 0, state.left_position, lhs_not_null);
 
-		const auto &rblock = rsorted.radix_sorting_data[state.right_chunk_index];
+		const auto &rblock = *rsorted.radix_sorting_data[state.right_chunk_index];
 		const auto rhs_not_null =
 		    SortedBlockNotNull(state.right_base, rblock.count, gstate.table->count - gstate.table->has_null);
 		BlockMergeInfo right_info(gstate.table->global_sort_state, state.right_chunk_index, state.right_position,
@@ -550,7 +550,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			// move to the next right chunk
 			state.left_position = 0;
 			state.right_position = 0;
-			state.right_base += rsorted.radix_sorting_data[state.right_chunk_index].count;
+			state.right_base += rsorted.radix_sorting_data[state.right_chunk_index]->count;
 			state.right_chunk_index++;
 			if (state.right_chunk_index >= rsorted.radix_sorting_data.size()) {
 				state.finished = true;

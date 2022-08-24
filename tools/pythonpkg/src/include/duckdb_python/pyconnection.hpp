@@ -112,6 +112,8 @@ public:
 	// these should be functions on the result but well
 	py::object FetchOne();
 
+	py::list FetchMany(idx_t size);
+
 	py::list FetchAll();
 
 	py::dict FetchNumpy();

@@ -1,8 +1,9 @@
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
-#include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
+
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
-#include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
@@ -18,7 +19,10 @@ unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(
 	auto &config = DBConfig::GetConfig(context);
 	bool use_materialized_collector =
 	    !config.options.preserve_insertion_order || !data.plan->AllSourcesSupportBatchIndex();
-	if (use_materialized_collector) {
+	if (!data.plan->AllOperatorsPreserveOrder()) {
+		// the plan is not order preserving, so we just use the parallel materialized collector
+		return make_unique_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, true);
+	} else if (use_materialized_collector) {
 		// parallel materialized collector only if we don't care about maintaining insertion order
 		return make_unique_base<PhysicalResultCollector, PhysicalMaterializedCollector>(
 		    data, !config.options.preserve_insertion_order);

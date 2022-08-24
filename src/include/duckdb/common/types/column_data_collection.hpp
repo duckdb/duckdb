@@ -75,9 +75,13 @@ public:
 	InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
 	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
 	//! Initialize a parallel scan over the column data collection over all columns
-	DUCKDB_API void InitializeScan(ColumnDataParallelScanState &state) const;
+	DUCKDB_API void
+	InitializeScan(ColumnDataParallelScanState &state,
+	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
 	//! Initialize a parallel scan over the column data collection over a subset of the columns
-	DUCKDB_API void InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids) const;
+	DUCKDB_API void
+	InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids,
+	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
 	//! Scans a DataChunk from the ColumnDataCollection
 	DUCKDB_API bool Scan(ColumnDataScanState &state, DataChunk &result) const;
 	//! Scans a DataChunk from the ColumnDataCollection
@@ -123,6 +127,12 @@ public:
 	static bool ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,
 	                         string &error_message);
 
+	//! Obtains the next scan index to scan from
+	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
+	//! Scans at the indices (obtained from NextScanIndex)
+	void ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result,
+	                 idx_t chunk_index, idx_t segment_index, idx_t row_index) const;
+
 private:
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
@@ -131,9 +141,6 @@ private:
 	void CreateSegment();
 
 	static ColumnDataCopyFunction GetCopyFunction(const LogicalType &type);
-
-	//! Obtains the next scan index to scan from
-	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
 
 private:
 	//! The Column Data Allocator

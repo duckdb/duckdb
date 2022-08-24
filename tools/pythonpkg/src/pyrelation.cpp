@@ -124,7 +124,11 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
 	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row as a tuple")
+	    .def("fetchmany", &DuckDBPyRelation::Fetchmany, "Execute and fetch the next set of rows as a list of tuples",
+	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows as a list of tuples")
+	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
+	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
 	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
 	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
@@ -341,7 +345,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::STD(const string &std_columns, co
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ValueCounts(const string &count_column, const string &groups) {
 	if (count_column.find(',') != string::npos) {
-		throw std::runtime_error("Only one column is accepted in Value_Counts method");
+		throw InvalidInputException("Only one column is accepted in Value_Counts method");
 	}
 	return GenericAggregator("count", count_column, groups, "", count_column);
 }
@@ -430,8 +434,8 @@ DataFrame DuckDBPyRelation::ToDF() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->FetchDF();
 }
@@ -442,10 +446,22 @@ py::object DuckDBPyRelation::Fetchone() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->Fetchone();
+}
+
+py::object DuckDBPyRelation::Fetchmany(idx_t size) {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (res->result->HasError()) {
+		res->result->ThrowError();
+	}
+	return res->Fetchmany(size);
 }
 
 py::object DuckDBPyRelation::Fetchall() {
@@ -454,10 +470,22 @@ py::object DuckDBPyRelation::Fetchall() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->Fetchall();
+}
+
+py::dict DuckDBPyRelation::FetchNumpy() {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (res->result->HasError()) {
+		res->result->ThrowError();
+	}
+	return res->FetchNumpy();
 }
 
 duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
@@ -466,8 +494,8 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->FetchArrowTable(batch_size);
 }
@@ -478,8 +506,8 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_s
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->FetchRecordBatchReader(batch_size);
 }
@@ -506,7 +534,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	} else if (type_string == "left") {
 		dtype = JoinType::LEFT;
 	} else {
-		throw std::runtime_error("Unsupported join type " + type_string + ", try 'inner' or 'left'");
+		throw InvalidInputException("Unsupported join type %s try 'inner' or 'left'", type_string);
 	}
 	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }
@@ -534,8 +562,8 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, cons
 		py::gil_scoped_release release;
 		res->result = rel->Query(view_name, sql_query);
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res;
 }
@@ -546,8 +574,8 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res;
 }

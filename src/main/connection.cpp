@@ -100,7 +100,7 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
 	auto statement = Prepare(query);
-	if (!statement->success) {
+	if (statement->HasError()) {
 		return make_unique<MaterializedQueryResult>(statement->error);
 	}
 	return statement->Execute(values, false);
@@ -228,22 +228,22 @@ shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> s
 
 void Connection::BeginTransaction() {
 	auto result = Query("BEGIN TRANSACTION");
-	if (!result->success) {
-		throw Exception(result->error);
+	if (result->HasError()) {
+		result->ThrowError();
 	}
 }
 
 void Connection::Commit() {
 	auto result = Query("COMMIT");
-	if (!result->success) {
-		throw Exception(result->error);
+	if (result->HasError()) {
+		result->ThrowError();
 	}
 }
 
 void Connection::Rollback() {
 	auto result = Query("ROLLBACK");
-	if (!result->success) {
-		throw Exception(result->error);
+	if (result->HasError()) {
+		result->ThrowError();
 	}
 }
 

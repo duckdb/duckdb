@@ -149,7 +149,7 @@ AllocatorDebugInfo::~AllocatorDebugInfo() {
 	if (allocation_count != 0) {
 		printf("Outstanding allocations found for Allocator\n");
 		for (auto &entry : pointers) {
-			printf("Allocation of size %lld at address %p\n", entry.second.first, (void *)entry.first);
+			printf("Allocation of size %ld at address %p\n", entry.second.first, (void *)entry.first);
 			printf("Stack trace:\n%s\n", entry.second.second.c_str());
 			printf("\n");
 		}
