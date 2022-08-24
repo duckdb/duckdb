@@ -36,10 +36,10 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
-	         py::arg("parameters") = py::list(), py::arg("multiple_parameter_sets") = false)
+	         py::arg("parameters") = py::none(), py::arg("multiple_parameter_sets") = false)
 	    .def("executemany", &DuckDBPyConnection::ExecuteMany,
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
-	         py::arg("query"), py::arg("parameters") = py::list())
+	         py::arg("query"), py::arg("parameters") = py::none())
 	    .def("close", &DuckDBPyConnection::Close, "Close the connection")
 	    .def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
 	    .def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
@@ -74,7 +74,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("values"))
 	    .def("table_function", &DuckDBPyConnection::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
-	         py::arg("parameters") = py::list())
+	         py::arg("parameters") = py::none())
 	    .def("from_query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
 	         py::arg("query"), py::arg("alias") = "query_relation")
 	    .def("query", &DuckDBPyConnection::RunQuery,
@@ -112,6 +112,9 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 }
 
 DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
+	if (params.is_none()) {
+		params = py::list();
+	}
 	Execute(query, std::move(params), true);
 	return this;
 }
@@ -130,6 +133,9 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
+	}
+	if (params.is_none()) {
+		params = py::list();
 	}
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
@@ -283,6 +289,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
+	if (params.is_none()) {
+		params = py::list();
+	}
+	if (!py::hasattr(params, "__len__")) {
+		throw InvalidInputException("Type of object passed to parameter 'values' must be iterable");
+	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
 }
@@ -299,6 +311,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fname, py::object params) {
+	if (params.is_none()) {
+		params = py::list();
+	}
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -600,14 +615,21 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           const py::dict &config_dict) {
+                                                           py::object config_options) {
 	auto res = make_shared<DuckDBPyConnection>();
 
 	DBConfig config;
 
+	if (config_options.is_none()) {
+		config_options = py::dict();
+	}
+	if (!py::isinstance<py::dict>(config_options)) {
+		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");
+	}
 	if (read_only) {
 		config.options.access_mode = AccessMode::READ_ONLY;
 	}
+	py::dict config_dict = config_options;
 	for (auto &kv : config_dict) {
 		string key = py::str(kv.first);
 		string val = py::str(kv.second);
