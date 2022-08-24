@@ -57,7 +57,7 @@ hash_t Hash(const char *val);
 template <>
 hash_t Hash(char *val);
 template <>
-hash_t Hash(string_t val);
+DUCKDB_API hash_t Hash(string_t val);
 template <>
 hash_t Hash(interval_t val);
 hash_t Hash(const char *val, size_t size);
