@@ -356,7 +356,27 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 				} else if (ascii_obj->state.kind == PyUnicode_WCHAR_KIND) {
 					throw InvalidInputException("Unsupported: decode not ready legacy string");
 				} else if (!PyUnicode_IS_COMPACT(unicode_obj) && ascii_obj->state.kind != PyUnicode_WCHAR_KIND) {
-					throw InvalidInputException("Unsupported: decode ready legacy string");
+					auto oval = PyUnicode_AsUnicode(val);
+
+					auto kind = PyUnicode_KIND(oval);
+					switch (kind) {
+					case PyUnicode_1BYTE_KIND:
+						tgt_ptr[row] =
+						    DecodePythonUnicode<Py_UCS1>(PyUnicode_1BYTE_DATA(oval), PyUnicode_GET_LENGTH(oval), out);
+						break;
+					case PyUnicode_2BYTE_KIND:
+						tgt_ptr[row] =
+						    DecodePythonUnicode<Py_UCS2>(PyUnicode_2BYTE_DATA(oval), PyUnicode_GET_LENGTH(oval), out);
+						break;
+					case PyUnicode_4BYTE_KIND:
+						tgt_ptr[row] =
+						    DecodePythonUnicode<Py_UCS4>(PyUnicode_4BYTE_DATA(oval), PyUnicode_GET_LENGTH(oval), out);
+						break;
+					default:
+						throw NotImplementedException(
+						    "Unsupported typekind constant %d for Python Unicode Compact decode", kind);
+					}
+
 				} else {
 					throw InvalidInputException("Unsupported string type: no clue what this string is");
 				}
