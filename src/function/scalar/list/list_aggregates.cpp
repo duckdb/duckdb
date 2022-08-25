@@ -159,7 +159,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
 	auto &aggr = (BoundAggregateExpression &)*info.aggr_expr;
-	AggregateInputData aggr_input_data(aggr.bind_info.get());
+	AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
 
 	D_ASSERT(aggr.function.update);
 
