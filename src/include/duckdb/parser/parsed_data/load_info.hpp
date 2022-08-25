@@ -17,13 +17,15 @@ enum class LoadType { LOAD, INSTALL, FORCE_INSTALL };
 
 struct LoadInfo : public ParseInfo {
 public:
-	LoadInfo() {}
+	LoadInfo() {
+	}
 	LoadType load_type;
+
 public:
-	const string& FileName() {
+	const string &FileName() {
 		return filename;
 	}
-	void SetFileName(const string& file_name) {
+	void SetFileName(const string &file_name) {
 		filename = file_name;
 	}
 	unique_ptr<LoadInfo> Copy() const {
@@ -32,6 +34,7 @@ public:
 		result->load_type = load_type;
 		return result;
 	}
+
 private:
 	string filename;
 };

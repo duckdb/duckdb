@@ -107,7 +107,7 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-void DatabaseInstance::Initialize(const char *path, DBConfig *new_config, DuckDB& db) {
+void DatabaseInstance::Initialize(const char *path, DBConfig *new_config, DuckDB &db) {
 	if (new_config) {
 		// user-supplied configuration
 		Configure(*new_config);

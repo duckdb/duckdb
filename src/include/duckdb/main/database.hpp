@@ -52,7 +52,7 @@ public:
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
 private:
-	void Initialize(const char *path, DBConfig *config, DuckDB& db);
+	void Initialize(const char *path, DBConfig *config, DuckDB &db);
 
 	void Configure(DBConfig &config);
 
