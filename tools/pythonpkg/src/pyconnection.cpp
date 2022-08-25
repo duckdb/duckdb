@@ -650,6 +650,9 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
                                                             py::object config_options) {
+	if (config_options.is_none()) {
+		config_options = py::dict();
+	}
 	auto res = make_shared<DuckDBPyConnection>();
 	if (!py::isinstance<py::dict>(config_options)) {
 		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");

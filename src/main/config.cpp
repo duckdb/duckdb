@@ -166,34 +166,9 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	return (idx_t)multiplier * limit;
 }
 
-// I know this looks horrendous :-(
+// Right now we only really care about access mode when comparing DBConfigs
 bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
-	bool is_equal = other.allow_unsigned_extensions == allow_unsigned_extensions;
-	is_equal = is_equal && other.checkpoint_on_shutdown == checkpoint_on_shutdown;
-	is_equal = is_equal && other.debug_many_free_list_blocks == debug_many_free_list_blocks;
-	is_equal = is_equal && other.enable_external_access == enable_external_access;
-	is_equal = is_equal && other.force_checkpoint == force_checkpoint;
-	is_equal = is_equal && other.initialize_default_database == initialize_default_database;
-	is_equal = is_equal && other.load_extensions == load_extensions;
-	is_equal = is_equal && other.object_cache_enable == object_cache_enable;
-	is_equal = is_equal && other.preserve_insertion_order == preserve_insertion_order;
-	is_equal = is_equal && other.use_direct_io == use_direct_io;
-	is_equal = is_equal && other.use_temporary_directory == use_temporary_directory;
-	is_equal = is_equal && other.access_mode == access_mode;
-	//	is_equal = is_equal && other.set_variables == set_variables;
-	is_equal = is_equal && other.checkpoint_abort == checkpoint_abort;
-	is_equal = is_equal && other.checkpoint_wal_size == checkpoint_wal_size;
-	is_equal = is_equal && other.collation == collation;
-	is_equal = is_equal && other.default_null_order == default_null_order;
-	is_equal = is_equal && other.default_order_type == default_order_type;
-	is_equal = is_equal && other.disabled_optimizers == disabled_optimizers;
-	is_equal = is_equal && other.external_threads == external_threads;
-	is_equal = is_equal && other.force_compression == force_compression;
-	//	is_equal = is_equal && other.maximum_memory == maximum_memory;
-	//	is_equal = is_equal && other.maximum_threads == maximum_threads;
-	//	is_equal = is_equal && other.temporary_directory == temporary_directory;
-	is_equal = is_equal && other.window_mode == window_mode;
-	return is_equal;
+	return other.access_mode == access_mode;
 }
 
 bool DBConfig::operator==(const DBConfig &other) {
