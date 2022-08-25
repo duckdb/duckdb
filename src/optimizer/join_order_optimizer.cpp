@@ -248,7 +248,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	return false;
 }
 
-//! the exclusion set with all entries in the subgraph
+//! Update the exclusion set with all entries in the subgraph
 static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set) {
 	for (idx_t i = 0; i < node->count; i++) {
 		exclusion_set.insert(node->relations[i]);
@@ -361,10 +361,6 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *rig
 	return true;
 }
 
-bool ReverseSort(idx_t a, idx_t b) {
-	return b <= a;
-}
-
 bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 	if (node->count == relations.size()) {
 		return true;
@@ -382,7 +378,7 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 	}
 
 	//! Neighbors should be reversed when iterating over them.
-	std::sort(neighbors.begin(), neighbors.end(), ReverseSort);
+	std::sort(neighbors.begin(), neighbors.end(), std::greater_equal<idx_t>());
 	for (idx_t i = 0; i < neighbors.size() - 1; i++) {
 		D_ASSERT(neighbors[i] >= neighbors[i + 1]);
 	}
@@ -460,7 +456,8 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet *node, unordered_
 	// recursively enumerate the sets
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
 	for (idx_t i = 0; i < neighbors.size(); i++) {
-		// this line is necessary, need to remember why.
+		// Reset the exclusion set so that the algorithm considers all combinations
+		// of the exclusion_set with a subset of neighbors.
 		new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
 		// updated the set of excluded entries with this neighbor
@@ -771,7 +768,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 		result_operator = move(extracted_relations[node->set->relations[0]]);
 	}
 	auto max_idx_t = NumericLimits<idx_t>::Maximum() - 10000;
-	result_operator->estimated_cardinality = (idx_t)MinValue(node->GetCardinality(), (double)max_idx_t);
+	result_operator->estimated_cardinality = MinValue<idx_t>(node->GetCardinality(), max_idx_t);
 	result_operator->has_estimated_cardinality = true;
 	result_operator->estimated_props = node->estimated_props->Copy();
 	// check if we should do a pushdown on this node

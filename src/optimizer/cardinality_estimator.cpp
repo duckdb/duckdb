@@ -35,7 +35,7 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 	D_ASSERT(filter_info->set->count >= 1);
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
-		if (i_set.count(filter_info->left_binding) > 0) {
+		if (i_set.find(filter_info->left_binding) != i_set.end()) {
 			// found an equivalent filter
 			return true;
 		}
@@ -49,22 +49,17 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *filter_info) {
 	vector<idx_t> matching_equivalent_sets;
 	auto equivalent_relation_index = 0;
-	// eri = equivalent relation index
-	bool added_to_eri;
 
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
-		added_to_eri = false;
-		if (i_set.count(filter_info->left_binding) > 0) {
+		if (i_set.find(filter_info->left_binding) != i_set.end()) {
 			matching_equivalent_sets.push_back(equivalent_relation_index);
-			added_to_eri = true;
-		}
-		// don't add both left and right to the matching_equivalent_sets
-		// since both left and right get added to that index anyway.
-		if (i_set.count(filter_info->right_binding) > 0 && !added_to_eri) {
+		} else if (i_set.find(filter_info->right_binding) != i_set.end()) {
+			// don't add both left and right to the matching_equivalent_sets
+			// since both left and right get added to that index anyway.
 			matching_equivalent_sets.push_back(equivalent_relation_index);
 		}
-		equivalent_relation_index += 1;
+		equivalent_relation_index++;
 	}
 	return matching_equivalent_sets;
 }
@@ -82,10 +77,10 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 		relations_to_tdoms.at(matching_equivalent_sets[0]).filters.push_back(filter_info);
 		// add all values of one set to the other, delete the empty one
 	} else if (matching_equivalent_sets.size() == 1) {
-		idx_t set_i = matching_equivalent_sets.at(0);
-		relations_to_tdoms.at(set_i).equivalent_relations.insert(filter_info->left_binding);
-		relations_to_tdoms.at(set_i).equivalent_relations.insert(filter_info->right_binding);
-		relations_to_tdoms.at(set_i).filters.push_back(filter_info);
+		auto &tdom_i = relations_to_tdoms.at(matching_equivalent_sets.at(0));
+		tdom_i.equivalent_relations.insert(filter_info->left_binding);
+		tdom_i.equivalent_relations.insert(filter_info->right_binding);
+		tdom_i.filters.push_back(filter_info);
 	} else if (matching_equivalent_sets.empty()) {
 		column_binding_set_t tmp;
 		tmp.insert(filter_info->left_binding);
@@ -112,17 +107,14 @@ void CardinalityEstimator::AddColumnToRelationMap(idx_t table_index, idx_t colum
 void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>> *filter_infos) {
 	// For each filter, we fill keep track of the index of the equivalent relation set
 	// the left and right relation needs to be added to.
-	vector<idx_t> matching_equivalent_sets;
 	for (auto &filter : *filter_infos) {
-		matching_equivalent_sets.clear();
-
 		if (SingleColumnFilter(filter.get())) {
 			continue;
 		}
 		D_ASSERT(filter->left_set->count >= 1);
 		D_ASSERT(filter->right_set->count >= 1);
 
-		matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
+		auto matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
 		AddToEquivalenceSets(filter.get(), matching_equivalent_sets);
 	}
 }
@@ -145,20 +137,15 @@ void CardinalityEstimator::InitTotalDomains() {
 }
 
 double CardinalityEstimator::ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality) {
-	double cost = expected_cardinality + left->GetCost() + right->GetCost();
-	return cost;
+	return expected_cardinality + left->GetCost() + right->GetCost();
 }
 
 double CardinalityEstimator::EstimateCrossProduct(const JoinNode *left, const JoinNode *right) {
 	// need to explicity use double here, otherwise auto converts it to an int, then
 	// there is an autocast in the return.
-	double expected_cardinality = 0;
-	if (left->GetCardinality() >= (NumericLimits<double>::Maximum() / right->GetCardinality())) {
-		expected_cardinality = NumericLimits<double>::Maximum();
-	} else {
-		expected_cardinality = left->GetCardinality() * right->GetCardinality();
-	}
-	return expected_cardinality;
+	return left->GetCardinality() >= (NumericLimits<double>::Maximum() / right->GetCardinality())
+	           ? NumericLimits<double>::Maximum()
+	           : left->GetCardinality() * right->GetCardinality();
 }
 
 void CardinalityEstimator::AddRelationColumnMapping(LogicalGet *get, idx_t relation_id) {
@@ -170,11 +157,8 @@ void CardinalityEstimator::AddRelationColumnMapping(LogicalGet *get, idx_t relat
 }
 
 void UpdateDenom(Subgraph2Denominator *relation_2_denom, RelationsToTDom *relation_to_tdom) {
-	if (relation_to_tdom->has_tdom_hll) {
-		relation_2_denom->denom *= relation_to_tdom->tdom_hll;
-	} else {
-		relation_2_denom->denom *= relation_to_tdom->tdom_no_hll;
-	}
+	relation_2_denom->denom *=
+	    relation_to_tdom->has_tdom_hll ? relation_to_tdom->tdom_hll : relation_to_tdom->tdom_no_hll;
 }
 
 void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
@@ -255,9 +239,10 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 			// a connection.
 			if (!found_match) {
 				subgraphs.emplace_back(Subgraph2Denominator());
-				subgraphs.back().relations.insert(filter->left_binding.table_index);
-				subgraphs.back().relations.insert(filter->right_binding.table_index);
-				UpdateDenom(&subgraphs.back(), &relation_2_tdom);
+				auto subgraph = &subgraphs.back();
+				subgraph->relations.insert(filter->left_binding.table_index);
+				subgraph->relations.insert(filter->right_binding.table_index);
+				UpdateDenom(subgraph, &relation_2_tdom);
 			}
 			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
 			                                   [](Subgraph2Denominator &s) { return s.relations.empty(); });
@@ -454,10 +439,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 TableFilterSet *CardinalityEstimator::GetTableFilters(LogicalOperator *op) {
 	// First check table filters
 	auto get = GetLogicalGet(op);
-	if (get) {
-		return &get->table_filters;
-	}
-	return nullptr;
+	return get ? &get->table_filters : nullptr;
 }
 
 idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *filter,
@@ -517,8 +499,6 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 	D_ASSERT(cardinality_after_filters > 0);
 	return cardinality_after_filters;
 }
-
-
 
 idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters) {
 	idx_t cardinality_after_filters = cardinality;
