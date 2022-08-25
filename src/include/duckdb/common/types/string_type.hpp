@@ -94,8 +94,8 @@ public:
 		}
 	}
 
-	void Verify();
-	void VerifyNull();
+	void Verify() const;
+	void VerifyNull() const;
 	bool operator<(const string_t &r) const {
 		auto this_str = this->GetString();
 		auto r_str = r.GetString();

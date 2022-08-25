@@ -16,9 +16,3 @@ CREATE VIEW integers AS SELECT * FROM '${BENCHMARK_DIR}/integers.parquet';
 
 run
 SELECT * FROM integers WHERE i IN (SELECT * FROM other_table) LIMIT 4
-
-result I
-337
-948247
-17797934
-99999998

@@ -10,6 +10,8 @@
 
 namespace duckdb {
 
+const uint64_t PLAN_SERIALIZATION_VERSION = 1;
+
 LogicalOperator::LogicalOperator(LogicalOperatorType type) : type(type) {
 }
 
