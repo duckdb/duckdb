@@ -116,7 +116,7 @@ private:
 };
 
 template <>
-void FieldWriter::Write(const string &val);
+DUCKDB_API void FieldWriter::Write(const string &val);
 
 class FieldDeserializer : public Deserializer {
 public:
