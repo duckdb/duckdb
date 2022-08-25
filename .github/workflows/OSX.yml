@@ -83,10 +83,6 @@ jobs:
 
     - name: Install UnixODBC
       shell: bash
-      run: brew install unixodbc
-
-    - name: Install UnixODBC
-      shell: bash
       run: |
         rm -rf build/unixodbc
         mkdir -p build/unixodbc
