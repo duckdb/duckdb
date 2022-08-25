@@ -1,13 +1,13 @@
 # name: test/fuzzer/pedro/force_no_cross_product.test
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
+# Disabled because the unoptimized version of this query does complete
+#statement ok
+#PRAGMA enable_verification
 
 statement ok
 PRAGMA debug_force_no_cross_product=1;
 
-query I
+# Requires cross-product but 'force_no_cross_product' is enabled
+statement error
 SELECT 1 FROM (SELECT 1), (SELECT 1);
-----
-1
