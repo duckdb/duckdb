@@ -770,7 +770,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// this should only happen in case the sets are actually disjunct
 		// in this case we need to generate cross product to connect the disjoint sets
 		if (context.config.force_no_cross_product) {
-			return move(plan);
+			throw InvalidInputException("Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
 		}
 		GenerateCrossProducts();
 		//! solve the join order again
