@@ -1,10 +1,10 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -77,7 +77,8 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 	}
 	case duckdb_libpgquery::PG_SETOP_UNION:
 	case duckdb_libpgquery::PG_SETOP_EXCEPT:
-	case duckdb_libpgquery::PG_SETOP_INTERSECT: {
+	case duckdb_libpgquery::PG_SETOP_INTERSECT:
+	case duckdb_libpgquery::PG_SETOP_UNION_BY_NAME: {
 		node = make_unique<SetOperationNode>();
 		auto result = (SetOperationNode *)node.get();
 		if (stmt->withClause) {
@@ -100,6 +101,10 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 			break;
 		case duckdb_libpgquery::PG_SETOP_INTERSECT:
 			result->setop_type = SetOperationType::INTERSECT;
+			break;
+		case duckdb_libpgquery::PG_SETOP_UNION_BY_NAME:
+			select_distinct = !stmt->all;
+			result->setop_type = SetOperationType::UNION_BY_NAME;
 			break;
 		default:
 			throw Exception("Unexpected setop type");
