@@ -9,7 +9,7 @@ unique_ptr<LoadStatement> Transformer::TransformLoad(duckdb_libpgquery::PGNode *
 
 	auto load_stmt = make_unique<LoadStatement>();
 	auto load_info = make_unique<LoadInfo>();
-	load_info->filename = std::string(stmt->filename);
+	load_info->SetFileName(std::string(stmt->filename));
 	switch (stmt->load_type) {
 	case duckdb_libpgquery::PG_LOAD_TYPE_LOAD:
 		load_info->load_type = LoadType::LOAD;

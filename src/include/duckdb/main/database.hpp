@@ -21,6 +21,7 @@ class ConnectionManager;
 class FileSystem;
 class TaskScheduler;
 class ObjectCache;
+class DuckDB;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -51,7 +52,7 @@ public:
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
 private:
-	void Initialize(const char *path, DBConfig *config);
+	void Initialize(const char *path, DBConfig *config, DuckDB& db);
 
 	void Configure(DBConfig &config);
 

@@ -2,9 +2,9 @@
 # group: [pedro]
 
 # make this use a (temporary) persisted db
-require icu
-
 load __TEST_DIR__/collate_reload_issue.db
+
+require icu
 
 statement ok
 CREATE TABLE t0 (c0 VARCHAR(0) COLLATE AF);

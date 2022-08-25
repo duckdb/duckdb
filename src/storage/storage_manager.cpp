@@ -43,6 +43,15 @@ bool StorageManager::InMemory() {
 	return path.empty() || path == ":memory:";
 }
 
+void StorageManager::InitializeDatabase() {
+	if (!InMemory()) {
+		// create or load the database from disk, if not in-memory mode
+		LoadDatabase();
+	} else {
+		block_manager = make_unique<InMemoryBlockManager>();
+	}
+}
+
 void StorageManager::Initialize() {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
@@ -71,13 +80,6 @@ void StorageManager::Initialize() {
 
 	// commit transactions
 	con.Commit();
-
-	if (!in_memory) {
-		// create or load the database from disk, if not in-memory mode
-		LoadDatabase();
-	} else {
-		block_manager = make_unique<InMemoryBlockManager>();
-	}
 }
 
 void StorageManager::LoadDatabase() {

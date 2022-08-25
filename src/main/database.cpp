@@ -107,7 +107,7 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
+void DatabaseInstance::Initialize(const char *path, DBConfig *new_config, DuckDB& db) {
 	if (new_config) {
 		// user-supplied configuration
 		Configure(*new_config);
@@ -140,16 +140,17 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 
 	// initialize the database
 	storage->Initialize();
+	if (config.options.load_extensions) {
+		ExtensionHelper::LoadAllExtensions(db);
+	}
+	storage->InitializeDatabase();
 
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads);
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
-	instance->Initialize(path, new_config);
-	if (instance->config.options.load_extensions) {
-		ExtensionHelper::LoadAllExtensions(*this);
-	}
+	instance->Initialize(path, new_config, *this);
 }
 
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {

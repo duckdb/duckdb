@@ -38,6 +38,8 @@ public:
 	static StorageManager &GetStorageManager(ClientContext &context);
 	static StorageManager &GetStorageManager(DatabaseInstance &db);
 
+	//! Load the database from disk or create the block_manager
+	void InitializeDatabase();
 	//! Initialize a database or load an existing database from the given path
 	void Initialize();
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
