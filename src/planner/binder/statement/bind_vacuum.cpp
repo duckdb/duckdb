@@ -32,7 +32,9 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 		for (auto &col_name : columns) {
 			ColumnRefExpression colref(col_name, ref->table->name);
 			auto result = bind_context.BindColumn(colref, 0);
-			D_ASSERT(!result.HasError());
+			if (result.HasError()) {
+				throw BinderException(result.error);
+			}
 			select_list.push_back(move(result.expression));
 		}
 		auto table_scan = CreatePlan(*ref);

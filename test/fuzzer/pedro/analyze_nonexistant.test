@@ -1,0 +1,5 @@
+statement ok
+CREATE TABLE t0(c0 TINYINT);
+
+statement error
+ANALYZE t0(c4);
