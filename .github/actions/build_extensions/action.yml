@@ -66,9 +66,6 @@ inputs:
   python_name:
     description: 'Python binary name because wtf Python'
     default: 'python3'
-  substrait:
-    description: 'Build Substrait'
-    default: 0
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
@@ -87,7 +84,6 @@ runs:
         BUILD_JSON: ${{ inputs.json }}
         BUILD_EXCEL: ${{ inputs.excel }}
         FORCE_32_BIT: ${{ inputs.force_32_bit }}
-        BUILD_SUBSTRAIT_EXTENSION: ${{ inputs.substrait }}
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
         STATIC_OPENSSL: 1
