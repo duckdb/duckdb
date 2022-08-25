@@ -1,6 +1,7 @@
 #' @rdname duckdb_driver-class
 #' @usage NULL
 dbDataType__duckdb_driver <- function(dbObj, obj, ...) {
+  # FIXME: Use RApiTypes::DetectRType()
   if (is.null(obj)) stop("NULL parameter")
   if (is.data.frame(obj)) {
     return(vapply(obj, function(x) dbDataType(dbObj, x), FUN.VALUE = "character"))
@@ -18,7 +19,7 @@ dbDataType__duckdb_driver <- function(dbObj, obj, ...) {
     "DOUBLE"
   } else if (inherits(obj, "POSIXt")) {
     "TIMESTAMP"
-  } else if (is.list(obj) && all(vapply(obj, typeof, FUN.VALUE = "character") == "raw" || is.na(obj))) {
+  } else if (inherits(obj, "blob") || (is.list(obj) && all(vapply(obj, typeof, FUN.VALUE = "character") %in% c("raw", "NULL")))) {
     "BLOB"
   } else {
     "STRING"

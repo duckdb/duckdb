@@ -169,6 +169,7 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Pipeline>>)
 INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Pipeline>>)
 template class std::vector<std::vector<Expression *>>;
 template class std::vector<LogicalType>;
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinHashTable>>)
 
 #if !defined(__clang__)
 template struct std::atomic<uint64_t>;

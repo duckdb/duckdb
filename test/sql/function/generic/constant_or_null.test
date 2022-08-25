@@ -1,0 +1,35 @@
+# name: test/sql/function/generic/constant_or_null.test
+# description: Test constant or null
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT constant_or_null(1, NULL), constant_or_null(1, 10)
+----
+NULL	1
+
+query I
+SELECT constant_or_null(1, case when i%2=0 then null else i end) from range(5) tbl(i)
+----
+NULL
+1
+NULL
+1
+NULL
+
+query I
+SELECT constant_or_null(1, case when i%2=0 then null else i end, case when i%2=1 then null else i end) from range(5) tbl(i)
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement error
+SELECT constant_or_null(1);
+
+statement error
+SELECT constant_or_null();

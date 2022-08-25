@@ -35,7 +35,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 	auto &query_has_label = query_ptr->query_has_label;
 	auto &query_label = query_ptr->query_label;
 
-	if (!result.success) {
+	if (result.HasError()) {
 		PrintLineSep();
 		std::cerr << "Query unexpectedly failed (" << file_name.c_str() << ":" << query_line << ")\n";
 		PrintLineSep();
@@ -43,7 +43,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		PrintLineSep();
 		PrintHeader("Actual result:");
 		result.Print();
-		if (SkipErrorMessage(result.error)) {
+		if (SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return;
 		}
@@ -320,7 +320,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 }
 
 void TestResultHelper::CheckStatementResult() {
-	bool error = !result.success;
+	bool error = result.HasError();
 
 	if (runner.output_result_mode || runner.debug_mode) {
 		result.Print();
@@ -331,7 +331,7 @@ void TestResultHelper::CheckStatementResult() {
 		// even in the case of "statement error", we do not accept ALL errors
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
-		bool internal_error = TestIsInternalError(runner.always_fail_error_messages, result.error);
+		bool internal_error = TestIsInternalError(runner.always_fail_error_messages, result.GetError());
 		if (!internal_error) {
 			error = !error;
 		} else {
@@ -346,7 +346,7 @@ void TestResultHelper::CheckStatementResult() {
 		PrintSQL(sql_query);
 		PrintLineSep();
 		result.Print();
-		if (expect_ok && SkipErrorMessage(result.error)) {
+		if (expect_ok && SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return;
 		}
@@ -372,8 +372,8 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 
 	auto csv_result =
 	    con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', columns=" + struct_definition + ")");
-	if (!csv_result->success) {
-		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error);
+	if (csv_result->HasError()) {
+		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->GetError());
 		PrintErrorHeader(error.c_str());
 		FAIL_LINE(file_name, query_line, 0);
 	}

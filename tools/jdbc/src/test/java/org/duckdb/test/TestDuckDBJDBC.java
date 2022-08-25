@@ -37,6 +37,7 @@ import org.duckdb.DuckDBDriver;
 import org.duckdb.DuckDBTimestamp;
 import org.duckdb.DuckDBColumnType;
 import org.duckdb.DuckDBResultSetMetaData;
+import org.duckdb.JsonNode;
 
 public class TestDuckDBJDBC {
 
@@ -327,6 +328,54 @@ public class TestDuckDBJDBC {
 		assertTrue(rs.getString("e1").equals("enum290"));
 		rs.close();
 		conn.close();
+	}
+
+	public static void test_timestamp_ms() throws Exception {
+		String expectedString = "2022-08-17 12:11:10.999";
+		String sql = "SELECT '2022-08-17T12:11:10.999'::TIMESTAMP_MS as ts_ms";
+		assert_timestamp_match(sql, expectedString, "TIMESTAMP_MS");
+	}
+
+	public static void test_timestamp_ns() throws Exception {
+		String expectedString = "2022-08-17 12:11:10.999999";
+		String sql = "SELECT '2022-08-17T12:11:10.999999999'::TIMESTAMP_NS as ts_ns";
+		assert_timestamp_match(sql, expectedString, "TIMESTAMP_NS");
+	}
+
+	public static void test_timestamp_s() throws Exception {
+		String expectedString = "2022-08-17 12:11:10";
+		String sql = "SELECT '2022-08-17T12:11:10'::TIMESTAMP_S as ts_s";
+		assert_timestamp_match(sql, expectedString, "TIMESTAMP_S");
+	}
+
+	private static void assert_timestamp_match(String fetchSql, String expectedString, String expectedTypeName) throws Exception {
+		String originalTzProperty = System.getProperty("user.timezone");
+		TimeZone originalTz = TimeZone.getDefault();
+		try {
+			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+			System.setProperty("user.timezone", "UTC");
+			Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			Statement stmt = conn.createStatement();
+
+			ResultSet rs = stmt.executeQuery(fetchSql);
+			assertTrue(rs.next());
+			Timestamp actual = rs.getTimestamp(1);
+
+			Timestamp expected = Timestamp.valueOf(expectedString);
+
+			assertEquals(expected.getTime(), actual.getTime());
+			assertEquals(expected.getNanos(), actual.getNanos());
+
+			assertEquals(Types.TIMESTAMP, rs.getMetaData().getColumnType(1));
+			assertEquals(expectedTypeName, rs.getMetaData().getColumnTypeName(1));
+
+			rs.close();
+			stmt.close();
+			conn.close();
+		} finally {
+			TimeZone.setDefault(originalTz);
+			System.setProperty("user.timezone", originalTzProperty);
+		}
 	}
 
 	public static void test_timestamp_tz() throws Exception {
@@ -2222,6 +2271,33 @@ public class TestDuckDBJDBC {
 
 		rowSet.next();
 		assertEquals(rowSet.getInt(1), 1);
+	}
+
+	public static void test_json() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+
+		try (Statement stmt = conn.createStatement()) {
+			ResultSet rs = stmt.executeQuery("select [1, 5]::JSON");
+
+			rs.next();
+
+			JsonNode jsonNode = (JsonNode) rs.getObject(1);
+
+			assertTrue(jsonNode.isArray());
+
+			assertEquals(jsonNode.toString(), "[1, 5]");
+		}
+
+		try (Statement stmt = conn.createStatement()) {
+			ResultSet rs = stmt.executeQuery("select \'hello\'::JSON");
+
+			rs.next();
+
+			JsonNode jsonNode = (JsonNode) rs.getObject(1);
+
+			assertTrue(jsonNode.isString());
+			assertEquals(jsonNode.toString(), "hello");
+		}
 	}
 
 	public static void main(String[] args) throws Exception {

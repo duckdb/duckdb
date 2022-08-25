@@ -23,23 +23,29 @@ string StreamQueryResult::ToString() {
 		result = HeaderToString();
 		result += "[[STREAM RESULT]]";
 	} else {
-		result = error + "\n";
+		result = GetError() + "\n";
 	}
 	return result;
 }
 
 unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 	if (!context) {
-		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            error);
+		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
+		if (HasError()) {
+			error_str += StringUtil::Format("\nError: %s", GetError());
+		}
+		throw InvalidInputException(error_str);
 	}
 	return context->LockContext();
 }
 
 void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 	if (!IsOpenInternal(lock)) {
-		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            error);
+		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
+		if (HasError()) {
+			error_str += StringUtil::Format("\nError: %s", GetError());
+		}
+		throw InvalidInputException(error_str);
 	}
 }
 
@@ -58,8 +64,8 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 }
 
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
-	if (!success || !context) {
-		return make_unique<MaterializedQueryResult>(error);
+	if (HasError() || !context) {
+		return make_unique<MaterializedQueryResult>(GetErrorObject());
 	}
 	auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 
@@ -74,8 +80,8 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	}
 	auto result =
 	    make_unique<MaterializedQueryResult>(statement_type, properties, names, move(collection), client_properties);
-	if (!success) {
-		return make_unique<MaterializedQueryResult>(error);
+	if (HasError()) {
+		return make_unique<MaterializedQueryResult>(GetErrorObject());
 	}
 	return result;
 }

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,10 @@ public:
 	vector<column_t> columns;
 	vector<unique_ptr<Expression>> bound_defaults;
 	bool update_is_del_and_insert;
+
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override {

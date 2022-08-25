@@ -693,7 +693,7 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 	writer.Finalize();
 }
 
-unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source) {
+unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
 	auto info = make_unique<CreateTableInfo>();
 
 	FieldReader reader(source);

@@ -12,6 +12,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -20,7 +21,7 @@ enum class MapInvalidReason : uint8_t { VALID, NULL_KEY_LIST, NULL_KEY, DUPLICAT
 struct VariableReturnBindData : public FunctionData {
 	LogicalType stype;
 
-	explicit VariableReturnBindData(const LogicalType &stype_p) : stype(stype_p) {
+	explicit VariableReturnBindData(LogicalType stype_p) : stype(move(stype_p)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -29,6 +30,18 @@ struct VariableReturnBindData : public FunctionData {
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (const VariableReturnBindData &)other_p;
 		return stype == other.stype;
+	}
+
+	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
+		D_ASSERT(bind_data_p);
+		auto &info = (VariableReturnBindData &)*bind_data_p;
+		writer.WriteSerializable(info.stype);
+	}
+
+	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	                                            ScalarFunction &bound_function) {
+		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+		return make_unique<VariableReturnBindData>(move(stype));
 	}
 };
 

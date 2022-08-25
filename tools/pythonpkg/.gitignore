@@ -12,3 +12,4 @@ duckdb/
 githash.list
 includes.list
 sources.list
+venv/

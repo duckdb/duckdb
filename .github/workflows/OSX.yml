@@ -61,7 +61,6 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
-      BUILD_REST: 1
       BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
@@ -165,7 +164,6 @@ jobs:
           post_install: rm build/release/src/libduckdb*
           run_tests: 0
           out_of_tree_ext: 1
-          substrait: 1
           static_link_build: 1
           osx_universal: 1
 

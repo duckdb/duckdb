@@ -548,7 +548,7 @@ static void AddMinMaxOperator(AggregateFunctionSet &set) {
 			set.AddFunction(GetMinMaxFunction<OP_VECTOR, VectorMinMaxState>(type));
 
 		} else {
-			set.AddFunction(GetUnaryAggregate<OP>(type));
+			set.AddFunction(GetUnaryAggregate<OP>(type)); // TODO this is pretty evil
 		}
 	}
 }
