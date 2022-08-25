@@ -770,7 +770,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// this should only happen in case the sets are actually disjunct
 		// in this case we need to generate cross product to connect the disjoint sets
 		if (context.config.force_no_cross_product) {
-			throw InternalException("HyperGraph isn't connected");
+			return move(plan);
 		}
 		GenerateCrossProducts();
 		//! solve the join order again

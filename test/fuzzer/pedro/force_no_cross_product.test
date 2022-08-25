@@ -1,0 +1,13 @@
+# name: test/fuzzer/pedro/force_no_cross_product.test
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA debug_force_no_cross_product=1;
+
+query I
+SELECT 1 FROM (SELECT 1), (SELECT 1);
+----
+1
