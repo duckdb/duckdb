@@ -1,10 +1,6 @@
 # name: test/fuzzer/pedro/force_no_cross_product.test
 # group: [pedro]
 
-# Disabled because the unoptimized version of this query does complete
-#statement ok
-#PRAGMA enable_verification
-
 statement ok
 PRAGMA debug_force_no_cross_product=1;
 
