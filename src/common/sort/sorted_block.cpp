@@ -355,10 +355,9 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 	}
 	D_ASSERT(scanned == count);
 	// Deserialize the payload data
-	for (idx_t col_idx = 0; col_idx < sorted_data.layout.ColumnCount(); col_idx++) {
-		const auto col_offset = sorted_data.layout.GetOffsets()[col_idx];
-		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), chunk.data[col_idx],
-		                      *FlatVector::IncrementalSelectionVector(), count, col_offset, col_idx);
+	for (idx_t col_no = 0; col_no < sorted_data.layout.ColumnCount(); col_no++) {
+		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), chunk.data[col_no],
+		                      *FlatVector::IncrementalSelectionVector(), count, sorted_data.layout, col_no);
 	}
 	chunk.SetCardinality(count);
 	chunk.Verify();
