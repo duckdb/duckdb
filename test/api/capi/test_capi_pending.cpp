@@ -72,6 +72,6 @@ TEST_CASE("Test pending statements in C API", "[capi]") {
 
 	result = pending.Execute();
 	REQUIRE(result);
-	REQUIRE(result->success);
+	REQUIRE(!result->HasError());
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 499999500000LL);
 }

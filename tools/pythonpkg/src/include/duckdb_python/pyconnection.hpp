@@ -72,7 +72,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
-	unique_ptr<DuckDBPyRelation> Values(py::object params = py::list());
+	unique_ptr<DuckDBPyRelation> Values(py::object params = py::none());
 
 	unique_ptr<DuckDBPyRelation> View(const string &vname);
 
@@ -112,6 +112,8 @@ public:
 	// these should be functions on the result but well
 	py::object FetchOne();
 
+	py::list FetchMany(idx_t size);
+
 	py::list FetchAll();
 
 	py::dict FetchNumpy();
@@ -123,8 +125,7 @@ public:
 
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only,
-	                                              const py::dict &py_config_dict);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 

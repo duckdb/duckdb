@@ -165,6 +165,10 @@ public:
 		return false;
 	}
 
+	virtual bool IsOrderPreserving() const {
+		return true;
+	}
+
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
 	virtual double GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
 
@@ -207,6 +211,7 @@ public:
 	// Pipeline construction
 	virtual vector<const PhysicalOperator *> GetSources() const;
 	bool AllSourcesSupportBatchIndex() const;
+	bool AllOperatorsPreserveOrder() const;
 
 	void AddPipeline(Executor &executor, shared_ptr<Pipeline> current, PipelineBuildState &state);
 	virtual void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state);

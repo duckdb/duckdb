@@ -222,15 +222,15 @@ CatalogEntry *SchemaCatalogEntry::AddFunction(ClientContext &context, CreateFunc
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
 		auto scalar_info = (CreateScalarFunctionInfo *)info;
 		auto &scalars = *(ScalarFunctionCatalogEntry *)entry;
-		for (const auto &scalar : scalars.functions) {
-			scalar_info->functions.emplace_back(scalar);
+		for (const auto &scalar : scalars.functions.functions) {
+			scalar_info->functions.AddFunction(scalar);
 		}
 		break;
 	}
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
 		auto agg_info = (CreateAggregateFunctionInfo *)info;
 		auto &aggs = *(AggregateFunctionCatalogEntry *)entry;
-		for (const auto &agg : aggs.functions) {
+		for (const auto &agg : aggs.functions.functions) {
 			agg_info->functions.AddFunction(agg);
 		}
 		break;

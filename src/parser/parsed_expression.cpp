@@ -1,5 +1,6 @@
-#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/main/client_context.hpp"
 
+#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/parser/expression/list.hpp"
@@ -165,7 +166,8 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 		result = WindowExpression::Deserialize(type, reader);
 		break;
 	default:
-		throw SerializationException("Unsupported type for expression deserialization!");
+		throw SerializationException("Unsupported type for expression deserialization: '%s'!",
+		                             ExpressionClassToString(expression_class));
 	}
 	result->alias = alias;
 	reader.Finalize();

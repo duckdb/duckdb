@@ -427,10 +427,10 @@ void WindowLocalSinkState::Group(WindowGlobalSinkState &gstate) {
 	}
 
 	auto &payload_data = *ungrouped->local_sort->payload_data;
-	auto rows = payload_data.CloneEmpty();
+	auto rows = payload_data.CloneEmpty(payload_data.keep_pinned);
 
 	auto &payload_heap = *ungrouped->local_sort->payload_heap;
-	auto heap = payload_heap.CloneEmpty();
+	auto heap = payload_heap.CloneEmpty(payload_heap.keep_pinned);
 
 	RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, payload_data, payload_heap, payload_layout);
 	RowDataCollectionScanner scanner(*rows, *heap, payload_layout, true);
@@ -453,7 +453,7 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 
 	// OVER()
 	if (over_chunk.ColumnCount() == 0) {
-		//	No sorts, so build row chunks
+		//	No sorts, so build paged row chunks
 		if (!rows) {
 			const auto entry_size = payload_layout.GetRowWidth();
 			const auto capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
@@ -464,16 +464,17 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 		const auto row_sel = FlatVector::IncrementalSelectionVector();
 		Vector addresses(LogicalType::POINTER);
 		auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
+		const auto prev_rows_blocks = rows->blocks.size();
 		auto handles = rows->Build(row_count, key_locations, nullptr, row_sel);
-		vector<UnifiedVectorFormat> input_data;
-		input_data.reserve(input_chunk.ColumnCount());
-		for (idx_t i = 0; i < input_chunk.ColumnCount(); i++) {
-			UnifiedVectorFormat pdata;
-			input_chunk.data[i].ToUnifiedFormat(row_count, pdata);
-			input_data.emplace_back(move(pdata));
+		auto input_data = input_chunk.ToUnifiedFormat();
+		RowOperations::Scatter(input_chunk, input_data.get(), payload_layout, addresses, *strings, *row_sel, row_count);
+		// Mark that row blocks contain pointers (heap blocks are pinned)
+		if (!payload_layout.AllConstant()) {
+			D_ASSERT(strings->keep_pinned);
+			for (size_t i = prev_rows_blocks; i < rows->blocks.size(); ++i) {
+				rows->blocks[i]->block->SetSwizzling("WindowLocalSinkState::Sink");
+			}
 		}
-		RowOperations::Scatter(input_chunk, input_data.data(), payload_layout, addresses, *strings, *row_sel,
-		                       row_count);
 		return;
 	}
 
@@ -1674,22 +1675,22 @@ void WindowLocalSourceState::MaterializeSortedData() {
 	// Data blocks are required
 	D_ASSERT(!sd.data_blocks.empty());
 	auto &block = sd.data_blocks[0];
-	rows = make_unique<RowDataCollection>(buffer_manager, block.capacity, block.entry_size);
+	rows = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
 	rows->blocks = move(sd.data_blocks);
 	rows->count = std::accumulate(rows->blocks.begin(), rows->blocks.end(), idx_t(0),
-	                              [&](idx_t c, const RowDataBlock &b) { return c + b.count; });
+	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
 
 	// Heap blocks are optional, but we want both for iteration.
 	if (!sd.heap_blocks.empty()) {
 		auto &block = sd.heap_blocks[0];
-		heap = make_unique<RowDataCollection>(buffer_manager, block.capacity, block.entry_size);
+		heap = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
 		heap->blocks = move(sd.heap_blocks);
 		hash_group.reset();
 	} else {
 		heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	}
 	heap->count = std::accumulate(heap->blocks.begin(), heap->blocks.end(), idx_t(0),
-	                              [&](idx_t c, const RowDataBlock &b) { return c + b.count; });
+	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
 }
 
 void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin_p) {
@@ -1740,8 +1741,8 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		partition_mask.SetValidUnsafe(0);
 		order_mask.SetValidUnsafe(0);
 		//	No partition - align the heap blocks with the row blocks
-		rows = gstate.rows->CloneEmpty();
-		heap = gstate.strings->CloneEmpty();
+		rows = gstate.rows->CloneEmpty(gstate.rows->keep_pinned);
+		heap = gstate.strings->CloneEmpty(gstate.strings->keep_pinned);
 		RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, *gstate.rows, *gstate.strings, layout);
 		external = true;
 	} else if (hash_bin < gstate.hash_groups.size() && gstate.hash_groups[hash_bin]) {

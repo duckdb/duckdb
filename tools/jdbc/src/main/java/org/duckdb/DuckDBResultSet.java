@@ -162,6 +162,8 @@ public class DuckDBResultSet implements ResultSet {
 			return getTimestamp(columnIndex);
 		case TIMESTAMP_WITH_TIME_ZONE:
 			return getOffsetDateTime(columnIndex);
+		case JSON:
+			return getJsonObject(columnIndex);
 		case INTERVAL:
 			return getLazyString(columnIndex);
 		default:
@@ -181,6 +183,11 @@ public class DuckDBResultSet implements ResultSet {
 		check(columnIndex);
 		was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
 		return was_null;
+	}
+
+	public JsonNode getJsonObject(int columnIndex) throws SQLException {
+		String result = getLazyString(columnIndex);
+		return result == null ? null : new JsonNode(result);
 	}
 
 	public String getLazyString(int columnIndex) throws SQLException {

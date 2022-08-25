@@ -16,11 +16,11 @@ TaskExecutionResult ExecutorTask::Execute(TaskExecutionMode mode) {
 	try {
 		return ExecuteTask(mode);
 	} catch (Exception &ex) {
-		executor.PushError(ex.type, ex.what());
+		executor.PushError(PreservedError(ex));
 	} catch (std::exception &ex) {
-		executor.PushError(ExceptionType::UNKNOWN_TYPE, ex.what());
+		executor.PushError(PreservedError(ex));
 	} catch (...) { // LCOV_EXCL_START
-		executor.PushError(ExceptionType::UNKNOWN_TYPE, "Unknown exception in Finalize!");
+		executor.PushError(PreservedError("Unknown exception in Finalize!"));
 	} // LCOV_EXCL_STOP
 	return TaskExecutionResult::TASK_ERROR;
 }

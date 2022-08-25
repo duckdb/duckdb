@@ -44,17 +44,17 @@ class TestArrowTimestamps(object):
 
                
 
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.ConversionException, match='Could not convert'):
             duck_rel = duckdb.from_arrow(arrow_table)
             res = duck_rel.project('a::TIMESTAMP_US')
             res.fetchone()
 
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.ConversionException, match='Could not convert'):
             duck_rel = duckdb.from_arrow(arrow_table)
             res = duck_rel.project('b::TIMESTAMP_US')
             res.fetchone()
 
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.ConversionException, match='Could not convert'):
             duck_rel = duckdb.from_arrow(arrow_table)
             res = duck_rel.project('c::TIMESTAMP_NS')
             res.fetchone()

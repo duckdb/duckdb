@@ -44,7 +44,7 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	      con(db) {
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
-		D_ASSERT(res->success);
+		D_ASSERT(!res->HasError());
 	}
 
 	unique_ptr<DBConfig> GetBenchmarkConfig() {
@@ -290,8 +290,8 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		string init_query = queries["init"];
 		result = state->con.Query(init_query);
 		while (result) {
-			if (!result->success) {
-				throw Exception(result->error);
+			if (result->HasError()) {
+				result->ThrowError();
 			}
 			result = move(result->next);
 		}
@@ -314,8 +314,8 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		}
 	}
 	while (result) {
-		if (!result->success) {
-			throw Exception(result->error);
+		if (result->HasError()) {
+			result->ThrowError();
 		}
 		result = move(result->next);
 	}
@@ -345,8 +345,8 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 		string cleanup_query = queries["cleanup"];
 		result = state.con.Query(cleanup_query);
 		while (result) {
-			if (!result->success) {
-				throw Exception(result->error);
+			if (result->HasError()) {
+				result->ThrowError();
 			}
 			result = move(result->next);
 		}
@@ -365,8 +365,8 @@ string InterpretedBenchmark::GetDatabasePath() {
 
 string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	if (!state.result->success) {
-		return state.result->error;
+	if (state.result->HasError()) {
+		return state.result->GetError();
 	}
 	if (result_column_count == 0) {
 		// no result specified

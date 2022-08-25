@@ -17,26 +17,6 @@ unique_ptr<SegmentScanState> ConstantInitScan(ColumnSegment &segment) {
 }
 
 //===--------------------------------------------------------------------===//
-// Scan base data
-//===--------------------------------------------------------------------===//
-void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
-	if (validity.has_null) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
-	}
-}
-
-template <class T>
-void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
-
-	auto data = FlatVector::GetData<T>(result);
-	data[0] = nstats.min.GetValueUnsafe<T>();
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-}
-
-//===--------------------------------------------------------------------===//
 // Scan Partial
 //===--------------------------------------------------------------------===//
 void ConstantFillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
@@ -69,6 +49,31 @@ template <class T>
 void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                          idx_t result_offset) {
 	ConstantFillFunction<T>(segment, result, result_offset, scan_count);
+}
+
+//===--------------------------------------------------------------------===//
+// Scan base data
+//===--------------------------------------------------------------------===//
+void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
+	if (validity.has_null) {
+		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result, true);
+		} else {
+			result.Flatten(scan_count);
+			ConstantFillFunctionValidity(segment, result, 0, scan_count);
+		}
+	}
+}
+
+template <class T>
+void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
+
+	auto data = FlatVector::GetData<T>(result);
+	data[0] = nstats.min.GetValueUnsafe<T>();
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 }
 
 //===--------------------------------------------------------------------===//

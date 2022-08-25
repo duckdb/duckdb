@@ -33,7 +33,7 @@ public:
 public:
 	string ToSQL() override;
 	void Serialize(duckdb::MetaBlockWriter &serializer);
-	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &source);
+	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &source, ClientContext &context);
 };
 
 } // namespace duckdb

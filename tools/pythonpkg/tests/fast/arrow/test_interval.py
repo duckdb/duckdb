@@ -41,6 +41,6 @@ class TestArrowInterval(object):
         data = pa.array([9223372036854775807], pa.duration('s'))
         arrow_table = pa.Table.from_arrays([data],['a'])
 
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.ConversionException, match='Could not convert Interval to Microsecond'):
              arrow_from_duck = duckdb.from_arrow(arrow_table).arrow()
        

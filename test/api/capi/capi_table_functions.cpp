@@ -132,9 +132,9 @@ TEST_CASE("Test Table Function errors in C API", "[capi]") {
 	capi_register_table_function(tester.connection, "my_error_function", my_bind, my_init, my_error_function);
 
 	result = tester.Query("SELECT * FROM my_error_bind(1)");
-	REQUIRE(!result->success);
+	REQUIRE(result->HasError());
 	result = tester.Query("SELECT * FROM my_error_init(1)");
-	REQUIRE(!result->success);
+	REQUIRE(result->HasError());
 	result = tester.Query("SELECT * FROM my_error_function(1)");
-	REQUIRE(!result->success);
+	REQUIRE(result->HasError());
 }

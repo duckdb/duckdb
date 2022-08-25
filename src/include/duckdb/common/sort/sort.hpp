@@ -80,7 +80,7 @@ public:
 	unique_ptr<SortedBlock> odd_one_out;
 
 	//! Pinned heap data (if sorting in memory)
-	vector<RowDataBlock> heap_blocks;
+	vector<unique_ptr<RowDataBlock>> heap_blocks;
 	vector<BufferHandle> pinned_blocks;
 
 	//! Capacity (number of rows) used to initialize blocks
@@ -108,7 +108,7 @@ public:
 	//! Sort the data accumulated so far
 	void Sort(GlobalSortState &global_sort_state, bool reorder_heap);
 	//! Concatenate the blocks held by a RowDataCollection into a single block
-	static RowDataBlock ConcatenateBlocks(RowDataCollection &row_data);
+	static unique_ptr<RowDataBlock> ConcatenateBlocks(RowDataCollection &row_data);
 
 private:
 	//! Sorts the data in the newly created SortedBlock
@@ -188,16 +188,16 @@ private:
 	               const bool left_smaller[], idx_t next_entry_sizes[], bool reset_indices);
 	//! Merges constant size rows according to the 'left_smaller' array
 	void MergeRows(data_ptr_t &l_ptr, idx_t &l_entry_idx, const idx_t &l_count, data_ptr_t &r_ptr, idx_t &r_entry_idx,
-	               const idx_t &r_count, RowDataBlock *target_block, data_ptr_t &target_ptr, const idx_t &entry_size,
+	               const idx_t &r_count, RowDataBlock &target_block, data_ptr_t &target_ptr, const idx_t &entry_size,
 	               const bool left_smaller[], idx_t &copied, const idx_t &count);
 	//! Flushes constant size rows into the result
 	void FlushRows(data_ptr_t &source_ptr, idx_t &source_entry_idx, const idx_t &source_count,
-	               RowDataBlock *target_block, data_ptr_t &target_ptr, const idx_t &entry_size, idx_t &copied,
+	               RowDataBlock &target_block, data_ptr_t &target_ptr, const idx_t &entry_size, idx_t &copied,
 	               const idx_t &count);
 	//! Flushes blob rows and accompanying heap
 	void FlushBlobs(const RowLayout &layout, const idx_t &source_count, data_ptr_t &source_data_ptr,
-	                idx_t &source_entry_idx, data_ptr_t &source_heap_ptr, RowDataBlock *target_data_block,
-	                data_ptr_t &target_data_ptr, RowDataBlock *target_heap_block, BufferHandle &target_heap_handle,
+	                idx_t &source_entry_idx, data_ptr_t &source_heap_ptr, RowDataBlock &target_data_block,
+	                data_ptr_t &target_data_ptr, RowDataBlock &target_heap_block, BufferHandle &target_heap_handle,
 	                data_ptr_t &target_heap_ptr, idx_t &copied, const idx_t &count);
 };
 

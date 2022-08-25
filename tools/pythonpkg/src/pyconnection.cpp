@@ -35,12 +35,14 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
-	         py::arg("parameters") = py::list(), py::arg("multiple_parameter_sets") = false)
+	         py::arg("parameters") = py::none(), py::arg("multiple_parameter_sets") = false)
 	    .def("executemany", &DuckDBPyConnection::ExecuteMany,
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
-	         py::arg("query"), py::arg("parameters") = py::list())
+	         py::arg("query"), py::arg("parameters") = py::none())
 	    .def("close", &DuckDBPyConnection::Close, "Close the connection")
 	    .def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
+	    .def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
+	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
 	    .def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute")
 	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
@@ -71,7 +73,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("values"))
 	    .def("table_function", &DuckDBPyConnection::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
-	         py::arg("parameters") = py::list())
+	         py::arg("parameters") = py::none())
 	    .def("from_query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
 	         py::arg("query"), py::arg("alias") = "query_relation")
 	    .def("query", &DuckDBPyConnection::RunQuery,
@@ -109,6 +111,9 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 }
 
 DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
+	if (params.is_none()) {
+		params = py::list();
+	}
 	Execute(query, std::move(params), true);
 	return this;
 }
@@ -119,14 +124,17 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 		execution_result = pending_query.ExecuteTask();
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
-		throw std::runtime_error(pending_query.error);
+		pending_query.ThrowError();
 	}
 	return pending_query.Execute();
 }
 
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
+	}
+	if (params.is_none()) {
+		params = py::list();
 	}
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
@@ -145,14 +153,14 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			auto pending_query = connection->PendingQuery(move(statements[i]));
 			auto res = CompletePendingQuery(*pending_query);
 
-			if (!res->success) {
-				throw std::runtime_error(res->error);
+			if (res->HasError()) {
+				res->ThrowError();
 			}
 		}
 
 		prep = connection->Prepare(move(statements.back()));
-		if (!prep->success) {
-			throw std::runtime_error(prep->error);
+		if (prep->HasError()) {
+			prep->error.Throw();
 		}
 	}
 
@@ -167,8 +175,8 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 
 	for (pybind11::handle single_query_params : params_set) {
 		if (prep->n_param != py::len(single_query_params)) {
-			throw std::runtime_error("Prepared statement needs " + to_string(prep->n_param) + " parameters, " +
-			                         to_string(py::len(single_query_params)) + " given");
+			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->n_param,
+			                            py::len(single_query_params));
 		}
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
@@ -178,8 +186,8 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			auto pending_query = prep->PendingQuery(args);
 			res->result = CompletePendingQuery(*pending_query);
 
-			if (!res->result->success) {
-				throw std::runtime_error(res->result->error);
+			if (res->result->HasError()) {
+				res->result->ThrowError();
 			}
 		}
 
@@ -198,7 +206,7 @@ DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, DataFrame val
 DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object,
                                                              const idx_t rows_per_tuple) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 
@@ -236,14 +244,14 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), python_object)));
 		connection->context->external_dependencies[name] = move(dependencies);
 	} else {
-		throw std::runtime_error("Python Object " + py_object_type + " not suitable to be registered as a view");
+		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
 	}
 	return this;
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	const char *duckdb_query_error = R"(duckdb.from_query cannot be used to run arbitrary SQL queries.
 It can only be used to run individual SELECT statements, and converts the result of that SELECT
@@ -254,7 +262,7 @@ Use duckdb.query to run arbitrary SQL queries.)";
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, const string &alias) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	Parser parser(connection->context->GetParserOptions());
 	parser.ParseQuery(query);
@@ -271,14 +279,20 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	return make_unique<DuckDBPyRelation>(connection->Table(tname));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
+	}
+	if (params.is_none()) {
+		params = py::list();
+	}
+	if (!py::hasattr(params, "__len__")) {
+		throw InvalidInputException("Type of object passed to parameter 'values' must be iterable");
 	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
@@ -286,7 +300,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	// First check our temporary view
 	if (temporary_views.find(vname) != temporary_views.end()) {
@@ -296,8 +310,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fname, py::object params) {
+	if (params.is_none()) {
+		params = py::list();
+	}
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 
 	return make_unique<DuckDBPyRelation>(
@@ -320,7 +337,7 @@ static std::string GenerateRandomName() {
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	string name = "df_" + GenerateRandomName();
 	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
@@ -334,7 +351,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) 
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filename) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
@@ -343,7 +360,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename, bool binary_as_string) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
@@ -354,13 +371,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_object, const idx_t rows_per_tuple) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	py::gil_scoped_acquire acquire;
 	string name = "arrow_object_" + GenerateRandomName();
 	auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
 	if (!IsAcceptedArrowObject(py_object_type)) {
-		throw std::runtime_error("Python Object Type " + py_object_type + " is not an accepted Arrow Object.");
+		throw InvalidInputException("Python Object Type %s is not an accepted Arrow Object.", py_object_type);
 	}
 	auto stream_factory =
 	    make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
@@ -382,7 +399,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	string name = "substrait_" + GenerateRandomName();
 	vector<Value> params;
@@ -392,7 +409,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto)
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(query);
@@ -401,7 +418,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &quer
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(query);
@@ -410,7 +427,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &
 
 unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	if (!connection) {
-		throw std::runtime_error("connection closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	return connection->GetTableNames(query);
 }
@@ -480,48 +497,55 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 // these should be functions on the result but well
 py::object DuckDBPyConnection::FetchOne() {
 	if (!result) {
-		throw std::runtime_error("no open result set");
+		throw InvalidInputException("No open result set");
 	}
 	return result->Fetchone();
 }
 
+py::list DuckDBPyConnection::FetchMany(idx_t size) {
+	if (!result) {
+		throw InvalidInputException("No open result set");
+	}
+	return result->Fetchmany(size);
+}
+
 py::list DuckDBPyConnection::FetchAll() {
 	if (!result) {
-		throw std::runtime_error("no open result set");
+		throw InvalidInputException("No open result set");
 	}
 	return result->Fetchall();
 }
 
 py::dict DuckDBPyConnection::FetchNumpy() {
 	if (!result) {
-		throw std::runtime_error("no open result set");
+		throw InvalidInputException("No open result set");
 	}
 	return result->FetchNumpyInternal();
 }
 DataFrame DuckDBPyConnection::FetchDF() {
 	if (!result) {
-		throw std::runtime_error("no open result set");
+		throw InvalidInputException("No open result set");
 	}
 	return result->FetchDF();
 }
 
 DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
 	if (!result) {
-		throw std::runtime_error("no open result set");
+		throw InvalidInputException("No open result set");
 	}
 	return result->FetchDFChunk(vectors_per_chunk);
 }
 
 duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("no open result set");
+		throw InvalidInputException("No open result set");
 	}
 	return result->FetchArrowTable(chunk_size);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
 	if (!result) {
-		throw std::runtime_error("no open result set");
+		throw InvalidInputException("No open result set");
 	}
 	return result->FetchRecordBatchReader(chunk_size);
 }
@@ -555,7 +579,7 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		table_function->external_dependency =
 		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), entry));
 	} else {
-		throw std::runtime_error("Python Object " + py_object_type + " not suitable for replacement scans");
+		throw InvalidInputException("Python Object %s not suitable for replacement scans", py_object_type);
 	}
 	return table_function;
 }
@@ -625,8 +649,12 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           const py::dict &py_config_dict) {
+                                                            py::object config_options) {
 	auto res = make_shared<DuckDBPyConnection>();
+	if (!py::isinstance<py::dict>(config_options)) {
+		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");
+	}
+	py::dict py_config_dict = config_options;
 	auto config_dict = TransformPyConfigDict(py_config_dict);
 	DBConfig config(config_dict, read_only);
 

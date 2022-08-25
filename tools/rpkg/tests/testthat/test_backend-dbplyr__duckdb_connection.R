@@ -7,7 +7,9 @@ skip_if_no_R4 <- function() {
 test_that("dbplyr generic scalars translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(as.character(1)), sql(r"{CAST(1.0 AS TEXT)}"))
@@ -32,7 +34,9 @@ test_that("dbplyr generic scalars translated correctly", {
 test_that("duckdb custom scalars translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   #  expect_equal(translate(as(1,"CHARACTER")), sql(r"{CAST(1.0 AS TEXT}"))        # Not implemented
@@ -69,7 +73,9 @@ test_that("duckdb custom scalars translated correctly", {
 test_that("pasting translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(paste("hi", "bye")), sql(r"{CONCAT_WS(' ', 'hi', 'bye')}"))
@@ -88,7 +94,9 @@ test_that("pasting translated correctly", {
 test_that("custom lubridate functions translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(yday(x)), sql(r"{EXTRACT(DOY FROM x)}"))
@@ -128,7 +136,9 @@ test_that("custom lubridate functions translated correctly", {
 test_that("custom stringr functions translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(str_c(x, y)), sql(r"{CONCAT_WS('', x, y)}"))
@@ -152,27 +162,30 @@ test_that("custom stringr functions translated correctly", {
 test_that("datetime escaping working as in DBI", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  con <- duckdb::translate_duckdb()
-  escape <- function(...) dbplyr::escape(...)
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  escape <- function(...) dbplyr::escape(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   test_date <- as.Date("2020-01-01")
-  expect_equal(escape(test_date, con = con), sql(r"{'2020-01-01'::date}"))
-  expect_equal(escape("2020-01-01", con = con), sql(r"{'2020-01-01'}"))
+  expect_equal(escape(test_date), sql(r"{'2020-01-01'::date}"))
+  expect_equal(escape("2020-01-01"), sql(r"{'2020-01-01'}"))
 
   test_datetime <- as.POSIXct("2020-01-01 01:23:45 UTC", tz = "UTC")
-  expect_equal(escape(test_datetime, con = con), sql(r"{'2020-01-01 01:23:45'::timestamp}"))
-  expect_equal(escape("2020-01-01 01:23:45 UTC", con = con), sql(r"{'2020-01-01 01:23:45 UTC'}"))
+  expect_equal(escape(test_datetime), sql(r"{'2020-01-01 01:23:45'::timestamp}"))
+  expect_equal(escape("2020-01-01 01:23:45 UTC"), sql(r"{'2020-01-01 01:23:45 UTC'}"))
 
   test_datetime_tz <- as.POSIXct("2020-01-01 18:23:45 UTC", tz = "America/Los_Angeles")
-  expect_equal(escape(test_datetime_tz, con = con), sql(r"{'2020-01-02 02:23:45'::timestamp}"))
-  expect_equal(escape("2020-01-01 18:23:45 PST", con = con), sql(r"{'2020-01-01 18:23:45 PST'}"))
+  expect_equal(escape(test_datetime_tz), sql(r"{'2020-01-02 02:23:45'::timestamp}"))
+  expect_equal(escape("2020-01-01 18:23:45 PST"), sql(r"{'2020-01-01 18:23:45 PST'}"))
 })
 
 test_that("two variable aggregates are translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(cor(x, y), window = FALSE), sql(r"{CORR(x, y)}"))
@@ -187,8 +200,10 @@ test_that("two variable aggregates are translated correctly", {
 test_that("snapshots of dbplyr generic scalar translation", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     translate(as.character(1))
@@ -215,8 +230,10 @@ test_that("snapshots of dbplyr generic scalar translation", {
 test_that("snapshots of duckdb custom scalars translations", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     #  translate(as(1,"CHARACTER"))        # Not implemented
@@ -254,8 +271,10 @@ test_that("snapshots of duckdb custom scalars translations", {
 test_that("snapshot tests for pasting translate", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     translate(paste("hi", "bye"))
@@ -275,8 +294,10 @@ test_that("snapshot tests for pasting translate", {
 test_that("snapshots for custom lubridate functions translated correctly", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     translate(yday(x))
@@ -317,8 +338,10 @@ test_that("snapshots for custom lubridate functions translated correctly", {
 test_that("snapshots for custom stringr functions translated correctly", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     translate(str_c(x, y))
@@ -343,30 +366,33 @@ test_that("snapshots for custom stringr functions translated correctly", {
 test_that("snapshots datetime escaping working as in DBI", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   local_edition(3)
-  con <- duckdb::translate_duckdb()
-  escape <- function(...) dbplyr::escape(...)
+  escape <- function(...) dbplyr::escape(..., con = con)
 
   expect_snapshot({
     test_date <- as.Date("2020-01-01")
-    escape(test_date, con = con)
-    escape("2020-01-01", con = con)
+    escape(test_date)
+    escape("2020-01-01")
 
     test_datetime <- as.POSIXct("2020-01-01 01:23:45 UTC", tz = "UTC")
-    escape(test_datetime, con = con)
-    escape("2020-01-01 01:23:45 UTC", con = con)
+    escape(test_datetime)
+    escape("2020-01-01 01:23:45 UTC")
 
     test_datetime_tz <- as.POSIXct("2020-01-01 18:23:45 UTC", tz = "America/Los_Angeles")
-    escape(test_datetime_tz, con = con)
-    escape("2020-01-01 18:23:45 PST", con = con)
+    escape(test_datetime_tz)
+    escape("2020-01-01 18:23:45 PST")
   })
 })
 
 test_that("two variable aggregates are translated correctly", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     translate(cor(x, y), window = FALSE)
@@ -377,8 +403,10 @@ test_that("two variable aggregates are translated correctly", {
 test_that("these should give errors", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot(error = TRUE, {
     translate(grepl("dummy", txt, perl = TRUE)) # Expected error
