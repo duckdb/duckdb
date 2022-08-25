@@ -85,9 +85,22 @@ jobs:
       shell: bash
       run: brew install unixodbc
 
+    - name: Install UnixODBC
+      shell: bash
+      run: |
+        rm -rf build/unixodbc
+        mkdir -p build/unixodbc
+        cd build/unixodbc
+        mkdir sources build
+        curl http://www.unixodbc.org/unixODBC-2.3.11.tar.gz | tar xv -C sources --strip-components 1
+        cd sources
+        export CFLAGS="-arch x86_64 -arch arm64"
+        ./configure --prefix `cd ../build; pwd` --disable-debug --disable-dependency-tracking --enable-static --enable-gui=no
+        make -j install
+
     - name: Build
       shell: bash
-      run: make
+      run: ODBC_CONFIG=../../build/unixodbc/build/bin/odbc_config make
 
     - name: Unit Test
       shell: bash
@@ -150,7 +163,7 @@ jobs:
           mkdir -p build/openssl
           cd build/openssl
           mkdir sources build
-          curl https://www.openssl.org/source/openssl-3.0.1.tar.gz | tar xv -C sources --strip-components 1
+          curl https://www.openssl.org/source/openssl-3.0.5.tar.gz | tar xv -C sources --strip-components 1
           export OPENSSL_ROOT_DIR=`pwd`/build
           cd sources
           export CC="clang -arch x86_64 -arch arm64"
