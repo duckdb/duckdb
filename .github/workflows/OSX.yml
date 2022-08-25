@@ -64,6 +64,7 @@ jobs:
       BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_ODBC: 1
       OSX_BUILD_UNIVERSAL: 1
 
     steps:
@@ -79,6 +80,10 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+
+    - name: Install UnixODBC
+      shell: bash
+      run: brew install unixodbc
 
     - name: Build
       shell: bash
@@ -107,7 +112,8 @@ jobs:
         python scripts/amalgamation.py
         zip -j duckdb_cli-osx-universal.zip build/release/duckdb
         zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        zip -j duckdb_odbc-osx-universal.zip build/release/tools/odbc/libduckdb_odbc.dylib
+        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
     - uses: actions/upload-artifact@v2
       with:
@@ -115,6 +121,7 @@ jobs:
         path: |
           libduckdb-osx-universal.zip
           duckdb_cli-osx-universal.zip
+          duckdb_odbc-osx-universal.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
   xcode-extensions:
