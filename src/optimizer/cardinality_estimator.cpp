@@ -506,7 +506,7 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 	unique_ptr<BaseStatistics> column_statistics;
 	for (auto &it : table_filters->filters) {
 		column_statistics = nullptr;
-		if (get->bind_data && get->function.name.compare("arrow_scan") != 0) {
+		if (get->bind_data && get->function.name.compare("seq_scan") == 0) {
 			auto &table_scan_bind_data = (TableScanBindData &)*get->bind_data;
 			column_statistics = get->function.statistics(context, &table_scan_bind_data, it.first);
 		}
