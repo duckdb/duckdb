@@ -143,6 +143,11 @@ void InterpretedBenchmark::LoadBenchmark() {
 				throw std::runtime_error(reader.FormatException("require requires a single parameter"));
 			}
 			extensions.insert(splits[1]);
+		} else if (splits[0] == "connect") {
+			if (splits.size() != 2) {
+				throw std::runtime_error(reader.FormatException("connect requires a database path"));
+			}
+			db_path = (splits[1]);
 		} else if (splits[0] == "cache") {
 			if (splits.size() != 2) {
 				throw std::runtime_error(reader.FormatException("cache requires a single parameter"));
@@ -358,6 +363,8 @@ string InterpretedBenchmark::GetDatabasePath() {
 		string path = "duckdb_benchmark_db.db";
 		DeleteDatabase(path);
 		return path;
+	} else if (db_path != "") {
+		return db_path;
 	} else {
 		return string();
 	}
