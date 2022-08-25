@@ -641,8 +641,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 			if (res->result->HasError()) {
 				res->result->ThrowError();
 			}
-			res->Fetchall();
 		}
+	}
+	if (res->result) {
+		res->Fetchall();
 	}
 	return make_unique<DuckDBPyRelation>(rel);
 }
