@@ -9,6 +9,7 @@ BufferedDeserializer::BufferedDeserializer(data_ptr_t ptr, idx_t data_size) : pt
 
 BufferedDeserializer::BufferedDeserializer(BufferedSerializer &serializer)
     : BufferedDeserializer(serializer.data, serializer.maximum_size) {
+	SetVersion(serializer.GetVersion());
 }
 
 void BufferedDeserializer::ReadData(data_ptr_t buffer, idx_t read_size) {

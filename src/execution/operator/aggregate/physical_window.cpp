@@ -472,7 +472,7 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 		if (!payload_layout.AllConstant()) {
 			D_ASSERT(strings->keep_pinned);
 			for (size_t i = prev_rows_blocks; i < rows->blocks.size(); ++i) {
-				rows->blocks[i].block->SetSwizzling("WindowLocalSinkState::Sink");
+				rows->blocks[i]->block->SetSwizzling("WindowLocalSinkState::Sink");
 			}
 		}
 		return;
@@ -1675,22 +1675,22 @@ void WindowLocalSourceState::MaterializeSortedData() {
 	// Data blocks are required
 	D_ASSERT(!sd.data_blocks.empty());
 	auto &block = sd.data_blocks[0];
-	rows = make_unique<RowDataCollection>(buffer_manager, block.capacity, block.entry_size);
+	rows = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
 	rows->blocks = move(sd.data_blocks);
 	rows->count = std::accumulate(rows->blocks.begin(), rows->blocks.end(), idx_t(0),
-	                              [&](idx_t c, const RowDataBlock &b) { return c + b.count; });
+	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
 
 	// Heap blocks are optional, but we want both for iteration.
 	if (!sd.heap_blocks.empty()) {
 		auto &block = sd.heap_blocks[0];
-		heap = make_unique<RowDataCollection>(buffer_manager, block.capacity, block.entry_size);
+		heap = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
 		heap->blocks = move(sd.heap_blocks);
 		hash_group.reset();
 	} else {
 		heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	}
 	heap->count = std::accumulate(heap->blocks.begin(), heap->blocks.end(), idx_t(0),
-	                              [&](idx_t c, const RowDataBlock &b) { return c + b.count; });
+	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
 }
 
 void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin_p) {

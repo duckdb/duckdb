@@ -385,7 +385,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 			aggr.function.initialize(aggr_state.get());
 
-			AggregateInputData aggr_input_data(aggr.bind_info.get());
+			AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
 			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
 			aggr.function.finalize(state_vector, aggr_input_data, chunk.data[null_groups.size() + i], 1, 0);
 			if (aggr.function.destructor) {

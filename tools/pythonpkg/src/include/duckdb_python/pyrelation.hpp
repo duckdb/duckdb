@@ -181,6 +181,8 @@ public:
 
 	py::object Fetchall();
 
+	py::dict FetchNumpy();
+
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);

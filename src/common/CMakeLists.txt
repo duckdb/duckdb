@@ -36,6 +36,7 @@ add_library_unity(
   preserved_error.cpp
   printer.cpp
   progress_bar.cpp
+  radix_partitioning.cpp
   re2_regex.cpp
   random_engine.cpp
   serializer.cpp

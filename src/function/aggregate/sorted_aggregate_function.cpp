@@ -197,7 +197,7 @@ struct SortedAggregateFunction {
 		// State variables
 		const auto input_count = order_bind->function.arguments.size();
 		auto bind_info = order_bind->bind_info.get();
-		AggregateInputData aggr_bind_info(bind_info);
+		AggregateInputData aggr_bind_info(bind_info, Allocator::DefaultAllocator());
 
 		// Inner aggregate APIs
 		auto initialize = order_bind->function.initialize;

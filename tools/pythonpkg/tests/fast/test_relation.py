@@ -1,5 +1,5 @@
 import duckdb
-import numpy
+import numpy as np
 import tempfile
 import os
 import pandas as pd
@@ -199,4 +199,34 @@ class TestRelation(object):
         rel2 = con.table('t2')
         join = rel1.join(rel2, 'i=j', 'inner').aggregate('count()')
         assert join.explain() == 'Aggregate [count_star()]\n  Join INNER i = j\n    Scan Table [t1]\n    Scan Table [t2]'
+
+    def test_fetchnumpy(self, duckdb_cursor):
+        start, stop = -1000, 2000
+        count = stop - start
+
+        con = duckdb.connect()
+        con.execute(f"CREATE table t AS SELECT range AS a FROM range({start}, {stop});")
+        rel = con.table("t")
+
+        # empty
+        res = rel.limit(0, offset=count + 1).fetchnumpy()
+        assert set(res.keys()) == {"a"}
+        assert len(res["a"]) == 0
+
+        # < vector_size, == vector_size, > vector_size
+        for size in [1000, 1024, 1100]:
+            res = rel.project("a").limit(size).fetchnumpy()
+            assert set(res.keys()) == {"a"}
+            # For some reason, this return a masked array. Shouldn't it be
+            # known that there can't be NULLs?
+            if isinstance(res, np.ma.MaskedArray):
+                assert res.count() == size
+                res = res.compressed()
+            else:
+                assert len(res["a"]) == size
+            assert np.all(res["a"] == np.arange(start, start + size))
+
+        with pytest.raises(duckdb.ConversionException, match="Conversion Error.*out of range.*"):
+            # invalid conversion of negative integer to UINTEGER
+            rel.project("CAST(a as UINTEGER)").fetchnumpy()
 
