@@ -4,7 +4,7 @@ import pytest
 @pytest.fixture()
 def tbl_table():
     con = duckdb.default_connection
-    con.execute("create table tbl (i integer)")
+    con.execute("create or replace table tbl (i integer)")
     yield
     con.execute('drop table tbl')
 
@@ -41,10 +41,27 @@ class TestRAPIQuery(object):
         result = rel.execute()
         assert(result.fetchall() == [(5,)])
 
+    def test_query_insert_into_relation(self, tbl_table):
+        con = duckdb.default_connection
+        rel = con.query("select i from range(1000) tbl(i)")
+        # Can't insert into this, not a table relation
+        with pytest.raises(duckdb.InvalidInputException):
+            rel.insert([5])
+
+    def test_query_table_unrelated(self, tbl_table):
+        con = duckdb.default_connection
+        rel = con.table("tbl")
+        # Querying a table relation
+        rel = rel.query("x", "select 5")
+        result = rel.execute()
+        assert(result.fetchall() == [(5,)])
+
     def test_query_broken(self, tbl_table):
         con = duckdb.default_connection
         rel = con.query("select i from range(10000) tbl(i)")
-        rel = rel.query("x", "insert into tbl VALUES(5)")
+
+        with pytest.raises(duckdb.InvalidInputException):
+            rel = rel.query("x", "insert into tbl VALUES(5)")
         result = rel.execute()
         # The query has no result, so the original relation wasn't executed in the last `rel.query` call
         assert(len(result.fetchall()) == 10000)

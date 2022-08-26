@@ -7,6 +7,7 @@
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/relation/view_relation.hpp"
 
 namespace duckdb {
 
@@ -621,6 +622,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
+static bool IsDescribeStatement(unique_ptr<SQLStatement>& statement) {
+	if (statement->type != StatementType::PRAGMA_STATEMENT) {
+		return false;
+	}
+	auto& pragma_statement = (PragmaStatement&)*statement;
+	if (pragma_statement.info->name != "show") {
+		return false;
+	}
+	return true;
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
 	auto view_relation = CreateView(view_name);
 	auto all_dependencies = rel->GetAllDependencies();
@@ -628,25 +640,21 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 
 	Parser parser(rel->context.GetContext()->GetParserOptions());
 	parser.ParseQuery(sql_query);
-	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT) {
-		return make_unique<DuckDBPyRelation>(make_shared<QueryRelation>(
-		    rel->context.GetContext(), unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0])),
-		    "query_relation"));
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("'DuckDBPyRelation.query' only accepts a single statement");
 	}
-	auto res = make_unique<DuckDBPyResult>();
-	{
-		py::gil_scoped_release release;
-		res->result = rel->Query(view_name, sql_query);
-		if (res->result != nullptr) {
-			if (res->result->HasError()) {
-				res->result->ThrowError();
-			}
-		}
+	auto& statement = parser.statements[0];
+	if (statement.type == StatementType::SELECT_STATEMENT) {
+		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0]));
+		auto query_relation = make_shared<QueryRelation>(rel->context.GetContext(), move(select_statement), "query_relation");
+		throw InvalidInputException("'DuckDBPyRelation.query' does not accept statements of type %s", StatementTypeToString(statement.type));
+		return make_unique<DuckDBPyRelation>(move(query_relation));
 	}
-	if (res->result) {
-		res->Fetchall();
+	else if (IsDescribeStatement(statement)) {
+		throw InvalidInputException("'DuckDBPyRelation.query' should accept a DESCRIBE statement, but doesn't :shrug:");
+		//auto describe_statement = unique_ptr_cast<SQLStatement, PragmaStatement>(move(parser.statements[0]));
+		//auto view_relation = make_shared<ViewRelation>()
 	}
-	return make_unique<DuckDBPyRelation>(rel);
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
@@ -680,7 +688,14 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 	}
 }
 
+static bool IsAcceptedInsertRelationType(const Relation& relation) {
+	return relation.type == RelationType::TABLE_RELATION;
+}
+
 void DuckDBPyRelation::Insert(py::object params) {
+	if (!IsAcceptedInsertRelationType(*this->rel)) {
+		throw InvalidInputException("'DuckDBPyRelation.insert' can only be used on a table relation");
+	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(move(params))};
 	py::gil_scoped_release release;
 	rel->Insert(values);
