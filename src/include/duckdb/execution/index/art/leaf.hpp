@@ -12,7 +12,6 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
-class ART;
 
 class Leaf : public Node {
 public:
@@ -30,7 +29,7 @@ public:
 	void Remove(row_t row_id);
 
 	//! Merge two NLeaf nodes
-	static void Merge(ART *l_art, Node *&l_node, Node *&r_node);
+	static void Merge(bool has_constraint, Node *&l_node, Node *&r_node);
 
 	BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
 

@@ -99,7 +99,7 @@ void Leaf::Remove(row_t row_id) {
 	}
 }
 
-void Leaf::Merge(ART *l_art, Node *&l_node, Node *&r_node) {
+void Leaf::Merge(bool has_constraint, Node *&l_node, Node *&r_node) {
 
 	Leaf *l_n = (Leaf *)l_node;
 	Leaf *r_n = (Leaf *)r_node;
@@ -117,7 +117,7 @@ void Leaf::Merge(ART *l_art, Node *&l_node, Node *&r_node) {
 		}
 	}
 
-	if ((l_art->IsUnique() || l_art->IsPrimary()) && l_n->count > 1) {
+	if (has_constraint && l_n->count > 1) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 }

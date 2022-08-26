@@ -329,7 +329,7 @@ void Node::Merge(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t dep
 	case NodeType::NLeaf:
 		D_ASSERT(l_node->type == NodeType::NLeaf);
 		D_ASSERT(r_node->type == NodeType::NLeaf);
-		return Leaf::Merge(l_art, l_node, r_node);
+		return Leaf::Merge((l_art->IsPrimary() || l_art->IsUnique()), l_node, r_node);
 	}
 	throw InternalException("Invalid node type for right node in merge.");
 }
