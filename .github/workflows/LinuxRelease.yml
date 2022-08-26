@@ -121,6 +121,9 @@ jobs:
        shell: bash
        run: apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
+     - name: Install unixODBC
+       shell: bash
+       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ ./scripts/install_unixodbc.sh
      - name: Build
        shell: bash
        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
