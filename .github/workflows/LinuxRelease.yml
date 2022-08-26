@@ -97,8 +97,6 @@ jobs:
    container: ubuntu:18.04 # cross compiler not available in 16
    env:
      GEN: ninja
-     CC: aarch64-linux-gnu-gcc
-     CXX: aarch64-linux-gnu-g++
    #     BUILD_BENCHMARK: 1
 #     BUILD_ICU: 1
 #     BUILD_TPCH: 1
@@ -123,11 +121,7 @@ jobs:
 
      - name: Build
        shell: bash
-       run: make
-
-     - name: Test
-       shell: bash
-       run: make allunit
+       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
 
      - name: Deploy
        shell: bash
