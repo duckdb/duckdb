@@ -1,7 +1,8 @@
-#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
+
+#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 #include <cstring>
 
 namespace duckdb {

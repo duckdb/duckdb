@@ -9,11 +9,11 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/index.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
 enum class NodeType : uint8_t { NLeaf = 0, N4 = 1, N16 = 2, N48 = 3, N256 = 4 };

@@ -1,7 +1,9 @@
 #include "duckdb/execution/index/art/node.hpp"
+
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
+
 namespace duckdb {
 
 Node::Node(NodeType type) : count(0), type(type) {
