@@ -25,6 +25,7 @@
 #include <string>
 #include <sysinfoapi.h>
 #include <shlwapi.h>
+#pragma comment(lib, "Shlwapi.lib")
 
 #ifdef __MINGW32__
 // need to manually define this for mingw
