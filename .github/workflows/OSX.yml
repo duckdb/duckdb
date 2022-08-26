@@ -84,7 +84,7 @@ jobs:
     - name: Install UnixODBC
       shell: bash
       run: |
-        brew remove unixodbc
+        brew remove --ignore-dependencies unixodbc
         rm -rf build/unixodbc
         mkdir -p build/unixodbc
         cd build/unixodbc
