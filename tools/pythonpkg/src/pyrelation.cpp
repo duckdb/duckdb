@@ -8,6 +8,8 @@
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/view_relation.hpp"
+#include "duckdb/function/pragma/pragma_functions.hpp"
+#include "duckdb/parser/statement/pragma_statement.hpp"
 
 namespace duckdb {
 
@@ -622,11 +624,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
-static bool IsDescribeStatement(unique_ptr<SQLStatement>& statement) {
-	if (statement->type != StatementType::PRAGMA_STATEMENT) {
+static bool IsDescribeStatement(SQLStatement &statement) {
+	if (statement.type != StatementType::PRAGMA_STATEMENT) {
 		return false;
 	}
-	auto& pragma_statement = (PragmaStatement&)*statement;
+	auto &pragma_statement = (PragmaStatement &)statement;
 	if (pragma_statement.info->name != "show") {
 		return false;
 	}
@@ -643,18 +645,20 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	if (parser.statements.size() != 1) {
 		throw InvalidInputException("'DuckDBPyRelation.query' only accepts a single statement");
 	}
-	auto& statement = parser.statements[0];
+	auto &statement = *parser.statements[0];
 	if (statement.type == StatementType::SELECT_STATEMENT) {
 		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0]));
-		auto query_relation = make_shared<QueryRelation>(rel->context.GetContext(), move(select_statement), "query_relation");
-		throw InvalidInputException("'DuckDBPyRelation.query' does not accept statements of type %s", StatementTypeToString(statement.type));
+		auto query_relation =
+		    make_shared<QueryRelation>(rel->context.GetContext(), move(select_statement), "query_relation");
 		return make_unique<DuckDBPyRelation>(move(query_relation));
+	} else if (IsDescribeStatement(statement)) {
+		FunctionParameters parameters;
+		parameters.values.push_back(view_name);
+		auto query = PragmaShow(*rel->context.GetContext(), parameters);
+		return Query(view_name, query);
 	}
-	else if (IsDescribeStatement(statement)) {
-		throw InvalidInputException("'DuckDBPyRelation.query' should accept a DESCRIBE statement, but doesn't :shrug:");
-		//auto describe_statement = unique_ptr_cast<SQLStatement, PragmaStatement>(move(parser.statements[0]));
-		//auto view_relation = make_shared<ViewRelation>()
-	}
+	throw InvalidInputException("'DuckDBPyRelation.query' does not accept statements of type %s",
+	                            StatementTypeToString(statement.type));
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
@@ -688,7 +692,7 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 	}
 }
 
-static bool IsAcceptedInsertRelationType(const Relation& relation) {
+static bool IsAcceptedInsertRelationType(const Relation &relation) {
 	return relation.type == RelationType::TABLE_RELATION;
 }
 

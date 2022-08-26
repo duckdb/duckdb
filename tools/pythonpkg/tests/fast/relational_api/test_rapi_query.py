@@ -4,7 +4,8 @@ import pytest
 @pytest.fixture()
 def tbl_table():
     con = duckdb.default_connection
-    con.execute("create or replace table tbl (i integer)")
+    con.execute("drop table if exists tbl")
+    con.execute("create table tbl (i integer)")
     yield
     con.execute('drop table tbl')
 
