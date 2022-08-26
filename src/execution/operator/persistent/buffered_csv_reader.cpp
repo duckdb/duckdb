@@ -465,14 +465,6 @@ string GenerateDateFormat(const string &separator, const char *format_template) 
 		}
 	}
 	return result;
-	////	replace all dashes with the separator
-	// for (auto pos = std::find(format_specifier.begin(), format_specifier.end(), '-');
-	//      pos != format_specifier.end() && DoesNotExceedValidRange(format_specifier, pos, separator);
-	//      pos = std::find(pos + separator.size(), format_specifier.end(), '-')) {
-	//	format_specifier.replace(pos, pos + 1, separator);
-	// }
-
-	// return format_specifier;
 }
 
 TextSearchShiftArray::TextSearchShiftArray() {
