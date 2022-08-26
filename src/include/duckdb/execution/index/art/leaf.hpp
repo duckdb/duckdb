@@ -12,6 +12,7 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
+class ART;
 
 class Leaf : public Node {
 public:
