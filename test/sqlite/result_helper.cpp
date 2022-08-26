@@ -331,7 +331,9 @@ void TestResultHelper::CheckStatementResult() {
 		// even in the case of "statement error", we do not accept ALL errors
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
-		bool internal_error = TestIsInternalError(runner.always_fail_error_messages, result.GetError());
+
+		bool internal_error =
+		    result.HasError() ? TestIsInternalError(runner.always_fail_error_messages, result.GetError()) : false;
 		if (!internal_error) {
 			error = !error;
 		} else {
