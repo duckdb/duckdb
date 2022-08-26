@@ -1,7 +1,7 @@
 import duckdb
 import pytest
 
-@pytest.fixture(autouse=True)
+@pytest.fixture()
 def tbl_table():
     con = duckdb.default_connection
     con.execute("create table tbl (i integer)")
