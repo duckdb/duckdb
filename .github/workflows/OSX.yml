@@ -66,6 +66,7 @@ jobs:
       BUILD_EXCEL: 1
       BUILD_ODBC: 1
       OSX_BUILD_UNIVERSAL: 1
+      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
 
     steps:
     - uses: actions/checkout@v3
@@ -97,7 +98,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: ODBC_CONFIG=../../build/unixodbc/build/bin/odbc_config make
+      run: make
 
     - name: Unit Test
       shell: bash
