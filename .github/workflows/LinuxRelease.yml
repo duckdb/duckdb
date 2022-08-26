@@ -117,7 +117,7 @@ jobs:
 
      - name: Install Cross-Compiler
        shell: bash
-       run: apt-get install -y gcc-aarch64-linux-gnu
+       run: apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
      - name: Build
        shell: bash
