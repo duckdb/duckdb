@@ -24,6 +24,7 @@
 #else
 #include <string>
 #include <sysinfoapi.h>
+#include <shlwapi.h>
 
 #ifdef __MINGW32__
 // need to manually define this for mingw
@@ -47,11 +48,15 @@ FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
 }
 
 bool FileSystem::IsPathAbsolute(const string &path) {
+	#ifndef _WIN32
 	auto path_separator = FileSystem::PathSeparator();
 	if (path.rfind(path_separator, 0) == 0) {
 		return true;
 	}
 	return false;
+	#else
+	return !PathIsRelativeA(path.c_str());
+	#endif
 }
 
 #ifndef _WIN32
