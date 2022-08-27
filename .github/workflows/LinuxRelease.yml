@@ -122,18 +122,25 @@ jobs:
        run: |
          apt-get update -y -qq
          apt-get install -y -qq curl wget ninja-build make gcc gcc-aarch64-linux-gnu g++-aarch64-linux-gnu git
-
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - name: Install CMake 3.21
-       shell: bash
-       run: |
          wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
          chmod +x cmake-3.21.3-linux-x86_64.sh
          ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
          cmake --version
+         curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
+
+     - name: Install Git 2.18.5
+       shell: bash
+       run: |
+         wget https://github.com/git/git/archive/refs/tags/v2.18.5.tar.gz
+         tar xvf v2.18.5.tar.gz
+         cd git-2.18.5
+         make
+         make prefix=/usr install
+         git --version
+
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
 
      - name: Install unixODBC
        shell: bash
@@ -142,10 +149,6 @@ jobs:
          cp build/unixodbc/build/bin/odbc_config .
          ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
          cp odbc_config build/unixodbc/build/bin/odbc_config
-
-     - name: Install JDK
-       shell: bash
-       run: curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
 
      - name: Build
        shell: bash
