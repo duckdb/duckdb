@@ -113,8 +113,6 @@ jobs:
      BUILD_JDBC: 1
      OVERRIDE_JDBC_OS_ARCH: aarch64
      JAVA_HOME: ../../jdk8u345-b01
-     CC: aarch64-linux-gnu-gcc
-     CXX: aarch64-linux-gnu-g++
 
    steps:
      - uses: actions/checkout@v3
@@ -134,12 +132,12 @@ jobs:
        run: | # we need an x86 odbc_config tool to run cmake. fun.
          CC=gcc ./scripts/install_unixodbc.sh
          cp build/unixodbc/build/bin/odbc_config .
-         ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
+         CC=aarch64-linux-gnu-gcc ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
          cp odbc_config build/unixodbc/build/bin/odbc_config
 
      - name: Build
        shell: bash
-       run: make
+       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
 
      - name: Deploy
        shell: bash
