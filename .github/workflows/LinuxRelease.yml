@@ -122,7 +122,7 @@ jobs:
        shell: bash
        run: |
          apt-get update -y -qq
-         apt-get install -y -qq ninja-build cmake make gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+         apt-get install -y -qq curl ninja-build cmake make gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
      - name: Install unixODBC
        shell: bash
