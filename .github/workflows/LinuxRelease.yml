@@ -103,7 +103,7 @@ jobs:
      BUILD_ICU: 1
      BUILD_TPCH: 1
      BUILD_FTS: 1
- #    BUILD_JDBC: 1
+     BUILD_JDBC: 1
      BUILD_JSON: 1
      BUILD_EXCEL: 1
      BUILD_ODBC: 1
@@ -111,6 +111,7 @@ jobs:
      FORCE_WARN_UNUSED: 1
      STATIC_LIBCPP: 1
      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
+     JAVA_HOME: ../../jdk8u345-b01
      CC: aarch64-linux-gnu-gcc
      CXX: aarch64-linux-gnu-g++
 
@@ -141,6 +142,10 @@ jobs:
          ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
          cp odbc_config build/unixodbc/build/bin/odbc_config
 
+     - name: Install JDK
+       shell: bash
+       run: curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
+
      - name: Build
        shell: bash
        run: make
@@ -152,7 +157,7 @@ jobs:
          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
          zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-         python3 scripts/asset-upload-gha.py  libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
+         python3 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
      - uses: actions/upload-artifact@v2
        with:
