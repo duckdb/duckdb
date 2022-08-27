@@ -94,7 +94,7 @@ jobs:
  linux-release-aarch64:
    name: Linux (AARCH64)
    runs-on: ubuntu-latest
- #  needs: linux-release-64
+   needs: linux-release-64
 
    container: ubuntu:18.04 # cross compiler not available in 16
    env:
@@ -130,6 +130,7 @@ jobs:
      - name: Install unixODBC
        shell: bash
        run: | # we need an x86 odbc_config tool to run cmake. fun.
+         apt-get remove -y unixodbc unixodbc-dev
          CC=gcc ./scripts/install_unixodbc.sh
          cp build/unixodbc/build/bin/odbc_config .
          CC=aarch64-linux-gnu-gcc ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
