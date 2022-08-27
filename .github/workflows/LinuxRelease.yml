@@ -117,23 +117,17 @@ jobs:
      CXX: aarch64-linux-gnu-g++
 
    steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+     - uses: ./.github/actions/ubuntu_16_setup
+
      - name: Install Stuff
        shell: bash
        run: |
          apt-get update -y -qq
-         apt-get install -y -qq curl wget ninja-build make gcc gcc-aarch64-linux-gnu g++-aarch64-linux-gnu software-properties-common
-         add-apt-repository ppa:git-core/ppa -y
-         apt update -y; apt install git -y
-         git --version
-         wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-         chmod +x cmake-3.21.3-linux-x86_64.sh
-         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
-         cmake --version
+         apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu 
          curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
-
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
 
      - name: Install unixODBC
        shell: bash
@@ -150,20 +144,20 @@ jobs:
      - name: Deploy
        shell: bash
        run: |
-         python3 scripts/amalgamation.py
+         python3.7 scripts/amalgamation.py
          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
          zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-         python3 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+         python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
      - uses: actions/upload-artifact@v2
        with:
-         name: duckdb-binaries-linux
+         name: duckdb-binaries-linux-aarch64
          path: |
            libduckdb-linux-aarch64.zip
            duckdb_odbc-linux-aarch64.zip
            duckdb_cli-linux-aarch64.zip
-
+           build/release/tools/jdbc/duckdb_jdbc.jar
 
  linux-extensions-64:
     name: Linux Extensions (64 Bit)
