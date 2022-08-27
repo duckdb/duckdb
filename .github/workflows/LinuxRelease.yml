@@ -118,17 +118,28 @@ jobs:
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
-#     - uses: ./.github/actions/ubuntu_16_setup
+
+     - name: Install CMake 3.21
+       shell: bash
+       run: |
+         wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+         chmod +x cmake-3.21.3-linux-x86_64.sh
+         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+         cmake --version
 
      - name: Install Cross-Compiler
        shell: bash
        run: |
          apt-get update -y -qq
-         apt-get install -y -qq curl ninja-build cmake make gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+         apt-get install -y -qq curl ninja-build python3-pip make gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
      - name: Install unixODBC
        shell: bash
-       run: ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
+       run: | # we need an x86 odbc_config tool to run cmake. fun.
+         CC=gcc ./scripts/install_unixodbc.sh
+         cp build/unixodbc/build/bin/odbc_config .
+         ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
+         cp odbc_config build/unixodbc/build/bin/odbc_config
 
      - name: Build
        shell: bash
