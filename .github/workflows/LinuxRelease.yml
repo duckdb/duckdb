@@ -111,6 +111,8 @@ jobs:
      FORCE_WARN_UNUSED: 1
      STATIC_LIBCPP: 1
      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
+     CC: aarch64-linux-gnu-gcc
+     CXX: aarch64-linux-gnu-g++
 
    steps:
      - uses: actions/checkout@v3
@@ -126,11 +128,11 @@ jobs:
 
      - name: Install unixODBC
        shell: bash
-       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ ./scripts/install_unixodbc.sh "--host aarch64-linux-gnu"
+       run: ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
 
      - name: Build
        shell: bash
-       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
+       run: make
 
      - name: Deploy
        shell: bash
