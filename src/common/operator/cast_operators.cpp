@@ -1559,7 +1559,7 @@ struct DecimalCastOperation {
 				exponent -= decimal_excess;
 			}
 			D_ASSERT(exponent >= 0);
-		} else if (exponent < 0) {
+		} else if (exponent < 0 && decimal_excess) {
 			//! Negative exponents dont require any extra digits
 			state.excessive_decimals = -exponent + decimal_excess;
 			exponent = 0;
@@ -1568,23 +1568,23 @@ struct DecimalCastOperation {
 			return false;
 		}
 		D_ASSERT(exponent >= 0);
-		// if (exponent < 0) {
-		//	for (idx_t i = 0; i < idx_t(-int64_t(exponent)); i++) {
-		//		state.result /= 10;
-		//		if (state.result == 0) {
-		//			break;
-		//		}
-		//	}
-		//	return true;
-		// } else {
-		//  positive exponent: append 0's
-		for (idx_t i = 0; i < idx_t(exponent); i++) {
-			if (!HandleDigit<T, NEGATIVE>(state, 0)) {
-				return false;
+		if (exponent < 0) {
+			for (idx_t i = 0; i < idx_t(-int64_t(exponent)); i++) {
+				state.result /= 10;
+				if (state.result == 0) {
+					break;
+				}
 			}
+			return true;
+		} else {
+			//  positive exponent: append 0's
+			for (idx_t i = 0; i < idx_t(exponent); i++) {
+				if (!HandleDigit<T, NEGATIVE>(state, 0)) {
+					return false;
+				}
+			}
+			return true;
 		}
-		return true;
-		//}
 	}
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
