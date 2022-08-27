@@ -1547,38 +1547,44 @@ struct DecimalCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
 		state.exponent = true;
-		auto abs_exponent = exponent >= 0 ? exponent : -exponent;
-		if (abs_exponent > 0) {
-			auto decimal_excess = (state.decimal_count > state.scale) ? state.decimal_count - state.scale : 0;
-			if (decimal_excess > abs_exponent) {
+		auto decimal_excess = (state.decimal_count > state.scale) ? state.decimal_count - state.scale : 0;
+		if (exponent > 0) {
+			//! Positive exponents need up to 'exponent' amount of digits
+			//! Everything beyond that amount needs to be truncated
+			if (decimal_excess > exponent) {
 				//! We've allowed too many decimals
-				state.excessive_decimals = decimal_excess - abs_exponent;
+				state.excessive_decimals = decimal_excess - exponent;
 				exponent = 0;
 			} else {
-				exponent -= decimal_excess * ((exponent >= 0) ? 1 : -1);
+				exponent -= decimal_excess;
 			}
 			D_ASSERT(exponent >= 0);
+		} else if (exponent < 0) {
+			//! Negative exponents dont require any extra digits
+			state.excessive_decimals = -exponent + decimal_excess;
+			exponent = 0;
 		}
 		if (!Finalize<T, NEGATIVE>(state)) {
 			return false;
 		}
-		if (exponent < 0) {
-			for (idx_t i = 0; i < idx_t(-int64_t(exponent)); i++) {
-				state.result /= 10;
-				if (state.result == 0) {
-					break;
-				}
+		D_ASSERT(exponent >= 0);
+		// if (exponent < 0) {
+		//	for (idx_t i = 0; i < idx_t(-int64_t(exponent)); i++) {
+		//		state.result /= 10;
+		//		if (state.result == 0) {
+		//			break;
+		//		}
+		//	}
+		//	return true;
+		// } else {
+		//  positive exponent: append 0's
+		for (idx_t i = 0; i < idx_t(exponent); i++) {
+			if (!HandleDigit<T, NEGATIVE>(state, 0)) {
+				return false;
 			}
-			return true;
-		} else {
-			// positive exponent: append 0's
-			for (idx_t i = 0; i < idx_t(exponent); i++) {
-				if (!HandleDigit<T, NEGATIVE>(state, 0)) {
-					return false;
-				}
-			}
-			return true;
 		}
+		return true;
+		//}
 	}
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
@@ -1589,6 +1595,7 @@ struct DecimalCastOperation {
 			// we just truncate the decimal
 			return true;
 		}
+		//! If we expect an exponent, we need to preserve the decimals
 		state.decimal_count++;
 		if (NEGATIVE) {
 			state.result = state.result * 10 - digit;
@@ -1598,9 +1605,9 @@ struct DecimalCastOperation {
 		return true;
 	}
 
-	// static string PrintHugeInt(hugeint_t hugeint) {
-	//	return Hugeint::ToString(hugeint);
-	// }
+	static string PrintHugeInt(hugeint_t hugeint) {
+		return Hugeint::ToString(hugeint);
+	}
 
 	template <class T, bool NEGATIVE>
 	static bool TruncateExcessiveDecimals(T &state) {
@@ -1608,7 +1615,6 @@ struct DecimalCastOperation {
 		bool round_up = false;
 		for (idx_t i = 0; i < state.excessive_decimals; i++) {
 			auto mod = state.result % 10;
-			// auto mod_str = PrintHugeInt(mod);
 			round_up = NEGATIVE ? mod <= -5 : mod >= 5;
 			state.result /= 10.0;
 		}
@@ -1638,7 +1644,6 @@ struct DecimalCastOperation {
 				return false;
 			}
 		}
-		// D_ASSERT(state.decimal_count <= state.scale);
 		//  if we have not gotten exactly "scale" decimals, we need to multiply the result
 		//  e.g. if we have a string "1.0" that is cast to a DECIMAL(9,3), the value needs to be 1000
 		//  but we have only gotten the value "10" so far, so we multiply by 1000
