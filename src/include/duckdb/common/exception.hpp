@@ -69,12 +69,11 @@ enum class ExceptionType {
 	NULL_POINTER = 27,    // nullptr exception
 	IO = 28,              // IO exception
 	INTERRUPT = 29,       // interrupt
-	FATAL = 30, // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
-	INTERNAL =
-	    31, // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
-	INVALID_INPUT = 32,          // Input or arguments error
-	OUT_OF_MEMORY = 33,          // out of memory
-	PERMISSION = 34,             // insufficient permissions
+	FATAL = 30,           // Fatal exceptions are non-recoverable, and render the entire DB in an unusable state
+	INTERNAL = 31,        // Internal exceptions indicate something went wrong internally (i.e. bug in the code base)
+	INVALID_INPUT = 32,   // Input or arguments error
+	OUT_OF_MEMORY = 33,   // out of memory
+	PERMISSION = 34,      // insufficient permissions
 	PARAMETER_NOT_RESOLVED = 35, // parameter types could not be resolved
 	PARAMETER_NOT_ALLOWED = 36   // parameter types not allowed
 };
@@ -88,8 +87,10 @@ public:
 
 public:
 	DUCKDB_API const char *what() const noexcept override;
+	DUCKDB_API const string &RawMessage() const;
 
-	DUCKDB_API string ExceptionTypeToString(ExceptionType type);
+	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
+	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message);
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
@@ -110,6 +111,7 @@ public:
 
 private:
 	string exception_message_;
+	string raw_message_;
 };
 
 //===--------------------------------------------------------------------===//
@@ -128,6 +130,16 @@ public:
 
 	template <typename... Args>
 	explicit CatalogException(const string &msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
+	}
+};
+
+class ConnectionException : public StandardException {
+public:
+	DUCKDB_API explicit ConnectionException(const string &msg);
+
+	template <typename... Args>
+	explicit ConnectionException(const string &msg, Args... params)
+	    : ConnectionException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -302,18 +314,24 @@ class CastException : public Exception {
 public:
 	DUCKDB_API CastException(const PhysicalType origType, const PhysicalType newType);
 	DUCKDB_API CastException(const LogicalType &origType, const LogicalType &newType);
+	DUCKDB_API
+	CastException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
 
 class InvalidTypeException : public Exception {
 public:
 	DUCKDB_API InvalidTypeException(PhysicalType type, const string &msg);
 	DUCKDB_API InvalidTypeException(const LogicalType &type, const string &msg);
+	DUCKDB_API
+	InvalidTypeException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
 
 class TypeMismatchException : public Exception {
 public:
 	DUCKDB_API TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg);
 	DUCKDB_API TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
+	DUCKDB_API
+	TypeMismatchException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
 
 class ValueOutOfRangeException : public Exception {
@@ -322,6 +340,8 @@ public:
 	DUCKDB_API ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType, const PhysicalType newType);
 	DUCKDB_API ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
 	DUCKDB_API ValueOutOfRangeException(const PhysicalType varType, const idx_t length);
+	DUCKDB_API ValueOutOfRangeException(
+	    const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
 
 class ParameterNotAllowedException : public StandardException {

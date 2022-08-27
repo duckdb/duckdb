@@ -128,7 +128,7 @@ TEST_CASE("Test Parquet File NaN", "[arrow]") {
 	auto table = ReadParquetFile(parquet_path);
 
 	auto result = ArrowToDuck(conn, *table);
-	REQUIRE(result->success);
+	REQUIRE(!result->HasError());
 	REQUIRE(CHECK_COLUMN(result, 0, {-1, std::numeric_limits<double>::infinity(), 2.5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"foo", "bar", "baz"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {true, false, true}));
@@ -145,7 +145,7 @@ TEST_CASE("Test Parquet File Fixed Size Binary", "[arrow]") {
 	auto table = ReadParquetFile(parquet_path);
 
 	auto result = ArrowToDuck(conn, *table);
-	REQUIRE(result->success);
+	REQUIRE(!result->HasError());
 	REQUIRE(
 	    CHECK_COLUMN(result, 0, {"\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\x09\\x0A\\x0B\\x0C\\x0D\\x0E\\x0F"}));
 }

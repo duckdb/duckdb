@@ -198,6 +198,18 @@ bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
 	return true;
 }
 
+bool PhysicalOperator::AllOperatorsPreserveOrder() const {
+	if (!IsOrderPreserving()) {
+		return false;
+	}
+	for (auto &child : children) {
+		if (!child->IsOrderPreserving()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void PhysicalOperator::Verify() {
 #ifdef DEBUG
 	auto sources = GetSources();

@@ -13,6 +13,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb_python/array_wrapper.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -155,7 +156,7 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	}
 
 	default:
-		throw NotImplementedException("unsupported type: " + type.ToString());
+		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
 	}
 }
 
@@ -165,8 +166,8 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
 		return nullptr;
 	}
 	auto chunk = result.Fetch();
-	if (!result.success) {
-		throw std::runtime_error(result.error);
+	if (result.HasError()) {
+		result.ThrowError();
 	}
 	return chunk;
 }
@@ -177,8 +178,8 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &result) {
 		return nullptr;
 	}
 	auto chunk = result.FetchRaw();
-	if (!result.success) {
-		throw std::runtime_error(result.error);
+	if (result.HasError()) {
+		result.ThrowError();
 	}
 	return chunk;
 }
@@ -187,7 +188,7 @@ py::object DuckDBPyResult::Fetchone() {
 	{
 		py::gil_scoped_release release;
 		if (!result) {
-			throw std::runtime_error("result closed");
+			throw InvalidInputException("result closed");
 		}
 		if (!current_chunk || chunk_offset >= current_chunk->size()) {
 			current_chunk = FetchNext(*result);
@@ -275,7 +276,7 @@ void InsertCategory(QueryResult &result, unordered_map<idx_t, py::list> &categor
 
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
-		throw std::runtime_error("result closed");
+		throw InvalidInputException("result closed");
 	}
 
 	// iterate over the result to materialize the data needed for the NumPy arrays
@@ -388,7 +389,7 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx
 
 py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("result closed");
+		throw InvalidInputException("result closed");
 	}
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 
@@ -401,7 +402,7 @@ py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 
 duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("There is no query result");
+		throw InvalidInputException("There is no query result");
 	}
 	py::gil_scoped_acquire acquire;
 
@@ -424,7 +425,7 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("There is no query result");
+		throw InvalidInputException("There is no query result");
 	}
 	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
@@ -486,7 +487,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 		return py::str(type.ToString());
 	}
 	default:
-		throw NotImplementedException("unsupported type: " + type.ToString());
+		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
 	}
 }
 

@@ -72,13 +72,13 @@ NULL
 NULL
 
 # IN-clause (semi join)
-query I
+query I sort
 SELECT k FROM integers WHERE i IN (SELECT * FROM other_table)
 ----
-337
-948247
 1779793
+337
 4779793
+948247
 
 query I
 (SELECT k FROM integers WHERE i>1978321 LIMIT 5) UNION ALL (SELECT k FROM integers WHERE i>4978321 LIMIT 5)

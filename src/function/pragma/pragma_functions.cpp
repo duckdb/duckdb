@@ -63,6 +63,18 @@ static void PragmaVerifySerializer(ClientContext &context, const FunctionParamet
 	ClientConfig::GetConfig(context).verify_serializer = true;
 }
 
+static void PragmaDisableVerifySerializer(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_serializer = false;
+}
+
+static void PragmaEnableExternalVerification(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_external = true;
+}
+
+static void PragmaDisableExternalVerification(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_external = false;
+}
+
 static void PragmaEnableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).verify_parallelism = true;
 }
@@ -112,7 +124,11 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_verification", PragmaEnableVerification));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verification", PragmaDisableVerification));
 
+	set.AddFunction(PragmaFunction::PragmaStatement("verify_external", PragmaEnableExternalVerification));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_external", PragmaDisableExternalVerification));
+
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_serializer", PragmaVerifySerializer));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_serializer", PragmaDisableVerifySerializer));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_parallelism", PragmaEnableForceParallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_parallelism", PragmaDisableForceParallelism));

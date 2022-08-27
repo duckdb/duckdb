@@ -1,0 +1,73 @@
+# name: test/optimizer/join_parquet_with_base.test_slow
+# description: Make sure we don't segfault when joining parquet files with base tables
+# group: [optimizer]
+
+require parquet
+
+require tpch
+
+statement ok
+CALL DBGEN(sf=0.1);
+
+statement ok
+COPY orders TO '__TEST_DIR__/orders.parquet';
+
+statement ok
+DROP TABLE orders;
+
+statement ok
+COPY customer TO '__TEST_DIR__/customer.parquet';
+
+statement ok
+DROP TABLE customer;
+
+statement ok
+COPY region TO '__TEST_DIR__/region.parquet';
+
+statement ok
+DROP TABLE region;
+
+statement ok
+COPY nation TO '__TEST_DIR__/nation.parquet';
+
+statement ok
+DROP TABLE nation;
+
+statement ok
+COPY supplier TO '__TEST_DIR__/supplier.parquet';
+
+statement ok
+DROP TABLE supplier
+
+statement ok
+CREATE view orders AS SELECT * FROM read_parquet('__TEST_DIR__/orders.parquet');
+
+statement ok
+CREATE view region AS SELECT * FROM read_parquet('__TEST_DIR__/region.parquet');
+
+statement ok
+CREATE view supplier AS SELECT * FROM read_parquet('__TEST_DIR__/supplier.parquet');
+
+statement ok
+CREATE view nation AS SELECT * FROM read_parquet('__TEST_DIR__/nation.parquet');
+
+statement ok
+CREATE view customer AS SELECT * FROM read_parquet('__TEST_DIR__/customer.parquet');
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q${i}.csv
+
+endloop

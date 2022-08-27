@@ -296,7 +296,7 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 		auto rec_idx = rec_number - 1;
 		auto &diag_record = odbc_handle->odbc_diagnostic->GetDiagRecord(rec_idx);
 
-		if (sql_state && strlen((char *)sql_state) >= 5) {
+		if (sql_state) {
 			OdbcUtils::WriteString(diag_record.sql_diag_sqlstate, sql_state, 6);
 		}
 		if (native_error_ptr) {

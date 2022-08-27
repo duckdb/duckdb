@@ -60,8 +60,10 @@ struct OpenTask : public Task {
 			extension.Load(*Get<Database>().database);
 			success = true;
 
+		} catch (const duckdb::Exception &ex) {
+			error = duckdb::PreservedError(ex);
 		} catch (std::exception &ex) {
-			error = ex.what();
+			error = duckdb::PreservedError(ex);
 		}
 	}
 
@@ -71,7 +73,7 @@ struct OpenTask : public Task {
 
 		std::vector<napi_value> args;
 		if (!success) {
-			args.push_back(Utils::CreateError(env, error));
+			args.push_back(Utils::CreateError(env, error.Message()));
 		} else {
 			args.push_back(env.Null());
 		}
@@ -83,7 +85,7 @@ struct OpenTask : public Task {
 
 	std::string filename;
 	duckdb::DBConfig duckdb_config;
-	std::string error = "";
+	duckdb::PreservedError error;
 	bool success = false;
 };
 

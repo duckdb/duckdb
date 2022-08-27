@@ -7,17 +7,17 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/arrow_aux_data.hpp"
-#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/execution/execution_context.hpp"
 
 namespace duckdb {
@@ -148,6 +148,18 @@ void DataChunk::Fuse(DataChunk &other) {
 		vector_caches.emplace_back(move(other.vector_caches[col_idx]));
 	}
 	other.Destroy();
+}
+
+void DataChunk::ReferenceColumns(DataChunk &other, vector<column_t> column_ids) {
+	D_ASSERT(ColumnCount() == column_ids.size());
+	Reset();
+	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
+		auto &other_col = other.data[column_ids[col_idx]];
+		auto &this_col = data[col_idx];
+		D_ASSERT(other_col.GetType() == this_col.GetType());
+		this_col.Reference(other_col);
+	}
+	SetCardinality(other.size());
 }
 
 void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel, idx_t sel_count) {

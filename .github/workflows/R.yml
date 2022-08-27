@@ -42,7 +42,6 @@ jobs:
       with:
         run_tests: 0
         static_link_build: 1
-        substrait: 1
 
     - uses: actions/upload-artifact@v2
       with:
@@ -57,7 +56,6 @@ jobs:
     env:
       LIBARROW_BINARY: 'false'
       ARROW_USER_SIMD_LEVEL: 'AVX2'
-      BUILD_SUBSTRAIT_EXTENSION: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -191,8 +189,6 @@ jobs:
     name: R Package Windows
     runs-on: windows-latest
     needs: rstats-linux
-    env:
-          BUILD_SUBSTRAIT_EXTENSION: 1
     steps:
     - uses: actions/checkout@v3
       with:
@@ -228,8 +224,6 @@ jobs:
     name: R UBSAN
     runs-on: ubuntu-latest
     needs: rstats-linux
-    env:
-          BUILD_SUBSTRAIT_EXTENSION: 1
     steps:
     - uses: actions/checkout@v3
       with:

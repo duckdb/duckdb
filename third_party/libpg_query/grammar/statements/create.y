@@ -222,7 +222,7 @@ GeneratedColumnType:
 			;
 
 opt_GeneratedColumnType:
-			GeneratedColumnType { $$ = $1 }
+			GeneratedColumnType { $$ = $1; }
 			| /* EMPTY */ { $$ = PG_CONSTR_GENERATED_VIRTUAL; }
 			;
 
