@@ -137,15 +137,18 @@ jobs:
        run: |
          python3.7 scripts/amalgamation.py
          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
+         zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-         python3.7 scripts/asset-upload-gha.py  libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip
+         python3.7 scripts/asset-upload-gha.py  libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
      - uses: actions/upload-artifact@v2
        with:
          name: duckdb-binaries-linux
          path: |
            libduckdb-linux-aarch64.zip
+           duckdb_odbc-linux-aarch64.zip
            duckdb_cli-linux-aarch64.zip
+
 
  linux-extensions-64:
     name: Linux Extensions (64 Bit)
