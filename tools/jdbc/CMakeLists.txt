@@ -4,7 +4,7 @@ find_package(JNI)
 cmake_minimum_required(VERSION 3.11.0)
 
 if(NOT JNI_FOUND OR NOT Java_FOUND)
-  message(FATAL_ERROR No compatible Java/JNI found)
+  message(FATAL_ERROR "No compatible Java/JNI found")
 endif()
 
 include(UseJava)
