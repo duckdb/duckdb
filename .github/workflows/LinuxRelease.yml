@@ -116,17 +116,15 @@ jobs:
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
-     - uses: ./.github/actions/ubuntu_16_setup
+#     - uses: ./.github/actions/ubuntu_16_setup
 
      - name: Install Cross-Compiler
        shell: bash
-       run: apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+       run: apt-get install -y cmake make gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
      - name: Install unixODBC
        shell: bash
-       run: |
-         apt-get remove -y unixodbc-dev unixodbc
-         CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ ./scripts/install_unixodbc.sh
+       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ ./scripts/install_unixodbc.sh
 
      - name: Build
        shell: bash
