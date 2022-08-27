@@ -94,7 +94,7 @@ jobs:
  linux-release-aarch64:
    name: Linux (AARCH64)
    runs-on: ubuntu-latest
-   needs: linux-release-64
+ #  needs: linux-release-64
 
    container: ubuntu:18.04 # cross compiler not available in 16
    env:
@@ -106,10 +106,11 @@ jobs:
  #    BUILD_JDBC: 1
      BUILD_JSON: 1
      BUILD_EXCEL: 1
- #    BUILD_ODBC: 1
+     BUILD_ODBC: 1
      TREAT_WARNINGS_AS_ERRORS: 1
      FORCE_WARN_UNUSED: 1
      STATIC_LIBCPP: 1
+     ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
 
    steps:
      - uses: actions/checkout@v3
@@ -121,10 +122,10 @@ jobs:
        shell: bash
        run: apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-#     - name: Install unixODBC
-#       shell: bash
-#       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ ./scripts/install_unixodbc.sh
-#
+     - name: Install unixODBC
+       shell: bash
+       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ ./scripts/install_unixodbc.sh
+
      - name: Build
        shell: bash
        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
