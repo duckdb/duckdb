@@ -1609,10 +1609,6 @@ struct DecimalCastOperation {
 		return true;
 	}
 
-	static string PrintHugeInt(hugeint_t hugeint) {
-		return Hugeint::ToString(hugeint);
-	}
-
 	template <class T, bool NEGATIVE>
 	static bool TruncateExcessiveDecimals(T &state) {
 		D_ASSERT(state.excessive_decimals);

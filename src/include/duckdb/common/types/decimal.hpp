@@ -15,22 +15,22 @@ namespace duckdb {
 template <class PHYSICAL_TYPE>
 struct DecimalWidth {};
 
-template<>
+template <>
 struct DecimalWidth<int16_t> {
 	static constexpr uint8_t max = 4;
 };
 
-template<>
+template <>
 struct DecimalWidth<int32_t> {
 	static constexpr uint8_t max = 9;
 };
 
-template<>
+template <>
 struct DecimalWidth<int64_t> {
 	static constexpr uint8_t max = 18;
 };
 
-template<>
+template <>
 struct DecimalWidth<hugeint_t> {
 	static constexpr uint8_t max = 38;
 };
