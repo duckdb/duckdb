@@ -119,6 +119,12 @@ jobs:
        with:
          fetch-depth: 0
 
+     - name: Install Cross-Compiler
+       shell: bash
+       run: |
+         apt-get update -y -qq
+         apt-get install -y -qq curl wget ninja-build python3-pip make gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
      - name: Install CMake 3.21
        shell: bash
        run: |
@@ -126,12 +132,6 @@ jobs:
          chmod +x cmake-3.21.3-linux-x86_64.sh
          ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
          cmake --version
-
-     - name: Install Cross-Compiler
-       shell: bash
-       run: |
-         apt-get update -y -qq
-         apt-get install -y -qq curl ninja-build python3-pip make gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
      - name: Install unixODBC
        shell: bash
