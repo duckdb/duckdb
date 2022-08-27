@@ -117,15 +117,15 @@ jobs:
      CXX: aarch64-linux-gnu-g++
 
    steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - name: Install Cross-Compiler
+     - name: Install Stuff
        shell: bash
        run: |
          apt-get update -y -qq
          apt-get install -y -qq curl wget ninja-build make gcc gcc-aarch64-linux-gnu g++-aarch64-linux-gnu git
+
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
 
      - name: Install CMake 3.21
        shell: bash
