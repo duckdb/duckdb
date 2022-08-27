@@ -27,4 +27,8 @@ uint64_t NextPowerOfTwo(uint64_t v) {
 	return v;
 }
 
+bool IsRowIdColumnId(column_t column_id) {
+	return column_id == COLUMN_IDENTIFIER_ROW_ID;
+}
+
 } // namespace duckdb

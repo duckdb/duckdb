@@ -20,13 +20,13 @@ namespace duckdb {
 class HivePartitioning {
 public:
 	//! Parse a filename that follows the hive partitioning scheme
-	static std::map<string, string> Parse(string &filename);
+	DUCKDB_API static std::map<string, string> Parse(string &filename);
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
-	static void ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters,
-	                                   unordered_map<string, column_t> &column_map, idx_t table_index,
-	                                   bool hive_enabled, bool filename_enabled);
+	DUCKDB_API static void ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters,
+	                                              unordered_map<string, column_t> &column_map, idx_t table_index,
+	                                              bool hive_enabled, bool filename_enabled);
 };
 
 } // namespace duckdb
