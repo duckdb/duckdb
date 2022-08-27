@@ -121,7 +121,7 @@ jobs:
        shell: bash
        run: |
          apt-get update -y -qq
-         apt-get install -y -qq curl wget ninja-build make gcc gcc-aarch64-linux-gnu g++-aarch64-linux-gnu git
+         apt-get install -y -qq curl wget ninja-build make gcc gcc-aarch64-linux-gnu g++-aarch64-linux-gnu software-properties-common
          add-apt-repository ppa:git-core/ppa -y
          apt update -y; apt install git -y
          git --version
