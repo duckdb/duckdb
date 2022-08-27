@@ -1,4 +1,5 @@
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -918,7 +919,7 @@ uint8_t DecimalType::GetScale(const LogicalType &type) {
 }
 
 uint8_t DecimalType::MaxWidth() {
-	return 38;
+	return DecimalWidth<hugeint_t>::max;
 }
 
 LogicalType LogicalType::DECIMAL(int width, int scale) {

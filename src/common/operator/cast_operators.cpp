@@ -1596,6 +1596,10 @@ struct DecimalCastOperation {
 			return true;
 		}
 		//! If we expect an exponent, we need to preserve the decimals
+		//! But we don't want to overflow, so we prevent overflowing the result with this check
+		if (state.digit_count + state.decimal_count >= DecimalWidth<decltype(state.result)>::max) {
+			return true;
+		}
 		state.decimal_count++;
 		if (NEGATIVE) {
 			state.result = state.result * 10 - digit;
