@@ -113,7 +113,6 @@ jobs:
      BUILD_JDBC: 1
      OVERRIDE_JDBC_OS_ARCH: aarch64
      JAVA_HOME: ../../jdk8u345-b01
-
      CC: aarch64-linux-gnu-gcc
      CXX: aarch64-linux-gnu-g++
 
