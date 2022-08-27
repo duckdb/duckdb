@@ -1567,7 +1567,6 @@ struct DecimalCastOperation {
 		if (!Finalize<T, NEGATIVE>(state)) {
 			return false;
 		}
-		D_ASSERT(exponent >= 0);
 		if (exponent < 0) {
 			for (idx_t i = 0; i < idx_t(-int64_t(exponent)); i++) {
 				state.result /= 10;
