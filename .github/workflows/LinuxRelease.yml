@@ -124,7 +124,9 @@ jobs:
 
      - name: Install unixODBC
        shell: bash
-       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ ./scripts/install_unixodbc.sh
+       run: |
+         apt-get remove -y unixodbc-dev unixodbc
+         CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ ./scripts/install_unixodbc.sh
 
      - name: Build
        shell: bash
