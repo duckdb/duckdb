@@ -1547,15 +1547,14 @@ struct DecimalCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
 		state.exponent = true;
-		auto abs_exponent = exponent >= 0 ? exponent : -exponent; 
+		auto abs_exponent = exponent >= 0 ? exponent : -exponent;
 		if (abs_exponent > 0) {
 			auto decimal_excess = (state.decimal_count > state.scale) ? state.decimal_count - state.scale : 0;
 			if (decimal_excess > abs_exponent) {
 				//! We've allowed too many decimals
 				state.excessive_decimals = decimal_excess - abs_exponent;
 				exponent = 0;
-			}
-			else {
+			} else {
 				exponent -= decimal_excess * ((exponent >= 0) ? 1 : -1);
 			}
 			D_ASSERT(exponent >= 0);
@@ -1599,9 +1598,9 @@ struct DecimalCastOperation {
 		return true;
 	}
 
-	//static string PrintHugeInt(hugeint_t hugeint) {
+	// static string PrintHugeInt(hugeint_t hugeint) {
 	//	return Hugeint::ToString(hugeint);
-	//}
+	// }
 
 	template <class T, bool NEGATIVE>
 	static bool TruncateExcessiveDecimals(T &state) {
@@ -1609,15 +1608,14 @@ struct DecimalCastOperation {
 		bool round_up = false;
 		for (idx_t i = 0; i < state.excessive_decimals; i++) {
 			auto mod = state.result % 10;
-			//auto mod_str = PrintHugeInt(mod);
+			// auto mod_str = PrintHugeInt(mod);
 			round_up = NEGATIVE ? mod <= -5 : mod >= 5;
 			state.result /= 10.0;
 		}
 		if (round_up) {
 			if (NEGATIVE) {
 				state.result -= 1;
-			}
-			else {
+			} else {
 				state.result += 1;
 			}
 		}
@@ -1633,18 +1631,17 @@ struct DecimalCastOperation {
 			if (!TruncateExcessiveDecimals<T, NEGATIVE>(state)) {
 				return false;
 			}
-		}
-		else if (!state.exponent && state.decimal_count > state.scale) {
+		} else if (!state.exponent && state.decimal_count > state.scale) {
 			//! Did not encounter an exponent, but ALLOW_EXPONENT was on
 			state.excessive_decimals = state.decimal_count - state.scale;
 			if (!TruncateExcessiveDecimals<T, NEGATIVE>(state)) {
 				return false;
 			}
 		}
-		//D_ASSERT(state.decimal_count <= state.scale);
-		// if we have not gotten exactly "scale" decimals, we need to multiply the result
-		// e.g. if we have a string "1.0" that is cast to a DECIMAL(9,3), the value needs to be 1000
-		// but we have only gotten the value "10" so far, so we multiply by 1000
+		// D_ASSERT(state.decimal_count <= state.scale);
+		//  if we have not gotten exactly "scale" decimals, we need to multiply the result
+		//  e.g. if we have a string "1.0" that is cast to a DECIMAL(9,3), the value needs to be 1000
+		//  but we have only gotten the value "10" so far, so we multiply by 1000
 		for (uint8_t i = state.decimal_count; i < state.scale; i++) {
 			state.result *= 10;
 		}
