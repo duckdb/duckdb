@@ -256,10 +256,11 @@ jobs:
            wget http://mirror.archlinuxarm.org/aarch64/core/python-3.10.6-1-aarch64.pkg.tar.xz
            tar xf python-3.10.6-1-aarch64.pkg.tar.xz
 
-           CC=$(which aarch64-unknown-linux-gnu)
-           echo $CC
+           CC=$(which aarch64-linux-gnu-gcc)
+           CXX=$(which aarch64-linux-gnu-g++)
+           echo $CC $CXX
 
-           python3 -m crossenv usr/bin/python3.10 venv --cc $(CC)
+           python3 -m crossenv usr/bin/python3.10 venv --cc $CC --cxx $CXX
            . venv/bin/activate
            echo "VIRTUAL ENV:" $VIRTUAL_ENV
 
