@@ -61,7 +61,6 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 	return can_reorder;
 }
 
-
 void JoinOrderOptimizer::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		// Here you have a filter on a single column in a table. Return a binding for the column
@@ -74,8 +73,7 @@ void JoinOrderOptimizer::GetColumnBinding(Expression &expression, ColumnBinding 
 		binding = ColumnBinding(relation_mapping[colref.binding.table_index], colref.binding.column_index);
 	}
 	// TODO: handle inequality filters with functions.
-	ExpressionIterator::EnumerateChildren(
-	    expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
 }
 
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
