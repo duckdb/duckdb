@@ -278,7 +278,7 @@ jobs:
           echo "VIRTUAL ENV:" $VIRTUAL_ENV
           
           build-python -m pip install wheel numpy
-          # pip install wheel
+          pip install wheel
           # pip install numpy
           
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
