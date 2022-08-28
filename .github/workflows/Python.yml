@@ -264,7 +264,7 @@ jobs:
          working-directory: tools/pythonpkg
          run: |
            python3 -m pip install pip -U
-           python3 -m pip debug --verbose
+           build-pip debug --verbose
 
        - name: Build
          shell: bash
@@ -274,8 +274,8 @@ jobs:
            echo "VIRTUAL ENV:" $VIRTUAL_ENV
 
            wget https://files.pythonhosted.org/packages/15/aa/f831165eefc6e0f10082db7b314871490f30791f9e6a2ddc404828c77e67/numpy-1.23.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
-           pip install wheel
-           pip install numpy-1.23.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+           build-pip install wheel
+           build-pip install numpy-1.23.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 
            export DISTUTILS_C_COMPILER_LAUNCHER=ccache
            # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
