@@ -253,8 +253,8 @@ jobs:
            cd tools/pythonpkg
            wget https://grimler.se/termux-packages-24/pool/main/p/python/python_3.10.6_aarch64.deb
            ar vx python_3.10.6_aarch64.deb
-           tar xvf control.tar.gz
-           tar data.tar.gz
+           tar xvf control.tar.xz
+           tar data.tar.xz
            ls
 
            python3 -m crossenv python3 venv
