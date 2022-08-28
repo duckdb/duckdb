@@ -253,6 +253,7 @@ jobs:
          shell: bash
          working-directory: tools/pythonpkg
          run: |
+           python3 -m pip install pip -U
            wget http://mirror.archlinuxarm.org/aarch64/core/python-3.10.6-1-aarch64.pkg.tar.xz
            tar xf python-3.10.6-1-aarch64.pkg.tar.xz
 
