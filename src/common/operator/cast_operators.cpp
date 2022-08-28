@@ -1545,10 +1545,19 @@ struct DecimalCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
+	static void RoundUpResult(T &state) {
+		if (NEGATIVE) {
+			state.result -= 1;
+		} else {
+			state.result += 1;
+		}
+	}
+
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
-		state.exponent = true;
 		auto decimal_excess = (state.decimal_count > state.scale) ? state.decimal_count - state.scale : 0;
 		if (exponent > 0) {
+			state.exponent = true;
 			//! Positive exponents need up to 'exponent' amount of digits
 			//! Everything beyond that amount needs to be truncated
 			if (decimal_excess > exponent) {
@@ -1559,20 +1568,22 @@ struct DecimalCastOperation {
 				exponent -= decimal_excess;
 			}
 			D_ASSERT(exponent >= 0);
-		} else if (exponent < 0 && decimal_excess) {
-			//! Negative exponents dont require any extra decimals
-			state.excessive_decimals = -exponent + decimal_excess;
-			exponent -= (decimal_excess > exponent) ? exponent : decimal_excess;
 		}
 		if (!Finalize<T, NEGATIVE>(state)) {
 			return false;
 		}
 		if (exponent < 0) {
+			bool round_up = false;
 			for (idx_t i = 0; i < idx_t(-int64_t(exponent)); i++) {
+				auto mod = state.result % 10;
+				round_up = NEGATIVE ? mod <= -5 : mod >= 5;
 				state.result /= 10;
 				if (state.result == 0) {
 					break;
 				}
+			}
+			if (round_up) {
+				RoundUpResult<T, NEGATIVE>(state);
 			}
 			return true;
 		} else {
@@ -1619,11 +1630,7 @@ struct DecimalCastOperation {
 		}
 		//! Only round up when exponents are involved
 		if (state.exponent && round_up) {
-			if (NEGATIVE) {
-				state.result -= 1;
-			} else {
-				state.result += 1;
-			}
+			RoundUpResult<T, NEGATIVE>(state);
 		}
 		D_ASSERT(state.decimal_count > state.scale);
 		state.decimal_count = state.scale;
