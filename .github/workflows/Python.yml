@@ -216,6 +216,50 @@ jobs:
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
         fi
 
+   linux-python3-aarch64:
+     name: Python 3 Linux aarch64
+     runs-on: ubuntu-20.04
+     strategy:
+       matrix:
+         arch: [aarch64]
+         python_build: [cp37-*, cp38-*, cp39-*, cp310-*]
+         isRelease:
+           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
+         exclude:
+           - isRelease: false
+             python_build: 'cp38-*'
+           - isRelease: false
+             python_build: 'cp39-*'
+
+     steps:
+       - uses: actions/checkout@v3
+         with:
+           fetch-depth: 0
+
+       - uses: actions/setup-python@v2
+
+       - name: Install
+         shell: bash
+         run: pip install crossenv twine build
+
+       - name: Setup Ccache
+         uses: hendrikmuhs/ccache-action@main
+         with:
+           key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+
+       - name: Build
+         shell: bash
+         run: |
+           cd tools/pythonpkg
+           python3 -m crossenv python3 venv
+           . venv/bin/activate
+           pip install numpy
+
+           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+
+           pyproject-build
+
    osx-python3:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
       name: Python 3 OSX
