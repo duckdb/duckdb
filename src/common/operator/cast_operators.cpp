@@ -1560,9 +1560,9 @@ struct DecimalCastOperation {
 			}
 			D_ASSERT(exponent >= 0);
 		} else if (exponent < 0 && decimal_excess) {
-			//! Negative exponents dont require any extra digits
+			//! Negative exponents dont require any extra decimals
 			state.excessive_decimals = -exponent + decimal_excess;
-			exponent = 0;
+			exponent -= (decimal_excess > exponent) ? exponent : decimal_excess;
 		}
 		if (!Finalize<T, NEGATIVE>(state)) {
 			return false;
@@ -1576,7 +1576,7 @@ struct DecimalCastOperation {
 			}
 			return true;
 		} else {
-			//  positive exponent: append 0's
+			// positive exponent: append 0's
 			for (idx_t i = 0; i < idx_t(exponent); i++) {
 				if (!HandleDigit<T, NEGATIVE>(state, 0)) {
 					return false;
@@ -1632,17 +1632,12 @@ struct DecimalCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
-		if (state.excessive_decimals) {
-			//! Encountered an exponent
-			if (!TruncateExcessiveDecimals<T, NEGATIVE>(state)) {
-				return false;
-			}
-		} else if (!state.exponent && state.decimal_count > state.scale) {
+		if (!state.exponent && state.decimal_count > state.scale) {
 			//! Did not encounter an exponent, but ALLOW_EXPONENT was on
 			state.excessive_decimals = state.decimal_count - state.scale;
-			if (!TruncateExcessiveDecimals<T, NEGATIVE>(state)) {
-				return false;
-			}
+		}
+		if (state.excessive_decimals && !TruncateExcessiveDecimals<T, NEGATIVE>(state)) {
+			return false;
 		}
 		//  if we have not gotten exactly "scale" decimals, we need to multiply the result
 		//  e.g. if we have a string "1.0" that is cast to a DECIMAL(9,3), the value needs to be 1000
