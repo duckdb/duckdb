@@ -274,8 +274,8 @@ jobs:
          name: Tests
          id: runcmd
          with:
-          arch: armv7
-          distro: ubuntu18.04
+          arch: aarch64
+          distro: ubuntu22.04
 
           # Not required, but speeds up builds by storing container images in
           # a GitHub package registry.
