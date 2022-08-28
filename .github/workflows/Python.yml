@@ -240,7 +240,9 @@ jobs:
 
        - name: Install
          shell: bash
-         run: pip install crossenv twine build
+         run: |
+          pip install crossenv twine build
+          sudo apt install binutils-aarch64-linux-gnu libc6-arm64-cross libc6-dev-arm64-cross crossbuild-essential-arm64
 
        - name: Setup Ccache
          uses: hendrikmuhs/ccache-action@main
