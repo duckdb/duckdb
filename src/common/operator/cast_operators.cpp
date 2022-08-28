@@ -1617,7 +1617,8 @@ struct DecimalCastOperation {
 			round_up = NEGATIVE ? mod <= -5 : mod >= 5;
 			state.result /= 10.0;
 		}
-		if (round_up) {
+		//! Only round up when exponents are involved
+		if (state.exponent && round_up) {
 			if (NEGATIVE) {
 				state.result -= 1;
 			} else {
