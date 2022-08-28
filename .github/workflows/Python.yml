@@ -255,7 +255,6 @@ jobs:
            cd tools/pythonpkg
            wget http://mirror.archlinuxarm.org/aarch64/core/python-3.10.6-1-aarch64.pkg.tar.xz
            tar xf python-3.10.6-1-aarch64.pkg.tar.xz
-           ls
 
            python3 -m crossenv usr/bin/python3.10 venv
            . venv/bin/activate
