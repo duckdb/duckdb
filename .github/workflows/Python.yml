@@ -255,7 +255,7 @@ jobs:
            dpkg-deb -xv python_3.10.6_aarch64.deb python-aarch64
            ls
 
-           python3 -m crossenv data/data/com.termux/files/usr/bin/python3 venv
+           python3 -m crossenv python-aarch64/data/data/com.termux/files/usr/bin/python3 venv
            . venv/bin/activate
            pip install numpy
 
