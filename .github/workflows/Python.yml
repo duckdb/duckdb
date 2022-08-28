@@ -237,6 +237,8 @@ jobs:
            fetch-depth: 0
 
        - uses: actions/setup-python@v2
+         with:
+           python-version: 3.10.6
 
        - name: Install
          shell: bash
