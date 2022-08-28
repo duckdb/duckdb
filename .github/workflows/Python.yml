@@ -259,7 +259,7 @@ jobs:
            wget http://mirror.archlinuxarm.org/aarch64/core/python-3.10.6-1-aarch64.pkg.tar.xz
            tar xf python-3.10.6-1-aarch64.pkg.tar.xz
 
-           python3 -m crossenv usr/bin/python3.10 venv --cc $(which aarch64-linux-gnu-gcc) --cxx $(which aarch64-linux-gnu-g++) --ar $(which aarch64-linux-gnu-ar)
+           python3 -m crossenv usr/bin/python3.10 venv --cc $(which aarch64-linux-gnu-gcc) --cxx $(which aarch64-linux-gnu-g++) --ar $(which aarch64-linux-gnu-ar) --manylinux manylinux_2_17 --manylinux manylinux2014
 
        - name: Debug pip
          shell: bash
