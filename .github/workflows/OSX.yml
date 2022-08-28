@@ -86,7 +86,7 @@ jobs:
       shell: bash
       run: |
         brew remove --ignore-dependencies unixodbc
-        ./scripts/install_unixodbc.sh
+        CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
 
     - name: Build
       shell: bash
