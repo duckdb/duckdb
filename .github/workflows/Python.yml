@@ -253,11 +253,11 @@ jobs:
          shell: bash
          run: |
            cd tools/pythonpkg
-           wget https://packages.termux.dev/apt/termux-main/pool/main/p/python/python_3.10.6_aarch64.deb
-           dpkg-deb -xv python_3.10.6_aarch64.deb python-aarch64
+           wget wget http://mirror.archlinuxarm.org/aarch64/core/python-3.10.6-1-aarch64.pkg.tar.xz
+           tar -xf python-3.10.6-1-aarch64.pkg.tar.xz
            ls
 
-           python3 -m crossenv python-aarch64/data/data/com.termux/files/usr/bin/python3 venv
+           python3 -m crossenv usr/bin/python3.10 venv
            . venv/bin/activate
            pip install numpy
 
