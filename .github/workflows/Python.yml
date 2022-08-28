@@ -268,11 +268,25 @@ jobs:
 
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
 
-          python -m pip install .
           python setup.py bdist_wheel
-          ls
-          tree dist
-          tree build
+
+       - uses: uraimo/run-on-arch-action@v2
+         name: Run commands
+         id: runcmd
+         with:
+          arch: armv7
+          distro: ubuntu18.04
+
+          # Not required, but speeds up builds by storing container images in
+          # a GitHub package registry.
+          githubToken: ${{ github.token }}
+
+          dockerRunArgs: |
+            --volume "${PWD}/dist:/dist"
+
+          run: |
+            pip install /artifacts/*.whl
+            python -c "print(__import__('duckdb').__version__)"
 
        - uses: actions/upload-artifact@v2
          with:
