@@ -258,11 +258,13 @@ jobs:
            ls
 
            python3 -m crossenv usr/bin/python3.10 venv
+           . venv/bin/activate
+           echo "VIRTUAL ENV:" $VIRTUAL_ENV
 
            export DISTUTILS_C_COMPILER_LAUNCHER=ccache
            # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
 
-           ./venv/bin/activate/python3 setup.py bdist_wheel
+           python setup.py bdist_wheel
 
    osx-python3:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
