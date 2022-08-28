@@ -277,8 +277,9 @@ jobs:
            . venv/bin/activate
            echo "VIRTUAL ENV:" $VIRTUAL_ENV
 
-           pip install wheel
-           pip install numpy
+           build-python -m pip install wheel numpy
+#           pip install wheel
+#           pip install numpy
 
            export DISTUTILS_C_COMPILER_LAUNCHER=ccache
            # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
