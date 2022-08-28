@@ -265,6 +265,7 @@ jobs:
          shell: bash
          working-directory: tools/pythonpkg
          run: |
+           . venv/bin/activate
            python3 -m pip install pip -U
            python3 -m sysconfig
 
