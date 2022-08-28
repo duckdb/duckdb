@@ -222,7 +222,7 @@ jobs:
      strategy:
        matrix:
          arch: [aarch64]
-         python_build: [cp37-*, cp38-*, cp39-*, cp310-*]
+         python_build: [3.10.6]
          isRelease:
            - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
          exclude:
@@ -238,7 +238,7 @@ jobs:
 
        - uses: actions/setup-python@v2
          with:
-           python-version: 3.10.6
+           python-version: ${{ matrix.python_build }}
 
        - name: Install
          shell: bash
@@ -256,35 +256,27 @@ jobs:
          working-directory: tools/pythonpkg
          run: |
            python3 -m pip install pip -U
-           wget http://mirror.archlinuxarm.org/aarch64/core/python-3.10.6-1-aarch64.pkg.tar.xz
+           wget http://mirror.archlinuxarm.org/aarch64/core/python-${{ matrix.python_build }}-1-aarch64.pkg.tar.xz
            tar xf python-3.10.6-1-aarch64.pkg.tar.xz
 
            python3 -m crossenv usr/bin/python3.10 venv --cc $(which aarch64-linux-gnu-gcc) --cxx $(which aarch64-linux-gnu-g++) --ar $(which aarch64-linux-gnu-ar) --manylinux manylinux_2_17 --manylinux manylinux2014
-
-       - name: Debug pip
-         shell: bash
-         working-directory: tools/pythonpkg
-         run: |
-           . venv/bin/activate
-           python3 -m pip install pip -U
-           python3 -m sysconfig
-           python3 -m pip debug --verbose
 
        - name: Build
          shell: bash
          working-directory: tools/pythonpkg
          run: |
           . venv/bin/activate
-          echo "VIRTUAL ENV:" $VIRTUAL_ENV
-          
-          build-python -m pip install wheel numpy
+
+          build-python -m pip install numpy
           pip install wheel
-          # pip install numpy
-          
+
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
-          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
-          
+
           python setup.py bdist_wheel
+
+       - uses: actions/upload-artifact@v2
+         with:
+           path: dist/
 
    osx-python3:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
