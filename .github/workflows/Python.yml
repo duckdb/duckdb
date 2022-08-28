@@ -271,7 +271,7 @@ jobs:
           python setup.py bdist_wheel
 
        - uses: uraimo/run-on-arch-action@v2
-         name: Run commands
+         name: Tests
          id: runcmd
          with:
           arch: armv7
@@ -283,7 +283,7 @@ jobs:
 
           dockerRunArgs: |
             --volume "${PWD}/dist:/dist"
-
+          install: apt install python3.10-full
           run: |
             pip install /artifacts/*.whl
             python -c "print(__import__('duckdb').__version__)"
