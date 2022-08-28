@@ -264,7 +264,7 @@ jobs:
          working-directory: tools/pythonpkg
          run: |
            python3 -m pip install pip -U
-           build-pip debug --verbose
+           python3 -m sysconfig
 
        - name: Build
          shell: bash
