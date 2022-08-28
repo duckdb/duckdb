@@ -249,18 +249,19 @@ jobs:
          with:
            key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
 
-       - name: Build
+       - name: Setup build env
          shell: bash
+         working-directory: tools/pythonpkg
          run: |
-           cd tools/pythonpkg
            wget http://mirror.archlinuxarm.org/aarch64/core/python-3.10.6-1-aarch64.pkg.tar.xz
            tar xf python-3.10.6-1-aarch64.pkg.tar.xz
 
-           CC=$(which aarch64-linux-gnu-gcc)
-           CXX=$(which aarch64-linux-gnu-g++)
-           echo $CC $CXX
+           python3 -m crossenv usr/bin/python3.10 venv --$(which aarch64-linux-gnu-gcc) --cxx $(which aarch64-linux-gnu-g++) --ar $(which aarch64-linux-gnu-ar)
 
-           python3 -m crossenv usr/bin/python3.10 venv --cc $CC --cxx $CXX
+       - name: Build
+         shell: bash
+         working-directory: tools/pythonpkg
+         run: |
            . venv/bin/activate
            echo "VIRTUAL ENV:" $VIRTUAL_ENV
 
