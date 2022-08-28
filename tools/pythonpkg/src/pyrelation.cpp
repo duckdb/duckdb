@@ -653,7 +653,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 		return make_unique<DuckDBPyRelation>(move(query_relation));
 	} else if (IsDescribeStatement(statement)) {
 		FunctionParameters parameters;
-		parameters.values.push_back(view_name);
+		parameters.values.emplace_back(view_name);
 		auto query = PragmaShow(*rel->context.GetContext(), parameters);
 		return Query(view_name, query);
 	}
