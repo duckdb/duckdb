@@ -251,7 +251,7 @@ jobs:
          shell: bash
          run: |
            cd tools/pythonpkg
-           wget https://grimler.se/termux-packages-24/pool/main/p/python/python_3.10.6_aarch64.deb
+           wget https://packages.termux.dev/apt/termux-main/pool/main/p/python/python_3.10.6_aarch64.deb
            dpkg-deb -xv python_3.10.6_aarch64.deb python-aarch64
            ls
 
