@@ -61,21 +61,8 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 	return can_reorder;
 }
 
-void JoinOrderOptimizer::GetColumnBindings(Expression &expression, ColumnBinding &left_binding,
-                                           ColumnBinding &right_binding) {
-	if (expression.type == ExpressionType::COMPARE_EQUAL) {
-		auto &colref = (BoundComparisonExpression &)expression;
-		if (colref.right->type == ExpressionType::BOUND_COLUMN_REF &&
-		    colref.left->type == ExpressionType::BOUND_COLUMN_REF) {
-			auto &right = (BoundColumnRefExpression &)*colref.right;
-			auto &left = (BoundColumnRefExpression &)*colref.left;
-			D_ASSERT(relation_mapping.find(left.binding.table_index) != relation_mapping.end());
-			D_ASSERT(relation_mapping.find(right.binding.table_index) != relation_mapping.end());
-			left_binding = ColumnBinding(relation_mapping[left.binding.table_index], left.binding.column_index);
-			right_binding = ColumnBinding(relation_mapping[right.binding.table_index], right.binding.column_index);
-			return;
-		}
-	} else if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+void JoinOrderOptimizer::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
+	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		// Here you have a filter on a single column in a table. Return a binding for the column
 		// being filtered on so the filter estimator knows what HLL count to pull
 		auto &colref = (BoundColumnRefExpression &)expression;
@@ -83,15 +70,10 @@ void JoinOrderOptimizer::GetColumnBindings(Expression &expression, ColumnBinding
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		left_binding = ColumnBinding(relation_mapping[colref.binding.table_index], colref.binding.column_index);
-		return;
+		binding = ColumnBinding(relation_mapping[colref.binding.table_index], colref.binding.column_index);
 	}
 	// TODO: handle inequality filters with functions.
-	// TODO: Don't overwrite the right binding. This fails silently right now
-	//  When enumerating the children, it's possible you overwrite the left_binding
-	//  if the right child is an expression with more children than the left child.
-	ExpressionIterator::EnumerateChildren(
-	    expression, [&](Expression &expr) { GetColumnBindings(expr, left_binding, right_binding); });
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
 }
 
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
@@ -316,6 +298,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	if (entry == plans.end() || new_plan->GetCost() < entry->second->GetCost()) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
+
 		//! make sure plans are symmetric for cardinality estimation
 		if (entry != plans.end()) {
 			cardinality_estimator.VerifySymmetry(result, entry->second.get());
@@ -944,7 +927,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// first extract the relation set for the entire filter
 		unordered_set<idx_t> bindings;
 		ExtractBindings(*filter, bindings);
-		GetColumnBindings(*filter, filter_info->left_binding, filter_info->right_binding);
 		filter_info->set = set_manager.GetJoinRelation(bindings);
 		filter_info->filter_index = i;
 		// now check if it can be used as a join predicate
@@ -954,6 +936,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			unordered_set<idx_t> left_bindings, right_bindings;
 			ExtractBindings(*comparison->left, left_bindings);
 			ExtractBindings(*comparison->right, right_bindings);
+			GetColumnBinding(*comparison->left, filter_info->left_binding);
+			GetColumnBinding(*comparison->right, filter_info->right_binding);
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist

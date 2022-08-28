@@ -212,9 +212,17 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 			for (it = subgraphs.begin(); it != subgraphs.end(); it++) {
 				auto left_in = it->relations.count(filter->left_binding.table_index);
 				auto right_in = it->relations.count(filter->right_binding.table_index);
-				// if both left and right bindings are in the subgraph, continue
-				// if both left and right bindings are *not* in the subgraph, continue
-				if (!(left_in ^ right_in)) {
+				if (left_in && right_in) {
+					// if both left and right bindings are in the subgraph, continue.
+					// This means another filter is connecting relations already in the
+					// subgraph it, but it has a tdom that is less, and we don't care.
+					found_match = true;
+					continue;
+				}
+				if (!left_in && !right_in) {
+					// if both left and right bindings are *not* in the subgraph, continue
+					// without finding a match. This will trigger the process to add a new
+					// subgraph
 					continue;
 				}
 				idx_t find_table;
@@ -258,7 +266,9 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 	}
 	double denom = 1;
 	for (auto &match : subgraphs) {
-		if (match.relations.size() == new_set->count) {
+		// It's possible that in production, one of the D_ASSERTS above will fail and not all subgraphs
+		// were connected. When this happens, just use the largest denominator of all the subgraphs.
+		if (match.denom > denom) {
 			denom = match.denom;
 		}
 	}
