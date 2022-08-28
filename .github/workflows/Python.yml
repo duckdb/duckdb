@@ -285,7 +285,7 @@ jobs:
             --volume "${PWD}/dist:/dist"
           install: |
             apt update
-            apt install python3.10-full -y
+            apt install python3.10-full python3-pip -y
           run: |
             python3.10 -m pip install /artifacts/*.whl
             python3.10 -c "print(__import__('duckdb').__version__)"
