@@ -265,6 +265,7 @@ jobs:
          run: |
            . venv/bin/activate
            echo "VIRTUAL ENV:" $VIRTUAL_ENV
+           python3 -m pip install pip -U
            python3 -c "print(__import__('platform').architecture())"
            python3 -c "import packaging.tags; print(list(packaging.tags.sys_tags()))"
 
