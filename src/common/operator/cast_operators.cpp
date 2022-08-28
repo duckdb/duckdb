@@ -1521,7 +1521,7 @@ struct DecimalCastData {
 	uint8_t decimal_count;
 	//! Only set when ALLOW_EXPONENT is enabled
 	uint8_t excessive_decimals;
-	bool exponent;
+	bool positive_exponent;
 };
 
 struct DecimalCastOperation {
@@ -1557,7 +1557,7 @@ struct DecimalCastOperation {
 	static bool HandleExponent(T &state, int32_t exponent) {
 		auto decimal_excess = (state.decimal_count > state.scale) ? state.decimal_count - state.scale : 0;
 		if (exponent > 0) {
-			state.exponent = true;
+			state.positive_exponent = true;
 			//! Positive exponents need up to 'exponent' amount of digits
 			//! Everything beyond that amount needs to be truncated
 			if (decimal_excess > exponent) {
@@ -1629,7 +1629,7 @@ struct DecimalCastOperation {
 			state.result /= 10.0;
 		}
 		//! Only round up when exponents are involved
-		if (state.exponent && round_up) {
+		if (state.positive_exponent && round_up) {
 			RoundUpResult<T, NEGATIVE>(state);
 		}
 		D_ASSERT(state.decimal_count > state.scale);
@@ -1639,7 +1639,7 @@ struct DecimalCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
-		if (!state.exponent && state.decimal_count > state.scale) {
+		if (!state.positive_exponent && state.decimal_count > state.scale) {
 			//! Did not encounter an exponent, but ALLOW_EXPONENT was on
 			state.excessive_decimals = state.decimal_count - state.scale;
 		}
@@ -1665,7 +1665,7 @@ bool TryDecimalStringCast(string_t input, T &result, string *error_message, uint
 	state.digit_count = 0;
 	state.decimal_count = 0;
 	state.excessive_decimals = 0;
-	state.exponent = false;
+	state.positive_exponent = false;
 	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false>(input.GetDataUnsafe(),
 	                                                                                 input.GetSize(), state, false)) {
 		string error = StringUtil::Format("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(),
