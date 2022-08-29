@@ -94,7 +94,7 @@ jobs:
  linux-release-aarch64:
    name: Linux (AARCH64)
    runs-on: ubuntu-latest
-   needs: linux-release-64
+   #needs: linux-release-64
 
    container: ubuntu:18.04 # cross compiler not available in 16
    env:
@@ -111,7 +111,7 @@ jobs:
      BUILD_ODBC: 1
      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
      BUILD_JDBC: 1
-     OVERRIDE_JDBC_OS_ARCH: aarch64
+     OVERRIDE_JDBC_OS_ARCH: arm64
      JAVA_HOME: ../../jdk8u345-b01
 
    steps:
