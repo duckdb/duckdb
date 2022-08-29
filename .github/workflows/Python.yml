@@ -258,7 +258,7 @@ jobs:
            wget ${{ matrix.python_build.url }}
            tar -xvjf *.tar.bz2
            ls lib/python${{matrix.python_build.version}}/_sysconfigdata_*
-           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_* | grep -v "_sysconfigdata_m_linux_aarch64-linux-gnu" | xargs rm
+           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_* | grep -v "linux_aarch64-linux-gnu" | xargs rm
            rm -rf lib/python${{matrix.python_build.version}}/__pycache__
 
            # if cibuildwheel starts supporting cross compiling for aarch64 at some point we should switch to that
