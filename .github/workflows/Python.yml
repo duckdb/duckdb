@@ -288,8 +288,8 @@ jobs:
             apt install python3.10-full python3-pip -y
           run: |
             cd /duckdb/tools/pythonpkg
-            python3 -m pip install -r requirements-dev.txt
             python3.10 -m pip install dist/*.whl -U
+            python3 -m pip install -r requirements-dev.txt
             python3.10 -c "print(__import__('duckdb').__version__)"
             python3.10 -m pytest tests/fast
 
