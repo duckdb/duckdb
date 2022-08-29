@@ -212,7 +212,6 @@ jobs:
    linux-python3-aarch64:
      name: Python 3 Linux aarch64
      runs-on: ubuntu-20.04
-     #  container: quay.io/pypa/manylinux2014_x86_64
      strategy:
        matrix:
          arch: [aarch64]
@@ -227,9 +226,9 @@ jobs:
            - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
          exclude:
            - isRelease: false
-             python_build: 'cp38-*'
+             python_build: {url: 'https://anaconda.org/anaconda/python/3.8.13/download/linux-aarch64/python-3.8.13-hc137634_0.tar.bz2', version: '3.8'}
            - isRelease: false
-             python_build: 'cp39-*'
+             python_build: {url: 'https://anaconda.org/anaconda/python/3.9.12/download/linux-aarch64/python-3.9.12-hc137634_1.tar.bz2', version: '3.9'}
 
      steps:
        - uses: actions/checkout@v3
@@ -256,7 +255,6 @@ jobs:
          working-directory: tools/pythonpkg
          run: |
            python${{matrix.python_build.version}} -m pip install pip -U
-           # TODO: need to find source for older aarch64 python binaries
            wget ${{ matrix.python_build.url }}
            tar -xvjf *.tar.bz2
            ls lib/python${{matrix.python_build.version}}/_sysconfigdata_* | grep -v sysconfigdata_aarch64_conda_linux_gnu | xargs rm
