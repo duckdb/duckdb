@@ -281,7 +281,7 @@ jobs:
        - uses: addnab/docker-run-action@v3
          with:
             image: 'quay.io/pypa/manylinux2014_aarch64:latest'
-            options: --volume ${{ github.workspace }}:/duckdb
+            options: --volume ${{ github.workspace }}:/duckdb --platform linux/arm64/v8
             run: |
               uname -m
               python3 -V
