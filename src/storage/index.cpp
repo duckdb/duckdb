@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 
 namespace duckdb {
+class ART;
 
 Index::Index(IndexType type, const vector<column_t> &column_ids_p,
              const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type_p)
@@ -40,6 +41,21 @@ void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);
 	Delete(state, entries, row_identifiers);
+}
+
+void Index::MergeIndexes(Index *other_index) {
+
+	// create the global index
+	switch (this->type) {
+	case IndexType::ART: {
+		auto this_art = (ART *)this;
+		auto other_art = (ART *)other_index;
+		ART::Merge(this_art, other_art);
+		break;
+	}
+	default:
+		throw InternalException("Unimplemented index type for merge");
+	}
 }
 
 void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {

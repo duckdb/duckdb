@@ -162,6 +162,9 @@ public:
 	void SetAsRoot() {
 		this->is_root = true;
 	}
+	bool GetIsRoot() {
+		return this->is_root;
+	}
 
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
 	void SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun);
@@ -179,6 +182,11 @@ public:
 	vector<vector<Value>> GetStorageInfo();
 	static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type);
 
+	//! Initializes a special scan that is used to create an index on the table, it keeps locks on the table
+	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
+	//! Scans the next chunk for the CREATE INDEX operator
+	bool CreateIndexScan(CreateIndexScanState &state, DataChunk &result, TableScanType type);
+
 private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const Constraint *constraint);
@@ -195,10 +203,6 @@ private:
 	                              TableFilterSet *table_filters, RowGroup *row_group, idx_t vector_index,
 	                              idx_t max_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state);
-
-	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
-	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
-	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, TableScanType type);
 
 private:
 	//! Lock for appending entries to the table

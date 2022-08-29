@@ -23,10 +23,10 @@ class PhysicalCreateIndex : public PhysicalOperator {
 public:
 	PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, vector<column_t> column_ids,
 	                    vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInfo> info,
-	                    vector<unique_ptr<Expression>> unbinded_expressions, idx_t estimated_cardinality)
+	                    vector<unique_ptr<Expression>> unbound_expressions, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality), table(table),
 	      column_ids(column_ids), expressions(move(expressions)), info(std::move(info)),
-	      unbound_expressions(move(unbinded_expressions)) {
+	      unbound_expressions(move(unbound_expressions)) {
 	}
 
 	//! The table to create the index for
@@ -37,7 +37,7 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 	//! Info for index creation
 	unique_ptr<CreateIndexInfo> info;
-	//! Unbinded expressions to be used in the optimizer
+	//! Unbound expressions to be used in the optimizer
 	vector<unique_ptr<Expression>> unbound_expressions;
 
 public:
@@ -45,5 +45,23 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+
+public:
+	// Sink interface
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
+	                    DataChunk &input) const override;
+	void Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const override;
+	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                          GlobalSinkState &gstate) const override;
+
+	bool IsSink() const override {
+		return true;
+	}
+	bool ParallelSink() const override {
+		return true;
+	}
 };
 } // namespace duckdb
