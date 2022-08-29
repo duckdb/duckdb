@@ -259,7 +259,7 @@ jobs:
            # TODO: need to find source for older aarch64 python binaries
            wget ${{ matrix.python_build.url }}
            tar -xvjf *.tar.bz2
-           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_*.py | grep -v sysconfigdata_aarch64_conda_linux_gnu | xargs rm
+           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_* | grep -v sysconfigdata_aarch64_conda_linux_gnu | xargs rm
 
            # if cibuildwheel starts supporting cross compiling for aarch64 at some point we should switch to that
            # as using emulation is far too slow (6+ hours)
