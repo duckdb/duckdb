@@ -253,9 +253,12 @@ jobs:
          working-directory: tools/pythonpkg
          run: |
            python3 -m pip install pip -U
+           # TODO: need to find source for older aarch64 python binaries
            wget http://mirror.archlinuxarm.org/aarch64/core/python-${{ matrix.python_build }}-1-aarch64.pkg.tar.xz
            tar xf python-3.10.6-1-aarch64.pkg.tar.xz
 
+           # if cibuildwheel starts supporting cross compiling for aarch64 at some point we should switch to that
+           # as using emulation is far too slow (6+ hours)
            python3 -m crossenv usr/bin/python3.10 venv --cc $(which aarch64-linux-gnu-gcc) --cxx $(which aarch64-linux-gnu-g++) --ar $(which aarch64-linux-gnu-ar) --manylinux manylinux_2_17 --manylinux manylinux2014
 
        - name: Build
