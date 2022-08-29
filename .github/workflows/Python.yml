@@ -257,7 +257,7 @@ jobs:
            python${{matrix.python_build.version}} -m pip install pip -U
            wget ${{ matrix.python_build.url }}
            tar -xvjf *.tar.bz2
-           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_* | grep -v aarch64 | xargs rm
+           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_* | grep -v _sysconfigdata_m_linux_aarch64-linux-gnu | xargs rm
            ls lib/python${{matrix.python_build.version}}/_sysconfigdata_*
            rm -rf lib/python${{matrix.python_build.version}}/__pycache__
 
