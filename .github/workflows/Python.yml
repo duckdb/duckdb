@@ -254,7 +254,7 @@ jobs:
          shell: bash
          working-directory: tools/pythonpkg
          run: |
-           python3 -m pip install pip -U
+           python${{matrix.python_build.version}} -m pip install pip -U
            # TODO: need to find source for older aarch64 python binaries
            wget ${{ matrix.python_build.url }}
            tar -xvjf *.tar.bz2
