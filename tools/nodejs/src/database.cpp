@@ -60,8 +60,10 @@ struct OpenTask : public Task {
 			extension.Load(*Get<Database>().database);
 			success = true;
 
+		} catch (const duckdb::Exception &ex) {
+			error = duckdb::PreservedError(ex);
 		} catch (std::exception &ex) {
-			error = ex.what();
+			error = duckdb::PreservedError(ex);
 		}
 	}
 
@@ -71,7 +73,7 @@ struct OpenTask : public Task {
 
 		std::vector<napi_value> args;
 		if (!success) {
-			args.push_back(Utils::CreateError(env, error));
+			args.push_back(Utils::CreateError(env, error.Message()));
 		} else {
 			args.push_back(env.Null());
 		}
@@ -83,7 +85,7 @@ struct OpenTask : public Task {
 
 	std::string filename;
 	duckdb::DBConfig duckdb_config;
-	std::string error = "";
+	duckdb::PreservedError error;
 	bool success = false;
 };
 
@@ -141,9 +143,7 @@ static void TaskExecuteCallback(napi_env e, void *data) {
 static void TaskCompleteCallback(napi_env e, napi_status status, void *data) {
 	std::unique_ptr<TaskHolder> holder((TaskHolder *)data);
 	holder->db->TaskComplete(e);
-	if (holder->task->callback.Value().IsFunction()) {
-		holder->task->Callback();
-	}
+	holder->task->DoCallback();
 }
 
 void Database::TaskComplete(Napi::Env env) {

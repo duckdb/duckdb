@@ -22,8 +22,8 @@ sqlsmith_duckdb_connection::sqlsmith_duckdb_connection(duckdb::DatabaseInstance 
 
 void sqlsmith_duckdb_connection::q(const char *query) {
 	auto result = connection->Query(query);
-	if (!result->success) {
-		throw runtime_error(result->error);
+	if (result->HasError()) {
+		result->ThrowError();
 	}
 }
 
@@ -33,12 +33,12 @@ schema_duckdb::schema_duckdb(duckdb::DatabaseInstance &database, bool no_catalog
 	if (verbose_output)
 		cerr << "Loading tables...";
 	auto result = connection->Query("SELECT * FROM sqlite_master WHERE type IN ('table', 'view')");
-	if (!result->success) {
-		throw runtime_error(result->error);
+	if (result->HasError()) {
+		result->ThrowError();
 	}
-	for (size_t i = 0; i < result->collection.Count(); i++) {
-		auto type = StringValue::Get(result->collection.GetValue(0, i));
-		auto name = StringValue::Get(result->collection.GetValue(2, i));
+	for (size_t i = 0; i < result->RowCount(); i++) {
+		auto type = StringValue::Get(result->GetValue(0, i));
+		auto name = StringValue::Get(result->GetValue(2, i));
 		bool view = type == "view";
 		table tab(name, "main", !view, !view);
 		tables.push_back(tab);
@@ -54,12 +54,12 @@ schema_duckdb::schema_duckdb(duckdb::DatabaseInstance &database, bool no_catalog
 
 	for (auto t = tables.begin(); t != tables.end(); ++t) {
 		result = connection->Query("PRAGMA table_info('" + t->name + "')");
-		if (!result->success) {
-			throw runtime_error(result->error);
+		if (result->HasError()) {
+			result->ThrowError();
 		}
-		for (size_t i = 0; i < result->collection.Count(); i++) {
-			auto name = StringValue::Get(result->collection.GetValue(1, i));
-			auto type = StringValue::Get(result->collection.GetValue(2, i));
+		for (size_t i = 0; i < result->RowCount(); i++) {
+			auto name = StringValue::Get(result->GetValue(1, i));
+			auto type = StringValue::Get(result->GetValue(2, i));
 			column c(name, sqltype::get(type));
 			t->columns().push_back(c);
 		}
@@ -160,8 +160,8 @@ void dut_duckdb::test(const std::string &stmt) {
 	is_active = false;
 	interrupt_thread.join();
 
-	if (!result->success) {
-		auto error = result->error.c_str();
+	if (result->HasError()) {
+		auto error = result->GetError().c_str();
 		if (regex_match(error, e_internal)) {
 			throw dut::broken(error);
 		}

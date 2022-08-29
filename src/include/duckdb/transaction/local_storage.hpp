@@ -90,6 +90,7 @@ public:
 	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<column_t> &bound_columns, Expression &cast_expr);
 
+	void MoveStorage(DataTable *old_dt, DataTable *new_dt);
 	void FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &chunk);
 	vector<unique_ptr<Index>> &GetIndexes(DataTable *table);
 

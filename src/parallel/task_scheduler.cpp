@@ -129,13 +129,32 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	unique_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		// wait for a signal with a timeout; the timeout allows us to periodically check
+		// wait for a signal with a timeout
 		queue->semaphore.wait();
 		if (queue->q.try_dequeue(task)) {
 			task->Execute(TaskExecutionMode::PROCESS_ALL);
 			task.reset();
 		}
 	}
+#else
+	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
+#endif
+}
+
+idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
+#ifndef DUCKDB_NO_THREADS
+	idx_t completed_tasks = 0;
+	// loop until the marker is set to false
+	while (*marker && completed_tasks < max_tasks) {
+		unique_ptr<Task> task;
+		if (!queue->q.try_dequeue(task)) {
+			return completed_tasks;
+		}
+		task->Execute(TaskExecutionMode::PROCESS_ALL);
+		task.reset();
+		completed_tasks++;
+	}
+	return completed_tasks;
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
 #endif
@@ -185,6 +204,12 @@ void TaskScheduler::SetThreads(int32_t n) {
 #endif
 }
 
+void TaskScheduler::Signal(idx_t n) {
+#ifndef DUCKDB_NO_THREADS
+	queue->semaphore.signal(n);
+#endif
+}
+
 void TaskScheduler::SetThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
 	if (threads.size() == idx_t(n - 1)) {
@@ -196,7 +221,7 @@ void TaskScheduler::SetThreadsInternal(int32_t n) {
 		for (idx_t i = 0; i < threads.size(); i++) {
 			*markers[i] = false;
 		}
-		queue->semaphore.signal(threads.size());
+		Signal(threads.size());
 		// now join the threads to ensure they are fully stopped before erasing them
 		for (idx_t i = 0; i < threads.size(); i++) {
 			threads[i]->internal_thread->join();

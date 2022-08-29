@@ -39,8 +39,8 @@ def check_create_table(category):
     res = conn.execute("SELECT x FROM t1 where x = '1'").fetchall()
     assert res == [('1',)]
 
-    res =  conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.x)").fetchall()
-    assert res == conn.execute("SELECT x FROM t1").fetchall()
+    res =  conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.x) order by t1.x").fetchall()
+    assert res == conn.execute("SELECT x FROM t1 order by t1.x").fetchall()
     
     res = conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.y) order by t1.x").fetchall()
     correct_res = conn.execute("SELECT x FROM t1 order by x").fetchall()

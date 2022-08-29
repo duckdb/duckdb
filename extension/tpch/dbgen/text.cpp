@@ -259,7 +259,7 @@ static char *auxillaries_index[AUXILLARIES_MAX_WEIGHT + 1];
 static char *verbs_index[VERBS_MAX_WEIGHT + 1];
 static char *prepositions_index[PREPOSITIONS_MAX_WEIGHT + 1];
 
-static char *szTextPool;
+static char *szTextPool = NULL;
 static long txtBufferSize = 0;
 
 // generate a lookup table for weight -> str

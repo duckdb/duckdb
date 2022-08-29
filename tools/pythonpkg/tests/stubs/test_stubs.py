@@ -18,7 +18,7 @@ def test_stubs():
 			'--mypy-config-file', MYPY_INI_PATH,
 		], stdout=subprocess.PIPE)
 	if (stubs.returncode != 0):
-		errors = stubs.stdout.decode('utf-8').split('error')
+		errors = stubs.stdout.decode('utf-8').split('Found')[0].split('error')
 		broken_stubs = []
 		for error in errors:
 			add_error = True

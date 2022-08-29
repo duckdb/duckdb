@@ -1,0 +1,143 @@
+# name: test/sql/setops/test_union_by_name.test
+# description: test union by name operations
+# group: [setops]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 (x INT, y INT);
+
+statement ok
+INSERT INTO t1 VALUES (3, 3), (3, 3), (1, 1);
+
+statement ok
+CREATE TABLE t2 (y INT, z INT);
+
+statement ok
+INSERT INTO t2 VALUES (2, 2), (4, 4);
+
+
+########## test binding
+query I
+SELECT t1.x FROM t1 UNION BY NAME SELECT x FROM t1 ORDER BY t1.x;
+----
+1
+3
+
+query I
+SELECT x FROM t1 UNION BY NAME SELECT x FROM t1 ORDER BY t1.x;
+----
+1
+3
+
+query II
+(SELECT x FROM t1 UNION ALL SELECT x FROM t1) UNION BY NAME SELECT 5 ORDER BY t1.x;
+----
+NULL	5
+1	NULL
+3	NULL
+
+query II
+(SELECT x FROM t1 UNION ALL SELECT y FROM t1) UNION BY NAME SELECT 5 ORDER BY y;
+----
+NULL	5
+1	NULL
+3	NULL
+
+
+# Ambiguous name
+
+#Error: Binder Error: Ambiguous reference to column
+statement error
+SELECT x AS a FROM t1 UNION BY NAME SELECT x AS b FROM t1 ORDER BY t1.x;
+
+# Error: Binder Error: Ambiguous name in ORDER BY!
+statement error
+(SELECT x FROM t1 UNION ALL SELECT y FROM t1) UNION BY NAME (SELECT z FROM t2 UNION ALL SELECT y FROM t2) ORDER BY y;
+
+
+########## test limit
+
+query III
+SELECT 1 UNION BY NAME SELECT * FROM range(2, 100) UNION BY NAME SELECT 999 ORDER BY #2, #1 LIMIT 5;
+----
+NULL	NULL	999
+1	NULL	NULL
+NULL	2	NULL
+NULL	3	NULL
+NULL	4	NULL
+
+########## test order by
+
+query III
+SELECT x, y FROM t1 UNION BY NAME SELECT y, z FROM t2 ORDER BY y;
+----
+1	1	NULL
+NULL	2	2
+3	3	NULL
+NULL	4	4
+
+query III
+SELECT x, y FROM t1 UNION BY NAME SELECT y, z FROM t2 ORDER BY 3, 1;
+----
+1	1	NULL
+3	3	NULL
+NULL	2	2
+NULL	4	4
+
+# Error: Binder Error: ORDER term out of range - should be between 1 and 3
+statement error
+SELECT x, y FROM t1 UNION BY NAME SELECT y, z FROM t2 ORDER BY 4;
+
+########## multi set operations
+
+query IIII
+(SELECT 1 UNION BY NAME SELECT x, y FROM t1) UNION BY NAME SELECT y, z FROM t2 ORDER BY #1, #2;
+----
+NULL	NULL	2	2
+NULL	NULL	4	4
+NULL	1	1	NULL
+NULL	3	3	NULL
+1	NULL	NULL	NULL
+
+
+query III
+SELECT x, y FROM t1 UNION BY NAME (SELECT y, z FROM t2 INTERSECT SELECT 2, 2 FROM t1 ORDER BY #1) ORDER BY #1;
+----
+NULL	2	2
+1	1	NULL
+3	3	NULL
+
+
+query III
+(SELECT x, y FROM t1 UNION BY NAME SELECT y, z FROM t2 ORDER BY #1) EXCEPT SELECT NULL, 2, 2 FROM t1 ORDER BY #1;
+----
+NULL	4	4
+1	1	NULL
+3	3	NULL
+
+
+########## same name in select list
+
+query III
+SELECT x, x as a FROM t1 UNION BY NAME SELECT y FROM t2 ORDER BY #1, #3;
+----
+NULL	NULL	2
+NULL	NULL	4
+1	1	NULL
+3	3	NULL
+
+########## alias name in select list
+
+query II
+SELECT x as a FROM t1 UNION BY NAME SELECT x FROM t1 ORDER BY #1, #2;
+----
+NULL	1
+NULL	3
+1	NULL
+3	NULL
+
+
+
+

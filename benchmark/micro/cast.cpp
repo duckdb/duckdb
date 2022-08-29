@@ -25,8 +25,8 @@ string GetQuery() override {
 	return "SELECT CAST(d AS VARCHAR) FROM dates";
 }
 string VerifyResult(QueryResult *result) override {
-	if (!result->success) {
-		return result->error;
+	if (result->HasError()) {
+		return result->GetError();
 	}
 	return string();
 }
@@ -52,8 +52,8 @@ string GetQuery() override {
 	return "SELECT CAST(d AS VARCHAR) FROM times";
 }
 string VerifyResult(QueryResult *result) override {
-	if (!result->success) {
-		return result->error;
+	if (result->HasError()) {
+		return result->GetError();
 	}
 	return string();
 }
@@ -81,8 +81,8 @@ string GetQuery() override {
 	return "SELECT CAST(d AS VARCHAR) FROM timestamps";
 }
 string VerifyResult(QueryResult *result) override {
-	if (!result->success) {
-		return result->error;
+	if (result->HasError()) {
+		return result->GetError();
 	}
 	return string();
 }

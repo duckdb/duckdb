@@ -60,9 +60,7 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 	case PyDecimalExponentType::EXPONENT_SCALE: {
 	case PyDecimalExponentType::EXPONENT_POWER: {
 		auto scale = exponent_value;
-		if (exponent_type == PyDecimalExponentType::EXPONENT_SCALE) {
-			scale *= -1;
-		} else if (exponent_type == PyDecimalExponentType::EXPONENT_POWER) {
+		if (exponent_type == PyDecimalExponentType::EXPONENT_POWER) {
 			width += scale;
 		}
 		if (width > Decimal::MAX_WIDTH_INT64) {

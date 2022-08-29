@@ -10,30 +10,29 @@
 
 namespace duckdb {
 
-py::object PythonTableArrowArrayStreamFactory::ProduceScanner(
-    py::object &arrow_scanner, py::handle &arrow_obj_handle,
-    std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns, TableFilterSet *filters,
-    ClientConfig &config) {
+py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
+                                                              ArrowStreamParameters &parameters, ClientConfig &config) {
+	auto filters = parameters.filters;
+	auto &column_list = parameters.projected_columns.columns;
 	bool has_filter = filters && !filters->filters.empty();
-	py::list projection_list = py::cast(project_columns.second);
+	py::list projection_list = py::cast(column_list);
 	if (has_filter) {
-		auto filter = TransformFilter(*filters, project_columns.first, config);
-		if (project_columns.second.empty()) {
+		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, config);
+		if (column_list.empty()) {
 			return arrow_scanner(arrow_obj_handle, py::arg("filter") = filter);
 		} else {
 			return arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
 		}
 	} else {
-		if (project_columns.second.empty()) {
+		if (column_list.empty()) {
 			return arrow_scanner(arrow_obj_handle);
 		} else {
 			return arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
 		}
 	}
 }
-unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
-    uintptr_t factory_ptr, std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
-    TableFilterSet *filters) {
+unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr,
+                                                                                ArrowStreamParameters &parameters) {
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
@@ -45,18 +44,18 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	if (py_object_type == "Table") {
 		auto arrow_dataset = py::module_::import("pyarrow.dataset").attr("dataset");
 		auto dataset = arrow_dataset(arrow_obj_handle);
-		scanner = ProduceScanner(arrow_scanner, dataset, project_columns, filters, factory->config);
+		scanner = ProduceScanner(arrow_scanner, dataset, parameters, factory->config);
 	} else if (py_object_type == "RecordBatchReader") {
 		py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
-		scanner = ProduceScanner(arrow_batch_scanner, arrow_obj_handle, project_columns, filters, factory->config);
+		scanner = ProduceScanner(arrow_batch_scanner, arrow_obj_handle, parameters, factory->config);
 	} else if (py_object_type == "Scanner") {
 		// If it's a scanner we have to turn it to a record batch reader, and then a scanner again since we can't stack
 		// scanners on arrow Otherwise pushed-down projections and filters will disappear like tears in the rain
 		auto record_batches = arrow_obj_handle.attr("to_reader")();
 		py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
-		scanner = ProduceScanner(arrow_batch_scanner, record_batches, project_columns, filters, factory->config);
+		scanner = ProduceScanner(arrow_batch_scanner, record_batches, parameters, factory->config);
 	} else {
-		scanner = ProduceScanner(arrow_scanner, arrow_obj_handle, project_columns, filters, factory->config);
+		scanner = ProduceScanner(arrow_scanner, arrow_obj_handle, parameters, factory->config);
 	}
 
 	auto record_batches = scanner.attr("to_reader")();
@@ -241,7 +240,7 @@ py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &f
 	auto filters_map = &filter_collection.filters;
 	auto it = filters_map->begin();
 	D_ASSERT(columns.find(it->first) != columns.end());
-	string timezone_config = ClientConfig::ExtractTimezoneFromConfig(config);
+	string timezone_config = config.ExtractTimezone();
 	py::object expression = TransformFilterRecursive(it->second.get(), columns[it->first], timezone_config);
 	while (it != filters_map->end()) {
 		py::object child_expression = TransformFilterRecursive(it->second.get(), columns[it->first], timezone_config);

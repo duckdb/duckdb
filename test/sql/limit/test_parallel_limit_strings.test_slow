@@ -1,0 +1,100 @@
+# name: test/sql/limit/test_parallel_limit_strings.test_slow
+# description: Test parallel limit execution with strings
+# group: [limit]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=8
+
+statement ok
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 1779793 UNION ALL SELECT 4779793;
+
+foreach table_type TABLE VIEW
+
+statement ok
+CREATE ${table_type} integers AS SELECT i, CONCAT('quackquack', i) AS k FROM range(10000000) tbl(i);
+
+query I
+SELECT k FROM integers LIMIT 5
+----
+quackquack0
+quackquack1
+quackquack2
+quackquack3
+quackquack4
+
+query I
+SELECT k FROM integers WHERE i>1978321 OR i=334 LIMIT 5
+----
+quackquack334
+quackquack1978322
+quackquack1978323
+quackquack1978324
+quackquack1978325
+
+query I
+SELECT k FROM integers WHERE i>1978321 LIMIT 5
+----
+quackquack1978322
+quackquack1978323
+quackquack1978324
+quackquack1978325
+quackquack1978326
+
+query I
+SELECT k FROM integers WHERE i>4978321 LIMIT 5
+----
+quackquack4978322
+quackquack4978323
+quackquack4978324
+quackquack4978325
+quackquack4978326
+
+# large offset
+query I
+SELECT k FROM integers WHERE i>4978321 LIMIT 5 OFFSET 100000;
+----
+quackquack5078322
+quackquack5078323
+quackquack5078324
+quackquack5078325
+quackquack5078326
+
+query I
+SELECT k FROM integers WHERE i>4978321 LIMIT 5 OFFSET 1000000;
+----
+quackquack5978322
+quackquack5978323
+quackquack5978324
+quackquack5978325
+quackquack5978326
+
+# IN-clause (semi join)
+query I sort
+SELECT k FROM integers WHERE i IN (SELECT * FROM other_table)
+----
+quackquack1779793
+quackquack337
+quackquack4779793
+quackquack948247
+
+query I
+(SELECT k FROM integers WHERE i>1978321 LIMIT 5) UNION ALL (SELECT k FROM integers WHERE i>4978321 LIMIT 5)
+----
+quackquack1978322
+quackquack1978323
+quackquack1978324
+quackquack1978325
+quackquack1978326
+quackquack4978322
+quackquack4978323
+quackquack4978324
+quackquack4978325
+quackquack4978326
+
+statement ok
+DROP ${table_type} integers
+
+endloop

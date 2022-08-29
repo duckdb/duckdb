@@ -16,8 +16,9 @@
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
-UndoBuffer::UndoBuffer(const shared_ptr<ClientContext> &context) : allocator(BufferAllocator::Get(*context)) {
-	D_ASSERT(context);
+UndoBuffer::UndoBuffer(const shared_ptr<ClientContext> &context_p)
+    : context(*context_p), allocator(BufferAllocator::Get(*context_p)) {
+	D_ASSERT(context_p);
 }
 
 data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
@@ -37,7 +38,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 	// iterate in insertion order: start with the tail
 	state.current = allocator.GetTail();
 	while (state.current) {
-		state.start = state.current->data->get();
+		state.start = state.current->data.get();
 		state.end = state.start + state.current->current_position;
 		while (state.start < state.end) {
 			UndoFlags type = Load<UndoFlags>(state.start);
@@ -57,7 +58,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::It
 	// iterate in insertion order: start with the tail
 	state.current = allocator.GetTail();
 	while (state.current) {
-		state.start = state.current->data->get();
+		state.start = state.current->data.get();
 		state.end =
 		    state.current == end_state.current ? end_state.start : state.start + state.current->current_position;
 		while (state.start < state.end) {
@@ -81,7 +82,7 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 	// iterate in reverse insertion order: start with the head
 	auto current = allocator.GetHead();
 	while (current) {
-		data_ptr_t start = current->data->get();
+		data_ptr_t start = current->data.get();
 		data_ptr_t end = start + current->current_position;
 		// create a vector with all nodes in this chunk
 		vector<pair<UndoFlags, data_ptr_t>> nodes;
@@ -130,7 +131,7 @@ void UndoBuffer::Cleanup() {
 }
 
 void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, WriteAheadLog *log, transaction_t commit_id) {
-	CommitState state(commit_id, log);
+	CommitState state(context, commit_id, log);
 	if (log) {
 		// commit WITH write ahead log
 		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<true>(type, data); });
@@ -141,7 +142,7 @@ void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, WriteAheadLog
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction_id, nullptr);
+	CommitState state(context, transaction_id, nullptr);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 }

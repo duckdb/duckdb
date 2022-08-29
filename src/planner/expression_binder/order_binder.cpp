@@ -29,7 +29,9 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 	if (extra_list && index < extra_list->size()) {
 		alias = extra_list->at(index)->ToString();
 	} else {
-		alias = expr.GetName();
+		if (!expr.alias.empty()) {
+			alias = expr.alias;
+		}
 	}
 	return make_unique<BoundColumnRefExpression>(move(alias), LogicalType::INVALID,
 	                                             ColumnBinding(projection_index, index));
@@ -88,6 +90,9 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	}
 	case ExpressionClass::POSITIONAL_REFERENCE: {
 		auto &posref = (PositionalReferenceExpression &)*expr;
+		if (posref.index < 1 || posref.index > max_count) {
+			throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
+		}
 		return CreateProjectionReference(*expr, posref.index - 1);
 	}
 	case ExpressionClass::PARAMETER: {

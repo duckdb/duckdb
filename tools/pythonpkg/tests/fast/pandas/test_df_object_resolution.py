@@ -218,7 +218,7 @@ class TestResolveObjectColumns(object):
                 [{'key': ['a', 'a', 'b'], 'value': [4, 0, 4]}]
             ]
         )
-        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains duplicates"):
+        with pytest.raises(duckdb.InvalidInputException, match="Dict->Map conversion failed because 'key' list contains duplicates"):
             converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_map_nullkey(self, duckdb_cursor):
@@ -227,7 +227,7 @@ class TestResolveObjectColumns(object):
                 [{'key': [None, 'a', 'b'], 'value': [4, 0, 4]}]
             ]
         )
-        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains None"):
+        with pytest.raises(duckdb.InvalidInputException, match="Dict->Map conversion failed because 'key' list contains None"):
             converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_map_nullkeylist(self, duckdb_cursor):
@@ -248,7 +248,7 @@ class TestResolveObjectColumns(object):
                 [{'a': 4, None: 0, 'd': 4}]
             ]
         )
-        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains None"):
+        with pytest.raises(duckdb.InvalidInputException, match="Dict->Map conversion failed because 'key' list contains None"):
             converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_map_fallback_nullkey_coverage(self, duckdb_cursor):
@@ -258,7 +258,7 @@ class TestResolveObjectColumns(object):
                 [{'key': None, None: 5}],
             ]
         )
-        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains None"):
+        with pytest.raises(duckdb.InvalidInputException, match="Dict->Map conversion failed because 'key' list contains None"):
             converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_struct_key_conversion(self, duckdb_cursor):
@@ -346,11 +346,13 @@ class TestResolveObjectColumns(object):
         pd.testing.assert_frame_equal(converted_col, duckdb_col)
 
     def test_ubigint_object_conversion(self, duckdb_cursor):
+		# UBIGINT + TINYINT would result in HUGEINT, but conversion to HUGEINT is not supported yet from pandas->duckdb
+		# So this instead becomes a DOUBLE
         data = [18446744073709551615, 0]
         x = pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
         converted_col = duckdb.query_df(x, "x", "select * from x").df()
-        uint64_dtype = np.dtype('uint64')
-        assert isinstance(converted_col['0'].dtype, uint64_dtype.__class__) == True
+        float64 = np.dtype('float64')
+        assert isinstance(converted_col['0'].dtype, float64.__class__) == True
 
     def test_double_object_conversion(self, duckdb_cursor):
         data = [18446744073709551616, 0]
@@ -419,7 +421,7 @@ class TestResolveObjectColumns(object):
         x = pd.DataFrame({
             'a': pd.Series(data=data)
         })
-        with pytest.raises(Exception, match="Unimplemented type for cast"):
+        with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
             res = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_numeric_decimal_incompatible(self):
@@ -435,14 +437,14 @@ class TestResolveObjectColumns(object):
                 (1.234,               -324234234,               1324234359)
             ) tbl(a, b, c);
         """
-        # Currently this raises a ConversionException due to an unrelated bug, so we can't accurately test faulty conversions
-        # This test serves as a reminder that this functionality needs to be properly tested once this bug is fixed.
-        # See PR #3985
-        with pytest.raises(Exception, match="Conversion Error"):
-            duckdb_conn.execute(reference_query)
-        #x = pd.DataFrame({
-        #    '0': ConvertStringToDecimal(['5', '12.0', '-123.0', '-234234.0', None, '1.234']),
-        #    '1': ConvertStringToDecimal([5002340, 13, '-12.0000000005', 7453324234, None, '-324234234']),
-        #    '2': ConvertStringToDecimal([-234234234234,  '324234234.00000005', -128, 345345, 0, '1324234359'])
-        #})
-        #conversion = duckdb.query_df(x, "x", "select * from x").fetchall()
+        duckdb_conn.execute(reference_query)
+        x = pd.DataFrame({
+            '0': ConvertStringToDecimal(['5', '12.0', '-123.0', '-234234.0', None, '1.234']),
+            '1': ConvertStringToDecimal([5002340, 13, '-12.0000000005', 7453324234, None, '-324234234']),
+            '2': ConvertStringToDecimal([-234234234234,  '324234234.00000005', -128, 345345, 0, '1324234359'])
+        })
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(x, "x", "select * from x").fetchall()
+
+        assert(conversion == reference)
+

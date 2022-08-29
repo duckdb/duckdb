@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 #include <limits>
 
@@ -90,7 +91,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 
 	if (result->options.include_parsed_hive_partitions) {
-		auto partitions = ParseHivePartitions(result->files[0]);
+		auto partitions = HivePartitioning::Parse(result->files[0]);
 		result->hive_partition_col_idx = names.size();
 		for (auto &part : partitions) {
 			return_types.emplace_back(LogicalType::VARCHAR);
@@ -117,6 +118,9 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInit(ClientContext &context, 
 	auto result = make_unique<ReadCSVOperatorData>();
 	if (bind_data.initial_reader) {
 		result->csv_reader = move(bind_data.initial_reader);
+	} else if (bind_data.files.empty()) {
+		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
+		return move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
 		result->csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
@@ -135,6 +139,12 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (ReadCSVData &)*data_p.bind_data;
 	auto &data = (ReadCSVOperatorData &)*data_p.global_state;
+
+	if (!data.csv_reader) {
+		// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files
+		return;
+	}
+
 	do {
 		data.csv_reader->ParseCSV(output);
 		data.bytes_read = data.csv_reader->bytes_in_chunk;
@@ -155,7 +165,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		col.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	if (bind_data.options.include_parsed_hive_partitions) {
-		auto partitions = ParseHivePartitions(data.csv_reader->options.file_path);
+		auto partitions = HivePartitioning::Parse(data.csv_reader->options.file_path);
 
 		idx_t i = bind_data.hive_partition_col_idx;
 
@@ -212,9 +222,118 @@ double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p
 	return percentage;
 }
 
+void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+                              vector<unique_ptr<Expression>> &filters) {
+	auto data = (ReadCSVData *)bind_data_p;
+
+	if (data->options.include_parsed_hive_partitions || data->options.include_file_name) {
+		string first_file = data->files[0];
+
+		unordered_map<string, column_t> column_map;
+		for (idx_t i = 0; i < get.column_ids.size(); i++) {
+			column_map.insert({get.names[get.column_ids[i]], i});
+		}
+
+		HivePartitioning::ApplyFiltersToFileList(data->files, filters, column_map, get.table_index,
+		                                         data->options.include_parsed_hive_partitions,
+		                                         data->options.include_file_name);
+
+		if (data->files.empty() || data->files[0] != first_file) {
+			data->initial_reader.reset();
+		}
+	}
+}
+
+void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
+	// common options
+	writer.WriteField<bool>(has_delimiter);
+	writer.WriteString(delimiter);
+	writer.WriteField<bool>(has_quote);
+	writer.WriteString(quote);
+	writer.WriteField<bool>(has_escape);
+	writer.WriteString(escape);
+	writer.WriteField<bool>(has_header);
+	writer.WriteField<bool>(header);
+	writer.WriteField<bool>(ignore_errors);
+	writer.WriteField<idx_t>(num_cols);
+	writer.WriteField<idx_t>(buffer_size);
+	writer.WriteString(null_str);
+	writer.WriteField<FileCompressionType>(compression);
+	// read options
+	writer.WriteList<string>(names);
+	writer.WriteField<idx_t>(skip_rows);
+	writer.WriteField<idx_t>(maximum_line_size);
+	writer.WriteField<bool>(normalize_names);
+	writer.WriteListNoReference<bool>(force_not_null);
+	writer.WriteField<bool>(all_varchar);
+	writer.WriteField<idx_t>(sample_chunk_size);
+	writer.WriteField<idx_t>(sample_chunks);
+	writer.WriteField<bool>(auto_detect);
+	writer.WriteString(file_path);
+	writer.WriteField<bool>(include_file_name);
+	writer.WriteField<bool>(include_parsed_hive_partitions);
+	// write options
+	writer.WriteListNoReference<bool>(force_quote);
+}
+
+void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
+	// common options
+	has_delimiter = reader.ReadRequired<bool>();
+	delimiter = reader.ReadRequired<string>();
+	has_quote = reader.ReadRequired<bool>();
+	quote = reader.ReadRequired<string>();
+	has_escape = reader.ReadRequired<bool>();
+	escape = reader.ReadRequired<string>();
+	has_header = reader.ReadRequired<bool>();
+	header = reader.ReadRequired<bool>();
+	ignore_errors = reader.ReadRequired<bool>();
+	num_cols = reader.ReadRequired<idx_t>();
+	buffer_size = reader.ReadRequired<idx_t>();
+	null_str = reader.ReadRequired<string>();
+	compression = reader.ReadRequired<FileCompressionType>();
+	// read options
+	names = reader.ReadRequiredList<string>();
+	skip_rows = reader.ReadRequired<idx_t>();
+	maximum_line_size = reader.ReadRequired<idx_t>();
+	normalize_names = reader.ReadRequired<bool>();
+	force_not_null = reader.ReadRequiredList<bool>();
+	all_varchar = reader.ReadRequired<bool>();
+	sample_chunk_size = reader.ReadRequired<idx_t>();
+	sample_chunks = reader.ReadRequired<idx_t>();
+	auto_detect = reader.ReadRequired<bool>();
+	file_path = reader.ReadRequired<string>();
+	include_file_name = reader.ReadRequired<bool>();
+	include_parsed_hive_partitions = reader.ReadRequired<bool>();
+	// write options
+	force_quote = reader.ReadRequiredList<bool>();
+}
+
+static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
+	auto &bind_data = (ReadCSVData &)*bind_data_p;
+	writer.WriteList<string>(bind_data.files);
+	writer.WriteRegularSerializableList<LogicalType>(bind_data.sql_types);
+	writer.WriteField<idx_t>(bind_data.filename_col_idx);
+	writer.WriteField<idx_t>(bind_data.hive_partition_col_idx);
+	bind_data.options.Serialize(writer);
+}
+
+static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, FieldReader &reader,
+                                                     TableFunction &function) {
+	auto result_data = make_unique<ReadCSVData>();
+	result_data->files = reader.ReadRequiredList<string>();
+	result_data->sql_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	result_data->filename_col_idx = reader.ReadRequired<idx_t>();
+	result_data->hive_partition_col_idx = reader.ReadRequired<idx_t>();
+	result_data->options.Deserialize(reader);
+	return move(result_data);
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInit);
 	read_csv.table_scan_progress = CSVReaderProgress;
+	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
+	read_csv.serialize = CSVReaderSerialize;
+	read_csv.deserialize = CSVReaderDeserialize;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }
@@ -224,6 +343,9 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 
 	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVAutoBind, ReadCSVInit);
 	read_csv_auto.table_scan_progress = CSVReaderProgress;
+	read_csv_auto.pushdown_complex_filter = CSVComplexFilterPushdown;
+	read_csv_auto.serialize = CSVReaderSerialize;
+	read_csv_auto.deserialize = CSVReaderDeserialize;
 	ReadCSVAddNamedParameters(read_csv_auto);
 	set.AddFunction(read_csv_auto);
 }
@@ -250,7 +372,6 @@ unique_ptr<TableFunctionRef> ReadCSVReplacement(ClientContext &context, const st
 void BuiltinFunctions::RegisterReadFunctions() {
 	CSVCopyFunction::RegisterFunction(*this);
 	ReadCSVTableFunction::RegisterFunction(*this);
-
 	auto &config = DBConfig::GetConfig(context);
 	config.replacement_scans.emplace_back(ReadCSVReplacement);
 }

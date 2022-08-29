@@ -11,18 +11,35 @@
 
 namespace duckdb {
 
+AllocatedData::AllocatedData() : allocator(nullptr), pointer(nullptr), allocated_size(0) {
+}
+
 AllocatedData::AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size)
-    : allocator(allocator), pointer(pointer), allocated_size(allocated_size) {
+    : allocator(&allocator), pointer(pointer), allocated_size(allocated_size) {
 }
 AllocatedData::~AllocatedData() {
 	Reset();
+}
+
+AllocatedData::AllocatedData(AllocatedData &&other) noexcept
+    : allocator(other.allocator), pointer(nullptr), allocated_size(0) {
+	std::swap(pointer, other.pointer);
+	std::swap(allocated_size, other.allocated_size);
+}
+
+AllocatedData &AllocatedData::operator=(AllocatedData &&other) noexcept {
+	std::swap(allocator, other.allocator);
+	std::swap(pointer, other.pointer);
+	std::swap(allocated_size, other.allocated_size);
+	return *this;
 }
 
 void AllocatedData::Reset() {
 	if (!pointer) {
 		return;
 	}
-	allocator.FreeData(pointer, allocated_size);
+	D_ASSERT(allocator);
+	allocator->FreeData(pointer, allocated_size);
 	pointer = nullptr;
 }
 
@@ -132,7 +149,7 @@ AllocatorDebugInfo::~AllocatorDebugInfo() {
 	if (allocation_count != 0) {
 		printf("Outstanding allocations found for Allocator\n");
 		for (auto &entry : pointers) {
-			printf("Allocation of size %lld at address %p\n", entry.second.first, (void *)entry.first);
+			printf("Allocation of size %ld at address %p\n", entry.second.first, (void *)entry.first);
 			printf("Stack trace:\n%s\n", entry.second.second.c_str());
 			printf("\n");
 		}

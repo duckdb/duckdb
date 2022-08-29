@@ -39,8 +39,8 @@ public:
 	//! Layout of this data
 	const RowLayout layout;
 	//! Data and heap blocks
-	vector<RowDataBlock> data_blocks;
-	vector<RowDataBlock> heap_blocks;
+	vector<unique_ptr<RowDataBlock>> data_blocks;
+	vector<unique_ptr<RowDataBlock>> heap_blocks;
 	//! Whether the pointers in this sorted data are swizzled
 	bool swizzled;
 
@@ -76,7 +76,7 @@ public:
 
 public:
 	//! Radix/memcmp sortable data
-	vector<RowDataBlock> radix_sorting_data;
+	vector<unique_ptr<RowDataBlock>> radix_sorting_data;
 	//! Variable sized sorting data
 	unique_ptr<SortedData> blob_sorting_data;
 	//! Payload data
@@ -160,14 +160,17 @@ private:
 	SBScanState read_state;
 	//! The total count of sorted_data
 	const idx_t total_count;
-	//! The global sort state
-	GlobalSortState &global_sort_state;
 	//! Addresses used to gather from the sorted data
 	Vector addresses = Vector(LogicalType::POINTER);
 	//! The number of rows scanned so far
 	idx_t total_scanned;
 	//! Whether to flush the blocks after scanning
 	const bool flush;
+	//! Whether we are unswizzling the blocks
+	const bool unswizzling;
+
+	//! Checks that the newest block is valid
+	void ValidateUnscannedBlock() const;
 };
 
 struct SBIterator {

@@ -25,8 +25,6 @@ class Planner {
 public:
 	explicit Planner(ClientContext &context);
 
-	void CreatePlan(unique_ptr<SQLStatement> statement);
-
 	unique_ptr<LogicalOperator> plan;
 	vector<string> names;
 	vector<LogicalType> types;
@@ -37,6 +35,11 @@ public:
 	ClientContext &context;
 
 	StatementProperties properties;
+
+public:
+	void CreatePlan(unique_ptr<SQLStatement> statement);
+	static void VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
+	                       bound_parameter_map_t *map = nullptr);
 
 private:
 	void CreatePlan(SQLStatement &statement);

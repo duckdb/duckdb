@@ -99,6 +99,10 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(FieldReader &reader) {
 		return SetDefaultInfo::Deserialize(reader, schema, table);
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT:
 		return AlterForeignKeyInfo::Deserialize(reader, schema, table);
+	case AlterTableType::SET_NOT_NULL:
+		return SetNotNullInfo::Deserialize(reader, schema, table);
+	case AlterTableType::DROP_NOT_NULL:
+		return DropNotNullInfo::Deserialize(reader, schema, table);
 	default:
 		throw SerializationException("Unknown alter table type for deserialization!");
 	}
@@ -255,6 +259,50 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, string sc
 	auto column_name = reader.ReadRequired<string>();
 	auto new_default = reader.ReadOptional<ParsedExpression>(nullptr);
 	return make_unique<SetDefaultInfo>(move(schema), move(table), move(column_name), move(new_default));
+}
+
+//===--------------------------------------------------------------------===//
+// SetNotNullInfo
+//===--------------------------------------------------------------------===//
+SetNotNullInfo::SetNotNullInfo(string schema_p, string table_p, string column_name_p)
+    : AlterTableInfo(AlterTableType::SET_NOT_NULL, move(schema_p), move(table_p)), column_name(move(column_name_p)) {
+}
+SetNotNullInfo::~SetNotNullInfo() {
+}
+
+unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
+	return make_unique_base<AlterInfo, SetNotNullInfo>(schema, name, column_name);
+}
+
+void SetNotNullInfo::SerializeAlterTable(FieldWriter &writer) const {
+	writer.WriteString(column_name);
+}
+
+unique_ptr<AlterInfo> SetNotNullInfo::Deserialize(FieldReader &reader, string schema, string table) {
+	auto column_name = reader.ReadRequired<string>();
+	return make_unique<SetNotNullInfo>(move(schema), move(table), move(column_name));
+}
+
+//===--------------------------------------------------------------------===//
+// DropNotNullInfo
+//===--------------------------------------------------------------------===//
+DropNotNullInfo::DropNotNullInfo(string schema_p, string table_p, string column_name_p)
+    : AlterTableInfo(AlterTableType::DROP_NOT_NULL, move(schema_p), move(table_p)), column_name(move(column_name_p)) {
+}
+DropNotNullInfo::~DropNotNullInfo() {
+}
+
+unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
+	return make_unique_base<AlterInfo, DropNotNullInfo>(schema, name, column_name);
+}
+
+void DropNotNullInfo::SerializeAlterTable(FieldWriter &writer) const {
+	writer.WriteString(column_name);
+}
+
+unique_ptr<AlterInfo> DropNotNullInfo::Deserialize(FieldReader &reader, string schema, string table) {
+	auto column_name = reader.ReadRequired<string>();
+	return make_unique<DropNotNullInfo>(move(schema), move(table), move(column_name));
 }
 
 //===--------------------------------------------------------------------===//

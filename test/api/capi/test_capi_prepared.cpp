@@ -221,9 +221,13 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	status = duckdb_prepare(tester.connection, "SELECT SUM(i)*$1-$2 FROM a", &stmt);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != nullptr);
+	// clear bindings
+	duckdb_bind_int32(stmt, 1, 2);
+	REQUIRE(duckdb_clear_bindings(stmt) == DuckDBSuccess);
+
+	// bind again will succeed
 	duckdb_bind_int32(stmt, 1, 2);
 	duckdb_bind_int32(stmt, 2, 1000);
-
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int32(&res, 0, 0) == 1000000);

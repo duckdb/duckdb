@@ -61,11 +61,12 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
-      BUILD_REST: 1
       BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_ODBC: 1
       OSX_BUILD_UNIVERSAL: 1
+      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
 
     steps:
     - uses: actions/checkout@v3
@@ -80,6 +81,12 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+
+    - name: Install UnixODBC
+      shell: bash
+      run: |
+        brew remove --ignore-dependencies unixodbc
+        CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
 
     - name: Build
       shell: bash
@@ -108,7 +115,8 @@ jobs:
         python scripts/amalgamation.py
         zip -j duckdb_cli-osx-universal.zip build/release/duckdb
         zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        zip -j duckdb_odbc-osx-universal.zip build/release/tools/odbc/libduckdb_odbc.dylib
+        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
     - uses: actions/upload-artifact@v2
       with:
@@ -116,6 +124,7 @@ jobs:
         path: |
           libduckdb-osx-universal.zip
           duckdb_cli-osx-universal.zip
+          duckdb_odbc-osx-universal.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
   xcode-extensions:
@@ -144,7 +153,7 @@ jobs:
           mkdir -p build/openssl
           cd build/openssl
           mkdir sources build
-          curl https://www.openssl.org/source/openssl-3.0.1.tar.gz | tar xv -C sources --strip-components 1
+          curl https://www.openssl.org/source/openssl-3.0.5.tar.gz | tar xv -C sources --strip-components 1
           export OPENSSL_ROOT_DIR=`pwd`/build
           cd sources
           export CC="clang -arch x86_64 -arch arm64"
@@ -165,7 +174,6 @@ jobs:
           post_install: rm build/release/src/libduckdb*
           run_tests: 0
           out_of_tree_ext: 1
-          substrait: 1
           static_link_build: 1
           osx_universal: 1
 

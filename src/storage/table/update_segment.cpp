@@ -630,10 +630,14 @@ static void InitializeUpdateData(UpdateInfo *base_info, Vector &base_data, Updat
 	}
 
 	auto base_array_data = FlatVector::GetData<T>(base_data);
+	auto &base_validity = FlatVector::Validity(base_data);
 	auto base_tuple_data = (T *)base_info->tuple_data;
 	for (idx_t i = 0; i < base_info->N; i++) {
-		base_tuple_data[i] =
-		    UpdateSelectElement::Operation<T>(base_info->segment, base_array_data[base_info->tuples[i]]);
+		auto base_idx = base_info->tuples[i];
+		if (!base_validity.RowIsValid(base_idx)) {
+			continue;
+		}
+		base_tuple_data[i] = UpdateSelectElement::Operation<T>(base_info->segment, base_array_data[base_idx]);
 	}
 }
 

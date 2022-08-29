@@ -7,6 +7,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 FieldWriter::FieldWriter(Serializer &serializer_p)
     : serializer(serializer_p), buffer(make_unique<BufferedSerializer>()), field_count(0), finalized(false) {
+	buffer->SetVersion(serializer.GetVersion());
 }
 
 FieldWriter::~FieldWriter() {
@@ -46,6 +47,7 @@ void FieldWriter::Finalize() {
 // Field Deserializer
 //===--------------------------------------------------------------------===//
 FieldDeserializer::FieldDeserializer(Deserializer &root) : root(root), remaining_data(idx_t(-1)) {
+	SetVersion(root.GetVersion());
 }
 
 void FieldDeserializer::ReadData(data_ptr_t buffer, idx_t read_size) {

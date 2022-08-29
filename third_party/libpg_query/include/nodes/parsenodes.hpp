@@ -1170,7 +1170,7 @@ typedef struct PGUpdateStmt {
  * whether it is a simple or compound SELECT.
  * ----------------------
  */
-typedef enum PGSetOperation { PG_SETOP_NONE = 0, PG_SETOP_UNION, PG_SETOP_INTERSECT, PG_SETOP_EXCEPT } PGSetOperation;
+typedef enum PGSetOperation { PG_SETOP_NONE = 0, PG_SETOP_UNION, PG_SETOP_INTERSECT, PG_SETOP_EXCEPT, PG_SETOP_UNION_BY_NAME } PGSetOperation;
 
 typedef struct PGSelectStmt {
 	PGNodeTag type;
@@ -1996,7 +1996,8 @@ typedef struct PGSampleOptions {
 	PGNodeTag type;
 	PGNode *sample_size;      /* the size of the sample to take */
 	char *method;             /* sample method, or NULL for default */
-	int seed;                 /* seed, or NULL for default; */
+	bool has_seed;            /* if the sample method has seed */
+	int seed;                 /* the seed value if set; */
 	int location;             /* token location, or -1 if unknown */
 } PGSampleOptions;
 

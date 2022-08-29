@@ -1,5 +1,5 @@
 # name: test/fuzzer/afl/window_function_binder_error.test
-# description: Invalid column assertion error
+# description: Invalid window function call
 # group: [afl]
 
 require vector_size 512

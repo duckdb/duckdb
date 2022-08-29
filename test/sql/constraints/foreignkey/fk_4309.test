@@ -1,0 +1,97 @@
+# name: test/sql/constraints/foreignkey/fk_4309.test
+# description: Issue #4309: Foreign key constraints are not honored when deleting rows from the parent table in the presence of multiple such constraints
+# group: [foreignkey]
+
+statement ok
+PRAGMA enable_verification
+
+# fks:
+# d -> a
+# e -> b
+# f -> c
+
+statement ok
+CREATE TABLE tf_1 (
+  a integer, b integer, c integer,
+  PRIMARY KEY (a),
+  UNIQUE (b),
+  UNIQUE (c)
+);
+
+statement ok
+CREATE TABLE tf_2 (
+  d integer, e integer, f integer,
+  FOREIGN KEY (d) REFERENCES tf_1 (a),
+  FOREIGN KEY (e) REFERENCES tf_1 (b),
+  FOREIGN KEY (f) REFERENCES tf_1 (c)
+);
+
+# key "1" does not exist yet
+statement error
+INSERT INTO tf_2 VALUES (1, 1, 1);
+
+# insert key (1, 1, 1)
+statement ok
+INSERT INTO tf_1 VALUES (1, 1, 1);
+
+# all these fail (all three need to match)
+statement error
+INSERT INTO tf_2 VALUES (2, 1, 1);
+
+statement error
+INSERT INTO tf_2 VALUES (1, 2, 1);
+
+statement error
+INSERT INTO tf_2 VALUES (1, 1, 2);
+
+# this succeeds
+statement ok
+INSERT INTO tf_2 VALUES (1, 1, 1);
+
+# now insert (2, NULL, NULL)
+statement ok
+INSERT INTO tf_1 VALUES (2, NULL, NULL);
+
+# insert a dependency
+statement ok
+INSERT INTO tf_2 VALUES (2, NULL, NULL);
+
+# we should not be able to delete this key now
+statement error
+DELETE FROM tf_1 WHERE a = 2;
+
+# delete everything with a|b = 2
+statement ok
+DELETE FROM tf_2 WHERE d=2;
+
+statement ok
+DELETE FROM tf_1 WHERE a=2;
+
+# insert (2, 3, NULL)
+statement ok
+INSERT INTO tf_1 VALUES (2, 3, NULL);
+
+# this is fine
+statement ok
+INSERT INTO tf_2 VALUES (1, 3, 1);
+
+# this should (still) not work
+statement error
+DELETE FROM tf_1 WHERE a = 2;
+
+# delete everything with a|b = 2
+statement ok
+DELETE FROM tf_2 WHERE d=2 OR e=3;
+
+statement ok
+DELETE FROM tf_1 WHERE a=2;
+
+# insert (2, NULL, 4)
+statement ok
+INSERT INTO tf_1 VALUES (2, NULL, 4);
+
+statement ok
+INSERT INTO tf_2 VALUES (1, 1, 4);
+
+statement error
+DELETE FROM tf_1 WHERE a = 2;

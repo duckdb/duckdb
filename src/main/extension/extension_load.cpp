@@ -19,17 +19,18 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	return (T)function;
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &extension) {
-	auto &config = DBConfig::GetConfig(db);
+void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
+	auto &db = DatabaseInstance::GetDatabase(context);
+	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetFileSystem(context);
 	auto filename = fs.ConvertSeparators(extension);
 
 	// shorthand case
 	if (!StringUtil::Contains(extension, ".") && !StringUtil::Contains(extension, fs.PathSeparator())) {
-		string local_path = fs.GetHomeDirectory();
+		string local_path = fs.GetHomeDirectory(FileSystem::GetFileOpener(context));
 		auto path_components = PathComponents();
 		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);

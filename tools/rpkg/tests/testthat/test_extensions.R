@@ -48,19 +48,3 @@ test_that("extensions can be loaded", {
     expect_equal(df0, res)
 })
 
-test_that("substrait extension test", {
-  skip_if(Sys.getenv("DUCKDB_R_TEST_EXTENSION_REQUIRED") != "1", "DUCKDB_R_TEST_EXTENSION_REQUIRED not set, hence not testing extensions")
-  con <- load_extension("substrait.duckdb_extension")
-  on.exit(dbDisconnect(con, shutdown = TRUE))
-  dbExecute(con, "CREATE TABLE integers (i INTEGER)")
-  dbExecute(con, "INSERT INTO integers VALUES (42)")
-  plan <- duckdb::duckdb_get_substrait(con, "select * from integers limit 5")
-  result <- duckdb::duckdb_prepare_substrait(con, plan)
-  df <- dbFetch(result)
-  expect_equal(df$i, 42L)
-
-  result_arrow <- duckdb::duckdb_prepare_substrait(con, plan, TRUE)
-  df2 <- as.data.frame(duckdb::duckdb_fetch_arrow(result_arrow))
-  expect_equal(df2$i, 42L)
-})
-

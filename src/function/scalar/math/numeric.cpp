@@ -199,8 +199,24 @@ struct BitCntOperator {
 	static inline TR Operation(TA input) {
 		using TU = typename std::make_unsigned<TA>::type;
 		TR count = 0;
-		for (auto value = TU(input); value > 0; value >>= 1) {
-			count += TR(value & 1);
+		for (auto value = TU(input); value; ++count) {
+			value &= (value - 1);
+		}
+		return count;
+	}
+};
+
+struct HugeIntBitCntOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		using TU = typename std::make_unsigned<int64_t>::type;
+		TR count = 0;
+
+		for (auto value = TU(input.upper); value; ++count) {
+			value &= (value - 1);
+		}
+		for (auto value = TU(input.lower); value; ++count) {
+			value &= (value - 1);
 		}
 		return count;
 	}
@@ -216,6 +232,8 @@ void BitCountFun::RegisterFunction(BuiltinFunctions &set) {
 	                                     ScalarFunction::UnaryFunction<int32_t, int8_t, BitCntOperator>));
 	functions.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TINYINT,
 	                                     ScalarFunction::UnaryFunction<int64_t, int8_t, BitCntOperator>));
+	functions.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::TINYINT,
+	                                     ScalarFunction::UnaryFunction<hugeint_t, int8_t, HugeIntBitCntOperator>));
 	set.AddFunction(functions);
 }
 
