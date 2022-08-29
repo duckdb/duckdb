@@ -257,8 +257,9 @@ jobs:
            python${{matrix.python_build.version}} -m pip install pip -U
            wget ${{ matrix.python_build.url }}
            tar -xvjf *.tar.bz2
-           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_* | grep -v sysconfigdata_aarch64_conda_linux_gnu | xargs rm
-           rm -rf ls lib/python${{matrix.python_build.version}}/__pycache__
+           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_* | grep -v aarch64 | xargs rm
+           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_*
+           rm -rf lib/python${{matrix.python_build.version}}/__pycache__
 
            # if cibuildwheel starts supporting cross compiling for aarch64 at some point we should switch to that
            # as using emulation is far too slow (6+ hours)
