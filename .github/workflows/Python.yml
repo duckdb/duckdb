@@ -292,12 +292,12 @@ jobs:
             --volume "${PWD}:/duckdb"
           install: |
             apt update
-            apt install python3.10-full python3-pip -y
+            apt install python${{matrix.python_build.version}}-full python3-pip -y
           run: |
             cd /duckdb/tools/pythonpkg
-            python3.10 -m pip install dist/*.whl pytest pandas pyarrow psutil
-            python3.10 -c "print(__import__('duckdb').__version__)"
-            python3.10 -m pytest tests/fast
+            python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
+            python${{matrix.python_build.version}} -c "print(__import__('duckdb').__version__)"
+            python${{matrix.python_build.version}} -m pytest tests/fast
 
        - uses: actions/upload-artifact@v2
          with:
