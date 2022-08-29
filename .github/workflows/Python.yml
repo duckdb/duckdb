@@ -280,8 +280,7 @@ jobs:
 
        - uses: addnab/docker-run-action@v3
          with:
-            registry: quay.io
-            image: manylinux2014_aarch64:latest
+            image: 'quay.io/pypa/manylinux2014_aarch64:latest'
             options: --volume "${{ github.workspace }}:/duckdb"
             run: |
               cd /duckdb/tools/pythonpkg
