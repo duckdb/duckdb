@@ -9,7 +9,7 @@ PRAGMA enable_verification
 query IIII
 SELECT '1e3'::DECIMAL, '1e-1'::DECIMAL, '.1e3'::DECIMAL, '0.1e3'::DECIMAL
 ----
-1000	0.1	100	100
+1000.000	0.1	100.000	100.000
 
 # negative numbers
 query IIII
