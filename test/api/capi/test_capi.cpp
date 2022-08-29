@@ -441,4 +441,5 @@ TEST_CASE("Decimal -> Double casting issue", "[capi]") {
 
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
+	;
 }

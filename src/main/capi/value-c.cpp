@@ -5,6 +5,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 
 using duckdb::const_data_ptr_t;
 using duckdb::Date;
@@ -140,12 +141,86 @@ using duckdb::UnsafeFetch;
 //===--------------------------------------------------------------------===//
 // Templated Casts
 //===--------------------------------------------------------------------===//
+
 template <class SOURCE_TYPE, class RESULT_TYPE, class OP>
 RESULT_TYPE TryCastCInternal(duckdb_result *result, idx_t col, idx_t row) {
 	RESULT_TYPE result_value;
 	try {
 		if (!OP::template Operation<SOURCE_TYPE, RESULT_TYPE>(UnsafeFetch<SOURCE_TYPE>(result, col, row),
 		                                                      result_value)) {
+			return FetchDefaultValue::Operation<RESULT_TYPE>();
+		}
+	} catch (...) {
+		return FetchDefaultValue::Operation<RESULT_TYPE>();
+	}
+	return result_value;
+}
+
+template <class RESULT_TYPE>
+static bool CastDecimalCInternal(duckdb_result *source, RESULT_TYPE &result, idx_t col, idx_t row) {
+	auto result_data = (duckdb::DuckDBResultData *)source->internal_data;
+	auto &query_result = result_data->result;
+	auto &source_type = query_result->types[col];
+	auto width = duckdb::DecimalType::GetWidth(source_type);
+	auto scale = duckdb::DecimalType::GetScale(source_type);
+	switch (source_type.InternalType()) {
+	case duckdb::PhysicalType::INT16:
+		return duckdb::TryCastFromDecimal::Operation<int16_t, RESULT_TYPE>(UnsafeFetch<int16_t>(source, col, row),
+		                                                                   result, nullptr, width, scale);
+	case duckdb::PhysicalType::INT32:
+		return duckdb::TryCastFromDecimal::Operation<int32_t, RESULT_TYPE>(UnsafeFetch<int32_t>(source, col, row),
+		                                                                   result, nullptr, width, scale);
+	case duckdb::PhysicalType::INT64:
+		return duckdb::TryCastFromDecimal::Operation<int64_t, RESULT_TYPE>(UnsafeFetch<int64_t>(source, col, row),
+		                                                                   result, nullptr, width, scale);
+	case duckdb::PhysicalType::INT128:
+		return duckdb::TryCastFromDecimal::Operation<hugeint_t, RESULT_TYPE>(
+		    UnsafeFetch<hugeint_t>(source, col, row), result, nullptr, width, scale);
+	default:
+		throw duckdb::InternalException("Unimplemented internal type for decimal");
+	}
+}
+
+template <>
+bool CastDecimalCInternal(duckdb_result *source, char* &result, idx_t col, idx_t row) {
+	auto result_data = (duckdb::DuckDBResultData *)source->internal_data;
+	auto &query_result = result_data->result;
+	auto &source_type = query_result->types[col];
+	auto width = duckdb::DecimalType::GetWidth(source_type);
+	auto scale = duckdb::DecimalType::GetScale(source_type);
+	duckdb::Vector result_vec(duckdb::LogicalType::VARCHAR, false, false);
+	duckdb::string_t result_string;
+	switch (source_type.InternalType()) {
+	case duckdb::PhysicalType::INT16:
+		result_string = duckdb::StringCastFromDecimal::Operation<int16_t>(UnsafeFetch<int16_t>(source, col, row),
+		                                                                   width, scale, result_vec);
+		break;
+	case duckdb::PhysicalType::INT32:
+		result_string = duckdb::StringCastFromDecimal::Operation<int32_t>(UnsafeFetch<int32_t>(source, col, row),
+		                                                                   width, scale, result_vec);
+		break;
+	case duckdb::PhysicalType::INT64:
+		result_string = duckdb::StringCastFromDecimal::Operation<int64_t>(UnsafeFetch<int64_t>(source, col, row),
+		                                                                   width, scale, result_vec);
+		break;
+	case duckdb::PhysicalType::INT128:
+		result_string = duckdb::StringCastFromDecimal::Operation<hugeint_t>(UnsafeFetch<hugeint_t>(source, col, row),
+																		   width, scale, result_vec);
+		break;
+	default:
+		throw duckdb::InternalException("Unimplemented internal type for decimal");
+	}
+	result = (char*)malloc(sizeof(char) * (result_string.GetSize() + 1));
+	memcpy(result, result_string.GetDataUnsafe(), result_string.GetSize());
+	result[result_string.GetSize()] = '\0';
+	return true;
+}
+
+template <class RESULT_TYPE>
+RESULT_TYPE TryCastDecimalCInternal(duckdb_result *source, idx_t col, idx_t row) {
+	RESULT_TYPE result_value;
+	try {
+		if (!CastDecimalCInternal<RESULT_TYPE>(source, result_value, col, row)) {
 			return FetchDefaultValue::Operation<RESULT_TYPE>();
 		}
 	} catch (...) {
@@ -213,24 +288,8 @@ static RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row
 		return TryCastCInternal<timestamp_t, RESULT_TYPE, OP>(result, col, row);
 	case DUCKDB_TYPE_HUGEINT:
 		return TryCastCInternal<hugeint_t, RESULT_TYPE, OP>(result, col, row);
-	case DUCKDB_TYPE_DECIMAL: {
-		D_ASSERT(result && result->internal_data);
-		auto result_data = (duckdb::DuckDBResultData *)result->internal_data;
-		D_ASSERT(result_data->result);
-		auto &query_result = *result_data->result;
-		switch (query_result.types[col].InternalType()) {
-		case duckdb::PhysicalType::INT16:
-			return TryCastCInternal<int16_t, RESULT_TYPE, OP>(result, col, row);
-		case duckdb::PhysicalType::INT32:
-			return TryCastCInternal<int32_t, RESULT_TYPE, OP>(result, col, row);
-		case duckdb::PhysicalType::INT64:
-			return TryCastCInternal<int64_t, RESULT_TYPE, OP>(result, col, row);
-		case duckdb::PhysicalType::INT128:
-			return TryCastCInternal<hugeint_t, RESULT_TYPE, OP>(result, col, row);
-		default:
-			throw duckdb::NotImplementedException("Internal type not implemented for Decimal");
-		}
-	}
+	case DUCKDB_TYPE_DECIMAL:
+		return TryCastDecimalCInternal<RESULT_TYPE>(result, col, row);
 	case DUCKDB_TYPE_INTERVAL:
 		return TryCastCInternal<interval_t, RESULT_TYPE, OP>(result, col, row);
 	case DUCKDB_TYPE_VARCHAR:
