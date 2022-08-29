@@ -94,7 +94,7 @@ jobs:
  linux-release-aarch64:
    name: Linux (AARCH64)
    runs-on: ubuntu-latest
-   #needs: linux-release-64
+   needs: linux-release-64
 
    container: ubuntu:18.04 # cross compiler not available in 16
    env:
