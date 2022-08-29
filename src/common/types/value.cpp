@@ -60,7 +60,8 @@ Value::Value(std::nullptr_t val) : Value(LogicalType::VARCHAR) {
 Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 
-Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false), str_value(move(val)) {
+Value::Value(string val, const LogicalType &type) : type_(type), is_null(false), str_value(move(val)) {
+	D_ASSERT(type.id() == LogicalTypeId::VARCHAR);
 	if (!Value::StringIsValid(str_value.c_str(), str_value.size())) {
 		throw Exception("String value is not valid UTF8");
 	}

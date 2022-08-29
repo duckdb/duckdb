@@ -291,19 +291,6 @@ void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	}
 }
 
-// FIXME Just like DECIMAL, it's important that type_info gets considered when determining whether or not to cast
-// just comparing internal type is not always enough
-static bool ValueShouldBeCast(const LogicalType &incoming, const LogicalType &target) {
-	if (incoming.InternalType() != target.InternalType()) {
-		return true;
-	}
-	if (incoming.id() == LogicalTypeId::DECIMAL && incoming.id() == target.id()) {
-		//! Compare the type_info
-		return incoming != target;
-	}
-	return false;
-}
-
 void Vector::SetValue(idx_t index, const Value &val) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// dictionary: apply dictionary and forward to child
@@ -311,7 +298,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
-	if (ValueShouldBeCast(val.type(), GetType())) {
+	if (val.type() != GetType()) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
@@ -403,7 +390,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 }
 
-Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
+Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	const Vector *vector = &v_p;
 	idx_t index = index_p;
 	bool finished = false;
@@ -520,7 +507,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::INTERVAL(((interval_t *)data)[index]);
 	case LogicalTypeId::VARCHAR: {
 		auto str = ((string_t *)data)[index];
-		return Value(str.GetString());
+		return Value(str.GetString(), vector->GetType());
 	}
 	case LogicalTypeId::JSON: {
 		auto str = ((string_t *)data)[index];
@@ -559,15 +546,6 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	default:
 		throw InternalException("Unimplemented type for value access");
 	}
-}
-
-Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
-	auto value = GetValueInternal(v_p, index_p);
-	// set the alias of the type to the correct value, if there is a type alias
-	if (v_p.GetType().HasAlias()) {
-		value.type().SetAlias(v_p.GetType().GetAlias());
-	}
-	return value;
 }
 
 Value Vector::GetValue(idx_t index) const {
