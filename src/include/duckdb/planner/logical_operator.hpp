@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/optimizer/estimated_properties.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -45,7 +46,10 @@ public:
 	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
 	vector<LogicalType> types;
 	//! Estimated Cardinality
-	idx_t estimated_cardinality = 0;
+	idx_t estimated_cardinality;
+	bool has_estimated_cardinality;
+
+	unique_ptr<EstimatedProperties> estimated_props;
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
@@ -64,7 +68,6 @@ public:
 	virtual void Verify(ClientContext &context);
 
 	void AddChild(unique_ptr<LogicalOperator> child);
-
 	virtual idx_t EstimateCardinality(ClientContext &context);
 
 	//! Serializes a LogicalOperator to a stand-alone binary blob

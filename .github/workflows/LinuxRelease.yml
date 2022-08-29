@@ -38,8 +38,10 @@ jobs:
       BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_ODBC: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
+      STATIC_LIBCPP: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -49,7 +51,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
+      run: make
 
     - name: Test
       shell: bash
@@ -88,6 +90,73 @@ jobs:
           duckdb_cli-linux-amd64.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
+
+ linux-release-aarch64:
+   name: Linux (AARCH64)
+   runs-on: ubuntu-latest
+   needs: linux-release-64
+
+   container: ubuntu:18.04 # cross compiler not available in 16
+   env:
+     GEN: ninja
+     BUILD_BENCHMARK: 1
+     BUILD_ICU: 1
+     BUILD_TPCH: 1
+     BUILD_FTS: 1
+     BUILD_JSON: 1
+     BUILD_EXCEL: 1
+     TREAT_WARNINGS_AS_ERRORS: 1
+     FORCE_WARN_UNUSED: 1
+     STATIC_LIBCPP: 1
+     BUILD_ODBC: 1
+     ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
+     BUILD_JDBC: 1
+     OVERRIDE_JDBC_OS_ARCH: aarch64
+     JAVA_HOME: ../../jdk8u345-b01
+
+   steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+     - uses: ./.github/actions/ubuntu_16_setup
+
+     - name: Install Stuff
+       shell: bash
+       run: |
+         apt-get update -y -qq
+         apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu 
+         curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
+
+     - name: Install unixODBC
+       shell: bash
+       run: | # we need an x86 odbc_config tool to run cmake. fun.
+         apt-get remove -y unixodbc unixodbc-dev
+         CC=gcc ./scripts/install_unixodbc.sh
+         cp build/unixodbc/build/bin/odbc_config .
+         CC=aarch64-linux-gnu-gcc ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
+         cp odbc_config build/unixodbc/build/bin/odbc_config
+
+     - name: Build
+       shell: bash
+       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
+
+     - name: Deploy
+       shell: bash
+       run: |
+         python3.7 scripts/amalgamation.py
+         zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
+         zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
+         zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+         python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+     - uses: actions/upload-artifact@v2
+       with:
+         name: duckdb-binaries-linux-aarch64
+         path: |
+           libduckdb-linux-aarch64.zip
+           duckdb_odbc-linux-aarch64.zip
+           duckdb_cli-linux-aarch64.zip
+           build/release/tools/jdbc/duckdb_jdbc.jar
 
  linux-extensions-64:
     name: Linux Extensions (64 Bit)

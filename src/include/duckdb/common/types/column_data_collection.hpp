@@ -25,19 +25,19 @@ class ColumnDataRowCollection;
 class ColumnDataCollection {
 public:
 	//! Constructs an in-memory column data collection from an allocator
-	ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
+	DUCKDB_API ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
 	//! Constructs a buffer-managed column data collection
-	ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
+	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
 	//! Constructs either an in-memory or a buffer-managed column data collection
-	ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
-	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	DUCKDB_API ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
+	                                ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
 	//! between multiple column data collections and prevents wasting space.
 	//! Note that after one CDC inherits blocks from another, the other
 	//! cannot be written to anymore (i.e. we take ownership of the half-written blocks).
-	ColumnDataCollection(ColumnDataCollection &parent);
-	ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator, vector<LogicalType> types);
-	~ColumnDataCollection();
+	DUCKDB_API ColumnDataCollection(ColumnDataCollection &parent);
+	DUCKDB_API ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator, vector<LogicalType> types);
+	DUCKDB_API ~ColumnDataCollection();
 
 public:
 	DUCKDB_API vector<LogicalType> &Types() {
