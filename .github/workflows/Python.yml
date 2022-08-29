@@ -283,6 +283,8 @@ jobs:
             image: 'quay.io/pypa/manylinux2014_aarch64:latest'
             options: --volume ${{ github.workspace }}:/duckdb
             run: |
+              uname -m
+              python3 -V
               cd /duckdb/tools/pythonpkg
               ./bin/python${{matrix.python_build.version}} -m ensurepip
               ./bin/python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
