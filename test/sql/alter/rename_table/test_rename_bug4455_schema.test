@@ -1,6 +1,6 @@
-# name: test/sql/alter/rename_col/test_rename_col.test
+# name: test/sql/alter/rename_table/test_rename_bug4455_schema.test
 # description: Test ALTER TABLE RENAME COLUMN
-# group: [rename_col]
+# group: [rename_table]
 
 statement ok
 create schema public;
