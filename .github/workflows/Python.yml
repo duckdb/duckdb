@@ -282,12 +282,13 @@ jobs:
           githubToken: ${{ github.token }}
 
           dockerRunArgs: |
-            --volume "${PWD}/dist:/dist"
+            --volume "${PWD}:/duckdb"
           install: |
             apt update
             apt install python3.10-full python3-pip -y
           run: |
-            python3.10 -m pip install /artifacts/*.whl
+            ls /duckdb
+            python3.10 -m pip install /duckdb/tools/pythonpkg/dist/*.whl
             python3.10 -c "print(__import__('duckdb').__version__)"
 
        - uses: actions/upload-artifact@v2
