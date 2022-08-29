@@ -217,6 +217,7 @@ jobs:
        matrix:
          arch: [aarch64]
          python_build: [
+           # urls from https://anaconda.org/anaconda/python/files
            {url: 'https://anaconda.org/anaconda/python/3.10.4/download/linux-aarch64/python-3.10.4-hc137634_0.tar.bz2', version: '3.10'},
            {url: 'https://anaconda.org/anaconda/python/3.9.12/download/linux-aarch64/python-3.9.12-hc137634_1.tar.bz2', version: '3.9'},
            {url: 'https://anaconda.org/anaconda/python/3.8.13/download/linux-aarch64/python-3.8.13-hc137634_0.tar.bz2', version: '3.8'},
