@@ -111,7 +111,7 @@ jobs:
      BUILD_ODBC: 1
      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
      BUILD_JDBC: 1
-     OVERRIDE_JDBC_OS_ARCH: aarch64
+     OVERRIDE_JDBC_OS_ARCH: arm64
      JAVA_HOME: ../../jdk8u345-b01
 
    steps:
