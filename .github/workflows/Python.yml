@@ -216,7 +216,12 @@ jobs:
      strategy:
        matrix:
          arch: [aarch64]
-         python_build: [3.10.6]
+         python_build: [
+           {url: 'https://anaconda.org/anaconda/python/3.10.4/download/linux-aarch64/python-3.10.4-hc137634_0.tar.bz2', version: 3.10.4},
+           {url: 'https://anaconda.org/anaconda/python/3.9.12/download/linux-aarch64/python-3.9.12-hc137634_1.tar.bz2', version: 3.9.12},
+           {url: 'https://anaconda.org/anaconda/python/3.8.13/download/linux-aarch64/python-3.8.13-hc137634_0.tar.bz2', version: 3.8.13},
+           {url: 'https://anaconda.org/anaconda/python/3.7.13/download/linux-aarch64/python-3.7.13-hc137634_0.tar.bz2', version: 3.7.13},
+         ]
          isRelease:
            - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
          exclude:
@@ -232,7 +237,7 @@ jobs:
 
        - uses: actions/setup-python@v2
          with:
-           python-version: ${{ matrix.python_build }}
+           python-version: ${{ matrix.python_build.version }}
 
        - name: Install
          shell: bash
@@ -251,8 +256,9 @@ jobs:
          run: |
            python3 -m pip install pip -U
            # TODO: need to find source for older aarch64 python binaries
-           wget http://mirror.archlinuxarm.org/aarch64/core/python-${{ matrix.python_build }}-1-aarch64.pkg.tar.xz
-           tar xf python-3.10.6-1-aarch64.pkg.tar.xz
+           wget ${{ matrix.python_build.url }}
+           tar -xvjf *.tar.bz2
+           ls
 
            # if cibuildwheel starts supporting cross compiling for aarch64 at some point we should switch to that
            # as using emulation is far too slow (6+ hours)
