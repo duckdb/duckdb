@@ -292,6 +292,7 @@ jobs:
             --volume "${PWD}:/duckdb"
           run: |
             cd /duckdb/tools/pythonpkg
+            ./bin/python${{matrix.python_build.version}} -m ensurepip
             ./bin/python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
             ./bin/python${{matrix.python_build.version}} -c "print(__import__('duckdb').__version__)"
             ./bin/python${{matrix.python_build.version}} -m pytest tests/fast
