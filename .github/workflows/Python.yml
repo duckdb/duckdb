@@ -215,6 +215,7 @@ jobs:
    linux-python3-aarch64:
      name: Python 3 Linux aarch64
      runs-on: ubuntu-20.04
+     container: quay.io/pypa/manylinux2014_x86_64
      strategy:
        matrix:
          arch: [aarch64]
