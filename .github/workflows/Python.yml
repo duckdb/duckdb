@@ -278,25 +278,17 @@ jobs:
 
           python setup.py bdist_wheel
 
-       - uses: uraimo/run-on-arch-action@v2
-         name: Tests
-         id: runcmd
+       - uses: addnab/docker-run-action@v3
          with:
-          arch: aarch64
-          distro: ubuntu22.04
-
-          # Not required, but speeds up builds by storing container images in
-          # a GitHub package registry.
-          githubToken: ${{ github.token }}
-
-          dockerRunArgs: |
-            --volume "${PWD}:/duckdb"
-          run: |
-            cd /duckdb/tools/pythonpkg
-            ./bin/python${{matrix.python_build.version}} -m ensurepip
-            ./bin/python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
-            ./bin/python${{matrix.python_build.version}} -c "print(__import__('duckdb').__version__)"
-            ./bin/python${{matrix.python_build.version}} -m pytest tests/fast
+            registry: quay.io
+            image: manylinux2014_aarch64:latest
+            options: --volume "${{ github.workspace }}:/duckdb"
+            run: |
+              cd /duckdb/tools/pythonpkg
+              ./bin/python${{matrix.python_build.version}} -m ensurepip
+              ./bin/python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
+              ./bin/python${{matrix.python_build.version}} -c "print(__import__('duckdb').__version__)"
+              ./bin/python${{matrix.python_build.version}} -m pytest tests/fast
 
        - uses: actions/upload-artifact@v2
          with:
