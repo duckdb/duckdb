@@ -423,3 +423,22 @@ TEST_CASE("Issue #2058: Cleanup after execution of invalid SQL statement causes 
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
 }
+
+TEST_CASE("Decimal -> Double casting issue", "[capi]") {
+	duckdb_database db;
+	duckdb_connection con;
+	duckdb_result result;
+	duckdb_result result_count;
+
+	REQUIRE(duckdb_open(NULL, &db) != DuckDBError);
+	REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+
+	assert(duckdb_query(con, "SELECT -0.5;", &result) == DuckDBSuccess);
+
+	auto type = duckdb_column_type(&result, 0);
+	auto ff = duckdb_value_double(&result, 0, 0);   // 1.8446744073709552E+19
+	auto str = duckdb_value_varchar(&result, 0, 0); // "18446744073709551611"
+
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+}

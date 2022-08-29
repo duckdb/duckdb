@@ -4,6 +4,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
+#include "duckdb/common/types.hpp"
 
 using duckdb::const_data_ptr_t;
 using duckdb::Date;
@@ -212,8 +213,24 @@ static RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row
 		return TryCastCInternal<timestamp_t, RESULT_TYPE, OP>(result, col, row);
 	case DUCKDB_TYPE_HUGEINT:
 		return TryCastCInternal<hugeint_t, RESULT_TYPE, OP>(result, col, row);
-	case DUCKDB_TYPE_DECIMAL:
-		return TryCastCInternal<hugeint_t, RESULT_TYPE, OP>(result, col, row);
+	case DUCKDB_TYPE_DECIMAL: {
+		D_ASSERT(result && result->internal_data);
+		auto result_data = (duckdb::DuckDBResultData *)result->internal_data;
+		D_ASSERT(result_data->result);
+		auto &query_result = *result_data->result;
+		switch (query_result.types[col].InternalType()) {
+		case duckdb::PhysicalType::INT16:
+			return TryCastCInternal<int16_t, RESULT_TYPE, OP>(result, col, row);
+		case duckdb::PhysicalType::INT32:
+			return TryCastCInternal<int32_t, RESULT_TYPE, OP>(result, col, row);
+		case duckdb::PhysicalType::INT64:
+			return TryCastCInternal<int64_t, RESULT_TYPE, OP>(result, col, row);
+		case duckdb::PhysicalType::INT128:
+			return TryCastCInternal<hugeint_t, RESULT_TYPE, OP>(result, col, row);
+		default:
+			throw duckdb::NotImplementedException("Internal type not implemented for Decimal");
+		}
+	}
 	case DUCKDB_TYPE_INTERVAL:
 		return TryCastCInternal<interval_t, RESULT_TYPE, OP>(result, col, row);
 	case DUCKDB_TYPE_VARCHAR:
