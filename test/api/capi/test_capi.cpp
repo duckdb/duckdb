@@ -425,14 +425,14 @@ TEST_CASE("Issue #2058: Cleanup after execution of invalid SQL statement causes 
 }
 
 TEST_CASE("Decimal -> Double casting issue", "[capi]") {
-	duckdb_database db;
-	duckdb_connection con;
+	duckdb_database db = nullptr;
+	duckdb_connection con = nullptr;
 	duckdb_result result;
 
 	REQUIRE(duckdb_open(NULL, &db) != DuckDBError);
 	REQUIRE(duckdb_connect(db, &con) != DuckDBError);
 
-	assert(duckdb_query(con, "SELECT -0.5;", &result) == DuckDBSuccess);
+	REQUIRE(duckdb_query(con, "SELECT -0.5;", &result) == DuckDBSuccess);
 
 	REQUIRE(duckdb_column_type(&result, 0) == DUCKDB_TYPE_DECIMAL);
 	REQUIRE(duckdb_value_double(&result, 0, 0) == (double)-0.5);
