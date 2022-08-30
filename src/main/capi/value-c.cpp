@@ -28,9 +28,19 @@ namespace duckdb {
 // Unsafe Fetch (for internal use only)
 //===--------------------------------------------------------------------===//
 template <class T>
-T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
+T UnsafeFetchFromPtr(void *pointer) {
+	return *((T *)pointer);
+}
+
+template <class T>
+void *UnsafeFetchPtr(duckdb_result *result, idx_t col, idx_t row) {
 	D_ASSERT(row < result->__deprecated_row_count);
-	return ((T *)result->__deprecated_columns[col].__deprecated_data)[row];
+	return (void *)&(((T *)result->__deprecated_columns[col].__deprecated_data)[row]);
+}
+
+template <class T>
+T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
+	return UnsafeFetchFromPtr<T>(UnsafeFetchPtr<T>(result, col, row));
 }
 
 //===--------------------------------------------------------------------===//
@@ -42,6 +52,15 @@ struct FetchDefaultValue {
 		return 0;
 	}
 };
+
+template <>
+duckdb_decimal FetchDefaultValue::Operation() {
+	duckdb_decimal result;
+	result.scale = 0;
+	result.width = 0;
+	result.value = {0, 0};
+	return result;
+}
 
 template <>
 date_t FetchDefaultValue::Operation() {
@@ -137,6 +156,8 @@ using duckdb::FromCBlobCastWrapper;
 using duckdb::FromCStringCastWrapper;
 using duckdb::ToCStringCastWrapper;
 using duckdb::UnsafeFetch;
+using duckdb::UnsafeFetchFromPtr;
+using duckdb::UnsafeFetchPtr;
 
 //===--------------------------------------------------------------------===//
 // Templated Casts
@@ -163,19 +184,20 @@ static bool CastDecimalCInternal(duckdb_result *source, RESULT_TYPE &result, idx
 	auto &source_type = query_result->types[col];
 	auto width = duckdb::DecimalType::GetWidth(source_type);
 	auto scale = duckdb::DecimalType::GetScale(source_type);
+	void *source_address = UnsafeFetchPtr<hugeint_t>(source, col, row);
 	switch (source_type.InternalType()) {
 	case duckdb::PhysicalType::INT16:
-		return duckdb::TryCastFromDecimal::Operation<int16_t, RESULT_TYPE>(UnsafeFetch<int16_t>(source, col, row),
+		return duckdb::TryCastFromDecimal::Operation<int16_t, RESULT_TYPE>(UnsafeFetchFromPtr<int16_t>(source_address),
 		                                                                   result, nullptr, width, scale);
 	case duckdb::PhysicalType::INT32:
-		return duckdb::TryCastFromDecimal::Operation<int32_t, RESULT_TYPE>(UnsafeFetch<int32_t>(source, col, row),
+		return duckdb::TryCastFromDecimal::Operation<int32_t, RESULT_TYPE>(UnsafeFetchFromPtr<int32_t>(source_address),
 		                                                                   result, nullptr, width, scale);
 	case duckdb::PhysicalType::INT64:
-		return duckdb::TryCastFromDecimal::Operation<int64_t, RESULT_TYPE>(UnsafeFetch<int64_t>(source, col, row),
+		return duckdb::TryCastFromDecimal::Operation<int64_t, RESULT_TYPE>(UnsafeFetchFromPtr<int64_t>(source_address),
 		                                                                   result, nullptr, width, scale);
 	case duckdb::PhysicalType::INT128:
-		return duckdb::TryCastFromDecimal::Operation<hugeint_t, RESULT_TYPE>(UnsafeFetch<hugeint_t>(source, col, row),
-		                                                                     result, nullptr, width, scale);
+		return duckdb::TryCastFromDecimal::Operation<hugeint_t, RESULT_TYPE>(
+		    UnsafeFetchFromPtr<hugeint_t>(source_address), result, nullptr, width, scale);
 	default:
 		throw duckdb::InternalException("Unimplemented internal type for decimal");
 	}
@@ -210,9 +232,20 @@ bool CastDecimalCInternal(duckdb_result *source, char *&result, idx_t col, idx_t
 	default:
 		throw duckdb::InternalException("Unimplemented internal type for decimal");
 	}
-	result = (char *)malloc(sizeof(char) * (result_string.GetSize() + 1));
+	result = (char *)duckdb_malloc(sizeof(char) * (result_string.GetSize() + 1));
 	memcpy(result, result_string.GetDataUnsafe(), result_string.GetSize());
 	result[result_string.GetSize()] = '\0';
+	return true;
+}
+
+template <>
+bool CastDecimalCInternal(duckdb_result *source, duckdb_decimal &result, idx_t col, idx_t row) {
+	auto result_data = (duckdb::DuckDBResultData *)source->internal_data;
+	result_data->result->types[col].GetDecimalProperties(result.width, result.scale);
+
+	auto internal_value = TryCastCInternal<hugeint_t, hugeint_t, duckdb::TryCast>(source, col, row);
+	result.value.lower = internal_value.lower;
+	result.value.upper = internal_value.upper;
 	return true;
 }
 
@@ -327,15 +360,7 @@ int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row) {
 }
 
 duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row) {
-	duckdb_decimal result_value;
-
-	auto result_data = (duckdb::DuckDBResultData *)result->internal_data;
-	result_data->result->types[col].GetDecimalProperties(result_value.width, result_value.scale);
-
-	auto internal_value = GetInternalCValue<hugeint_t>(result, col, row);
-	result_value.value.lower = internal_value.lower;
-	result_value.value.upper = internal_value.upper;
-	return result_value;
+	return GetInternalCValue<duckdb_decimal>(result, col, row);
 }
 
 duckdb_hugeint duckdb_value_hugeint(duckdb_result *result, idx_t col, idx_t row) {
