@@ -128,7 +128,7 @@ jobs:
  mingw:
      name: MingW (64 Bit)
      runs-on: windows-latest
-#     needs: win-release-64
+     needs: win-release-64
      steps:
        - uses: actions/checkout@v3
        - uses: msys2/setup-msys2@v2
