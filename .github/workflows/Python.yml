@@ -295,7 +295,7 @@ jobs:
             apt update
             apt install software-properties-common --yes
             add-apt-repository ppa:deadsnakes --yes
-            apt install python${{matrix.python_build.version}}-full
+            apt install python${{matrix.python_build.version}}-full --yes
 
             # # Download, build and install python
             # apt install wget
