@@ -291,6 +291,20 @@ void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	}
 }
 
+//! FIXME: this is a nice optimization, but currently its also necessary because there are casts missing:
+//! INTEGER -> DATE
+//! BIGINT -> TIMESTAMP_S
+//! BIGINT -> TIMESTAMP
+//! INTEGER -> DATE
+//! Since we have generic type info that can theoretically be applied to any column
+//! It might become necessary to implement these casts (even if they are 1 to 1)
+//! Or maybe the generic type info needs to be excluded from this check
+static bool ShouldCastValue(const LogicalType &left, const LogicalType &right) {
+	//! If two types share the same physical type and there is no extra type info
+	//  or the type info is the same, we can avoid casting
+	return (left.InternalType() != right.InternalType() || !left.EqualTypeInfo(right));
+}
+
 void Vector::SetValue(idx_t index, const Value &val) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// dictionary: apply dictionary and forward to child
@@ -298,7 +312,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
-	if (val.type() != GetType()) {
+	if (ShouldCastValue(GetType(), val.type())) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}

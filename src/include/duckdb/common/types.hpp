@@ -408,6 +408,7 @@ struct LogicalType {
 	inline const ExtraTypeInfo *AuxInfo() const {
 		return type_info_.get();
 	}
+	bool EqualTypeInfo(const LogicalType& rhs) const;
 
 	// copy assignment
 	inline LogicalType& operator=(const LogicalType &other) {
