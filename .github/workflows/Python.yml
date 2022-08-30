@@ -278,18 +278,34 @@ jobs:
 
           python setup.py bdist_wheel
 
-       - uses: addnab/docker-run-action@v3
+       - uses: uraimo/run-on-arch-action@v2
+         name: Tests
+         id: runcmd
          with:
-            image: 'quay.io/pypa/manylinux2014_aarch64:latest'
-            options: --volume ${{ github.workspace }}:/duckdb --platform linux/arm64/v8
-            run: |
-              uname -m
-              python3 -V
-              cd /duckdb/tools/pythonpkg
-              ./bin/python${{matrix.python_build.version}} -m ensurepip
-              ./bin/python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
-              ./bin/python${{matrix.python_build.version}} -c "print(__import__('duckdb').__version__)"
-              ./bin/python${{matrix.python_build.version}} -m pytest tests/fast
+          arch: aarch64
+          distro: ubuntu22.04
+
+          # Not required, but speeds up builds by storing container images in
+          # a GitHub package registry.
+          githubToken: ${{ github.token }}
+
+          dockerRunArgs: |
+            --volume "${PWD}:/duckdb"
+          install:
+            # Download, build and install python
+            wget https://www.python.org/ftp/python/3.10.4/Python-3.10.4.tgz
+            tar -xzf Python-3.10.4.tgz
+            cd Python-3.10.4
+            ./configure --enable-optimizations --enable-shared --enable-unicode=ucs4 --enable-ssl
+            make altinstall
+            cd ..
+            python3.10 -m ensurepip
+
+          run: |
+            cd /duckdb/tools/pythonpkg
+            python3.10 -m pip install dist/*.whl pytest pandas pyarrow psutil
+            python3.10 -c "print(__import__('duckdb').__version__)"
+            python3.10 -m pytest tests/fast
 
        - uses: actions/upload-artifact@v2
          with:
