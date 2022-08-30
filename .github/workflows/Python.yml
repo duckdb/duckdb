@@ -295,7 +295,7 @@ jobs:
             apt update
             apt install software-properties-common --yes
             add-apt-repository ppa:deadsnakes --yes
-            apt install python${{matrix.python_build.version}}-full --yes
+            apt install python${{matrix.python_build.version}}-full python3-pip --yes
 
             # # Download, build and install python
             # apt install wget
@@ -305,7 +305,7 @@ jobs:
             # ./configure --enable-optimizations --enable-shared --enable-unicode=ucs4 --enable-ssl
             # make altinstall
             # cd ..
-            python${{matrix.python_build.version}} -m ensurepip
+            # python${{matrix.python_build.version}} -m ensurepip
 
           run: |
             cd /duckdb/tools/pythonpkg
