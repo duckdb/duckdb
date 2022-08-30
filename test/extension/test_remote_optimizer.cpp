@@ -58,16 +58,18 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			REQUIRE(read(connfd, buffer, bytes) == bytes);
 
 			BufferedDeserializer deserializer((data_ptr_t)buffer, bytes);
-			auto plan = LogicalOperator::Deserialize(deserializer, *con2.context);
+			PlanDeserializationState state(*con2.context);
+			auto plan = LogicalOperator::Deserialize(deserializer, state);
 			plan->ResolveOperatorTypes();
 
 			auto statement = make_unique<LogicalPlanStatement>(move(plan));
 			auto result = con2.Query(move(statement));
-			idx_t num_chunks = result->collection.ChunkCount();
+			auto& collection = result->Collection();
+			idx_t num_chunks = collection.ChunkCount();
 			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
-			for (auto &chunk : result->collection.Chunks()) {
+			for (auto &chunk : collection.Chunks()) {
 				BufferedSerializer serializer;
-				chunk->Serialize(serializer);
+				chunk.Serialize(serializer);
 				auto data = serializer.GetData();
 				ssize_t len = data.size;
 				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));

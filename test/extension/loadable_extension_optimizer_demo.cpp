@@ -4,7 +4,8 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
-#include "duckdb/planner/operator/logical_chunk_get.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 using namespace duckdb;
 
@@ -20,6 +21,46 @@ using namespace duckdb;
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+
+namespace duckdb {
+
+//! LogicalChunkGet represents a scan operation from a ChunkCollection
+class LogicalChunkGet : public LogicalOperator {
+public:
+	LogicalChunkGet(idx_t table_index, vector<LogicalType> types, unique_ptr<ChunkCollection> collection)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_CHUNK_GET), table_index(table_index),
+	      collection(move(collection)) {
+		D_ASSERT(types.size() > 0);
+		chunk_types = types;
+	}
+
+	//! The table index in the current bind context
+	idx_t table_index;
+	//! The types of the chunk
+	vector<LogicalType> chunk_types;
+	//! The chunk collection to scan
+	unique_ptr<ChunkCollection> collection;
+
+public:
+	vector<ColumnBinding> GetColumnBindings() override {
+		return GenerateColumnBindings(table_index, chunk_types.size());
+	}
+	void Serialize(FieldWriter &writer) const override {
+		throw NotImplementedException(LogicalOperatorToString(type));
+	}
+
+	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
+	                                               FieldReader &reader) {
+		throw NotImplementedException(LogicalOperatorToString(type));
+	}
+
+protected:
+	void ResolveTypes() override {
+		// types are resolved in the constructor
+		this->types = chunk_types;
+	}
+};
+}
 
 class WaggleExtension : public OptimizerExtension {
 public:
