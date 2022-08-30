@@ -291,12 +291,17 @@ jobs:
 
           dockerRunArgs: |
             --volume "${PWD}:/duckdb"
+          install: |
+            apt update
+            apt install software-properties-common --yes
+            add-apt-repository ppa:deadsnakes --yes
+            apt install python${{matrix.python_build.version}}-full python${{matrix.python_build.version}}-dev python3-pip --yes
+
           run: |
             cd /duckdb/tools/pythonpkg
-            ./bin/python${{matrix.python_build.version}} -m ensurepip
-            ./bin/python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
-            ./bin/python${{matrix.python_build.version}} -c "print(__import__('duckdb').__version__)"
-            ./bin/python${{matrix.python_build.version}} -m pytest tests/fast
+            python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
+            python${{matrix.python_build.version}} -c "print(__import__('duckdb').__version__)"
+            python${{matrix.python_build.version}} -m pytest tests/fast
 
        - uses: actions/upload-artifact@v2
          with:
