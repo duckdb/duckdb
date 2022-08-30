@@ -292,7 +292,8 @@ jobs:
           dockerRunArgs: |
             --volume "${PWD}:/duckdb"
           install: |
-            apt-add-repository ppa:deadsnakes --yes
+            apt install software-properties-common --yes
+            add-apt-repository ppa:deadsnakes --yes
             apt install python${{matrix.python_build.version}}-full
 
             # # Download, build and install python
