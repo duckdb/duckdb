@@ -150,6 +150,7 @@ public:
 	Napi::Value Run(const Napi::CallbackInfo &info);
 	Napi::Value Finish(const Napi::CallbackInfo &info);
 	Napi::Value Stream(const Napi::CallbackInfo &info);
+	Napi::Value Arrow(const Napi::CallbackInfo &info);
 
 public:
 	static Napi::FunctionReference constructor;

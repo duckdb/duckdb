@@ -138,6 +138,17 @@ Connection.prototype.stream = async function* (sql) {
 }
 
 /**
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Connection.prototype.arrow = function (sql) {
+    var statement = new Statement(this, sql);
+    return statement.arrow.apply(statement, arguments);
+}
+
+/**
  * Register a User Defined Function
  *
  * @arg name
@@ -397,6 +408,17 @@ Database.prototype.all = function () {
  * @param callback
  * @return {void}
  */
+Database.prototype.arrow = function () {
+    default_connection(this).arrow.apply(this.default_connection, arguments);
+    return this;
+}
+
+/**
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
 Database.prototype.exec = function () {
     default_connection(this).exec.apply(this.default_connection, arguments);
     return this;
@@ -481,3 +503,10 @@ Statement.prototype.finalize
  * @yield callback
  */
 Statement.prototype.stream;
+/**
+ * @method
+ * @arg sql
+ * @param {...*} params
+ * @yield callback
+ */
+Statement.prototype.arrow;

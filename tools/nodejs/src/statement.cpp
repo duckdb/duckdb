@@ -16,7 +16,7 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	    DefineClass(env, "Statement",
 	                {InstanceMethod("run", &Statement::Run), InstanceMethod("all", &Statement::All),
 	                 InstanceMethod("each", &Statement::Each), InstanceMethod("finalize", &Statement::Finish),
-	                 InstanceMethod("stream", &Statement::Stream)});
+	                 InstanceMethod("stream", &Statement::Stream), InstanceMethod("arrow", &Statement::Arrow)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -237,7 +237,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 	return scope.Escape(result);
 }
 
-enum RunType { RUN, EACH, ALL };
+enum RunType { RUN, EACH, ALL, ARROW };
 
 struct StatementParam {
 	std::vector<duckdb::Value> params;
@@ -307,6 +307,27 @@ struct RunPreparedTask : public Task {
 			if (!params->complete.IsUndefined() && params->complete.IsFunction()) {
 				params->complete.MakeCallback(statement.Value(), {env.Null(), Napi::Number::New(env, count)});
 			}
+			break;
+		}
+		case RunType::ARROW: {
+			auto timezone_config = duckdb::QueryResult::GetConfigTimezone(*result);
+
+			while (true) {
+				Napi::HandleScope scope(env);
+
+				auto chunk = result->Fetch();
+				if (!chunk || chunk->size() == 0) {
+					break;
+				}
+				ArrowArray carray;
+				ArrowSchema cschema;
+				duckdb::ArrowConverter::ToArrowArray(*chunk, &carray);
+				duckdb::ArrowConverter::ToArrowSchema(&cschema, result->types, result->names, timezone_config);
+
+				cb.MakeCallback(statement.Value(), {env.Null(), Napi::Number::New(env, (int64_t)&carray),
+				                                    Napi::Number::New(env, (int64_t)&cschema)});
+			}
+
 			break;
 		}
 		case RunType::ALL: {
@@ -415,6 +436,12 @@ Napi::Value Statement::Run(const Napi::CallbackInfo &info) {
 Napi::Value Statement::Each(const Napi::CallbackInfo &info) {
 	connection_ref->database_ref->Schedule(
 	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::EACH));
+	return info.This();
+}
+
+Napi::Value Statement::Arrow(const Napi::CallbackInfo &info) {
+	connection_ref->database_ref->Schedule(
+	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::ARROW));
 	return info.This();
 }
 
