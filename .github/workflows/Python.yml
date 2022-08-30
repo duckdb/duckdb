@@ -305,13 +305,13 @@ jobs:
             # ./configure --enable-optimizations --enable-shared --enable-unicode=ucs4 --enable-ssl
             # make altinstall
             # cd ..
-            python3.10 -m ensurepip
+            python${{matrix.python_build.version}} -m ensurepip
 
           run: |
             cd /duckdb/tools/pythonpkg
-            python3.10 -m pip install dist/*.whl pytest pandas pyarrow psutil
-            python3.10 -c "print(__import__('duckdb').__version__)"
-            python3.10 -m pytest tests/fast
+            python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
+            python${{matrix.python_build.version}} -c "print(__import__('duckdb').__version__)"
+            python${{matrix.python_build.version}} -m pytest tests/fast
 
        - uses: actions/upload-artifact@v2
          with:
