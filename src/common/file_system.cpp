@@ -26,6 +26,13 @@
 #include <sysinfoapi.h>
 #include <shlwapi.h>
 
+#ifdef __MINGW32__
+// need to manually define this for mingw
+extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
+#else
+#pragma comment(lib, "Shlwapi.lib")
+#endif
+
 #undef FILE_CREATE // woo mingw
 #endif
 

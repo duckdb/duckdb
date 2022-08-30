@@ -34,7 +34,7 @@ for ext in extensions:
 
 libraries = []
 if platform.system() == 'Windows':
-    libraries += ['ws2_32']
+    libraries += ['ws2_32', 'Shlwapi']
 
 link_flags = ''
 for libname in libraries:
