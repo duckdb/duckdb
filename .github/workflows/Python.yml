@@ -291,15 +291,18 @@ jobs:
 
           dockerRunArgs: |
             --volume "${PWD}:/duckdb"
-          install:
-            # Download, build and install python
-            apt install wget
-            wget https://www.python.org/ftp/python/3.10.4/Python-3.10.4.tgz
-            tar -xzf Python-3.10.4.tgz
-            cd Python-3.10.4
-            ./configure --enable-optimizations --enable-shared --enable-unicode=ucs4 --enable-ssl
-            make altinstall
-            cd ..
+          install: |
+            add-apt-repository ppa:deadsnakes --yes
+            apt install python${{matrix.python_build.version}}-full
+
+            # # Download, build and install python
+            # apt install wget
+            # wget https://www.python.org/ftp/python/3.10.4/Python-3.10.4.tgz
+            # tar xzf Python-3.10.4.tgz
+            # cd Python-3.10.4
+            # ./configure --enable-optimizations --enable-shared --enable-unicode=ucs4 --enable-ssl
+            # make altinstall
+            # cd ..
             python3.10 -m ensurepip
 
           run: |
