@@ -801,10 +801,9 @@ struct ExtraTypeInfo {
 public:
 	bool Equals(ExtraTypeInfo *other_p) const {
 		//! These types are eligible to have ALIAS info
-		if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
-		    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
-			const string &other_alias = (other_p) ? other_p->alias : "";
-			return alias == other_alias;
+		const string &other_alias = (other_p) ? other_p->alias : "";
+		if (alias != other_alias) {
+			return false;
 		}
 		if (!other_p) {
 			return false;
@@ -812,8 +811,7 @@ public:
 		if (type != other_p->type) {
 			return false;
 		}
-		auto &other = *other_p;
-		return alias == other.alias && EqualsInternal(other_p);
+		return EqualsInternal(other_p);
 	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
 	virtual void Serialize(FieldWriter &writer) const {};
