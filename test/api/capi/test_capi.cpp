@@ -438,6 +438,7 @@ TEST_CASE("Decimal -> Double casting issue", "[capi]") {
 	REQUIRE(duckdb_value_double(&result, 0, 0) == (double)-0.5);
 	auto str = duckdb_value_varchar(&result, 0, 0);
 	REQUIRE(!strcmp(str, "-0.5"));
+	duckdb_free(str);
 	duckdb_destroy_result(&result);
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
