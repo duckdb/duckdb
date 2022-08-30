@@ -396,7 +396,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 }
 
-Value Vector::AttachTypeInfo(const Vector &v, Value&& val) {
+Value Vector::AttachTypeInfo(const Vector &v, Value &&val) {
 	if (!v.GetType().HasAlias()) {
 		return val;
 	}
