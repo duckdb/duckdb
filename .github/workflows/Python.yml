@@ -297,16 +297,6 @@ jobs:
             add-apt-repository ppa:deadsnakes --yes
             apt install python${{matrix.python_build.version}}-full python${{matrix.python_build.version}}-dev python3-pip --yes
 
-            # # Download, build and install python
-            # apt install wget
-            # wget https://www.python.org/ftp/python/3.10.4/Python-3.10.4.tgz
-            # tar xzf Python-3.10.4.tgz
-            # cd Python-3.10.4
-            # ./configure --enable-optimizations --enable-shared --enable-unicode=ucs4 --enable-ssl
-            # make altinstall
-            # cd ..
-            # python${{matrix.python_build.version}} -m ensurepip
-
           run: |
             cd /duckdb/tools/pythonpkg
             python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
