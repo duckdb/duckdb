@@ -16,7 +16,7 @@ bool parse_datachunk(string csv, DataChunk &result, vector<LogicalType> sql_type
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
-bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType> sql_types, bool has_header,
+bool compare_result(string csv, ColumnDataCollection &collection, vector<LogicalType> sql_types, bool has_header,
                     string &error_message);
 
 } // namespace duckdb

@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -150,24 +151,22 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 
 AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
-	case PhysicalType::INT16:
+	case PhysicalType::INT16: {
 		return AggregateFunction::UnaryAggregate<AvgState<int64_t>, int16_t, double, IntegerAverageOperation>(
-		    LogicalType::SMALLINT, LogicalType::DOUBLE, true);
+		    LogicalType::SMALLINT, LogicalType::DOUBLE);
+	}
 	case PhysicalType::INT32: {
-		auto function =
-		    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
-		        LogicalType::INTEGER, LogicalType::DOUBLE, true);
-		return function;
+		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
+		    LogicalType::INTEGER, LogicalType::DOUBLE);
 	}
 	case PhysicalType::INT64: {
-		auto function =
-		    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
-		        LogicalType::BIGINT, LogicalType::DOUBLE, true);
-		return function;
+		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
+		    LogicalType::BIGINT, LogicalType::DOUBLE);
 	}
-	case PhysicalType::INT128:
+	case PhysicalType::INT128: {
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
-		    LogicalType::HUGEINT, LogicalType::DOUBLE, true);
+		    LogicalType::HUGEINT, LogicalType::DOUBLE);
+	}
 	default:
 		throw InternalException("Unimplemented average aggregate");
 	}
@@ -186,14 +185,16 @@ unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunctio
 
 void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet avg("avg");
+
 	avg.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, true, nullptr, BindDecimalAvg));
+	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                                  BindDecimalAvg));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT16));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, true));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(avg);
 
 	avg.name = "mean";
@@ -201,7 +202,7 @@ void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 
 	AggregateFunctionSet favg("favg");
 	favg.AddFunction(AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, true));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(favg);
 }
 

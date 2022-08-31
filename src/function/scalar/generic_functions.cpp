@@ -9,6 +9,7 @@ void BuiltinFunctions::RegisterGenericFunctions() {
 	Register<GreatestFun>();
 	Register<StatsFun>();
 	Register<TypeOfFun>();
+	Register<ConstantOrNull>();
 	Register<CurrentSettingFun>();
 	Register<SystemFun>();
 }

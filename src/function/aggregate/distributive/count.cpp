@@ -56,12 +56,25 @@ AggregateFunction CountFun::GetFunction() {
 	auto fun = AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountFunction>(
 	    LogicalType(LogicalTypeId::ANY), LogicalType::BIGINT);
 	fun.name = "count";
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
+}
+
+static void CountStarSerialize(FieldWriter &writer, const FunctionData *bind_data, const AggregateFunction &function) {
+}
+
+static unique_ptr<FunctionData> CountStarDeserialize(ClientContext &context, FieldReader &reader,
+                                                     AggregateFunction &function) {
+	return nullptr;
 }
 
 AggregateFunction CountStarFun::GetFunction() {
 	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 	fun.name = "count_star";
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	// TODO is there a better way to set those?
+	fun.serialize = CountStarSerialize;
+	fun.deserialize = CountStarDeserialize;
 	return fun;
 }
 

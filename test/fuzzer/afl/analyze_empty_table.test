@@ -1,0 +1,12 @@
+# name: test/fuzzer/afl/analyze_empty_table.test
+# description: Test analyze of empty table
+# group: [afl]
+
+statement ok
+PRAGMA disable_optimizer
+
+statement ok
+CREATE TABLE t0 (c0 int);
+
+statement ok
+ANALYZE t0;

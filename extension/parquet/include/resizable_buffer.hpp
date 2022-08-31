@@ -76,12 +76,12 @@ public:
 		if (new_size > alloc_len) {
 			alloc_len = new_size;
 			allocated_data = allocator.Allocate(alloc_len);
-			ptr = (char *)allocated_data->get();
+			ptr = (char *)allocated_data.get();
 		}
 	}
 
 private:
-	unique_ptr<AllocatedData> allocated_data;
+	AllocatedData allocated_data;
 	idx_t alloc_len = 0;
 };
 

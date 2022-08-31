@@ -56,10 +56,11 @@ public:
 	}
 
 public:
-	static bool ComputeOffset(DataChunk &input, idx_t &limit, idx_t &offset, idx_t current_offset, idx_t &max_element,
-	                          Expression *limit_expression, Expression *offset_expression);
+	static bool ComputeOffset(ExecutionContext &context, DataChunk &input, idx_t &limit, idx_t &offset,
+	                          idx_t current_offset, idx_t &max_element, Expression *limit_expression,
+	                          Expression *offset_expression);
 	static bool HandleOffset(DataChunk &input, idx_t &current_offset, idx_t offset, idx_t limit);
-	static Value GetDelimiter(DataChunk &input, Expression *expr);
+	static Value GetDelimiter(ExecutionContext &context, DataChunk &input, Expression *expr);
 };
 
 } // namespace duckdb

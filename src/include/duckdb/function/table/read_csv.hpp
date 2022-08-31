@@ -19,6 +19,9 @@ struct BaseCSVData : public TableFunctionData {
 	vector<string> files;
 	//! The CSV reader options
 	BufferedCSVReaderOptions options;
+	//! Offsets for generated columns
+	idx_t filename_col_idx;
+	idx_t hive_partition_col_idx;
 
 	void Finalize();
 };

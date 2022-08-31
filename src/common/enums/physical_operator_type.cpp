@@ -11,6 +11,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "DUMMY_SCAN";
 	case PhysicalOperatorType::CHUNK_SCAN:
 		return "CHUNK_SCAN";
+	case PhysicalOperatorType::COLUMN_DATA_SCAN:
+		return "COLUMN_DATA_SCAN";
 	case PhysicalOperatorType::DELIM_SCAN:
 		return "DELIM_SCAN";
 	case PhysicalOperatorType::ORDER_BY:
@@ -33,8 +35,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "STREAMING_WINDOW";
 	case PhysicalOperatorType::UNNEST:
 		return "UNNEST";
-	case PhysicalOperatorType::SIMPLE_AGGREGATE:
-		return "SIMPLE_AGGREGATE";
+	case PhysicalOperatorType::UNGROUPED_AGGREGATE:
+		return "UNGROUPED_AGGREGATE";
 	case PhysicalOperatorType::HASH_GROUP_BY:
 		return "HASH_GROUP_BY";
 	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:

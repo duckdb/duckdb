@@ -2,6 +2,8 @@
 # description: NULL values and a multi-column UNIQUE constraint
 # group: [unique]
 
+require skip_reload
+
 statement ok
 CREATE TEMPORARY TABLE integers(i INTEGER, j INTEGER)
 

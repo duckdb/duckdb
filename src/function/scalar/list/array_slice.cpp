@@ -102,11 +102,11 @@ static void ExecuteSlice(Vector &result, Vector &s, Vector &b, Vector &e, const 
 			rdata[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
 		}
 	} else {
-		VectorData sdata, bdata, edata;
+		UnifiedVectorFormat sdata, bdata, edata;
 
-		s.Orrify(count, sdata);
-		b.Orrify(count, bdata);
-		e.Orrify(count, edata);
+		s.ToUnifiedFormat(count, sdata);
+		b.ToUnifiedFormat(count, bdata);
+		e.ToUnifiedFormat(count, edata);
 
 		auto rdata = FlatVector::GetData<INPUT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
@@ -191,7 +191,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ArraySliceFunction, false, false, ArraySliceBind);
+	                   ArraySliceFunction, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction({"array_slice", "list_slice"}, fun);

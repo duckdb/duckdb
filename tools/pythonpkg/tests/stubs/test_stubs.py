@@ -10,7 +10,7 @@ MYPY_INI_PATH = os.path.join(os.path.dirname(__file__), 'mypy.ini')
 
 def test_stubs():
 	# The test has false positives on the following keywords
-	skip_stubs_errors = ['pybind11_module_local', 'git_revision']
+	skip_stubs_errors = ['pybind11_module_local', 'git_revision', '(checked 1 module)']
 	# just run stubtest
 	stubs = subprocess.run([
 			sys.executable, '-m', 'mypy.stubtest',
@@ -18,7 +18,7 @@ def test_stubs():
 			'--mypy-config-file', MYPY_INI_PATH,
 		], stdout=subprocess.PIPE)
 	if (stubs.returncode != 0):
-		errors = stubs.stdout.decode('utf-8').split('error')
+		errors = stubs.stdout.decode('utf-8').split('Found')[0].split('error')
 		broken_stubs = []
 		for error in errors:
 			add_error = True

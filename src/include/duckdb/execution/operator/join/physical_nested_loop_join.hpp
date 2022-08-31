@@ -25,7 +25,7 @@ public:
 
 public:
 	// Operator Interface
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
@@ -40,6 +40,8 @@ public:
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                 GlobalSourceState &gstate) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
@@ -66,6 +68,12 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+	static bool IsSupported(const vector<JoinCondition> &conditions);
+
+public:
+	//! Returns a list of the types of the join conditions
+	vector<LogicalType> GetJoinTypes() const;
 
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)

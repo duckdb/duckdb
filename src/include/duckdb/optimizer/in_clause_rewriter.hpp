@@ -11,13 +11,15 @@
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+class ClientContext;
 class Optimizer;
 
 class InClauseRewriter : public LogicalOperatorVisitor {
 public:
-	explicit InClauseRewriter(Optimizer &optimizer) : optimizer(optimizer) {
+	explicit InClauseRewriter(ClientContext &context, Optimizer &optimizer) : context(context), optimizer(optimizer) {
 	}
 
+	ClientContext &context;
 	Optimizer &optimizer;
 	unique_ptr<LogicalOperator> root;
 

@@ -22,7 +22,7 @@ class PhysicalRangeJoin : public PhysicalComparisonJoin {
 public:
 	class LocalSortedTable {
 	public:
-		LocalSortedTable(const PhysicalRangeJoin &op, const idx_t child);
+		LocalSortedTable(Allocator &allocator, const PhysicalRangeJoin &op, const idx_t child);
 
 		void Sink(DataChunk &input, GlobalSortState &global_sort_state);
 
@@ -65,7 +65,7 @@ public:
 		}
 
 		inline idx_t BlockSize(idx_t i) const {
-			return global_sort_state.sorted_blocks[0]->radix_sorting_data[i].count;
+			return global_sort_state.sorted_blocks[0]->radix_sorting_data[i]->count;
 		}
 
 		void Combine(LocalSortedTable &ltable);
@@ -95,8 +95,10 @@ public:
 
 public:
 	// Gather the result values and slice the payload columns to those values.
-	static void SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
-	                               const SelectionVector &result, const idx_t result_count, const idx_t left_cols = 0);
+	// Returns a buffer handle to the pinned heap block (if any)
+	static BufferHandle SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
+	                                       const SelectionVector &result, const idx_t result_count,
+	                                       const idx_t left_cols = 0);
 	// Apply a tail condition to the current selection
 	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
 	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);

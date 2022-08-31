@@ -12,19 +12,6 @@
 
 namespace duckdb {
 
-vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings) {
-	vector<AggregateObject> aggregates;
-	for (auto &binding : bindings) {
-		auto payload_size = binding->function.state_size();
-#ifndef DUCKDB_ALLOW_UNDEFINED
-		payload_size = AlignValue(payload_size);
-#endif
-		aggregates.emplace_back(binding->function, binding->bind_info.get(), binding->children.size(), payload_size,
-		                        binding->distinct, binding->return_type.InternalType(), binding->filter.get());
-	}
-	return aggregates;
-}
-
 RowLayout::RowLayout()
     : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_pointer_offset(0) {
 }

@@ -12,9 +12,11 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/optimizer/cardinality_estimator.hpp"
 
 #include <functional>
 
@@ -22,32 +24,15 @@ namespace duckdb {
 
 class JoinOrderOptimizer {
 public:
-	//! Represents a node in the join plan
-	struct JoinNode {
-		JoinRelationSet *set;
-		NeighborInfo *info;
-		idx_t cardinality;
-		idx_t cost;
-		JoinNode *left;
-		JoinNode *right;
-
-		//! Create a leaf node in the join tree
-		JoinNode(JoinRelationSet *set, idx_t cardinality)
-		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
-		}
-		//! Create an intermediate node in the join tree
-		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
-		         idx_t cost)
-		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right) {
-		}
-	};
-
-public:
-	explicit JoinOrderOptimizer(ClientContext &context) : context(context) {
+	explicit JoinOrderOptimizer(ClientContext &context)
+	    : context(context), cardinality_estimator(context), full_plan_found(false), must_update_full_plan(false) {
 	}
 
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
+
+	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, const vector<NeighborInfo *> &possible_connections,
+	                                    JoinNode *left, JoinNode *right);
 
 private:
 	ClientContext &context;
@@ -63,6 +48,7 @@ private:
 	QueryGraph query_graph;
 	//! The optimal join plan found for the specific JoinRelationSet*
 	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
+
 	//! The set of filters extracted from the query graph
 	vector<unique_ptr<Expression>> filters;
 	//! The set of filter infos created from the extracted filters
@@ -72,18 +58,29 @@ private:
 	//! C}
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
+	CardinalityEstimator cardinality_estimator;
+
+	bool full_plan_found;
+	bool must_update_full_plan;
+	unordered_set<JoinNode *> join_nodes_in_full_plan;
+
 	//! Extract the bindings referred to by an Expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
+
+	//! Get column bindings from a filter
+	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
+
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
 	                          LogicalOperator *parent = nullptr);
+
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	JoinNode *EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info);
+	JoinNode *EmitPair(JoinRelationSet *left, JoinRelationSet *right, const vector<NeighborInfo *> &info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
-	bool TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info);
+	bool TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, const vector<NeighborInfo *> &info);
 
 	bool EnumerateCmpRecursive(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> exclusion_set);
 	//! Emit a relation set node
@@ -102,7 +99,10 @@ private:
 	//! Solve the join order approximately using a greedy algorithm
 	void SolveJoinOrderApproximately();
 
-	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
+	void UpdateDPTree(JoinNode *new_plan);
+
+	void UpdateJoinNodesInFullPlan(JoinNode *node);
+
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
 };

@@ -35,7 +35,7 @@ struct IndexScanState {
 	}
 };
 
-typedef unordered_map<block_id_t, unique_ptr<BufferHandle>> buffer_handle_set_t;
+typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 
 struct ColumnScanState {
 	//! The column segment that is currently being scanned
@@ -67,6 +67,8 @@ struct ColumnFetchState {
 	buffer_handle_set_t handles;
 	//! Any child states of the fetch
 	vector<unique_ptr<ColumnFetchState>> child_states;
+
+	BufferHandle &GetOrInsertHandle(ColumnSegment &segment);
 };
 
 struct LocalScanState {
@@ -88,7 +90,7 @@ private:
 
 class RowGroupScanState {
 public:
-	RowGroupScanState(TableScanState &parent_p) : parent(parent_p), vector_index(0), max_row(0) {
+	RowGroupScanState(TableScanState &parent_p) : parent(parent_p), row_group(nullptr), vector_index(0), max_row(0) {
 	}
 
 	//! The parent scan state

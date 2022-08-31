@@ -451,14 +451,20 @@ static bool StartsWithNumericDate(string &separator, const string &value) {
 
 string GenerateDateFormat(const string &separator, const char *format_template) {
 	string format_specifier = format_template;
-
-	//	replace all dashes with the separator
-	for (auto pos = std::find(format_specifier.begin(), format_specifier.end(), '-'); pos != format_specifier.end();
-	     pos = std::find(pos + separator.size(), format_specifier.end(), '-')) {
-		format_specifier.replace(pos, pos + 1, separator);
+	auto amount_of_dashes = std::count(format_specifier.begin(), format_specifier.end(), '-');
+	if (!amount_of_dashes) {
+		return format_specifier;
 	}
-
-	return format_specifier;
+	string result;
+	result.reserve(format_specifier.size() - amount_of_dashes + (amount_of_dashes * separator.size()));
+	for (auto &character : format_specifier) {
+		if (character == '-') {
+			result += separator;
+		} else {
+			result += character;
+		}
+	}
+	return result;
 }
 
 TextSearchShiftArray::TextSearchShiftArray() {
@@ -492,17 +498,18 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
-BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, FileOpener *opener_p, BufferedCSVReaderOptions options_p,
-                                     const vector<LogicalType> &requested_types)
-    : fs(fs_p), opener(opener_p), options(move(options_p)), buffer_size(0), position(0), start(0) {
+BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
+                                     BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
+    : fs(fs_p), allocator(allocator), opener(opener_p), options(move(options_p)), buffer_size(0), position(0),
+      start(0) {
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
 }
 
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : BufferedCSVReader(FileSystem::GetFileSystem(context), FileSystem::GetFileOpener(context), move(options_p),
-                        requested_types) {
+    : BufferedCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
+                        move(options_p), requested_types) {
 }
 
 BufferedCSVReader::~BufferedCSVReader() {
@@ -669,7 +676,7 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 
 		// initialize the parse_chunk with a set of VARCHAR types
 		vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
-		parse_chunk.Initialize(varchar_types);
+		parse_chunk.Initialize(allocator, varchar_types);
 	}
 }
 
@@ -996,7 +1003,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 		// jump to beginning and skip potential header
 		JumpToBeginning(options.skip_rows, true);
 		DataChunk header_row;
-		header_row.Initialize(sql_types);
+		header_row.Initialize(allocator, sql_types);
 		parse_chunk.Copy(header_row);
 
 		if (header_row.size() == 0) {
@@ -1116,7 +1123,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 			best_format_candidates = format_candidates;
 			best_header_row.Destroy();
 			auto header_row_types = header_row.GetTypes();
-			best_header_row.Initialize(header_row_types);
+			best_header_row.Initialize(allocator, header_row_types);
 			header_row.Copy(best_header_row);
 		}
 	}

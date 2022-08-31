@@ -25,11 +25,12 @@ PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types
       function(move(function_p)), bind_data(move(bind_data_p)), column_ids(move(column_ids_p)) {
 }
 
-unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ClientContext &context) const {
+unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ExecutionContext &context) const {
+	auto &gstate = (TableInOutGlobalState &)*op_state;
 	auto result = make_unique<TableInOutLocalState>();
 	if (function.init_local) {
 		TableFunctionInitInput input(bind_data.get(), column_ids, nullptr);
-		result->local_state = function.init_local(context, input, nullptr);
+		result->local_state = function.init_local(context, input, gstate.global_state.get());
 	}
 	return move(result);
 }
@@ -48,7 +49,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	auto &gstate = (TableInOutGlobalState &)gstate_p;
 	auto &state = (TableInOutLocalState &)state_p;
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
-	return function.in_out_function(context.client, data, input, chunk);
+	return function.in_out_function(context, data, input, chunk);
 }
 
 } // namespace duckdb

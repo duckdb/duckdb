@@ -9,6 +9,7 @@
 dbDisconnect__duckdb_connection <- function(conn, ..., shutdown = FALSE) {
   if (!dbIsValid(conn)) {
     warning("Connection already closed.", call. = FALSE)
+    invisible(FALSE)
   }
   rapi_disconnect(conn@conn_ref)
   if (shutdown) {

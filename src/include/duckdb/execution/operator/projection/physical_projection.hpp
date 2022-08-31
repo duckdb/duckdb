@@ -21,7 +21,7 @@ public:
 	vector<unique_ptr<Expression>> select_list;
 
 public:
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 

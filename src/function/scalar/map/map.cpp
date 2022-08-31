@@ -12,19 +12,19 @@ namespace duckdb {
 // TODO: this doesn't recursively verify maps if maps are nested
 MapInvalidReason CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	VectorData map_vdata;
-	map.Orrify(count, map_vdata);
+	UnifiedVectorFormat map_vdata;
+	map.ToUnifiedFormat(count, map_vdata);
 	auto &map_validity = map_vdata.validity;
 
 	auto &key_vector = *(StructVector::GetEntries(map)[0]);
-	VectorData key_vdata;
-	key_vector.Orrify(count, key_vdata);
+	UnifiedVectorFormat key_vdata;
+	key_vector.ToUnifiedFormat(count, key_vdata);
 	auto key_data = (list_entry_t *)key_vdata.data;
 	auto &key_validity = key_vdata.validity;
 
 	auto &key_entries = ListVector::GetEntry(key_vector);
-	VectorData key_entry_vdata;
-	key_entries.Orrify(count, key_entry_vdata);
+	UnifiedVectorFormat key_entry_vdata;
+	key_entries.ToUnifiedFormat(count, key_entry_vdata);
 	auto &entry_validity = key_entry_vdata.validity;
 
 	for (idx_t row = 0; row < count; row++) {
@@ -55,7 +55,7 @@ MapInvalidReason CheckMapValidity(Vector &map, idx_t count, const SelectionVecto
 	return MapInvalidReason::VALID;
 }
 
-static void MapConversionVerify(Vector &vector, idx_t count) {
+void MapConversionVerify(Vector &vector, idx_t count) {
 	auto valid_check = CheckMapValidity(vector, count);
 	switch (valid_check) {
 	case MapInvalidReason::VALID:
@@ -108,8 +108,12 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		return;
 	}
 
-	if (ListVector::GetListSize(args.data[0]) != ListVector::GetListSize(args.data[1])) {
-		throw Exception("Key list has a different size from Value list");
+	auto key_count = ListVector::GetListSize(args.data[0]);
+	auto value_count = ListVector::GetListSize(args.data[1]);
+	if (key_count != value_count) {
+		throw InvalidInputException(
+		    "Error in MAP creation: key list has a different size from value list (%lld keys, %lld values)", key_count,
+		    value_count);
 	}
 
 	key_vector.Reference(args.data[0]);
@@ -150,7 +154,7 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 
 void MapFun::RegisterFunction(BuiltinFunctions &set) {
 	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun("map", {}, LogicalTypeId::MAP, MapFunction, false, MapBind);
+	ScalarFunction fun("map", {}, LogicalTypeId::MAP, MapFunction, MapBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);

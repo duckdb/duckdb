@@ -18,7 +18,7 @@ class TestInsertInto(object):
         assert con.execute("select * from s.t").fetchall() == [(1,)]
 
         # This should fail since this will go to default schema
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             rel.insert_into('t')
 
         #If we add t in the default schema it should work.

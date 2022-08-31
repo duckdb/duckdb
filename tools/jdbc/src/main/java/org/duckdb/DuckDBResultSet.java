@@ -156,9 +156,14 @@ public class DuckDBResultSet implements ResultSet {
 		case DATE:
 			return getDate(columnIndex);
 		case TIMESTAMP:
+		case TIMESTAMP_NS:
+		case TIMESTAMP_S:
+		case TIMESTAMP_MS:
 			return getTimestamp(columnIndex);
 		case TIMESTAMP_WITH_TIME_ZONE:
 			return getOffsetDateTime(columnIndex);
+		case JSON:
+			return getJsonObject(columnIndex);
 		case INTERVAL:
 			return getLazyString(columnIndex);
 		default:
@@ -178,6 +183,11 @@ public class DuckDBResultSet implements ResultSet {
 		check(columnIndex);
 		was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
 		return was_null;
+	}
+
+	public JsonNode getJsonObject(int columnIndex) throws SQLException {
+		String result = getLazyString(columnIndex);
+		return result == null ? null : new JsonNode(result);
 	}
 
 	public String getLazyString(int columnIndex) throws SQLException {
@@ -476,7 +486,17 @@ public class DuckDBResultSet implements ResultSet {
 		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
 			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong());
 		}
-		return null;
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
+			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong() * 1000);
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
+			return DuckDBTimestamp.toSqlTimestampNanos(getbuf(columnIndex, 8).getLong());
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
+			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong() * 1_000_000);
+		}
+		Object o = getObject(columnIndex);
+		return Timestamp.valueOf(o.toString());
 	}
 
 	private LocalDateTime getLocalDateTime(int columnIndex) throws SQLException {
@@ -486,7 +506,8 @@ public class DuckDBResultSet implements ResultSet {
 		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
 			return DuckDBTimestamp.toLocalDateTime(getbuf(columnIndex, 8).getLong());
 		}
-		return null;
+		Object o = getObject(columnIndex);
+		return LocalDateTime.parse(o.toString());
 	}
 
 	private OffsetDateTime getOffsetDateTime(int columnIndex) throws SQLException {
@@ -496,7 +517,8 @@ public class DuckDBResultSet implements ResultSet {
 		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
 			return DuckDBTimestamp.toOffsetDateTime(getbuf(columnIndex, 8).getLong());
 		}
-		return null;
+		Object o = getObject(columnIndex);
+		return OffsetDateTime.parse(o.toString());
 	}
 
 	static class DuckDBBlobResult implements Blob {

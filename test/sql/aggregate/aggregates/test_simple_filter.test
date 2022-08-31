@@ -70,3 +70,12 @@ SELECT
 FROM issue3105;
 ----
 600.000000	1000.000000	400.000000
+
+query III
+SELECT
+	SUM(pay) FILTER (gender = 'male'),
+	SUM(pay),
+	SUM(pay) FILTER (gender = 'female')
+FROM issue3105;
+----
+600.000000	1000.000000	400.000000

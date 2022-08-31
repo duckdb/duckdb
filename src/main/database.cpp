@@ -38,7 +38,7 @@ DatabaseInstance::~DatabaseInstance() {
 		auto &storage = StorageManager::GetStorageManager(*this);
 		if (!storage.InMemory()) {
 			auto &config = storage.db.config;
-			if (!config.checkpoint_on_shutdown) {
+			if (!config.options.checkpoint_on_shutdown) {
 				return;
 			}
 			storage.CreateCheckpoint(true);
@@ -83,6 +83,14 @@ ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
 	return context.config;
 }
 
+const DBConfig &DBConfig::GetConfig(const DatabaseInstance &db) {
+	return db.config;
+}
+
+const ClientConfig &ClientConfig::GetConfig(const ClientContext &context) {
+	return context.config;
+}
+
 TransactionManager &TransactionManager::Get(ClientContext &context) {
 	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
 }
@@ -108,22 +116,22 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 		DBConfig config;
 		Configure(config);
 	}
-	if (config.temporary_directory.empty() && path) {
+	if (config.options.temporary_directory.empty() && path) {
 		// no directory specified: use default temp path
-		config.temporary_directory = string(path) + ".tmp";
+		config.options.temporary_directory = string(path) + ".tmp";
 
 		// special treatment for in-memory mode
 		if (strcmp(path, ":memory:") == 0) {
-			config.temporary_directory = ".tmp";
+			config.options.temporary_directory = ".tmp";
 		}
 	}
-	if (new_config && !new_config->use_temporary_directory) {
+	if (new_config && !new_config->options.use_temporary_directory) {
 		// temporary directories explicitly disabled
-		config.temporary_directory = string();
+		config.options.temporary_directory = string();
 	}
 
-	storage =
-	    make_unique<StorageManager>(*this, path ? string(path) : string(), config.access_mode == AccessMode::READ_ONLY);
+	storage = make_unique<StorageManager>(*this, path ? string(path) : string(),
+	                                      config.options.access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 	scheduler = make_unique<TaskScheduler>(*this);
@@ -134,12 +142,12 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	storage->Initialize();
 
 	// only increase thread count after storage init because we get races on catalog otherwise
-	scheduler->SetThreads(config.maximum_threads);
+	scheduler->SetThreads(config.options.maximum_threads);
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
 	instance->Initialize(path, new_config);
-	if (instance->config.load_extensions) {
+	if (instance->config.options.load_extensions) {
 		ExtensionHelper::LoadAllExtensions(*this);
 	}
 }
@@ -190,53 +198,61 @@ Allocator &Allocator::Get(ClientContext &context) {
 }
 
 Allocator &Allocator::Get(DatabaseInstance &db) {
-	return db.config.allocator;
+	return *db.config.allocator;
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config) {
-	config.access_mode = AccessMode::READ_WRITE;
-	if (new_config.access_mode != AccessMode::UNDEFINED) {
-		config.access_mode = new_config.access_mode;
+	config.options.access_mode = AccessMode::READ_WRITE;
+	if (new_config.options.access_mode != AccessMode::UNDEFINED) {
+		config.options.access_mode = new_config.options.access_mode;
 	}
 	if (new_config.file_system) {
 		config.file_system = move(new_config.file_system);
 	} else {
 		config.file_system = make_unique<VirtualFileSystem>();
 	}
-	config.maximum_memory = new_config.maximum_memory;
-	if (config.maximum_memory == (idx_t)-1) {
+	config.options.maximum_memory = new_config.options.maximum_memory;
+	if (config.options.maximum_memory == (idx_t)-1) {
 		auto memory = FileSystem::GetAvailableMemory();
 		if (memory != DConstants::INVALID_INDEX) {
-			config.maximum_memory = memory * 8 / 10;
+			config.options.maximum_memory = memory * 8 / 10;
 		}
 	}
-	if (new_config.maximum_threads == (idx_t)-1) {
+	if (new_config.options.maximum_threads == (idx_t)-1) {
 #ifndef DUCKDB_NO_THREADS
-		config.maximum_threads = std::thread::hardware_concurrency();
+		config.options.maximum_threads = std::thread::hardware_concurrency();
 #else
-		config.maximum_threads = 1;
+		config.options.maximum_threads = 1;
 #endif
 	} else {
-		config.maximum_threads = new_config.maximum_threads;
+		config.options.maximum_threads = new_config.options.maximum_threads;
 	}
-	config.external_threads = new_config.external_threads;
-	config.load_extensions = new_config.load_extensions;
-	config.force_compression = new_config.force_compression;
+	config.options.external_threads = new_config.options.external_threads;
+	config.options.load_extensions = new_config.options.load_extensions;
+	config.options.force_compression = new_config.options.force_compression;
 	config.allocator = move(new_config.allocator);
-	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
-	config.use_direct_io = new_config.use_direct_io;
-	config.temporary_directory = new_config.temporary_directory;
-	config.collation = new_config.collation;
-	config.default_order_type = new_config.default_order_type;
-	config.default_null_order = new_config.default_null_order;
-	config.enable_external_access = new_config.enable_external_access;
+	if (!config.allocator) {
+		config.allocator = make_unique<Allocator>();
+	}
+	config.options.checkpoint_wal_size = new_config.options.checkpoint_wal_size;
+	config.options.use_direct_io = new_config.options.use_direct_io;
+	config.options.temporary_directory = new_config.options.temporary_directory;
+	config.options.collation = new_config.options.collation;
+	config.options.default_order_type = new_config.options.default_order_type;
+	config.options.default_null_order = new_config.options.default_null_order;
+	config.options.enable_external_access = new_config.options.enable_external_access;
+	config.options.allow_unsigned_extensions = new_config.options.allow_unsigned_extensions;
 	config.replacement_scans = move(new_config.replacement_scans);
-	config.initialize_default_database = new_config.initialize_default_database;
-	config.disabled_optimizers = move(new_config.disabled_optimizers);
+	config.options.initialize_default_database = new_config.options.initialize_default_database;
+	config.options.disabled_optimizers = move(new_config.options.disabled_optimizers);
 	config.parser_extensions = move(new_config.parser_extensions);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
+	return context.db->config;
+}
+
+const DBConfig &DBConfig::GetConfig(const ClientContext &context) {
 	return context.db->config;
 }
 
@@ -259,12 +275,34 @@ void DuckDB::SetExtensionLoaded(const std::string &name) {
 	instance->loaded_extensions.insert(name);
 }
 
-string ClientConfig::ExtractTimezoneFromConfig(ClientConfig &config) {
-	if (config.set_variables.find("TimeZone") == config.set_variables.end()) {
+bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
+	// check the session values
+	auto &db_config = DBConfig::GetConfig(*this);
+	const auto &global_config_map = db_config.options.set_variables;
+
+	auto global_value = global_config_map.find(key);
+	bool found_global_value = global_value != global_config_map.end();
+	if (!found_global_value) {
+		return false;
+	}
+	result = global_value->second;
+	return true;
+}
+
+string ClientConfig::ExtractTimezone() const {
+	auto entry = set_variables.find("TimeZone");
+	if (entry == set_variables.end()) {
 		return "UTC";
 	} else {
-		return config.set_variables["TimeZone"].GetValue<std::string>();
+		return entry->second.GetValue<std::string>();
 	}
+}
+
+void DatabaseInstance::Invalidate() {
+	this->is_invalidated = true;
+}
+bool DatabaseInstance::IsInvalidated() {
+	return this->is_invalidated;
 }
 
 } // namespace duckdb

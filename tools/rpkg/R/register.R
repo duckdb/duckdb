@@ -1,7 +1,8 @@
 # helper to clean up non-utf and posixlt vectors
 encode_values <- function(value) {
-  value <- as.data.frame(value)
-  names(value) <- enc2utf8(names(value))
+  if (!is.null(names(value))) {
+    names(value) <- enc2utf8(names(value))
+  }
 
   is_character <- vapply(value, is.character, logical(1))
   value[is_character] <- lapply(value[is_character], enc2utf8)
@@ -43,14 +44,13 @@ encode_values <- function(value) {
 duckdb_register <- function(conn, name, df) {
   stopifnot(dbIsValid(conn))
   df <- encode_values(as.data.frame(df))
-  rapi_register_df(conn@conn_ref, enc2utf8(as.character(name)), df)
+  rapi_register_df(conn@conn_ref, enc2utf8(as.character(name)), df, conn@driver@bigint == "integer64")
   invisible(TRUE)
 }
 
 #' @rdname duckdb_register
 #' @export
 duckdb_unregister <- function(conn, name) {
-  stopifnot(dbIsValid(conn))
   rapi_unregister_df(conn@conn_ref, enc2utf8(as.character(name)))
   invisible(TRUE)
 }

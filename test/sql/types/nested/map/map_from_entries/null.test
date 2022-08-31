@@ -1,0 +1,60 @@
+# name: test/sql/types/nested/map/map_from_entries/null.test
+# description: Show expected behavior when the provided list of entries is NULL
+# group: [map_from_entries]
+
+statement ok
+PRAGMA enable_verification
+
+# Provided argument is NULL
+query I
+SELECT MAP_FROM_ENTRIES(NULL);
+----
+NULL
+
+statement ok
+CREATE TABLE tbl (
+	input STRUCT(a INTEGER, b INTEGER)[]
+);
+INSERT INTO tbl VALUES(NULL);
+INSERT INTO tbl VALUES(NULL);
+INSERT INTO tbl VALUES(NULL);
+
+query I
+SELECT input FROM tbl;
+----
+NULL
+NULL
+NULL
+
+# Multi row NULLs
+query I
+SELECT MAP_FROM_ENTRIES(input) FROM tbl;
+----
+NULL
+NULL
+NULL
+
+statement ok
+INSERT INTO tbl VALUES ([(5,3), (6,4), (7,3)])
+
+# With valid MAPs mixed in
+query I
+SELECT MAP_FROM_ENTRIES(input) FROM tbl;
+----
+NULL
+NULL
+NULL
+{5=3, 6=4, 7=3}
+
+statement ok
+INSERT INTO tbl VALUES (NULL)
+
+# Followed by another NULL
+query I
+SELECT MAP_FROM_ENTRIES(input) FROM tbl;
+----
+NULL
+NULL
+NULL
+{5=3, 6=4, 7=3}
+NULL

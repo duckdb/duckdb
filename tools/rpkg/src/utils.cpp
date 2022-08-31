@@ -54,7 +54,7 @@ RStrings::RStrings() {
 	R_PreserveObject(strings);
 	MARK_NOT_MUTABLE(strings);
 
-	SEXP chars = r.Protect(Rf_allocVector(VECSXP, 8));
+	SEXP chars = r.Protect(Rf_allocVector(VECSXP, 9));
 	SET_VECTOR_ELT(chars, 0, UTC_str = Rf_mkString("UTC"));
 	SET_VECTOR_ELT(chars, 1, Date_str = Rf_mkString("Date"));
 	SET_VECTOR_ELT(chars, 2, difftime_str = Rf_mkString("difftime"));
@@ -63,6 +63,7 @@ RStrings::RStrings() {
 	SET_VECTOR_ELT(chars, 5, POSIXct_POSIXt_str = StringsToSexp({"POSIXct", "POSIXt"}));
 	SET_VECTOR_ELT(chars, 6, factor_str = Rf_mkString("factor"));
 	SET_VECTOR_ELT(chars, 7, dataframe_str = Rf_mkString("data.frame"));
+	SET_VECTOR_ELT(chars, 8, integer64_str = Rf_mkString("integer64"));
 
 	R_PreserveObject(chars);
 	MARK_NOT_MUTABLE(chars);
@@ -93,7 +94,7 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 }
 
 Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
-	auto rtype = RApiTypes::DetectRType(valsexp);
+	auto rtype = RApiTypes::DetectRType(valsexp, false); // TODO
 	switch (rtype) {
 	case RType::LOGICAL: {
 		auto lgl_val = INTEGER_POINTER(valsexp)[idx];
@@ -187,6 +188,12 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	case RType::TIME_WEEKS_INTEGER: {
 		auto ts_val = INTEGER_POINTER(valsexp)[idx];
 		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeWeeksType::Convert(ts_val));
+	}
+	case RType::LIST_OF_NULLS:
+		return Value();
+	case RType::BLOB: {
+		auto ts_val = VECTOR_ELT(valsexp, idx);
+		return Rf_isNull(ts_val) ? Value(LogicalType::BLOB) : Value::BLOB(RAW(ts_val), Rf_xlength(ts_val));
 	}
 	default:
 		cpp11::stop("duckdb_sexp_to_value: Unsupported type");

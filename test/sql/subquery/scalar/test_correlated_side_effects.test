@@ -1,0 +1,18 @@
+# name: test/sql/subquery/scalar/test_correlated_side_effects.test
+# description: Test correlated subqueries with side effects
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+# FIXME: we should not perform duplicate elimination for subqueries that have side-effects
+
+mode skip
+
+query I
+SELECT COUNT(DISTINCT
+	(SELECT concat(gen_random_uuid()::VARCHAR, r::VARCHAR))
+  ) as total_seats
+FROM (SELECT 1 FROM generate_series(1, 100, 1)) AS t(r)
+----
+100

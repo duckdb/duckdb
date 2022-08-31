@@ -157,7 +157,9 @@ public:
 	//! Gets the working directory
 	DUCKDB_API static string GetWorkingDirectory();
 	//! Gets the users home directory
-	DUCKDB_API static string GetHomeDirectory();
+	DUCKDB_API static string GetHomeDirectory(FileOpener *opener);
+	//! Expands a given path, including e.g. expanding the home directory of the user
+	DUCKDB_API static string ExpandPath(const string &path, FileOpener *opener);
 	//! Returns the system-available memory in bytes. Returns DConstants::INVALID_INDEX if the system function fails.
 	DUCKDB_API static idx_t GetAvailableMemory();
 	//! Path separator for the current file system

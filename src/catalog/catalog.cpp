@@ -386,8 +386,10 @@ LogicalType Catalog::GetType(ClientContext &context, const string &schema, const
 
 void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 	ModifyCatalog();
-	auto lookup = LookupEntry(context, info->GetCatalogType(), info->schema, info->name);
-	D_ASSERT(lookup.Found()); // It must have thrown otherwise.
+	auto lookup = LookupEntry(context, info->GetCatalogType(), info->schema, info->name, info->if_exists);
+	if (!lookup.Found()) {
+		return;
+	}
 	return lookup.schema->Alter(context, info);
 }
 

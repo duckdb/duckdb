@@ -162,6 +162,14 @@ void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const
 	InnerGetListOfDependencies(*generated_expression, dependencies);
 }
 
+string ColumnDefinition::GetName() {
+	return name;
+}
+
+LogicalType ColumnDefinition::GetType() {
+	return type;
+}
+
 void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expression) {
 	category = TableColumnType::GENERATED;
 

@@ -1,0 +1,28 @@
+# name: test/sql/binder/table_alias_single_quotes.test
+# description: Test table alias with single quotes
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+query I
+SELECT t.k FROM integers AS 't'('k') ORDER BY ALL
+----
+NULL
+1
+2
+3
+
+query I
+SELECT t.k FROM integers t('k') ORDER BY ALL
+----
+NULL
+1
+2
+3

@@ -85,6 +85,8 @@ struct BufferedCSVReaderOptions {
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! The column names of the columns to read/write
+	vector<string> names;
 
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
@@ -111,13 +113,13 @@ struct BufferedCSVReaderOptions {
 	string file_path;
 	//! Whether or not to include a file name column
 	bool include_file_name = false;
+	//! Whether or not to include a parsed hive partition columns
+	bool include_parsed_hive_partitions = false;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
 
-	//! The column names of the columns to write
-	vector<string> names;
 	//! True, if column with that index must be quoted
 	vector<bool> force_quote;
 
@@ -128,6 +130,9 @@ struct BufferedCSVReaderOptions {
 	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+
+	void Serialize(FieldWriter &writer) const;
+	void Deserialize(FieldReader &reader);
 
 	void SetDelimiter(const string &delimiter);
 	//! Set an option that is supported by both reading and writing functions, called by
@@ -159,11 +164,12 @@ public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
-	BufferedCSVReader(FileSystem &fs, FileOpener *opener, BufferedCSVReaderOptions options,
+	BufferedCSVReader(FileSystem &fs, Allocator &allocator, FileOpener *opener, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BufferedCSVReader();
 
 	FileSystem &fs;
+	Allocator &allocator;
 	FileOpener *opener;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;

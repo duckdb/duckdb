@@ -105,7 +105,7 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 }
 
 void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
-	vector.Normalify(count);
+	vector.Flatten(count);
 
 	// append the null values
 	validity.Append(*stats.validity_stats, state.child_appends[0], vector, count);
@@ -118,7 +118,7 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 		if (!struct_validity.AllValid()) {
 			// we set the child entries of the struct to NULL
 			// for any values in which the struct itself is NULL
-			child_entries[i]->Normalify(count);
+			child_entries[i]->Flatten(count);
 
 			auto &child_validity = FlatVector::Validity(*child_entries[i]);
 			child_validity.Combine(struct_validity, count);

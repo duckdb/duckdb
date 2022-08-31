@@ -1,4 +1,5 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -48,6 +49,24 @@ string BoundOrderByNode::ToString() const {
 		break;
 	}
 	return str;
+}
+
+void BoundOrderByNode::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteField(type);
+	writer.WriteField(null_order);
+	writer.WriteSerializable(*expression);
+	// TODO statistics
+	writer.Finalize();
+}
+
+BoundOrderByNode BoundOrderByNode::Deserialize(Deserializer &source, PlanDeserializationState &state) {
+	FieldReader reader(source);
+	auto type = reader.ReadRequired<OrderType>();
+	auto null_order = reader.ReadRequired<OrderByNullType>();
+	auto expression = reader.ReadRequiredSerializable<Expression>(state);
+	reader.Finalize();
+	return BoundOrderByNode(type, null_order, move(expression));
 }
 
 BoundLimitModifier::BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {

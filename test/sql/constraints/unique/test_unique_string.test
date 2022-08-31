@@ -2,6 +2,8 @@
 # description: UNIQUE constraint on temporary tables with Strings
 # group: [unique]
 
+require skip_reload
+
 statement ok
 CREATE TEMPORARY TABLE integers(i INTEGER, j VARCHAR)
 

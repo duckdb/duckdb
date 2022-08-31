@@ -4,64 +4,75 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/parser/statement/pragma_statement.hpp"
-#include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/planner/operator/logical_execute.hpp"
-#include "duckdb/planner/operator/logical_prepare.hpp"
-#include "duckdb/planner/expression_binder/constant_binder.hpp"
-#include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/serializer/buffered_deserializer.hpp"
 
 namespace duckdb {
 
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
 }
 
+static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t depth = 0) {
+	if (depth >= max_depth) {
+		throw ParserException("Maximum tree depth of %lld exceeded in logical planner", max_depth);
+	}
+	for (auto &child : op.children) {
+		CheckTreeDepth(*child, max_depth, depth + 1);
+	}
+}
+
 void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
 	auto parameter_count = statement.n_param;
 
-	vector<BoundParameterExpression *> bound_parameters;
+	BoundParameterMap bound_parameters(parameter_data);
 
 	// first bind the tables and columns to the catalog
-	profiler.StartPhase("binder");
-	binder->parameters = &bound_parameters;
-	binder->parameter_types = &parameter_types;
-	auto bound_statement = binder->Bind(statement);
-	profiler.EndPhase();
+	bool parameters_resolved = true;
+	try {
+		profiler.StartPhase("binder");
+		binder->parameters = &bound_parameters;
+		auto bound_statement = binder->Bind(statement);
+		profiler.EndPhase();
 
+		this->names = bound_statement.names;
+		this->types = bound_statement.types;
+		this->plan = move(bound_statement.plan);
+
+		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
+		CheckTreeDepth(*plan, max_tree_depth);
+	} catch (const ParameterNotResolvedException &ex) {
+		// parameter types could not be resolved
+		this->names = {"unknown"};
+		this->types = {LogicalTypeId::UNKNOWN};
+		this->plan = nullptr;
+		parameters_resolved = false;
+	} catch (const Exception &ex) {
+		throw;
+	} catch (std::exception &ex) {
+		throw;
+	}
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;
-	this->names = bound_statement.names;
-	this->types = bound_statement.types;
-	this->plan = move(bound_statement.plan);
-	properties.bound_all_parameters = true;
+	properties.bound_all_parameters = parameters_resolved;
+
+	Planner::VerifyPlan(context, plan, &bound_parameters.parameters);
 
 	// set up a map of parameter number -> value entries
-	for (auto &expr : bound_parameters) {
+	for (auto &kv : bound_parameters.parameters) {
+		auto parameter_index = kv.first;
+		auto &parameter_data = kv.second;
 		// check if the type of the parameter could be resolved
-		if (expr->return_type.id() == LogicalTypeId::INVALID || expr->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (!parameter_data->return_type.IsValid()) {
 			properties.bound_all_parameters = false;
 			continue;
 		}
-		auto value = make_unique<Value>(expr->return_type);
-		expr->value = value.get();
-		// check if the parameter number has been used before
-		auto entry = value_map.find(expr->parameter_nr);
-		if (entry == value_map.end()) {
-			// not used before, create vector
-			value_map[expr->parameter_nr] = vector<unique_ptr<Value>>();
-		} else if (entry->second.back()->type() != value->type()) {
-			// used before, but types are inconsistent
-			throw BinderException(
-			    "Inconsistent types found for parameter with index %llu, current type %s, new type %s",
-			    expr->parameter_nr, entry->second.back()->type().ToString(), value->type().ToString());
-		}
-		value_map[expr->parameter_nr].push_back(move(value));
+		parameter_data->value = Value(parameter_data->return_type);
+		value_map[parameter_index] = parameter_data;
 	}
 }
 
@@ -78,91 +89,6 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	prepared_data->properties = properties;
 	prepared_data->catalog_version = Transaction::GetTransaction(context).catalog_version;
 	return prepared_data;
-}
-
-void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
-	auto &stmt = (ExecuteStatement &)*statement;
-	auto parameter_count = stmt.n_param;
-
-	// bind the prepared statement
-	auto &client_data = ClientData::Get(context);
-
-	auto entry = client_data.prepared_statements.find(stmt.name);
-	if (entry == client_data.prepared_statements.end()) {
-		throw BinderException("Prepared statement \"%s\" does not exist", stmt.name);
-	}
-
-	// check if we need to rebind the prepared statement
-	// this happens if the catalog changes, since in this case e.g. tables we relied on may have been deleted
-	auto prepared = entry->second;
-	auto &catalog = Catalog::GetCatalog(context);
-	bool rebound = false;
-
-	// bind any supplied parameters
-	vector<Value> bind_values;
-	for (idx_t i = 0; i < stmt.values.size(); i++) {
-		ConstantBinder cbinder(*binder, context, "EXECUTE statement");
-		auto bound_expr = cbinder.Bind(stmt.values[i]);
-
-		Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
-		bind_values.push_back(move(value));
-	}
-	bool all_bound = prepared->properties.bound_all_parameters;
-	if (catalog.GetCatalogVersion() != entry->second->catalog_version || !all_bound) {
-		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
-		for (auto &value : bind_values) {
-			parameter_types.push_back(value.type());
-		}
-		prepared = PrepareSQLStatement(entry->second->unbound_statement->Copy());
-		if (all_bound && prepared->types != entry->second->types) {
-			throw BinderException("Rebinding statement \"%s\" after catalog change resulted in change of types",
-			                      stmt.name);
-		}
-		D_ASSERT(prepared->properties.bound_all_parameters);
-		rebound = true;
-	}
-	// copy the properties of the prepared statement into the planner
-	this->properties = prepared->properties;
-	this->properties.parameter_count = parameter_count;
-	this->names = prepared->names;
-	this->types = prepared->types;
-
-	// add casts to the prepared statement parameters as required
-	for (idx_t i = 0; i < bind_values.size(); i++) {
-		if (prepared->value_map.count(i + 1) == 0) {
-			continue;
-		}
-		bind_values[i] = bind_values[i].CastAs(prepared->GetType(i + 1));
-	}
-
-	prepared->Bind(move(bind_values));
-	if (rebound) {
-		auto execute_plan = make_unique<LogicalExecute>(move(prepared));
-		execute_plan->children.push_back(move(plan));
-		this->plan = move(execute_plan);
-		return;
-	}
-
-	this->plan = make_unique<LogicalExecute>(move(prepared));
-}
-
-void Planner::PlanPrepare(unique_ptr<SQLStatement> statement) {
-	auto &stmt = (PrepareStatement &)*statement;
-	auto prepared_data = PrepareSQLStatement(move(stmt.statement));
-
-	auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(plan));
-	// we can prepare in read-only mode: prepared statements are not written to the catalog
-	properties.read_only = true;
-	// we can always prepare, even if the transaction has been invalidated
-	// this is required because most clients ALWAYS invoke prepared statements
-	properties.requires_valid_transaction = false;
-	properties.allow_stream_result = false;
-	properties.bound_all_parameters = true;
-	properties.parameter_count = 0;
-	properties.return_type = StatementReturnType::NOTHING;
-	this->names = {"Success"};
-	this->types = {LogicalType::BOOLEAN};
-	this->plan = move(prepare);
 }
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
@@ -187,17 +113,76 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::SET_STATEMENT:
 	case StatementType::LOAD_STATEMENT:
 	case StatementType::EXTENSION_STATEMENT:
-		CreatePlan(*statement);
-		break;
-	case StatementType::EXECUTE_STATEMENT:
-		PlanExecute(move(statement));
-		break;
 	case StatementType::PREPARE_STATEMENT:
-		PlanPrepare(move(statement));
+	case StatementType::EXECUTE_STATEMENT:
+	case StatementType::LOGICAL_PLAN_STATEMENT:
+		CreatePlan(*statement);
 		break;
 	default:
 		throw NotImplementedException("Cannot plan statement of type %s!", StatementTypeToString(statement->type));
 	}
+}
+
+static bool OperatorSupportsSerialization(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_PREPARE:
+	case LogicalOperatorType::LOGICAL_EXECUTE:
+	case LogicalOperatorType::LOGICAL_ALTER:
+	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
+	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
+	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
+	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
+	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
+	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
+	case LogicalOperatorType::LOGICAL_DROP:
+	case LogicalOperatorType::LOGICAL_PRAGMA:
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
+	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
+	case LogicalOperatorType::LOGICAL_EXPLAIN:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+	case LogicalOperatorType::LOGICAL_LOAD:
+	case LogicalOperatorType::LOGICAL_VACUUM:
+		// unsupported (for now)
+		return false;
+	default:
+		break;
+	}
+	for (auto &child : op.children) {
+		if (!OperatorSupportsSerialization(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
+	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
+		return;
+	}
+	//! SELECT only for now
+	if (!OperatorSupportsSerialization(*op)) {
+		return;
+	}
+
+	BufferedSerializer serializer;
+	try {
+		op->Serialize(serializer);
+	} catch (NotImplementedException &ex) {
+		// ignore for now (FIXME)
+		return;
+	}
+	auto data = serializer.GetData();
+	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+
+	PlanDeserializationState state(context);
+	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
+	if (map) {
+		*map = move(state.parameter_data);
+	}
+	op = move(new_plan);
 }
 
 } // namespace duckdb

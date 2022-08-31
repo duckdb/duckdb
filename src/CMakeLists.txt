@@ -58,6 +58,7 @@ else()
   add_subdirectory(parallel)
   add_subdirectory(storage)
   add_subdirectory(transaction)
+  add_subdirectory(verification)
 
   set(DUCKDB_LINK_LIBS
       ${DUCKDB_SYSTEM_LIBS}
@@ -67,7 +68,8 @@ else()
       duckdb_miniz
       duckdb_utf8proc
       duckdb_hyperloglog
-      duckdb_fastpforlib)
+      duckdb_fastpforlib
+      duckdb_mbedtls)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})

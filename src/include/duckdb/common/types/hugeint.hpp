@@ -17,21 +17,11 @@ namespace duckdb {
 //! The Hugeint class contains static operations for the INT128 type
 class Hugeint {
 public:
-	//! Convert a string to a hugeint object
-	static bool FromString(string str, hugeint_t &result);
-	//! Convert a string to a hugeint object
-	static bool FromCString(const char *str, idx_t len, hugeint_t &result);
 	//! Convert a hugeint object to a string
 	static string ToString(hugeint_t input);
 
-	static hugeint_t FromString(string str) {
-		hugeint_t result;
-		FromString(str, result);
-		return result;
-	}
-
 	template <class T>
-	static bool TryCast(hugeint_t input, T &result);
+	DUCKDB_API static bool TryCast(hugeint_t input, T &result);
 
 	template <class T>
 	static T Cast(hugeint_t input) {
@@ -53,6 +43,9 @@ public:
 	}
 
 	static void NegateInPlace(hugeint_t &input) {
+		if (input.upper == NumericLimits<int64_t>::Minimum() && input.lower == 0) {
+			throw OutOfRangeException("HUGEINT is out of range");
+		}
 		input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
 		input.upper = -1 - input.upper + (input.lower == 0);
 	}
@@ -118,29 +111,29 @@ public:
 };
 
 template <>
-bool Hugeint::TryCast(hugeint_t input, int8_t &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, int8_t &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, int16_t &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, int16_t &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, int32_t &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, int32_t &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, int64_t &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, int64_t &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, uint8_t &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, uint8_t &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, uint16_t &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, uint16_t &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, uint32_t &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, uint32_t &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, uint64_t &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, uint64_t &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, hugeint_t &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, hugeint_t &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, float &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, float &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, double &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, double &result);
 template <>
-bool Hugeint::TryCast(hugeint_t input, long double &result);
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, long double &result);
 
 template <>
 bool Hugeint::TryConvert(int8_t value, hugeint_t &result);

@@ -54,11 +54,36 @@ explain_option_arg:
 
 
 ExplainableStmt:
-			SelectStmt
-			| InsertStmt
-			| UpdateStmt
+			AlterObjectSchemaStmt
+			| AlterSeqStmt
+			| AlterTableStmt
+			| CallStmt
+			| CheckPointStmt
+			| CopyStmt
+			| CreateAsStmt
+			| CreateFunctionStmt
+			| CreateSchemaStmt
+			| CreateSeqStmt
+			| CreateStmt
+			| CreateTypeStmt
+			| DeallocateStmt
 			| DeleteStmt
-			| CreateAsStmt					/* by default all are $$=$1 */
+			| DropStmt
+			| ExecuteStmt
+			| IndexStmt
+			| InsertStmt
+			| LoadStmt
+			| PragmaStmt
+			| PrepareStmt
+			| RenameStmt
+			| SelectStmt
+			| TransactionStmt
+			| UpdateStmt
+			| VacuumStmt
+			| VariableResetStmt
+			| VariableSetStmt
+			| VariableShowStmt
+			| ViewStmt
 		;
 
 

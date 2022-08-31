@@ -18,6 +18,7 @@
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/planner.hpp"
 
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
@@ -50,7 +51,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 
 void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
 	auto &config = DBConfig::GetConfig(context);
-	if (config.disabled_optimizers.find(type) != config.disabled_optimizers.end()) {
+	if (config.options.disabled_optimizers.find(type) != config.options.disabled_optimizers.end()) {
 		// optimizer is marked as disabled: skip
 		return;
 	}
@@ -83,7 +84,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	});
 
 	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
-		InClauseRewriter rewriter(*this);
+		InClauseRewriter rewriter(context, *this);
 		plan = rewriter.Rewrite(move(plan));
 	});
 
@@ -138,6 +139,14 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		ExpressionHeuristics expression_heuristics(*this);
 		plan = expression_heuristics.Rewrite(move(plan));
 	});
+
+	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
+		RunOptimizer(OptimizerType::EXTENSION, [&]() {
+			optimizer_extension.optimize_function(context, optimizer_extension.optimizer_info.get(), plan);
+		});
+	}
+
+	Planner::VerifyPlan(context, plan);
 
 	return plan;
 }

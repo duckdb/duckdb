@@ -33,6 +33,19 @@ static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx
 	}
 }
 
+static void AppendBLOBSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
+	auto result_data = FlatVector::GetData<string_t>(result);
+	auto &result_mask = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		SEXP val = VECTOR_ELT(coldata, row_idx + i);
+		if (val == R_NilValue) {
+			result_mask.SetInvalid(i);
+		} else {
+			result_data[i] = string_t((char *)RAW(val), Rf_xlength(val));
+		}
+	}
+}
+
 static bool get_bool_param(named_parameter_map_t &named_parameters, string name, bool dflt = false) {
 	bool res = dflt;
 	auto entry = named_parameters.find(name);
@@ -80,6 +93,7 @@ static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableF
                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	data_frame df((SEXP)input.inputs[0].GetPointer());
 
+	auto integer64 = get_bool_param(input.named_parameters, "integer64", false);
 	auto experimental = get_bool_param(input.named_parameters, "experimental", false);
 
 	auto df_names = df.names();
@@ -92,7 +106,7 @@ static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableF
 		data_ptr_t coldata_ptr = nullptr;
 
 		names.push_back(df_names[col_idx]);
-		rtypes.push_back(RApiTypes::DetectRType(coldata));
+		rtypes.push_back(RApiTypes::DetectRType(coldata, integer64));
 
 		switch (rtypes[col_idx]) {
 		case RType::LOGICAL:
@@ -105,6 +119,10 @@ static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableF
 			break;
 		case RType::NUMERIC:
 			duckdb_col_type = LogicalType::DOUBLE;
+			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
+			break;
+		case RType::INTEGER64:
+			duckdb_col_type = LogicalType::BIGINT;
 			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
 			break;
 		case RType::FACTOR: {
@@ -152,8 +170,11 @@ static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableF
 			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
 			duckdb_col_type = LogicalType::DATE;
 			break;
+		case RType::BLOB:
+			duckdb_col_type = LogicalType::BLOB;
+			break;
 		default:
-			cpp11::stop("rapi_execute: Unsupported column type for scan");
+			cpp11::stop("rapi_execute: Unsupported column type for bind");
 		}
 
 		return_types.push_back(duckdb_col_type);
@@ -200,13 +221,14 @@ static bool DataFrameScanParallelStateNext(ClientContext &context, const Functio
 	return true;
 }
 
-static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
+static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ExecutionContext &context,
+                                                                  TableFunctionInitInput &input,
                                                                   GlobalTableFunctionState *global_state) {
 	auto &gstate = (DataFrameGlobalState &)*global_state;
 	auto result = make_unique<DataFrameLocalState>();
 
 	result->column_ids = input.column_ids;
-	DataFrameScanParallelStateNext(context, input.bind_data, *result, gstate);
+	DataFrameScanParallelStateNext(context.client, input.bind_data, *result, gstate);
 	return move(result);
 }
 
@@ -234,7 +256,7 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 	auto sexp_offset = operator_data.offset + operator_data.position;
 	D_ASSERT(sexp_offset + this_count <= bind_data.row_count);
 
-	for (R_xlen_t out_col_idx = 0; out_col_idx < output.ColumnCount(); out_col_idx++) {
+	for (R_xlen_t out_col_idx = 0; out_col_idx < R_xlen_t(output.ColumnCount()); out_col_idx++) {
 		auto &v = output.data[out_col_idx];
 		auto src_df_col_idx = operator_data.column_ids[out_col_idx];
 
@@ -260,6 +282,11 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 		case RType::NUMERIC: {
 			auto data_ptr = (double *)coldata_ptr + sexp_offset;
 			AppendColumnSegment<double, double, RDoubleType>(data_ptr, v, this_count);
+			break;
+		}
+		case RType::INTEGER64: {
+			auto data_ptr = (int64_t *)coldata_ptr + sexp_offset;
+			AppendColumnSegment<int64_t, int64_t, RInteger64Type>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::STRING: {
@@ -359,8 +386,14 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 			AppendColumnSegment<int, date_t, RDateType>(data_ptr, v, this_count);
 			break;
 		}
+		case RType::BLOB: {
+			AppendBLOBSegment(((data_frame)bind_data.df)[(R_xlen_t)src_df_col_idx], v, sexp_offset, this_count);
+			break;
+		}
+		case RType::LIST_OF_NULLS:
+			break;
 		default:
-			throw;
+			cpp11::stop("rapi_execute: Unsupported column type for scan");
 		}
 	}
 
@@ -382,5 +415,6 @@ DataFrameScanFunction::DataFrameScanFunction()
 	cardinality = DataFrameScanCardinality;
 	to_string = DataFrameScanToString;
 	named_parameters["experimental"] = LogicalType::BOOLEAN;
+	named_parameters["integer64"] = LogicalType::BOOLEAN;
 	projection_pushdown = true;
 }

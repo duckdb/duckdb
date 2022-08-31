@@ -16,13 +16,13 @@ namespace duckdb {
 
 static void PragmaEnableProfilingStatement(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	config.enable_profiler = true;
+	config.emit_profiler_output = true;
 }
 
 void RegisterEnableProfiling(BuiltinFunctions &set) {
-	vector<PragmaFunction> functions;
-	functions.push_back(PragmaFunction::PragmaStatement(string(), PragmaEnableProfilingStatement));
+	PragmaFunctionSet functions("");
+	functions.AddFunction(PragmaFunction::PragmaStatement(string(), PragmaEnableProfilingStatement));
 
 	set.AddFunction("enable_profile", functions);
 	set.AddFunction("enable_profiling", functions);
@@ -31,7 +31,6 @@ void RegisterEnableProfiling(BuiltinFunctions &set) {
 static void PragmaDisableProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = false;
-	config.profiler_print_format = ProfilerPrintFormat::NONE;
 }
 
 static void PragmaEnableProgressBar(ClientContext &context, const FunctionParameters &parameters) {
@@ -52,10 +51,28 @@ static void PragmaDisablePrintProgressBar(ClientContext &context, const Function
 
 static void PragmaEnableVerification(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).query_verification_enabled = true;
+	ClientConfig::GetConfig(context).verify_serializer = true;
 }
 
 static void PragmaDisableVerification(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).query_verification_enabled = false;
+	ClientConfig::GetConfig(context).verify_serializer = false;
+}
+
+static void PragmaVerifySerializer(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_serializer = true;
+}
+
+static void PragmaDisableVerifySerializer(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_serializer = false;
+}
+
+static void PragmaEnableExternalVerification(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_external = true;
+}
+
+static void PragmaDisableExternalVerification(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_external = false;
 }
 
 static void PragmaEnableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
@@ -67,7 +84,7 @@ static void PragmaEnableForceIndexJoin(ClientContext &context, const FunctionPar
 }
 
 static void PragmaForceCheckpoint(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).force_checkpoint = true;
+	DBConfig::GetConfig(context).options.force_checkpoint = true;
 }
 
 static void PragmaDisableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
@@ -75,19 +92,19 @@ static void PragmaDisableForceParallelism(ClientContext &context, const Function
 }
 
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).object_cache_enable = true;
+	DBConfig::GetConfig(context).options.object_cache_enable = true;
 }
 
 static void PragmaDisableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).object_cache_enable = false;
+	DBConfig::GetConfig(context).options.object_cache_enable = false;
 }
 
 static void PragmaEnableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).checkpoint_on_shutdown = true;
+	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = true;
 }
 
 static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).checkpoint_on_shutdown = false;
+	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
 }
 
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
@@ -106,6 +123,12 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_verification", PragmaEnableVerification));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verification", PragmaDisableVerification));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("verify_external", PragmaEnableExternalVerification));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_external", PragmaDisableExternalVerification));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("verify_serializer", PragmaVerifySerializer));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_serializer", PragmaDisableVerifySerializer));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_parallelism", PragmaEnableForceParallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_parallelism", PragmaDisableForceParallelism));

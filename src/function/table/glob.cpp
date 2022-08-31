@@ -13,7 +13,7 @@ struct GlobFunctionBindData : public TableFunctionData {
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("Globbing is disabled through configuration");
 	}
 	auto result = make_unique<GlobFunctionBindData>();

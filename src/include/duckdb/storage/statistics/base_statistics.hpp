@@ -24,7 +24,7 @@ class FieldReader;
 class Vector;
 class ValidityStatistics;
 class DistinctStatistics;
-struct VectorData;
+struct UnifiedVectorFormat;
 
 enum StatisticsType { LOCAL_STATS = 0, GLOBAL_STATS = 1 };
 
@@ -62,6 +62,8 @@ public:
 
 	virtual void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const;
+
+	idx_t GetDistinctCount();
 
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
 

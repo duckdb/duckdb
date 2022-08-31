@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -85,7 +86,9 @@ class PhysicalOperator {
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
 	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
+		estimated_props = make_unique<EstimatedProperties>(estimated_cardinality, 0);
 	}
+
 	virtual ~PhysicalOperator() {
 	}
 
@@ -97,6 +100,8 @@ public:
 	vector<LogicalType> types;
 	//! The estimated cardinality of this physical operator
 	idx_t estimated_cardinality;
+	unique_ptr<EstimatedProperties> estimated_props;
+
 	//! The global sink state of this operator
 	unique_ptr<GlobalSinkState> sink_state;
 	//! The global state of this operator
@@ -130,7 +135,7 @@ public:
 
 public:
 	// Operator interface
-	virtual unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const;
+	virtual unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
@@ -165,6 +170,10 @@ public:
 		return false;
 	}
 
+	virtual bool IsOrderPreserving() const {
+		return true;
+	}
+
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
 	virtual double GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
 
@@ -188,6 +197,9 @@ public:
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
 
+	//! The maximum amount of memory the operator should use per thread.
+	static idx_t GetMaxThreadMemory(ClientContext &context);
+
 	virtual bool IsSink() const {
 		return false;
 	}
@@ -204,6 +216,7 @@ public:
 	// Pipeline construction
 	virtual vector<const PhysicalOperator *> GetSources() const;
 	bool AllSourcesSupportBatchIndex() const;
+	bool AllOperatorsPreserveOrder() const;
 
 	void AddPipeline(Executor &executor, shared_ptr<Pipeline> current, PipelineBuildState &state);
 	virtual void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state);

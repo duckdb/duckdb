@@ -16,8 +16,8 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 
 	idx_t count = args.size();
 
-	VectorData list_data;
-	input.Orrify(count, list_data);
+	UnifiedVectorFormat list_data;
+	input.ToUnifiedFormat(count, list_data);
 	auto list_entries = (list_entry_t *)list_data.data;
 
 	auto &child_vector = ListVector::GetEntry(input);
@@ -41,8 +41,8 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 	}
 
 	auto child_size = ListVector::GetListSize(input);
-	VectorData child_data;
-	child_vector.Orrify(child_size, child_data);
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(child_size, child_data);
 	auto child_entries = (list_entry_t *)child_data.data;
 	auto &data_vector = ListVector::GetEntry(child_vector);
 
@@ -105,6 +105,11 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 		bound_function.return_type = input_type;
 		return make_unique<VariableReturnBindData>(bound_function.return_type);
 	}
+	if (child_type.id() == LogicalTypeId::UNKNOWN) {
+		bound_function.arguments[0] = LogicalType(LogicalTypeId::UNKNOWN);
+		bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
+		return nullptr;
+	}
 	D_ASSERT(child_type.id() == LogicalTypeId::LIST);
 
 	bound_function.return_type = child_type;
@@ -128,7 +133,7 @@ static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, Funct
 
 void ListFlattenFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::LIST(LogicalType::ANY))}, LogicalType::LIST(LogicalType::ANY),
-	                   ListFlattenFunction, false, false, ListFlattenBind, nullptr, ListFlattenStats);
+	                   ListFlattenFunction, ListFlattenBind, nullptr, ListFlattenStats);
 	set.AddFunction({"flatten"}, fun);
 }
 

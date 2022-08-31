@@ -64,11 +64,11 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 }
 
 static inline OrderType ResolveOrderType(const DBConfig &config, OrderType type) {
-	return (type == OrderType::ORDER_DEFAULT) ? config.default_order_type : type;
+	return (type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : type;
 }
 
 static inline OrderByNullType ResolveNullOrder(const DBConfig &config, OrderByNullType null_order) {
-	return (null_order == OrderByNullType::ORDER_DEFAULT) ? config.default_null_order : null_order;
+	return (null_order == OrderByNullType::ORDER_DEFAULT) ? config.options.default_null_order : null_order;
 }
 
 static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) {
@@ -202,7 +202,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 			throw BinderException(binder.FormatError(window, error));
 		}
 		// found a matching function! bind it as an aggregate
-		auto &bound_function = func->functions[best_function];
+		auto bound_function = func->functions.GetFunctionByOffset(best_function);
 		auto bound_aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children));
 		// create the aggregate
 		aggregate = make_unique<AggregateFunction>(bound_aggregate->function);

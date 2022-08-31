@@ -5,6 +5,8 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
@@ -174,7 +176,7 @@ struct StringConvert {
 			                                      start_pos);
 			break;
 		default:
-			throw std::runtime_error("Unsupported typekind for Python Unicode Compact decode");
+			throw NotImplementedException("Unsupported typekind constant '%d' for Python Unicode Compact decode", kind);
 		}
 		return result;
 	}
@@ -220,7 +222,8 @@ struct BlobConvert {
 struct UUIDConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static PyObject *ConvertValue(hugeint_t val) {
-		py::handle h = py::module::import("uuid").attr("UUID")(UUID::ToString(val)).release();
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		py::handle h = import_cache.uuid.UUID()(UUID::ToString(val)).release();
 		return h.ptr();
 	}
 
@@ -281,7 +284,7 @@ double IntegralConvert::ConvertValue(hugeint_t val) {
 } // namespace duckdb_py_convert
 
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
-static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *target_mask, VectorData &idata,
+static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *target_mask, UnifiedVectorFormat &idata,
                           idx_t count) {
 	auto src_ptr = (DUCKDB_T *)idata.data;
 	auto out_ptr = (NUMPY_T *)target_data;
@@ -310,7 +313,7 @@ static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *tar
 }
 
 template <class DUCKDB_T, class NUMPY_T>
-static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t target_data, VectorData &idata,
+static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t target_data, UnifiedVectorFormat &idata,
                                              idx_t count) {
 	auto src_ptr = (DUCKDB_T *)idata.data;
 	auto out_ptr = (NUMPY_T *)target_data;
@@ -339,7 +342,7 @@ static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t tar
 
 template <class NUMPY_T, class CONVERT>
 static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &input,
-                          VectorData &idata, idx_t count) {
+                          UnifiedVectorFormat &idata, idx_t count) {
 	auto out_ptr = (NUMPY_T *)target_data;
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -364,8 +367,8 @@ static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *tar
 }
 
 template <class NUMPY_T>
-static bool ConvertColumnCategorical(idx_t target_offset, data_ptr_t target_data, VectorData &idata, idx_t count,
-                                     PhysicalType physical_type) {
+static bool ConvertColumnCategorical(idx_t target_offset, data_ptr_t target_data, UnifiedVectorFormat &idata,
+                                     idx_t count, PhysicalType physical_type) {
 	switch (physical_type) {
 	case PhysicalType::UINT8:
 		return ConvertColumnCategoricalTemplate<uint8_t, NUMPY_T>(target_offset, target_data, idata, count);
@@ -379,15 +382,15 @@ static bool ConvertColumnCategorical(idx_t target_offset, data_ptr_t target_data
 }
 
 template <class T>
-static bool ConvertColumnRegular(idx_t target_offset, data_ptr_t target_data, bool *target_mask, VectorData &idata,
-                                 idx_t count) {
+static bool ConvertColumnRegular(idx_t target_offset, data_ptr_t target_data, bool *target_mask,
+                                 UnifiedVectorFormat &idata, idx_t count) {
 	return ConvertColumn<T, T, duckdb_py_convert::RegularConvert>(target_offset, target_data, target_mask, idata,
 	                                                              count);
 }
 
 template <class DUCKDB_T>
-static bool ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, bool *target_mask, VectorData &idata,
-                                   idx_t count, double division) {
+static bool ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, bool *target_mask,
+                                   UnifiedVectorFormat &idata, idx_t count, double division) {
 	auto src_ptr = (DUCKDB_T *)idata.data;
 	auto out_ptr = (double *)target_data;
 	if (!idata.validity.AllValid()) {
@@ -416,7 +419,7 @@ static bool ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, 
 }
 
 static bool ConvertDecimal(const LogicalType &decimal_type, idx_t target_offset, data_ptr_t target_data,
-                           bool *target_mask, VectorData &idata, idx_t count) {
+                           bool *target_mask, UnifiedVectorFormat &idata, idx_t count) {
 	auto dec_scale = DecimalType::GetScale(decimal_type);
 	double division = pow(10, dec_scale);
 	switch (decimal_type.InternalType()) {
@@ -492,7 +495,7 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 		type_width = sizeof(PyObject *);
 		break;
 	default:
-		throw std::runtime_error("Unsupported type " + type.ToString() + " for DuckDB -> NumPy conversion");
+		throw NotImplementedException("Unsupported type \"%s\" for DuckDB -> NumPy conversion", type.ToString());
 	}
 }
 
@@ -569,7 +572,7 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 		}
 	} break;
 	default:
-		throw std::runtime_error("unsupported type " + type.ToString());
+		throw NotImplementedException("Unsupported type \"%s\"", type.ToString());
 	}
 	array = py::array(py::dtype(dtype), capacity);
 	data = (data_ptr_t)array.mutable_data();
@@ -604,8 +607,8 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	D_ASSERT(input.GetType() == data->type);
 	bool may_have_null;
 
-	VectorData idata;
-	input.Orrify(count, idata);
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
 	switch (input.GetType().id()) {
 	case LogicalTypeId::ENUM: {
 		auto size = EnumType::GetSize(input.GetType());
@@ -714,7 +717,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 
 	default:
-		throw std::runtime_error("unsupported type " + input.GetType().ToString());
+		throw NotImplementedException("Unsupported type \"%s\"", input.GetType().ToString());
 	}
 	if (may_have_null) {
 		requires_mask = true;

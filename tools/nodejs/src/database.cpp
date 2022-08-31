@@ -1,4 +1,5 @@
 #include "duckdb_node.hpp"
+#include "napi.h"
 #include "parquet-amalgamation.hpp"
 
 namespace node_duckdb {
@@ -22,23 +23,47 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 }
 
 struct OpenTask : public Task {
-	OpenTask(Database &database_, std::string filename_, bool read_only_, Napi::Function callback_)
-	    : Task(database_, callback_), filename(filename_), read_only(read_only_) {
+	OpenTask(Database &database_, std::string filename_, duckdb::AccessMode access_mode_, Napi::Object config_,
+	         Napi::Function callback_)
+	    : Task(database_, callback_), filename(filename_) {
+
+		duckdb_config.options.access_mode = access_mode_;
+		Napi::Env env = database_.Env();
+		Napi::HandleScope scope(env);
+
+		if (!config_.IsUndefined()) {
+			const Napi::Array config_names = config_.GetPropertyNames();
+
+			for (duckdb::idx_t config_idx = 0; config_idx < config_names.Length(); config_idx++) {
+				std::string key = config_names.Get(config_idx).As<Napi::String>();
+				std::string val = config_.Get(key).As<Napi::String>();
+				auto config_property = duckdb::DBConfig::GetOptionByName(key);
+				if (!config_property) {
+					Napi::TypeError::New(env, "Unrecognized configuration property" + key).ThrowAsJavaScriptException();
+					return;
+				}
+				try {
+					duckdb_config.SetOption(*config_property, duckdb::Value(val));
+				} catch (std::exception &e) {
+					Napi::TypeError::New(env, "Failed to set configuration option " + key + ": " + e.what())
+					    .ThrowAsJavaScriptException();
+					return;
+				}
+			}
+		}
 	}
 
 	void DoWork() override {
 		try {
-			duckdb::DBConfig config;
-			if (read_only) {
-				config.access_mode = duckdb::AccessMode::READ_ONLY;
-			}
-			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename, &config);
+			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename, &duckdb_config);
 			duckdb::ParquetExtension extension;
 			extension.Load(*Get<Database>().database);
 			success = true;
 
+		} catch (const duckdb::Exception &ex) {
+			error = duckdb::PreservedError(ex);
 		} catch (std::exception &ex) {
-			error = ex.what();
+			error = duckdb::PreservedError(ex);
 		}
 	}
 
@@ -48,7 +73,7 @@ struct OpenTask : public Task {
 
 		std::vector<napi_value> args;
 		if (!success) {
-			args.push_back(Utils::CreateError(env, error));
+			args.push_back(Utils::CreateError(env, error.Message()));
 		} else {
 			args.push_back(env.Null());
 		}
@@ -59,22 +84,35 @@ struct OpenTask : public Task {
 	}
 
 	std::string filename;
-	bool read_only = false;
-	std::string error = "";
+	duckdb::DBConfig duckdb_config;
+	duckdb::PreservedError error;
 	bool success = false;
 };
 
-Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(info), task_inflight(false) {
+Database::Database(const Napi::CallbackInfo &info)
+    : Napi::ObjectWrap<Database>(info), task_inflight(false), env(info.Env()) {
 	auto env = info.Env();
+
 	if (info.Length() < 1 || !info[0].IsString()) {
 		Napi::TypeError::New(env, "Database location expected").ThrowAsJavaScriptException();
 		return;
 	}
 	std::string filename = info[0].As<Napi::String>();
 	unsigned int pos = 1;
+
+	duckdb::AccessMode access_mode = duckdb::AccessMode::AUTOMATIC;
+
 	int mode = 0;
 	if (info.Length() >= pos && info[pos].IsNumber() && Utils::OtherIsInt(info[pos].As<Napi::Number>())) {
 		mode = info[pos++].As<Napi::Number>().Int32Value();
+		if (mode == DUCKDB_NODEJS_READONLY) {
+			access_mode = duckdb::AccessMode::READ_ONLY;
+		}
+	}
+
+	Napi::Object config;
+	if (info.Length() >= pos && info[pos].IsObject() && !info[pos].IsFunction()) {
+		config = info[pos++].As<Napi::Object>();
 	}
 
 	Napi::Function callback;
@@ -82,7 +120,11 @@ Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(
 		callback = info[pos++].As<Napi::Function>();
 	}
 
-	Schedule(env, duckdb::make_unique<OpenTask>(*this, filename, mode == DUCKDB_NODEJS_READONLY, callback));
+	Schedule(env, duckdb::make_unique<OpenTask>(*this, filename, access_mode, config, callback));
+}
+
+Database::~Database() {
+	Napi::MemoryManagement::AdjustExternalMemory(env, -bytes_allocated);
 }
 
 void Database::Schedule(Napi::Env env, std::unique_ptr<Task> task) {
@@ -101,9 +143,7 @@ static void TaskExecuteCallback(napi_env e, void *data) {
 static void TaskCompleteCallback(napi_env e, napi_status status, void *data) {
 	std::unique_ptr<TaskHolder> holder((TaskHolder *)data);
 	holder->db->TaskComplete(e);
-	if (holder->task->callback.Value().IsFunction()) {
-		holder->task->Callback();
-	}
+	holder->task->DoCallback();
 }
 
 void Database::TaskComplete(Napi::Env env) {
@@ -112,6 +152,16 @@ void Database::TaskComplete(Napi::Env env) {
 		task_inflight = false;
 	}
 	Process(env);
+
+	if (database) {
+		// Bookkeeping: tell node (and the node GC in particular) how much
+		// memory we're using, such that it can make better decisions on when to
+		// trigger collections.
+		auto &buffer_manager = duckdb::BufferManager::GetBufferManager(*database->instance);
+		auto current_bytes = buffer_manager.GetUsedMemory();
+		Napi::MemoryManagement::AdjustExternalMemory(env, current_bytes - bytes_allocated);
+		bytes_allocated = current_bytes;
+	}
 }
 
 void Database::Process(Napi::Env env) {

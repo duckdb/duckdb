@@ -24,7 +24,7 @@ enum class PhysicalOperatorType : uint8_t {
 	TOP_N,
 	WINDOW,
 	UNNEST,
-	SIMPLE_AGGREGATE,
+	UNGROUPED_AGGREGATE,
 	HASH_GROUP_BY,
 	PERFECT_HASH_GROUP_BY,
 	FILTER,
@@ -38,6 +38,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	TABLE_SCAN,
 	DUMMY_SCAN,
+	COLUMN_DATA_SCAN,
 	CHUNK_SCAN,
 	RECURSIVE_CTE_SCAN,
 	DELIM_SCAN,

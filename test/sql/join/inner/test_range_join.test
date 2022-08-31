@@ -57,3 +57,26 @@ SELECT test.a, test.b, test2.b, test2.c FROM test, test2 WHERE test.a>test2.c AN
 ----
 11	1	1	10
 
+# Forced external
+statement ok
+PRAGMA debug_force_external=true;
+
+# In memory unswizzling
+statement ok
+CREATE TABLE issue4419 (x INT, y VARCHAR);
+
+statement ok
+INSERT INTO issue4419 VALUES (1, 'sssssssssssssssssueufuheuooefef');
+
+statement ok
+INSERT INTO issue4419 VALUES (2, 'sssssssssssssssssueufuheuooefesffff');
+
+statement ok
+INSERT INTO issue4419 VALUES (2, 'sssssssssssssssssueufuheuooefesffffsssssssieiffih');
+
+query IIII
+SELECT * FROM issue4419 t1 INNER JOIN issue4419 t2 ON t1.x < t2.x;
+----
+1	sssssssssssssssssueufuheuooefef	2	sssssssssssssssssueufuheuooefesffff
+1	sssssssssssssssssueufuheuooefef	2	sssssssssssssssssueufuheuooefesffffsssssssieiffih
+

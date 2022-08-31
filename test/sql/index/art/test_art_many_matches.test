@@ -3,6 +3,9 @@
 # group: [art]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 BEGIN TRANSACTION
 
 # create a table with the values [0, 1, 0, 1, ..., 0, 1]

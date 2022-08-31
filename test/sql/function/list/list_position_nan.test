@@ -1,0 +1,27 @@
+# name: test/sql/function/list/list_position_nan.test
+# description: Test list_position function with nans
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+# list position with NaN
+query I
+SELECT list_position(['NaN'::DOUBLE], 'NaN'::DOUBLE)
+----
+1
+
+query I
+SELECT list_position([NULL, 0, 'NaN'::DOUBLE], 'NaN'::DOUBLE)
+----
+3
+
+query I
+SELECT list_contains([NULL, 0, 'NaN'::DOUBLE], 'NaN'::DOUBLE)
+----
+true
+
+query I
+SELECT list_position([[[NULL, 42]]], [[NULL, 42]])
+----
+1

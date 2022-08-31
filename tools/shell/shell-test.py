@@ -299,6 +299,10 @@ CREATE INDEX a_idx ON a(i);
 # this does not seem to output anything
 test('.sha3sum')
 
+test('''
+.mode jsonlines
+SELECT 42,43;
+''', out='{"42":42,"43":43}')
 
 test('''
 .mode csv
@@ -309,7 +313,7 @@ SELECT 42,43;
 test('''
 .timer on
 SELECT NULL;
-''', out="Run Time:")
+''', out="Run Time (s):")
 
 test('''
 .scanstats on
@@ -435,6 +439,26 @@ SELECT "hello world", '\r\t\n\b\f\\' FROM "foo";
 
 test('.system echo 42', out="42")
 test('.shell echo 42', out="42")
+
+# query profiling that includes the optimizer
+test("""
+PRAGMA enable_profiling=query_tree_optimizer;
+SELECT 42;
+""", out="42", err="Optimizer")
+
+# detailed also includes optimizer
+test("""
+PRAGMA enable_profiling;
+PRAGMA profiling_mode=detailed;
+SELECT 42;
+""", out="42", err="Optimizer")
+
+# even in json output mode
+test("""
+PRAGMA enable_profiling=json;
+PRAGMA profiling_mode=detailed;
+SELECT 42;
+""", out="42", err="optimizer")
 
 # this fails because db_config is missing
 # test('''

@@ -43,8 +43,17 @@ public:
 		return readers;
 	}
 
+	inline bool IsSwizzled() const {
+		return !unswizzled;
+	}
+
+	inline void SetSwizzling(const char *unswizzler) {
+		unswizzled = unswizzler;
+	}
+
 private:
-	static unique_ptr<BufferHandle> Load(shared_ptr<BlockHandle> &handle);
+	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);
+	unique_ptr<FileBuffer> UnloadAndTakeBlock();
 	void Unload();
 	bool CanUnload();
 
@@ -64,6 +73,8 @@ private:
 	const bool can_destroy;
 	//! The memory usage of the block
 	idx_t memory_usage;
+	//! Does the block contain any memory pointers?
+	const char *unswizzled;
 };
 
 } // namespace duckdb

@@ -32,3 +32,17 @@ duckdb_get_substrait <- function(conn, query) {
   stopifnot(is.character(query))
   rapi_get_substrait(conn@conn_ref, query)
 }
+
+
+#' Get the Substrait plan for a SQL query in the JSON format
+#' Transforms a SQL query into a vector containing the serialized Substrait query JSON
+#'
+#' @param conn A DuckDB connection, created by `dbConnect()`.
+#' @param query The query string in SQL
+#' @return A vector containing the substrait protobuf JSON
+#' @export
+duckdb_get_substrait_json <- function(conn, query) {
+  stopifnot(dbIsValid(conn))
+  stopifnot(is.character(query))
+  rapi_get_substrait_json(conn@conn_ref, query)
+}

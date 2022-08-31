@@ -8,6 +8,7 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ vector<PhysicalOperator *> PhysicalOperator::GetChildren() const {
 // Operator
 //===--------------------------------------------------------------------===//
 // LCOV_EXCL_START
-unique_ptr<OperatorState> PhysicalOperator::GetOperatorState(ClientContext &context) const {
+unique_ptr<OperatorState> PhysicalOperator::GetOperatorState(ExecutionContext &context) const {
 	return make_unique<OperatorState>();
 }
 
@@ -104,6 +105,14 @@ unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext 
 
 unique_ptr<GlobalSinkState> PhysicalOperator::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<GlobalSinkState>();
+}
+
+idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
+	// Memory usage per thread should scale with max mem / num threads
+	// We take 1/4th of this, to be conservative
+	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
+	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	return (max_memory / num_threads) / 4;
 }
 
 //===--------------------------------------------------------------------===//
@@ -183,6 +192,18 @@ bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
 	auto sources = GetSources();
 	for (auto &source : sources) {
 		if (!source->SupportsBatchIndex()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool PhysicalOperator::AllOperatorsPreserveOrder() const {
+	if (!IsOrderPreserving()) {
+		return false;
+	}
+	for (auto &child : children) {
+		if (!child->IsOrderPreserving()) {
 			return false;
 		}
 	}

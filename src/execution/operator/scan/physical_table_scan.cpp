@@ -46,7 +46,7 @@ public:
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.table_filters.get());
-			local_state = op.function.init_local(context.client, input, gstate.global_state.get());
+			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}
 
@@ -123,6 +123,7 @@ string PhysicalTableScan::ParamsToString() const {
 			}
 		}
 	}
+	result += "\nEC=" + to_string(estimated_cardinality) + "\n";
 	return result;
 }
 

@@ -249,7 +249,7 @@ test("SELECT '9223372036854788.758'::DECIMAL;", err="[ISQL]ERROR")
 
 test("SELECT '0.1'::DECIMAL(3, 0)::VARCHAR;", out='0')
 test("SELECT '123.4'::DECIMAL(9)::VARCHAR;", out='123')
-test("SELECT '0.1'::DECIMAL(3, 3)::VARCHAR, '-0.1'::DECIMAL(3, 3)::VARCHAR;", out='0.100|-0.100')
+test("SELECT '0.1'::DECIMAL(3, 3)::VARCHAR, '-0.1'::DECIMAL(3, 3)::VARCHAR;", out='.100|-.100')
 
 test("SELECT '1'::DECIMAL(3, 3)::VARCHAR;", err="[ISQL]ERROR")
 test("SELECT '-1'::DECIMAL(3, 3)::VARCHAR;", err="[ISQL]ERROR")

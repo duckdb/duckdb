@@ -2,6 +2,8 @@
 # description: Test IEJoin
 # group: [iejoin]
 
+require skip_reload
+
 # RNG order depends on vector size
 require vector_size 1024
 

@@ -42,15 +42,14 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	explicit InterpretedBenchmarkState(string path)
 	    : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
 	      con(db) {
-		con.EnableProfiling();
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
-		D_ASSERT(res->success);
+		D_ASSERT(!res->HasError());
 	}
 
 	unique_ptr<DBConfig> GetBenchmarkConfig() {
 		auto result = make_unique<DBConfig>();
-		result->load_extensions = false;
+		result->options.load_extensions = false;
 		return result;
 	}
 };
@@ -144,6 +143,11 @@ void InterpretedBenchmark::LoadBenchmark() {
 				throw std::runtime_error(reader.FormatException("require requires a single parameter"));
 			}
 			extensions.insert(splits[1]);
+		} else if (splits[0] == "connect") {
+			if (splits.size() != 2) {
+				throw std::runtime_error(reader.FormatException("connect requires a database path"));
+			}
+			db_path = (splits[1]);
 		} else if (splits[0] == "cache") {
 			if (splits.size() != 2) {
 				throw std::runtime_error(reader.FormatException("cache requires a single parameter"));
@@ -291,8 +295,8 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		string init_query = queries["init"];
 		result = state->con.Query(init_query);
 		while (result) {
-			if (!result->success) {
-				throw Exception(result->error);
+			if (result->HasError()) {
+				result->ThrowError();
 			}
 			result = move(result->next);
 		}
@@ -315,8 +319,8 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		}
 	}
 	while (result) {
-		if (!result->success) {
-			throw Exception(result->error);
+		if (result->HasError()) {
+			result->ThrowError();
 		}
 		result = move(result->next);
 	}
@@ -346,8 +350,8 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 		string cleanup_query = queries["cleanup"];
 		result = state.con.Query(cleanup_query);
 		while (result) {
-			if (!result->success) {
-				throw Exception(result->error);
+			if (result->HasError()) {
+				result->ThrowError();
 			}
 			result = move(result->next);
 		}
@@ -359,6 +363,8 @@ string InterpretedBenchmark::GetDatabasePath() {
 		string path = "duckdb_benchmark_db.db";
 		DeleteDatabase(path);
 		return path;
+	} else if (db_path != "") {
+		return db_path;
 	} else {
 		return string();
 	}
@@ -366,8 +372,8 @@ string InterpretedBenchmark::GetDatabasePath() {
 
 string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	if (!state.result->success) {
-		return state.result->error;
+	if (state.result->HasError()) {
+		return state.result->GetError();
 	}
 	if (result_column_count == 0) {
 		// no result specified
@@ -380,15 +386,15 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		                          state.result->ToString());
 	}
 	// compare row count
-	if (state.result->collection.Count() != result_values.size()) {
+	if (state.result->RowCount() != result_values.size()) {
 		return StringUtil::Format("Error in result: expected %lld rows but got %lld\nObtained result: %s",
-		                          (int64_t)result_values.size(), (int64_t)state.result->collection.Count(),
+		                          (int64_t)result_values.size(), (int64_t)state.result->RowCount(),
 		                          state.result->ToString());
 	}
 	// compare values
 	for (int64_t r = 0; r < (int64_t)result_values.size(); r++) {
 		for (int64_t c = 0; c < result_column_count; c++) {
-			auto value = state.result->collection.GetValue(c, r);
+			auto value = state.result->GetValue(c, r);
 			if (result_values[r][c] == "NULL" && value.IsNull()) {
 				continue;
 			}

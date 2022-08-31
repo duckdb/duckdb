@@ -6,7 +6,7 @@ namespace duckdb {
 
 using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
-static void ComputeStringEntrySizes(VectorData &vdata, idx_t entry_sizes[], const idx_t ser_count,
+static void ComputeStringEntrySizes(UnifiedVectorFormat &vdata, idx_t entry_sizes[], const idx_t ser_count,
                                     const SelectionVector &sel, const idx_t offset) {
 	auto strings = (string_t *)vdata.data;
 	for (idx_t i = 0; i < ser_count; i++) {
@@ -35,7 +35,7 @@ static void ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount
 	}
 }
 
-static void ComputeListEntrySizes(Vector &v, VectorData &vdata, idx_t entry_sizes[], idx_t ser_count,
+static void ComputeListEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t entry_sizes[], idx_t ser_count,
                                   const SelectionVector &sel, idx_t offset) {
 	auto list_data = ListVector::GetData(v);
 	auto &child_vector = ListVector::GetEntry(v);
@@ -78,8 +78,8 @@ static void ComputeListEntrySizes(Vector &v, VectorData &vdata, idx_t entry_size
 	}
 }
 
-void RowOperations::ComputeEntrySizes(Vector &v, VectorData &vdata, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
-                                      const SelectionVector &sel, idx_t offset) {
+void RowOperations::ComputeEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t entry_sizes[], idx_t vcount,
+                                      idx_t ser_count, const SelectionVector &sel, idx_t offset) {
 	const auto physical_type = v.GetType().InternalType();
 	if (TypeIsConstantSize(physical_type)) {
 		const auto type_size = GetTypeIdSize(physical_type);
@@ -108,13 +108,13 @@ void RowOperations::ComputeEntrySizes(Vector &v, VectorData &vdata, idx_t entry_
 
 void RowOperations::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
                                       const SelectionVector &sel, idx_t offset) {
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(vcount, vdata);
 	ComputeEntrySizes(v, vdata, entry_sizes, vcount, ser_count, sel, offset);
 }
 
 template <class T>
-static void TemplatedHeapScatter(VectorData &vdata, const SelectionVector &sel, idx_t count, idx_t col_idx,
+static void TemplatedHeapScatter(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t count, idx_t col_idx,
                                  data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
 	auto source = (T *)vdata.data;
 	if (!validitymask_locations) {
@@ -149,8 +149,8 @@ static void TemplatedHeapScatter(VectorData &vdata, const SelectionVector &sel, 
 
 static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
                                     data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(vcount, vdata);
 
 	auto strings = (string_t *)vdata.data;
 	if (!validitymask_locations) {
@@ -193,8 +193,8 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 
 static void HeapScatterStructVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
                                     data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(vcount, vdata);
 
 	auto &children = StructVector::GetEntries(v);
 	idx_t num_children = children.size();
@@ -232,8 +232,8 @@ static void HeapScatterStructVector(Vector &v, idx_t vcount, const SelectionVect
 
 static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_no,
                                   data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(vcount, vdata);
 
 	idx_t entry_idx;
 	idx_t idx_in_entry;
@@ -243,8 +243,8 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 
 	auto &child_vector = ListVector::GetEntry(v);
 
-	VectorData list_vdata;
-	child_vector.Orrify(ListVector::GetListSize(v), list_vdata);
+	UnifiedVectorFormat list_vdata;
+	child_vector.ToUnifiedFormat(ListVector::GetListSize(v), list_vdata);
 	auto child_type = ListType::GetChildType(v.GetType()).InternalType();
 
 	idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
@@ -334,8 +334,8 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 void RowOperations::HeapScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
                                 data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
 	if (TypeIsConstantSize(v.GetType().InternalType())) {
-		VectorData vdata;
-		v.Orrify(vcount, vdata);
+		UnifiedVectorFormat vdata;
+		v.ToUnifiedFormat(vcount, vdata);
 		RowOperations::HeapScatterVData(vdata, v.GetType().InternalType(), sel, ser_count, col_idx, key_locations,
 		                                validitymask_locations, offset);
 	} else {
@@ -358,9 +358,9 @@ void RowOperations::HeapScatter(Vector &v, idx_t vcount, const SelectionVector &
 	}
 }
 
-void RowOperations::HeapScatterVData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
-                                     idx_t col_idx, data_ptr_t *key_locations, data_ptr_t *validitymask_locations,
-                                     idx_t offset) {
+void RowOperations::HeapScatterVData(UnifiedVectorFormat &vdata, PhysicalType type, const SelectionVector &sel,
+                                     idx_t ser_count, idx_t col_idx, data_ptr_t *key_locations,
+                                     data_ptr_t *validitymask_locations, idx_t offset) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

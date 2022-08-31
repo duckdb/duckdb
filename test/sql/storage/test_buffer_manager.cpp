@@ -15,9 +15,9 @@ TEST_CASE("Test scanning a table and computing an aggregate over a table that ex
 	auto config = GetTestConfig();
 
 	// set the maximum memory to 10MB and force uncompressed so we actually use the memory
-	config->force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
-	config->maximum_memory = 10000000;
-	config->maximum_threads = 1;
+	config->options.force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
+	config->options.maximum_memory = 10000000;
+	config->options.maximum_threads = 1;
 
 	int64_t expected_sum;
 	Value sum;
@@ -30,7 +30,7 @@ TEST_CASE("Test scanning a table and computing an aggregate over a table that ex
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)"));
 		uint64_t table_size = 2 * 4 * sizeof(int);
-		uint64_t desired_size = 10 * config->maximum_memory;
+		uint64_t desired_size = 10 * config->options.maximum_memory;
 		expected_sum = 11 + 12 + 13 + 22 + 22 + 21;
 		// grow the table until it exceeds 100MB
 		while (table_size < desired_size) {
@@ -56,7 +56,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
-	config->maximum_threads = 1;
+	config->options.maximum_threads = 1;
 
 	uint64_t string_length = 64;
 	uint64_t desired_size = 10000000; // desired size is 10MB
@@ -94,7 +94,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	}
 	// now reload the database, but this time with a max memory of 5MB
 	{
-		config->maximum_memory = 5000000;
+		config->options.maximum_memory = 5000000;
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		// we can still select the integer
@@ -105,7 +105,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	}
 	{
 		// reloading with a bigger limit again makes it work
-		config->maximum_memory = (idx_t)-1;
+		config->options.maximum_memory = (idx_t)-1;
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT LENGTH(a) FROM test");
@@ -122,9 +122,9 @@ TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager 
 	auto config = GetTestConfig();
 
 	// maximum memory is 10MB
-	config->force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
-	config->maximum_memory = 10000000;
-	config->maximum_threads = 1;
+	config->options.force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
+	config->options.maximum_memory = 10000000;
+	config->options.maximum_threads = 1;
 
 	// create a table of size 10 times the buffer pool size
 	uint64_t size = 0, size_a, sum_a, sum_b;
@@ -257,7 +257,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		buffer_manager.ReAllocate(block, requested_size);
 		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
 		// unpin and make sure it's evicted
-		handle.reset();
+		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
 		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
 		// re-pin
@@ -271,7 +271,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		buffer_manager.ReAllocate(block, requested_size);
 		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
 		// unpin and make sure it's evicted
-		handle.reset();
+		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
 		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
 		// re-pin
