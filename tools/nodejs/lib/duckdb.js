@@ -317,7 +317,7 @@ var default_connection = function (o) {
  */
 Database.prototype.close = function() {
     this.default_connection = null
-    this.close_internal.apply(arguments);
+    this.close_internal.apply(this, arguments);
 };
 
 /**
