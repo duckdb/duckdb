@@ -265,6 +265,8 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 		}
 	}
 	double denom = 1;
+	// TODO: It's possible cross-products were added and are not present in the filters in the relation_2_tdom
+	//       structures. When that's the case, multiply the denom structures that have no intersection
 	for (auto &match : subgraphs) {
 		// It's possible that in production, one of the D_ASSERTS above will fail and not all subgraphs
 		// were connected. When this happens, just use the largest denominator of all the subgraphs.
