@@ -1,4 +1,4 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 
 void duckdb_destroy_value(duckdb_value *value) {
 	if (value && *value) {
