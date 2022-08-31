@@ -14,7 +14,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op)
 	bool plan_preserves_order = plan->AllOperatorsPreserveOrder();
 
 	unique_ptr<PhysicalOperator> limit;
-	if (!config.options.preserve_insertion_order || !plan_preserves_order) {
+
+	if (op.force_stream_and_no_parallel) {
+		limit = make_unique<PhysicalStreamingLimit>(op.types, (idx_t)op.limit_val, op.offset_val, move(op.limit),
+		                                            move(op.offset), op.estimated_cardinality, false);
+	} else if (!config.options.preserve_insertion_order || !plan_preserves_order) {
 		// use parallel streaming limit if insertion order is not important
 		limit = make_unique<PhysicalStreamingLimit>(op.types, (idx_t)op.limit_val, op.offset_val, move(op.limit),
 		                                            move(op.offset), op.estimated_cardinality, true);

@@ -25,6 +25,8 @@ public:
 	//! The offset from the start to begin emitting elements
 	unique_ptr<Expression> offset;
 
+	bool force_stream_and_no_parallel = false;
+
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
