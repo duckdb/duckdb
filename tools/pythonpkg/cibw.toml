@@ -8,12 +8,15 @@ before-test = 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy "p
 test-requires = 'pytest'
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests'
 
-# For musllinux we currently don't build extensions yet
+# For musllinux, 32 bit, windows, or aarch64, we currently don't build extensions yet
 [[tool.cibuildwheel.overrides]]
 select = "*-musllinux*"
 test-command = "python -m pytest {project}/tests/fast"
 
-# For 32 bit we don't build extensions
+[[tool.cibuildwheel.overrides]]
+select = "*aarch64*"
+test-command = "python -m pytest {project}/tests/fast"
+
 [[tool.cibuildwheel.overrides]]
 select = "*i686*"
 test-command = "python -m pytest {project}/tests/fast"

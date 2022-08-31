@@ -20,10 +20,14 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  TWINE_USERNAME: 'hfmuehleisen'
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
   AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
   AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+  DUCKDB_BUILD_UNITY: 1
+  SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+  PYTEST_TIMEOUT: '600'
 
 jobs:
 #  This is just a sanity check of Python 3.9 running with Arrow
@@ -34,9 +38,6 @@ jobs:
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
-      PYTEST_TIMEOUT: '600'
 
     steps:
     - uses: actions/checkout@v3
@@ -156,11 +157,7 @@ jobs:
     needs: manylinux-extensions
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
-      CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || 'auto64'}}
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
-      PYTEST_TIMEOUT: '600'
-      DUCKDB_BUILD_UNITY: 1
+      CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || 'auto64' }}
 
     steps:
     - uses: actions/checkout@v3
@@ -211,6 +208,113 @@ jobs:
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
         fi
 
+   linux-python3-aarch64:
+     name: Python 3 Linux aarch64
+     runs-on: ubuntu-20.04
+     strategy:
+       matrix:
+         arch: [aarch64]
+         python_build: [
+           # urls from https://anaconda.org/anaconda/python/files
+           {url: 'https://anaconda.org/anaconda/python/3.10.4/download/linux-aarch64/python-3.10.4-hc137634_0.tar.bz2', version: '3.10'},
+           {url: 'https://anaconda.org/anaconda/python/3.9.12/download/linux-aarch64/python-3.9.12-hc137634_1.tar.bz2', version: '3.9'},
+           {url: 'https://anaconda.org/anaconda/python/3.8.13/download/linux-aarch64/python-3.8.13-hc137634_0.tar.bz2', version: '3.8'},
+           {url: 'https://anaconda.org/anaconda/python/3.7.13/download/linux-aarch64/python-3.7.13-hc137634_0.tar.bz2', version: '3.7'},
+         ]
+         isRelease:
+           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
+         exclude:
+           - isRelease: false
+             python_build: {url: 'https://anaconda.org/anaconda/python/3.8.13/download/linux-aarch64/python-3.8.13-hc137634_0.tar.bz2', version: '3.8'}
+           - isRelease: false
+             python_build: {url: 'https://anaconda.org/anaconda/python/3.9.12/download/linux-aarch64/python-3.9.12-hc137634_1.tar.bz2', version: '3.9'}
+
+     steps:
+       - uses: actions/checkout@v3
+         with:
+           fetch-depth: 0
+
+       - uses: actions/setup-python@v4
+         with:
+           python-version: ${{ matrix.python_build.version }}
+
+       - name: Install
+         shell: bash
+         run: |
+          python${{matrix.python_build.version}} -m pip install crossenv twine build
+          sudo apt install binutils-aarch64-linux-gnu libc6-arm64-cross libc6-dev-arm64-cross crossbuild-essential-arm64
+
+       - name: Setup Ccache
+         uses: hendrikmuhs/ccache-action@main
+         with:
+           key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+
+       - name: Setup build env
+         shell: bash
+         working-directory: tools/pythonpkg
+         run: |
+           python${{matrix.python_build.version}} -m pip install pip -U
+           wget ${{ matrix.python_build.url }}
+           tar -xvjf *.tar.bz2
+           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_*
+           ls lib/python${{matrix.python_build.version}}/_sysconfigdata_* | grep -v "linux_aarch64-linux-gnu" | xargs rm
+           rm -rf lib/python${{matrix.python_build.version}}/__pycache__
+
+           # if cibuildwheel starts supporting cross compiling for aarch64 at some point we should switch to that
+           # as using emulation is far too slow (6+ hours)
+           python${{matrix.python_build.version}} -m crossenv bin/python${{matrix.python_build.version}} venv --cc $(which aarch64-linux-gnu-gcc) --cxx $(which aarch64-linux-gnu-g++) --ar $(which aarch64-linux-gnu-ar) --manylinux manylinux_2_17 --manylinux manylinux2014
+
+       - name: Build
+         shell: bash
+         working-directory: tools/pythonpkg
+         run: |
+          . venv/bin/activate
+
+          build-python -m pip install numpy
+          pip install wheel
+
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+
+          python setup.py bdist_wheel
+
+       - uses: uraimo/run-on-arch-action@v2
+         name: Tests
+         id: runcmd
+         with:
+          arch: aarch64
+          distro: ubuntu22.04
+
+          # Not required, but speeds up builds by storing container images in
+          # a GitHub package registry.
+          githubToken: ${{ github.token }}
+
+          dockerRunArgs: |
+            --volume "${PWD}:/duckdb"
+          install: |
+            apt update
+            apt install software-properties-common --yes
+            add-apt-repository ppa:deadsnakes --yes
+            apt install python${{matrix.python_build.version}}-full python${{matrix.python_build.version}}-dev python3-pip --yes
+
+          run: |
+            cd /duckdb/tools/pythonpkg
+            python${{matrix.python_build.version}} -m pip install dist/*.whl pytest pandas pyarrow psutil
+            python${{matrix.python_build.version}} -c "print(__import__('duckdb').__version__)"
+            python${{matrix.python_build.version}} -m pytest tests/fast
+
+       - uses: actions/upload-artifact@v2
+         with:
+           name: linux-python-aarch64
+           path: |
+             tools/pythonpkg/dist
+
+       - name: Deploy
+         shell: bash
+         run: |
+           if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+             twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/dist/*.whl
+           fi
+
    osx-python3:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
       name: Python 3 OSX
@@ -223,9 +327,6 @@ jobs:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
-        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-        TWINE_USERNAME: 'hfmuehleisen'
-        DUCKDB_BUILD_UNITY: 1
 
       steps:
       - uses: actions/checkout@v3
@@ -281,10 +382,7 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
-        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         SETUPTOOLS_USE_DISTUTILS: 'stdlib'
-        TWINE_USERNAME: 'hfmuehleisen'
-        DUCKDB_BUILD_UNITY: 1
 
       steps:
       - uses: actions/checkout@v3
