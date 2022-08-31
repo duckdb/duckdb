@@ -151,6 +151,9 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST:
 		// Share the value dictionary as we are just going to slice it
+		if (s.GetVectorType() != VectorType::FLAT_VECTOR && s.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			s.Flatten(count);
+		}
 		ListVector::ReferenceEntry(result, s);
 		ExecuteSlice<list_entry_t, int64_t>(result, s, b, e, count);
 		break;

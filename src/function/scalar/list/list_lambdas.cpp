@@ -285,6 +285,10 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 		AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
 		                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
 	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
