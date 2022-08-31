@@ -271,6 +271,21 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	return result;
 }
 
+
+void JoinOrderOptimizer::UpdateJoinNodesInFullPlanSTR(JoinNode *node) {
+	if (!node) {
+		return;
+	}
+	if (node->set->count == relations.size()) {
+		join_nodes_in_full_plan_str.clear();
+	}
+	if (node->set->count < relations.size()) {
+		join_nodes_in_full_plan_str.insert(node->set->ToString());
+	}
+	UpdateJoinNodesInFullPlanSTR(node->left);
+	UpdateJoinNodesInFullPlanSTR(node->right);
+}
+
 void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 	if (!node) {
 		return;
@@ -295,7 +310,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
-	if (entry == plans.end() || new_plan->GetCost() < entry->second->GetCost()) {
+	if (entry == plans.end() ||  new_plan->GetCost() < entry->second->GetCost()) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
 
@@ -303,8 +318,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 		if (entry != plans.end()) {
 			cardinality_estimator.VerifySymmetry(result, entry->second.get());
 		}
-
-		if (full_plan_found && join_nodes_in_full_plan.count(new_plan.get()) > 0) {
+		if (full_plan_found && join_nodes_in_full_plan_str.count(new_plan->set->ToString()) > 0) {
 			must_update_full_plan = true;
 		}
 		if (new_set->count == relations.size()) {
@@ -317,6 +331,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 			// If we know a node in the full plan is updated, we can prevent ourselves from exiting the
 			// DP algorithm until the last plan updated is a full plan
 			UpdateJoinNodesInFullPlan(result);
+			UpdateJoinNodesInFullPlanSTR(result);
 			if (must_update_full_plan) {
 				must_update_full_plan = false;
 			}
@@ -656,6 +671,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 		join_relations.push_back(best_connection->set);
 	}
 }
+
 
 void JoinOrderOptimizer::SolveJoinOrder() {
 	// first try to solve the join order exactly
