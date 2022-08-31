@@ -321,6 +321,14 @@ Database.prototype.close = function() {
 };
 
 /**
+ * Internal method. Do not use, call Connection#close instead
+ * @method
+ * @param callback
+ * @return {void}
+ */
+Database.prototype.close_internal;
+
+/**
  * Triggers callback when all scheduled database tasks have completed.
  * @method
  * @param callback
