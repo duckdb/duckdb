@@ -39,28 +39,28 @@ TEST_CASE("Test CAPI duckdb_decimal_as_properties", "[capi]") {
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
 
-	////! From DOUBLE
-	// TestTypeConversion(tester, "SELECT CAST(123.45678 AS %s)", "DOUBLE");
-	////! From FLOAT
-	// TestTypeConversion(tester, "SELECT CAST(123.45678 AS %s)", "FLOAT");
-	////! From HUGEINT
-	// TestTypeConversion(tester, "SELECT CAST(123124 AS %s)", "HUGEINT");
-	////! From BIGINT
-	// TestTypeConversion(tester, "SELECT CAST(123124 AS %s)", "BIGINT");
-	////! From UBIGINT
-	// TestTypeConversion(tester, "SELECT CAST(123124 AS %s)", "UBIGINT");
-	////! From INTEGER
-	// TestTypeConversion(tester, "SELECT CAST(123124 AS %s)", "INTEGER");
-	////! From UINTEGER
-	// TestTypeConversion(tester, "SELECT CAST(123124 AS %s)", "UINTEGER");
-	////! From SMALLINT
-	// TestTypeConversion(tester, "SELECT CAST(12312 AS %s)", "SMALLINT");
-	////! From USMALLINT
-	// TestTypeConversion(tester, "SELECT CAST(12312 AS %s)", "USMALLINT");
+	//! From DOUBLE
+	TestTypeConversion(tester, "SELECT CAST(123.45678 AS %s)", "DOUBLE");
+	//! From FLOAT
+	TestTypeConversion(tester, "SELECT CAST(123.45678 AS %s)", "FLOAT");
+	//! From HUGEINT
+	TestTypeConversion(tester, "SELECT CAST(123124 AS %s)", "HUGEINT");
+	//! From BIGINT
+	TestTypeConversion(tester, "SELECT CAST(123124 AS %s)", "BIGINT");
+	//! From UBIGINT
+	TestTypeConversion(tester, "SELECT CAST(123124 AS %s)", "UBIGINT");
+	//! From INTEGER
+	TestTypeConversion(tester, "SELECT CAST(123124 AS %s)", "INTEGER");
+	//! From UINTEGER
+	TestTypeConversion(tester, "SELECT CAST(123124 AS %s)", "UINTEGER");
+	//! From SMALLINT
+	TestTypeConversion(tester, "SELECT CAST(12312 AS %s)", "SMALLINT");
+	//! From USMALLINT
+	TestTypeConversion(tester, "SELECT CAST(12312 AS %s)", "USMALLINT");
 	//! From TINYINT
 	TestTypeConversion(tester, "SELECT CAST(-123 AS %s)", "TINYINT");
-	////! From UTINYINT
-	// TestTypeConversion(tester, "SELECT CAST(255 AS %s)", "UTINYINT");
-	////! From VARCHAR
-	// TestTypeConversion(tester, "SELECT CAST(123124.2342 AS %s)", "VARCHAR");
+	//! From UTINYINT
+	TestTypeConversion(tester, "SELECT CAST(255 AS %s)", "UTINYINT");
+	//! From VARCHAR
+	TestTypeConversion(tester, "SELECT CAST(123124.2342 AS %s)", "VARCHAR");
 }
