@@ -1,0 +1,29 @@
+# name: test/fuzzer/pedro/returning_clause_sizes_not_match.test
+# group: [pedro]
+
+statement ok
+CREATE TABLE test (x INT, INT AS(x + 100));
+
+query II
+INSERT INTO test VALUES (1), (2) RETURNING *;
+----
+1	101
+2	102
+
+query IIII
+INSERT INTO test VALUES (1), (2) RETURNING *, *;
+----
+1	101	1	101
+2	102	2	102
+
+query II
+DELETE FROM test WHERE x=2 RETURNING *;
+----
+2	102
+2	102
+
+query II
+UPDATE test SET x=0 WHERE x = 1 RETURNING *;
+----
+0	100
+0	100
