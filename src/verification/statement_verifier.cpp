@@ -73,11 +73,6 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 			D_ASSERT(select_list[i]->Hash() == other.select_list[i]->Hash());
 
 			other.select_list[i]->Verify();
-
-			// ToString round trip
-			auto parsed_list = Parser::ParseExpressionList(str);
-			D_ASSERT(parsed_list.size() == 1);
-			D_ASSERT(parsed_list[0]->Equals(select_list[i].get()));
 		}
 	}
 #endif
