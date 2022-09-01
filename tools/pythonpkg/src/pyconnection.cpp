@@ -46,10 +46,13 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
 	    .def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute")
-	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
-	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
+	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()",
+	         py::arg("date_as_datetime") = false)
+	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()",
+	         py::arg("date_as_datetime") = false)
 	    .def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
-	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1)
+	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("date_as_datetime") = false,
+	         py::arg("vectors_per_chunk") = 1)
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
@@ -523,18 +526,18 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	}
 	return result->FetchNumpyInternal();
 }
-DataFrame DuckDBPyConnection::FetchDF() {
+DataFrame DuckDBPyConnection::FetchDF(bool date_as_datetime) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->FetchDF();
+	return result->FetchDF(date_as_datetime);
 }
 
-DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
+DataFrame DuckDBPyConnection::FetchDFChunk(bool date_as_datetime, const idx_t vectors_per_chunk) const {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->FetchDFChunk(vectors_per_chunk);
+	return result->FetchDFChunk(date_as_datetime, vectors_per_chunk);
 }
 
 duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {

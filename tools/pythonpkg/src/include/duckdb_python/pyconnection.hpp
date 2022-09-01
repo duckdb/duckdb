@@ -117,9 +117,9 @@ public:
 	py::list FetchAll();
 
 	py::dict FetchNumpy();
-	DataFrame FetchDF();
+	DataFrame FetchDF(bool date_as_datetime);
 
-	DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1) const;
+	DataFrame FetchDFChunk(bool date_as_datetime, const idx_t vectors_per_chunk = 1) const;
 
 	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
 

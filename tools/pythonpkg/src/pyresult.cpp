@@ -28,10 +28,12 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy,
 	         "Fetch all rows as a Python dict mapping each column to one numpy arrays")
 	    .def("df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
-	    .def("fetchdf", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
-	    .def("fetch_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetchdf", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame",
+	         py::arg("date_as_datetime") = false)
+	    .def("fetch_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame",
+	         py::arg("date_as_datetime") = false)
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk, "Fetch a chunk of rows as a pandas DataFrame",
-	         py::arg("num_of_vectors") = 1)
+	         py::arg("date_as_datetime") = false, py::arg("num_of_vectors") = 1)
 	    .def("arrow", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
 	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
@@ -349,23 +351,34 @@ void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
 	}
 }
 
-DataFrame DuckDBPyResult::FrameFromNumpy(const py::handle &o) {
+void DuckDBPyResult::ChangeDateToDatetime(DataFrame &df) {
+	for (idx_t i = 0; i < result->ColumnCount(); i++) {
+		if (result->types[i] == LogicalType::DATE) {
+			df[result->names[i].c_str()] = df[result->names[i].c_str()].attr("dt").attr("date");
+		}
+	}
+}
+
+DataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_datetime, const py::handle &o) {
 	auto df = py::cast<DataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
+	if (date_as_datetime) {
+		ChangeDateToDatetime(df);
+	}
 	return df;
 }
 
-DataFrame DuckDBPyResult::FetchDF() {
+DataFrame DuckDBPyResult::FetchDF(bool date_as_datetime) {
 	timezone_config = QueryResult::GetConfigTimezone(*result);
-	return FrameFromNumpy(FetchNumpyInternal());
+	return FrameFromNumpy(date_as_datetime, FetchNumpyInternal());
 }
 
-DataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
+DataFrame DuckDBPyResult::FetchDFChunk(bool date_as_datetime, idx_t num_of_vectors) {
 	if (timezone_config.empty()) {
 		timezone_config = QueryResult::GetConfigTimezone(*result);
 	}
-	return FrameFromNumpy(FetchNumpyInternal(true, num_of_vectors));
+	return FrameFromNumpy(date_as_datetime, FetchNumpyInternal(true, num_of_vectors));
 }
 
 void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches) {
