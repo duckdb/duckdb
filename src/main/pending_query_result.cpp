@@ -32,8 +32,11 @@ void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 		invalidated = !context->IsActiveResult(lock, this);
 	}
 	if (invalidated) {
-		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            GetError());
+		if (HasError()) {
+			throw InvalidInputException(
+			    "Attempting to execute an unsuccessful or closed pending query result\nError: %s", GetError());
+		}
+		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result");
 	}
 }
 

@@ -55,6 +55,7 @@ duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row)
 		//! Can't convert to decimal from another type without providing width+scale
 		return FetchDefaultValue::Operation<duckdb_decimal>();
 	}
+
 	return GetInternalCValue<duckdb_decimal>(result, col, row);
 }
 
