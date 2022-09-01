@@ -34,6 +34,7 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 #include "duckdb/planner/operator/logical_get.hpp"
 #endif
@@ -104,6 +105,17 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 	ColumnDataCollection buffer;
 };
 
+void ParquetOptions::Serialize(FieldWriter &writer) const {
+	writer.WriteField<bool>(binary_as_string);
+	writer.WriteField<bool>(filename);
+	writer.WriteField<bool>(hive_partitioning);
+}
+void ParquetOptions::Deserialize(FieldReader &reader) {
+	binary_as_string = reader.ReadRequired<bool>();
+	filename = reader.ReadRequired<bool>();
+	hive_partitioning = reader.ReadRequired<bool>();
+}
+
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
@@ -117,6 +129,9 @@ public:
 		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
+		table_function.serialize = ParquetScanSerialize;
+		table_function.deserialize = ParquetScanDeserialize;
+
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
 		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
@@ -167,7 +182,7 @@ public:
 	                                                   column_t column_index) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 
-		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+		if (IsRowIdColumnId(column_index)) {
 			return nullptr;
 		}
 
@@ -376,6 +391,26 @@ public:
 	                                      GlobalTableFunctionState *global_state) {
 		auto &data = (ParquetReadLocalState &)*local_state;
 		return data.batch_index;
+	}
+
+	static void ParquetScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+	                                 const TableFunction &function) {
+		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
+		writer.WriteList<string>(bind_data.files);
+		writer.WriteRegularSerializableList(bind_data.types);
+		writer.WriteList<string>(bind_data.names);
+		bind_data.parquet_options.Serialize(writer);
+	}
+
+	static unique_ptr<FunctionData> ParquetScanDeserialize(ClientContext &context, FieldReader &reader,
+	                                                       TableFunction &function) {
+		auto files = reader.ReadRequiredList<string>();
+		auto types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+		auto names = reader.ReadRequiredList<string>();
+		ParquetOptions options(context);
+		options.Deserialize(reader);
+
+		return ParquetScanBindInternal(context, files, types, names, options);
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -603,6 +638,11 @@ void ParquetExtension::Load(DuckDB &db) {
 	con.BeginTransaction();
 	auto &context = *con.context;
 	auto &catalog = Catalog::GetCatalog(context);
+
+	if (catalog.GetEntry<TableFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "parquet_scan", true)) {
+		throw InvalidInputException("Parquet extension is either already loaded or built-in");
+	}
+
 	catalog.CreateCopyFunction(context, &info);
 	catalog.CreateTableFunction(context, &cinfo);
 	catalog.CreateTableFunction(context, &pq_scan);
@@ -621,6 +661,20 @@ std::string ParquetExtension::Name() {
 }
 
 } // namespace duckdb
+
+#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+extern "C" {
+
+DUCKDB_EXTENSION_API void parquet_init(duckdb::DatabaseInstance &db) { // NOLINT
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::ParquetExtension>();
+}
+
+DUCKDB_EXTENSION_API const char *parquet_version() { // NOLINT
+	return duckdb::DuckDB::LibraryVersion();
+}
+}
+#endif
 
 #ifndef DUCKDB_EXTENSION_MAIN
 #error DUCKDB_EXTENSION_MAIN not defined

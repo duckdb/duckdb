@@ -2,6 +2,12 @@ import duckdb
 from threading import Thread, current_thread
 import pandas as pd
 import os
+import pytest
+
+@pytest.fixture(scope="session")
+def tmp_database(tmp_path_factory):
+    database = tmp_path_factory.mktemp("databases", numbered=True) / "tmp.duckdb"
+    return str(database)
 
 def insert_from_cursor(duckdb_con):
     # Insert a row with the name of the thread
@@ -61,10 +67,9 @@ class TestPythonMultithreading(object):
 
         assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [('my_thread_0',), ('my_thread_1',), ('my_thread_2',)]
 
-    def test_multiple_cursors_persisted(self, duckdb_cursor):
-        duckdb_con = duckdb.connect('another_test_10.duckdb')
+    def test_multiple_cursors_persisted(self, tmp_database):
+        duckdb_con = duckdb.connect(tmp_database)
         duckdb_con.execute("""CREATE OR REPLACE TABLE my_inserts (thread_name varchar)""")
-
 
         thread_count = 3
         threads = []
@@ -83,12 +88,10 @@ class TestPythonMultithreading(object):
 
         assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [('my_thread_0',), ('my_thread_1',), ('my_thread_2',)]
         duckdb_con.close()
-        os.remove('another_test_10.duckdb')
 
-    def test_same_connection_persisted(self, duckdb_cursor):
-        duckdb_con = duckdb.connect('another_test_10.duckdb')
+    def test_same_connection_persisted(self, tmp_database):
+        duckdb_con = duckdb.connect(tmp_database)
         duckdb_con.execute("""CREATE OR REPLACE TABLE my_inserts (thread_name varchar)""")
-
 
         thread_count = 3
         threads = []
@@ -107,4 +110,3 @@ class TestPythonMultithreading(object):
 
         assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [('my_thread_0',), ('my_thread_1',), ('my_thread_2',)]
         duckdb_con.close()
-        os.remove('another_test_10.duckdb')

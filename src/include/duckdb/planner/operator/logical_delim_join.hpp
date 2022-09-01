@@ -16,11 +16,14 @@ namespace duckdb {
 //! flattening, and involves performing duplicate elimination on the LEFT side which is then pushed into the RIGHT side.
 class LogicalDelimJoin : public LogicalComparisonJoin {
 public:
-	explicit LogicalDelimJoin(JoinType type) : LogicalComparisonJoin(type, LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-	}
+	explicit LogicalDelimJoin(JoinType type);
 
 	//! The set of columns that will be duplicate eliminated from the LHS and pushed into the RHS
 	vector<unique_ptr<Expression>> duplicate_eliminated_columns;
+
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 };
 
 } // namespace duckdb

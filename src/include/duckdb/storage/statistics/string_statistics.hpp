@@ -19,7 +19,7 @@ public:
 	constexpr static uint32_t MAX_STRING_MINMAX_SIZE = 8;
 
 public:
-	explicit StringStatistics(LogicalType type, StatisticsType stats_type);
+	DUCKDB_API explicit StringStatistics(LogicalType type, StatisticsType stats_type);
 
 	//! The minimum value of the segment, potentially truncated
 	data_t min[MAX_STRING_MINMAX_SIZE];
@@ -33,8 +33,8 @@ public:
 	bool has_overflow_strings;
 
 public:
-	void Update(const string_t &value);
-	void Merge(const BaseStatistics &other) override;
+	DUCKDB_API void Update(const string_t &value);
+	DUCKDB_API void Merge(const BaseStatistics &other) override;
 
 	unique_ptr<BaseStatistics> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;

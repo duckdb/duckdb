@@ -202,7 +202,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 			throw BinderException(binder.FormatError(window, error));
 		}
 		// found a matching function! bind it as an aggregate
-		auto &bound_function = func->functions[best_function];
+		auto bound_function = func->functions.GetFunctionByOffset(best_function);
 		auto bound_aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children));
 		// create the aggregate
 		aggregate = make_unique<AggregateFunction>(bound_aggregate->function);

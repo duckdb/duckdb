@@ -23,17 +23,7 @@ void PhysicalUnion::BuildPipelines(Executor &executor, Pipeline &current, Pipeli
 
 	auto union_pipeline = make_shared<Pipeline>(executor);
 	auto pipeline_ptr = union_pipeline.get();
-	auto &child_pipelines = state.GetChildPipelines(executor);
-	auto &child_dependencies = state.GetChildDependencies(executor);
 	auto &union_pipelines = state.GetUnionPipelines(executor);
-	// set up dependencies for any child pipelines to this union pipeline
-	auto child_entry = child_pipelines.find(&current);
-	if (child_entry != child_pipelines.end()) {
-		for (auto &current_child : child_entry->second) {
-			D_ASSERT(child_dependencies.find(current_child.get()) != child_dependencies.end());
-			child_dependencies[current_child.get()].push_back(pipeline_ptr);
-		}
-	}
 	// for the current pipeline, continue building on the LHS
 	state.SetPipelineOperators(*union_pipeline, state.GetPipelineOperators(current));
 	children[0]->BuildPipelines(executor, current, state);

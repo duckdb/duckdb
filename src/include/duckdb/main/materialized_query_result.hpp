@@ -24,7 +24,7 @@ public:
 	                                   vector<string> names, unique_ptr<ColumnDataCollection> collection,
 	                                   ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API explicit MaterializedQueryResult(string error);
+	DUCKDB_API explicit MaterializedQueryResult(PreservedError error);
 
 public:
 	//! Fetches a DataChunk from the query result.

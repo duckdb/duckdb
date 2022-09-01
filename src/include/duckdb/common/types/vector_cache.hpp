@@ -20,7 +20,7 @@ class Vector;
 class VectorCache {
 public:
 	//! Instantiate a vector cache with the given type
-	explicit VectorCache(Allocator &allocator, const LogicalType &type);
+	DUCKDB_API explicit VectorCache(Allocator &allocator, const LogicalType &type);
 
 	buffer_ptr<VectorBuffer> buffer;
 

@@ -451,14 +451,20 @@ static bool StartsWithNumericDate(string &separator, const string &value) {
 
 string GenerateDateFormat(const string &separator, const char *format_template) {
 	string format_specifier = format_template;
-
-	//	replace all dashes with the separator
-	for (auto pos = std::find(format_specifier.begin(), format_specifier.end(), '-'); pos != format_specifier.end();
-	     pos = std::find(pos + separator.size(), format_specifier.end(), '-')) {
-		format_specifier.replace(pos, pos + 1, separator);
+	auto amount_of_dashes = std::count(format_specifier.begin(), format_specifier.end(), '-');
+	if (!amount_of_dashes) {
+		return format_specifier;
 	}
-
-	return format_specifier;
+	string result;
+	result.reserve(format_specifier.size() - amount_of_dashes + (amount_of_dashes * separator.size()));
+	for (auto &character : format_specifier) {
+		if (character == '-') {
+			result += separator;
+		} else {
+			result += character;
+		}
+	}
+	return result;
 }
 
 TextSearchShiftArray::TextSearchShiftArray() {

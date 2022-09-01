@@ -14,6 +14,7 @@ void ExpressionExecutor::Execute(const BoundReferenceExpression &expr, Expressio
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	D_ASSERT(expr.index != DConstants::INVALID_INDEX);
 	D_ASSERT(expr.index < chunk->ColumnCount());
+
 	if (sel) {
 		result.Slice(chunk->data[expr.index], *sel, count);
 	} else {

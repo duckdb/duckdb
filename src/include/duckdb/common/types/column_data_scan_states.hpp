@@ -60,6 +60,7 @@ struct ColumnDataParallelScanState {
 
 struct ColumnDataLocalScanState {
 	ChunkManagementState current_chunk_state;
+	idx_t current_segment_index = DConstants::INVALID_INDEX;
 	idx_t current_row_index;
 };
 

@@ -13,6 +13,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb_python/array_wrapper.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -20,18 +21,23 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	py::class_<DuckDBPyResult>(m, "DuckDBPyResult", py::module_local())
 	    .def("description", &DuckDBPyResult::Description)
 	    .def("close", &DuckDBPyResult::Close)
-	    .def("fetchone", &DuckDBPyResult::Fetchone)
-	    .def("fetchall", &DuckDBPyResult::Fetchall)
-	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy)
-	    .def("fetchdf", &DuckDBPyResult::FetchDF)
-	    .def("fetch_df", &DuckDBPyResult::FetchDF)
-	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
-	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table",
+	    .def("fetchone", &DuckDBPyResult::Fetchone, "Fetch a single row as a tuple")
+	    .def("fetchmany", &DuckDBPyResult::Fetchmany, "Fetch the next set of rows as a list of tuples",
+	         py::arg("size") = 1)
+	    .def("fetchall", &DuckDBPyResult::Fetchall, "Fetch all rows as a list of tuples")
+	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy,
+	         "Fetch all rows as a Python dict mapping each column to one numpy arrays")
+	    .def("df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetchdf", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetch_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk, "Fetch a chunk of rows as a pandas DataFrame",
+	         py::arg("num_of_vectors") = 1)
+	    .def("arrow", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
+	         py::arg("chunk_size") = 1000000)
+	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
 	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
-	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"))
-	    .def("arrow", &DuckDBPyResult::FetchArrowTable, py::arg("chunk_size") = 1000000)
-	    .def("df", &DuckDBPyResult::FetchDF);
+	         "Fetch all rows as an Arrow Record Batch Reader", py::arg("approx_batch_size"));
 
 	PyDateTime_IMPORT;
 }
@@ -150,22 +156,30 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	}
 
 	default:
-		throw NotImplementedException("unsupported type: " + type.ToString());
+		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
 	}
 }
 
-unique_ptr<DataChunk> FetchNext(QueryResult &result) {
+unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
+	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
+		result_closed = true;
+		return nullptr;
+	}
 	auto chunk = result.Fetch();
-	if (!result.success) {
-		throw std::runtime_error(result.error);
+	if (result.HasError()) {
+		result.ThrowError();
 	}
 	return chunk;
 }
 
-unique_ptr<DataChunk> FetchNextRaw(QueryResult &result) {
+unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &result) {
+	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
+		result_closed = true;
+		return nullptr;
+	}
 	auto chunk = result.FetchRaw();
-	if (!result.success) {
-		throw std::runtime_error(result.error);
+	if (result.HasError()) {
+		result.ThrowError();
 	}
 	return chunk;
 }
@@ -174,7 +188,7 @@ py::object DuckDBPyResult::Fetchone() {
 	{
 		py::gil_scoped_release release;
 		if (!result) {
-			throw std::runtime_error("result closed");
+			throw InvalidInputException("result closed");
 		}
 		if (!current_chunk || chunk_offset >= current_chunk->size()) {
 			current_chunk = FetchNext(*result);
@@ -200,6 +214,18 @@ py::object DuckDBPyResult::Fetchone() {
 	return move(res);
 }
 
+py::list DuckDBPyResult::Fetchmany(idx_t size) {
+	py::list res;
+	for (idx_t i = 0; i < size; i++) {
+		auto fres = Fetchone();
+		if (fres.is_none()) {
+			break;
+		}
+		res.append(fres);
+	}
+	return res;
+}
+
 py::list DuckDBPyResult::Fetchall() {
 	py::list res;
 	while (true) {
@@ -211,6 +237,7 @@ py::list DuckDBPyResult::Fetchall() {
 	}
 	return res;
 }
+
 py::dict DuckDBPyResult::FetchNumpy() {
 	return FetchNumpyInternal();
 }
@@ -249,7 +276,7 @@ void InsertCategory(QueryResult &result, unordered_map<idx_t, py::list> &categor
 
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
-		throw std::runtime_error("result closed");
+		throw InvalidInputException("result closed");
 	}
 
 	// iterate over the result to materialize the data needed for the NumPy arrays
@@ -362,7 +389,7 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx
 
 py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("result closed");
+		throw InvalidInputException("result closed");
 	}
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 
@@ -375,7 +402,7 @@ py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 
 duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("There is no query result");
+		throw InvalidInputException("There is no query result");
 	}
 	py::gil_scoped_acquire acquire;
 
@@ -398,7 +425,7 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("There is no query result");
+		throw InvalidInputException("There is no query result");
 	}
 	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
@@ -460,7 +487,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 		return py::str(type.ToString());
 	}
 	default:
-		throw NotImplementedException("unsupported type: " + type.ToString());
+		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
 	}
 }
 

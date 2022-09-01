@@ -1,7 +1,8 @@
 # helper to clean up non-utf and posixlt vectors
 encode_values <- function(value) {
-  value <- as.data.frame(value)
-  names(value) <- enc2utf8(names(value))
+  if (!is.null(names(value))) {
+    names(value) <- enc2utf8(names(value))
+  }
 
   is_character <- vapply(value, is.character, logical(1))
   value[is_character] <- lapply(value[is_character], enc2utf8)
