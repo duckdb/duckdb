@@ -68,6 +68,10 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 			result_data[i] = JSONCommon::WriteVal(origs[i], result);
 		}
 	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetMergePatchFunction() {
