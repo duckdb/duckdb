@@ -8,11 +8,12 @@ namespace duckdb {
 template <class INTERNAL_TYPE>
 struct ToCDecimalCastWrapper {
 	template <class SOURCE_TYPE>
-	static duckdb_decimal Operation(SOURCE_TYPE input, std::string *error, uint8_t width, uint8_t scale) {
+	static bool Operation(SOURCE_TYPE input, duckdb_decimal &result, std::string *error, uint8_t width, uint8_t scale) {
 		throw NotImplementedException("Type not implemented for CDecimalCastWrapper");
 	}
 };
 
+//! Hugeint
 template <>
 struct ToCDecimalCastWrapper<hugeint_t> {
 	template <class SOURCE_TYPE>
@@ -29,6 +30,77 @@ struct ToCDecimalCastWrapper<hugeint_t> {
 		duckdb_hugeint hugeint_value;
 		hugeint_value.upper = intermediate_result.upper;
 		hugeint_value.lower = intermediate_result.lower;
+		result.value = hugeint_value;
+		return true;
+	}
+};
+
+//! FIXME: reduce duplication here by just matching on the signed-ness of the type
+//! INTERNAL_TYPE = int16_t
+template <>
+struct ToCDecimalCastWrapper<int16_t> {
+	template <class SOURCE_TYPE>
+	static bool Operation(SOURCE_TYPE input, duckdb_decimal &result, std::string *error, uint8_t width, uint8_t scale) {
+		int16_t intermediate_result;
+
+		if (!TryCastToDecimal::Operation<SOURCE_TYPE, int16_t>(input, intermediate_result, error, width, scale)) {
+			result = FetchDefaultValue::Operation<duckdb_decimal>();
+			return false;
+		}
+		hugeint_t hugeint_result = Hugeint::Convert(intermediate_result);
+
+		result.scale = scale;
+		result.width = width;
+
+		duckdb_hugeint hugeint_value;
+		hugeint_value.upper = hugeint_result.upper;
+		hugeint_value.lower = hugeint_result.lower;
+		result.value = hugeint_value;
+		return true;
+	}
+};
+//! INTERNAL_TYPE = int32_t
+template <>
+struct ToCDecimalCastWrapper<int32_t> {
+	template <class SOURCE_TYPE>
+	static bool Operation(SOURCE_TYPE input, duckdb_decimal &result, std::string *error, uint8_t width, uint8_t scale) {
+		int32_t intermediate_result;
+
+		if (!TryCastToDecimal::Operation<SOURCE_TYPE, int32_t>(input, intermediate_result, error, width, scale)) {
+			result = FetchDefaultValue::Operation<duckdb_decimal>();
+			return false;
+		}
+		hugeint_t hugeint_result = Hugeint::Convert(intermediate_result);
+
+		result.scale = scale;
+		result.width = width;
+
+		duckdb_hugeint hugeint_value;
+		hugeint_value.upper = hugeint_result.upper;
+		hugeint_value.lower = hugeint_result.lower;
+		result.value = hugeint_value;
+		return true;
+	}
+};
+//! INTERNAL_TYPE = int64_t
+template <>
+struct ToCDecimalCastWrapper<int64_t> {
+	template <class SOURCE_TYPE>
+	static bool Operation(SOURCE_TYPE input, duckdb_decimal &result, std::string *error, uint8_t width, uint8_t scale) {
+		int64_t intermediate_result;
+
+		if (!TryCastToDecimal::Operation<SOURCE_TYPE, int64_t>(input, intermediate_result, error, width, scale)) {
+			result = FetchDefaultValue::Operation<duckdb_decimal>();
+			return false;
+		}
+		hugeint_t hugeint_result = Hugeint::Convert(intermediate_result);
+
+		result.scale = scale;
+		result.width = width;
+
+		duckdb_hugeint hugeint_value;
+		hugeint_value.upper = hugeint_result.upper;
+		hugeint_value.lower = hugeint_result.lower;
 		result.value = hugeint_value;
 		return true;
 	}
@@ -81,8 +153,9 @@ using duckdb::ToCStringCastWrapper;
 using duckdb::TryCastToDecimalCInternal;
 using duckdb::UnsafeFetch;
 
+template <class INTERNAL_TYPE>
 duckdb_decimal GetInternalAsDecimalCValue(duckdb_result *result, idx_t col, idx_t row, uint8_t width, uint8_t scale) {
-	using OP = duckdb::ToCDecimalCastWrapper<duckdb::hugeint_t>;
+	using OP = duckdb::ToCDecimalCastWrapper<INTERNAL_TYPE>;
 	if (!CanFetchValue(result, col, row)) {
 		return duckdb::FetchDefaultValue::Operation<duckdb_decimal>();
 	}
@@ -142,5 +215,14 @@ duckdb_decimal GetInternalAsDecimalCastSwitch(duckdb_result *result, idx_t col, 
 		//! Invalid format
 		return FetchDefaultValue::Operation<duckdb_decimal>();
 	}
-	return GetInternalAsDecimalCValue(result, col, row, width, scale);
+	if (width > duckdb::Decimal::MAX_WIDTH_INT64) {
+		return GetInternalAsDecimalCValue<hugeint_t>(result, col, row, width, scale);
+	}
+	if (width > duckdb::Decimal::MAX_WIDTH_INT32) {
+		return GetInternalAsDecimalCValue<int64_t>(result, col, row, width, scale);
+	}
+	if (width > duckdb::Decimal::MAX_WIDTH_INT16) {
+		return GetInternalAsDecimalCValue<int32_t>(result, col, row, width, scale);
+	}
+	return GetInternalAsDecimalCValue<int16_t>(result, col, row, width, scale);
 }
