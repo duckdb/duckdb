@@ -20,6 +20,33 @@ describe("data type support", function () {
       done();
     });
   });
+
+  it("supports INTEGER values", function (done) {
+    db.run("CREATE TABLE integer_table (a TINYINT, b SMALLINT, c INTEGER, d BIGINT, e UTINYINT, f USMALLINT, g UINTEGER, h UBIGINT)");
+    const stmt = db.prepare("INSERT INTO integer_table VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+
+    // Numerical limits
+    signedMinValue = (bitWidth) => -(2**(bitWidth-1)-1)-1;
+    signedMaxValue = (bitWidth) => 2**(bitWidth-1)-1;
+    unsignedMaxValue = (bitWidth) => 2**(bitWidth)-1;
+    let minValues = [signedMinValue(8), signedMinValue(16), signedMinValue(32), signedMinValue(64), 0, 0, 0, 0];
+    let maxValues = [signedMinValue(8), signedMinValue(16), signedMinValue(32), signedMinValue(64), unsignedMaxValue(8), unsignedMaxValue(16), unsignedMaxValue(32), unsignedMaxValue(64)];
+
+    // Insert values
+    stmt.run(...minValues);
+    stmt.run(...maxValues);
+
+    db.prepare("SELECT * from integer_table;").all((err, res) => {
+      assert(err === null);
+      assert(res.length === 2);
+      assert(Object.entries(res[0]).length === 8);
+      assert(Object.entries(res[1]).length === 8);
+      assert(Object.entries(res[0]).every((v, i) => v[1] == minValues[i]))
+      assert(Object.entries(res[1]).every((v, i) => v[1] == maxValues[i]))
+      done();
+    });
+  });
+
   it("supports INTERVAL values", function (done) {
     db.prepare(
       `SELECT
