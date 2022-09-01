@@ -33,6 +33,7 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr
 }
 
 BlockHandle::~BlockHandle() {
+	auto &block_manager = BlockManager::GetBlockManager(db);
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	// being destroyed, so any unswizzled pointers are just binary junk now.
 	unswizzled = nullptr;
@@ -42,7 +43,7 @@ BlockHandle::~BlockHandle() {
 		buffer.reset();
 		buffer_manager.current_memory -= memory_usage;
 	}
-	buffer_manager.UnregisterBlock(block_id, can_destroy);
+	block_manager.UnregisterBlock(block_id, can_destroy);
 }
 
 unique_ptr<Block> AllocateBlock(Allocator &allocator, unique_ptr<FileBuffer> reusable_buffer, block_id_t block_id) {
@@ -222,7 +223,7 @@ BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_mem
 BufferManager::~BufferManager() {
 }
 
-shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
+shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 	lock_guard<mutex> lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
@@ -235,17 +236,17 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 		}
 	}
 	// create a new block pointer for this block
-	auto result = make_shared<BlockHandle>(db, block_id);
+	auto result = make_shared<BlockHandle>(buffer_manager.db, block_id);
 	// register the block pointer in the set of blocks as a weak pointer
 	blocks[block_id] = weak_ptr<BlockHandle>(result);
 	return result;
 }
 
-shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_manager, block_id_t block_id,
+shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id,
                                                            shared_ptr<BlockHandle> old_block) {
 
 	// pin the old block to ensure we have it loaded in memory
-	auto old_handle = Pin(old_block);
+	auto old_handle = buffer_manager.Pin(old_block);
 	D_ASSERT(old_block->state == BlockState::BLOCK_LOADED);
 	D_ASSERT(old_block->buffer);
 
@@ -266,9 +267,9 @@ shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_m
 	old_block.reset();
 
 	// persist the new block to disk
-	block_manager.Write(*new_block->buffer, block_id);
+	Write(*new_block->buffer, block_id);
 
-	AddToEvictionQueue(new_block);
+	buffer_manager.AddToEvictionQueue(new_block);
 
 	return new_block;
 }
@@ -418,12 +419,12 @@ void BufferManager::PurgeQueue() {
 	}
 }
 
-void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
+void BlockManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 	if (block_id >= MAXIMUM_BLOCK) {
 		// in-memory buffer: destroy the buffer
 		if (!can_destroy) {
 			// buffer could have been offloaded to disk: remove the file
-			DeleteTemporaryFile(block_id);
+			buffer_manager.DeleteTemporaryFile(block_id);
 		}
 	} else {
 		lock_guard<mutex> lock(blocks_lock);
@@ -431,6 +432,7 @@ void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 		blocks.erase(block_id);
 	}
 }
+
 void BufferManager::SetLimit(idx_t limit) {
 	lock_guard<mutex> l_lock(limit_lock);
 	// try to evict until the limit is reached

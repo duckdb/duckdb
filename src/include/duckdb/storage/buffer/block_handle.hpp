@@ -22,6 +22,7 @@ class FileBuffer;
 enum class BlockState : uint8_t { BLOCK_UNLOADED = 0, BLOCK_LOADED = 1 };
 
 class BlockHandle {
+	friend class BlockManager;
 	friend struct BufferEvictionNode;
 	friend class BufferHandle;
 	friend class BufferManager;
