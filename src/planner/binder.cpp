@@ -424,10 +424,6 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
                                      BoundStatement result,
                                      case_insensitive_map_t<unique_ptr<ParsedExpression>> &gcols) {
 
-	for (auto &returning_expr : returning_list) {
-		RewriteGeneratedColumn(returning_expr, gcols);
-	}
-
 	vector<LogicalType> types;
 	vector<std::string> names;
 
@@ -457,6 +453,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 				projection_expressions.push_back(move(star_expr));
 			}
 		} else {
+			RewriteGeneratedColumn(returning_expr, gcols);
 			auto expr = returning_binder.Bind(returning_expr, &result_type);
 			result.names.push_back(expr->GetName());
 			result.types.push_back(result_type);
