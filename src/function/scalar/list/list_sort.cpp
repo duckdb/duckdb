@@ -107,7 +107,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &result_validity = FlatVector::Validity(result);
 
 	for (auto &v : args.data) {
-		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		if (v.GetVectorType() != VectorType::FLAT_VECTOR && v.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			v.Flatten(count);
 		}
 	}
