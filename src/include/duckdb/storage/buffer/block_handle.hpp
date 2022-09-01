@@ -28,12 +28,12 @@ class BlockHandle {
 	friend class BufferManager;
 
 public:
-	BlockHandle(DatabaseInstance &db, block_id_t block_id);
-	BlockHandle(DatabaseInstance &db, block_id_t block_id, unique_ptr<FileBuffer> buffer, bool can_destroy,
+	BlockHandle(BlockManager &block_manager, block_id_t block_id);
+	BlockHandle(BlockManager &block_manager, block_id_t block_id, unique_ptr<FileBuffer> buffer, bool can_destroy,
 	            idx_t block_size);
 	~BlockHandle();
 
-	DatabaseInstance &db;
+	BlockManager &block_manager;
 
 public:
 	block_id_t BlockId() {

@@ -75,6 +75,8 @@ public:
 
 	DUCKDB_API Allocator &GetBufferAllocator();
 
+	DatabaseInstance &GetDatabase() { return db; }
+
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
@@ -126,6 +128,8 @@ private:
 	atomic<block_id_t> temporary_id;
 	//! Allocator associated with the buffer manager, that passes all allocations through this buffer manager
 	Allocator buffer_allocator;
+	//! Block manager for temp data
+	unique_ptr<BlockManager> temp_block_manager;
 };
 
 } // namespace duckdb

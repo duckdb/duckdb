@@ -5,6 +5,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/in_memory_block_manager.hpp"
 
 namespace duckdb {
 
@@ -15,17 +16,17 @@ struct BufferAllocatorData : PrivateAllocatorData {
 	BufferManager &manager;
 };
 
-BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p)
-    : db(db), readers(0), block_id(block_id_p), buffer(nullptr), eviction_timestamp(0), can_destroy(false),
-      unswizzled(nullptr) {
+BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p)
+    : block_manager(block_manager), readers(0), block_id(block_id_p), buffer(nullptr), eviction_timestamp(0),
+      can_destroy(false), unswizzled(nullptr) {
 	eviction_timestamp = 0;
 	state = BlockState::BLOCK_UNLOADED;
 	memory_usage = Storage::BLOCK_ALLOC_SIZE;
 }
 
-BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
+BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
                          bool can_destroy_p, idx_t block_size)
-    : db(db), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p), unswizzled(nullptr) {
+    : block_manager(block_manager), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p), unswizzled(nullptr) {
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	buffer = move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
@@ -33,10 +34,9 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr
 }
 
 BlockHandle::~BlockHandle() {
-	auto &block_manager = BlockManager::GetBlockManager(db);
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	// being destroyed, so any unswizzled pointers are just binary junk now.
 	unswizzled = nullptr;
+	auto &buffer_manager = block_manager.buffer_manager;
 	// no references remain to this block: erase
 	if (state == BlockState::BLOCK_LOADED) {
 		// the block is still loaded in memory: erase it
@@ -91,17 +91,16 @@ BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileB
 		return BufferHandle(handle, handle->buffer.get());
 	}
 
-	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
-	auto &block_manager = BlockManager::GetBlockManager(handle->db);
+	auto &block_manager = handle->block_manager;
 	if (handle->block_id < MAXIMUM_BLOCK) {
-		auto block = AllocateBlock(Allocator::Get(handle->db), move(reusable_buffer), handle->block_id);
+		auto block = AllocateBlock(Allocator::Get(block_manager.buffer_manager.GetDatabase()), move(reusable_buffer), handle->block_id);
 		block_manager.Read(*block);
 		handle->buffer = move(block);
 	} else {
 		if (handle->can_destroy) {
 			return BufferHandle();
 		} else {
-			handle->buffer = buffer_manager.ReadTemporaryBuffer(handle->block_id, move(reusable_buffer));
+			handle->buffer = block_manager.buffer_manager.ReadTemporaryBuffer(handle->block_id, move(reusable_buffer));
 		}
 	}
 	handle->state = BlockState::BLOCK_LOADED;
@@ -109,7 +108,6 @@ BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileB
 }
 
 unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (state == BlockState::BLOCK_UNLOADED) {
 		// already unloaded: nothing to do
 		return nullptr;
@@ -120,9 +118,9 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 
 	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
 		// temporary block that cannot be destroyed: write to temporary file
-		buffer_manager.WriteTemporaryBuffer((ManagedBuffer &)*buffer);
+		block_manager.buffer_manager.WriteTemporaryBuffer((ManagedBuffer &)*buffer);
 	}
-	buffer_manager.current_memory -= memory_usage;
+	block_manager.buffer_manager.current_memory -= memory_usage;
 	state = BlockState::BLOCK_UNLOADED;
 	return move(buffer);
 }
@@ -141,8 +139,7 @@ bool BlockHandle::CanUnload() {
 		// there are active readers
 		return false;
 	}
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	if (block_id >= MAXIMUM_BLOCK && !can_destroy && buffer_manager.temp_directory.empty()) {
+	if (block_id >= MAXIMUM_BLOCK && !can_destroy && block_manager.buffer_manager.temp_directory.empty()) {
 		// in order to unload this block we need to write it to a temporary buffer
 		// however, no temporary directory is specified!
 		// hence we cannot unload the block
@@ -218,6 +215,7 @@ BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_mem
       queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_unique<BufferAllocatorData>(*this)) {
+  	temp_block_manager = make_unique<InMemoryBlockManager>(*this);
 }
 
 BufferManager::~BufferManager() {
@@ -236,7 +234,7 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 		}
 	}
 	// create a new block pointer for this block
-	auto result = make_shared<BlockHandle>(buffer_manager.db, block_id);
+	auto result = make_shared<BlockHandle>(*this, block_id);
 	// register the block pointer in the set of blocks as a weak pointer
 	blocks[block_id] = weak_ptr<BlockHandle>(result);
 	return result;
@@ -287,7 +285,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 	auto buffer = AllocateManagedBuffer(db, move(reusable_buffer), block_size, can_destroy, temp_id);
 
 	// create a new block pointer for this block
-	return make_shared<BlockHandle>(db, temp_id, move(buffer), can_destroy, block_size);
+	return make_shared<BlockHandle>(*temp_block_manager, temp_id, move(buffer), can_destroy, block_size);
 }
 
 BufferHandle BufferManager::Allocate(idx_t block_size) {

@@ -42,8 +42,7 @@ void BufferHandle::Destroy() {
 	if (!handle || !IsValid()) {
 		return;
 	}
-	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
-	buffer_manager.Unpin(handle);
+	handle->block_manager.buffer_manager.Unpin(handle);
 	handle.reset();
 	node = nullptr;
 }

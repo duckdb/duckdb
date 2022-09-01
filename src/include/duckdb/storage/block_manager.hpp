@@ -67,9 +67,10 @@ public:
 	static BlockManager &GetBlockManager(ClientContext &context);
 	static BlockManager &GetBlockManager(DatabaseInstance &db);
 
-private:
 	//! The buffer manager
 	BufferManager &buffer_manager;
+
+private:
 	//! The lock for the set of blocks
 	mutex blocks_lock;
 	//! A mapping of block id -> BlockHandle
