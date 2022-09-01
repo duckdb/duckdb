@@ -197,9 +197,8 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	auto stream_factory_ptr = input.inputs[0].GetPointer();
 	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();
 	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer();
-	auto rows_per_thread = input.inputs[3].GetValue<uint64_t>();
 
-	auto res = make_unique<ArrowScanFunctionData>(rows_per_thread, stream_factory_produce, stream_factory_ptr);
+	auto res = make_unique<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
 
 	auto &data = *res;
 	stream_factory_get_schema(stream_factory_ptr, data.schema_root);
@@ -244,11 +243,7 @@ unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData
 }
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	if (bind_data.number_of_rows <= 0 || ClientConfig::GetConfig(context).verify_parallelism) {
-		return context.db->NumberOfThreads();
-	}
-	return ((bind_data.number_of_rows + bind_data.rows_per_thread - 1) / bind_data.rows_per_thread) + 1;
+	return context.db->NumberOfThreads();
 }
 
 bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p, ArrowScanLocalState &state,
@@ -314,28 +309,15 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 }
 
 unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContext &context, const FunctionData *data) {
-	auto &bind_data = (ArrowScanFunctionData &)*data;
-	return make_unique<NodeStatistics>(bind_data.number_of_rows, bind_data.number_of_rows);
-}
-
-double ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p,
-                                         const GlobalTableFunctionState *global_state) {
-	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	if (bind_data.number_of_rows == 0) {
-		return 100;
-	}
-	auto percentage = bind_data.lines_read * 100.0 / bind_data.number_of_rows;
-	return percentage;
+	return make_unique<NodeStatistics>();
 }
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction arrow("arrow_scan",
-	                    {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER, LogicalType::UBIGINT},
+	TableFunction arrow("arrow_scan", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
 	                    ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow.cardinality = ArrowScanCardinality;
 	arrow.projection_pushdown = true;
 	arrow.filter_pushdown = true;
-	arrow.table_scan_progress = ArrowProgress;
 	set.AddFunction(arrow);
 }
 

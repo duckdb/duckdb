@@ -67,12 +67,12 @@ SELECT k, l FROM integers WHERE i>497832 LIMIT 5 OFFSET 1000000;
 ----
 
 # IN-clause (semi join)
-query II
+query II sort
 SELECT k, l FROM integers WHERE i IN (SELECT * FROM other_table)
 ----
-[NULL, 338, NULL]	{'i': 337}
 [94824, NULL, 94826]	{'i': NULL}
 [NULL, 177980, NULL]	{'i': 177979}
+[NULL, 338, NULL]	{'i': 337}
 [NULL, 477980, NULL]	{'i': 477979}
 
 query II

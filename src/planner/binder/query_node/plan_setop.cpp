@@ -1,6 +1,6 @@
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
@@ -64,18 +64,43 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	auto left_node = node.left_binder->CreatePlan(*node.left);
 	auto right_node = node.right_binder->CreatePlan(*node.right);
 
+	// Add a new projection to child node
+	D_ASSERT(node.left_reorder_exprs.size() == node.right_reorder_exprs.size());
+	if (!node.left_reorder_exprs.empty()) {
+		D_ASSERT(node.setop_type == SetOperationType::UNION_BY_NAME);
+		vector<LogicalType> left_types;
+		vector<LogicalType> right_types;
+		// We are going to add a new projection operator, so collect the type
+		// of reorder exprs in order to call CastLogicalOperatorToTypes()
+		for (idx_t i = 0; i < node.left_reorder_exprs.size(); ++i) {
+			left_types.push_back(node.left_reorder_exprs[i]->return_type);
+			right_types.push_back(node.right_reorder_exprs[i]->return_type);
+		}
+
+		auto left_projection = make_unique<LogicalProjection>(GenerateTableIndex(), move(node.left_reorder_exprs));
+		left_projection->children.push_back(move(left_node));
+		left_node = move(left_projection);
+
+		auto right_projection = make_unique<LogicalProjection>(GenerateTableIndex(), move(node.right_reorder_exprs));
+		right_projection->children.push_back(move(right_node));
+		right_node = move(right_projection);
+
+		left_node = CastLogicalOperatorToTypes(left_types, node.types, move(left_node));
+		right_node = CastLogicalOperatorToTypes(right_types, node.types, move(right_node));
+	} else {
+		left_node = CastLogicalOperatorToTypes(node.left->types, node.types, move(left_node));
+		right_node = CastLogicalOperatorToTypes(node.right->types, node.types, move(right_node));
+	}
+
 	// check if there are any unplanned subqueries left in either child
 	has_unplanned_subqueries =
 	    node.left_binder->has_unplanned_subqueries || node.right_binder->has_unplanned_subqueries;
-
-	// for both the left and right sides, cast them to the same types
-	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, move(left_node));
-	right_node = CastLogicalOperatorToTypes(node.right->types, node.types, move(right_node));
 
 	// create actual logical ops for setops
 	LogicalOperatorType logical_type;
 	switch (node.setop_type) {
 	case SetOperationType::UNION:
+	case SetOperationType::UNION_BY_NAME:
 		logical_type = LogicalOperatorType::LOGICAL_UNION;
 		break;
 	case SetOperationType::EXCEPT:
@@ -86,6 +111,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		logical_type = LogicalOperatorType::LOGICAL_INTERSECT;
 		break;
 	}
+
 	auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), move(left_node), move(right_node),
 	                                             logical_type);
 

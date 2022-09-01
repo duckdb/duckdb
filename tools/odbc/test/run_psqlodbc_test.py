@@ -23,8 +23,23 @@ parser.add_argument('--no-trace', dest='notrace', action='store_const', const=Tr
 parser.add_argument('--no-exit', dest='noexit', action='store_const', const=True, help='Do not exit on test failure')
 parser.add_argument('--debugger', dest='debugger', default=None, choices=['lldb', 'gdb'], help='Debugger to attach (if any). If set, will set up the environment and give you a command to run with the debugger.')
 
-
 args = parser.parse_args()
+
+build_config = 'debug'
+if args.release is not None:
+    build_config = 'release'
+
+odbc_build_dir = os.path.join(args.psqlodbcdir, 'build', build_config)
+odbc_reset = os.path.join(odbc_build_dir, 'reset-db')
+odbc_test = os.path.join(odbc_build_dir, 'psql_odbc_test')
+
+def reset_db():
+	try_remove(args.tracefile)
+	try_remove(os.path.join(args.psqlodbcdir, 'contrib_regression'))
+	try_remove(os.path.join(args.psqlodbcdir, 'contrib_regression.wal'))
+
+	command = odbc_reset + ' < sampletables.sql'
+	syscall(command, 'Failed to reset db')
 
 def print_trace_and_exit():
     if args.notrace is None:
@@ -42,9 +57,6 @@ def syscall(arg, error, print_trace=True):
         exit(1)
 
 
-build_config = 'debug'
-if args.release is not None:
-    build_config = 'release'
 
 if args.build_psqlodbc is not None:
     if not os.path.isdir('psqlodbc'):
@@ -94,17 +106,9 @@ os.chdir(args.psqlodbcdir)
 
 os.environ['PSQLODBC_TEST_DSN'] = 'DuckDB'
 
-try_remove(args.tracefile)
-try_remove(os.path.join(args.psqlodbcdir, 'contrib_regression'))
-try_remove(os.path.join(args.psqlodbcdir, 'contrib_regression.wal'))
+reset_db()
 
-odbc_build_dir = os.path.join(args.psqlodbcdir, 'build', build_config)
-odbc_reset = os.path.join(odbc_build_dir, 'reset-db')
-odbc_test = os.path.join(odbc_build_dir, 'psql_odbc_test')
 test_list_file = os.path.join(args.duckdbdir, 'tools', 'odbc', 'test', 'psql_supported_tests')
-
-syscall(odbc_reset + ' < sampletables.sql', 'Failed to reset db')
-
 test_list = []
 if args.test is None:
     # all tests: read from list
@@ -112,6 +116,8 @@ if args.test is None:
         test_list = [x.strip() for x in f.readlines() if len(x.strip()) > 0]
 else:
     test_list = [args.test]
+
+odbc_test = os.path.join(odbc_build_dir, 'psql_odbc_test')
 
 if args.debugger is not None:
     argstart = '--args'

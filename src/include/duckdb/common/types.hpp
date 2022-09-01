@@ -141,50 +141,50 @@ public:
 	int64_t upper;
 
 public:
-	hugeint_t() = default;
-	hugeint_t(int64_t value); // NOLINT: Allow implicit conversion from `int64_t`
-	hugeint_t(const hugeint_t &rhs) = default;
-	hugeint_t(hugeint_t &&rhs) = default;
-	hugeint_t &operator=(const hugeint_t &rhs) = default;
-	hugeint_t &operator=(hugeint_t &&rhs) = default;
+	DUCKDB_API hugeint_t() = default;
+	DUCKDB_API hugeint_t(int64_t value); // NOLINT: Allow implicit conversion from `int64_t`
+	DUCKDB_API hugeint_t(const hugeint_t &rhs) = default;
+	DUCKDB_API hugeint_t(hugeint_t &&rhs) = default;
+	DUCKDB_API hugeint_t &operator=(const hugeint_t &rhs) = default;
+	DUCKDB_API hugeint_t &operator=(hugeint_t &&rhs) = default;
 
 	DUCKDB_API string ToString() const;
 
 	// comparison operators
-	bool operator==(const hugeint_t &rhs) const;
-	bool operator!=(const hugeint_t &rhs) const;
-	bool operator<=(const hugeint_t &rhs) const;
-	bool operator<(const hugeint_t &rhs) const;
-	bool operator>(const hugeint_t &rhs) const;
-	bool operator>=(const hugeint_t &rhs) const;
+	DUCKDB_API bool operator==(const hugeint_t &rhs) const;
+	DUCKDB_API bool operator!=(const hugeint_t &rhs) const;
+	DUCKDB_API bool operator<=(const hugeint_t &rhs) const;
+	DUCKDB_API bool operator<(const hugeint_t &rhs) const;
+	DUCKDB_API bool operator>(const hugeint_t &rhs) const;
+	DUCKDB_API bool operator>=(const hugeint_t &rhs) const;
 
 	// arithmetic operators
-	hugeint_t operator+(const hugeint_t &rhs) const;
-	hugeint_t operator-(const hugeint_t &rhs) const;
-	hugeint_t operator*(const hugeint_t &rhs) const;
-	hugeint_t operator/(const hugeint_t &rhs) const;
-	hugeint_t operator%(const hugeint_t &rhs) const;
-	hugeint_t operator-() const;
+	DUCKDB_API hugeint_t operator+(const hugeint_t &rhs) const;
+	DUCKDB_API hugeint_t operator-(const hugeint_t &rhs) const;
+	DUCKDB_API hugeint_t operator*(const hugeint_t &rhs) const;
+	DUCKDB_API hugeint_t operator/(const hugeint_t &rhs) const;
+	DUCKDB_API hugeint_t operator%(const hugeint_t &rhs) const;
+	DUCKDB_API hugeint_t operator-() const;
 
 	// bitwise operators
-	hugeint_t operator>>(const hugeint_t &rhs) const;
-	hugeint_t operator<<(const hugeint_t &rhs) const;
-	hugeint_t operator&(const hugeint_t &rhs) const;
-	hugeint_t operator|(const hugeint_t &rhs) const;
-	hugeint_t operator^(const hugeint_t &rhs) const;
-	hugeint_t operator~() const;
+	DUCKDB_API hugeint_t operator>>(const hugeint_t &rhs) const;
+	DUCKDB_API hugeint_t operator<<(const hugeint_t &rhs) const;
+	DUCKDB_API hugeint_t operator&(const hugeint_t &rhs) const;
+	DUCKDB_API hugeint_t operator|(const hugeint_t &rhs) const;
+	DUCKDB_API hugeint_t operator^(const hugeint_t &rhs) const;
+	DUCKDB_API hugeint_t operator~() const;
 
 	// in-place operators
-	hugeint_t &operator+=(const hugeint_t &rhs);
-	hugeint_t &operator-=(const hugeint_t &rhs);
-	hugeint_t &operator*=(const hugeint_t &rhs);
-	hugeint_t &operator/=(const hugeint_t &rhs);
-	hugeint_t &operator%=(const hugeint_t &rhs);
-	hugeint_t &operator>>=(const hugeint_t &rhs);
-	hugeint_t &operator<<=(const hugeint_t &rhs);
-	hugeint_t &operator&=(const hugeint_t &rhs);
-	hugeint_t &operator|=(const hugeint_t &rhs);
-	hugeint_t &operator^=(const hugeint_t &rhs);
+	DUCKDB_API hugeint_t &operator+=(const hugeint_t &rhs);
+	DUCKDB_API hugeint_t &operator-=(const hugeint_t &rhs);
+	DUCKDB_API hugeint_t &operator*=(const hugeint_t &rhs);
+	DUCKDB_API hugeint_t &operator/=(const hugeint_t &rhs);
+	DUCKDB_API hugeint_t &operator%=(const hugeint_t &rhs);
+	DUCKDB_API hugeint_t &operator>>=(const hugeint_t &rhs);
+	DUCKDB_API hugeint_t &operator<<=(const hugeint_t &rhs);
+	DUCKDB_API hugeint_t &operator&=(const hugeint_t &rhs);
+	DUCKDB_API hugeint_t &operator|=(const hugeint_t &rhs);
+	DUCKDB_API hugeint_t &operator^=(const hugeint_t &rhs);
 };
 
 struct string_t;

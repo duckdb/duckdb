@@ -13,11 +13,13 @@
 
 namespace duckdb {
 
-struct ListFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
 struct HistogramFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 	static AggregateFunction GetHistogramUnorderedMap(LogicalType &type);
 };
+
+struct ListFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

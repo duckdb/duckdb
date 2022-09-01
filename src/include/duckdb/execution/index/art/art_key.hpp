@@ -20,6 +20,8 @@ class Key {
 public:
 	Key(unique_ptr<data_t[]> data, idx_t len);
 
+	explicit Key(idx_t len);
+
 	idx_t len;
 	unique_ptr<data_t[]> data;
 

@@ -35,7 +35,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 		// change table name
 
 		// get the table and schema
-		string schema = DEFAULT_SCHEMA;
+		string schema = INVALID_SCHEMA;
 		string table;
 		D_ASSERT(stmt->relation->relname);
 		if (stmt->relation->relname) {
@@ -53,7 +53,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 		// change view name
 
 		// get the view and schema
-		string schema = DEFAULT_SCHEMA;
+		string schema = INVALID_SCHEMA;
 		string view;
 		D_ASSERT(stmt->relation->relname);
 		if (stmt->relation->relname) {

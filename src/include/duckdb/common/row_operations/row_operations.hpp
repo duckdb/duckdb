@@ -49,8 +49,11 @@ struct RowOperations {
 	static void Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,
 	                    RowDataCollection &string_heap, const SelectionVector &sel, idx_t count);
 	//! Gather a single column.
+	//! If heap_ptr is not null, then the data is assumed to contain swizzled pointers,
+	//! which will be unswizzled in memory.
 	static void Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
-	                   const idx_t count, const idx_t col_offset, const idx_t col_no, const idx_t build_size = 0);
+	                   const idx_t count, const RowLayout &layout, const idx_t col_no, const idx_t build_size = 0,
+	                   data_ptr_t heap_ptr = nullptr);
 	//! Full Scan an entire columns
 	static void FullScanColumn(const RowLayout &layout, Vector &rows, Vector &col, idx_t count, idx_t col_idx);
 
@@ -102,6 +105,10 @@ struct RowOperations {
 	//! Swizzles the base pointer of each row to offset within heap block
 	static void SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
 	                               const idx_t count, const idx_t base_offset = 0);
+	//! Copies 'count' heap rows that are pointed to by the rows at 'row_ptr' to 'heap_ptr' and swizzles the pointers
+	static void CopyHeapAndSwizzle(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+	                               data_ptr_t heap_ptr, const idx_t count);
+
 	//! Unswizzles the base offset within heap block the rows to pointers
 	static void UnswizzleHeapPointer(const RowLayout &layout, const data_ptr_t base_row_ptr,
 	                                 const data_ptr_t base_heap_ptr, const idx_t count);

@@ -119,11 +119,11 @@ static void TemplatedMatchType(UnifiedVectorFormat &col, Vector &rows, Selection
 }
 
 template <class OP, bool NO_MATCH_SEL>
-static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count, const idx_t col_offset,
+static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count, const RowLayout &layout,
                                  const idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
 	// Gather a dense Vector containing the column values being matched
 	Vector key(col.GetType());
-	RowOperations::Gather(rows, sel, key, *FlatVector::IncrementalSelectionVector(), count, col_offset, col_no);
+	RowOperations::Gather(rows, sel, key, *FlatVector::IncrementalSelectionVector(), count, layout, col_no);
 
 	// Densify the input column
 	Vector sliced(col, sel, count);
@@ -203,7 +203,7 @@ static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const RowLay
 	case PhysicalType::LIST:
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
-		TemplatedMatchNested<OP, NO_MATCH_SEL>(vec, rows, sel, count, col_offset, col_no, no_match, no_match_count);
+		TemplatedMatchNested<OP, NO_MATCH_SEL>(vec, rows, sel, count, layout, col_no, no_match, no_match_count);
 		break;
 	default:
 		throw InternalException("Unsupported column type for RowOperations::Match");

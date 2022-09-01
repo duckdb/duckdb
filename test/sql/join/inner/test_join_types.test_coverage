@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+pragma verify_external
+
 # numeric types
 
 foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
