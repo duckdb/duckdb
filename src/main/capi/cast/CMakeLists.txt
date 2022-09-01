@@ -1,4 +1,5 @@
-add_library_unity(duckdb_main_capi_cast OBJECT utils-c.cpp to_decimal-c.cpp)
+add_library_unity(duckdb_main_capi_cast OBJECT utils-c.cpp to_decimal-c.cpp
+                  from_decimal-c.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_capi_cast>

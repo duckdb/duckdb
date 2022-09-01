@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/main/capi/cast/utils.hpp"
-#include "duckdb/main/capi/cast/from_decimal.hpp"
-
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"
+
+#include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/main/capi/cast/utils.hpp"
+#include "duckdb/main/capi/cast/from_decimal.hpp"
 
 namespace duckdb {
 
@@ -62,14 +62,15 @@ RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row) {
 		return TryCastCInternal<char *, RESULT_TYPE, FromCStringCastWrapper<OP>>(result, col, row);
 	case DUCKDB_TYPE_BLOB:
 		return TryCastCInternal<duckdb_blob, RESULT_TYPE, FromCBlobCastWrapper>(result, col, row);
-	default: // LCOV_EXCL_START
+	default: { // LCOV_EXCL_START
 		// invalid type for C to C++ conversion
 		D_ASSERT(0);
 		return FetchDefaultValue::Operation<RESULT_TYPE>();
 	} // LCOV_EXCL_STOP
+	}
 }
+
+} // namespace duckdb
 
 duckdb_decimal GetInternalAsDecimalCastSwitch(duckdb_result *result, idx_t col, idx_t row, uint8_t width,
                                               uint8_t scale);
-
-} // namespace duckdb

@@ -9,7 +9,6 @@
 using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::FetchDefaultValue;
-using duckdb::GetInternalAsDecimalCastSwitch;
 using duckdb::GetInternalCValue;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
