@@ -1,13 +1,13 @@
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_delete.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/planner/operator/logical_cross_product.hpp"
 
 namespace duckdb {
 
@@ -64,6 +64,15 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		filter->AddChild(move(root));
 		root = move(filter);
 	}
+
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> gcols;
+	for (idx_t i = 0; i < table->columns.size(); i++) {
+		auto &col = table->columns[i];
+		if (col.Generated()) {
+			gcols[col.Name()] = col.GeneratedExpression().Copy();
+		}
+	}
+
 	// create the delete node
 	auto del = make_unique<LogicalDelete>(table);
 	del->AddChild(move(root));
@@ -81,7 +90,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 		unique_ptr<LogicalOperator> del_as_logicaloperator = move(del);
 		return BindReturning(move(stmt.returning_list), table, update_table_index, move(del_as_logicaloperator),
-		                     move(result));
+		                     move(result), gcols);
 	} else {
 		result.plan = move(del);
 		result.names = {"Count"};

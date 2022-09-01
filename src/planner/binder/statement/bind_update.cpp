@@ -1,5 +1,8 @@
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression_binder/update_binder.hpp"
@@ -8,12 +11,10 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
-#include "duckdb/planner/constraints/bound_check_constraint.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/tableref/bound_crossproductref.hpp"
+#include "duckdb/storage/data_table.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -149,6 +150,14 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		// update of persistent table: not read only!
 		properties.read_only = false;
 	}
+
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> gcols;
+	for (idx_t i = 0; i < table->columns.size(); i++) {
+		auto &col = table->columns[i];
+		if (col.Generated()) {
+			gcols[col.Name()] = col.GeneratedExpression().Copy();
+		}
+	}
 	auto update = make_unique<LogicalUpdate>(table);
 
 	// set return_chunk boolean early because it needs uses update_is_del_and_insert logic
@@ -224,7 +233,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = move(update);
 
 		return BindReturning(move(stmt.returning_list), table, update_table_index, move(update_as_logicaloperator),
-		                     move(result));
+		                     move(result), gcols);
 
 	} else {
 		update->table_index = 0;

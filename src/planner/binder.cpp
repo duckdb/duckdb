@@ -401,15 +401,16 @@ string Binder::FormatErrorRecursive(idx_t query_location, const string &message,
 	return context.FormatErrorRecursive(message, values);
 }
 
-void RewriteGeneratedColumn(unique_ptr<ParsedExpression> &expr,
-                            case_insensitive_map_t<unique_ptr<ParsedExpression>> &gcols) {
+static void RewriteGeneratedColumn(unique_ptr<ParsedExpression> &expr,
+                                   case_insensitive_map_t<unique_ptr<ParsedExpression>> &gcols) {
 	if (expr->type == ExpressionType::COLUMN_REF) {
 		auto &column_ref = (ColumnRefExpression &)(*expr);
 		auto &name = column_ref.GetColumnName();
 		// it's a generated column
 		auto iter = gcols.find(name);
 		if (iter != gcols.end()) {
-			expr = move(iter->second);
+			// Copy here,
+			expr = iter->second->Copy();
 			return;
 		}
 	}
@@ -449,6 +450,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 			binder->bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr, generated_star_list);
 
 			for (auto &star_column : generated_star_list) {
+				RewriteGeneratedColumn(star_column, gcols);
 				auto star_expr = returning_binder.Bind(star_column, &result_type);
 				result.types.push_back(result_type);
 				result.names.push_back(star_expr->GetName());
