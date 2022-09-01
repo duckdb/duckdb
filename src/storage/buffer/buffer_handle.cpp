@@ -38,11 +38,6 @@ data_ptr_t BufferHandle::Ptr() {
 	return node->buffer;
 }
 
-block_id_t BufferHandle::GetBlockId() const {
-	D_ASSERT(handle);
-	return handle->BlockId();
-}
-
 void BufferHandle::Destroy() {
 	if (!handle || !IsValid()) {
 		return;
