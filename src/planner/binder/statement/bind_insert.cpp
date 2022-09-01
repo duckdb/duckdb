@@ -44,6 +44,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	idx_t generated_column_count = 0;
 	vector<idx_t> named_column_map;
+    case_insensitive_map_t<unique_ptr<ParsedExpression>> gcols;
 	if (!stmt.columns.empty()) {
 		// insertion statement specifies column list
 
@@ -68,6 +69,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			auto &col = table->columns[i];
 			if (col.Generated()) {
+                gcols[col.Name()] = col.GeneratedExpression().Copy();
 				generated_column_count++;
 			}
 			auto entry = column_name_map.find(col.Name());
@@ -83,6 +85,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			auto &col = table->columns[i];
 			if (col.Generated()) {
+                gcols[col.Name()] = col.GeneratedExpression().Copy();
 				generated_column_count++;
 				continue;
 			}
@@ -155,7 +158,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		unique_ptr<LogicalOperator> index_as_logicaloperator = move(insert);
 
 		return BindReturning(move(stmt.returning_list), table, insert_table_index, move(index_as_logicaloperator),
-		                     move(result));
+		                     move(result), gcols);
 	} else {
 		D_ASSERT(result.types.size() == result.names.size());
 		result.plan = move(insert);

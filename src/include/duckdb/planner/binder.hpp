@@ -8,18 +8,18 @@
 
 #pragma once
 
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/bound_statement.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/result_modifier.hpp"
-#include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -227,7 +227,7 @@ private:
 
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
 	                             idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
-	                             BoundStatement result);
+	                             BoundStatement result, case_insensitive_map_t<unique_ptr<ParsedExpression>> &gcols);
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry *macro_func, idx_t depth);
 

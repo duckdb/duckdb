@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -400,9 +401,31 @@ string Binder::FormatErrorRecursive(idx_t query_location, const string &message,
 	return context.FormatErrorRecursive(message, values);
 }
 
+void RewriteGeneratedColumn(unique_ptr<ParsedExpression> &expr,
+                            case_insensitive_map_t<unique_ptr<ParsedExpression>> &gcols) {
+	if (expr->type == ExpressionType::COLUMN_REF) {
+		auto &column_ref = (ColumnRefExpression &)(*expr);
+		auto &name = column_ref.GetColumnName();
+		// it's a generated column
+		auto iter = gcols.find(name);
+		if (iter != gcols.end()) {
+			expr = move(iter->second);
+			return;
+		}
+	}
+
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { RewriteGeneratedColumn(child, gcols); });
+}
+
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
                                      idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
-                                     BoundStatement result) {
+                                     BoundStatement result,
+                                     case_insensitive_map_t<unique_ptr<ParsedExpression>> &gcols) {
+
+	for (auto &returning_expr : returning_list) {
+		RewriteGeneratedColumn(returning_expr, gcols);
+	}
 
 	vector<LogicalType> types;
 	vector<std::string> names;
