@@ -41,8 +41,8 @@ describe("data type support", function () {
       assert(res.length === 2);
       assert(Object.entries(res[0]).length === 8);
       assert(Object.entries(res[1]).length === 8);
-      assert(Object.entries(res[0]).every((v, i) => v[1] == minValues[i]))
-      assert(Object.entries(res[1]).every((v, i) => v[1] == maxValues[i]))
+      assert.deepEqual(Object.entries(res[0]).map(v => v[1]), minValues);
+      assert.deepEqual(Object.entries(res[1]).map(v => v[1]), maxValues);
       done();
     });
   });
