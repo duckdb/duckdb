@@ -25,7 +25,7 @@ public:
 	//! The offset from the start to begin emitting elements
 	unique_ptr<Expression> offset;
 
-	bool force_stream_and_no_parallel = false;
+	bool force_stream_and_parallel = false;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

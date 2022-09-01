@@ -41,7 +41,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					// when the right child has data, return the left child
 					// when the right child has no data, return an empty set
 					auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
-					limit->force_stream_and_no_parallel = true;
+					limit->force_stream_and_parallel = true;
 					limit->AddChild(move(join.children[1]));
 					auto cross_product = LogicalCrossProduct::Create(move(join.children[0]), move(limit));
 					*node_ptr = move(cross_product);
@@ -78,7 +78,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						// when the right child has data, return the left child
 						// when the right child has no data, return an empty set
 						auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
-						limit->force_stream_and_no_parallel = true;
+						limit->force_stream_and_parallel = true;
 						limit->AddChild(move(join.children[1]));
 						auto cross_product = LogicalCrossProduct::Create(move(join.children[0]), move(limit));
 						*node_ptr = move(cross_product);
