@@ -570,6 +570,13 @@ DUCKDB_API duckdb_hugeint duckdb_value_hugeint(duckdb_result *result, idx_t col,
 DUCKDB_API duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
+ * returns: The result as a duckdb_decimal value with the given properties, at the specified location, or 0 if the value
+ * cannot be converted.
+ */
+DUCKDB_API duckdb_decimal duckdb_value_decimal_as_properties(duckdb_result *result, idx_t col, idx_t row, uint8_t width,
+                                                             uint8_t scale);
+
+/*!
  * returns: The uint8_t value at the specified location, or 0 if the value cannot be converted.
  */
 DUCKDB_API uint8_t duckdb_value_uint8(duckdb_result *result, idx_t col, idx_t row);

@@ -98,6 +98,10 @@ public:
 		throw NotImplementedException("Unimplemented type for fetch");
 	}
 
+	duckdb_decimal FetchAsDecimal(idx_t col, idx_t row, uint8_t width, uint8_t scale) {
+		return duckdb_value_decimal_as_properties(&result, col, row, width, scale);
+	}
+
 	bool IsNull(idx_t col, idx_t row) {
 		auto nullmask_ptr = duckdb_nullmask_data(&result, col);
 		REQUIRE(duckdb_value_is_null(&result, col, row) == nullmask_ptr[row]);
