@@ -27,7 +27,7 @@ struct EvictionQueue;
 //! be used by the database internally.
 //
 //! BlockIds are NOT unique within the context of a BufferManager. A buffer manager
-//! can be shared by many block registries.
+//! can be shared by many BlockManagers.
 class BufferManager {
 	friend class BufferHandle;
 	friend class BlockHandle;

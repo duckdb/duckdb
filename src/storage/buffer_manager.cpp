@@ -68,8 +68,7 @@ unique_ptr<FileBuffer> AllocateManagedBuffer(DatabaseInstance &db, unique_ptr<Fi
                                                 idx_t size) {
 	if (reusable_buffer) {
 		auto tmp = move(reusable_buffer);
-		auto buffer = make_unique<FileBuffer>(*tmp, FileBufferType::MANAGED_BUFFER);
-		return buffer;
+		return make_unique<FileBuffer>(*tmp, FileBufferType::MANAGED_BUFFER);
 	} else {
 		// no re-usable buffer: allocate a new buffer
 		return make_unique<FileBuffer>(Allocator::Get(db), FileBufferType::MANAGED_BUFFER, size);
