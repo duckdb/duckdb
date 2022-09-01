@@ -64,23 +64,15 @@ unique_ptr<Block> AllocateBlock(Allocator &allocator, unique_ptr<FileBuffer> reu
 	}
 }
 
-unique_ptr<ManagedBuffer> AllocateManagedBuffer(DatabaseInstance &db, unique_ptr<FileBuffer> reusable_buffer,
-                                                idx_t size, bool can_destroy, block_id_t id) {
+unique_ptr<FileBuffer> AllocateManagedBuffer(DatabaseInstance &db, unique_ptr<FileBuffer> reusable_buffer,
+                                                idx_t size) {
 	if (reusable_buffer) {
-		// re-usable buffer: re-use it
-		if (reusable_buffer->type == FileBufferType::MANAGED_BUFFER) {
-			// we can reuse the buffer entirely
-			auto &managed = (ManagedBuffer &)*reusable_buffer;
-			managed.id = id;
-			managed.can_destroy = can_destroy;
-			return unique_ptr_cast<FileBuffer, ManagedBuffer>(move(reusable_buffer));
-		}
-		auto buffer = make_unique<ManagedBuffer>(db, *reusable_buffer, can_destroy, id);
-		reusable_buffer.reset();
+		auto tmp = move(reusable_buffer);
+		auto buffer = make_unique<FileBuffer>(*tmp, FileBufferType::MANAGED_BUFFER);
 		return buffer;
 	} else {
 		// no re-usable buffer: allocate a new buffer
-		return make_unique<ManagedBuffer>(db, size, can_destroy, id);
+		return make_unique<FileBuffer>(Allocator::Get(db), FileBufferType::MANAGED_BUFFER, size);
 	}
 }
 
@@ -118,7 +110,7 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 
 	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
 		// temporary block that cannot be destroyed: write to temporary file
-		block_manager.buffer_manager.WriteTemporaryBuffer((ManagedBuffer &)*buffer);
+		block_manager.buffer_manager.WriteTemporaryBuffer(block_id, *buffer);
 	}
 	block_manager.buffer_manager.current_memory -= memory_usage;
 	state = BlockState::BLOCK_UNLOADED;
@@ -281,11 +273,10 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 		                           GetUsedMemory(), GetMaxMemory(), InMemoryWarning());
 	}
 
-	auto temp_id = ++temporary_id;
-	auto buffer = AllocateManagedBuffer(db, move(reusable_buffer), block_size, can_destroy, temp_id);
+	auto buffer = AllocateManagedBuffer(db, move(reusable_buffer), block_size);
 
 	// create a new block pointer for this block
-	return make_shared<BlockHandle>(*temp_block_manager, temp_id, move(buffer), can_destroy, block_size);
+	return make_shared<BlockHandle>(*temp_block_manager, ++temporary_id, move(buffer), can_destroy, block_size);
 }
 
 BufferHandle BufferManager::Allocate(idx_t block_size) {
@@ -455,10 +446,10 @@ void BufferManager::SetLimit(idx_t limit) {
 //===--------------------------------------------------------------------===//
 // Temporary File Management
 //===--------------------------------------------------------------------===//
-unique_ptr<ManagedBuffer> ReadTemporaryBufferInternal(DatabaseInstance &db, FileHandle &handle, idx_t position,
-                                                      idx_t size, block_id_t id,
+unique_ptr<FileBuffer> ReadTemporaryBufferInternal(DatabaseInstance &db, FileHandle &handle, idx_t position,
+                                                      idx_t size,
                                                       unique_ptr<FileBuffer> reusable_buffer) {
-	auto buffer = AllocateManagedBuffer(db, move(reusable_buffer), size, false, id);
+	auto buffer = AllocateManagedBuffer(db, move(reusable_buffer), size);
 	buffer->Read(handle, position);
 	return buffer;
 }
@@ -572,14 +563,14 @@ public:
 		return TemporaryFileIndex(file_index, block_index);
 	}
 
-	void WriteTemporaryFile(ManagedBuffer &buffer, TemporaryFileIndex index) {
+	void WriteTemporaryFile(FileBuffer &buffer, TemporaryFileIndex index) {
 		D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
 		buffer.Write(*handle, GetPositionInFile(index.block_index));
 	}
 
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, idx_t block_index,
 	                                           unique_ptr<FileBuffer> reusable_buffer) {
-		auto buffer = ReadTemporaryBufferInternal(db, *handle, GetPositionInFile(block_index), Storage::BLOCK_SIZE, id,
+		auto buffer = ReadTemporaryBufferInternal(db, *handle, GetPositionInFile(block_index), Storage::BLOCK_SIZE,
 		                                          move(reusable_buffer));
 		{
 			// remove the block (and potentially truncate the temp file)
@@ -651,7 +642,7 @@ public:
 		lock_guard<mutex> lock;
 	};
 
-	void WriteTemporaryBuffer(ManagedBuffer &buffer) {
+	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
 		D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
 		TemporaryFileIndex index;
 		TemporaryFileHandle *handle = nullptr;
@@ -676,8 +667,8 @@ public:
 
 				index = handle->TryGetBlockIndex();
 			}
-			D_ASSERT(used_blocks.find(buffer.id) == used_blocks.end());
-			used_blocks[buffer.id] = index;
+			D_ASSERT(used_blocks.find(block_id) == used_blocks.end());
+			used_blocks[block_id] = index;
 		}
 		D_ASSERT(handle);
 		D_ASSERT(index.IsValid());
@@ -787,16 +778,16 @@ void BufferManager::RequireTemporaryDirectory() {
 	}
 }
 
-void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
+void BufferManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
 	RequireTemporaryDirectory();
 	if (buffer.size == Storage::BLOCK_SIZE) {
-		temp_directory_handle->GetTempFile().WriteTemporaryBuffer(buffer);
+		temp_directory_handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;
 	}
 
 	D_ASSERT(buffer.size > Storage::BLOCK_SIZE);
 	// get the path to write to
-	auto path = GetTemporaryPath(buffer.id);
+	auto path = GetTemporaryPath(block_id);
 	// create the file and write the size followed by the buffer contents
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
@@ -818,7 +809,7 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id, unique_
 	handle->Read(&block_size, sizeof(idx_t), 0);
 
 	// now allocate a buffer of this size and read the data into that buffer
-	auto buffer = ReadTemporaryBufferInternal(db, *handle, sizeof(idx_t), block_size, id, move(reusable_buffer));
+	auto buffer = ReadTemporaryBufferInternal(db, *handle, sizeof(idx_t), block_size, move(reusable_buffer));
 
 	handle.reset();
 	DeleteTemporaryFile(id);

@@ -15,7 +15,6 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/storage/buffer/managed_buffer.hpp"
 #include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
@@ -88,7 +87,7 @@ private:
 	void PurgeQueue();
 
 	//! Write a temporary buffer to disk
-	void WriteTemporaryBuffer(ManagedBuffer &buffer);
+	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer);
 	//! Read a temporary buffer from disk
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer = nullptr);
 	//! Get the path of the temporary buffer
