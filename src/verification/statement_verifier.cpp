@@ -61,7 +61,7 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 		for (idx_t i = 0; i < expr_count; i++) {
 			D_ASSERT(!select_list[i]->Equals(nullptr));
 			// Run the ToString, to verify that it doesn't crash
-			auto str = select_list[i]->ToString();
+			select_list[i]->ToString();
 
 			if (select_list[i]->HasSubquery()) {
 				continue;
