@@ -748,8 +748,15 @@ function(build_loadable_extension NAME)
   set(FILES ${ARGV})
   # Remove name
   list(REMOVE_AT FILES 0)
-  # Remove ignore_warnings
-  list(REMOVE_AT FILES -1)
+  list(GET FILES -1 HAS_WARNING)
+  if(EXISTS "${HAS_WARNING}")
+    # Ignore Warnings was not set
+    set(IGNORE_WARNINGS OFF)
+  else()
+      # Remove ignore_warnings from FILES list
+      set(IGNORE_WARNINGS HAS_WARNING)
+    list(REMOVE_AT FILES -1)
+  endif()
 
   build_loadable_extension_directory(${NAME} extension/${NAME} ${FILES} ${IGNORE_WARNINGS})
 endfunction()

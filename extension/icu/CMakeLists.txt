@@ -22,8 +22,8 @@ set(ICU_EXTENSION_FILES
 add_library(icu_extension STATIC ${ICU_EXTENSION_FILES})
 link_threads(icu_extension)
 disable_target_warnings(icu_extension)
-set(IGNORE_WARNINGS ON)
-build_loadable_extension(icu ${ICU_EXTENSION_FILES} ${IGNORE_WARNINGS})
+
+build_loadable_extension(icu ${ICU_EXTENSION_FILES})
 install(
   TARGETS icu_extension
   EXPORT "${DUCKDB_EXPORT_SET}"
