@@ -34,9 +34,8 @@ void PreservedError::Throw(const string &prepended_message) const {
 	if (!prepended_message.empty()) {
 		string new_message = prepended_message + raw_message;
 		Exception::ThrowAsTypeWithMessage(type, new_message);
-	} else {
-		Exception::ThrowAsTypeWithMessage(type, raw_message);
 	}
+	Exception::ThrowAsTypeWithMessage(type, raw_message);
 }
 
 const ExceptionType &PreservedError::Type() const {
