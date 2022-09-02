@@ -387,6 +387,10 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		yyjson_mut_doc_set_root(*doc, objs[i]);
 		objects[i] = JSONCommon::WriteDoc(*doc, result);
 	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -414,6 +418,10 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 		yyjson_mut_doc_set_root(*doc, arrs[i]);
 		objects[i] = JSONCommon::WriteDoc(*doc, result);
 	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -437,6 +445,10 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		} else {
 			result_validity.SetInvalid(i);
 		}
+	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

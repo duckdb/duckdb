@@ -106,7 +106,12 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_validity = FlatVector::Validity(result);
 
-	args.Flatten();
+	for (auto &v : args.data) {
+		if (v.GetVectorType() != VectorType::FLAT_VECTOR && v.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			v.Flatten(count);
+		}
+	}
+
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
 		result_validity.SetInvalid(0);
 		return;
@@ -228,6 +233,10 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 
 	result.Reference(lists);
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,

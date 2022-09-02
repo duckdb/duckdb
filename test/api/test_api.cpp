@@ -20,6 +20,15 @@ TEST_CASE("Test correlated subquery", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 }
 
+TEST_CASE("Test comment in CPP API", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	con.SendQuery("--ups");
+	//! Should not crash
+	REQUIRE(1);
+}
+
 TEST_CASE("Test using connection after database is gone", "[api]") {
 	auto db = make_unique<DuckDB>(nullptr);
 	auto conn = make_unique<Connection>(*db);
