@@ -10,6 +10,16 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test correlated subquery", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	auto result = con.SendQuery("SELECT (0 IS DISTINCT FROM 2) = 0;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	result = con.SendQuery("SELECT CASE 8 WHEN(0 IS DISTINCT FROM 0) THEN 2 END;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+}
+
 TEST_CASE("Test using connection after database is gone", "[api]") {
 	auto db = make_unique<DuckDB>(nullptr);
 	auto conn = make_unique<Connection>(*db);
