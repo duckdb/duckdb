@@ -401,22 +401,37 @@ string Binder::FormatErrorRecursive(idx_t query_location, const string &message,
 	return context.FormatErrorRecursive(message, values);
 }
 
-static void RewriteGeneratedColumn(unique_ptr<ParsedExpression> &expr,
+static void RewriteGeneratedColumn(ReturningBinder &binder, unique_ptr<ParsedExpression> &expr,
                                    case_insensitive_map_t<unique_ptr<ParsedExpression>> &gcols) {
 	if (expr->type == ExpressionType::COLUMN_REF) {
 		auto &column_ref = (ColumnRefExpression &)(*expr);
-		auto &name = column_ref.GetColumnName();
-		// it's a generated column
-		auto iter = gcols.find(name);
-		if (iter != gcols.end()) {
-			// Copy here,
-			expr = iter->second->Copy();
-			return;
+		string error_message;
+		auto new_expr = binder.QualifyColumnName(column_ref, error_message);
+		if (new_expr) {
+			if (!expr->alias.empty()) {
+				new_expr->alias = expr->alias;
+			}
+			expr = move(new_expr);
+			// if new_expr is column ref, we rewrite generated column here
+			// struct_pack, struct_extract, we rewrite them recursively
+			if (expr->type == ExpressionType::COLUMN_REF) {
+				auto &new_column_ref = (ColumnRefExpression &)(*expr);
+				D_ASSERT(new_column_ref.IsQualified());
+				// expr is still a column expression
+				string name = new_column_ref.GetColumnName();
+				// it's a generated column
+				auto iter = gcols.find(name);
+				if (iter != gcols.end()) {
+					// Copy here,
+					expr = iter->second->Copy();
+					expr->alias = move(name);
+				}
+			}
 		}
 	}
 
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { RewriteGeneratedColumn(child, gcols); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { RewriteGeneratedColumn(binder, child, gcols); });
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
@@ -446,14 +461,14 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 			binder->bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr, generated_star_list);
 
 			for (auto &star_column : generated_star_list) {
-				RewriteGeneratedColumn(star_column, gcols);
+				RewriteGeneratedColumn(returning_binder, star_column, gcols);
 				auto star_expr = returning_binder.Bind(star_column, &result_type);
 				result.types.push_back(result_type);
 				result.names.push_back(star_expr->GetName());
 				projection_expressions.push_back(move(star_expr));
 			}
 		} else {
-			RewriteGeneratedColumn(returning_expr, gcols);
+			RewriteGeneratedColumn(returning_binder, returning_expr, gcols);
 			auto expr = returning_binder.Bind(returning_expr, &result_type);
 			result.names.push_back(expr->GetName());
 			result.types.push_back(result_type);
