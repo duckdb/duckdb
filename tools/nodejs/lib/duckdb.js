@@ -92,6 +92,7 @@ QueryResult.prototype[Symbol.asyncIterator] = async function*() {
 
 
 /**
+ * Run a SQL statement and trigger a callback when done
  * @arg sql
  * @param {...*} params
  * @param callback
@@ -103,6 +104,7 @@ Connection.prototype.run = function (sql) {
 }
 
 /**
+ * Run a SQL query and triggers the callback once for all result rows
  * @arg sql
  * @param {...*} params
  * @param callback
@@ -114,6 +116,7 @@ Connection.prototype.all = function (sql) {
 }
 
 /**
+ * Runs a SQL query and triggers the callback for each result row
  * @arg sql
  * @param {...*} params
  * @param callback
@@ -260,6 +263,7 @@ Connection.prototype.register = function (name, return_type, fun) {
 }
 
 /**
+ * Prepare a SQL query for execution
  * @method
  * @arg sql
  * @param {...*} params
@@ -268,6 +272,7 @@ Connection.prototype.register = function (name, return_type, fun) {
  */
 Connection.prototype.prepare;
 /**
+ * Execute a SQL query
  * @method
  * @arg sql
  * @param {...*} params
@@ -305,16 +310,28 @@ var default_connection = function (o) {
 
 
 /**
+ * Closes database instance
  * @method
  * @param callback
  * @return {void}
  */
-Database.prototype.close;
+Database.prototype.close = function() {
+    this.default_connection = null
+    this.close_internal.apply(this, arguments);
+};
 
 /**
+ * Internal method. Do not use, call Connection#close instead
  * @method
  * @param callback
- * TODO: what does this do?
+ * @return {void}
+ */
+Database.prototype.close_internal;
+
+/**
+ * Triggers callback when all scheduled database tasks have completed.
+ * @method
+ * @param callback
  * @return {void}
  */
 Database.prototype.wait;
@@ -336,6 +353,7 @@ Database.prototype.serialize;
 Database.prototype.parallelize;
 
 /**
+ * Create a new database connection
  * @method
  * @arg path the database to connect to, either a file path, or `:memory:`
  * @return {Connection}
@@ -343,7 +361,7 @@ Database.prototype.parallelize;
 Database.prototype.connect;
 
 /**
- * TODO: what does this do?
+ * Supposedly interrupt queries, but currently does not do anything.
  * @method
  * @param callback
  * @return {void}
@@ -351,6 +369,7 @@ Database.prototype.connect;
 Database.prototype.interrupt;
 
 /**
+ * Prepare a SQL query for execution
  * @arg sql
  * @return {Statement}
  */
@@ -359,6 +378,7 @@ Database.prototype.prepare = function () {
 }
 
 /**
+ * Convenience method for Connection#run using a built-in default connection
  * @arg sql
  * @param {...*} params
  * @param callback
@@ -370,6 +390,7 @@ Database.prototype.run = function () {
 }
 
 /**
+ * Convenience method for Connection#each using a built-in default connection
  * @arg sql
  * @param {...*} params
  * @param callback
@@ -381,6 +402,7 @@ Database.prototype.each = function () {
 }
 
 /**
+ * Convenience method for Connection#apply using a built-in default connection
  * @arg sql
  * @param {...*} params
  * @param callback
@@ -392,6 +414,7 @@ Database.prototype.all = function () {
 }
 
 /**
+ * Convenience method for Connection#exec using a built-in default connection
  * @arg sql
  * @param {...*} params
  * @param callback
@@ -403,9 +426,7 @@ Database.prototype.exec = function () {
 }
 
 /**
- * Register a User Defined Function
- *
- * Convenience method for Connection#register
+ * Convenience method for Connection#register using a built-in default connection
  * @arg name
  * @arg return_type
  * @arg fun
@@ -417,9 +438,7 @@ Database.prototype.register = function () {
 }
 
 /**
- * Unregister a User Defined Function
- *
- * Convenience method for Connection#unregister
+ * Convenience method for Connection#unregister using a built-in default connection
  * @arg name
  * @return {this}
  */
