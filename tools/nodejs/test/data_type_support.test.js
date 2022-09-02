@@ -26,9 +26,9 @@ describe("data type support", function () {
     const stmt = db.prepare("INSERT INTO integer_table VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
 
     // Numerical limits
-    signedMinValue = (bitWidth) => -(2**(bitWidth-1)-1)-1;
-    signedMaxValue = (bitWidth) => 2**(bitWidth-1)-1;
-    unsignedMaxValue = (bitWidth) => 2**(bitWidth)-1;
+    signedMinValue = (bitWidth) => Math.max(-(2**(bitWidth-1)-1)-1, Number.MIN_SAFE_INTEGER);
+    signedMaxValue = (bitWidth) => Math.min(2**(bitWidth-1)-1, Number.MAX_SAFE_INTEGER);
+    unsignedMaxValue = (bitWidth) => Math.min(2**(bitWidth)-1, Number.MAX_SAFE_INTEGER);
     let minValues = [signedMinValue(8), signedMinValue(16), signedMinValue(32), signedMinValue(64), 0, 0, 0, 0];
     let maxValues = [signedMinValue(8), signedMinValue(16), signedMinValue(32), signedMinValue(64), unsignedMaxValue(8), unsignedMaxValue(16), unsignedMaxValue(32), unsignedMaxValue(64)];
 
