@@ -15,9 +15,21 @@ void FillResult(Value &values, Vector &result, idx_t row) {
 	}
 
 	//! now set the pointer
-	auto &entry = ((list_entry_t *)result.GetData())[row];
+	auto &entry = ListVector::GetData(result)[row];
 	entry.length = list_values.size();
 	entry.offset = current_offset;
+}
+
+static bool ShouldCastKey(const LogicalType &map_key_type, const LogicalType &indexing_type) {
+	return map_key_type != LogicalTypeId::SQLNULL && map_key_type != indexing_type;
+}
+
+static Value GetKeyToLookFor(Vector &index_vector, idx_t row, const LogicalType &cast_to) {
+	auto key_value = index_vector.GetValue(row);
+	if (cast_to.id() != LogicalTypeId::SQLNULL) {
+		key_value = key_value.CastAs(cast_to);
+	}
+	return key_value;
 }
 
 static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -28,16 +40,18 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &map = args.data[0];
 	auto &key = args.data[1];
 
-	auto key_value = key.GetValue(0);
 	UnifiedVectorFormat offset_data;
 
 	auto &children = StructVector::GetEntries(map);
+	auto &map_key_type = ListType::GetChildType(children[0]->GetType());
+
+	bool should_cast = ShouldCastKey(map_key_type, key.GetType());
+	auto key_value = key.GetValue(0);
+
 	children[0]->ToUnifiedFormat(args.size(), offset_data);
-	auto &key_type = ListType::GetChildType(children[0]->GetType());
-	if (key_type != LogicalTypeId::SQLNULL) {
-		key_value = key_value.CastAs(key_type);
-	}
 	for (idx_t row = 0; row < args.size(); row++) {
+		idx_t row_index = offset_data.sel->get_index(row);
+		auto key_value = GetKeyToLookFor(key, row_index, should_cast ? map_key_type : LogicalType::SQLNULL);
 		auto offsets = ListVector::Search(*children[0], key_value, offset_data.sel->get_index(row));
 		auto values = ListVector::GetValuesFromOffsets(*children[1], offsets);
 		FillResult(values, result, row);

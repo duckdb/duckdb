@@ -1464,7 +1464,7 @@ vector<idx_t> ListVector::Search(Vector &list, const Value &key, idx_t row) {
 	vector<idx_t> offsets;
 
 	auto &list_vector = ListVector::GetEntry(list);
-	auto &entry = ((list_entry_t *)list.GetData())[row];
+	auto &entry = ListVector::GetData(list)[row];
 
 	switch (list_vector.GetType().InternalType()) {
 	case PhysicalType::BOOL:
