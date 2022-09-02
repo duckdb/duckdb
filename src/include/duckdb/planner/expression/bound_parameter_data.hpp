@@ -9,7 +9,8 @@
 #pragma once
 
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/planner/bound_parameter_map.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -21,9 +22,24 @@ struct BoundParameterData {
 
 	Value value;
 	LogicalType return_type;
-};
 
-using bound_parameter_map_t = unordered_map<idx_t, shared_ptr<BoundParameterData>>;
+public:
+	void Serialize(Serializer &serializer) const {
+		FieldWriter writer(serializer);
+		value.Serialize(writer.GetSerializer());
+		writer.WriteSerializable(return_type);
+		writer.Finalize();
+	}
+
+	static shared_ptr<BoundParameterData> Deserialize(Deserializer &source) {
+		FieldReader reader(source);
+		auto value = Value::Deserialize(reader.GetSource());
+		auto result = make_shared<BoundParameterData>(move(value));
+		result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+		reader.Finalize();
+		return result;
+	}
+};
 
 struct BoundParameterMap {
 	BoundParameterMap(vector<BoundParameterData> &parameter_data) : parameter_data(parameter_data) {

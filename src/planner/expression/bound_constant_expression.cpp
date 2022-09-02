@@ -1,5 +1,5 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
@@ -31,6 +31,16 @@ unique_ptr<Expression> BoundConstantExpression::Copy() {
 	auto copy = make_unique<BoundConstantExpression>(value);
 	copy->CopyProperties(*this);
 	return move(copy);
+}
+
+void BoundConstantExpression::Serialize(FieldWriter &writer) const {
+	value.Serialize(writer.GetSerializer());
+}
+
+unique_ptr<Expression> BoundConstantExpression::Deserialize(ExpressionDeserializationState &state,
+                                                            FieldReader &reader) {
+	auto value = Value::Deserialize(reader.GetSource());
+	return make_unique<BoundConstantExpression>(value);
 }
 
 } // namespace duckdb

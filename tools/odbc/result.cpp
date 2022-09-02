@@ -16,7 +16,7 @@ SQLRETURN SQL_API SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_para
 static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
 		// case there is a result set, just fetch from it
-		if (stmt->res && stmt->res->success) {
+		if (stmt->res && !stmt->res->HasError()) {
 			return SQL_SUCCESS;
 		}
 		// check if it's needed to execute the stmt before fetch

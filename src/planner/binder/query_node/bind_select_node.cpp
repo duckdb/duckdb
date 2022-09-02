@@ -209,7 +209,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			}
 			for (auto &target_distinct : distinct.target_distincts) {
 				auto &bound_colref = (BoundColumnRefExpression &)*target_distinct;
-				auto sql_type = sql_types[bound_colref.binding.column_index];
+				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					target_distinct = ExpressionBinder::PushCollation(context, move(target_distinct),
 					                                                  StringType::GetCollation(sql_type), true);
@@ -239,7 +239,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 					throw BinderException("Ambiguous name in ORDER BY!");
 				}
 				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
-				auto sql_type = sql_types[bound_colref.binding.column_index];
+				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					order_node.expression = ExpressionBinder::PushCollation(context, move(order_node.expression),

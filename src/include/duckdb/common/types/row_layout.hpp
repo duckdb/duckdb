@@ -74,7 +74,7 @@ public:
 	inline bool AllConstant() const {
 		return all_constant;
 	}
-	inline idx_t GetHeapPointerOffset() const {
+	inline idx_t GetHeapOffset() const {
 		return heap_pointer_offset;
 	}
 

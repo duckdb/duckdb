@@ -167,11 +167,11 @@ static void delete_elements(DuckDB *db, bool *correct, size_t threadnr) {
 	for (size_t i = 0; i < CONCURRENT_DELETE_INSERT_ELEMENTS; i++) {
 		// count should decrease by one for every delete we do
 		auto element = CONCURRENT_DELETE_INSERT_ELEMENTS * threadnr + i;
-		if (!con.Query("DELETE FROM integers WHERE i=" + to_string(element))->success) {
+		if (con.Query("DELETE FROM integers WHERE i=" + to_string(element))->HasError()) {
 			correct[threadnr] = false;
 		}
 		result = con.Query("SELECT COUNT(*) FROM integers");
-		if (!result->success) {
+		if (result->HasError()) {
 			correct[threadnr] = false;
 		} else {
 			Value new_count = result->GetValue(0, 0);

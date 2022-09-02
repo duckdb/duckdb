@@ -7,6 +7,10 @@ namespace duckdb {
 Key::Key(unique_ptr<data_t[]> data, idx_t len) : len(len), data(move(data)) {
 }
 
+Key::Key(idx_t len) : len(len) {
+	data = unique_ptr<data_t[]>(new data_t[len]);
+}
+
 template <>
 unique_ptr<Key> Key::CreateKey(string_t value) {
 	idx_t len = value.GetSize() + 1;

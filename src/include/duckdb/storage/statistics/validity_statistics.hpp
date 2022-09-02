@@ -17,7 +17,7 @@ class Vector;
 
 class ValidityStatistics : public BaseStatistics {
 public:
-	explicit ValidityStatistics(bool has_null = false, bool has_no_null = true);
+	DUCKDB_API explicit ValidityStatistics(bool has_null = false, bool has_no_null = true);
 
 	//! Whether or not the segment can contain NULL values
 	bool has_null;
@@ -25,9 +25,9 @@ public:
 	bool has_no_null;
 
 public:
-	void Merge(const BaseStatistics &other) override;
+	DUCKDB_API void Merge(const BaseStatistics &other) override;
 
-	bool IsConstant() const override;
+	DUCKDB_API bool IsConstant() const override;
 
 	unique_ptr<BaseStatistics> Copy() const override;
 

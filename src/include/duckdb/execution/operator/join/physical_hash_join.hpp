@@ -18,6 +18,11 @@
 
 namespace duckdb {
 
+class HashJoinGlobalSinkState;
+
+class HashJoinLocalSourceState;
+class HashJoinGlobalSourceState;
+
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
@@ -29,6 +34,9 @@ public:
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
 	                 PerfectHashJoinStats join_state);
 
+	//! Initialize HT for this operator
+	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
+
 	vector<idx_t> right_projection_map;
 	//! The types of the keys
 	vector<LogicalType> condition_types;
@@ -36,8 +44,10 @@ public:
 	vector<LogicalType> build_types;
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
-	// used in perfect hash join
+	//! Used in perfect hash join
 	PerfectHashJoinStats perfect_join_statistics;
+	//! Whether we can go external (can't yet if recursive CTE or full outer TODO)
+	bool can_go_external;
 
 public:
 	// Operator Interface
@@ -56,12 +66,16 @@ public:
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                 GlobalSourceState &gstate) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	//! Becomes a source when it is an external join
 	bool IsSource() const override {
-		return IsRightOuterJoin(join_type);
+		return true;
 	}
+
 	bool ParallelSource() const override {
 		return true;
 	}

@@ -64,7 +64,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 static void SortTiedBlobs(BufferManager &buffer_manager, SortedBlock &sb, bool *ties, data_ptr_t dataptr,
                           const idx_t &count, const idx_t &tie_col, const SortLayout &sort_layout) {
 	D_ASSERT(!ties[count - 1]);
-	auto &blob_block = sb.blob_sorting_data->data_blocks.back();
+	auto &blob_block = *sb.blob_sorting_data->data_blocks.back();
 	auto blob_handle = buffer_manager.Pin(blob_block.block);
 	const data_ptr_t blob_ptr = blob_handle.Ptr();
 
@@ -273,7 +273,7 @@ static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t da
 
 void LocalSortState::SortInMemory() {
 	auto &sb = *sorted_blocks.back();
-	auto &block = sb.radix_sorting_data.back();
+	auto &block = *sb.radix_sorting_data.back();
 	const auto &count = block.count;
 	auto handle = buffer_manager->Pin(block.block);
 	const auto dataptr = handle.Ptr();

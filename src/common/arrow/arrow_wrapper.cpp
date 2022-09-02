@@ -85,14 +85,14 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	}
 
 	auto &result = *my_stream->result;
-	if (!result.success) {
-		my_stream->last_error = result.GetError();
+	if (result.HasError()) {
+		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = (StreamQueryResult &)result;
 		if (!stream_result.IsOpen()) {
-			my_stream->last_error = "Query Stream is closed";
+			my_stream->last_error = PreservedError("Query Stream is closed");
 			return -1;
 		}
 	}
@@ -110,8 +110,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	}
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	auto &result = *my_stream->result;
-	if (!result.success) {
-		my_stream->last_error = result.GetError();
+	if (result.HasError()) {
+		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
@@ -127,9 +127,9 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		my_stream->column_names = result.names;
 	}
 	idx_t result_count;
-	string error;
+	PreservedError error;
 	if (!ArrowUtil::TryFetchChunk(&result, my_stream->batch_size, out, result_count, error)) {
-		D_ASSERT(!error.empty());
+		D_ASSERT(error);
 		my_stream->last_error = error;
 		return -1;
 	}
@@ -154,7 +154,7 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	}
 	D_ASSERT(stream->private_data);
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
-	return my_stream->last_error.c_str();
+	return my_stream->last_error.Message().c_str();
 }
 
 ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)
@@ -173,7 +173,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 }
 
-bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, string &error) {
+bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, PreservedError &error) {
 	if (result.type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = (StreamQueryResult &)result;
 		if (!stream_result.IsOpen()) {
@@ -183,14 +183,15 @@ bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, 
 	return result.TryFetch(chunk, error);
 }
 
-bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &count, string &error) {
+bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &count,
+                              PreservedError &error) {
 	count = 0;
 	ArrowAppender appender(result->types, chunk_size);
 	while (count < chunk_size) {
 		unique_ptr<DataChunk> data_chunk;
 		if (!TryFetchNext(*result, data_chunk, error)) {
-			if (!result->success) {
-				error = result->error;
+			if (result->HasError()) {
+				error = result->GetErrorObject();
 			}
 			return false;
 		}
@@ -207,10 +208,10 @@ bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray 
 }
 
 idx_t ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out) {
-	string error;
+	PreservedError error;
 	idx_t result_count;
 	if (!TryFetchChunk(result, chunk_size, out, result_count, error)) {
-		throw std::runtime_error(error);
+		error.Throw();
 	}
 	return result_count;
 }

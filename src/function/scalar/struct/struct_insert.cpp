@@ -99,6 +99,8 @@ void StructInsertFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("struct_insert", {}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, nullptr,
 	                   StructInsertStats);
 	fun.varargs = LogicalType::ANY;
+	fun.serialize = VariableReturnBindData::Serialize;
+	fun.deserialize = VariableReturnBindData::Deserialize;
 	set.AddFunction(fun);
 }
 

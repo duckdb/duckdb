@@ -447,7 +447,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			}
 			auto tgt_ptr = (date_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
-				tgt_ptr[row] = date_t(int64_t(src_ptr[row]) / (1000 * 60 * 60 * 24));
+				tgt_ptr[row] = date_t(int64_t(src_ptr[row]) / static_cast<int64_t>(1000 * 60 * 60 * 24));
 			}
 			break;
 		}
