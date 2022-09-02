@@ -39,17 +39,17 @@ INSERT INTO test VALUES(1) RETURNING y.int;
 statement error
 INSERT INTO test VALUES(1) RETURNING y.*;
 
-query II
+query I
 INSERT INTO test VALUES(1) RETURNING test;
 ----
 {'x': 1, 'int': 101}
 
-query II
+query I
 INSERT INTO test VALUES(1) RETURNING test.int;
 ----
 101
 
-query II
+query I
 INSERT INTO test VALUES(1) RETURNING {'i' : x, 'j' : int};
 ----
-{'x': 1, 'int': 101}
+{'i': 1, 'j': 101}
