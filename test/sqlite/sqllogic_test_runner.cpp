@@ -74,6 +74,11 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	named_connection_map.clear();
 	// now re-open the current database
 
+	//! If the database depends on extensions, we have to make sure those extensions are loaded at startup
+	if (!extensions.empty()) {
+		config->options.load_extensions = true;
+	}
+
 	db = make_unique<DuckDB>(dbpath, config.get());
 	con = make_unique<Connection>(*db);
 	if (enable_verification) {
