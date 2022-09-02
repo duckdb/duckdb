@@ -160,8 +160,8 @@ public:
 	                                         QueryErrorContext error_context = QueryErrorContext());
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback);
-	//! Gets the "schema.name" entry of the specified type, if if_exists=true returns nullptr if entry does not exist,
-	//! otherwise an exception is thrown
+	//! Gets the "schema.name" entry of the specified type, if if_exists=true returns nullptr if entry does not
+	//! exist, otherwise an exception is thrown
 	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &schema,
 	                                  const string &name, bool if_exists = false,
 	                                  QueryErrorContext error_context = QueryErrorContext());
