@@ -422,9 +422,14 @@ static void RewriteGeneratedColumn(ReturningBinder &binder, unique_ptr<ParsedExp
 				// it's a generated column
 				auto iter = gcols.find(name);
 				if (iter != gcols.end()) {
+					string alias = expr->alias;
 					// Copy here,
 					expr = iter->second->Copy();
-					expr->alias = move(name);
+					if (alias.empty()) {
+						expr->alias = move(name);
+					} else {
+						expr->alias = move(alias);
+					}
 				}
 			}
 		}
