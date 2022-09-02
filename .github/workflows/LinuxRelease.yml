@@ -322,6 +322,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
 
     steps:
     - uses: actions/checkout@v3

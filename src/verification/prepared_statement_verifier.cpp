@@ -85,7 +85,7 @@ bool PreparedStatementVerifier::Run(
 		}
 		auto execute_result = run(string(), move(execute_statement));
 		if (execute_result->HasError()) {
-			prepare_result->ThrowError("Failed execute during verify: ");
+			execute_result->ThrowError("Failed execute during verify: ");
 		}
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(execute_result));
 	} catch (const Exception &ex) {
