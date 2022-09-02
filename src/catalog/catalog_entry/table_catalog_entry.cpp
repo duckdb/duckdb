@@ -303,12 +303,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	auto col_name = info.new_column.GetName();
 
 	// We're checking for the opposite condition (ADD COLUMN IF _NOT_ EXISTS ...).
-	if (info.if_column_not_exists) {
-		auto existing_col_index = GetColumnIndex(col_name, true);
-		auto found = existing_col_index != DConstants::INVALID_INDEX;
-		if (found) {
-			return nullptr;
-		}
+	if (info.if_column_not_exists && GetColumnIndex(col_name, true) != DConstants::INVALID_INDEX) {
+		return nullptr;
 	}
 
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
