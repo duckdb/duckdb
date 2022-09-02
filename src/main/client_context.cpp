@@ -743,9 +743,8 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 	if (statements.empty()) {
 		// no statements, return empty successful result
 		StatementProperties properties;
-		vector<LogicalType> types;
 		vector<string> names;
-		auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), move(types));
+		auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator());
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(names),
 		                                            move(collection), GetClientProperties());
 	}
