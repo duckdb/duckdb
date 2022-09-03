@@ -25,7 +25,6 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// uncorrelated EXISTS
 		// we only care about existence, hence we push a LIMIT 1 operator
 		auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
-		limit->force_stream_and_parallel = true;
 		limit->AddChild(move(plan));
 		plan = move(limit);
 
