@@ -94,6 +94,10 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 			}
 		}
 	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 template <class T, class OP>

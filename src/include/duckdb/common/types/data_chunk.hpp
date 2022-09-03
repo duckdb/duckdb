@@ -70,6 +70,9 @@ public:
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	DUCKDB_API void SetValue(idx_t col_idx, idx_t index, const Value &val);
 
+	//! Returns true if all vectors in the DataChunk are constant
+	DUCKDB_API bool AllConstant() const;
+
 	//! Set the DataChunk to reference another data chunk
 	DUCKDB_API void Reference(DataChunk &chunk);
 	//! Set the DataChunk to own the data of data chunk, destroying the other chunk in the process

@@ -296,6 +296,10 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			throw InternalException("Unimplemented histogram aggregate");
 		}
 	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
