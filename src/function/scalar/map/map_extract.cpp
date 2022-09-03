@@ -25,6 +25,18 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.data[0].GetType().id() == LogicalTypeId::MAP);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
+	if (args.data[1].GetType().id() == LogicalTypeId::SQLNULL) {
+		//! We don't need to look through the map if the 'key' to look for is NULL
+		//! Because maps can't have NULL as key
+		ListVector::SetListSize(result, 0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto list_data = ConstantVector::GetData<list_entry_t>(result);
+		list_data->offset = 0;
+		list_data->length = 0;
+		result.Verify(args.size());
+		return;
+	}
+
 	auto &map = args.data[0];
 	auto &key = args.data[1];
 
@@ -56,12 +68,14 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	if (arguments[0]->return_type.id() != LogicalTypeId::MAP) {
 		throw BinderException("MAP_EXTRACT can only operate on MAPs");
 	}
-	auto &child_types = StructType::GetChildTypes(arguments[0]->return_type);
-	auto &value_type = ListType::GetChildType(child_types[1].second);
+	auto &value_type = MapType::ValueType(arguments[0]->return_type);
 
 	//! Here we have to construct the List Type that will be returned
 	bound_function.return_type = LogicalType::LIST(value_type);
-	bound_function.arguments[1] = MapType::KeyType(arguments[0]->return_type);
+	auto key_type = MapType::KeyType(arguments[0]->return_type);
+	if (key_type.id() != LogicalTypeId::SQLNULL && arguments[1]->return_type.id() != LogicalTypeId::SQLNULL) {
+		bound_function.arguments[1] = MapType::KeyType(arguments[0]->return_type);
+	}
 	return make_unique<VariableReturnBindData>(value_type);
 }
 
