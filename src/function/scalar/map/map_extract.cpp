@@ -20,18 +20,6 @@ void FillResult(Value &values, Vector &result, idx_t row) {
 	entry.offset = current_offset;
 }
 
-static bool ShouldCastKey(const LogicalType &map_key_type, const LogicalType &indexing_type) {
-	return map_key_type != LogicalTypeId::SQLNULL && map_key_type != indexing_type;
-}
-
-static Value GetKeyToLookFor(Vector &index_vector, idx_t row, const LogicalType &cast_to) {
-	auto key_value = index_vector.GetValue(row);
-	if (cast_to.id() != LogicalTypeId::SQLNULL) {
-		key_value = key_value.CastAs(cast_to);
-	}
-	return key_value;
-}
-
 static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data.size() == 2);
 	D_ASSERT(args.data[0].GetType().id() == LogicalTypeId::MAP);
@@ -43,15 +31,11 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	UnifiedVectorFormat offset_data;
 
 	auto &children = StructVector::GetEntries(map);
-	auto &map_key_type = ListType::GetChildType(children[0]->GetType());
-
-	bool should_cast = ShouldCastKey(map_key_type, key.GetType());
-	auto key_value = key.GetValue(0);
 
 	children[0]->ToUnifiedFormat(args.size(), offset_data);
 	for (idx_t row = 0; row < args.size(); row++) {
 		idx_t row_index = offset_data.sel->get_index(row);
-		auto key_value = GetKeyToLookFor(key, row_index, should_cast ? map_key_type : LogicalType::SQLNULL);
+		auto key_value = key.GetValue(row_index);
 		auto offsets = ListVector::Search(*children[0], key_value, offset_data.sel->get_index(row));
 		auto values = ListVector::GetValuesFromOffsets(*children[1], offsets);
 		FillResult(values, result, row);
@@ -77,6 +61,7 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 
 	//! Here we have to construct the List Type that will be returned
 	bound_function.return_type = LogicalType::LIST(value_type);
+	bound_function.arguments[1] = MapType::KeyType(arguments[0]->return_type);
 	return make_unique<VariableReturnBindData>(value_type);
 }
 
