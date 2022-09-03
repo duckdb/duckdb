@@ -51,8 +51,7 @@ static bool ResultIsDecimal(duckdb_result *result, idx_t col) {
 }
 
 duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row) {
-	if (!ResultIsDecimal(result, col)) {
-		//! Can't convert to decimal from another type without providing width+scale
+	if (!CanFetchValue(result, col, row) || !ResultIsDecimal(result, col)) {
 		return FetchDefaultValue::Operation<duckdb_decimal>();
 	}
 
