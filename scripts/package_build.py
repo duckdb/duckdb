@@ -106,15 +106,16 @@ def get_relative_path(source_dir, target_file):
     return target_file
 
 def git_commit_hash():
+    if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
+        return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
     try:
         return subprocess.check_output(['git','log','-1','--format=%h']).strip().decode('utf8')
     except:
-        if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
-            return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
-        else:
-            return "deadbeeff"
+        return "deadbeeff"
 
 def git_dev_version():
+    if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
+        return os.environ['SETUPTOOLS_SCM_PRETEND_VERSION']
     try:
         version = subprocess.check_output(['git','describe','--tags','--abbrev=0']).strip().decode('utf8')
         long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
@@ -128,10 +129,7 @@ def git_dev_version():
             version_splits[2] = str(int(version_splits[2]) + 1)
             return '.'.join(version_splits) + "-dev" + dev_version
     except:
-        if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
-            return os.environ['SETUPTOOLS_SCM_PRETEND_VERSION']
-        else:
-            return "0.0.0"
+        return "0.0.0"
 
 def include_package(pkg_name, pkg_dir, include_files, include_list, source_list):
     import amalgamation
