@@ -800,12 +800,19 @@ struct ExtraTypeInfo {
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) const {
-		const string &other_alias = (other_p) ? other_p->alias : "";
-		bool alias_equal = alias == other_alias;
-		if (!alias_equal &&
-		    (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
-		     type == ExtraTypeInfoType::GENERIC_TYPE_INFO)) {
-			return false;
+		if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
+		    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
+			if (!other_p) {
+				if (!alias.empty()) {
+					return false;
+				}
+				//! We only need to compare aliases when both types have them in this case
+				return true;
+			}
+			if (alias != other_p->alias) {
+				return false;
+			}
+			return true;
 		}
 		if (!other_p) {
 			return false;
@@ -813,7 +820,7 @@ public:
 		if (type != other_p->type) {
 			return false;
 		}
-		return alias_equal && EqualsInternal(other_p);
+		return alias == other_p->alias && EqualsInternal(other_p);
 	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
 	virtual void Serialize(FieldWriter &writer) const {};

@@ -521,7 +521,7 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 		return AttachTypeInfo(*vector, Value::INTERVAL(((interval_t *)data)[index]));
 	case LogicalTypeId::VARCHAR: {
 		auto str = ((string_t *)data)[index];
-		return AttachTypeInfo(*vector, Value(str.GetString(), vector->GetType()));
+		return AttachTypeInfo(*vector, Value(str.GetString()));
 	}
 	case LogicalTypeId::JSON: {
 		auto str = ((string_t *)data)[index];

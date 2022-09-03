@@ -43,9 +43,7 @@ public:
 	//! Create a VARCHAR value
 	DUCKDB_API Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
 	//! Create a VARCHAR value
-	//! 'type' is included here because it can possibly contain type_info we want this Value to inherit
-	DUCKDB_API Value(string val,
-	                 const LogicalType &type = LogicalType::VARCHAR); // NOLINT: Allow implicit conversion from `string`
+	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
 	//! Copy constructor
 	DUCKDB_API Value(const Value &other);
 	//! Move constructor
