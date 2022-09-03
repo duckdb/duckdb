@@ -128,7 +128,7 @@ duckdb_decimal TryCastToDecimalCInternal(SOURCE_TYPE source, uint8_t width, uint
 
 template <class SOURCE_TYPE, class OP>
 duckdb_decimal TryCastToDecimalCInternal(duckdb_result *result, idx_t col, idx_t row, uint8_t width, uint8_t scale) {
-	return TryCastToDecimalCInternal(UnsafeFetch<SOURCE_TYPE>(result, col, row), width, scale);
+	return TryCastToDecimalCInternal<SOURCE_TYPE, OP>(UnsafeFetch<SOURCE_TYPE>(result, col, row), width, scale);
 }
 
 } // namespace duckdb
