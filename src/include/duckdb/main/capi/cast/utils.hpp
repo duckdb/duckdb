@@ -12,7 +12,6 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
