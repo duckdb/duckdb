@@ -539,7 +539,7 @@ bool Hugeint::TryConvert(uint64_t value, hugeint_t &result) {
 
 template <>
 bool Hugeint::TryConvert(hugeint_t value, hugeint_t &result) {
-	result = move(value);
+	result = value;
 	return true;
 }
 
