@@ -291,10 +291,17 @@ void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	}
 }
 
-static bool ShouldCastValue(const LogicalType &left, const LogicalType &right) {
-	//! If two types share the same physical type and there is no extra type info
-	//  or the type info is the same, we can avoid casting
-	return (left.InternalType() != right.InternalType() || !left.EqualTypeInfo(right));
+// FIXME Just like DECIMAL, it's important that type_info gets considered when determining whether or not to cast
+// just comparing internal type is not always enough
+static bool ValueShouldBeCast(const LogicalType &incoming, const LogicalType &target) {
+	if (incoming.InternalType() != target.InternalType()) {
+		return true;
+	}
+	if (incoming.id() == LogicalTypeId::DECIMAL && incoming.id() == target.id()) {
+		//! Compare the type_info
+		return incoming != target;
+	}
+	return false;
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {
@@ -304,7 +311,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
-	if (ShouldCastValue(GetType(), val.type())) {
+	if (ValueShouldBeCast(val.type(), GetType())) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
@@ -396,15 +403,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 }
 
-Value Vector::AttachTypeInfo(const Vector &v, Value &&val) {
-	if (!v.GetType().HasAlias()) {
-		return val;
-	}
-	val.type().CopyAuxInfo(v.GetType());
-	return val;
-}
-
-Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
+Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	const Vector *vector = &v_p;
 	idx_t index = index_p;
 	bool finished = false;
@@ -428,7 +427,7 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
 			SequenceVector::GetSequence(*vector, start, increment);
-			return AttachTypeInfo(*vector, Value::Numeric(vector->GetType(), start + increment * index));
+			return Value::Numeric(vector->GetType(), start + increment * index);
 		}
 		default:
 			throw InternalException("Unimplemented vector type for Vector::GetValue");
@@ -439,59 +438,59 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	auto &type = vector->GetType();
 
 	if (!validity.RowIsValid(index)) {
-		return AttachTypeInfo(*vector, Value(vector->GetType()));
+		return Value(vector->GetType());
 	}
 	switch (vector->GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
-		return AttachTypeInfo(*vector, Value::BOOLEAN(((bool *)data)[index]));
+		return Value::BOOLEAN(((bool *)data)[index]);
 	case LogicalTypeId::TINYINT:
-		return AttachTypeInfo(*vector, Value::TINYINT(((int8_t *)data)[index]));
+		return Value::TINYINT(((int8_t *)data)[index]);
 	case LogicalTypeId::SMALLINT:
-		return AttachTypeInfo(*vector, Value::SMALLINT(((int16_t *)data)[index]));
+		return Value::SMALLINT(((int16_t *)data)[index]);
 	case LogicalTypeId::INTEGER:
-		return AttachTypeInfo(*vector, Value::INTEGER(((int32_t *)data)[index]));
+		return Value::INTEGER(((int32_t *)data)[index]);
 	case LogicalTypeId::DATE:
-		return AttachTypeInfo(*vector, Value::DATE(((date_t *)data)[index]));
+		return Value::DATE(((date_t *)data)[index]);
 	case LogicalTypeId::TIME:
-		return AttachTypeInfo(*vector, Value::TIME(((dtime_t *)data)[index]));
+		return Value::TIME(((dtime_t *)data)[index]);
 	case LogicalTypeId::TIME_TZ:
-		return AttachTypeInfo(*vector, Value::TIMETZ(((dtime_t *)data)[index]));
+		return Value::TIMETZ(((dtime_t *)data)[index]);
 	case LogicalTypeId::BIGINT:
-		return AttachTypeInfo(*vector, Value::BIGINT(((int64_t *)data)[index]));
+		return Value::BIGINT(((int64_t *)data)[index]);
 	case LogicalTypeId::UTINYINT:
-		return AttachTypeInfo(*vector, Value::UTINYINT(((uint8_t *)data)[index]));
+		return Value::UTINYINT(((uint8_t *)data)[index]);
 	case LogicalTypeId::USMALLINT:
-		return AttachTypeInfo(*vector, Value::USMALLINT(((uint16_t *)data)[index]));
+		return Value::USMALLINT(((uint16_t *)data)[index]);
 	case LogicalTypeId::UINTEGER:
-		return AttachTypeInfo(*vector, Value::UINTEGER(((uint32_t *)data)[index]));
+		return Value::UINTEGER(((uint32_t *)data)[index]);
 	case LogicalTypeId::UBIGINT:
-		return AttachTypeInfo(*vector, Value::UBIGINT(((uint64_t *)data)[index]));
+		return Value::UBIGINT(((uint64_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP:
-		return AttachTypeInfo(*vector, Value::TIMESTAMP(((timestamp_t *)data)[index]));
+		return Value::TIMESTAMP(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return AttachTypeInfo(*vector, Value::TIMESTAMPNS(((timestamp_t *)data)[index]));
+		return Value::TIMESTAMPNS(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return AttachTypeInfo(*vector, Value::TIMESTAMPMS(((timestamp_t *)data)[index]));
+		return Value::TIMESTAMPMS(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return AttachTypeInfo(*vector, Value::TIMESTAMPSEC(((timestamp_t *)data)[index]));
+		return Value::TIMESTAMPSEC(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return AttachTypeInfo(*vector, Value::TIMESTAMPTZ(((timestamp_t *)data)[index]));
+		return Value::TIMESTAMPTZ(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
-		return AttachTypeInfo(*vector, Value::HUGEINT(((hugeint_t *)data)[index]));
+		return Value::HUGEINT(((hugeint_t *)data)[index]);
 	case LogicalTypeId::UUID:
-		return AttachTypeInfo(*vector, Value::UUID(((hugeint_t *)data)[index]));
+		return Value::UUID(((hugeint_t *)data)[index]);
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			return AttachTypeInfo(*vector, Value::DECIMAL(((int16_t *)data)[index], width, scale));
+			return Value::DECIMAL(((int16_t *)data)[index], width, scale);
 		case PhysicalType::INT32:
-			return AttachTypeInfo(*vector, Value::DECIMAL(((int32_t *)data)[index], width, scale));
+			return Value::DECIMAL(((int32_t *)data)[index], width, scale);
 		case PhysicalType::INT64:
-			return AttachTypeInfo(*vector, Value::DECIMAL(((int64_t *)data)[index], width, scale));
+			return Value::DECIMAL(((int64_t *)data)[index], width, scale);
 		case PhysicalType::INT128:
-			return AttachTypeInfo(*vector, Value::DECIMAL(((hugeint_t *)data)[index], width, scale));
+			return Value::DECIMAL(((hugeint_t *)data)[index], width, scale);
 		default:
 			throw InternalException("Physical type '%s' has a width bigger than 38, which is not supported",
 			                        TypeIdToString(type.InternalType()));
@@ -500,43 +499,43 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::ENUM: {
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
-			return AttachTypeInfo(*vector, Value::ENUM(((uint8_t *)data)[index], type));
+			return Value::ENUM(((uint8_t *)data)[index], type);
 		case PhysicalType::UINT16:
-			return AttachTypeInfo(*vector, Value::ENUM(((uint16_t *)data)[index], type));
+			return Value::ENUM(((uint16_t *)data)[index], type);
 		case PhysicalType::UINT32:
-			return AttachTypeInfo(*vector, Value::ENUM(((uint32_t *)data)[index], type));
+			return Value::ENUM(((uint32_t *)data)[index], type);
 		case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
-			return AttachTypeInfo(*vector, Value::ENUM(((uint64_t *)data)[index], type));
+			return Value::ENUM(((uint64_t *)data)[index], type);
 		default:
 			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 	}
 	case LogicalTypeId::POINTER:
-		return AttachTypeInfo(*vector, Value::POINTER(((uintptr_t *)data)[index]));
+		return Value::POINTER(((uintptr_t *)data)[index]);
 	case LogicalTypeId::FLOAT:
-		return AttachTypeInfo(*vector, Value::FLOAT(((float *)data)[index]));
+		return Value::FLOAT(((float *)data)[index]);
 	case LogicalTypeId::DOUBLE:
-		return AttachTypeInfo(*vector, Value::DOUBLE(((double *)data)[index]));
+		return Value::DOUBLE(((double *)data)[index]);
 	case LogicalTypeId::INTERVAL:
-		return AttachTypeInfo(*vector, Value::INTERVAL(((interval_t *)data)[index]));
+		return Value::INTERVAL(((interval_t *)data)[index]);
 	case LogicalTypeId::VARCHAR: {
 		auto str = ((string_t *)data)[index];
-		return AttachTypeInfo(*vector, Value(str.GetString()));
+		return Value(str.GetString());
 	}
 	case LogicalTypeId::JSON: {
 		auto str = ((string_t *)data)[index];
-		return AttachTypeInfo(*vector, Value::JSON(str.GetString()));
+		return Value::JSON(str.GetString());
 	}
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::BLOB: {
 		auto str = ((string_t *)data)[index];
-		return AttachTypeInfo(*vector, Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize()));
+		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
 	case LogicalTypeId::MAP: {
 		auto &child_entries = StructVector::GetEntries(*vector);
 		Value key = child_entries[0]->GetValue(index);
 		Value value = child_entries[1]->GetValue(index);
-		return AttachTypeInfo(*vector, Value::MAP(move(key), move(value)));
+		return Value::MAP(move(key), move(value));
 	}
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
@@ -546,7 +545,7 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 			auto &struct_child = child_entries[child_idx];
 			children.push_back(make_pair(StructType::GetChildName(type, child_idx), struct_child->GetValue(index_p)));
 		}
-		return AttachTypeInfo(*vector, Value::STRUCT(move(children)));
+		return Value::STRUCT(move(children));
 	}
 	case LogicalTypeId::LIST: {
 		auto offlen = ((list_entry_t *)data)[index];
@@ -555,11 +554,20 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			children.push_back(child_vec.GetValue(i));
 		}
-		return AttachTypeInfo(*vector, Value::LIST(ListType::GetChildType(type), move(children)));
+		return Value::LIST(ListType::GetChildType(type), move(children));
 	}
 	default:
 		throw InternalException("Unimplemented type for value access");
 	}
+}
+
+Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
+	auto value = GetValueInternal(v_p, index_p);
+	// set the alias of the type to the correct value, if there is a type alias
+	if (v_p.GetType().HasAlias()) {
+		value.type().SetAlias(v_p.GetType().GetAlias());
+	}
+	return value;
 }
 
 Value Vector::GetValue(idx_t index) const {
