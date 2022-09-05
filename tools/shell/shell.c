@@ -20289,7 +20289,7 @@ static const char zOptions[] =
 #endif
   "   -newline SEP         set output row separator. Default: '\\n'\n"
   "   -nofollow            refuse to open symbolic links to database files\n"
-  "   -no-stdin            exit after processing options instead of reading stdin"
+  "   -no-stdin            exit after processing options instead of reading stdin\n"
   "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
   "   -pagecache SIZE N    use N slots of SZ bytes each for page cache memory\n"
   "   -quote               set output mode to 'quote'\n"

@@ -55,7 +55,7 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 	writer.Finalize();
 }
 
-unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
+unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
 	auto info = make_unique<CreateViewInfo>();
 
 	FieldReader reader(source);

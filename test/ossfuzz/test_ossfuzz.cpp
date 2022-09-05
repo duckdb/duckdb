@@ -26,10 +26,10 @@ static void test_runner() {
 	result = con.Query(query.c_str());
 
 	unordered_set<string> internal_error_messages = {"Unoptimized Result differs from original result!", "INTERNAL"};
-	if (!result->success) {
-		if (TestIsInternalError(internal_error_messages, result->error)) {
+	if (result->HasError()) {
+		if (TestIsInternalError(internal_error_messages, result->GetError())) {
 			result->Print();
-			REQUIRE(result->error.empty());
+			REQUIRE(!result->GetErrorObject());
 		}
 	}
 

@@ -42,7 +42,6 @@ jobs:
       with:
         run_tests: 0
         static_link_build: 1
-        substrait: 1
 
     - uses: actions/upload-artifact@v2
       with:
@@ -55,9 +54,8 @@ jobs:
     runs-on: ubuntu-20.04
     needs: r-test-extension
     env:
-      LIBARROW_BINARY : 'false'
-      ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
-      BUILD_SUBSTRAIT_EXTENSION: 1
+      LIBARROW_BINARY: 'false'
+      ARROW_USER_SIMD_LEVEL: 'AVX2'
 
     steps:
     - uses: actions/checkout@v3
@@ -155,8 +153,8 @@ jobs:
     needs: rstats-linux
 
     env:
-      LIBARROW_BINARY : 'false'
-      ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
+      LIBARROW_BINARY: 'false'
+      ARROW_USER_SIMD_LEVEL: 'AVX2'
       DUCKDB_R_DEBUG: 1
     steps:
     - uses: actions/checkout@v3
@@ -191,8 +189,6 @@ jobs:
     name: R Package Windows
     runs-on: windows-latest
     needs: rstats-linux
-    env:
-          BUILD_SUBSTRAIT_EXTENSION: 1
     steps:
     - uses: actions/checkout@v3
       with:
@@ -228,8 +224,6 @@ jobs:
     name: R UBSAN
     runs-on: ubuntu-latest
     needs: rstats-linux
-    env:
-          BUILD_SUBSTRAIT_EXTENSION: 1
     steps:
     - uses: actions/checkout@v3
       with:

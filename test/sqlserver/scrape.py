@@ -84,7 +84,7 @@ for p in pages:
 			query = query.replace('\n', ' ')
 			query = re.sub(r"\s+", " ", query)
 
-			print('\n\nresult = con.Query("%s");\nREQUIRE(result->success);' % query.replace('"', '\\"'))
+			print('\n\nresult = con.Query("%s");\nREQUIRE(!result->HasError());' % query.replace('"', '\\"'))
 
 			look_for_answer = True
 		elif look_for_answer:

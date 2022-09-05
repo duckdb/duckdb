@@ -880,10 +880,14 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		absolute_path = true;
 	} else if (splits[0] == "~") {
 		// starts with home directory
-		auto home_directory = GetHomeDirectory();
+		auto home_directory = GetHomeDirectory(opener);
 		if (!home_directory.empty()) {
 			absolute_path = true;
 			splits[0] = home_directory;
+			D_ASSERT(path[0] == '~');
+			if (!HasGlob(path)) {
+				return Glob(home_directory + path.substr(1));
+			}
 		}
 	}
 	// Check if the path has a glob at all

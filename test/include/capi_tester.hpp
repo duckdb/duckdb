@@ -41,8 +41,17 @@ private:
 
 class CAPIResult {
 public:
+	CAPIResult() {
+	}
+	CAPIResult(duckdb_result result, bool success) : success(success), result(result) {
+	}
 	~CAPIResult() {
 		duckdb_destroy_result(&result);
+	}
+
+public:
+	bool HasError() const {
+		return !success;
 	}
 	void Query(duckdb_connection connection, string query) {
 		success = (duckdb_query(connection, query.c_str(), &result) == DuckDBSuccess);

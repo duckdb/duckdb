@@ -2,6 +2,7 @@
 
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,20 @@ unique_ptr<Expression> BoundUnnestExpression::Copy() {
 	auto copy = make_unique<BoundUnnestExpression>(return_type);
 	copy->child = child->Copy();
 	return move(copy);
+}
+
+void BoundUnnestExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(return_type);
+	writer.WriteSerializable(*child);
+}
+
+unique_ptr<Expression> BoundUnnestExpression::Deserialize(ExpressionDeserializationState &state, FieldReader &reader) {
+	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto child = reader.ReadRequiredSerializable<Expression>(state.gstate);
+
+	auto result = make_unique<BoundUnnestExpression>(return_type);
+	result->child = move(child);
+	return move(result);
 }
 
 } // namespace duckdb

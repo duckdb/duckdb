@@ -15,6 +15,7 @@ namespace duckdb {
 
 class BufferHandle;
 class RowDataCollection;
+struct RowDataBlock;
 class DataChunk;
 
 //! Used to scan the data into DataChunks after sorting
@@ -36,14 +37,17 @@ public:
 
 		BufferHandle data_handle;
 		BufferHandle heap_handle;
+
+		// We must pin ALL blocks we are going to gather from
+		vector<BufferHandle> pinned_blocks;
 	};
 
 	//! Ensure that heap blocks correspond to row blocks
-	static void SwizzleBlocks(RowDataCollection &swizzled_block_collection, RowDataCollection &swizzled_string_heap,
-	                          RowDataCollection &block_collection, RowDataCollection &string_heap,
-	                          const RowLayout &layout);
+	static void AlignHeapBlocks(RowDataCollection &dst_block_collection, RowDataCollection &dst_string_heap,
+	                            RowDataCollection &src_block_collection, RowDataCollection &src_string_heap,
+	                            const RowLayout &layout);
 
-	RowDataCollectionScanner(RowDataCollection &rows, RowDataCollection &heap, const RowLayout &layout,
+	RowDataCollectionScanner(RowDataCollection &rows, RowDataCollection &heap, const RowLayout &layout, bool external,
 	                         bool flush = true);
 
 	//! The type layout of the payload
@@ -60,6 +64,14 @@ public:
 	inline idx_t Remaining() const {
 		return total_count - total_scanned;
 	}
+
+	//! Swizzle the blocks for external scanning
+	//! Swizzling is all or nothing, so if we have scanned previously,
+	//! we need to re-swizzle.
+	void ReSwizzle();
+
+	void SwizzleBlock(RowDataBlock &data_block, RowDataBlock &heap_block);
+
 	//! Scans the next data chunk from the sorted data
 	void Scan(DataChunk &chunk);
 
@@ -78,8 +90,15 @@ private:
 	idx_t total_scanned;
 	//! Addresses used to gather from the sorted data
 	Vector addresses = Vector(LogicalType::POINTER);
+	//! Whether the blocks can be flushed to disk
+	const bool external;
 	//! Whether to flush the blocks after scanning
 	const bool flush;
+	//! Whether we are unswizzling the blocks
+	const bool unswizzling;
+
+	//! Checks that the newest block is valid
+	void ValidateUnscannedBlock() const;
 };
 
 } // namespace duckdb

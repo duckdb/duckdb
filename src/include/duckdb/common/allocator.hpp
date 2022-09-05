@@ -69,9 +69,9 @@ public:
 	Allocator &operator=(Allocator &&allocator) noexcept = delete;
 	DUCKDB_API ~Allocator();
 
-	data_ptr_t AllocateData(idx_t size);
-	void FreeData(data_ptr_t pointer, idx_t size);
-	data_ptr_t ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t new_size);
+	DUCKDB_API data_ptr_t AllocateData(idx_t size);
+	DUCKDB_API void FreeData(data_ptr_t pointer, idx_t size);
+	DUCKDB_API data_ptr_t ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t new_size);
 
 	AllocatedData Allocate(idx_t size) {
 		return AllocatedData(*this, AllocateData(size), size);
@@ -110,7 +110,7 @@ private:
 //! Note that there is a cost to doing so (several atomic operations will be performed on allocation/free).
 //! As such this class should be used primarily for larger allocations.
 struct BufferAllocator {
-	static Allocator &Get(ClientContext &context);
+	DUCKDB_API static Allocator &Get(ClientContext &context);
 };
 
 } // namespace duckdb

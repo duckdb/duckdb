@@ -39,8 +39,8 @@ using namespace duckdb;
 	}
 	static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = R_NilValue;
 	auto res = conn->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
-	if (!res->success) {
-		cpp11::stop(res->error.c_str());
+	if (res->HasError()) {
+		cpp11::stop(res->GetError().c_str());
 	}
 }
 
@@ -221,7 +221,6 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
 			children.push_back(
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
-			children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(100000)));
 			table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
 			return table_function;
 		}

@@ -23,7 +23,7 @@ class PendingQueryResult : public BaseQueryResult {
 public:
 	DUCKDB_API PendingQueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
 	                              vector<LogicalType> types, bool allow_stream_result);
-	DUCKDB_API explicit PendingQueryResult(string error_message);
+	DUCKDB_API explicit PendingQueryResult(PreservedError error_message);
 	DUCKDB_API ~PendingQueryResult();
 
 public:

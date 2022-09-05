@@ -548,11 +548,10 @@ void GroupedAggregateHashTable::FlushMove(FlushMoveState &state, Vector &source_
 
 	state.groups.Reset();
 	state.groups.SetCardinality(count);
-	for (idx_t i = 0; i < state.groups.ColumnCount(); i++) {
-		auto &column = state.groups.data[i];
-		const auto col_offset = layout.GetOffsets()[i];
+	for (idx_t col_no = 0; col_no < state.groups.ColumnCount(); col_no++) {
+		auto &column = state.groups.data[col_no];
 		RowOperations::Gather(source_addresses, *FlatVector::IncrementalSelectionVector(), column,
-		                      *FlatVector::IncrementalSelectionVector(), count, col_offset, i);
+		                      *FlatVector::IncrementalSelectionVector(), count, layout, col_no);
 	}
 
 	FindOrCreateGroups(state.groups, source_hashes, state.group_addresses, state.new_groups_sel);
@@ -673,11 +672,10 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	result.SetCardinality(this_n);
 	// fetch the group columns (ignoring the final hash column
 	const auto group_cols = layout.ColumnCount() - 1;
-	for (idx_t i = 0; i < group_cols; i++) {
-		auto &column = result.data[i];
-		const auto col_offset = layout.GetOffsets()[i];
+	for (idx_t col_no = 0; col_no < group_cols; col_no++) {
+		auto &column = result.data[col_no];
 		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), column,
-		                      *FlatVector::IncrementalSelectionVector(), result.size(), col_offset, i);
+		                      *FlatVector::IncrementalSelectionVector(), result.size(), layout, col_no);
 	}
 
 	RowOperations::FinalizeStates(layout, addresses, result, group_cols);

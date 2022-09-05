@@ -25,19 +25,21 @@ class ColumnDataRowCollection;
 class ColumnDataCollection {
 public:
 	//! Constructs an in-memory column data collection from an allocator
-	ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
+	DUCKDB_API ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
+	//! Constructs an empty (but valid) in-memory column data collection from an allocator
+	DUCKDB_API ColumnDataCollection(Allocator &allocator);
 	//! Constructs a buffer-managed column data collection
-	ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
+	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
 	//! Constructs either an in-memory or a buffer-managed column data collection
-	ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
-	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	DUCKDB_API ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
+	                                ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
 	//! between multiple column data collections and prevents wasting space.
 	//! Note that after one CDC inherits blocks from another, the other
 	//! cannot be written to anymore (i.e. we take ownership of the half-written blocks).
-	ColumnDataCollection(ColumnDataCollection &parent);
-	ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator, vector<LogicalType> types);
-	~ColumnDataCollection();
+	DUCKDB_API ColumnDataCollection(ColumnDataCollection &parent);
+	DUCKDB_API ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator, vector<LogicalType> types);
+	DUCKDB_API ~ColumnDataCollection();
 
 public:
 	DUCKDB_API vector<LogicalType> &Types() {
@@ -75,9 +77,13 @@ public:
 	InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
 	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
 	//! Initialize a parallel scan over the column data collection over all columns
-	DUCKDB_API void InitializeScan(ColumnDataParallelScanState &state) const;
+	DUCKDB_API void
+	InitializeScan(ColumnDataParallelScanState &state,
+	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
 	//! Initialize a parallel scan over the column data collection over a subset of the columns
-	DUCKDB_API void InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids) const;
+	DUCKDB_API void
+	InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids,
+	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
 	//! Scans a DataChunk from the ColumnDataCollection
 	DUCKDB_API bool Scan(ColumnDataScanState &state, DataChunk &result) const;
 	//! Scans a DataChunk from the ColumnDataCollection
@@ -123,6 +129,12 @@ public:
 	static bool ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,
 	                         string &error_message);
 
+	//! Obtains the next scan index to scan from
+	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
+	//! Scans at the indices (obtained from NextScanIndex)
+	void ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result,
+	                 idx_t chunk_index, idx_t segment_index, idx_t row_index) const;
+
 private:
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
@@ -131,9 +143,6 @@ private:
 	void CreateSegment();
 
 	static ColumnDataCopyFunction GetCopyFunction(const LogicalType &type);
-
-	//! Obtains the next scan index to scan from
-	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
 
 private:
 	//! The Column Data Allocator

@@ -218,7 +218,7 @@ class TestResolveObjectColumns(object):
                 [{'key': ['a', 'a', 'b'], 'value': [4, 0, 4]}]
             ]
         )
-        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains duplicates"):
+        with pytest.raises(duckdb.InvalidInputException, match="Dict->Map conversion failed because 'key' list contains duplicates"):
             converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_map_nullkey(self, duckdb_cursor):
@@ -227,7 +227,7 @@ class TestResolveObjectColumns(object):
                 [{'key': [None, 'a', 'b'], 'value': [4, 0, 4]}]
             ]
         )
-        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains None"):
+        with pytest.raises(duckdb.InvalidInputException, match="Dict->Map conversion failed because 'key' list contains None"):
             converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_map_nullkeylist(self, duckdb_cursor):
@@ -248,7 +248,7 @@ class TestResolveObjectColumns(object):
                 [{'a': 4, None: 0, 'd': 4}]
             ]
         )
-        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains None"):
+        with pytest.raises(duckdb.InvalidInputException, match="Dict->Map conversion failed because 'key' list contains None"):
             converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_map_fallback_nullkey_coverage(self, duckdb_cursor):
@@ -258,7 +258,7 @@ class TestResolveObjectColumns(object):
                 [{'key': None, None: 5}],
             ]
         )
-        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains None"):
+        with pytest.raises(duckdb.InvalidInputException, match="Dict->Map conversion failed because 'key' list contains None"):
             converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_struct_key_conversion(self, duckdb_cursor):
@@ -421,7 +421,7 @@ class TestResolveObjectColumns(object):
         x = pd.DataFrame({
             'a': pd.Series(data=data)
         })
-        with pytest.raises(Exception, match="Unimplemented type for cast"):
+        with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
             res = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_numeric_decimal_incompatible(self):

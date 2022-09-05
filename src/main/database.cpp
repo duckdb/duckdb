@@ -275,6 +275,20 @@ void DuckDB::SetExtensionLoaded(const std::string &name) {
 	instance->loaded_extensions.insert(name);
 }
 
+bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
+	// check the session values
+	auto &db_config = DBConfig::GetConfig(*this);
+	const auto &global_config_map = db_config.options.set_variables;
+
+	auto global_value = global_config_map.find(key);
+	bool found_global_value = global_value != global_config_map.end();
+	if (!found_global_value) {
+		return false;
+	}
+	result = global_value->second;
+	return true;
+}
+
 string ClientConfig::ExtractTimezone() const {
 	auto entry = set_variables.find("TimeZone");
 	if (entry == set_variables.end()) {

@@ -209,6 +209,7 @@ unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {
 		}
 		result->groups.grouping_sets.push_back(grouping_set);
 	}
+
 	result->aggregate_handling = reader.ReadRequired<AggregateHandling>();
 	result->having = reader.ReadOptional<ParsedExpression>(nullptr);
 	result->sample = reader.ReadOptional<SampleOptions>(nullptr);

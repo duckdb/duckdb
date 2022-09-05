@@ -1,9 +1,10 @@
 #include "duckdb/common/types/column_data_collection.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/column_data_collection_segment.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -40,6 +41,14 @@ struct ColumnDataMetaData {
 		return segment.GetVectorData(vector_data_index);
 	}
 };
+
+//! Explicitly initialized without types
+ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
+	types.clear();
+	count = 0;
+	this->finished_append = false;
+	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+}
 
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
 	Initialize(move(types_p));
@@ -236,6 +245,13 @@ void ColumnDataRowIterationHelper::ColumnDataRowIterator::Next() {
 			collection = nullptr;
 		}
 	}
+}
+
+ColumnDataRowIterationHelper::ColumnDataRowIterator ColumnDataRowIterationHelper::begin() { // NOLINT
+	return ColumnDataRowIterationHelper::ColumnDataRowIterator(collection.Count() == 0 ? nullptr : &collection);
+}
+ColumnDataRowIterationHelper::ColumnDataRowIterator ColumnDataRowIterationHelper::end() { // NOLINT
+	return ColumnDataRowIterationHelper::ColumnDataRowIterator(nullptr);
 }
 
 ColumnDataRowIterationHelper::ColumnDataRowIterator &ColumnDataRowIterationHelper::ColumnDataRowIterator::operator++() {
@@ -597,12 +613,14 @@ void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<col
 	state.column_ids = move(column_ids);
 }
 
-void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state) const {
-	InitializeScan(state.scan_state);
+void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state,
+                                          ColumnDataScanProperties properties) const {
+	InitializeScan(state.scan_state, properties);
 }
 
-void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids) const {
-	InitializeScan(state.scan_state, move(column_ids));
+void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids,
+                                          ColumnDataScanProperties properties) const {
+	InitializeScan(state.scan_state, move(column_ids), properties);
 }
 
 bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
@@ -618,11 +636,7 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 			return false;
 		}
 	}
-	auto &segment = *segments[segment_index];
-	lstate.current_chunk_state.properties = state.scan_state.properties;
-	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result, state.scan_state.column_ids);
-	lstate.current_row_index = row_index;
-	result.Verify();
+	ScanAtIndex(state, lstate, result, chunk_index, segment_index, row_index);
 	return true;
 }
 
@@ -664,6 +678,20 @@ bool ColumnDataCollection::NextScanIndex(ColumnDataScanState &state, idx_t &chun
 	segment_index = state.segment_index;
 	chunk_index = state.chunk_index++;
 	return true;
+}
+
+void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
+                                       DataChunk &result, idx_t chunk_index, idx_t segment_index,
+                                       idx_t row_index) const {
+	if (segment_index != lstate.current_segment_index) {
+		lstate.current_chunk_state.handles.clear();
+		lstate.current_segment_index = segment_index;
+	}
+	auto &segment = *segments[segment_index];
+	lstate.current_chunk_state.properties = state.scan_state.properties;
+	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result, state.scan_state.column_ids);
+	lstate.current_row_index = row_index;
+	result.Verify();
 }
 
 bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {

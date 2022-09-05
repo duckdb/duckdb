@@ -68,7 +68,7 @@ public:
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
-	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source);
+	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source, ClientContext &context);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
 
@@ -79,8 +79,8 @@ public:
 
 	//! Returns the column index of the specified column name.
 	//! If the column does not exist:
-	//! If if_exists is true, returns DConstants::INVALID_INDEX
-	//! If if_exists is false, throws an exception
+	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
+	//! If if_column_exists is false, throws an exception
 	column_t GetColumnIndex(string &name, bool if_exists = false);
 
 private:

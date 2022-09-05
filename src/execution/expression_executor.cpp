@@ -98,6 +98,8 @@ bool ExpressionExecutor::TryEvaluateScalar(const Expression &expr, Value &result
 	try {
 		result = EvaluateScalar(expr);
 		return true;
+	} catch (InternalException &ex) {
+		throw ex;
 	} catch (...) {
 		return false;
 	}
@@ -142,6 +144,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 #ifdef DEBUG
+	//! The result Vector must be "clean"
 	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
 		D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
 	}

@@ -9,7 +9,7 @@ PRAGMA enable_verification
 query R
 SELECT ROUND(0.1, 1000);
 ----
-0.100000
+0.1
 
 statement ok
 CREATE TABLE t0(c0 INT);

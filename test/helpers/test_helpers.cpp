@@ -9,6 +9,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "pid.hpp"
 
 #include <cmath>
 #include <fstream>
@@ -20,10 +21,10 @@ using namespace std;
 namespace duckdb {
 
 bool NO_FAIL(QueryResult &result) {
-	if (!result.success) {
-		fprintf(stderr, "Query failed with message: %s\n", result.error.c_str());
+	if (result.HasError()) {
+		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
 	}
-	return result.success;
+	return !result.HasError();
 }
 
 bool NO_FAIL(unique_ptr<QueryResult> result) {
@@ -64,7 +65,11 @@ string TestDirectoryPath() {
 	if (!fs->DirectoryExists(TESTING_DIRECTORY_NAME)) {
 		fs->CreateDirectory(TESTING_DIRECTORY_NAME);
 	}
-	return TESTING_DIRECTORY_NAME;
+	string path = StringUtil::Format(TESTING_DIRECTORY_NAME "/%d", getpid());
+	if (!fs->DirectoryExists(path)) {
+		fs->CreateDirectory(path);
+	}
+	return path;
 }
 
 string TestCreatePath(string suffix) {
@@ -116,8 +121,8 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		return false;
 	}
 	auto &result = (MaterializedQueryResult &)result_;
-	if (!result.success) {
-		fprintf(stderr, "Query failed with message: %s\n", result.error.c_str());
+	if (result.HasError()) {
+		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
 		return false;
 	}
 	if (result.names.size() != result.types.size()) {
@@ -175,9 +180,9 @@ bool CHECK_COLUMN(unique_ptr<duckdb::MaterializedQueryResult> &result, size_t co
 string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	D_ASSERT(result.type == QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (MaterializedQueryResult &)result;
-	if (!materialized.success) {
-		fprintf(stderr, "Query failed with message: %s\n", materialized.error.c_str());
-		return materialized.error;
+	if (materialized.HasError()) {
+		fprintf(stderr, "Query failed with message: %s\n", materialized.GetError().c_str());
+		return materialized.GetError();
 	}
 	string error;
 	if (!compare_result(csv, materialized.Collection(), materialized.types, header, error)) {
