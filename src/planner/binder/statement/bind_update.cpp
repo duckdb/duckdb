@@ -184,10 +184,10 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
-		if (std::find(update->columns.begin(), update->columns.end(), column.Oid()) != update->columns.end()) {
+		if (std::find(update->columns.begin(), update->columns.end(), column.StorageOid() ) != update->columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
-		update->columns.push_back(column.Oid());
+		update->columns.push_back(column.StorageOid());
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
 			update->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));
