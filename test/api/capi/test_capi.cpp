@@ -3,6 +3,11 @@
 using namespace duckdb;
 using namespace std;
 
+static void require_hugeint_eq(duckdb_hugeint left, duckdb_hugeint right) {
+	REQUIRE(left.lower == right.lower);
+	REQUIRE(left.upper == right.upper);
+}
+
 TEST_CASE("Basic test of C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
@@ -263,6 +268,42 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(2, 0)) == 320938.4298);
 	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(3, 0)) == 49082094824.904820482094);
 	REQUIRE(result->IsNull(4, 0));
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	REQUIRE(result->Fetch<int8_t>(0, 0) == 1);
+	REQUIRE(result->Fetch<uint8_t>(0, 0) == 1);
+	REQUIRE(result->Fetch<int16_t>(0, 0) == 1);
+	REQUIRE(result->Fetch<uint16_t>(0, 0) == 1);
+	REQUIRE(result->Fetch<int32_t>(0, 0) == 1);
+	REQUIRE(result->Fetch<uint32_t>(0, 0) == 1);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 1);
+	REQUIRE(result->Fetch<uint64_t>(0, 0) == 1);
+	require_hugeint_eq(result->Fetch<duckdb_hugeint>(0, 0), {.lower = 1, .upper = 0});
+	REQUIRE(result->Fetch<float>(0, 0) == 1.2f);
+	REQUIRE(result->Fetch<double>(0, 0) == 1.2);
+	REQUIRE(result->Fetch<string>(0, 0) == "1.2");
+
+	result = tester.Query("SELECT -123.45::DECIMAL(5,2)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	REQUIRE(result->Fetch<int8_t>(0, 0) == -123);
+	REQUIRE(result->Fetch<uint8_t>(0, 0) == 0);
+	REQUIRE(result->Fetch<int16_t>(0, 0) == -123);
+	REQUIRE(result->Fetch<uint16_t>(0, 0) == 0);
+	REQUIRE(result->Fetch<int32_t>(0, 0) == -123);
+	REQUIRE(result->Fetch<uint32_t>(0, 0) == 0);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == -123);
+	REQUIRE(result->Fetch<uint64_t>(0, 0) == 0);
+
+	hugeint_t expected_hugeint_val;
+	Hugeint::TryConvert(-123, expected_hugeint_val);
+	duckdb_hugeint expected_val;
+	expected_val.lower = expected_hugeint_val.lower;
+	expected_val.upper = expected_hugeint_val.upper;
+	require_hugeint_eq(result->Fetch<duckdb_hugeint>(0, 0), expected_val);
+
+	REQUIRE(result->Fetch<float>(0, 0) == -123.45f);
+	REQUIRE(result->Fetch<double>(0, 0) == -123.45);
+	REQUIRE(result->Fetch<string>(0, 0) == "-123.45");
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {
