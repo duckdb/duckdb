@@ -22,6 +22,7 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLWarning;
 import java.sql.SQLXML;
+import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
@@ -29,7 +30,12 @@ import java.util.Calendar;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 
+import java.util.logging.Logger;
+import java.util.logging.Level;
+
 public class DuckDBPreparedStatement implements PreparedStatement {
+	private static Logger logger = Logger.getLogger(DuckDBPreparedStatement.class.getName());
+
 	private DuckDBConnection conn;
 
 	private ByteBuffer stmt_ref = null;
@@ -57,6 +63,20 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		prepare(sql);
 	}
 
+	private void startTransaction() throws SQLException {
+		if (this.conn.autoCommit
+			|| this.conn.transactionRunning) {
+			return;
+		}
+
+		this.conn.transactionRunning = true;
+
+		// Start transaction via Statement
+		Statement s = conn.createStatement();
+		s.execute("BEGIN TRANSACTION;");
+		s.close();
+	}
+
 	private void prepare(String sql) throws SQLException {
 		if (isClosed()) {
 			throw new SQLException("Statement was closed");
@@ -65,19 +85,31 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			throw new SQLException("sql query parameter cannot be null");
 		}
 
-		stmt_ref = null;
+		// In case the statement is reused, release old one first
+		if (stmt_ref != null) {
+			DuckDBNative.duckdb_jdbc_release(stmt_ref);
+			stmt_ref = null;
+		}
+
 		meta = null;
 		params = null;
 
 		select_result = null;
 		update_result = 0;
 
-		stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(StandardCharsets.UTF_8));
-		meta = DuckDBNative.duckdb_jdbc_meta(stmt_ref);
-		params = new Object[0];
-		// TODO add query type to meta
-		String query_type = DuckDBNative.duckdb_jdbc_prepare_type(stmt_ref);
-		is_update = !query_type.equals("SELECT") && !query_type.equals("PRAGMA") && !query_type.equals("EXPLAIN");
+		try {
+			stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(StandardCharsets.UTF_8));
+			meta = DuckDBNative.duckdb_jdbc_meta(stmt_ref);
+			params = new Object[0];
+			// TODO add query type to meta
+			String query_type = DuckDBNative.duckdb_jdbc_prepare_type(stmt_ref);
+			is_update = !query_type.equals("SELECT") && !query_type.equals("PRAGMA") && !query_type.equals("EXPLAIN");
+		}
+		catch (SQLException e) {
+			// Delete stmt_ref as it might already be allocated
+			close();
+			throw new SQLException(e);
+		}
 	}
 
 	@Override
@@ -88,9 +120,27 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (stmt_ref == null) {
 			throw new SQLException("Prepare something first");
 		}
-		ByteBuffer result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
-		select_result = new DuckDBResultSet(this, meta, result_ref);
 
+		ByteBuffer result_ref = null;
+		select_result = null;
+
+		try {
+			startTransaction();
+			result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
+			select_result = new DuckDBResultSet(this, meta, result_ref);
+		}
+		catch (SQLException e) {
+			// Delete stmt_ref as it cannot be used anymore and 
+			// result_ref as it might be allocated
+			if (select_result != null) {
+				select_result.close();
+			}
+			else if (result_ref != null) {
+				result_ref = null;
+			}
+			close();
+			throw new SQLException(e);
+		}
 		return !is_update;
 	}
 
@@ -247,7 +297,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setMaxFieldSize(int max) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		logger.log(Level.FINE, "setMaxFieldSize not supported");
 	}
 
 	@Override
@@ -270,7 +320,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setQueryTimeout(int seconds) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		logger.log(Level.FINE, "setQueryTimeout not supported");
 	}
 
 	@Override

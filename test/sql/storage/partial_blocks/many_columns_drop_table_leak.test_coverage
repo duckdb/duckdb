@@ -2,6 +2,8 @@
 # description: Verify that dropping tables with multi-use blocks does not leak memory
 # group: [partial_blocks]
 
+require skip_reload
+
 load __TEST_DIR__/many_columns.db
 
 # verify that doing this in a loop doesn't increase database size (i.e. blocks properly get added to the free list)
@@ -38,7 +40,7 @@ statement ok
 DROP TABLE integers2
 
 query I
-SELECT total_blocks<10 FROM pragma_database_size()
+SELECT total_blocks<15 FROM pragma_database_size()
 ----
 true
 

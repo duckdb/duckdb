@@ -5,9 +5,13 @@
 
 namespace duckdb {
 
-StreamQueryResult::StreamQueryResult(StatementType statement_type, shared_ptr<ClientContext> context,
-                                     vector<LogicalType> types, vector<string> names)
-    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), move(names)), context(move(context)) {
+StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProperties properties,
+                                     shared_ptr<ClientContext> context_p, vector<LogicalType> types,
+                                     vector<string> names)
+    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, properties, move(types), move(names),
+                  context_p->GetClientProperties()),
+      context(move(context_p)) {
+	D_ASSERT(context);
 }
 
 StreamQueryResult::~StreamQueryResult() {
@@ -19,23 +23,29 @@ string StreamQueryResult::ToString() {
 		result = HeaderToString();
 		result += "[[STREAM RESULT]]";
 	} else {
-		result = error + "\n";
+		result = GetError() + "\n";
 	}
 	return result;
 }
 
 unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 	if (!context) {
-		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            error);
+		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
+		if (HasError()) {
+			error_str += StringUtil::Format("\nError: %s", GetError());
+		}
+		throw InvalidInputException(error_str);
 	}
 	return context->LockContext();
 }
 
 void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 	if (!IsOpenInternal(lock)) {
-		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            error);
+		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
+		if (HasError()) {
+			error_str += StringUtil::Format("\nError: %s", GetError());
+		}
+		throw InvalidInputException(error_str);
 	}
 }
 
@@ -54,19 +64,24 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 }
 
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
-	if (!success) {
-		return make_unique<MaterializedQueryResult>(error);
+	if (HasError() || !context) {
+		return make_unique<MaterializedQueryResult>(GetErrorObject());
 	}
-	auto result = make_unique<MaterializedQueryResult>(statement_type, types, names);
+	auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+
+	ColumnDataAppendState append_state;
+	collection->InitializeAppend(append_state);
 	while (true) {
 		auto chunk = Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
-		result->collection.Append(*chunk);
+		collection->Append(append_state, *chunk);
 	}
-	if (!success) {
-		return make_unique<MaterializedQueryResult>(error);
+	auto result =
+	    make_unique<MaterializedQueryResult>(statement_type, properties, names, move(collection), client_properties);
+	if (HasError()) {
+		return make_unique<MaterializedQueryResult>(GetErrorObject());
 	}
 	return result;
 }

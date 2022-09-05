@@ -65,12 +65,12 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 			// it's need to reset the last_fetched_len
 			ResetLastFetchedVariableVal();
 			auto chunk = stmt->res->Fetch();
-			if (!stmt->res->success) {
+			if (stmt->res->HasError()) {
 				stmt->open = false;
-				stmt->error_messages.emplace_back(stmt->res->error);
+				stmt->error_messages.emplace_back(stmt->res->GetError());
 				return SQL_ERROR;
 			}
-			if (!chunk) {
+			if (!chunk || chunk->size() == 0) {
 				resultset_end = true;
 				return SQL_NO_DATA;
 			}
@@ -85,8 +85,7 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 			}
 		} catch (duckdb::Exception &e) {
 			// TODO this is quite dirty, we should have separate error holder
-			stmt->res->error = e.what();
-			stmt->res->success = false;
+			stmt->res->SetError(PreservedError(e));
 			stmt->open = false;
 			stmt->error_messages.emplace_back(std::string(e.what()));
 			return SQL_ERROR;
@@ -244,6 +243,30 @@ SQLRETURN OdbcFetch::FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *s
 	default:
 		return SQL_SUCCESS;
 	}
+}
+
+SQLRETURN OdbcFetch::DummyFetch() {
+	if (stmt_ref->retrieve_data == SQL_RD_OFF) {
+		auto row_set_size = (SQLLEN)stmt_ref->row_desc->ard->header.sql_desc_array_size;
+
+		if (stmt_ref->odbc_fetcher->chunk_row + row_set_size > stmt_ref->odbc_fetcher->row_count) {
+			row_set_size = stmt_ref->odbc_fetcher->row_count - stmt_ref->odbc_fetcher->chunk_row;
+		}
+		if (row_set_size <= 0) {
+			return SQL_NO_DATA;
+		}
+		if (stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr) {
+			duckdb::idx_t row_idx;
+			for (row_idx = 0; row_idx < (duckdb::idx_t)row_set_size; row_idx++) {
+				stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr[row_idx] = SQL_ROW_SUCCESS;
+			}
+			for (; row_idx < stmt_ref->row_desc->ard->header.sql_desc_array_size; row_idx++) {
+				stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr[row_idx] = SQL_ROW_NOROW;
+			}
+		}
+		return SQL_SUCCESS;
+	}
+	return SQL_NEED_DATA;
 }
 
 SQLRETURN OdbcFetch::GetValue(SQLUSMALLINT col_idx, duckdb::Value &value) {
@@ -427,6 +450,13 @@ size_t OdbcFetch::GetLastFetchedLength() {
 
 bool OdbcFetch::IsInExecutionState() {
 	return !chunks.empty() && current_chunk != nullptr;
+}
+
+SQLLEN OdbcFetch::GetRowCount() {
+	if (current_chunk) {
+		return duckdb::MaxValue(row_count, (SQLLEN)current_chunk->size());
+	}
+	return row_count;
 }
 
 void OdbcFetch::SetRowStatus(idx_t row_idx, SQLINTEGER status) {

@@ -5,6 +5,7 @@
             "sources": [
                 "src/duckdb_node.cpp",
                 "src/database.cpp",
+                "src/data_chunk.cpp",
                 "src/connection.cpp",
                 "src/statement.cpp",
                 "src/utils.cpp",
@@ -20,18 +21,20 @@
             ],
             "cflags_cc": [
                 "-frtti",
-                "-fexceptions"
+                "-fexceptions",
+                "-Wno-redundant-move",
             ],
             "cflags_cc!": [
-                "-fno-rrti"
+                "-fno-rrti",
                 "-fno-exceptions",
             ],
             "cflags": [
                 "-frtti",
-                "-fexceptions"
+                "-fexceptions",
+                "-Wno-redundant-move",
             ],
             "cflags!": [
-                "-fno-rrti"
+                "-fno-rrti",
                 "-fno-exceptions",
             ],
             "xcode_settings": {
@@ -40,7 +43,7 @@
                 "CLANG_CXX_LIBRARY": "libc++",
                 "MACOSX_DEPLOYMENT_TARGET": "10.15",
                 'CLANG_CXX_LANGUAGE_STANDARD':'c++11',
-                'OTHER_CFLAGS' : ['-fexceptions', '-frtti']
+                'OTHER_CFLAGS' : ['-fexceptions', '-frtti', '-Wno-redundant-move']
 
             },
             "msvs_settings": {

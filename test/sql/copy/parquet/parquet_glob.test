@@ -64,7 +64,7 @@ select count(*) from parquet_scan('')
 
 # schema mismatch in parquet glob
 statement error
-select count(*) from parquet_scan('data/parquet-testing/*.parquet')
+select * from parquet_scan('data/parquet-testing/*.parquet')
 
 # parquet glob with COPY FROM
 statement ok

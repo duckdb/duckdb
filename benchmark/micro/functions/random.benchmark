@@ -1,0 +1,12 @@
+# name: benchmark/micro/functions/random.benchmark
+# description: Run the RANDOM() function many times
+# group: [functions]
+
+name Random
+group functions
+
+load
+CREATE TABLE integers AS SELECT * FROM range(100000000)
+
+run
+SELECT SUM(RANDOM()) FROM integers

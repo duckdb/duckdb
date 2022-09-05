@@ -86,3 +86,17 @@ end
 
     DBInterface.close!(con)
 end
+
+@testset "DBInterface.prepare: ambiguous parameters" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    stmt = DBInterface.prepare(con, "SELECT ? AS a")
+    result = DataFrame(DBInterface.execute(stmt, [42]))
+    @test isequal(result.a, [42])
+
+    result = DataFrame(DBInterface.execute(stmt, ["hello world"]))
+    @test isequal(result.a, ["hello world"])
+
+    result = DataFrame(DBInterface.execute(stmt, [DateTime(1992, 9, 20, 23, 10, 33)]))
+    @test isequal(result.a, [DateTime(1992, 9, 20, 23, 10, 33)])
+end

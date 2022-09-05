@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_planner_expression
   OBJECT
+  bound_expression.cpp
   bound_aggregate_expression.cpp
   bound_between_expression.cpp
   bound_case_expression.cpp
@@ -9,7 +10,9 @@ add_library_unity(
   bound_comparison_expression.cpp
   bound_conjunction_expression.cpp
   bound_constant_expression.cpp
+  bound_default_expression.cpp
   bound_function_expression.cpp
+  bound_lambda_expression.cpp
   bound_operator_expression.cpp
   bound_parameter_expression.cpp
   bound_reference_expression.cpp

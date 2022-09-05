@@ -13,24 +13,24 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 class ClientContext;
+class ColumnDataCollection;
 
 //! The physical plan generator generates a physical execution plan from a
 //! logical query plan
 class PhysicalPlanGenerator {
 public:
-	explicit PhysicalPlanGenerator(ClientContext &context) : context(context) {
-	}
+	explicit PhysicalPlanGenerator(ClientContext &context);
+	~PhysicalPlanGenerator();
 
 	unordered_set<CatalogEntry *> dependencies;
 	//! Recursive CTEs require at least one ChunkScan, referencing the working_table.
 	//! This data structure is used to establish it.
-	unordered_map<idx_t, std::shared_ptr<ChunkCollection>> rec_ctes;
+	unordered_map<idx_t, std::shared_ptr<ColumnDataCollection>> recursive_cte_tables;
 
 public:
 	//! Creates a plan from the logical operator. This involves resolving column bindings and generating physical
@@ -42,7 +42,7 @@ protected:
 
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalAggregate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalAnyJoin &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalChunkGet &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalColumnDataGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateTable &op);

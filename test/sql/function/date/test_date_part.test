@@ -14,7 +14,21 @@ INSERT INTO dates VALUES
 	('1992-03-03', 'month'),
 	('1992-05-05', 'day'),
 	('2022-01-01', 'isoyear'),
-	('044-03-15 (BC)', 'millennium');
+	('044-03-15 (BC)', 'millennium'),
+	('infinity', 'century'),
+	('-infinity', 'decade'),
+	(NULL, 'weekday'),
+;
+
+statement ok
+CREATE TABLE specifiers (specifier VARCHAR);
+
+foreach specifier era millennium century decade year quarter month day week weekday isodow dayofyear isoyear yearweek
+
+statement ok
+INSERT INTO specifiers VALUES ('${partcode}');
+
+endloop
 
 # test date_part with different combinations of constant/non-constant columns
 query I
@@ -25,10 +39,16 @@ NULL
 NULL
 NULL
 NULL
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part(s, NULL::TIMESTAMP) FROM dates;
 ----
+NULL
+NULL
+NULL
 NULL
 NULL
 NULL
@@ -44,6 +64,9 @@ NULL
 NULL
 NULL
 NULL
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part(s, DATE '1992-01-01') FROM dates;
@@ -53,6 +76,9 @@ SELECT date_part(s, DATE '1992-01-01') FROM dates;
 1
 1992
 2
+20
+199
+3
 
 query I
 SELECT date_part('year', d) FROM dates;
@@ -62,6 +88,9 @@ SELECT date_part('year', d) FROM dates;
 1992
 2022
 -43
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part('isoyear', d) FROM dates;
@@ -71,6 +100,9 @@ SELECT date_part('isoyear', d) FROM dates;
 1992
 2021
 -43
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part(s, d) FROM dates;
@@ -80,6 +112,9 @@ SELECT date_part(s, d) FROM dates;
 5
 2021
 -1
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part('era', d) FROM dates;
@@ -89,6 +124,9 @@ SELECT date_part('era', d) FROM dates;
 1
 1
 0
+NULL
+NULL
+NULL
 
 statement error
 SELECT date_part('timezone', d) FROM dates;
@@ -108,6 +146,9 @@ NULL
 NULL
 NULL
 NULL
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part(s, TIMESTAMP '1992-01-01') FROM dates;
@@ -117,6 +158,9 @@ SELECT date_part(s, TIMESTAMP '1992-01-01') FROM dates;
 1
 1992
 2
+20
+199
+3
 
 query I
 SELECT date_part('year', d::TIMESTAMP) FROM dates;
@@ -126,6 +170,9 @@ SELECT date_part('year', d::TIMESTAMP) FROM dates;
 1992
 2022
 -43
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part('isoyear', d::TIMESTAMP) FROM dates;
@@ -135,6 +182,9 @@ SELECT date_part('isoyear', d::TIMESTAMP) FROM dates;
 1992
 2021
 -43
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part(s, d::TIMESTAMP) FROM dates;
@@ -144,6 +194,9 @@ SELECT date_part(s, d::TIMESTAMP) FROM dates;
 5
 2021
 -1
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part('era', d::TIMESTAMP) FROM dates;
@@ -153,6 +206,9 @@ SELECT date_part('era', d::TIMESTAMP) FROM dates;
 1
 1
 0
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part('timezone', d::TIMESTAMP) FROM dates;
@@ -162,6 +218,9 @@ SELECT date_part('timezone', d::TIMESTAMP) FROM dates;
 0
 0
 0
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part('timezone_hour', d::TIMESTAMP) FROM dates;
@@ -171,6 +230,9 @@ SELECT date_part('timezone_hour', d::TIMESTAMP) FROM dates;
 0
 0
 0
+NULL
+NULL
+NULL
 
 query I
 SELECT date_part('timezone_minute', d::TIMESTAMP) FROM dates;
@@ -180,6 +242,9 @@ SELECT date_part('timezone_minute', d::TIMESTAMP) FROM dates;
 0
 0
 0
+NULL
+NULL
+NULL
 
 #  last_day
 query TTT
@@ -195,6 +260,9 @@ SELECT LAST_DAY(d) FROM dates;
 1992-05-31
 2022-01-31
 0044-03-31 (BC)
+NULL
+NULL
+NULL
 
 query T
 SELECT LAST_DAY(d::timestamp) FROM dates;
@@ -204,6 +272,9 @@ SELECT LAST_DAY(d::timestamp) FROM dates;
 1992-05-31
 2022-01-31
 0044-03-31 (BC)
+NULL
+NULL
+NULL
 
 #  monthname
 query T
@@ -214,6 +285,9 @@ March
 May
 January
 March
+NULL
+NULL
+NULL
 
 #  dayname
 query T
@@ -224,6 +298,9 @@ Tuesday
 Tuesday
 Saturday
 Friday
+NULL
+NULL
+NULL
 
 #  yearweek
 query I
@@ -234,6 +311,9 @@ SELECT YEARWEEK(d) FROM dates;
 199219
 202152
 -4311
+NULL
+NULL
+NULL
 
 #  aliases
 query I
@@ -244,6 +324,9 @@ SELECT DAYOFMONTH(d) FROM dates;
 5
 1
 15
+NULL
+NULL
+NULL
 
 query I
 SELECT WEEKDAY(d) FROM dates;
@@ -253,6 +336,9 @@ SELECT WEEKDAY(d) FROM dates;
 2
 6
 5
+NULL
+NULL
+NULL
 
 query I
 SELECT WEEKOFYEAR(d) FROM dates;
@@ -262,6 +348,9 @@ SELECT WEEKOFYEAR(d) FROM dates;
 19
 52
 11
+NULL
+NULL
+NULL
 
 query IIIIIIIIIIII
 select
@@ -286,7 +375,7 @@ foreach partcode era millennium century decade year quarter month day week weekd
 query III
 SELECT d, DATE_PART('${partcode}', d) AS p, ${partcode}(d) AS f
 FROM dates
-WHERE p <> f;
+WHERE p IS DISTINCT FROM f;
 ----
 
 endloop
@@ -301,7 +390,7 @@ foreach partcode era millennium century decade year quarter month day week weekd
 query III
 SELECT d, DATE_PART('${partcode}', d) AS p, DATE_PART(['${partcode}'], d) AS st
 FROM dates
-WHERE p <> st['${partcode}'];
+WHERE p IS DISTINCT FROM st['${partcode}'];
 ----
 
 endloop
@@ -312,11 +401,14 @@ SELECT d, DATE_PART(['year', 'month', 'day'], d) AS parts
 FROM dates
 ORDER BY 1;
 ----
+NULL	NULL
+-infinity	{'year': NULL, 'month': NULL, 'day': NULL}
 0044-03-15 (BC)	{'year': -43, 'month': 3, 'day': 15}
 1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
 1992-03-03	{'year': 1992, 'month': 3, 'day': 3}
 1992-05-05	{'year': 1992, 'month': 5, 'day': 5}
 2022-01-01	{'year': 2022, 'month': 1, 'day': 1}
+infinity	{'year': NULL, 'month': NULL, 'day': NULL}
 
 # Year parts
 query II
@@ -324,11 +416,14 @@ SELECT d, DATE_PART(['era', 'millennium', 'century', 'decade', 'quarter'], d) AS
 FROM dates
 ORDER BY 1;
 ----
+NULL	NULL
+-infinity	{'era': NULL, 'millennium': NULL, 'century': NULL, 'decade': NULL, 'quarter': NULL}
 0044-03-15 (BC)	{'era': 0, 'millennium': -1, 'century': -1, 'decade': -4, 'quarter': 1}
 1992-01-01	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 1}
 1992-03-03	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 1}
 1992-05-05	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 2}
 2022-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 1}
+infinity	{'era': NULL, 'millennium': NULL, 'century': NULL, 'decade': NULL, 'quarter': NULL}
 
 # Day parts
 query II
@@ -336,11 +431,14 @@ SELECT d, DATE_PART(['weekday', 'isodow', 'doy'], d) AS parts
 FROM dates
 ORDER BY 1;
 ----
+NULL	NULL
+-infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL}
 0044-03-15 (BC)	{'weekday': 5, 'isodow': 5, 'doy': 74}
 1992-01-01	{'weekday': 3, 'isodow': 3, 'doy': 1}
 1992-03-03	{'weekday': 2, 'isodow': 2, 'doy': 63}
 1992-05-05	{'weekday': 2, 'isodow': 2, 'doy': 126}
 2022-01-01	{'weekday': 6, 'isodow': 6, 'doy': 1}
+infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL}
 
 # ISO parts
 query II
@@ -348,11 +446,14 @@ SELECT d, DATE_PART(['isoyear', 'week', 'yearweek'], d) AS parts
 FROM dates
 ORDER BY 1;
 ----
+NULL	NULL
+-infinity	{'isoyear': NULL, 'week': NULL, 'yearweek': NULL}
 0044-03-15 (BC)	{'isoyear': -43, 'week': 11, 'yearweek': -4311}
 1992-01-01	{'isoyear': 1992, 'week': 1, 'yearweek': 199201}
 1992-03-03	{'isoyear': 1992, 'week': 10, 'yearweek': 199210}
 1992-05-05	{'isoyear': 1992, 'week': 19, 'yearweek': 199219}
 2022-01-01	{'isoyear': 2021, 'week': 52, 'yearweek': 202152}
+infinity	{'isoyear': NULL, 'week': NULL, 'yearweek': NULL}
 
 # Invalid parts
 
@@ -362,5 +463,36 @@ statement error
 SELECT d, DATE_PART(['${datepart}'], d) AS parts
 FROM dates
 ORDER BY 1;
+
+endloop
+
+#
+# Infinities
+#
+# PG returns numeric ±Infinity, but we have to return an integer,
+# so instead we return NULL, which is what PG used to do.
+
+foreach datatype DATE TIMESTAMP
+
+foreach special infinity -infinity
+
+# Binary function
+query I
+SELECT DATE_PART(specifier, '${special}'::${datatype}) AS result
+FROM specifiers
+WHERE result IS NOT NULL
+----
+
+foreach unary year month day decade century millennium quarter dayofweek isodow dayofyear week isoyear era timezone timezone_hour timezone_minute epoch microsecond millisecond second minute hour yearweek dayofmonth weekday weekofyear last_day monthname dayname
+
+# Unary functions
+query I
+SELECT ${unary}('${special}'::${datatype});
+----
+NULL
+
+endloop
+
+endloop
 
 endloop

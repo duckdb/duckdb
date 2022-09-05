@@ -273,11 +273,6 @@ inline const unsigned char *ASN1_STRING_get0_data(const ASN1_STRING *asn1) {
 #include <brotli/encode.h>
 #endif
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wexit-time-destructors"
-#endif
-
 /*
  * Declaration
  */
@@ -2055,7 +2050,7 @@ inline std::string encode_url(const std::string &s) {
 	for (size_t i = 0; s[i]; i++) {
 		switch (s[i]) {
 		case ' ': result += "%20"; break;
-		case '+': result += "%2B"; break;
+//		case '+': result += "%2B"; break;
 		case '\r': result += "%0D"; break;
 		case '\n': result += "%0A"; break;
 		case '\'': result += "%27"; break;
@@ -2101,7 +2096,12 @@ inline std::string decode_url(const std::string &s,
 				int val = 0;
 				if (from_hex_to_i(s, i + 1, 2, val)) {
 					// 2 digits hex codes
-					result += static_cast<char>(val);
+					if (static_cast<char>(val) == '+'){
+						// We don't decode +
+						result += "%2B";
+					} else {
+						result += static_cast<char>(val);
+					}
 					i += 2; // '00'
 				} else {
 					result += s[i];
@@ -3700,7 +3700,7 @@ inline void parse_query_text(const std::string &s, Params &params) {
 		});
 
 		if (!key.empty()) {
-			params.emplace(decode_url(key, true), decode_url(val, true));
+			params.emplace(decode_url(key, true), decode_url(val, false));
 		}
 	});
 }
@@ -6077,7 +6077,7 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
 		return false;
 	}
 
-	auto location = detail::decode_url(res.get_header_value("location"), true);
+	auto location = detail::decode_url(res.get_header_value("location"), false);
 	if (location.empty()) { return false; }
 
 	const static Regex re(
@@ -8188,9 +8188,5 @@ inline SSL_CTX *Client::ssl_context() const {
 // ----------------------------------------------------------------------------
 
 } // namespace CPPHTTPLIB_NAMESPACE
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
 
 #endif // CPPHTTPLIB_HTTPLIB_H

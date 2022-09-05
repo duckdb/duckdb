@@ -33,7 +33,9 @@ public:
 
 public:
 	//! Convert the object to a string
-	virtual string ToString() const;
+	virtual string ToString() const = 0;
+	string BaseToString(string result) const;
+	string BaseToString(string result, const vector<string> &column_name_alias) const;
 	void Print();
 
 	virtual bool Equals(const TableRef *other) const;

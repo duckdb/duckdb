@@ -11,10 +11,19 @@ PreparedStatement::PreparedStatement(shared_ptr<ClientContext> context, shared_p
 	D_ASSERT(data || !success);
 }
 
-PreparedStatement::PreparedStatement(string error) : context(nullptr), success(false), error(move(error)) {
+PreparedStatement::PreparedStatement(PreservedError error) : context(nullptr), success(false), error(move(error)) {
 }
 
 PreparedStatement::~PreparedStatement() {
+}
+
+const string &PreparedStatement::GetError() {
+	D_ASSERT(HasError());
+	return error.Message();
+}
+
+bool PreparedStatement::HasError() const {
+	return !success;
 }
 
 idx_t PreparedStatement::ColumnCount() {
@@ -25,6 +34,11 @@ idx_t PreparedStatement::ColumnCount() {
 StatementType PreparedStatement::GetStatementType() {
 	D_ASSERT(data);
 	return data->statement_type;
+}
+
+StatementProperties PreparedStatement::GetStatementProperties() {
+	D_ASSERT(data);
+	return data->properties;
 }
 
 const vector<LogicalType> &PreparedStatement::GetTypes() {
@@ -38,19 +52,22 @@ const vector<string> &PreparedStatement::GetNames() {
 }
 
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
-	auto pending = PendingQuery(values);
-	if (!pending->success) {
-		return make_unique<MaterializedQueryResult>(pending->error);
+	auto pending = PendingQuery(values, allow_stream_result);
+	if (pending->HasError()) {
+		return make_unique<MaterializedQueryResult>(pending->GetErrorObject());
 	}
-	return pending->Execute(allow_stream_result && data->allow_stream_result);
+	return pending->Execute();
 }
 
-unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &values) {
+unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &values, bool allow_stream_result) {
 	if (!success) {
 		throw InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
 	}
 	D_ASSERT(data);
-	auto result = context->PendingQuery(query, data, values);
+	PendingQueryParameters parameters;
+	parameters.parameters = &values;
+	parameters.allow_stream_result = allow_stream_result && data->properties.allow_stream_result;
+	auto result = context->PendingQuery(query, data, parameters);
 	return result;
 }
 

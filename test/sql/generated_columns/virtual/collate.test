@@ -1,0 +1,26 @@
+# name: test/sql/generated_columns/virtual/collate.test
+# description: Test generated columns with the COLLATE option
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+#Add a collation to a generated column
+statement error
+CREATE TABLE tbl (
+	price VARCHAR,
+	also_price VARCHAR AS (price) COLLATE NOCASE
+);
+
+statement ok
+CREATE TABLE coll (
+	g1 AS (x),
+	g2 AS (x),
+	x VARCHAR COLLATE NOCASE
+);
+
+statement ok
+INSERT INTO coll VALUES ('string'), ('STRING')
+
+statement ok
+SELECT * FROM coll;

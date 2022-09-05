@@ -76,10 +76,10 @@ SELECT mod_two(a), SUM(a) FROM integers GROUP BY mod_two(a)
 
 # more nested stuff
 statement ok
-CREATE MACRO add(a, b) AS a + b
+CREATE MACRO add_mac(a, b) AS a + b
 
 statement ok
-CREATE MACRO double_add(a, b, c) AS add(add(a, b), c)
+CREATE MACRO double_add(a, b, c) AS add_mac(add_mac(a, b), c)
 
 query T
 SELECT double_add(1, 2, 3)
@@ -87,7 +87,7 @@ SELECT double_add(1, 2, 3)
 6
 
 statement ok
-CREATE MACRO triple_add1(a, b, c, d) AS add(add(a, b), add(c, d))
+CREATE MACRO triple_add1(a, b, c, d) AS add_mac(add_mac(a, b), add_mac(c, d))
 
 query T
 SELECT triple_add1(1, 2, 3, 4)
@@ -95,7 +95,7 @@ SELECT triple_add1(1, 2, 3, 4)
 10
 
 statement ok
-CREATE MACRO triple_add2(a, b, c, d) as add(add(add(a, b), c), d)
+CREATE MACRO triple_add2(a, b, c, d) as add_mac(add_mac(add_mac(a, b), c), d)
 
 query T
 SELECT triple_add2(1, 2, 3, 4)

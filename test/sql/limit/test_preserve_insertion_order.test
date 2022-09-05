@@ -1,0 +1,53 @@
+# name: test/sql/limit/test_preserve_insertion_order.test
+# description: Test limit with preserve insertion order disabled
+# group: [limit]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET preserve_insertion_order=false
+
+statement ok
+CREATE TABLE integers AS SELECT 1 FROM range(1000000)
+
+query I
+SELECT * FROM integers LIMIT 5
+----
+1
+1
+1
+1
+1
+
+query I
+SELECT * FROM integers LIMIT 5 OFFSET 500000
+----
+1
+1
+1
+1
+1
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM range(1000000) tbl (i)
+
+# we need a rowsort here because we don't preserve insertion order
+# note that rowsort is a string-based sort
+query I rowsort
+SELECT * FROM integers2 WHERE i IN (337, 195723, 442578, 994375)
+----
+195723
+337
+442578
+994375
+
+# when insertion order is disabled, there is no guarantee on which tuples come out of a LIMIT clause
+# for the LIMIT test select everything
+query I rowsort
+SELECT * FROM integers2 WHERE i IN (337, 195723, 442578, 994375) LIMIT 4
+----
+195723
+337
+442578
+994375

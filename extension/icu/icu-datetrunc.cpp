@@ -2,6 +2,7 @@
 #include "include/icu-datefunc.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -110,26 +111,33 @@ struct ICUDateTrunc : public ICUDateFunc {
 				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 				auto truncator = TruncationFactory(GetDatePartSpecifier(specifier));
 				UnaryExecutor::Execute<T, timestamp_t>(date_arg, result, args.size(), [&](T input) {
-					auto micros = SetTime(calendar.get(), input);
-					truncator(calendar.get(), micros);
-					return GetTimeUnsafe(calendar.get(), micros);
+					if (Timestamp::IsFinite(input)) {
+						auto micros = SetTime(calendar.get(), input);
+						truncator(calendar.get(), micros);
+						return GetTimeUnsafe(calendar.get(), micros);
+					} else {
+						return input;
+					}
 				});
 			}
 		} else {
 			BinaryExecutor::Execute<string_t, T, timestamp_t>(
 			    part_arg, date_arg, result, args.size(), [&](string_t specifier, T input) {
-				    auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
-				    auto micros = SetTime(calendar.get(), input);
-				    truncator(calendar.get(), micros);
-				    return GetTimeUnsafe(calendar.get(), micros);
+				    if (Timestamp::IsFinite(input)) {
+					    auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
+					    auto micros = SetTime(calendar.get(), input);
+					    truncator(calendar.get(), micros);
+					    return GetTimeUnsafe(calendar.get(), micros);
+				    } else {
+					    return input;
+				    }
 			    });
 		}
 	}
 
 	template <typename TA>
 	static ScalarFunction GetDateTruncFunction(const LogicalTypeId &type) {
-		return ScalarFunction({LogicalType::VARCHAR, type}, LogicalType::TIMESTAMP_TZ, ICUDateTruncFunction<TA>, false, false,
-		                      Bind);
+		return ScalarFunction({LogicalType::VARCHAR, type}, LogicalType::TIMESTAMP_TZ, ICUDateTruncFunction<TA>, Bind);
 	}
 
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {

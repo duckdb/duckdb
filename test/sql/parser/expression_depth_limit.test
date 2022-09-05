@@ -1,0 +1,18 @@
+# name: test/sql/parser/expression_depth_limit.test
+# description: Test max expression depth limit
+# group: [parser]
+
+statement ok
+SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
+
+statement ok
+SET max_expression_depth TO 3;
+
+statement error
+SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
+
+statement ok
+SET max_expression_depth TO 1000;
+
+statement ok
+SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));

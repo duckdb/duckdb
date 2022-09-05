@@ -50,7 +50,7 @@ public:
 	bool lhs_first = true;
 
 public:
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
@@ -61,6 +61,10 @@ public:
 	bool RequiresCache() const override {
 		return true;
 	}
+
+public:
+	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
+	vector<const PhysicalOperator *> GetSources() const override;
 
 private:
 	void GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const;

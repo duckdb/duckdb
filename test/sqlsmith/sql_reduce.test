@@ -1,0 +1,47 @@
+# name: test/sqlsmith/sql_reduce.test
+# description: Test reduce SQL statement
+# group: [sqlsmith]
+
+require sqlsmith
+
+query I
+SELECT * FROM reduce_sql_statement('SELECT a, b FROM tbl') ORDER BY 1
+----
+SELECT a FROM tbl
+SELECT a, b
+SELECT b FROM tbl
+
+query I
+SELECT * FROM reduce_sql_statement('SELECT a, b FROM tbl WHERE a AND b') ORDER BY 1
+----
+SELECT a FROM tbl WHERE (a AND b)
+SELECT a, b FROM tbl
+SELECT a, b FROM tbl WHERE NULL
+SELECT a, b FROM tbl WHERE a
+SELECT a, b FROM tbl WHERE b
+SELECT a, b WHERE (a AND b)
+SELECT b FROM tbl WHERE (a AND b)
+
+query I
+SELECT * FROM reduce_sql_statement('INSERT INTO tbl VALUES (1, 2)') ORDER BY 1
+----
+INSERT INTO tbl (VALUES (1))
+INSERT INTO tbl (VALUES (2))
+INSERT INTO tbl SELECT *
+INSERT INTO tbl SELECT NULL FROM (VALUES (1, 2))
+
+query I
+SELECT * FROM reduce_sql_statement('UPDATE tbl SET i=3, j=4 WHERE z=5') ORDER BY 1
+----
+UPDATE tbl SET i=3 WHERE z = 5
+UPDATE tbl SET i=3, j=4
+UPDATE tbl SET i=3, j=4 WHERE NULL
+UPDATE tbl SET j=4 WHERE z = 5
+
+query I
+SELECT * FROM reduce_sql_statement('DELETE FROM a WHERE i >= 2000 AND i < 5000;') ORDER BY 1
+----
+DELETE FROM a
+DELETE FROM a WHERE NULL
+DELETE FROM a WHERE i < 5000
+DELETE FROM a WHERE i >= 2000

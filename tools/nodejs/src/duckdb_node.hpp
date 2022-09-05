@@ -1,22 +1,40 @@
 #pragma once
 #define NODE_ADDON_API_DISABLE_DEPRECATED
+#include "duckdb.hpp"
+
 #include <napi.h>
 #include <queue>
 #include <unordered_map>
 
-#include "duckdb.hpp"
-
 namespace node_duckdb {
 
 struct Task {
-	Task(Napi::Reference<Napi::Object> &object_, Napi::Function cb_) : object(object_) {
-		if (!cb_.IsUndefined() && cb_.IsFunction()) {
-			callback = Persistent(cb_); // TODO not sure what this does
+	Task(Napi::Reference<Napi::Object> &object, Napi::Function cb) : object(object) {
+		if (!cb.IsUndefined() && cb.IsFunction()) {
+			callback = Persistent(cb); // TODO not sure what this does
 		}
 		object.Ref();
 	}
+	explicit Task(Napi::Reference<Napi::Object> &object) : object(object) {
+		object.Ref();
+	}
+
+	// Called on a worker thread (i.e., not the main event loop thread)
 	virtual void DoWork() = 0;
 
+	// Called on the event loop thread after the work has been completed. By
+	// default, call the associated callback, if defined. If you're writing
+	// a Task that uses promises, override this method instead of Callback.
+	virtual void DoCallback() {
+		auto env = object.Env();
+		Napi::HandleScope scope(env);
+
+		if (!callback.Value().IsUndefined()) {
+			Callback();
+		}
+	}
+
+	// Called on the event loop thread by DoCallback (see above)
 	virtual void Callback() {
 		auto env = object.Env();
 		Napi::HandleScope scope(env);
@@ -40,7 +58,8 @@ class Connection;
 
 class Database : public Napi::ObjectWrap<Database> {
 public:
-	Database(const Napi::CallbackInfo &info);
+	explicit Database(const Napi::CallbackInfo &info);
+	~Database() override;
 	static Napi::Object Init(Napi::Env env, Napi::Object exports);
 	void Process(Napi::Env env);
 	void TaskComplete(Napi::Env env);
@@ -50,8 +69,9 @@ public:
 	static bool HasInstance(Napi::Value val) {
 		Napi::Env env = val.Env();
 		Napi::HandleScope scope(env);
-		if (!val.IsObject())
+		if (!val.IsObject()) {
 			return false;
+		}
 		Napi::Object obj = val.As<Napi::Object>();
 		return obj.InstanceOf(constructor.Value());
 	}
@@ -75,17 +95,19 @@ private:
 	std::mutex task_mutex;
 	bool task_inflight;
 	static Napi::FunctionReference constructor;
+	Napi::Env env;
+	int64_t bytes_allocated = 0;
 };
 
 struct JSArgs;
-void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, nullptr_t *, JSArgs *data);
+void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *, JSArgs *data);
 
-typedef Napi::TypedThreadSafeFunction<nullptr_t, JSArgs, DuckDBNodeUDFLauncher> DuckDBNodeUDFFUnction;
+typedef Napi::TypedThreadSafeFunction<std::nullptr_t, JSArgs, DuckDBNodeUDFLauncher> duckdb_node_udf_function_t;
 
 class Connection : public Napi::ObjectWrap<Connection> {
 public:
-	Connection(const Napi::CallbackInfo &info);
-	~Connection();
+	explicit Connection(const Napi::CallbackInfo &info);
+	~Connection() override;
 	static Napi::Object Init(Napi::Env env, Napi::Object exports);
 
 public:
@@ -97,8 +119,9 @@ public:
 	static bool HasInstance(Napi::Value val) {
 		Napi::Env env = val.Env();
 		Napi::HandleScope scope(env);
-		if (!val.IsObject())
+		if (!val.IsObject()) {
 			return false;
+		}
 		Napi::Object obj = val.As<Napi::Object>();
 		return obj.InstanceOf(constructor.Value());
 	}
@@ -107,15 +130,15 @@ public:
 	static Napi::FunctionReference constructor;
 	std::unique_ptr<duckdb::Connection> connection;
 	Database *database_ref;
-	std::unordered_map<std::string, DuckDBNodeUDFFUnction> udfs;
+	std::unordered_map<std::string, duckdb_node_udf_function_t> udfs;
 };
 
 struct StatementParam;
 
 class Statement : public Napi::ObjectWrap<Statement> {
 public:
-	Statement(const Napi::CallbackInfo &info);
-	~Statement();
+	explicit Statement(const Napi::CallbackInfo &info);
+	~Statement() override;
 	static Napi::Object Init(Napi::Env env, Napi::Object exports);
 	void SetProcessFirstParam() {
 		ignore_first_param = false;
@@ -125,9 +148,8 @@ public:
 	Napi::Value All(const Napi::CallbackInfo &info);
 	Napi::Value Each(const Napi::CallbackInfo &info);
 	Napi::Value Run(const Napi::CallbackInfo &info);
-	Napi::Value Bind(const Napi::CallbackInfo &info);
-
-	Napi::Value Finalize_(const Napi::CallbackInfo &info);
+	Napi::Value Finish(const Napi::CallbackInfo &info);
+	Napi::Value Stream(const Napi::CallbackInfo &info);
 
 public:
 	static Napi::FunctionReference constructor;
@@ -138,6 +160,21 @@ public:
 
 private:
 	std::unique_ptr<StatementParam> HandleArgs(const Napi::CallbackInfo &info);
+};
+
+class QueryResult : public Napi::ObjectWrap<QueryResult> {
+public:
+	explicit QueryResult(const Napi::CallbackInfo &info);
+	~QueryResult() override;
+	static Napi::Object Init(Napi::Env env, Napi::Object exports);
+	std::unique_ptr<duckdb::QueryResult> result;
+
+public:
+	static Napi::FunctionReference constructor;
+	Napi::Value NextChunk(const Napi::CallbackInfo &info);
+
+private:
+	Database *database_ref;
 };
 
 struct TaskHolder {
@@ -157,5 +194,7 @@ public:
 		return Napi::ObjectWrap<T>::Unwrap(obj);
 	}
 };
+
+Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_types, bool with_data);
 
 } // namespace node_duckdb

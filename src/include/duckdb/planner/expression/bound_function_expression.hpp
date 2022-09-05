@@ -21,7 +21,7 @@ public:
 	                        vector<unique_ptr<Expression>> arguments, unique_ptr<FunctionData> bind_info,
 	                        bool is_operator = false);
 
-	// The bound function expression
+	//! The bound function expression
 	ScalarFunction function;
 	//! List of child-expressions of the function
 	vector<unique_ptr<Expression>> children;
@@ -40,5 +40,8 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 	void Verify() const override;
+
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
 };
 } // namespace duckdb

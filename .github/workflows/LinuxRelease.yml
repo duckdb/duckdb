@@ -17,10 +17,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
@@ -39,12 +35,13 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
-      BUILD_REST: 1
       BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_ODBC: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
+      STATIC_LIBCPP: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -53,18 +50,21 @@ jobs:
     - uses: ./.github/actions/ubuntu_16_setup
 
     - name: Build
-      run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
+      shell: bash
+      run: make
 
     - name: Test
+      shell: bash
       run: make allunit
 
     - name: Tools Tests
+      shell: bash
       run: |
         python3.7 tools/shell/shell-test.py build/release/duckdb
-        python3.7 tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
+      shell: bash
       run: |
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
@@ -73,14 +73,14 @@ jobs:
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
     - name: Deploy
+      shell: bash
       run: |
         python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
-        zip -j duckdb_rest-linux-amd64.zip build/release/tools/rest/duckdb_rest_server
         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
-        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar duckdb_odbc-linux-amd64.zip
+        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip  duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar duckdb_odbc-linux-amd64.zip
 
     - uses: actions/upload-artifact@v2
       with:
@@ -91,30 +91,78 @@ jobs:
           build/release/tools/jdbc/duckdb_jdbc.jar
 
 
+ linux-release-aarch64:
+   name: Linux (AARCH64)
+   runs-on: ubuntu-latest
+   needs: linux-release-64
+
+   container: ubuntu:18.04 # cross compiler not available in 16
+   env:
+     GEN: ninja
+     BUILD_BENCHMARK: 1
+     BUILD_ICU: 1
+     BUILD_TPCH: 1
+     BUILD_FTS: 1
+     BUILD_JSON: 1
+     BUILD_EXCEL: 1
+     TREAT_WARNINGS_AS_ERRORS: 1
+     FORCE_WARN_UNUSED: 1
+     STATIC_LIBCPP: 1
+     BUILD_ODBC: 1
+     ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
+     BUILD_JDBC: 1
+     OVERRIDE_JDBC_OS_ARCH: arm64
+     JAVA_HOME: ../../jdk8u345-b01
+
+   steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+     - uses: ./.github/actions/ubuntu_16_setup
+
+     - name: Install Stuff
+       shell: bash
+       run: |
+         apt-get update -y -qq
+         apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu 
+         curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
+
+     - name: Install unixODBC
+       shell: bash
+       run: | # we need an x86 odbc_config tool to run cmake. fun.
+         apt-get remove -y unixodbc unixodbc-dev
+         CC=gcc ./scripts/install_unixodbc.sh
+         cp build/unixodbc/build/bin/odbc_config .
+         CC=aarch64-linux-gnu-gcc ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
+         cp odbc_config build/unixodbc/build/bin/odbc_config
+
+     - name: Build
+       shell: bash
+       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
+
+     - name: Deploy
+       shell: bash
+       run: |
+         python3.7 scripts/amalgamation.py
+         zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
+         zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
+         zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+         python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+     - uses: actions/upload-artifact@v2
+       with:
+         name: duckdb-binaries-linux-aarch64
+         path: |
+           libduckdb-linux-aarch64.zip
+           duckdb_odbc-linux-aarch64.zip
+           duckdb_cli-linux-aarch64.zip
+           build/release/tools/jdbc/duckdb_jdbc.jar
+
  linux-extensions-64:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
     needs: linux-release-64
-    env:
-      GEN: ninja
-      BUILD_VISUALIZER: 1
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_HTTPFS: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      BUILD_SUBSTRAIT_EXTENSION: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
-      FORCE_WARN_UNUSED: 1
-      STATIC_OPENSSL: 1
-      DISABLE_BUILTIN_EXTENSIONS: 1
-      OPENSSL_ROOT_DIR: /usr/local/ssl
-      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-      AWS_DEFAULT_REGION: us-east-1
 
     steps:
     - uses: actions/checkout@v3
@@ -124,19 +172,15 @@ jobs:
       with:
         openssl: 1
 
-    - name: Build
-      run: |
-        make
-        rm build/release/src/libduckdb*
-
-    - name: Deploy
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh linux_amd64
-          ./scripts/extension-upload-test.sh
-        else
-          ./scripts/extension-upload-test.sh local
-        fi
+    - uses: ./.github/actions/build_extensions
+      with:
+        post_install: rm build/release/src/libduckdb*
+        deploy_as: linux_amd64
+        static_link_build: 1
+        out_of_tree_ext: 1
+        s3_id: ${{ secrets.S3_ID }}
+        s3_key: ${{ secrets.S3_KEY }}
+        signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
 
  linux-release-32:
     name: Linux (32 Bit)
@@ -151,14 +195,17 @@ jobs:
     - uses: ./.github/actions/ubuntu_16_setup
 
     - name: Build
+      shell: bash
       run: |
         mkdir -p build/release
         (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
+      shell: bash
       run: build/release/test/unittest "*"
 
     - name: Deploy
+      shell: bash
       run: |
         python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-i386.zip build/release/duckdb
@@ -188,11 +235,18 @@ jobs:
         python-version: '3.7'
 
     - name: Install
+      shell: bash
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
+      shell: bash
       run: |
         export TOOLCHAIN=`pwd`/rpi-tools
         mkdir -p build/release
@@ -202,6 +256,7 @@ jobs:
         file duckdb
 
     - name: Deploy
+      shell: bash
       run: |
         python scripts/amalgamation.py
         zip -j duckdb_cli-linux-rpi.zip build/release/duckdb
@@ -235,12 +290,20 @@ jobs:
         python-version: '3.7'
 
     - name: Install
+      shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
+      shell: bash
       run: make release
 
     - name: Test
+      shell: bash
       run: make allunit
 
  release-assert:
@@ -259,6 +322,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -266,12 +330,20 @@ jobs:
         fetch-depth: 0
 
     - name: Install
+      shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
+      shell: bash
       run: make relassert
 
     - name: Test
+      shell: bash
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
 
@@ -293,7 +365,13 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Test
+      shell: bash
       run: python scripts/test_vector_sizes.py
 
  linux-wasm-release:
@@ -306,21 +384,32 @@ jobs:
         fetch-depth: 0
 
     - name: Build Amalgamation
+      shell: bash
       run: python scripts/amalgamation.py
 
     - name: Setup
+      shell: bash
       run: ./scripts/wasm_configure.sh
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build Library Module
+      shell: bash
       run: ./scripts/wasm_build_lib.sh Release
 
     - name: Build Test Module
+      shell: bash
       run: ./scripts/wasm_build_test.sh Release
 
     - name: Test WASM Module
+      shell: bash
       run: node ./test/wasm/hello_wasm_test.js
 
     - name: Package
+      shell: bash
       run: |
         zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
         python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
@@ -345,10 +434,17 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
+      shell: bash
       run: make
 
     - name: Symbol Leakage Test
+      shell: bash
       run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
 
  linux-httpfs:
@@ -359,6 +455,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
       S3_TEST_SERVER_AVAILABLE: 1
+      GEN: ninja
 
     steps:
     - uses: actions/checkout@v3
@@ -369,25 +466,28 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: actions/setup-node@v2
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
       with:
-        node-version: '16'
+        key: ${{ github.job }}
 
     - name: Build
+      shell: bash
       run: make
 
     - name: Start S3/HTTP test server
+      shell: bash
       run: |
         sudo ./scripts/install_s3_test_server.sh
-        mkdir -p /tmp/s3rver
-        ./scripts/run_s3_test_server.sh &> /tmp/s3rver/access_log.txt &
+        ./scripts/run_s3_test_server.sh
 
     - name: Test
+      shell: bash
       run: make allunit
-
-    - name: Check S3/HTTP server log
-      if: always()
-      run: cat /tmp/s3rver/access_log.txt
 
  amalgamation-tests:
     name: Amalgamation Tests
@@ -412,6 +512,7 @@ jobs:
         version: "10.0"
 
     - name: Generate Amalgamation
+      shell: bash
       run:  |
           python scripts/amalgamation.py --extended
           python scripts/parquet_amalgamation.py

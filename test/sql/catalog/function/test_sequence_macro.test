@@ -2,6 +2,9 @@
 # description: Test Sequence Macro
 # group: [function]
 
+require skip_reload
+
+
 statement ok
 CREATE TABLE integers (i INT)
 
@@ -85,14 +88,14 @@ DROP SEQUENCE seq2
 
 # argument with side-effects not allowed
 statement ok
-CREATE MACRO add(a, b) AS a + b
+CREATE MACRO add_macro(a, b) AS a + b
 
 statement ok
 CREATE SEQUENCE seqq
 
 # TODO: uncomment when macro parameters are pushed as a projection
 #query T
-#SELECT add(i + nextval('seqq'), 5) FROM integers
+#SELECT add_macro(i + nextval('seqq'), 5) FROM integers
 #----
 #48
 #48

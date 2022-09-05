@@ -1,0 +1,32 @@
+# name: test/sql/order/hugeint_order_by_extremes.test
+# description: Issue #3471: Select fails when ordering on hugeint column
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a hugeint);
+
+statement ok
+INSERT INTO test values (-170141183460469231731687303715884105727::hugeint), (-1111::hugeint), (-1::hugeint), (0::hugeint), (1::hugeint), (1111::hugeint);
+
+query I
+SELECT * FROM test order by a;
+----
+-170141183460469231731687303715884105727
+-1111
+-1
+0
+1
+1111
+
+query I
+SELECT * FROM test order by a DESC;
+----
+1111
+1
+0
+-1
+-1111
+-170141183460469231731687303715884105727

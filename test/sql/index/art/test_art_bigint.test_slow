@@ -2,6 +2,8 @@
 # description: ART Integer Type: BIGINT
 # group: [art]
 
+require skip_reload
+
 statement ok
 PRAGMA force_index_join
 

@@ -21,8 +21,8 @@ public:
 
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
-	BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags = DEFAULT_OPEN_FLAGS,
-	                   FileOpener *opener = nullptr);
+	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags = DEFAULT_OPEN_FLAGS,
+	                              FileOpener *opener = nullptr);
 
 	FileSystem &fs;
 	string path;
@@ -32,17 +32,17 @@ public:
 	unique_ptr<FileHandle> handle;
 
 public:
-	void WriteData(const_data_ptr_t buffer, uint64_t write_size) override;
+	DUCKDB_API void WriteData(const_data_ptr_t buffer, uint64_t write_size) override;
 	//! Flush the buffer to disk and sync the file to ensure writing is completed
-	void Sync();
+	DUCKDB_API void Sync();
 	//! Flush the buffer to the file (without sync)
-	void Flush();
+	DUCKDB_API void Flush();
 	//! Returns the current size of the file
-	int64_t GetFileSize();
+	DUCKDB_API int64_t GetFileSize();
 	//! Truncate the size to a previous size (given that size <= GetFileSize())
-	void Truncate(int64_t size);
+	DUCKDB_API void Truncate(int64_t size);
 
-	idx_t GetTotalWritten();
+	DUCKDB_API idx_t GetTotalWritten();
 };
 
 } // namespace duckdb

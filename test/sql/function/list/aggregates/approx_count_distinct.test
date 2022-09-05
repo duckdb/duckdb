@@ -16,7 +16,7 @@ select list_approx_count_distinct([10]), list_approx_count_distinct(['hello']) f
 query II
 select list_approx_count_distinct(l), list_approx_count_distinct(['hello']) from list_ints;
 ----
-100	1
+98	1
 
 query I
 select list_approx_count_distinct([]) from list_ints;
@@ -29,7 +29,7 @@ INSERT INTO list_ints VALUES ([]), (NULL), ([NULL]);
 query I
 select list_approx_count_distinct(l) from list_ints;
 ----
-100
+98
 0
 NULL
 0
@@ -80,7 +80,7 @@ INSERT INTO list_ints_2 SELECT LIST(a), LIST(mod(a, 10)) FROM range(2000) tbl(a)
 query III
 SELECT list_count(a), list_approx_count_distinct(a), list_approx_count_distinct(b) from list_ints_2
 ----
-2000	2002	10
+2000	1991	10
 
 statement ok
 DELETE FROM list_ints_2
@@ -94,5 +94,5 @@ INSERT INTO list_ints_2 SELECT LIST(a), NULL FROM range(2000) tbl(a, b) WHERE a 
 query I
 SELECT list_approx_count_distinct(a) from list_ints_2;
 ----
-998
-997
+993
+986

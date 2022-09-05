@@ -15,17 +15,18 @@
 # specific language governing permissions and limitations
 # under the License.
 
-library(arrow, warn.conflicts = FALSE)
-library(dplyr, warn.conflicts = FALSE)
-library(duckdb)
-library("testthat")
-library("DBI")
 skip_on_cran()
 skip_on_os("windows")
+skip_if_not_installed("dbplyr")
+skip_if_not_installed("dplyr")
 skip_if_not_installed("arrow", "5.0.0")
 # Skip if parquet is not a capability as an indicator that Arrow is fully installed.
 skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
-skip_if_not_installed("dbplyr")
+
+library(arrow, warn.conflicts = FALSE)
+library(dplyr, warn.conflicts = FALSE)
+library(duckdb)
+library("DBI")
 
 example_data <- dplyr::tibble(
   int = c(1:3, NA_integer_, 5:10),
@@ -37,53 +38,54 @@ example_data <- dplyr::tibble(
   fct = factor(letters[c(1:4, NA, NA, 7:10)])
 )
 
-# This seems to fail on the latest released duckdb
-# test_that("to_duckdb", {
-#   ds <- InMemoryDataset$create(example_data)
+test_that("to_duckdb", {
+  ds <- InMemoryDataset$create(example_data)
+  con <- dbConnect(duckdb::duckdb())
 
-#   expect_identical(
-#     ds %>%
-#       to_duckdb() %>%
-#       collect() %>%
-#       # factors don't roundtrip https://github.com/duckdb/duckdb/issues/1879
-#       select(!fct) %>%
-#       arrange(int),
-#       example_data %>%
-#         select(!fct) %>%
-#         arrange(int)
-#   )
+  dbExecute(con, "PRAGMA threads=1")
+  expect_equal(
+    ds %>%
+      to_duckdb(con = con) %>%
+      collect() %>%
+      # factors don't roundtrip https://github.com/duckdb/duckdb/issues/1879
+      select(!fct) %>%
+      arrange(int),
+    example_data %>%
+      select(!fct) %>%
+      arrange(int)
+  )
 
-#   expect_identical(
-#     ds %>%
-#       select(int, lgl, dbl) %>%
-#       to_duckdb() %>%
-#       group_by(lgl) %>%
-#       summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
-#       collect() %>%
-#       arrange(mean_int),
-#     dplyr::tibble(
-#       lgl = c(TRUE, NA, FALSE),
-#       mean_int = c(3, 6.25, 8.5),
-#       mean_dbl = c(3.1, 6.35, 6.1)
-#     )
-#   )
+  expect_equal(
+    ds %>%
+      select(int, lgl, dbl) %>%
+      to_duckdb(con = con) %>%
+      group_by(lgl) %>%
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
+      collect() %>%
+      arrange(lgl, sum_int),
+    example_data %>%
+      select(int, lgl, dbl) %>%
+      group_by(lgl) %>%
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
+      arrange(lgl, sum_int)
+  )
 
-#   # can group_by before the to_duckdb
-#   expect_identical(
-#     ds %>%
-#       select(int, lgl, dbl) %>%
-#       group_by(lgl) %>%
-#       to_duckdb() %>%
-#       summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
-#       collect() %>%
-#       arrange(mean_int),
-#     dplyr::tibble(
-#       lgl = c(TRUE, NA, FALSE),
-#       mean_int = c(3, 6.25, 8.5),
-#       mean_dbl = c(3.1, 6.35, 6.1)
-#     )
-#   )
-# })
+  # can group_by before the to_duckdb
+  expect_equal(
+    ds %>%
+      select(int, lgl, dbl) %>%
+      group_by(lgl) %>%
+      to_duckdb(con = con) %>%
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
+      collect() %>%
+      arrange(lgl, sum_int),
+    example_data %>%
+      select(int, lgl, dbl) %>%
+      group_by(lgl) %>%
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
+      arrange(lgl, sum_int)
+  )
+})
 
 test_that("to_duckdb then to_arrow", {
   ds <- InMemoryDataset$create(example_data)
@@ -198,7 +200,7 @@ test_that("to_arrow roundtrip, with dataset", {
 # we need to create a connection separate from the ephemeral one that is made
 # with arrow_duck_connection()
 con <- dbConnect(duckdb::duckdb())
-dbExecute(con, "PRAGMA threads=2")
+dbExecute(con, "PRAGMA threads=1")
 on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
 test_that("Joining, auto-cleanup enabled", {
@@ -223,7 +225,7 @@ test_that("Joining, auto-cleanup enabled", {
   expect_true(all(c(table_one_name, table_two_name) %in% duckdb::duckdb_list_arrow(con)))
   rm(table_one, table_two)
   gc()
-  expect_false(any(c(table_one_name, table_two_name) %in% duckdb::duckdb_list_arrow(con)))
+  expect_false(any(c(table_one_name,     table_two_name) %in% duckdb::duckdb_list_arrow(con)))
 })
 
 test_that("Joining, auto-cleanup disabled", {
@@ -279,7 +281,7 @@ test_that("to_duckdb passing a connection", {
   table_four <- ds %>%
     select(int, lgl, dbl) %>%
     to_duckdb(con = con_separate, auto_disconnect = FALSE)
-  table_four_name <- table_four$ops$x
+  table_four_name <- dbplyr::remote_name(table_four)
 
   result <- DBI::dbGetQuery(
     con_separate,

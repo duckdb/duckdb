@@ -23,7 +23,7 @@
 
 %type <list>	distinct_clause opt_all_clause name_list_opt_comma opt_name_list
 				sort_clause opt_sort_clause sortby_list name_list from_clause from_list from_list_opt_comma opt_array_bounds
-				qualified_name_list any_name 				any_operator expr_list	opt_expr_list attrs expr_list_opt_comma opt_expr_list_opt_comma
+				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma
 				target_list			 			 indirection opt_indirection target_list_opt_comma opt_target_list_opt_comma
 			 group_clause select_limit
 				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers
@@ -90,7 +90,7 @@
 
 
 
-%type <typnam>	Typename SimpleTypename ConstTypename
+%type <typnam>	Typename SimpleTypename ConstTypename opt_Typename
 				GenericType Numeric opt_float
 				Character ConstCharacter
 				CharacterWithLength CharacterWithoutLength

@@ -12,10 +12,13 @@ namespace duckdb {
 
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
 	config = GetTestConfig();
-	config->load_extensions = false;
+	config->options.load_extensions = false;
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
+	config.reset();
+	con.reset();
+	db.reset();
 	for (auto &loaded_path : loaded_databases) {
 		if (loaded_path.empty()) {
 			continue;
@@ -73,6 +76,9 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 
 	db = make_unique<DuckDB>(dbpath, config.get());
 	con = make_unique<Connection>(*db);
+	if (enable_verification) {
+		con->EnableQueryVerification();
+	}
 
 	// load any previously loaded extensions again
 	for (auto &extension : extensions) {
@@ -209,6 +215,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			auto system_name = StringUtil::Lower(token.parameters[0]);
 			bool our_system = system_name == "duckdb";
+			if (original_sqlite_test) {
+				our_system = our_system || system_name == "postgresql";
+			}
 			if (our_system == skip_if) {
 				// we skip this command in two situations
 				// (1) skipif duckdb
@@ -298,7 +307,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				if (sort_style == "nosort") {
 					/* Do no sorting */
 					command->sort_style = SortStyle::NO_SORT;
-				} else if (sort_style == "rowsort") {
+				} else if (sort_style == "rowsort" || sort_style == "sort") {
 					/* Row-oriented sorting */
 					command->sort_style = SortStyle::ROW_SORT;
 				} else if (sort_style == "valuesort") {
@@ -469,6 +478,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 			} else if (param == "test_helper") {
 				db->LoadExtension<TestHelperExtension>();
+			} else if (param == "skip_reload") {
+				skip_reload = true;
 			} else {
 				auto result = ExtensionHelper::LoadExtension(*db, param);
 				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
@@ -512,11 +523,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			// set up the config file
 			if (readonly) {
-				config->use_temporary_directory = false;
-				config->access_mode = AccessMode::READ_ONLY;
+				config->options.use_temporary_directory = false;
+				config->options.access_mode = AccessMode::READ_ONLY;
 			} else {
-				config->use_temporary_directory = true;
-				config->access_mode = AccessMode::AUTOMATIC;
+				config->options.use_temporary_directory = true;
+				config->options.access_mode = AccessMode::AUTOMATIC;
 			}
 			// now create the database file
 			LoadDatabase(dbpath);

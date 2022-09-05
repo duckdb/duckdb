@@ -21,74 +21,9 @@ void SubstringDetection(string &str_1, string &str_2, const string &name_str_1, 
 	}
 }
 
-static bool ParseBoolean(vector<Value> &set) {
-	if (set.empty()) {
-		// no option specified: default to true
-		return true;
-	}
-	if (set.size() > 1) {
-		throw BinderException("Expected a single argument as a boolean value (e.g. TRUE or 1)");
-	}
-	if (set[0].type() == LogicalType::FLOAT || set[0].type() == LogicalType::DOUBLE ||
-	    set[0].type().id() == LogicalTypeId::DECIMAL) {
-		throw BinderException("Expected a boolean value (e.g. TRUE or 1)");
-	}
-	return BooleanValue::Get(set[0].CastAs(LogicalType::BOOLEAN));
-}
-
-static string ParseString(vector<Value> &set) {
-	if (set.size() != 1) {
-		// no option specified or multiple options specified
-		throw BinderException("Expected a single argument as a string value");
-	}
-	if (set[0].type().id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("Expected a string argument!");
-	}
-	return set[0].GetValue<string>();
-}
-
-static int64_t ParseInteger(vector<Value> &set) {
-	if (set.size() != 1) {
-		// no option specified or multiple options specified
-		throw BinderException("Expected a single argument as a integer value");
-	}
-	return set[0].GetValue<int64_t>();
-}
-
 //===--------------------------------------------------------------------===//
 // Bind
 //===--------------------------------------------------------------------===//
-static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, vector<Value> &set) {
-	if (StringUtil::StartsWith(loption, "delim") || StringUtil::StartsWith(loption, "sep")) {
-		options.SetDelimiter(ParseString(set));
-	} else if (loption == "quote") {
-		options.quote = ParseString(set);
-		options.has_quote = true;
-	} else if (loption == "escape") {
-		options.escape = ParseString(set);
-		options.has_escape = true;
-	} else if (loption == "header") {
-		options.header = ParseBoolean(set);
-		options.has_header = true;
-	} else if (loption == "null") {
-		options.null_str = ParseString(set);
-	} else if (loption == "encoding") {
-		auto encoding = StringUtil::Lower(ParseString(set));
-		if (encoding != "utf8" && encoding != "utf-8") {
-			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
-		}
-	} else if (loption == "compression") {
-		options.compression = FileCompressionTypeFromString(ParseString(set));
-	} else if (loption == "skip") {
-		options.skip_rows = ParseInteger(set);
-	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
-		options.maximum_line_size = ParseInteger(set);
-	} else {
-		// unrecognized option in base CSV
-		return false;
-	}
-	return true;
-}
 
 void BaseCSVData::Finalize() {
 	// verify that the options are correct in the final pass
@@ -122,35 +57,11 @@ void BaseCSVData::Finalize() {
 	}
 }
 
-static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
-	vector<bool> result;
+static Value ConvertVectorToValue(vector<Value> set) {
 	if (set.empty()) {
-		throw BinderException("Expected a column list or * as parameter");
+		return Value::EMPTYLIST(LogicalType::BOOLEAN);
 	}
-	if (set.size() == 1 && set[0].type().id() == LogicalTypeId::VARCHAR && set[0].GetValue<string>() == "*") {
-		// *, force_not_null on all columns
-		result.resize(names.size(), true);
-	} else {
-		// list of options: parse the list
-		unordered_map<string, bool> option_map;
-		for (idx_t i = 0; i < set.size(); i++) {
-			option_map[set[i].ToString()] = false;
-		}
-		result.resize(names.size(), false);
-		for (idx_t i = 0; i < names.size(); i++) {
-			auto entry = option_map.find(names[i]);
-			if (entry != option_map.end()) {
-				result[i] = true;
-				entry->second = true;
-			}
-		}
-		for (auto &entry : option_map) {
-			if (!entry.second) {
-				throw BinderException("Column %s not found in table", entry.first.c_str());
-			}
-		}
-	}
-	return result;
+	return Value::LIST(move(set));
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
@@ -161,19 +72,12 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		if (ParseBaseOption(bind_data->options, loption, set)) {
-			// parsed option in base CSV options: continue
-			continue;
-		} else if (loption == "force_quote") {
-			bind_data->force_quote = ParseColumnList(set, names);
-		} else {
-			throw NotImplementedException("Unrecognized option for CSV: %s", option.first.c_str());
-		}
+		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(move(set)));
 	}
 	// verify the parsed options
-	if (bind_data->force_quote.empty()) {
+	if (bind_data->options.force_quote.empty()) {
 		// no FORCE_QUOTE specified: initialize to false
-		bind_data->force_quote.resize(names.size(), false);
+		bind_data->options.force_quote.resize(names.size(), false);
 	}
 	bind_data->Finalize();
 	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
@@ -200,63 +104,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		if (loption == "auto_detect") {
-			options.auto_detect = ParseBoolean(set);
-		} else if (ParseBaseOption(options, loption, set)) {
-			// parsed option in base CSV options: continue
-			continue;
-		} else if (loption == "sample_size") {
-			int64_t sample_size = ParseInteger(set);
-			if (sample_size < 1 && sample_size != -1) {
-				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
-			}
-			if (sample_size == -1) {
-				options.sample_chunks = std::numeric_limits<uint64_t>::max();
-				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
-			} else if (sample_size <= STANDARD_VECTOR_SIZE) {
-				options.sample_chunk_size = sample_size;
-				options.sample_chunks = 1;
-			} else {
-				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
-				options.sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
-			}
-		} else if (loption == "sample_chunk_size") {
-			options.sample_chunk_size = ParseInteger(set);
-			if (options.sample_chunk_size > STANDARD_VECTOR_SIZE) {
-				throw BinderException(
-				    "Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
-				    STANDARD_VECTOR_SIZE);
-			} else if (options.sample_chunk_size < 1) {
-				throw BinderException("Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be smaller than 1");
-			}
-		} else if (loption == "sample_chunks") {
-			options.sample_chunks = ParseInteger(set);
-			if (options.sample_chunks < 1) {
-				throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
-			}
-		} else if (loption == "force_not_null") {
-			options.force_not_null = ParseColumnList(set, expected_names);
-		} else if (loption == "date_format" || loption == "dateformat") {
-			string format = ParseString(set);
-			auto &date_format = options.date_format[LogicalTypeId::DATE];
-			string error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
-			date_format.format_specifier = format;
-			if (!error.empty()) {
-				throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
-			}
-			options.has_format[LogicalTypeId::DATE] = true;
-		} else if (loption == "timestamp_format" || loption == "timestampformat") {
-			string format = ParseString(set);
-			auto &timestamp_format = options.date_format[LogicalTypeId::TIMESTAMP];
-			string error = StrTimeFormat::ParseFormatSpecifier(format, timestamp_format);
-			timestamp_format.format_specifier = format;
-			if (!error.empty()) {
-				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
-			}
-			options.has_format[LogicalTypeId::TIMESTAMP] = true;
-		} else {
-			throw NotImplementedException("Unrecognized option for CSV: %s", option.first.c_str());
-		}
+		options.SetReadOption(loption, ConvertVectorToValue(move(set)), expected_names);
 	}
 	// verify the parsed options
 	if (options.force_not_null.empty()) {
@@ -414,15 +262,15 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 	unique_ptr<FileHandle> handle;
 };
 
-static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &context, FunctionData &bind_data) {
+static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto local_data = make_unique<LocalReadCSVData>();
 
 	// create the chunk with VARCHAR types
 	vector<LogicalType> types;
-	types.resize(csv_data.names.size(), LogicalType::VARCHAR);
+	types.resize(csv_data.options.names.size(), LogicalType::VARCHAR);
 
-	local_data->cast_chunk.Initialize(types);
+	local_data->cast_chunk.Initialize(Allocator::Get(context.client), types);
 	return move(local_data);
 }
 
@@ -436,11 +284,12 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	if (options.header) {
 		BufferedSerializer serializer;
 		// write the header line to the file
-		for (idx_t i = 0; i < csv_data.names.size(); i++) {
+		for (idx_t i = 0; i < csv_data.options.names.size(); i++) {
 			if (i != 0) {
 				serializer.WriteBufferData(options.delimiter);
 			}
-			WriteQuotedString(serializer, csv_data, csv_data.names[i].c_str(), csv_data.names[i].size(), false);
+			WriteQuotedString(serializer, csv_data, csv_data.options.names[i].c_str(), csv_data.options.names[i].size(),
+			                  false);
 		}
 		serializer.WriteBufferData(csv_data.newline);
 
@@ -449,7 +298,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	return move(global_data);
 }
 
-static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                          LocalFunctionData &lstate, DataChunk &input) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
@@ -465,13 +314,22 @@ static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, Global
 		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// VARCHAR, just create a reference
 			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
+		} else if (options.has_format[LogicalTypeId::DATE] && csv_data.sql_types[col_idx].id() == LogicalTypeId::DATE) {
+			// use the date format to cast the chunk
+			csv_data.options.write_date_format[LogicalTypeId::DATE].ConvertDateVector(
+			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
+		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
+		           csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+			// use the timestamp format to cast the chunk
+			csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP].ConvertTimestampVector(
+			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		} else {
 			// non varchar column, perform the cast
 			VectorOperations::Cast(input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		}
 	}
 
-	cast_chunk.Normalify();
+	cast_chunk.Flatten();
 	auto &writer = local_data.serializer;
 	// now loop over the vectors and output the values
 	for (idx_t row_idx = 0; row_idx < cast_chunk.size(); row_idx++) {
@@ -493,7 +351,7 @@ static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, Global
 			// (e.g. integers only require quotes if the delimiter is a number, decimals only require quotes if the
 			// delimiter is a number or "." character)
 			WriteQuotedString(writer, csv_data, str_value.GetDataUnsafe(), str_value.GetSize(),
-			                  csv_data.force_quote[col_idx]);
+			                  csv_data.options.force_quote[col_idx]);
 		}
 		writer.WriteBufferData(csv_data.newline);
 	}
@@ -507,7 +365,7 @@ static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, Global
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                             LocalFunctionData &lstate) {
 	auto &local_data = (LocalReadCSVData &)lstate;
 	auto &global_state = (GlobalWriteCSVData &)gstate;

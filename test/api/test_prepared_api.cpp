@@ -8,6 +8,7 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 
 	// prepare no statements
 	REQUIRE_FAIL(con.Prepare(""));
@@ -56,10 +57,13 @@ TEST_CASE("Test type resolution of function with parameter expressions", "[api]"
 
 	// can deduce type of prepared parameter here
 	auto prepared = con.Prepare("select 1 + $1");
-	REQUIRE(prepared->error.empty());
+	REQUIRE(!prepared->error);
 
 	result = prepared->Execute(1);
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	// no prepared statement
+	REQUIRE_FAIL(con.SendQuery("SELECT ?"));
 }
 
 TEST_CASE("Test prepared statements and dependencies", "[api]") {
@@ -130,9 +134,9 @@ TEST_CASE("Alter table and prepared statements", "[api]") {
 	// we can alter the type of the column
 	REQUIRE_NO_FAIL(con2.Query("ALTER TABLE a ALTER i TYPE BIGINT USING i"));
 
-	// after the table is altered, the return types change, so we fail executing the statement
-	REQUIRE_FAIL(prepared->Execute(12));
-	REQUIRE_FAIL(prepared->Execute(12));
+	// after the table is altered, the return types change, but the rebind is still successful
+	result = prepared->Execute(12);
+	REQUIRE(CHECK_COLUMN(result, 0, {12}));
 }
 
 TEST_CASE("Test destructors of prepared statements", "[api]") {
@@ -171,7 +175,7 @@ TEST_CASE("Test destructors of prepared statements", "[api]") {
 	REQUIRE_NO_FAIL(con->Query("SELECT 42"));
 	// we can also prepare new statements
 	prepare = con->Prepare("SELECT $1::INTEGER+$2::INTEGER");
-	REQUIRE(prepare->success);
+	REQUIRE(!prepare->HasError());
 }
 
 TEST_CASE("Test incorrect usage of prepared statements API", "[api]") {
@@ -191,12 +195,12 @@ TEST_CASE("Test incorrect usage of prepared statements API", "[api]") {
 	// prepare an SQL string with a parse error
 	auto prepare = con.Prepare("SELEC COUNT(*) FROM a WHERE i=$1");
 	// we cannot execute this prepared statement
-	REQUIRE(!prepare->success);
+	REQUIRE(prepare->HasError());
 	REQUIRE_THROWS(prepare->Execute(12));
 
 	// cannot prepare multiple statements at once
 	prepare = con.Prepare("SELECT COUNT(*) FROM a WHERE i=$1; SELECT 42+$2;");
-	REQUIRE(!prepare->success);
+	REQUIRE(prepare->HasError());
 	REQUIRE_THROWS(prepare->Execute(12));
 
 	// also not in the Query syntax
@@ -251,31 +255,28 @@ TEST_CASE("Test prepared statement parameter counting", "[api]") {
 	Connection con(db);
 
 	auto p0 = con.Prepare("SELECT 42");
-	REQUIRE(p0->success);
+	REQUIRE(!p0->HasError());
 	REQUIRE(p0->n_param == 0);
 
 	auto p1 = con.Prepare("SELECT $1::int");
-	REQUIRE(p1->success);
+	REQUIRE(!p1->HasError());
 	REQUIRE(p1->n_param == 1);
 
 	p1 = con.Prepare("SELECT ?::int");
-	REQUIRE(p1->success);
+	REQUIRE(!p1->HasError());
 	REQUIRE(p1->n_param == 1);
 
 	auto p2 = con.Prepare("SELECT $1::int");
-	REQUIRE(p2->success);
+	REQUIRE(!p2->HasError());
 	REQUIRE(p2->n_param == 1);
 
 	auto p3 = con.Prepare("SELECT ?::int, ?::string");
-	REQUIRE(p3->success);
+	REQUIRE(!p3->HasError());
 	REQUIRE(p3->n_param == 2);
 
 	auto p4 = con.Prepare("SELECT $1::int, $2::string");
-	REQUIRE(p4->success);
+	REQUIRE(!p4->HasError());
 	REQUIRE(p4->n_param == 2);
-
-	auto p5 = con.Prepare("SELECT $2::int, $2::string");
-	REQUIRE(!p5->success);
 }
 
 TEST_CASE("Test ANALYZE", "[api]") {
@@ -289,14 +290,14 @@ TEST_CASE("Test ANALYZE", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("VACUUM"));
 
 	auto prep = con.Prepare("ANALYZE");
-	REQUIRE(prep->success);
+	REQUIRE(!prep->HasError());
 	auto res = prep->Execute();
-	REQUIRE(res->success);
+	REQUIRE(!res->HasError());
 
 	prep = con.Prepare("VACUUM");
-	REQUIRE(prep->success);
+	REQUIRE(!prep->HasError());
 	res = prep->Execute();
-	REQUIRE(res->success);
+	REQUIRE(!res->HasError());
 }
 
 TEST_CASE("Test DECIMAL with PreparedStatement", "[api]") {
@@ -337,7 +338,7 @@ TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 	Value blob_val = Value::BLOB((const_data_ptr_t)blob_chars.get(), num_chars);
 	unique_ptr<PreparedStatement> ps = con.Prepare("INSERT INTO blobs VALUES (?::BYTEA)");
 	ps->Execute(blob_val);
-	REQUIRE(ps->success);
+	REQUIRE(!ps->HasError());
 	ps.reset();
 
 	// Testing if the bytes are stored correctly
@@ -383,13 +384,13 @@ TEST_CASE("PREPARE multiple statements", "[prepared]") {
 	string query = "SELECT $1::INTEGER; SELECT $1::INTEGER;";
 	// cannot prepare multiple statements like this
 	auto prepared = con.Prepare(query);
-	REQUIRE(!prepared->success);
+	REQUIRE(prepared->HasError());
 	// we can use ExtractStatements to execute the individual statements though
 	auto statements = con.ExtractStatements(query);
 	for (auto &statement : statements) {
 		string stmt = query.substr(statement->stmt_location, statement->stmt_length);
 		prepared = con.Prepare(stmt);
-		REQUIRE(prepared->success);
+		REQUIRE(!prepared->HasError());
 
 		result = prepared->Execute(1);
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
@@ -398,7 +399,7 @@ TEST_CASE("PREPARE multiple statements", "[prepared]") {
 
 static unique_ptr<QueryResult> TestExecutePrepared(Connection &con, string query) {
 	auto prepared = con.Prepare(query);
-	REQUIRE(prepared->success);
+	REQUIRE(!prepared->HasError());
 	return prepared->Execute();
 }
 
@@ -455,4 +456,23 @@ TEST_CASE("Prepare all types of statements", "[prepared]") {
 
 	// TRANSACTION
 	REQUIRE_NO_FAIL(TestExecutePrepared(con, "COMMIT"));
+}
+
+TEST_CASE("Test ambiguous prepared statement parameter types", "[api]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	result = con.Query("SELECT ?", 42);
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	result = con.Query("SELECT ?", "hello");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+
+	auto prep = con.Prepare("SELECT ?");
+	result = prep->Execute(42);
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	result = prep->Execute("hello");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
 }

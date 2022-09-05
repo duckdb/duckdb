@@ -15,7 +15,6 @@
 
 namespace duckdb {
 
-class ColumnStatistics;
 class DataTable;
 struct CreateViewInfo;
 
@@ -40,7 +39,7 @@ public:
 	//! Serialize the meta information of the ViewCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
-	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &source);
+	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &source, ClientContext &context);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
 

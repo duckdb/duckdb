@@ -90,8 +90,8 @@ from bool;
 query II
 select approx_count_distinct(a), approx_count_distinct(b) from t group by b%2;
 ----
-50513	5
-50611	5
+49874	5
+51026	5
 
 query II
 select arg_min(b,a), arg_max(b,a) from t;

@@ -1,18 +1,19 @@
 #include "duckdb/storage/statistics/struct_statistics.hpp"
-#include "duckdb/common/types/vector.hpp"
+
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
-StructStatistics::StructStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
+StructStatistics::StructStatistics(LogicalType type_p) : BaseStatistics(move(type_p), StatisticsType::LOCAL_STATS) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+	InitializeBase();
 
 	auto &child_types = StructType::GetChildTypes(type);
 	child_stats.resize(child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second);
+		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second, StatisticsType::LOCAL_STATS);
 	}
-	validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 void StructStatistics::Merge(const BaseStatistics &other_p) {
@@ -36,14 +37,13 @@ FilterPropagateResult StructStatistics::CheckZonemap(ExpressionType comparison_t
 // LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> StructStatistics::Copy() const {
-	auto copy = make_unique<StructStatistics>(type);
-	if (validity_stats) {
-		copy->validity_stats = validity_stats->Copy();
-	}
+	auto result = make_unique<StructStatistics>(type);
+	result->CopyBase(*this);
+
 	for (idx_t i = 0; i < child_stats.size(); i++) {
-		copy->child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
+		result->child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
 	}
-	return move(copy);
+	return move(result);
 }
 
 void StructStatistics::Serialize(FieldWriter &writer) const {
@@ -89,7 +89,7 @@ string StructStatistics::ToString() const {
 		result += child_types[i].first + ": " + (child_stats[i] ? child_stats[i]->ToString() : "No Stats");
 	}
 	result += "}";
-	result += validity_stats ? validity_stats->ToString() : "";
+	result += BaseStatistics::ToString();
 	return result;
 }
 

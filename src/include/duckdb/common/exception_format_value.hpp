@@ -27,8 +27,8 @@ struct ExceptionFormatValue {
 
 	ExceptionFormatValueType type;
 
-	double dbl_val;
-	int64_t int_val;
+	double dbl_val = 0;
+	int64_t int_val = 0;
 	string str_val;
 
 public:

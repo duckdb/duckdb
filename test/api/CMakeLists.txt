@@ -11,6 +11,8 @@ set(TEST_API_OBJECTS
     test_table_info.cpp
     test_appender_api.cpp
     test_pending_query.cpp
+    test_plan_serialization.cpp
+    test_plan_serialization_across_versions.cpp
     test_relation_api.cpp
     test_query_profiler.cpp
     test_dbdir.cpp

@@ -35,12 +35,14 @@ public:
 	string schema;
 	//! Name of the aggregate function
 	string function_name;
-	//! The child expression of the main window aggregate
+	//! The child expression of the main window function
 	vector<unique_ptr<ParsedExpression>> children;
 	//! The set of expressions to partition by
 	vector<unique_ptr<ParsedExpression>> partitions;
 	//! The set of ordering clauses
 	vector<OrderByNode> orders;
+	//! Expression representing a filter, only used for aggregates
+	unique_ptr<ParsedExpression> filter_expr;
 	//! True to ignore NULL values
 	bool ignore_nulls;
 	//! The window boundaries
@@ -89,8 +91,13 @@ public:
 		if (entry.ignore_nulls) {
 			result += " IGNORE NULLS";
 		}
+		// FILTER
+		if (entry.filter_expr) {
+			result += ") FILTER (WHERE " + entry.filter_expr->ToString();
+		}
+
 		// Over clause
-		result += ") OVER(";
+		result += ") OVER (";
 		string sep;
 
 		// Partitions

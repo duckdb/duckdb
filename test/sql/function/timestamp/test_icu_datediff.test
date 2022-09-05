@@ -38,6 +38,31 @@ SELECT DATEDIFF('isoyear', '2022-01-01 00:00:00-08'::TIMESTAMPTZ, '2022-01-03 00
 ----
 1
 
+#
+# Infinities
+#
+foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour
+
+foreach lspecial infinity -infinity 2004-01-31T12:00:00.000050-08
+
+foreach rspecial infinity -infinity
+
+query I
+SELECT DATEDIFF('${specifier}', '${lspecial}'::TIMESTAMPTZ, '${rspecial}'::TIMESTAMPTZ);
+----
+NULL
+
+query I
+SELECT DATEDIFF('${specifier}', '${rspecial}'::TIMESTAMPTZ, '${lspecial}'::TIMESTAMPTZ);
+----
+NULL
+
+endloop
+
+endloop
+
+endloop
+
 # Negation
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
 

@@ -81,7 +81,7 @@ SQLRETURN ParameterDescriptor::GetParamValues(std::vector<Value> &values) {
 				return SQL_ERROR;
 			}
 		}
-		values.emplace_back(GetNextValue());
+		values.emplace_back(GetNextValue(rec_idx));
 	}
 	return SetParamIndex();
 }
@@ -243,7 +243,7 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 	auto sql_ind_ptr_val_set = GetSQLDescIndicatorPtr(*apd_record, val_idx);
 	if (sql_data_ptr == nullptr || sql_ind_ptr == nullptr || *sql_ind_ptr_val_set == SQL_NULL_DATA) {
 		Value val_null(nullptr);
-		SetValue(val_null, val_idx);
+		SetValue(val_null, rec_idx);
 		return SQL_SUCCESS;
 	}
 
@@ -260,7 +260,9 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 	switch (ipd->records[rec_idx].sql_desc_type) {
 	case SQL_CHAR:
 	case SQL_VARCHAR: {
-		auto str_data = (char *)sql_data_ptr + (val_idx * ipd->records[rec_idx].sql_desc_length);
+		auto buff_size = duckdb::MaxValue((SQLLEN)ipd->records[rec_idx].sql_desc_length,
+		                                  apd->records[rec_idx].sql_desc_octet_length);
+		auto str_data = (char *)sql_data_ptr + (val_idx * buff_size);
 		if (*sql_ind_ptr_val_set == SQL_NTS) {
 			*sql_ind_ptr_val_set = strlen(str_data);
 		}
@@ -269,7 +271,9 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 		break;
 	}
 	case SQL_WCHAR: {
-		auto str_data = (wchar_t *)sql_data_ptr + (val_idx * ipd->records[rec_idx].sql_desc_length);
+		auto buff_size = duckdb::MaxValue((SQLLEN)ipd->records[rec_idx].sql_desc_length,
+		                                  apd->records[rec_idx].sql_desc_octet_length);
+		auto str_data = (wchar_t *)sql_data_ptr + (val_idx * buff_size);
 		if (*sql_ind_ptr_val_set == SQL_NTS) {
 			*sql_ind_ptr_val_set = wcslen(str_data);
 		}
@@ -279,7 +283,9 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 	}
 	case SQL_VARBINARY:
 	case SQL_BINARY: {
-		auto blob_data = (duckdb::const_data_ptr_t)sql_data_ptr + (val_idx * ipd->records[rec_idx].sql_desc_length);
+		auto buff_size = duckdb::MaxValue((SQLLEN)ipd->records[rec_idx].sql_desc_length,
+		                                  apd->records[rec_idx].sql_desc_octet_length);
+		auto blob_data = (duckdb::const_data_ptr_t)sql_data_ptr + (val_idx * buff_size);
 		auto blob_len = *sql_ind_ptr_val_set;
 		value = Value::BLOB(blob_data, blob_len);
 		break;
@@ -343,7 +349,7 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 		return SQL_PARAM_ERROR;
 	}
 
-	SetValue(value, val_idx);
+	SetValue(value, rec_idx);
 	return SQL_PARAM_SUCCESS;
 }
 
@@ -356,12 +362,15 @@ void ParameterDescriptor::SetValue(Value &value, idx_t val_idx) {
 	values[val_idx] = value;
 }
 
-Value ParameterDescriptor::GetNextValue() {
-	return values[paramset_idx];
+Value ParameterDescriptor::GetNextValue(idx_t val_idx) {
+	return values[val_idx];
 }
 
 SQLRETURN ParameterDescriptor::SetParamIndex() {
 	++paramset_idx;
+	if (ipd->header.sql_desc_rows_processed_ptr) {
+		*ipd->header.sql_desc_rows_processed_ptr = paramset_idx;
+	}
 	if (paramset_idx == cur_apd->header.sql_desc_array_size) {
 		return SQL_SUCCESS;
 	}

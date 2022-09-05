@@ -13,6 +13,19 @@
 namespace duckdb {
 
 struct DateSub {
+	template <class TA, class TB, class TR, class OP>
+	static inline void BinaryExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+		BinaryExecutor::ExecuteWithNulls<TA, TB, TR>(
+		    left, right, result, count, [&](TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
+			    if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
+				    return OP::template Operation<TA, TB, TR>(startdate, enddate);
+			    } else {
+				    mask.SetInvalid(idx);
+				    return TR();
+			    }
+		    });
+	}
+
 	struct MonthOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA start_ts, TB end_ts) {
@@ -339,8 +352,13 @@ static int64_t SubtractDateParts(DatePartSpecifier type, TA startdate, TB enddat
 
 struct DateSubTernaryOperator {
 	template <typename TS, typename TA, typename TB, typename TR>
-	static inline TR Operation(TS part, TA startdate, TB enddate) {
-		return SubtractDateParts<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
+	static inline TR Operation(TS part, TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
+		if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
+			return SubtractDateParts<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
+		} else {
+			mask.SetInvalid(idx);
+			return TR();
+		}
 	}
 };
 
@@ -349,48 +367,48 @@ static void DateSubBinaryExecutor(DatePartSpecifier type, Vector &left, Vector &
 	switch (type) {
 	case DatePartSpecifier::YEAR:
 	case DatePartSpecifier::ISOYEAR:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::YearOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::YearOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MONTH:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::MonthOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::MonthOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::DayOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::DayOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::DECADE:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::DecadeOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::DecadeOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::CENTURY:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::CenturyOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::CenturyOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MILLENNIUM:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::MilleniumOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::MilleniumOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::QUARTER:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::QuarterOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::QuarterOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::WeekOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::WeekOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::MicrosecondsOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::MicrosecondsOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::MillisecondsOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::MillisecondsOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::SECOND:
 	case DatePartSpecifier::EPOCH:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::SecondsOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::SecondsOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MINUTE:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::MinutesOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::MinutesOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::HOUR:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateSub::HoursOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::HoursOperator>(left, right, result, count);
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATESUB");
@@ -401,8 +419,8 @@ template <typename T>
 static void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 3);
 	auto &part_arg = args.data[0];
-	auto &startdate_arg = args.data[1];
-	auto &enddate_arg = args.data[2];
+	auto &start_arg = args.data[1];
+	auto &end_arg = args.data[2];
 
 	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Common case of constant part.
@@ -411,11 +429,12 @@ static void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &res
 			ConstantVector::SetNull(result, true);
 		} else {
 			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
-			DateSubBinaryExecutor<T, T, int64_t>(type, startdate_arg, enddate_arg, result, args.size());
+			DateSubBinaryExecutor<T, T, int64_t>(type, start_arg, end_arg, result, args.size());
 		}
 	} else {
-		TernaryExecutor::Execute<string_t, T, T, int64_t>(part_arg, startdate_arg, enddate_arg, result, args.size(),
-		                                                  DateSubTernaryOperator::Operation<string_t, T, T, int64_t>);
+		TernaryExecutor::ExecuteWithNulls<string_t, T, T, int64_t>(
+		    part_arg, start_arg, end_arg, result, args.size(),
+		    DateSubTernaryOperator::Operation<string_t, T, T, int64_t>);
 	}
 }
 

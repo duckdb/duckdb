@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/field_writer.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
 
@@ -43,16 +44,19 @@ struct CreateInfo : public ParseInfo {
 	//! The SQL string of the CREATE statement
 	string sql;
 
+protected:
+	virtual void SerializeInternal(Serializer &) const = 0;
+
+	void DeserializeBase(Deserializer &deserializer);
+
 public:
+	void Serialize(Serializer &serializer) const;
+
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+
 	virtual unique_ptr<CreateInfo> Copy() const = 0;
-	void CopyProperties(CreateInfo &other) const {
-		other.type = type;
-		other.schema = schema;
-		other.on_conflict = on_conflict;
-		other.temporary = temporary;
-		other.internal = internal;
-		other.sql = sql;
-	}
+
+	DUCKDB_API void CopyProperties(CreateInfo &other) const;
 };
 
 } // namespace duckdb

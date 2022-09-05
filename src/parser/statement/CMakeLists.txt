@@ -10,6 +10,7 @@ add_library_unity(
   execute_statement.cpp
   explain_statement.cpp
   export_statement.cpp
+  extension_statement.cpp
   insert_statement.cpp
   load_statement.cpp
   pragma_statement.cpp

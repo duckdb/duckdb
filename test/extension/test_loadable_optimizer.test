@@ -1,0 +1,19 @@
+# name: test/extension/test_loadable_optimizer.test
+# description: Enable Test alias for point.
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+mode skip
+
+# FIXME: not going to do this now
+statement ok
+PRAGMA enable_verification
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_optimizer_demo.duckdb_extension';
+
+statement ok
+select 42

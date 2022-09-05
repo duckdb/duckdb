@@ -5,6 +5,14 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+PRAGMA disable_optimizer
+
+query I
+SELECT roundBankers(45, -1)
+----
+40
+
 query II
 select i, round_even(i + 0.5, 0) from generate_series(-2,4) tbl(i);
 ----

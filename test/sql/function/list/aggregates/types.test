@@ -23,7 +23,7 @@ NULL
 endloop
 
 # any other result
-foreach func_name approx_count_distinct count entropy array_agg list
+foreach func_name approx_count_distinct count entropy array_agg list histogram
 
 statement ok
 SELECT list_aggr([False], '${func_name}')
@@ -34,7 +34,7 @@ SELECT list_aggr([NULL::BOOLEAN], '${func_name}')
 endloop
 
 # statement error for BOOLEAN
-foreach func_name avg favg bit_and bit_or bit_xor histogram kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr([False], '${func_name}')
@@ -172,8 +172,7 @@ endloop
 endloop
 
 # TEMPORAL types
-# exceptions: 
-# histogram (works with everything except interval)
+# exceptions:
 # mad (works with everything except interval)
 
 # specific result
@@ -249,7 +248,7 @@ endloop
 endloop
 
 # any other result
-foreach func_name approx_count_distinct count entropy median array_agg list
+foreach func_name approx_count_distinct count entropy median array_agg list histogram
 
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz
 
@@ -378,7 +377,7 @@ happy
 endloop
 
 # any other result
-foreach func_name approx_count_distinct count entropy array_agg list
+foreach func_name approx_count_distinct count entropy array_agg list histogram
 
 statement ok
 SELECT list_aggr(e, '${func_name}') FROM enums
@@ -387,7 +386,7 @@ endloop
 
 # statement error for ENUMS
 
-foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or histogram kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr(e, '${func_name}') FROM enums

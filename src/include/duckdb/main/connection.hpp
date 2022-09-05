@@ -23,7 +23,7 @@
 
 namespace duckdb {
 
-class ChunkCollection;
+class ColumnDataCollection;
 class ClientContext;
 
 class DatabaseInstance;
@@ -84,9 +84,10 @@ public:
 
 	//! Issues a query to the database and returns a Pending Query Result. Note that "query" may only contain
 	//! a single statement.
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, bool allow_stream_result = false);
 	//! Issues a query to the database and returns a Pending Query Result
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
+	                                                       bool allow_stream_result = false);
 
 	//! Prepare the specified query, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
@@ -105,8 +106,8 @@ public:
 
 	//! Appends a DataChunk to the specified table
 	DUCKDB_API void Append(TableDescription &description, DataChunk &chunk);
-	//! Appends a ChunkCollection to the specified table
-	DUCKDB_API void Append(TableDescription &description, ChunkCollection &collection);
+	//! Appends a ColumnDataCollection to the specified table
+	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
 
 	//! Returns a relation that produces a table from this connection
 	DUCKDB_API shared_ptr<Relation> Table(const string &tname);
@@ -140,6 +141,7 @@ public:
 	DUCKDB_API void Rollback();
 	DUCKDB_API void SetAutoCommit(bool auto_commit);
 	DUCKDB_API bool IsAutoCommit();
+	DUCKDB_API bool HasActiveTransaction();
 
 	//! Fetch a list of table names that are required for a given query
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query);

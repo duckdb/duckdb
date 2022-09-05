@@ -2,18 +2,21 @@
 # description: Test ART index on table with multiple columns
 # group: [art]
 
+require skip_reload
+
+
 statement ok
 PRAGMA force_index_join
 
 # create a table
 statement ok con1
-CREATE TABLE integers(i INTEGER, j INTEGER)
+CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok con1
-CREATE INDEX i_index ON integers using art(i)
+CREATE INDEX i_index ON integers using art(i);
 
 statement ok con1
-INSERT INTO integers VALUES (1, 3)
+INSERT INTO integers VALUES (1, 3);
 
 loop i 0 3000
 

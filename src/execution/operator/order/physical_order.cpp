@@ -30,7 +30,15 @@ public:
 
 class OrderLocalState : public LocalSinkState {
 public:
-	OrderLocalState() {
+	OrderLocalState(ExecutionContext &context, const vector<BoundOrderByNode> &orders)
+	    : executor(Allocator::Get(context.client)) {
+		// Initialize order clause expression executor and DataChunk
+		vector<LogicalType> types;
+		for (auto &order : orders) {
+			types.push_back(order.expression->return_type);
+			executor.AddExpression(*order.expression);
+		}
+		sort.Initialize(Allocator::Get(context.client), types);
 	}
 
 public:
@@ -49,23 +57,12 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	auto state = make_unique<OrderGlobalState>(BufferManager::GetBufferManager(context), *this, payload_layout);
 	// Set external (can be force with the PRAGMA)
 	state->global_sort_state.external = ClientConfig::GetConfig(context).force_external;
-	// Memory usage per thread should scale with max mem / num threads
-	// We take 1/4th of this, to be conservative
-	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
-	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	state->memory_per_thread = (max_memory / num_threads) / 4;
+	state->memory_per_thread = GetMaxThreadMemory(context);
 	return move(state);
 }
 
 unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) const {
-	auto result = make_unique<OrderLocalState>();
-	// Initialize order clause expression executor and DataChunk
-	vector<LogicalType> types;
-	for (auto &order : orders) {
-		types.push_back(order.expression->return_type);
-		result->executor.AddExpression(*order.expression);
-	}
-	result->sort.Initialize(types);
+	auto result = make_unique<OrderLocalState>(context, orders);
 	return move(result);
 }
 
@@ -88,6 +85,8 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &g
 	lstate.executor.Execute(input, sort);
 
 	// Sink the data into the local sort state
+	sort.Verify();
+	input.Verify();
 	local_sort_state.SinkChunk(sort, input);
 
 	// When sorting data reaches a certain size, we sort it

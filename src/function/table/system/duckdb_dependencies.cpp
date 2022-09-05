@@ -13,7 +13,7 @@ struct DependencyInformation {
 	DependencyType type;
 };
 
-struct DuckDBDependenciesData : public FunctionOperatorData {
+struct DuckDBDependenciesData : public GlobalTableFunctionState {
 	DuckDBDependenciesData() : offset(0) {
 	}
 
@@ -47,9 +47,7 @@ static unique_ptr<FunctionData> DuckDBDependenciesBind(ClientContext &context, T
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBDependenciesInit(ClientContext &context, const FunctionData *bind_data,
-                                                        const vector<column_t> &column_ids,
-                                                        TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBDependenciesData>();
 
 	// scan all the schemas and collect them
@@ -66,9 +64,8 @@ unique_ptr<FunctionOperatorData> DuckDBDependenciesInit(ClientContext &context, 
 	return move(result);
 }
 
-void DuckDBDependenciesFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (DuckDBDependenciesData &)*operator_state;
+void DuckDBDependenciesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBDependenciesData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

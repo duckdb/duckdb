@@ -17,7 +17,7 @@ namespace duckdb {
 
 class ProgressBar {
 public:
-	explicit ProgressBar(Executor &executor, idx_t show_progress_after);
+	explicit ProgressBar(Executor &executor, idx_t show_progress_after, bool print_progress);
 
 	//! Starts the thread
 	void Start();
@@ -39,6 +39,8 @@ private:
 	idx_t show_progress_after;
 	//! The current progress percentage
 	double current_percentage;
+	//! Whether or not we print the progress bar
+	bool print_progress;
 	//! Whether or not profiling is supported for the current query
 	bool supported = true;
 };

@@ -10,7 +10,9 @@ static void AliasFunction(DataChunk &args, ExpressionState &state, Vector &resul
 }
 
 void AliasFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, AliasFunction));
+	auto fun = ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, AliasFunction);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb

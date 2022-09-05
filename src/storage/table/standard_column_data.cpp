@@ -81,7 +81,8 @@ void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(move(child_append));
 }
 
-void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count) {
+void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
+                                    idx_t count) {
 	ColumnData::AppendData(stats, state, vdata, count);
 
 	validity.AppendData(*stats.validity_stats, state.child_appends[0], vdata, count);
@@ -128,7 +129,7 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 		return nullptr;
 	}
 	if (!stats) {
-		stats = BaseStatistics::CreateEmpty(type);
+		stats = BaseStatistics::CreateEmpty(type, StatisticsType::GLOBAL_STATS);
 	}
 	stats->validity_stats = move(validity_stats);
 	return stats;
@@ -159,9 +160,9 @@ struct StandardColumnCheckpointState : public ColumnCheckpointState {
 
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
-		auto stats = global_stats->Copy();
-		stats->validity_stats = validity_state->GetStatistics();
-		return stats;
+		D_ASSERT(global_stats);
+		global_stats->validity_stats = validity_state->GetStatistics();
+		return move(global_stats);
 	}
 
 	void FlushToDisk() override {

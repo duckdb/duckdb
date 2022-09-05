@@ -54,19 +54,19 @@ class TestMap(object):
         def return_empty_df(df):
             return pd.DataFrame()
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.InvalidInputException, match='Expected 1 columns from UDF, got 2'):
             print(testrel.map(evil1).df())
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.InvalidInputException, match='UDF column type mismatch'):
             print(testrel.map(evil2).df())
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.InvalidInputException, match='UDF column name mismatch'):
             print(testrel.map(evil3).df())
 
         with pytest.raises(AttributeError):
             print(testrel.map(evil4).df())
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             print(testrel.map(evil5).df())
 
         # not a function
@@ -79,15 +79,15 @@ class TestMap(object):
 
         testrel.map(return_dataframe).df().equals(pd.DataFrame({'A' : [1]}))
         
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='UDF returned more than 1024 rows, which is not allowed.'):
             testrel.map(return_big_dataframe).df()
 
         empty_rel.map(return_dataframe).df().equals(pd.DataFrame({'A' : []}))
 
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='No return value from Python function'):
             testrel.map(return_none).df()
 
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='Need a DataFrame with at least one column'):
             testrel.map(return_empty_df).df()
 
     def test_isse_3237(self, duckdb_cursor):

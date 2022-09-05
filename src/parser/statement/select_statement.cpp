@@ -29,4 +29,8 @@ bool SelectStatement::Equals(const SQLStatement *other_p) const {
 	return node->Equals(other->node.get());
 }
 
+string SelectStatement::ToString() const {
+	return node->ToString();
+}
+
 } // namespace duckdb

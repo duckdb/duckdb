@@ -4,6 +4,15 @@
 
 namespace duckdb {
 
+SelectionData::SelectionData(idx_t count) {
+	owned_data = unique_ptr<sel_t[]>(new sel_t[count]);
+#ifdef DEBUG
+	for (idx_t i = 0; i < count; i++) {
+		owned_data[i] = std::numeric_limits<sel_t>::max();
+	}
+#endif
+}
+
 // LCOV_EXCL_START
 string SelectionVector::ToString(idx_t count) const {
 	string result = "Selection Vector (" + to_string(count) + ") [";

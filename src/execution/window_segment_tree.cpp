@@ -8,18 +8,20 @@ namespace duckdb {
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
                                      const LogicalType &result_type_p, ChunkCollection *input,
-                                     WindowAggregationMode mode_p)
+                                     const ValidityMask &filter_mask_p, WindowAggregationMode mode_p)
     : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
       statep(Value::POINTER((idx_t)state.data())), frame(0, 0), active(0, 1),
-      statev(Value::POINTER((idx_t)state.data())), internal_nodes(0), input_ref(input), mode(mode_p) {
+      statev(Value::POINTER((idx_t)state.data())), internal_nodes(0), input_ref(input), filter_mask(filter_mask_p),
+      mode(mode_p) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
-	statep.Normalify(STANDARD_VECTOR_SIZE);
+	statep.Flatten(STANDARD_VECTOR_SIZE);
 	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 
 	if (input_ref && input_ref->ColumnCount() > 0) {
-		inputs.Initialize(input_ref->Types());
+		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
+		inputs.Initialize(Allocator::DefaultAllocator(), input_ref->Types());
 		// if we have a frame-by-frame method, share the single state
 		if (aggregate.window && UseWindowAPI()) {
 			AggregateInit();
@@ -60,7 +62,8 @@ void WindowSegmentTree::AggregateInit() {
 }
 
 void WindowSegmentTree::AggegateFinal(Vector &result, idx_t rid) {
-	aggregate.finalize(statev, bind_info, result, 1, rid);
+	AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
+	aggregate.finalize(statev, aggr_input_data, result, 1, rid);
 
 	if (aggregate.destructor) {
 		aggregate.destructor(statev, 1);
@@ -99,6 +102,19 @@ void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 			VectorOperations::Copy(chunk_b.data[i], v, chunk_b_count, 0, chunk_a_count);
 		}
 	}
+
+	// Slice to any filtered rows
+	if (!filter_mask.AllValid()) {
+		idx_t filtered = 0;
+		for (idx_t i = begin; i < end; ++i) {
+			if (filter_mask.RowIsValid(i)) {
+				filter_sel.set_index(filtered++, i - begin);
+			}
+		}
+		if (filtered != inputs.size()) {
+			inputs.Slice(filter_sel, filtered);
+		}
+	}
 }
 
 void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) {
@@ -114,7 +130,8 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	Vector s(statep, 0);
 	if (l_idx == 0) {
 		ExtractFrame(begin, end);
-		aggregate.update(&inputs.data[0], bind_info, input_ref->ColumnCount(), s, inputs.size());
+		AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
+		aggregate.update(&inputs.data[0], aggr_input_data, input_ref->ColumnCount(), s, inputs.size());
 	} else {
 		inputs.Reset();
 		inputs.SetCardinality(end - begin);
@@ -127,7 +144,8 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 			pdata[i] = begin_ptr + i * state.size();
 		}
 		v.Verify(inputs.size());
-		aggregate.combine(v, s, inputs.size());
+		AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
+		aggregate.combine(v, s, aggr_input_data, inputs.size());
 	}
 }
 
@@ -179,7 +197,16 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 	if (inputs.ColumnCount() == 0) {
 		D_ASSERT(GetTypeIdSize(result_type.InternalType()) == sizeof(idx_t));
 		auto data = FlatVector::GetData<idx_t>(result);
-		data[rid] = end - begin;
+		// Slice to any filtered rows
+		if (!filter_mask.AllValid()) {
+			idx_t filtered = 0;
+			for (idx_t i = begin; i < end; ++i) {
+				filtered += filter_mask.RowIsValid(i);
+			}
+			data[rid] = filtered;
+		} else {
+			data[rid] = end - begin;
+		}
 		return;
 	}
 
@@ -220,8 +247,9 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 		active = FrameBounds(active_chunks.first * STANDARD_VECTOR_SIZE,
 		                     MinValue((active_chunks.second + 1) * STANDARD_VECTOR_SIZE, coll.Count()));
 
-		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result, rid,
-		                 active.first);
+		AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
+		aggregate.window(inputs.data.data(), filter_mask, aggr_input_data, inputs.ColumnCount(), state.data(), frame,
+		                 prev, result, rid, active.first);
 		return;
 	}
 

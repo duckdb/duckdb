@@ -12,6 +12,7 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -159,9 +160,10 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinitio
 	Verify();
 
 	// construct a new column data for the new column
-	auto added_column = ColumnData::CreateColumn(GetTableInfo(), columns.size(), start, new_column.type);
+	auto added_column = ColumnData::CreateColumn(GetTableInfo(), columns.size(), start, new_column.Type());
+	auto added_col_stats = make_shared<SegmentStatistics>(
+	    new_column.Type(), BaseStatistics::CreateEmpty(new_column.Type(), StatisticsType::LOCAL_STATS));
 
-	auto added_col_stats = make_shared<SegmentStatistics>(new_column.type);
 	idx_t rows_to_write = this->count;
 	if (rows_to_write > 0) {
 		DataChunk dummy_chunk;
@@ -611,7 +613,7 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, row_t *
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
 		if (offset > 0) {
 			Vector sliced_vector(update_chunk.data[i], offset);
-			sliced_vector.Normalify(count);
+			sliced_vector.Flatten(count);
 			columns[column]->Update(transaction, column, sliced_vector, ids + offset, count);
 		} else {
 			columns[column]->Update(transaction, column, update_chunk.data[i], ids, count);
@@ -639,14 +641,22 @@ unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) {
 	return stats[column_idx]->statistics->Copy();
 }
 
-void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
+void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
 	D_ASSERT(column_idx < stats.size());
 
 	lock_guard<mutex> slock(stats_lock);
 	stats[column_idx]->statistics->Merge(other);
 }
 
+void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
+	D_ASSERT(column_idx < stats.size());
+
+	lock_guard<mutex> slock(stats_lock);
+	other.Merge(*stats[column_idx]->statistics);
+}
+
 RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+	RowGroupPointer row_group_pointer;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
 
@@ -661,22 +671,21 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 		D_ASSERT(stats);
 
 		global_stats[column_idx]->Merge(*stats);
+		row_group_pointer.statistics.push_back(move(stats));
 		states.push_back(move(checkpoint_state));
 	}
 
 	// construct the row group pointer and write the column meta data to disk
 	D_ASSERT(states.size() == columns.size());
-	RowGroupPointer row_group_pointer;
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
 	for (auto &state : states) {
 		// get the current position of the meta data writer
-		auto &meta_writer = writer.GetMetaWriter();
+		auto &meta_writer = writer.GetTableWriter();
 		auto pointer = meta_writer.GetBlockPointer();
 
 		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
-		row_group_pointer.statistics.push_back(state->GetStatistics());
 
 		// now flush the actual column data to disk
 		state->FlushToDisk();
@@ -758,10 +767,18 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Co
 
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < columns.size(); i++) {
-		auto stats = BaseStatistics::Deserialize(source, columns[i].type);
+		auto &col = columns[i];
+		if (col.Generated()) {
+			continue;
+		}
+		auto stats = BaseStatistics::Deserialize(source, columns[i].Type());
 		result.statistics.push_back(move(stats));
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
+		auto &col = columns[i];
+		if (col.Generated()) {
+			continue;
+		}
 		BlockPointer pointer;
 		pointer.block_id = source.Read<block_id_t>();
 		pointer.offset = source.Read<uint64_t>();

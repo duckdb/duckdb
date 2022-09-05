@@ -33,6 +33,7 @@ add_library(
   src/scan.cpp
   src/utils.cpp
   src/altrep.cpp
+  src/relational.cpp
   src/types.cpp)
 target_link_libraries(duckdb_r_shlib duckdb ${DUCKDB_EXTRA_LINK_FLAGS}
                       ${R_LIBRARY_BASE})

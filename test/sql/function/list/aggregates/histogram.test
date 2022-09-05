@@ -98,5 +98,7 @@ SELECT list_histogram(['15:00:07'::TIMETZ])
 {15:00:07+00=1}
 
 # interval
-statement error
+query I
 SELECT list_histogram([INTERVAL 1 YEAR])
+----
+{1 year=1}

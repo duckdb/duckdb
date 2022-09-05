@@ -1,17 +1,19 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
 
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/function/table/arrow.hpp"
 
 using namespace duckdb;
 
-[[cpp11::register]] void rapi_register_df(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value) {
-	if (!conn || !conn->conn) {
+[[cpp11::register]] void rapi_register_df(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value,
+                                          bool integer64) {
+	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_register_df: Invalid connection");
 	}
 	if (name.empty()) {
@@ -21,7 +23,9 @@ using namespace duckdb;
 		cpp11::stop("rapi_register_df: Data frame with at least one column required");
 	}
 	try {
-		conn->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)value.data())})
+		named_parameter_map_t parameter_map;
+		parameter_map["integer64"] = Value::BOOLEAN(integer64);
+		conn->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)value.data())}, parameter_map)
 		    ->CreateView(name, true, true);
 		static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = value;
 	} catch (std::exception &e) {
@@ -30,25 +34,22 @@ using namespace duckdb;
 }
 
 [[cpp11::register]] void rapi_unregister_df(duckdb::conn_eptr_t conn, std::string name) {
-	if (!conn || !conn->conn) {
-		cpp11::stop("rapi_unregister_df: Invalid connection");
+	if (!conn || !conn.get() || !conn->conn) {
+		return;
 	}
 	static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = R_NilValue;
 	auto res = conn->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
-	if (!res->success) {
-		cpp11::stop(res->error.c_str());
+	if (res->HasError()) {
+		cpp11::stop(res->GetError().c_str());
 	}
 }
 
 class RArrowTabularStreamFactory {
 public:
-	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_scannable_p)
-	    : arrow_scannable(arrow_scannable_p), export_fun(export_fun_p) {};
+	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_scannable_p, ClientConfig &config)
+	    : arrow_scannable(arrow_scannable_p), export_fun(export_fun_p), config(config) {};
 
-	static unique_ptr<ArrowArrayStreamWrapper>
-	Produce(uintptr_t factory_p, std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
-	        TableFilterCollection *filters) {
-
+	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
 		RProtector r;
 		auto res = make_unique<ArrowArrayStreamWrapper>();
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
@@ -57,14 +58,18 @@ public:
 
 		cpp11::function export_fun = VECTOR_ELT(factory->export_fun, 0);
 
-		if (project_columns.second.empty()) {
+		auto &column_list = parameters.projected_columns.columns;
+		auto filters = parameters.filters;
+		auto &projection_map = parameters.projected_columns.projection_map;
+		if (column_list.empty()) {
 			export_fun(factory->arrow_scannable, stream_ptr_sexp);
 		} else {
-			auto projection_sexp = r.Protect(StringsToSexp(project_columns.second));
+			auto projection_sexp = r.Protect(StringsToSexp(column_list));
 			SEXP filters_sexp = r.Protect(Rf_ScalarLogical(true));
-			if (filters && filters->table_filters && !filters->table_filters->filters.empty()) {
-
-				filters_sexp = r.Protect(TransformFilter(*filters, project_columns.first, factory->export_fun));
+			if (filters && !filters->filters.empty()) {
+				auto timezone_config = factory->config.ExtractTimezone();
+				filters_sexp =
+				    r.Protect(TransformFilter(*filters, projection_map, factory->export_fun, timezone_config));
 			}
 			export_fun(factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp);
 		}
@@ -86,9 +91,11 @@ public:
 
 	SEXP arrow_scannable;
 	SEXP export_fun;
+	ClientConfig &config;
 
 private:
-	static SEXP TransformFilterExpression(TableFilter &filter, const string &column_name, SEXP functions) {
+	static SEXP TransformFilterExpression(TableFilter &filter, const string &column_name, SEXP functions,
+	                                      string &timezone_config) {
 		RProtector r;
 		auto column_name_sexp = r.Protect(Rf_mkString(column_name.c_str()));
 		auto column_name_expr = r.Protect(CreateFieldRef(functions, column_name_sexp));
@@ -96,7 +103,7 @@ private:
 		switch (filter.filter_type) {
 		case TableFilterType::CONSTANT_COMPARISON: {
 			auto constant_filter = (ConstantFilter &)filter;
-			auto constant_sexp = r.Protect(RApiTypes::ValueToSexp(constant_filter.constant));
+			auto constant_sexp = r.Protect(RApiTypes::ValueToSexp(constant_filter.constant, timezone_config));
 			auto constant_expr = r.Protect(CreateScalar(functions, constant_sexp));
 			switch (constant_filter.comparison_type) {
 			case ExpressionType::COMPARE_EQUAL: {
@@ -131,11 +138,13 @@ private:
 		}
 		case TableFilterType::CONJUNCTION_AND: {
 			auto &and_filter = (ConjunctionAndFilter &)filter;
-			return TransformChildFilters(functions, column_name, "and_kleene", and_filter.child_filters);
+			return TransformChildFilters(functions, column_name, "and_kleene", and_filter.child_filters,
+			                             timezone_config);
 		}
 		case TableFilterType::CONJUNCTION_OR: {
 			auto &and_filter = (ConjunctionAndFilter &)filter;
-			return TransformChildFilters(functions, column_name, "or_kleene", and_filter.child_filters);
+			return TransformChildFilters(functions, column_name, "or_kleene", and_filter.child_filters,
+			                             timezone_config);
 		}
 
 		default:
@@ -145,27 +154,28 @@ private:
 	}
 
 	static SEXP TransformChildFilters(SEXP functions, const string &column_name, const string op,
-	                                  vector<unique_ptr<TableFilter>> &filters) {
+	                                  vector<unique_ptr<TableFilter>> &filters, string &timezone_config) {
 		auto fit = filters.begin();
 		RProtector r;
-		auto conjunction_sexp = r.Protect(TransformFilterExpression(**fit, column_name, functions));
+		auto conjunction_sexp = r.Protect(TransformFilterExpression(**fit, column_name, functions, timezone_config));
 		fit++;
 		for (; fit != filters.end(); ++fit) {
-			SEXP rhs = r.Protect(TransformFilterExpression(**fit, column_name, functions));
+			SEXP rhs = r.Protect(TransformFilterExpression(**fit, column_name, functions, timezone_config));
 			conjunction_sexp = r.Protect(CreateExpression(functions, op, conjunction_sexp, rhs));
 		}
 		return conjunction_sexp;
 	}
 
-	static SEXP TransformFilter(TableFilterCollection &filter_collection, std::unordered_map<idx_t, string> &columns,
-	                            SEXP functions) {
+	static SEXP TransformFilter(TableFilterSet &filter_collection, std::unordered_map<idx_t, string> &columns,
+	                            SEXP functions, string &timezone_config) {
 		RProtector r;
 
-		auto fit = filter_collection.table_filters->filters.begin();
-		SEXP res = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions));
+		auto fit = filter_collection.filters.begin();
+		SEXP res = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions, timezone_config));
 		fit++;
-		for (; fit != filter_collection.table_filters->filters.end(); ++fit) {
-			SEXP rhs = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions));
+		for (; fit != filter_collection.filters.end(); ++fit) {
+			SEXP rhs =
+			    r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions, timezone_config));
 			res = r.Protect(CreateExpression(functions, "and_kleene", res, rhs));
 		}
 		return res;
@@ -211,7 +221,6 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
 			children.push_back(
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
-			children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(100000)));
 			table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
 			return table_function;
 		}
@@ -221,14 +230,14 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context
 
 [[cpp11::register]] void rapi_register_arrow(duckdb::conn_eptr_t conn, std::string name, cpp11::list export_funs,
                                              cpp11::sexp valuesexp) {
-	if (!conn || !conn->conn) {
+	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_register_arrow: Invalid connection");
 	}
 	if (name.empty()) {
 		cpp11::stop("rapi_register_arrow: Name cannot be empty");
 	}
 
-	auto stream_factory = new RArrowTabularStreamFactory(export_funs, valuesexp);
+	auto stream_factory = new RArrowTabularStreamFactory(export_funs, valuesexp, conn->conn->context->config);
 	// make r external ptr object to keep factory around until arrow table is unregistered
 	cpp11::external_pointer<RArrowTabularStreamFactory> factorysexp(stream_factory);
 
@@ -243,10 +252,9 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context
 }
 
 [[cpp11::register]] void rapi_unregister_arrow(duckdb::conn_eptr_t conn, std::string name) {
-	if (!conn || !conn->conn) {
-		cpp11::stop("rapi_unregister_arrow: Invalid connection");
+	if (!conn || !conn.get() || !conn->conn) {
+		return; // if the connection is already dead there is probably no point in cleaning this
 	}
-
 	{
 		lock_guard<mutex> arrow_scans_lock(conn->db_eptr->lock);
 		auto &arrow_scans = conn->db_eptr->arrow_scans;

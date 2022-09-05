@@ -88,7 +88,7 @@ void ReorderTableEntries(vector<TableCatalogEntry *> &tables) {
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("COPY TO is disabled through configuration");
 	}
 	BoundStatement result;
@@ -197,7 +197,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	result.plan = move(export_node);
-	this->allow_stream_result = false;
+	properties.allow_stream_result = false;
+	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
 

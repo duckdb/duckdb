@@ -117,7 +117,7 @@ SELECT * FROM greek_tbl where id<=(SELECT min(id) FROM xt(id,30));
 # check that table macros are present in  duckdb_functions() -
 # nb they have the function_type 'table_macro'
 query IIIIIIIII
-SELECT * FROM duckdb_functions() WHERE function_type = 'table_macro' AND
+SELECT schema_name, function_name, function_type, description, return_type, parameters, parameter_types, varargs, macro_definition FROM duckdb_functions() WHERE function_type = 'table_macro' AND
  ( function_name = 'sgreek' or  function_name = 'xt') order by function_name;
 ----
 main	sgreek	table_macro	NULL	NULL	[a, b, c]	[NULL, NULL, NULL]	NULL	NULL

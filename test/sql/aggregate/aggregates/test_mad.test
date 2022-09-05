@@ -123,11 +123,11 @@ select mad(x) from (values ('294247-01-10'::date), ('290309-12-22 (BC)'::date)) 
 
 query I
 select mad(x) from (values
-	('294247-01-10 04:00:54.775807'::timestamp),
+	('294247-01-10 04:00:54.775806'::timestamp),
 	('290309-12-22 (BC) 00:00:00'::timestamp)
 	) tbl(x);
 ----
-106751991 days 02:00:27.387904
+106751991 days 02:00:27.387903
 
 query I
 select mad(x) from (values ('23:59:59.999999'::time), ('00:00:00'::time)) tbl(x);

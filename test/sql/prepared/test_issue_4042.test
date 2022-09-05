@@ -1,0 +1,37 @@
+# name: test/sql/prepared/test_issue_4042.test
+# description: Issue 4042: Text/varchar parameters cause "Binder Error: Inconsistent types found for parameter" when used in a combination with bigint column.
+# group: [prepared]
+
+statement ok
+PRAGMA enable_verification
+
+require skip_reload
+
+statement ok
+CREATE TABLE stringliterals AS SELECT 1 AS ID, 1::BIGINT AS a1,'value-1' AS a2,'value-1' AS a3,10::BIGINT AS a4
+
+statement ok
+PREPARE v1 AS
+SELECT ((SUM(CASE
+             WHEN ((stringliterals.a2 = ($1)::text) AND (stringliterals.a3 = ($1)::text))
+	     THEN stringliterals.a4
+	     ELSE (0)::int
+	     END) +
+	 SUM(CASE
+	     WHEN ((stringliterals.a2 = ($2)::text) AND (stringliterals.a3 = ($2)::text))
+	     THEN stringliterals.a4
+	     ELSE (0)::int
+	     END)) / ((SUM(CASE
+	                   WHEN ((stringliterals.a2 = ($1)::text) AND (stringliterals.a3 = ($1)::text))
+			   THEN stringliterals.a4
+			   ELSE (0)::int
+			   END) +
+                       SUM(CASE
+		           WHEN ((stringliterals.a2 = ($2)::text) AND (stringliterals.a3 = ($2)::text))
+			   THEN stringliterals.a4
+			   ELSE (0)::int
+			   END)))::float8) AS A00000185
+FROM stringliterals
+
+statement ok
+EXECUTE v1('value-1', 'value-2')

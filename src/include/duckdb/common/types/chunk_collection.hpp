@@ -13,6 +13,8 @@
 #include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
+class Allocator;
+class ClientContext;
 
 //!  A ChunkCollection represents a set of DataChunks that all have the same
 //!  types
@@ -24,8 +26,8 @@ namespace duckdb {
 */
 class ChunkCollection {
 public:
-	ChunkCollection() : count(0) {
-	}
+	ChunkCollection(Allocator &allocator);
+	ChunkCollection(ClientContext &context);
 
 	//! The amount of columns in the ChunkCollection
 	DUCKDB_API vector<LogicalType> &Types() {
@@ -70,11 +72,8 @@ public:
 	//! Copy a single cell to a target vector
 	DUCKDB_API void CopyCell(idx_t column, idx_t index, Vector &target, idx_t target_offset);
 
-	DUCKDB_API string ToString() const {
-		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
-		                          : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
-	}
-	DUCKDB_API void Print();
+	DUCKDB_API string ToString() const;
+	DUCKDB_API void Print() const;
 
 	//! Gets a reference to the chunk at the given index
 	DUCKDB_API DataChunk &GetChunkForRow(idx_t row_index) {
@@ -129,7 +128,12 @@ public:
 		return result;
 	}
 
+	Allocator &GetAllocator() {
+		return allocator;
+	}
+
 private:
+	Allocator &allocator;
 	//! The total amount of elements in the collection
 	idx_t count;
 	//! The set of data chunks in the collection

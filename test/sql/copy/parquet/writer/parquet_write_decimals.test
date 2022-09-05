@@ -84,4 +84,4 @@ PRAGMA disable_verification
 query IIII
 SELECT stats(dec4), stats(dec9), stats(dec18), stats(dec38) FROM '__TEST_DIR__/decimals.parquet' LIMIT 1
 ----
-[Min: -42.0, Max: 42.0][Has Null: true]	[Min: -42.00, Max: 42.00][Has Null: true]	[Min: -42.000, Max: 42.000][Has Null: true]	[Min: -42.0000, Max: 42.0000][Has Null: true]
+[Min: -42.0, Max: 42.0][Has Null: true, Has No Null: true]	[Min: -42.00, Max: 42.00][Has Null: true, Has No Null: true]	[Min: -42.000, Max: 42.000][Has Null: true, Has No Null: true]	[Min: -42.0000, Max: 42.0000][Has Null: true, Has No Null: true]

@@ -56,7 +56,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 		// binding function expression has extra parameter needed for macro's
 		return BindExpression((FunctionExpression &)expr_ref, depth, expr);
 	case ExpressionClass::LAMBDA:
-		return BindExpression((LambdaExpression &)expr_ref, depth);
+		return BindExpression((LambdaExpression &)expr_ref, depth, false, LogicalTypeId::INVALID);
 	case ExpressionClass::OPERATOR:
 		return BindExpression((OperatorExpression &)expr_ref, depth);
 	case ExpressionClass::SUBQUERY:
@@ -165,19 +165,6 @@ LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 	return ExchangeType(type, LogicalTypeId::SQLNULL, LogicalType::INTEGER);
 }
 
-void ExpressionBinder::ResolveParameterType(LogicalType &type) {
-	if (type.id() == LogicalTypeId::UNKNOWN) {
-		type = LogicalType::VARCHAR;
-	}
-}
-
-void ExpressionBinder::ResolveParameterType(unique_ptr<Expression> &expr) {
-	if (ContainsType(expr->return_type, LogicalTypeId::UNKNOWN)) {
-		auto result_type = ExchangeType(expr->return_type, LogicalTypeId::UNKNOWN, LogicalType::VARCHAR);
-		expr = BoundCastExpression::AddCastToType(move(expr), result_type);
-	}
-}
-
 unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type,
                                               bool root_expression) {
 	// bind the main expression
@@ -206,9 +193,9 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 				result = BoundCastExpression::AddCastToType(move(result), result_type);
 			}
 		}
-		// check if we failed to convert any parameters
-		// if we did, we push a cast
-		ExpressionBinder::ResolveParameterType(result);
+		if (result->return_type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
 	}
 	if (result_type) {
 		*result_type = result->return_type;
@@ -228,17 +215,16 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 	BindResult result = BindExpression(expr, depth, root_expression);
 	if (result.HasError()) {
 		return result.error;
-	} else {
-		// successfully bound: replace the node with a BoundExpression
-		*expr = make_unique<BoundExpression>(move(result.expression));
-		auto be = (BoundExpression *)expr->get();
-		D_ASSERT(be);
-		be->alias = alias;
-		if (!alias.empty()) {
-			be->expr->alias = alias;
-		}
-		return string();
 	}
+	// successfully bound: replace the node with a BoundExpression
+	*expr = make_unique<BoundExpression>(move(result.expression));
+	auto be = (BoundExpression *)expr->get();
+	D_ASSERT(be);
+	be->alias = alias;
+	if (!alias.empty()) {
+		be->expr->alias = alias;
+	}
+	return string();
 }
 
 } // namespace duckdb

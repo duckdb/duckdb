@@ -43,7 +43,16 @@ PRAGMA tpcds(${i})
 
 endloop
 
-loop i 65 85
+loop i 65 71
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
+
+loop i 72 85
 
 query I
 PRAGMA tpcds(${i})
@@ -53,6 +62,21 @@ PRAGMA tpcds(${i})
 endloop
 
 loop i 86 99
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
+
+# unstable multithreaded rounding
+# 71
+
+foreach i 71
+
+statement ok
+pragma threads=1
 
 query I
 PRAGMA tpcds(${i})

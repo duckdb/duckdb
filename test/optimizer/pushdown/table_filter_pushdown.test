@@ -2,6 +2,9 @@
 # description: Test Table Filter Push Down
 # group: [pushdown]
 
+require skip_reload
+
+
 statement ok
 CREATE TABLE integers(i integer, j integer, k integer)
 

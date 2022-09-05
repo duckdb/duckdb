@@ -19,11 +19,12 @@ enum class PhysicalOperatorType : uint8_t {
 	INVALID,
 	ORDER_BY,
 	LIMIT,
+	STREAMING_LIMIT,
 	LIMIT_PERCENT,
 	TOP_N,
 	WINDOW,
 	UNNEST,
-	SIMPLE_AGGREGATE,
+	UNGROUPED_AGGREGATE,
 	HASH_GROUP_BY,
 	PERFECT_HASH_GROUP_BY,
 	FILTER,
@@ -37,6 +38,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	TABLE_SCAN,
 	DUMMY_SCAN,
+	COLUMN_DATA_SCAN,
 	CHUNK_SCAN,
 	RECURSIVE_CTE_SCAN,
 	DELIM_SCAN,
@@ -93,7 +95,8 @@ enum class PhysicalOperatorType : uint8_t {
 	EXPORT,
 	SET,
 	LOAD,
-	INOUT_FUNCTION
+	INOUT_FUNCTION,
+	RESULT_COLLECTOR
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

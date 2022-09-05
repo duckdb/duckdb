@@ -3,11 +3,39 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/tableref/list.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
-string TableRef::ToString() const {
-	return string();
+string TableRef::BaseToString(string result) const {
+	vector<string> column_name_alias;
+	return BaseToString(move(result), column_name_alias);
+}
+
+string TableRef::BaseToString(string result, const vector<string> &column_name_alias) const {
+	if (!alias.empty()) {
+		result += " AS " + KeywordHelper::WriteOptionallyQuoted(alias);
+	}
+	if (!column_name_alias.empty()) {
+		D_ASSERT(!alias.empty());
+		result += "(";
+		for (idx_t i = 0; i < column_name_alias.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += KeywordHelper::WriteOptionallyQuoted(column_name_alias[i]);
+		}
+		result += ")";
+	}
+	if (sample) {
+		result += " TABLESAMPLE " + SampleMethodToString(sample->method);
+		result += "(" + sample->sample_size.ToString() + " " + string(sample->is_percentage ? "PERCENT" : "ROWS") + ")";
+		if (sample->seed >= 0) {
+			result += "REPEATABLE (" + to_string(sample->seed) + ")";
+		}
+	}
+
+	return result;
 }
 
 bool TableRef::Equals(const TableRef *other) const {

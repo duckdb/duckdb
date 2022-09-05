@@ -118,6 +118,7 @@ public:
 	unique_ptr<QueryResult> res;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
+	SQLULEN retrieve_data = SQL_RD_ON;
 	SQLULEN *rows_fetched_ptr;
 
 	// fetcher
@@ -261,7 +262,7 @@ SQLRETURN WithStatementPrepared(SQLHANDLE &statement_handle, T &&lambda) {
 		if (!stmt->stmt) {
 			return SQL_ERROR;
 		}
-		if (!stmt->stmt->success) {
+		if (stmt->stmt->HasError()) {
 			return SQL_ERROR;
 		}
 		try {
@@ -278,7 +279,7 @@ SQLRETURN WithStatementResult(SQLHANDLE &statement_handle, T &&lambda) {
 		if (!stmt->res) {
 			return SQL_ERROR;
 		}
-		if (!stmt->res->success) {
+		if (stmt->res->HasError()) {
 			return SQL_ERROR;
 		}
 		try {

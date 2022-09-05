@@ -8,7 +8,7 @@
 namespace duckdb {
 
 LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name) {
-	if (type_name->type != duckdb_libpgquery::T_PGTypeName) {
+	if (!type_name || type_name->type != duckdb_libpgquery::T_PGTypeName) {
 		throw ParserException("Expected a type");
 	}
 	auto stack_checker = StackCheck();
@@ -18,7 +18,9 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 	LogicalTypeId base_type = TransformStringToLogicalTypeId(name);
 
 	LogicalType result_type;
-	if (base_type == LogicalTypeId::STRUCT) {
+	if (base_type == LogicalTypeId::LIST) {
+		throw ParserException("LIST is not valid as a stand-alone type");
+	} else if (base_type == LogicalTypeId::STRUCT) {
 		if (!type_name->typmods || type_name->typmods->length == 0) {
 			throw ParserException("Struct needs a name and entries");
 		}

@@ -1,0 +1,78 @@
+# name: test/sql/binder/test_implicit_struct_pack.test
+# description: Test implicit struct pack when selecting table alias
+# group: [binder]
+
+statement ok
+pragma enable_verification
+
+statement ok
+create table test as select range i from range(3)
+
+query T
+select test from test
+----
+{'i': 0}
+{'i': 1}
+{'i': 2}
+
+# equivalent
+query T nosort q0
+select test from main.test
+
+query T nosort q0
+select main.test from main.test
+
+query T nosort q0
+SELECT t FROM test AS t
+
+query T nosort q0
+select t from (SELECT * FROM test) AS t
+
+# shouldn't work
+statement error
+select main.test from main.test t
+
+statement error
+select main.t from main.test t
+
+# example query in feature request
+query T
+WITH data AS (
+    SELECT 1 as a, 2 as b, 3 as c
+)
+SELECT d FROM data d
+----
+{'a': 1, 'b': 2, 'c': 3}
+
+# schema conflict
+# create ambiguity: main.test can refer to column main.test, or to table main.test
+statement ok
+create table main as select 3 test
+
+# selecting the column has precedence over selecting the implicit struct_pack
+query T
+select main.test from main, test
+----
+3
+3
+3
+
+query T
+select test from main, test
+----
+3
+3
+3
+
+# struct conflict
+# more ambiguity: main.test can now also refer to struct field "test" of struct "main"
+# selecting the struct field has precedence over selecting the implicit struct_pack
+statement ok
+create table structs as select {test: 4} main
+
+query T
+select main.test from structs, test
+----
+4
+4
+4

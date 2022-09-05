@@ -56,16 +56,16 @@ update lineitem set l_new=l_quantity * l_discount;
 query I
 select l_new from lineitem limit 10;
 ----
+1
+3
+1
+3
+2
+2
 0
 3
-0
+5
 2
-2
-2
-0
-2
-4
-1
 
 statement ok
 CHECKPOINT
@@ -73,33 +73,29 @@ CHECKPOINT
 query I
 select l_new from lineitem limit 10;
 ----
+1
+3
+1
+3
+2
+2
 0
 3
-0
+5
 2
-2
-2
-0
-2
-4
-1
 
 restart
 
 query I
 select l_new from lineitem limit 10;
 ----
+1
+3
+1
+3
+2
+2
 0
 3
-0
+5
 2
-2
-2
-0
-2
-4
-1
-
-
-
-

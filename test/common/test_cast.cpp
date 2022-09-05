@@ -6,8 +6,29 @@
 #include "duckdb/common/types/vector.hpp"
 #include <vector>
 
-using namespace duckdb;
-using namespace std;
+using namespace duckdb; // NOLINT
+using namespace std;    // NOLINT
+
+template <class SRC, class DST>
+struct ExpectedNumericCast {
+	static inline DST Operation(SRC value) {
+		return (DST)value;
+	}
+};
+
+template <class DST>
+struct ExpectedNumericCast<double, DST> {
+	static inline DST Operation(double value) {
+		return (DST)nearbyint(value);
+	}
+};
+
+template <class DST>
+struct ExpectedNumericCast<float, DST> {
+	static inline DST Operation(float value) {
+		return (DST)nearbyintf(value);
+	}
+};
 
 template <class SRC, class DST>
 static void TestNumericCast(vector<SRC> &working_values, vector<SRC> &broken_values) {
@@ -15,7 +36,7 @@ static void TestNumericCast(vector<SRC> &working_values, vector<SRC> &broken_val
 	for (auto value : working_values) {
 		REQUIRE_NOTHROW(Cast::Operation<SRC, DST>(value) == (DST)value);
 		REQUIRE(TryCast::Operation<SRC, DST>(value, result));
-		REQUIRE(result == (DST)value);
+		REQUIRE(result == ExpectedNumericCast<SRC, DST>::Operation(value));
 	}
 	for (auto value : broken_values) {
 		REQUIRE_THROWS(Cast::Operation<SRC, DST>(value));

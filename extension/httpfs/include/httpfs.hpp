@@ -3,6 +3,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb_httplib_openssl {
 struct Response;
@@ -11,7 +12,7 @@ class Client;
 
 namespace duckdb {
 
-using HeaderMap = unordered_map<string, string>;
+using HeaderMap = case_insensitive_map_t<string>;
 
 // avoid including httplib in header
 struct ResponseWrapper {

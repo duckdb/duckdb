@@ -1,0 +1,251 @@
+# name: test/sql/function/timestamp/test_icu_strftime.test
+# description: Test sequence overflow
+# group: [timestamp]
+
+require icu
+
+# Set a known time zone
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE timestamps AS SELECT ts::TIMESTAMPTZ AS ts FROM (VALUES
+	('0044-03-13 (BC) 10:33:41.987654+01'),
+	('1962-07-31 12:20:48.123456+00'),
+	('2021-01-01 00:00:00+00'),
+	('2021-02-02 00:00:00+00'),
+	('2021-11-26 10:15:13.123456+00'),
+	('2021-11-15 02:30:00-08'),
+	('2021-11-15 02:30:00-07'),
+	('2021-12-25 00:00:00+02'),
+	(NULL),
+) tbl(ts);
+
+query II
+SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
+----
+0044-03-13 (BC) 09:33:41.987654+00	-43-03-15 01:40:43.987654 America/Los_Angeles
+1962-07-31 12:20:48.123456+00	1962-07-31 05:20:48.123456 America/Los_Angeles
+2021-01-01 00:00:00+00	2020-12-31 16:00:00.000000 America/Los_Angeles
+2021-02-02 00:00:00+00	2021-02-01 16:00:00.000000 America/Los_Angeles
+2021-11-26 10:15:13.123456+00	2021-11-26 02:15:13.123456 America/Los_Angeles
+2021-11-15 10:30:00+00	2021-11-15 02:30:00.000000 America/Los_Angeles
+2021-11-15 09:30:00+00	2021-11-15 01:30:00.000000 America/Los_Angeles
+2021-12-24 22:00:00+00	2021-12-24 14:00:00.000000 America/Los_Angeles
+NULL	NULL
+
+# TZ at the start
+query II
+SELECT ts, strftime(ts, '%Z %Y-%m-%d %H:%M:%S.%f') FROM timestamps;
+----
+0044-03-13 (BC) 09:33:41.987654+00	America/Los_Angeles -43-03-15 01:40:43.987654
+1962-07-31 12:20:48.123456+00	America/Los_Angeles 1962-07-31 05:20:48.123456
+2021-01-01 00:00:00+00	America/Los_Angeles 2020-12-31 16:00:00.000000
+2021-02-02 00:00:00+00	America/Los_Angeles 2021-02-01 16:00:00.000000
+2021-11-26 10:15:13.123456+00	America/Los_Angeles 2021-11-26 02:15:13.123456
+2021-11-15 10:30:00+00	America/Los_Angeles 2021-11-15 02:30:00.000000
+2021-11-15 09:30:00+00	America/Los_Angeles 2021-11-15 01:30:00.000000
+2021-12-24 22:00:00+00	America/Los_Angeles 2021-12-24 14:00:00.000000
+NULL	NULL
+
+#
+# Multiple Formats from an exhaustive list
+#
+statement ok
+CREATE TABLE formats (f VARCHAR);
+
+statement ok
+INSERT INTO formats VALUES
+	('%Y-%m-%d %H:%M:%S.%f %Z'),
+	('%Y-%m-%d %H:%M:%S.%f'),
+	('%Y'),
+	('(%Y)'),
+	('%% %Y %%'),
+	('%%%%%% %Y %%%%%%'),
+	('%d/%m/%Y'),
+	('%Y %Y %Y %Y'),
+	('%d/%m/%Y'),
+	('hello world'),
+	('%g'),
+	('%a'),
+	('%A'),
+	('%w'),
+	('%d'),
+	('%-d'),
+	('%b'),
+	('%h'),
+	('%B'),
+	('%m'),
+	('%-m'),
+	('%y'),
+	('%-y'),
+	('%-y'),
+	('%Y'),
+	('%H'),
+	('%-H'),
+	('%I'),
+	('%-I'),
+	('%p'),
+	('%M'),
+	('%-M'),
+	('%S'),
+	('%-S'),
+	('%f'),
+	('%z'),
+	('%Z'),
+	('%j'),
+	('%-j'),
+	('%U'),
+	('%W'),
+	('%c'),
+	('XX%cXX'),
+	('%x'),
+	('%X'),
+	('XX%cXX%xXX%XXX'),
+	('%Y'),
+	('%Y'),
+	('%y'),
+	('%y'),
+	(NULL),
+;
+
+query I
+SELECT strftime('2022-04-07 18:12:15.123456+00'::TIMESTAMPTZ, f)
+FROM formats
+----
+2022-04-07 11:12:15.123456 America/Los_Angeles
+2022-04-07 11:12:15.123456
+2022
+(2022)
+% 2022 %
+%%% 2022 %%%
+07/04/2022
+2022 2022 2022 2022
+07/04/2022
+hello world
+123
+Thu
+Thursday
+4
+07
+7
+Apr
+Apr
+April
+04
+4
+22
+22
+22
+2022
+11
+11
+11
+11
+AM
+12
+12
+15
+15
+123456
+-07
+America/Los_Angeles
+097
+97
+14
+14
+2022-04-07 11:12:15
+XX2022-04-07 11:12:15XX
+2022-04-07
+11:12:15
+XX2022-04-07 11:12:15XX2022-04-07XX11:12:15XX
+2022
+2022
+22
+22
+NULL
+
+#
+# Fractional Time Zones
+#
+
+statement ok
+SET TimeZone='Asia/Kathmandu';
+
+query II
+SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
+----
+0044-03-13 (BC) 09:33:41.987654+00	-43-03-15 15:14:57.987654 Asia/Kathmandu
+1962-07-31 12:20:48.123456+00	1962-07-31 17:50:48.123456 Asia/Kathmandu
+2021-01-01 00:00:00+00	2021-01-01 05:45:00.000000 Asia/Kathmandu
+2021-02-02 00:00:00+00	2021-02-02 05:45:00.000000 Asia/Kathmandu
+2021-11-26 10:15:13.123456+00	2021-11-26 16:00:13.123456 Asia/Kathmandu
+2021-11-15 10:30:00+00	2021-11-15 16:15:00.000000 Asia/Kathmandu
+2021-11-15 09:30:00+00	2021-11-15 15:15:00.000000 Asia/Kathmandu
+2021-12-24 22:00:00+00	2021-12-25 03:45:00.000000 Asia/Kathmandu
+NULL	NULL
+
+query II
+SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %z') FROM timestamps;
+----
+0044-03-13 (BC) 09:33:41.987654+00	-43-03-15 15:14:57.987654 +05:41
+1962-07-31 12:20:48.123456+00	1962-07-31 17:50:48.123456 +05:30
+2021-01-01 00:00:00+00	2021-01-01 05:45:00.000000 +05:45
+2021-02-02 00:00:00+00	2021-02-02 05:45:00.000000 +05:45
+2021-11-26 10:15:13.123456+00	2021-11-26 16:00:13.123456 +05:45
+2021-11-15 10:30:00+00	2021-11-15 16:15:00.000000 +05:45
+2021-11-15 09:30:00+00	2021-11-15 15:15:00.000000 +05:45
+2021-12-24 22:00:00+00	2021-12-25 03:45:00.000000 +05:45
+NULL	NULL
+
+statement ok
+SET TimeZone='Canada/Newfoundland';
+
+query II
+SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %Z') FROM timestamps;
+----
+0044-03-13 (BC) 09:33:41.987654+00	-43-03-15 06:02:49.987654 Canada/Newfoundland
+1962-07-31 12:20:48.123456+00	1962-07-31 09:50:48.123456 Canada/Newfoundland
+2021-01-01 00:00:00+00	2020-12-31 20:30:00.000000 Canada/Newfoundland
+2021-02-02 00:00:00+00	2021-02-01 20:30:00.000000 Canada/Newfoundland
+2021-11-26 10:15:13.123456+00	2021-11-26 06:45:13.123456 Canada/Newfoundland
+2021-11-15 10:30:00+00	2021-11-15 07:00:00.000000 Canada/Newfoundland
+2021-11-15 09:30:00+00	2021-11-15 06:00:00.000000 Canada/Newfoundland
+2021-12-24 22:00:00+00	2021-12-24 18:30:00.000000 Canada/Newfoundland
+NULL	NULL
+
+query II
+SELECT ts, strftime(ts, '%Y-%m-%d %H:%M:%S.%f %z') FROM timestamps;
+----
+0044-03-13 (BC) 09:33:41.987654+00	-43-03-15 06:02:49.987654 -03:30
+1962-07-31 12:20:48.123456+00	1962-07-31 09:50:48.123456 -02:30
+2021-01-01 00:00:00+00	2020-12-31 20:30:00.000000 -03:30
+2021-02-02 00:00:00+00	2021-02-01 20:30:00.000000 -03:30
+2021-11-26 10:15:13.123456+00	2021-11-26 06:45:13.123456 -03:30
+2021-11-15 10:30:00+00	2021-11-15 07:00:00.000000 -03:30
+2021-11-15 09:30:00+00	2021-11-15 06:00:00.000000 -03:30
+2021-12-24 22:00:00+00	2021-12-24 18:30:00.000000 -03:30
+NULL	NULL
+
+#
+# Infinities
+#
+
+foreach special infinity -infinity
+
+# PG to_char returns NULL here
+query I
+SELECT strftime('${special}'::TIMESTAMPTZ, '%Y-%m-%d');
+----
+NULL
+
+endloop
+
+#
+# Errors/Coverage
+#
+statement error
+SELECT ts, strftime(ts, '%C') FROM timestamps;

@@ -11,6 +11,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -19,33 +20,29 @@ class PreparedStatementData;
 //! The planner creates a logical query plan from the parsed SQL statements
 //! using the Binder and LogicalPlanGenerator.
 class Planner {
+	friend class Binder;
+
 public:
 	explicit Planner(ClientContext &context);
-
-	void CreatePlan(unique_ptr<SQLStatement> statement);
 
 	unique_ptr<LogicalOperator> plan;
 	vector<string> names;
 	vector<LogicalType> types;
-	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;
+	bound_parameter_map_t value_map;
+	vector<BoundParameterData> parameter_data;
 
 	shared_ptr<Binder> binder;
 	ClientContext &context;
 
-	bool read_only;
-	bool requires_valid_transaction;
-	bool allow_stream_result;
+	StatementProperties properties;
+
+public:
+	void CreatePlan(unique_ptr<SQLStatement> statement);
+	static void VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
+	                       bound_parameter_map_t *map = nullptr);
 
 private:
 	void CreatePlan(SQLStatement &statement);
 	shared_ptr<PreparedStatementData> PrepareSQLStatement(unique_ptr<SQLStatement> statement);
-	void PlanPrepare(unique_ptr<SQLStatement> statement);
-	void PlanExecute(unique_ptr<SQLStatement> statement);
-
-	// void VerifyQuery(BoundSQLStatement &statement);
-	// void VerifyNode(BoundQueryNode &statement);
-	// void VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies);
-
-	// bool StatementRequiresValidTransaction(BoundSQLStatement &statement);
 };
 } // namespace duckdb

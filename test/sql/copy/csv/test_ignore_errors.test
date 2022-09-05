@@ -1,0 +1,90 @@
+# name: test/sql/copy/csv/test_ignore_errors.test
+# description: IGNORE_ERRORS test
+# group: [csv]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+statement ok
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, IGNORE_ERRORS)
+
+statement error
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER)
+
+# not enough columns provided
+query II
+SELECT * FROM integers AS too_little_columns
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+statement ok
+DELETE FROM integers;
+
+statement ok
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER, IGNORE_ERRORS)
+
+statement error
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER)
+
+# not enough columns provided, single value
+query II
+SELECT * FROM integers AS too_little_columns
+----
+
+
+statement ok
+DELETE FROM integers;
+
+statement ok
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_many.csv' (HEADER, IGNORE_ERRORS)
+
+statement error
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_many.csv' (HEADER)
+
+# too many columns provided
+query II
+SELECT * FROM integers AS too_many_columns
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+statement ok
+DELETE FROM integers;
+
+statement ok
+COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER, IGNORE_ERRORS)
+
+statement error
+COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER)
+
+# too many columns provided
+query II
+SELECT * FROM integers AS too_many_columns
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+statement ok
+CREATE TABLE nullable_type (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));
+
+statement ok
+COPY nullable_type FROM 'test/sql/copy/csv/data/test/test_incompatible_type_with_nullable.csv' (IGNORE_ERRORS)
+
+statement error
+COPY nullable_type FROM 'test/sql/copy/csv/data/test/test_incompatible_type_with_nullable.csv'
+
+query IIII
+SELECT * FROM nullable_type
+----
+1	NULL	test	null
+2	NULL	test	null

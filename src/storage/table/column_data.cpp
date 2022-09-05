@@ -1,16 +1,17 @@
 #include "duckdb/storage/table/column_data.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/data_pointer.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/planner/table_filter.hpp"
+
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/data_pointer.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
-
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
-#include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 
 namespace duckdb {
 
@@ -101,7 +102,7 @@ idx_t ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, Colum
 		if (!ALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
 			throw TransactionException("Cannot create index with outstanding updates");
 		}
-		result.Normalify(scan_count);
+		result.Flatten(scan_count);
 		if (SCAN_COMMITTED) {
 			updates->FetchCommitted(vector_index, result);
 		} else {
@@ -138,7 +139,7 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
 	auto scan_count = ScanVector(child_state, result, count);
 	if (updates) {
-		result.Normalify(scan_count);
+		result.Flatten(scan_count);
 		updates->FetchCommittedRange(offset_in_row_group, count, result);
 	}
 }
@@ -155,7 +156,7 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count)
 void ColumnData::Select(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
-	result.Normalify(scan_count);
+	result.Flatten(scan_count);
 	ColumnSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
 }
 
@@ -204,8 +205,8 @@ void ColumnScanState::NextVector() {
 }
 
 void ColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
-	VectorData vdata;
-	vector.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	vector.ToUnifiedFormat(count, vdata);
 	AppendData(stats, state, vdata, count);
 }
 
@@ -229,7 +230,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.current->InitializeAppend(state);
 }
 
-void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count) {
+void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
 	idx_t offset = 0;
 	while (true) {
 		// append the data from the vector
@@ -307,7 +308,7 @@ void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &up
 	ColumnScanState state;
 	auto fetch_count = Fetch(state, row_ids[0], base_vector);
 
-	base_vector.Normalify(fetch_count);
+	base_vector.Flatten(fetch_count);
 	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
@@ -350,7 +351,7 @@ void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, 
                                 Vector &scan_vector) {
 	segment->Scan(state, count, scan_vector, 0, true);
 	if (updates) {
-		scan_vector.Normalify(count);
+		scan_vector.Flatten(count);
 		updates->FetchCommittedRange(state.row_index - row_group_start, count, scan_vector);
 	}
 }
@@ -360,7 +361,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, writer);
-	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type);
+	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type, StatisticsType::LOCAL_STATS);
 
 	if (!data.root_node) {
 		// empty table: flush the empty list

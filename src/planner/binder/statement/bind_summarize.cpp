@@ -128,6 +128,7 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 	select_node->select_list.push_back(SummarizeWrapUnnest(null_percentage_children, "null_percentage"));
 	select_node->from_table = move(subquery_ref);
 
+	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return Bind(*select_node);
 }
 

@@ -1,0 +1,28 @@
+# name: test/sql/function/list/lambdas/list_comprehension.test
+# description: Test different examples that can be found when searching for python list comprehension examples
+# group: [lambdas]
+
+statement ok
+PRAGMA enable_verification
+
+# even squares
+query I
+SELECT list_transform(list_filter([0, 1, 2, 3, 4, 5], x -> x % 2 = 0), y -> y * y)
+----
+[0, 4, 16]
+
+# divisible by 2 and 5
+query I
+SELECT list_filter(list_filter([2, 4, 3, 1, 20, 10, 3, 30], x -> x % 2 == 0), y -> y % 5 == 0)
+----
+[20, 10, 30]
+
+query I
+SELECT list_filter(['apple', 'banana', 'cherry', 'kiwi', 'mango'], fruit -> contains(fruit, 'a'))
+----
+[apple, banana, mango]
+
+query I
+SELECT list_transform([[1, NULL, 2], [3, NULL]], a -> list_filter(a, x -> x IS NOT NULL))
+----
+[[1, 2], [3]]

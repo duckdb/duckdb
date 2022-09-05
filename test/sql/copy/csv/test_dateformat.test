@@ -27,6 +27,22 @@ SELECT * FROM dates ORDER BY d
 2019-05-06
 2019-06-05
 
+# test dateformat on COPY TO
+statement ok
+CREATE TABLE new_dates (d DATE);
+
+statement ok
+COPY dates TO '__TEST_DIR__/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
+
+statement ok
+COPY new_dates FROM '__TEST_DIR__/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
+
+query I
+SELECT * FROM new_dates ORDER BY 1
+----
+2019-05-06
+2019-06-05
+
 # timestamp format
 statement ok
 CREATE TABLE timestamps(t TIMESTAMP);
@@ -37,6 +53,36 @@ COPY timestamps FROM 'test/sql/copy/csv/data/test/timestampformat.csv' (HEADER 0
 
 query I
 SELECT * FROM timestamps
+----
+2003-06-30 12:03:10
+
+# test timestamp format on COPY TO
+statement ok
+CREATE TABLE new_timestamps (t TIMESTAMP);
+
+statement ok
+COPY timestamps TO '__TEST_DIR__/timestampformat.csv' (HEADER 0, TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
+
+statement ok
+COPY new_timestamps FROM '__TEST_DIR__/timestampformat.csv' (HEADER 0, TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
+
+query I
+SELECT * FROM new_timestamps ORDER BY 1
+----
+2003-06-30 12:03:10
+
+statement ok
+DELETE FROM new_timestamps
+
+# test iso format in copy
+statement ok
+COPY timestamps TO '__TEST_DIR__/timestampformat.csv' (HEADER 0, TIMESTAMPFORMAT ISO)
+
+statement ok
+COPY new_timestamps FROM '__TEST_DIR__/timestampformat.csv' (HEADER 0)
+
+query I
+SELECT * FROM new_timestamps ORDER BY 1
 ----
 2003-06-30 12:03:10
 

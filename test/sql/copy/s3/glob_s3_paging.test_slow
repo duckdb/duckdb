@@ -12,7 +12,12 @@ require-env S3_TEST_SERVER_AVAILABLE 1
 set ignore_error_messages
 
 statement ok
-SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='s3.s3rver-endpoint.com:4923';SET s3_use_ssl=false;
+SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='minio_duckdb_user';SET s3_region='eu-west-1'; SET s3_endpoint='duckdb-minio.com:9000';SET s3_use_ssl=false;
+
+foreach urlstyle path vhost
+
+statement ok
+SET s3_url_style='${urlstyle}'
 
 ## For both formats we generate 2000 files which we will glob to test the paging mechanism of aws ListObjectV2 call is handled properly
 foreach format parquet csv
@@ -26,7 +31,7 @@ foreach k 0 1 2 3 4 5 6 7 8 9
 foreach l 0 1 2 3 4 5 6 7 8 9
 
 statement ok
-COPY (select (${i}${j}${k}${l})::INT as column0) to 's3://test-bucket/parquet_glob_s3_paging/paging/t${i}${j}${k}${l}.${format}';
+COPY (select (${i}${j}${k}${l})::INT as column0) to 's3://test-bucket/parquet_glob_s3_paging/paging/t${i}${j}${k}${l}-${urlstyle}-urls.${format}';
 
 endloop
 
@@ -38,13 +43,10 @@ endloop
 
 # Begin tests
 query I
-select count(*) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*.${format}'
-----
-2000
-
-query I
-select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*.${format}'
+select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*-${urlstyle}-urls.${format}'
 ----
 1999000
+
+endloop
 
 endloop

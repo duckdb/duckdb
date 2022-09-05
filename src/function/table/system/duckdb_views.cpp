@@ -5,10 +5,11 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
-struct DuckDBViewsData : public FunctionOperatorData {
+struct DuckDBViewsData : public GlobalTableFunctionState {
 	DuckDBViewsData() : offset(0) {
 	}
 
@@ -45,8 +46,7 @@ static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, TableFun
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBViewsInit(ClientContext &context, const FunctionData *bind_data,
-                                                 const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBViewsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBViewsData>();
 
 	// scan all the schemas for tables and collect themand collect them
@@ -56,14 +56,13 @@ unique_ptr<FunctionOperatorData> DuckDBViewsInit(ClientContext &context, const F
 	};
 
 	// check the temp schema as well
-	context.temporary_objects->Scan(context, CatalogType::VIEW_ENTRY,
-	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::VIEW_ENTRY,
+	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
-void DuckDBViewsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                         DataChunk *input, DataChunk &output) {
-	auto &data = (DuckDBViewsData &)*operator_state;
+void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBViewsData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

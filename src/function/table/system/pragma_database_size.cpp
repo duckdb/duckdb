@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-struct PragmaDatabaseSizeData : public FunctionOperatorData {
+struct PragmaDatabaseSizeData : public GlobalTableFunctionState {
 	PragmaDatabaseSizeData() : finished(false) {
 	}
 
@@ -44,15 +44,12 @@ static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, T
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> PragmaDatabaseSizeInit(ClientContext &context, const FunctionData *bind_data,
-                                                        const vector<column_t> &column_ids,
-                                                        TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaDatabaseSizeInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<PragmaDatabaseSizeData>();
 }
 
-void PragmaDatabaseSizeFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (PragmaDatabaseSizeData &)*operator_state;
+void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (PragmaDatabaseSizeData &)*data_p.global_state;
 	if (data.finished) {
 		return;
 	}

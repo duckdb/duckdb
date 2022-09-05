@@ -32,9 +32,7 @@ struct ColumnCheckpointState {
 	unique_ptr<BaseStatistics> global_stats;
 
 public:
-	virtual unique_ptr<BaseStatistics> GetStatistics() {
-		return global_stats->Copy();
-	}
+	virtual unique_ptr<BaseStatistics> GetStatistics();
 
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
 	virtual void FlushToDisk();

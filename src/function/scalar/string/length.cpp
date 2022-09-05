@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "utf8proc.hpp"
 
 namespace duckdb {
@@ -49,9 +50,9 @@ struct BitLenOperator {
 	}
 };
 
-static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                       FunctionData *bind_data,
-                                                       vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
@@ -66,18 +67,21 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, B
 
 static unique_ptr<FunctionData> ListLengthBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;
 }
 
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction array_length_unary = ScalarFunction(
-	    {LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT,
-	    ScalarFunction::UnaryFunction<list_entry_t, int64_t, ArrayLengthOperator>, false, false, ListLengthBind);
+	ScalarFunction array_length_unary =
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT,
+	                   ScalarFunction::UnaryFunction<list_entry_t, int64_t, ArrayLengthOperator>, ListLengthBind);
 	ScalarFunctionSet length("length");
 	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, false,
-	                                  false, nullptr, nullptr, LengthPropagateStats));
+	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
+	                                  nullptr, LengthPropagateStats));
 	length.AddFunction(array_length_unary);
 	set.AddFunction(length);
 	length.name = "len";
@@ -85,10 +89,9 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunctionSet array_length("array_length");
 	array_length.AddFunction(array_length_unary);
-	array_length.AddFunction(
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<list_entry_t, int64_t, int64_t, ArrayLengthBinaryOperator>, false,
-	                   false, ListLengthBind));
+	array_length.AddFunction(ScalarFunction(
+	    {LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::BIGINT,
+	    ScalarFunction::BinaryFunction<list_entry_t, int64_t, int64_t, ArrayLengthBinaryOperator>, ListLengthBind));
 	set.AddFunction(array_length);
 
 	set.AddFunction(ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,

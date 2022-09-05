@@ -82,6 +82,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	D_ASSERT(!updates);
 
 	idx_t scan_count = ScanVector(state, result, count);
+	D_ASSERT(scan_count > 0);
 	validity.ScanCount(state.child_states[0], result, count);
 
 	auto data = FlatVector::GetData<list_entry_t>(result);
@@ -154,7 +155,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	D_ASSERT(count > 0);
 	auto &stats = (ListStatistics &)stats_p;
 
-	vector.Normalify(count);
+	vector.Flatten(count);
 	auto &list_validity = FlatVector::Validity(vector);
 
 	// construct the list_entry_t entries to append to the column data
@@ -186,9 +187,9 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	         child_count);
 #endif
 
-	VectorData vdata;
+	UnifiedVectorFormat vdata;
 	vdata.validity = list_validity;
-	vdata.sel = FlatVector::IncrementalSelectionVector(count, vdata.owned_sel);
+	vdata.sel = FlatVector::IncrementalSelectionVector();
 	vdata.data = (data_ptr_t)append_offsets.get();
 
 	// append the list offsets

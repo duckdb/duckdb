@@ -330,11 +330,6 @@ int main(int argc, char **argv) {
 	if (p != NULL) {
 		// remove last component
 		*p = '\0';
-		if (p > buf + 4 && strcmp(p - 4, "\\bin") == 0) {
-			// also remove \bin directory
-			p -= 4;
-			*p = '\0';
-		}
 	}
 
 	if (strcmp("/Install", cmd) == 0) {

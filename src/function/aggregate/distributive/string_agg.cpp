@@ -3,6 +3,9 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -12,7 +15,22 @@ struct StringAggState {
 	char *dataptr;
 };
 
-struct StringAggBaseFunction {
+struct StringAggBindData : public FunctionData {
+	explicit StringAggBindData(string sep_p) : sep(move(sep_p)) {
+	}
+
+	string sep;
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<StringAggBindData>(sep);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (StringAggBindData &)other_p;
+		return sep == other.sep;
+	}
+};
+
+struct StringAggFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		state->dataptr = nullptr;
@@ -21,7 +39,7 @@ struct StringAggBaseFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->dataptr) {
 			mask.SetInvalid(idx);
 		} else {
@@ -70,66 +88,84 @@ struct StringAggBaseFunction {
 		}
 	}
 
-	static inline void PerformOperation(StringAggState *state, string_t str, string_t sep) {
-		PerformOperation(state, str.GetDataUnsafe(), sep.GetDataUnsafe(), str.GetSize(), sep.GetSize());
-	}
-
-	static inline void PerformOperation(StringAggState *state, string_t str) {
-		PerformOperation(state, str.GetDataUnsafe(), ",", str.GetSize(), 1);
-	}
-};
-
-struct StringAggFunction : public StringAggBaseFunction {
-	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *str_data, B_TYPE *sep_data,
-	                      ValidityMask &str_mask, ValidityMask &sep_mask, idx_t str_idx, idx_t sep_idx) {
-		PerformOperation(state, str_data[str_idx], sep_data[sep_idx]);
-	}
-};
-
-struct StringAggSingleFunction : public StringAggBaseFunction {
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *str_data, ValidityMask &str_mask,
-	                      idx_t str_idx) {
-		PerformOperation(state, str_data[str_idx]);
+	static inline void PerformOperation(StringAggState *state, string_t str, FunctionData *data_p) {
+		auto &data = (StringAggBindData &)*data_p;
+		PerformOperation(state, str.GetDataUnsafe(), data.sep.c_str(), str.GetSize(), data.sep.size());
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *str_data,
+	                      ValidityMask &str_mask, idx_t str_idx) {
+		PerformOperation(state, str_data[str_idx], aggr_input_data.bind_data);
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
 		if (!source.dataptr) {
 			// source is not set: skip combining
 			return;
 		}
-		PerformOperation(target, string_t(source.dataptr, source.size));
+		PerformOperation(target, string_t(source.dataptr, source.size), aggr_input_data.bind_data);
 	}
 };
 
+unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction &function,
+                                       vector<unique_ptr<Expression>> &arguments) {
+	if (arguments.size() == 1) {
+		// single argument: default to comma
+		return make_unique<StringAggBindData>(",");
+	}
+	D_ASSERT(arguments.size() == 2);
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	if (!arguments[1]->IsFoldable()) {
+		throw BinderException("Separator argument to StringAgg must be a constant");
+	}
+	auto separator_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	if (separator_val.IsNull()) {
+		arguments[0] = make_unique<BoundConstantExpression>(Value(LogicalType::VARCHAR));
+	}
+	Function::EraseArgument(function, arguments, arguments.size() - 1);
+	return make_unique<StringAggBindData>(separator_val.ToString());
+}
+
+static void StringAggSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+                               const AggregateFunction &function) {
+	D_ASSERT(bind_data_p);
+	auto bind_data = (StringAggBindData *)bind_data_p;
+	writer.WriteString(bind_data->sep);
+}
+
+unique_ptr<FunctionData> StringAggDeserialize(ClientContext &context, FieldReader &reader,
+                                              AggregateFunction &bound_function) {
+	auto sep = reader.ReadRequired<string>();
+	return make_unique<StringAggBindData>(move(sep));
+}
+
 void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet string_agg("string_agg");
-	string_agg.AddFunction(AggregateFunction(
-	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	    AggregateFunction::StateSize<StringAggState>,
+	AggregateFunction string_agg_param(
+	    {LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
 	    AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
-	    AggregateFunction::BinaryScatterUpdate<StringAggState, string_t, string_t, StringAggFunction>, nullptr,
+	    AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggFunction>,
+	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
 	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
-	    AggregateFunction::BinaryUpdate<StringAggState, string_t, string_t, StringAggFunction>, nullptr,
-	    AggregateFunction::StateDestroy<StringAggState, StringAggFunction>, nullptr, nullptr));
-	string_agg.AddFunction(
-	    AggregateFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
-	                      AggregateFunction::StateInitialize<StringAggState, StringAggSingleFunction>,
-	                      AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggSingleFunction>,
-	                      AggregateFunction::StateCombine<StringAggState, StringAggSingleFunction>,
-	                      AggregateFunction::StateFinalize<StringAggState, string_t, StringAggSingleFunction>,
-	                      AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggSingleFunction>, nullptr,
-	                      AggregateFunction::StateDestroy<StringAggState, StringAggSingleFunction>, nullptr, nullptr));
+	    AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggFunction>, StringAggBind,
+	    AggregateFunction::StateDestroy<StringAggState, StringAggFunction>);
+	string_agg_param.serialize = StringAggSerialize;
+	string_agg_param.deserialize = StringAggDeserialize;
+	string_agg.AddFunction(string_agg_param);
+	string_agg_param.arguments.emplace_back(LogicalType::VARCHAR);
+	string_agg.AddFunction(string_agg_param);
 	set.AddFunction(string_agg);
 	string_agg.name = "group_concat";
 	set.AddFunction(string_agg);

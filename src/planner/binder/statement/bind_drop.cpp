@@ -14,11 +14,11 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::PREPARED_STATEMENT:
 		// dropping prepared statements is always possible
 		// it also does not require a valid transaction
-		this->requires_valid_transaction = false;
+		properties.requires_valid_transaction = false;
 		break;
 	case CatalogType::SCHEMA_ENTRY:
 		// dropping a schema is never read-only because there are no temporary schemas
-		this->read_only = false;
+		properties.read_only = false;
 		break;
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
@@ -34,7 +34,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		}
 		if (!entry->temporary) {
 			// we can only drop temporary tables in read-only mode
-			this->read_only = false;
+			properties.read_only = false;
 		}
 		stmt.info->schema = entry->schema->name;
 		break;
@@ -45,7 +45,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_DROP, move(stmt.info));
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	this->allow_stream_result = false;
+	properties.allow_stream_result = false;
+	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
 

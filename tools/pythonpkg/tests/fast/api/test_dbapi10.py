@@ -11,8 +11,8 @@ class TestCursorDescription(object):
             ["SELECT * FROM timestamps", "t", "DATETIME", datetime],
             ["SELECT DATE '1992-09-20' AS date_col;", "date_col", "Date", date],
             ["SELECT '\\xAA'::BLOB AS blob_col;", "blob_col", "BINARY", bytes],
-            ["SELECT {'x': 1, 'y': 2, 'z': 3}", "main.struct_pack(1, 2, 3)", "dict", dict],
-            ["SELECT [1, 2, 3]", "main.list_value(1, 2, 3)", "list", list],
+            ["SELECT {'x': 1, 'y': 2, 'z': 3} AS struct_col", "struct_col", "dict", dict],
+            ["SELECT [1, 2, 3] AS list_col", "list_col", "list", list],
         ],
     )
     def test_description(

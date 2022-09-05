@@ -73,8 +73,8 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			Execute(*expr.children[child], state->child_states[child].get(), current_sel, remaining_count,
 			        vector_to_check);
 
-			VectorData vdata;
-			vector_to_check.Orrify(remaining_count, vdata);
+			UnifiedVectorFormat vdata;
+			vector_to_check.ToUnifiedFormat(remaining_count, vdata);
 
 			idx_t result_count = 0;
 			next_count = 0;
@@ -100,9 +100,8 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			}
 		}
 		if (remaining_count > 0) {
-			auto &result_mask = FlatVector::Validity(result);
 			for (idx_t i = 0; i < remaining_count; i++) {
-				result_mask.SetInvalid(current_sel->get_index(i));
+				FlatVector::SetNull(result, current_sel->get_index(i), true);
 			}
 		}
 		if (sel) {

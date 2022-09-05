@@ -38,10 +38,8 @@ EXECUTE v2('hello world', 'hello mars')
 ----
 false
 
-query I
+statement error
 EXECUTE v2([1, 2, 3], '[1, 2, 3]')
-----
-true
 
 # unbound parameter in scalar subquery
 statement ok
@@ -121,14 +119,14 @@ EXECUTE v6(NULL)
 
 # unbound parameter with printf
 statement ok
-PREPARE v7 AS SELECT printf('%s: %s', ?, ?)
+PREPARE v7 AS SELECT printf('%s: %d', ?, ?)
 
 query I
 EXECUTE v7('time', 27)
 ----
 time: 27
 
-query I
+statement error
 EXECUTE v7('hello world', [1, 2, 3])
 ----
 hello world: [1, 2, 3]

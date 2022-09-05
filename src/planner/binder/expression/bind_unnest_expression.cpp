@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -30,7 +31,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	auto &child = (BoundExpression &)*function.children[0];
 	auto &child_type = child.expr->return_type;
 
-	if (child_type.id() != LogicalTypeId::LIST && child_type.id() != LogicalTypeId::SQLNULL) {
+	if (child_type.id() != LogicalTypeId::LIST && child_type.id() != LogicalTypeId::SQLNULL &&
+	    child_type.id() != LogicalTypeId::UNKNOWN) {
 		return BindResult(binder.FormatError(function, "Unnest() can only be applied to lists and NULL"));
 	}
 
@@ -41,6 +43,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	auto return_type = LogicalType(LogicalTypeId::SQLNULL);
 	if (child_type.id() == LogicalTypeId::LIST) {
 		return_type = ListType::GetChildType(child_type);
+	} else if (child_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
 	}
 
 	auto result = make_unique<BoundUnnestExpression>(return_type);

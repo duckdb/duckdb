@@ -74,8 +74,8 @@ unique_ptr<CompressionState> UncompressedFunctions::InitCompression(ColumnDataCh
 
 void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, idx_t count) {
 	auto &state = (UncompressedCompressState &)state_p;
-	VectorData vdata;
-	data.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	data.ToUnifiedFormat(count, vdata);
 
 	ColumnAppendState append_state;
 	idx_t offset = 0;
@@ -105,7 +105,7 @@ void UncompressedFunctions::FinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 struct FixedSizeScanState : public SegmentScanState {
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 };
 
 unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
@@ -124,7 +124,7 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
-	auto data = scan_state.handle->node->buffer + segment.GetBlockOffset();
+	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);
 
 	// copy the data from the base table
@@ -134,8 +134,20 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 
 template <class T>
 void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// FIXME: we should be able to do a zero-copy here
-	FixedSizeScanPartial<T>(segment, state, scan_count, result, 0);
+	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
+	auto start = segment.GetRelativeIndex(state.row_index);
+
+	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto source_data = data + start * sizeof(T);
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	if (std::is_same<T, list_entry_t>()) {
+		// list columns are modified in-place during the scans to correct the offsets
+		// so we can't do a zero-copy there
+		memcpy(FlatVector::GetData(result), source_data, scan_count * sizeof(T));
+	} else {
+		FlatVector::SetData(result, source_data);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -148,7 +160,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 	auto handle = buffer_manager.Pin(segment.block);
 
 	// first fetch the data from the base table
-	auto data_ptr = handle->node->buffer + segment.GetBlockOffset() + row_id * sizeof(T);
+	auto data_ptr = handle.Ptr() + segment.GetBlockOffset() + row_id * sizeof(T);
 
 	memcpy(FlatVector::GetData(result) + result_idx * sizeof(T), data_ptr, sizeof(T));
 }
@@ -157,7 +169,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 // Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, VectorData &adata,
+static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
                        idx_t offset, idx_t count) {
 	auto sdata = (T *)adata.data;
 	auto tdata = (T *)target;
@@ -186,8 +198,8 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 }
 
 template <>
-void AppendLoop<list_entry_t>(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, VectorData &adata,
-                              idx_t offset, idx_t count) {
+void AppendLoop<list_entry_t>(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset,
+                              UnifiedVectorFormat &adata, idx_t offset, idx_t count) {
 	auto sdata = (list_entry_t *)adata.data;
 	auto tdata = (list_entry_t *)target;
 	for (idx_t i = 0; i < count; i++) {
@@ -198,12 +210,13 @@ void AppendLoop<list_entry_t>(SegmentStatistics &stats, data_ptr_t target, idx_t
 }
 
 template <class T>
-idx_t FixedSizeAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
+idx_t FixedSizeAppend(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset,
+                      idx_t count) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	D_ASSERT(segment.GetBlockOffset() == 0);
 
-	auto target_ptr = handle->node->buffer;
+	auto target_ptr = handle.Ptr();
 	idx_t max_tuple_count = Storage::BLOCK_SIZE / sizeof(T);
 	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
 

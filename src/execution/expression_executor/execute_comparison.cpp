@@ -153,9 +153,9 @@ idx_t NestedSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &ri
 static inline idx_t SelectNotNull(Vector &left, Vector &right, const idx_t count, const SelectionVector &sel,
                                   SelectionVector &maybe_vec, OptionalSelection &false_opt) {
 
-	VectorData lvdata, rvdata;
-	left.Orrify(count, lvdata);
-	right.Orrify(count, rvdata);
+	UnifiedVectorFormat lvdata, rvdata;
+	left.ToUnifiedFormat(count, lvdata);
+	right.ToUnifiedFormat(count, rvdata);
 
 	auto &lmask = lvdata.validity;
 	auto &rmask = rvdata.validity;
@@ -212,9 +212,8 @@ static idx_t NestedSelectOperation(Vector &left, Vector &right, const SelectionV
 	// a selection vector in a single pass. But to implement progressive comparisons,
 	// we have to make multiple passes, so we need to keep track of the original input positions
 	// and then scatter the output selections when we are done.
-	SelectionVector owned_sel;
 	if (!sel) {
-		sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+		sel = FlatVector::IncrementalSelectionVector();
 	}
 
 	// Make buffered selections for progressive comparisons

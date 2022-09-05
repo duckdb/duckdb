@@ -1,0 +1,20 @@
+# name: test/sql/cast/decimal_integer_cast.test
+# description: Issue #2965
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+foreach datatype TINYINT SMALLINT INTEGER BIGINT HUGEINT
+
+query I
+SELECT CAST(0.55 AS ${datatype}) as x;
+----
+1
+
+query I
+SELECT CAST(-0.55 AS ${datatype}) as x;
+----
+-1
+
+endloop

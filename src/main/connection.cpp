@@ -1,18 +1,20 @@
 #include "duckdb/main/connection.hpp"
-#include "duckdb/main/query_profiler.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
+
+#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/relation/read_csv_relation.hpp"
-#include "duckdb/main/relation/table_relation.hpp"
 #include "duckdb/main/relation/table_function_relation.hpp"
+#include "duckdb/main/relation/table_relation.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/main/relation/view_relation.hpp"
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/main/connection_manager.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -20,6 +22,7 @@ Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientC
 	ConnectionManager::Get(database).AddConnection(*context);
 #ifdef DEBUG
 	EnableProfiling();
+	context->config.emit_profiler_output = false;
 #endif
 }
 
@@ -35,7 +38,7 @@ string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	if (format == ProfilerPrintFormat::JSON) {
 		return profiler.ToJSON();
 	} else {
-		return profiler.ToString();
+		return profiler.QueryTreeToString();
 	}
 }
 
@@ -79,12 +82,12 @@ unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> s
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 }
 
-unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query) {
-	return context->PendingQuery(query);
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, bool allow_stream_result) {
+	return context->PendingQuery(query, allow_stream_result);
 }
 
-unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement) {
-	return context->PendingQuery(move(statement));
+unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
+	return context->PendingQuery(move(statement), allow_stream_result);
 }
 
 unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {
@@ -97,7 +100,7 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
 	auto statement = Prepare(query);
-	if (!statement->success) {
+	if (statement->HasError()) {
 		return make_unique<MaterializedQueryResult>(statement->error);
 	}
 	return statement->Execute(values, false);
@@ -120,12 +123,15 @@ unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
-	ChunkCollection collection;
+	if (chunk.size() == 0) {
+		return;
+	}
+	ColumnDataCollection collection(Allocator::Get(*context), chunk.GetTypes());
 	collection.Append(chunk);
 	Append(description, collection);
 }
 
-void Connection::Append(TableDescription &description, ChunkCollection &collection) {
+void Connection::Append(TableDescription &description, ColumnDataCollection &collection) {
 	context->Append(description, collection);
 }
 
@@ -222,22 +228,22 @@ shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> s
 
 void Connection::BeginTransaction() {
 	auto result = Query("BEGIN TRANSACTION");
-	if (!result->success) {
-		throw Exception(result->error);
+	if (result->HasError()) {
+		result->ThrowError();
 	}
 }
 
 void Connection::Commit() {
 	auto result = Query("COMMIT");
-	if (!result->success) {
-		throw Exception(result->error);
+	if (result->HasError()) {
+		result->ThrowError();
 	}
 }
 
 void Connection::Rollback() {
 	auto result = Query("ROLLBACK");
-	if (!result->success) {
-		throw Exception(result->error);
+	if (result->HasError()) {
+		result->ThrowError();
 	}
 }
 
@@ -247,6 +253,9 @@ void Connection::SetAutoCommit(bool auto_commit) {
 
 bool Connection::IsAutoCommit() {
 	return context->transaction.IsAutoCommit();
+}
+bool Connection::HasActiveTransaction() {
+	return context->transaction.HasActiveTransaction();
 }
 
 } // namespace duckdb

@@ -4,7 +4,6 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
@@ -113,7 +112,7 @@ void ColumnSegment::InitializeAppend(ColumnAppendState &state) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-idx_t ColumnSegment::Append(ColumnAppendState &state, VectorData &append_data, idx_t offset, idx_t count) {
+idx_t ColumnSegment::Append(ColumnAppendState &state, UnifiedVectorFormat &append_data, idx_t offset, idx_t count) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (!function->append) {
 		throw InternalException("Attempting to append to a segment without append method");
@@ -267,10 +266,11 @@ static void FilterSelectionSwitch(T *vec, T *predicate, SelectionVector &sel, id
 }
 
 template <bool IS_NULL>
-static idx_t TemplatedNullSelection(SelectionVector &sel, idx_t approved_tuple_count, ValidityMask &mask) {
+static idx_t TemplatedNullSelection(SelectionVector &sel, idx_t &approved_tuple_count, ValidityMask &mask) {
 	if (mask.AllValid()) {
 		// no NULL values
 		if (IS_NULL) {
+			approved_tuple_count = 0;
 			return 0;
 		} else {
 			return approved_tuple_count;
@@ -285,6 +285,7 @@ static idx_t TemplatedNullSelection(SelectionVector &sel, idx_t approved_tuple_c
 			}
 		}
 		sel.Initialize(result_sel);
+		approved_tuple_count = result_count;
 		return result_count;
 	}
 }

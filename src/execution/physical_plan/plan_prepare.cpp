@@ -6,12 +6,14 @@
 namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &op) {
-	D_ASSERT(op.children.size() == 1);
+	D_ASSERT(op.children.size() <= 1);
 
 	// generate physical plan
-	auto plan = CreatePlan(*op.children[0]);
-	op.prepared->types = plan->types;
-	op.prepared->plan = move(plan);
+	if (!op.children.empty()) {
+		auto plan = CreatePlan(*op.children[0]);
+		op.prepared->types = plan->types;
+		op.prepared->plan = move(plan);
+	}
 
 	return make_unique<PhysicalPrepare>(op.name, move(op.prepared), op.estimated_cardinality);
 }

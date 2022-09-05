@@ -4,6 +4,7 @@ add_library_unity(
   duckdb_func_table
   OBJECT
   arrow.cpp
+  arrow_conversion.cpp
   checkpoint.cpp
   glob.cpp
   range.cpp

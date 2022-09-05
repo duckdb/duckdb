@@ -13,7 +13,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 	if (!func.function.statistics) {
 		return nullptr;
 	}
-	return func.function.statistics(context, func, func.bind_info.get(), stats);
+	FunctionStatisticsInput input(func, func.bind_info.get(), stats, expr_ptr);
+	return func.function.statistics(context, input);
 }
 
 } // namespace duckdb

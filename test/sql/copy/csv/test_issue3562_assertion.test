@@ -1,0 +1,20 @@
+# name: test/sql/copy/csv/test_issue3562_assertion.test
+# description: Test copy from with decimal type specifier
+# group: [csv]
+
+statement ok
+create table test as SELECT * FROM read_csv('test/sql/copy/csv/data/test/issue3562_assertion.csv.gz', header=TRUE, columns={'OBJECTID': 'DECIMAL(18,3)', 'URL': 'TEXT', 'NAME': 'TEXT', 'the_geom':'TEXT', 'LINE': 'TEXT'});
+
+query II
+select objectid, name from test ORDER BY objectid limit 10
+----
+1.000	15th St & Kings Hwy at SE corner
+2.000	15th St & Avenue U at SE corner
+3.000	15th St & Gravesend Neck Rd at NE corner
+4.000	15th St & Sheepshead Bay Rd at SE corner
+5.000	NULL
+6.000	Branch 7 St & Brighton Beach Rd at NE corner
+7.000	Branch 7 St & Brighton Beach Rd at SE corner
+8.000	Branch 7 St & Brighton Beach Rd at SE corner
+9.000	Ocean Pkwy & Brighton Beach Rd at NE corner
+10.000	Ocean Pkwy & Brighton Beach Rd at NE corner

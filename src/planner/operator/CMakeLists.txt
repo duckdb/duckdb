@@ -2,19 +2,45 @@ add_library_unity(
   duckdb_planner_operator
   OBJECT
   logical_aggregate.cpp
-  logical_empty_result.cpp
   logical_any_join.cpp
+  logical_column_data_get.cpp
   logical_comparison_join.cpp
+  logical_copy_to_file.cpp
+  logical_create.cpp
+  logical_create_index.cpp
+  logical_create_table.cpp
   logical_cross_product.cpp
+  logical_cteref.cpp
+  logical_delete.cpp
+  logical_delim_get.cpp
+  logical_delim_join.cpp
+  logical_distinct.cpp
+  logical_dummy_scan.cpp
+  logical_empty_result.cpp
+  logical_execute.cpp
+  logical_explain.cpp
+  logical_export.cpp
+  logical_expression_get.cpp
   logical_filter.cpp
   logical_get.cpp
-  logical_limit.cpp
+  logical_insert.cpp
   logical_join.cpp
+  logical_limit.cpp
+  logical_limit_percent.cpp
+  logical_order.cpp
+  logical_pragma.cpp
+  logical_prepare.cpp
   logical_projection.cpp
+  logical_recursive_cte.cpp
   logical_sample.cpp
+  logical_set.cpp
+  logical_set_operation.cpp
+  logical_show.cpp
+  logical_simple.cpp
+  logical_top_n.cpp
   logical_unnest.cpp
-  logical_window.cpp
-  logical_distinct.cpp)
+  logical_update.cpp
+  logical_window.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner_operator>
     PARENT_SCOPE)

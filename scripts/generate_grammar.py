@@ -163,13 +163,14 @@ for ur in unreserved_keywords:
 def add_to_other_keywords(kw, list_name):
     global unreserved_dict
     global reserved_dict
+    global other_dict
     if kw in unreserved_dict:
         print("Keyword " + kw + " is marked as both unreserved and " + list_name)
         exit(1)
     if kw in reserved_dict:
         print("Keyword " + kw + " is marked as both reserved and " + list_name)
         exit(1)
-    other_dict[cr] = True
+    other_dict[kw] = True
 
 for cr in colname_keywords:
     add_to_other_keywords(cr, "colname")
@@ -250,7 +251,14 @@ if res != 0:
         print("In case of shift/reduce conflicts, try re-running with --counterexamples")
         print("Note: this requires a more recent version of Bison (e.g. version 3.8)")
         print("On a Macbook you can obtain this using \"brew install bison\"")
+    if counterexamples and 'time limit exceeded' in text:
+        print("---------------------------------------------------------------------")
+        print("The counterexamples time limit was exceeded. This likely means that no useful counterexample was generated.")
+        print("")
+        print("The counterexamples time limit can be increased by setting the TIME_LIMIT environment variable, e.g.:")
+        print("export TIME_LIMIT=100")
     exit(1)
+
 
 os.rename(result_source, target_source_loc)
 os.rename(result_header, target_header_loc)

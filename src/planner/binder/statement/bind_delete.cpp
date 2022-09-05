@@ -28,8 +28,11 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	if (!table->temporary) {
 		// delete from persistent table: not read only!
-		this->read_only = false;
+		properties.read_only = false;
 	}
+
+	// Add CTEs as bindable
+	AddCTEMap(stmt.cte_map);
 
 	// plan any tables from the various using clauses
 	if (!stmt.using_clauses.empty()) {
@@ -40,19 +43,13 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 			auto op = CreatePlan(*bound_node);
 			if (child_operator) {
 				// already bound a child: create a cross product to unify the two
-				auto cross_product = make_unique<LogicalCrossProduct>();
-				cross_product->children.push_back(move(child_operator));
-				cross_product->children.push_back(move(op));
-				child_operator = move(cross_product);
+				child_operator = LogicalCrossProduct::Create(move(child_operator), move(op));
 			} else {
 				child_operator = move(op);
 			}
 		}
 		if (child_operator) {
-			auto cross_product = make_unique<LogicalCrossProduct>();
-			cross_product->children.push_back(move(root));
-			cross_product->children.push_back(move(child_operator));
-			root = move(cross_product);
+			root = LogicalCrossProduct::Create(move(root), move(child_operator));
 		}
 	}
 
@@ -89,7 +86,8 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		result.plan = move(del);
 		result.names = {"Count"};
 		result.types = {LogicalType::BIGINT};
-		this->allow_stream_result = false;
+		properties.allow_stream_result = false;
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
 	}
 	return result;
 }

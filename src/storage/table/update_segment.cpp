@@ -1,10 +1,12 @@
 #include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/transaction/update_info.hpp"
-#include "duckdb/storage/table/column_data.hpp"
+
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
+#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/update_info.hpp"
 
 namespace duckdb {
 
@@ -628,10 +630,14 @@ static void InitializeUpdateData(UpdateInfo *base_info, Vector &base_data, Updat
 	}
 
 	auto base_array_data = FlatVector::GetData<T>(base_data);
+	auto &base_validity = FlatVector::Validity(base_data);
 	auto base_tuple_data = (T *)base_info->tuple_data;
 	for (idx_t i = 0; i < base_info->N; i++) {
-		base_tuple_data[i] =
-		    UpdateSelectElement::Operation<T>(base_info->segment, base_array_data[base_info->tuples[i]]);
+		auto base_idx = base_info->tuples[i];
+		if (!base_validity.RowIsValid(base_idx)) {
+			continue;
+		}
+		base_tuple_data[i] = UpdateSelectElement::Operation<T>(base_info->segment, base_array_data[base_idx]);
 	}
 }
 
@@ -1045,7 +1051,7 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
-	update.Normalify(count);
+	update.Flatten(count);
 
 	// update statistics
 	SelectionVector sel;

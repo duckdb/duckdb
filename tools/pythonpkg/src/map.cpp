@@ -6,8 +6,8 @@
 namespace duckdb {
 
 MapFunction::MapFunction()
-    : TableFunction("python_map_function", {LogicalType::TABLE, LogicalType::POINTER}, MapFunctionExec,
-                    MapFunctionBind) {
+    : TableFunction("python_map_function", {LogicalType::TABLE, LogicalType::POINTER}, nullptr, MapFunctionBind) {
+	in_out_function = MapFunctionExec;
 }
 
 struct MapFunctionData : public TableFunctionData {
@@ -56,7 +56,7 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	NumpyResultConversion conversion(data.in_types, 0);
 	auto df = FunctionCall(conversion, data.in_names, data.function);
 	vector<PandasColumnBindData> pandas_bind_data; // unused
-	VectorConversion::BindPandas(df, pandas_bind_data, return_types, names);
+	VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
 
 	data.out_names = names;
 	data.out_types = return_types;
@@ -67,20 +67,19 @@ static string TypeVectorToString(vector<LogicalType> &types) {
 	return StringUtil::Join(types, types.size(), ", ", [](const LogicalType &argument) { return argument.ToString(); });
 }
 
-void MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bind_data,
-                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-
+OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
+                                                DataChunk &output) {
 	py::gil_scoped_acquire acquire;
 
-	if (input->size() == 0) {
-		return;
+	if (input.size() == 0) {
+		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
-	auto &data = (MapFunctionData &)*bind_data;
+	auto &data = (MapFunctionData &)*data_p.bind_data;
 
-	D_ASSERT(input->GetTypes() == data.in_types);
-	NumpyResultConversion conversion(data.in_types, input->size());
-	conversion.Append(*input);
+	D_ASSERT(input.GetTypes() == data.in_types);
+	NumpyResultConversion conversion(data.in_types, input.size());
+	conversion.Append(input);
 
 	auto df = FunctionCall(conversion, data.in_names, data.function);
 
@@ -88,7 +87,8 @@ void MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bi
 	vector<LogicalType> pandas_return_types;
 	vector<string> pandas_names;
 
-	VectorConversion::BindPandas(df, pandas_bind_data, pandas_return_types, pandas_names);
+	VectorConversion::BindPandas(DBConfig::GetConfig(context.client), df, pandas_bind_data, pandas_return_types,
+	                             pandas_names);
 	if (pandas_return_types.size() != output.ColumnCount()) {
 		throw InvalidInputException("Expected %llu columns from UDF, got %llu", output.ColumnCount(),
 		                            pandas_return_types.size());
@@ -116,6 +116,7 @@ void MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bi
 		                                output.data[col_idx]);
 	}
 	output.SetCardinality(row_count);
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 } // namespace duckdb

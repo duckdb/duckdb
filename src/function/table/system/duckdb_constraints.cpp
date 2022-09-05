@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/check_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
@@ -16,7 +17,7 @@
 
 namespace duckdb {
 
-struct DuckDBConstraintsData : public FunctionOperatorData {
+struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	DuckDBConstraintsData() : offset(0), constraint_offset(0) {
 	}
 
@@ -62,9 +63,7 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, Ta
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBConstraintsInit(ClientContext &context, const FunctionData *bind_data,
-                                                       const vector<column_t> &column_ids,
-                                                       TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBConstraintsData>();
 
 	// scan all the schemas for tables and collect themand collect them
@@ -74,14 +73,13 @@ unique_ptr<FunctionOperatorData> DuckDBConstraintsInit(ClientContext &context, c
 	};
 
 	// check the temp schema as well
-	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
-	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
+	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
-void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (DuckDBConstraintsData &)*operator_state;
+void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBConstraintsData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -184,7 +182,7 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 			vector<Value> column_name_list;
 			for (auto column_index : column_index_list) {
 				index_list.push_back(Value::BIGINT(column_index));
-				column_name_list.emplace_back(table.columns[column_index].name);
+				column_name_list.emplace_back(table.columns[column_index].Name());
 			}
 
 			// constraint_column_indexes, LIST

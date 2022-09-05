@@ -1,0 +1,39 @@
+# name: test/sql/types/nested/map/map_from_entries/column_null_entry.test
+# description: Test basic functionality when the provided argument is a column
+# group: [map_from_entries]
+
+statement ok
+PRAGMA enable_verification
+
+# Provide column as parameter
+statement ok
+CREATE TABLE t1 AS (SELECT ARRAY[(1, 'x'), (2, 'y'), (4, 's')] AS list);
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[(2, 'a'), (3,'b')])
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[(6, 'h'), (7,'g')])
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[NULL, (7,'g')])
+
+query I
+SELECT MAP_FROM_ENTRIES(list) FROM t1;
+----
+{1=x, 2=y, 4=s}
+{2=a, 3=b}
+{6=h, 7=g}
+{7=g}
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[NULL, NULL])
+
+query I
+SELECT MAP_FROM_ENTRIES(list) FROM t1;
+----
+{1=x, 2=y, 4=s}
+{2=a, 3=b}
+{6=h, 7=g}
+{7=g}
+NULL

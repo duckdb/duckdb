@@ -2,6 +2,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -26,17 +27,20 @@ struct NumericRangeInfo {
 		if (start_value < end_value && increment_value < 0) {
 			return 0;
 		}
-		int64_t total_diff = AbsValue(end_value - start_value);
-		int64_t increment = AbsValue(increment_value);
-		int64_t total_values = total_diff / increment;
+		hugeint_t total_diff = AbsValue(hugeint_t(end_value) - hugeint_t(start_value));
+		hugeint_t increment = AbsValue(hugeint_t(increment_value));
+		hugeint_t total_values = total_diff / increment;
 		if (total_diff % increment == 0) {
 			if (inclusive_bound) {
-				total_values++;
+				total_values += 1;
 			}
 		} else {
-			total_values++;
+			total_values += 1;
 		}
-		return total_values;
+		if (total_values > NumericLimits<uint32_t>::Maximum()) {
+			throw InvalidInputException("Lists larger than 2^32 elements are not supported");
+		}
+		return Hugeint::Cast<uint64_t>(total_values);
 	}
 
 	static void Increment(int64_t &input, int64_t increment) {
@@ -61,6 +65,11 @@ struct TimestampRangeInfo {
 			// interval is 0: no result
 			return 0;
 		}
+		// We don't allow infinite bounds because they generate errors or infinite loops
+		if (!Timestamp::IsFinite(start_value) || !Timestamp::IsFinite(end_value)) {
+			throw InvalidInputException("Interval infinite bounds not supported");
+		}
+
 		if (is_negative && is_positive) {
 			// we don't allow a mix of
 			throw InvalidInputException("Interval with mix of negative/positive entries not supported");
@@ -77,12 +86,18 @@ struct TimestampRangeInfo {
 			while (inclusive_bound ? start_value >= end_value : start_value > end_value) {
 				start_value = Interval::Add(start_value, increment_value);
 				total_values++;
+				if (total_values > NumericLimits<uint32_t>::Maximum()) {
+					throw InvalidInputException("Lists larger than 2^32 elements are not supported");
+				}
 			}
 		} else {
 			// positive interval, start_value is going up
 			while (inclusive_bound ? start_value <= end_value : start_value < end_value) {
 				start_value = Interval::Add(start_value, increment_value);
 				total_values++;
+				if (total_values > NumericLimits<uint32_t>::Maximum()) {
+					throw InvalidInputException("Lists larger than 2^32 elements are not supported");
+				}
 			}
 		}
 		return total_values;
@@ -99,16 +114,16 @@ public:
 	explicit RangeInfoStruct(DataChunk &args_p) : args(args_p) {
 		switch (args.ColumnCount()) {
 		case 1:
-			args.data[0].Orrify(args.size(), vdata[0]);
+			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
 			break;
 		case 2:
-			args.data[0].Orrify(args.size(), vdata[0]);
-			args.data[1].Orrify(args.size(), vdata[1]);
+			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
+			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
 			break;
 		case 3:
-			args.data[0].Orrify(args.size(), vdata[0]);
-			args.data[1].Orrify(args.size(), vdata[1]);
-			args.data[2].Orrify(args.size(), vdata[2]);
+			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
+			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
+			args.data[2].ToUnifiedFormat(args.size(), vdata[2]);
 			break;
 		default:
 			throw InternalException("Unsupported number of parameters for range");
@@ -169,7 +184,7 @@ public:
 
 private:
 	DataChunk &args;
-	VectorData vdata[3];
+	UnifiedVectorFormat vdata[3];
 };
 
 template <class OP, bool INCLUSIVE_BOUND>
@@ -211,8 +226,10 @@ static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 		typename OP::TYPE range_value = start_value;
 		for (idx_t range_idx = 0; range_idx < list_data[i].length; range_idx++) {
+			if (range_idx > 0) {
+				OP::Increment(range_value, increment);
+			}
 			range_data[total_idx++] = range_value;
-			OP::Increment(range_value, increment);
 		}
 	}
 

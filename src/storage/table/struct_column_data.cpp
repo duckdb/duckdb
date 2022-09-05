@@ -105,7 +105,7 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 }
 
 void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
-	vector.Normalify(count);
+	vector.Flatten(count);
 
 	// append the null values
 	validity.Append(*stats.validity_stats, state.child_appends[0], vector, count);
@@ -118,7 +118,7 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 		if (!struct_validity.AllValid()) {
 			// we set the child entries of the struct to NULL
 			// for any values in which the struct itself is NULL
-			child_entries[i]->Normalify(count);
+			child_entries[i]->Flatten(count);
 
 			auto &child_validity = FlatVector::Validity(*child_entries[i]);
 			child_validity.Combine(struct_validity, count);
@@ -181,7 +181,7 @@ void StructColumnData::UpdateColumn(Transaction &transaction, const vector<colum
 
 unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	// check if any child column has updates
-	auto stats = BaseStatistics::CreateEmpty(type);
+	auto stats = BaseStatistics::CreateEmpty(type, StatisticsType::GLOBAL_STATS);
 	auto &struct_stats = (StructStatistics &)*stats;
 	stats->validity_stats = validity.GetUpdateStatistics();
 	for (idx_t i = 0; i < sub_columns.size(); i++) {

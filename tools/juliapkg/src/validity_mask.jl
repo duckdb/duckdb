@@ -1,7 +1,7 @@
 """
 DuckDB validity mask
 """
-mutable struct ValidityMask
+struct ValidityMask
     data::Vector{UInt64}
 
     function ValidityMask(data::Vector{UInt64})

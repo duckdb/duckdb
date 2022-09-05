@@ -3,6 +3,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/windows.hpp"
+#include "duckdb/common/enum_class_hash.hpp"
 
 #include "sqlext.h"
 #include "sqltypes.h"
@@ -154,13 +155,6 @@ struct SQLState {
 	std::string erro_msg;
 };
 
-struct EnumClassHash {
-	template <typename T>
-	std::size_t operator()(T t) const {
-		return static_cast<std::size_t>(t);
-	}
-};
-
 struct DiagRecord {
 public:
 	explicit DiagRecord(const std::string &msg, const SQLStateType &sqlstate_type, const std::string &server_name = "",
@@ -207,7 +201,7 @@ public:
 	std::vector<SQLSMALLINT> vec_record_idx;
 	static const std::unordered_map<SQLINTEGER, std::string> MAP_DYNAMIC_FUNCTION;
 	static const std::set<std::string> SET_ODBC3_SUBCLASS_ORIGIN;
-	static const std::unordered_map<SQLStateType, SQLState, EnumClassHash> MAP_ODBC_SQL_STATES;
+	static const std::unordered_map<SQLStateType, SQLState, duckdb::EnumClassHash> MAP_ODBC_SQL_STATES;
 
 public:
 	static bool IsDiagRecordField(SQLSMALLINT diag_identifier);

@@ -165,7 +165,7 @@ TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 	// but subsequent query fails!
 	chunk = result->Fetch();
 	REQUIRE(!chunk);
-	REQUIRE(!result->success);
+	REQUIRE(result->HasError());
 	auto str = result->ToString();
 	REQUIRE(!str.empty());
 }

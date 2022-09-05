@@ -14,7 +14,7 @@ duckdb_data_chunk duckdb_create_data_chunk(duckdb_logical_type *ctypes, idx_t co
 	}
 
 	auto result = new duckdb::DataChunk();
-	result->Initialize(types);
+	result->Initialize(duckdb::Allocator::DefaultAllocator(), types);
 	return result;
 }
 

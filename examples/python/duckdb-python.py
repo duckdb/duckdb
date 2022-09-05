@@ -94,6 +94,9 @@ print(rel.order('j'))
 # limit the rows returned
 print(rel.limit(2))
 
+# skip the first row and limit the number of results
+print(rel.limit(2, offset=1))
+
 # of course these things can be chained
 print(rel.filter('i > 1').project('i + 1').order('j').limit(2))
 

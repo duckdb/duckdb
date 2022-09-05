@@ -1,0 +1,32 @@
+# name: test/optimizer/regex_optimizer.test
+# description: Test Like Optimization Rules
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(s VARCHAR);
+
+statement ok
+INSERT INTO test VALUES ('aaa');
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+
+# contains optimization: /aaa/ -> contains(aaa)
+query I nosort regexconstantpattern
+EXPLAIN SELECT regexp_matches(s, 'aa') FROM test
+----
+
+query I nosort regexconstantpattern
+EXPLAIN SELECT contains(s, 'aa') FROM test
+----
+
+
+# contains optimization: /a/ -> contains(aaa)
+query I nosort regexconstantsinglechar
+EXPLAIN SELECT regexp_matches(s, 'a') FROM test
+----
+
+query I nosort regexconstantsinglechar
+EXPLAIN SELECT contains(s, 'a') FROM test
+----

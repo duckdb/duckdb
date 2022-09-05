@@ -45,7 +45,7 @@ SELECT
 	ARRAY_AGG (
 	CASE WHEN first_name='Matt' and title='Team America'
 	THEN 'MATT DAAAMON'
-	ELSE first_name || ' ' || last_name END) actors
+	ELSE first_name || ' ' || last_name END order by actor_id) actors
 FROM films
 JOIN film_actor USING (film_id)
 JOIN actors USING (actor_id)

@@ -1,11 +1,18 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
+#include "duckdb/storage/statistics/list_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
-#include "duckdb/storage/statistics/list_statistics.hpp"
 
 namespace duckdb {
+
+void UpdateDistinctStats(BaseStatistics &distinct_stats, const Value &input) {
+	Vector v(input);
+	auto &d_stats = (DistinctStatistics &)distinct_stats;
+	d_stats.Update(v, 1);
+}
 
 unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value &input) {
 	switch (input.type().InternalType()) {
@@ -21,13 +28,15 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE: {
-		auto result = make_unique<NumericStatistics>(input.type(), input, input);
+		auto result = make_unique<NumericStatistics>(input.type(), input, input, StatisticsType::GLOBAL_STATS);
 		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		UpdateDistinctStats(*result->distinct_stats, input);
 		return move(result);
 	}
 	case PhysicalType::VARCHAR: {
-		auto result = make_unique<StringStatistics>(input.type());
+		auto result = make_unique<StringStatistics>(input.type(), StatisticsType::GLOBAL_STATS);
 		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		UpdateDistinctStats(*result->distinct_stats, input);
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
 			result->Update(string_t(string_value));

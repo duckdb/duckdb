@@ -14,7 +14,7 @@ struct SumSetOperation {
 		state->Initialize();
 	}
 	template <class STATE>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		target->Combine(source);
 	}
 	template <class STATE>
@@ -25,7 +25,7 @@ struct SumSetOperation {
 
 struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
@@ -36,7 +36,7 @@ struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 
 struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
@@ -48,7 +48,7 @@ struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintA
 template <class ADD_OPERATOR>
 struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATOR> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
@@ -65,7 +65,7 @@ using KahanSumOperation = DoubleSumOperation<KahanAdd>;
 
 struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
@@ -105,50 +105,60 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 			return nullptr;
 		}
 		// total sum is guaranteed to fit in a single int64: use int64 sum instead of hugeint sum
-		switch (internal_type) {
-		case PhysicalType::INT32:
-			expr.function =
-			    AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
-			        LogicalType::INTEGER, LogicalType::HUGEINT, true);
-			expr.function.name = "sum";
-			break;
-		case PhysicalType::INT64:
-			expr.function =
-			    AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
-			        LogicalType::BIGINT, LogicalType::HUGEINT, true);
-			expr.function.name = "sum";
-			break;
-		default:
-			throw InternalException("Unsupported type for propagate sum stats");
-		}
+		expr.function = SumFun::GetSumAggregateNoOverflow(internal_type);
 	}
 	return nullptr;
 }
 
 AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
 	switch (type) {
-	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
-		    LogicalType::SMALLINT, LogicalType::HUGEINT, true);
+	case PhysicalType::INT16: {
+		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
+		    LogicalType::SMALLINT, LogicalType::HUGEINT);
+		return function;
+	}
+
 	case PhysicalType::INT32: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int32_t, hugeint_t, SumToHugeintOperation>(
-		        LogicalType::INTEGER, LogicalType::HUGEINT, true);
+		        LogicalType::INTEGER, LogicalType::HUGEINT);
 		function.statistics = SumPropagateStats;
 		return function;
 	}
 	case PhysicalType::INT64: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int64_t, hugeint_t, SumToHugeintOperation>(
-		        LogicalType::BIGINT, LogicalType::HUGEINT, true);
+		        LogicalType::BIGINT, LogicalType::HUGEINT);
 		function.statistics = SumPropagateStats;
 		return function;
 	}
-	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
-		    LogicalType::HUGEINT, LogicalType::HUGEINT, true);
+	case PhysicalType::INT128: {
+		auto function =
+		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
+		        LogicalType::HUGEINT, LogicalType::HUGEINT);
+		return function;
+	}
 	default:
 		throw InternalException("Unimplemented sum aggregate");
+	}
+}
+
+AggregateFunction SumFun::GetSumAggregateNoOverflow(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::INT32: {
+		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
+		    LogicalType::INTEGER, LogicalType::HUGEINT);
+		function.name = "sum_no_overflow";
+		return function;
+	}
+	case PhysicalType::INT64: {
+		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
+		    LogicalType::BIGINT, LogicalType::HUGEINT);
+		function.name = "sum_no_overflow";
+		return function;
+	}
+	default:
+		throw BinderException("Unsupported internal type for sum_no_overflow");
 	}
 }
 
@@ -162,24 +172,43 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 	return nullptr;
 }
 
+unique_ptr<FunctionData> BindDecimalSumNoOverflow(ClientContext &context, AggregateFunction &function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
+	auto decimal_type = arguments[0]->return_type;
+	function = SumFun::GetSumAggregateNoOverflow(decimal_type.InternalType());
+	function.name = "sum_no_overflow";
+	function.arguments[0] = decimal_type;
+	function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
+	return nullptr;
+}
+
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// decimal
 	sum.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, true, nullptr, BindDecimalSum));
+	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                                  BindDecimalSum));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, true));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 	set.AddFunction(sum);
+
+	AggregateFunctionSet sum_no_overflow("sum_no_overflow");
+	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT32));
+	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT64));
+	sum_no_overflow.AddFunction(
+	    AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSumNoOverflow));
+	set.AddFunction(sum_no_overflow);
 
 	// fsum
 	AggregateFunctionSet fsum("fsum");
 	fsum.AddFunction(AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, true));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 	set.AddFunction(fsum);
 

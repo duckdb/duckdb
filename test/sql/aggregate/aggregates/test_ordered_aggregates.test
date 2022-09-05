@@ -72,7 +72,7 @@ select percentile_cont(0.25) within group(order by i desc) from generate_series(
 query I
 select percentile_cont([0.25, 0.5, 0.75]) within group(order by i desc) from generate_series(0,100) tbl(i);
 ----
-[75.000000, 50.000000, 25.000000]
+[75.0, 50.0, 25.0]
 
 #
 # Error checking

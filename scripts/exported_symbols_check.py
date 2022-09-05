@@ -14,7 +14,7 @@ culprits = []
 
 whitelist = ['@@GLIBC', '@@CXXABI', '__gnu_cxx::', 'std::', 
 'N6duckdb', 'duckdb::', 'duckdb_miniz::', 'duckdb_fmt::', 'duckdb_hll::', 'duckdb_moodycamel::', 'duckdb_',
-'RefCounter', 'registerTMCloneTable', 'RegisterClasses', 'Unwind_Resume', '__gmon_start', '_fini', '_init', '_end', '_edata', '__bss_start']
+'RefCounter', 'registerTMCloneTable', 'RegisterClasses', 'Unwind_Resume', '__gmon_start', '_fini', '_init', '_end', '_edata', '__bss_start', '__udivti3']
 
 for symbol in res.stdout.decode('utf-8').split('\n'):
 	if len(symbol.strip()) == 0:

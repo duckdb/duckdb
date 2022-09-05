@@ -1,0 +1,56 @@
+# name: test/sql/function/list/list_sort_having.test
+# description: Issue #4370: Random segmentation fault when using list_sort and having
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create or replace table test1 as (
+    select 'new_customers' as child, 'dim_model_7' as parent
+    union all select 'exposure_1' as child, 'dim_model_7' as parent
+    union all select 'exposure_1' as child, 'exposure_1' as parent
+    union all select 'fct_model_6' as child, 'fct_model_6' as parent
+    union all select 'exposure_1' as child, 'fct_model_6' as parent
+    union all select 'report_1' as child, 'fct_model_6' as parent
+    union all select 'report_2' as child, 'fct_model_6' as parent
+    union all select 'report_3' as child, 'fct_model_6' as parent
+    union all select 'fct_model_9' as child, 'fct_model_9' as parent
+    union all select 'stg_model_5' as child, 'fct_model_9' as parent
+    union all select 'int_model_4' as child, 'int_model_4' as parent
+    union all select 'int_model_5' as child, 'int_model_4' as parent
+    union all select 'dim_model_7' as child, 'int_model_4' as parent
+    union all select 'new_customers' as child, 'int_model_4' as parent
+    union all select 'exposure_1' as child, 'int_model_4' as parent
+    union all select 'int_model_5' as child, 'int_model_5' as parent
+    union all select 'dim_model_7' as child, 'int_model_5' as parent
+    union all select 'new_customers' as child, 'int_model_5' as parent
+    union all select 'exposure_1' as child, 'int_model_5' as parent
+    union all select 'model_8' as child, 'model_8' as parent
+    union all select 'new_customers' as child, 'new_customers' as parent
+    union all select 'report_1' as child, 'report_1' as parent
+    union all select 'report_2' as child, 'report_2' as parent
+    union all select 'report_3' as child, 'report_3' as parent
+);
+
+query III rowsort
+select
+    child,
+    count(*) as cnt,
+    list_sort(
+        list(
+            parent
+        )
+    )
+    as source_parents
+from test1
+group by 1
+having cnt > 1;
+----
+dim_model_7	2	[int_model_4, int_model_5]
+exposure_1	5	[dim_model_7, exposure_1, fct_model_6, int_model_4, int_model_5]
+int_model_5	2	[int_model_4, int_model_5]
+new_customers	4	[dim_model_7, int_model_4, int_model_5, new_customers]
+report_1	2	[fct_model_6, report_1]
+report_2	2	[fct_model_6, report_2]
+report_3	2	[fct_model_6, report_3]

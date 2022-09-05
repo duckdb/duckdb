@@ -51,6 +51,16 @@ test('select \'asdf\' as a;', out='asdf')
 
 test('select * from range(10000);', out='9999')
 
+import_basic_csv_table = tf()
+print("col_1,col_2\n1,2\n10,20",  file=open(import_basic_csv_table, 'w'))
+# test create missing table with import
+test("""
+.mode csv
+.import "%s" test_table
+SELECT * FROM test_table;
+""" % import_basic_csv_table, out="col_1,col_2\n1,2\n10,20"
+)
+
 # test pragma
 test("""
 .mode csv
@@ -173,6 +183,36 @@ SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT '
 test('explain select sum(i) from range(1000) tbl(i)', out='RANGE')
 test('explain analyze select sum(i) from range(1000) tbl(i)', out='RANGE')
 
+# test returning insert
+test('''
+CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING *;
+SELECT COUNT(*) FROM table1;
+''', out='1')
+
+# test display of pragmas
+test('''
+CREATE TABLE table1 (mylittlecolumn INTEGER);
+pragma table_info('table1');
+''', out='mylittlecolumn')
+
+# test display of show
+test('''
+CREATE TABLE table1 (mylittlecolumn INTEGER);
+show table1;
+''', out='mylittlecolumn')
+
+# test display of call
+test('''
+CALL range(4);
+''', out='3')
+
+# test display of prepare/execute
+test('''
+PREPARE v1 AS SELECT ?::INT;
+EXECUTE v1(42);
+''', out='42')
+
 
 # this should be fixed
 test('.selftest', err='sqlite3_table_column_metadata')
@@ -259,6 +299,10 @@ CREATE INDEX a_idx ON a(i);
 # this does not seem to output anything
 test('.sha3sum')
 
+test('''
+.mode jsonlines
+SELECT 42,43;
+''', out='{"42":42,"43":43}')
 
 test('''
 .mode csv
@@ -269,7 +313,7 @@ SELECT 42,43;
 test('''
 .timer on
 SELECT NULL;
-''', out="Run Time:")
+''', out="Run Time (s):")
 
 test('''
 .scanstats on
@@ -395,6 +439,26 @@ SELECT "hello world", '\r\t\n\b\f\\' FROM "foo";
 
 test('.system echo 42', out="42")
 test('.shell echo 42', out="42")
+
+# query profiling that includes the optimizer
+test("""
+PRAGMA enable_profiling=query_tree_optimizer;
+SELECT 42;
+""", out="42", err="Optimizer")
+
+# detailed also includes optimizer
+test("""
+PRAGMA enable_profiling;
+PRAGMA profiling_mode=detailed;
+SELECT 42;
+""", out="42", err="Optimizer")
+
+# even in json output mode
+test("""
+PRAGMA enable_profiling=json;
+PRAGMA profiling_mode=detailed;
+SELECT 42;
+""", out="42", err="optimizer")
 
 # this fails because db_config is missing
 # test('''
@@ -540,6 +604,32 @@ select 42;
 ''', out='42')
 
 test('/* ;;;;;; */ select 42;', out='42')
+
+
+# sqlite udfs
+test('''
+SELECT writefile();
+''', err='wrong number of arguments to function writefile')
+
+test('''
+SELECT writefile('hello');
+''', err='wrong number of arguments to function writefile')
+
+test('''
+SELECT writefile('duckdbtest_writefile', 'hello');
+''')
+test_writefile = 'duckdbtest_writefile'
+if not os.path.exists(test_writefile):
+     raise Exception(f"Failed to write file {test_writefile}");
+with open(test_writefile, 'r') as f:
+     text = f.read()
+if text != 'hello':
+     raise Exception("Incorrect contents for test writefile")
+os.remove(test_writefile)
+
+test('''
+SELECT lsmode(1) AS lsmode;
+''', out='lsmode')
 
 if os.name != 'nt':
      test('''

@@ -3,6 +3,8 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb_python/vector_conversion.hpp"
+#include "duckdb_python/pandas_type.hpp"
 
 namespace duckdb {
 
@@ -69,9 +71,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("mode", &DuckDBPyRelation::Mode,
 	         "Returns the most frequent value for the aggregate columns. NULL values are ignored.",
 	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
-	    .def("abs", &DuckDBPyRelation::Abs,
-	         "Returns the most absolute value for the  aggregate columns. NULL values are ignored.",
-	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
+	    .def("abs", &DuckDBPyRelation::Abs, "Returns the absolute value for the specified columns.",
+	         py::arg("aggregation_columns"))
 	    .def("prod", &DuckDBPyRelation::Prod, "Calculates the product of the aggregate column.",
 	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
 	    .def("skew", &DuckDBPyRelation::Skew, "Returns the skewness of the aggregate column.",
@@ -93,8 +94,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         py::arg("aggregation_columns"))
 	    .def("describe", &DuckDBPyRelation::Describe,
 	         "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
-	    .def("union", &DuckDBPyRelation::Union,
-	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("except_", &DuckDBPyRelation::Except,
 	         "Create the set except of this relation object with another relation object in other_rel",
 	         py::arg("other_rel"))
@@ -106,8 +105,9 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "in join_condition. Types supported are 'inner' and 'left'",
 	         py::arg("other_rel"), py::arg("condition"), py::arg("how") = "inner")
 	    .def("distinct", &DuckDBPyRelation::Distinct, "Retrieve distinct rows from this relation object")
-	    .def("limit", &DuckDBPyRelation::Limit, "Only retrieve the first n rows from this relation object",
-	         py::arg("n"))
+	    .def("limit", &DuckDBPyRelation::Limit,
+	         "Only retrieve the first n rows from this relation object, starting at offset", py::arg("n"),
+	         py::arg("offset") = 0)
 	    .def("query", &DuckDBPyRelation::Query,
 	         "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation "
 	         "object",
@@ -123,52 +123,78 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("create_view", &DuckDBPyRelation::CreateView,
 	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
-	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table",
+	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row as a tuple")
+	    .def("fetchmany", &DuckDBPyRelation::Fetchmany, "Execute and fetch the next set of rows as a list of tuples",
+	         py::arg("size") = 1)
+	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows as a list of tuples")
+	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
+	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
+	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
+	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
+	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
-	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table",
+	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
 	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
-	         "Transforms the relation object into a Arrow Record Batch Reader", py::arg("batch_size") = 1000000)
-	    .def("to_df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
-	    .def("df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
-	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row")
-	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows")
+	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
 	    .def("__str__", &DuckDBPyRelation::Print)
-	    .def("__repr__", &DuckDBPyRelation::Print);
+	    .def("__repr__", &DuckDBPyRelation::Print)
+	    .def("explain", &DuckDBPyRelation::Explain);
 }
 
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(py::object df, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df));
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromDF(df);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
 	return conn->Values(std::move(values));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, const string &alias,
                                                          DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
 	return conn->FromQuery(query, alias);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RunQuery(const string &query, const string &alias,
                                                         DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
 	return conn->RunQuery(query, alias);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filename, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
 	return conn->FromCsvAuto(filename);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filename, bool binary_as_string,
                                                            DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
 	return conn->FromParquet(filename, binary_as_string);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetDefault(const string &filename, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
 	bool binary_as_string = false;
 	Value result;
 	if (conn->connection->context->TryGetCurrentSetting("binary_as_string", result)) {
@@ -178,23 +204,59 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetDefault(const string &
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
 	return conn->GetSubstrait(query);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstraitJSON(const string &query, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->GetSubstraitJSON(query);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
 	return conn->FromSubstrait(proto);
 }
 
+void DuckDBPyRelation::InstallExtension(const string &extension, bool force_install, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->InstallExtension(extension, force_install);
+}
+
+void DuckDBPyRelation::LoadExtension(const string &extension, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->LoadExtension(extension);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_object, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
 	return conn->FromArrow(arrow_object);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
-	return make_unique<DuckDBPyRelation>(rel->Project(expr));
+	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expr));
+	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
+	return projected_relation;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(py::object df, const string &expr, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Project(expr);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(const DataFrame &df, const string &expr,
+                                                         DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromDF(df)->Project(expr);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SetAlias(const string &expr) {
@@ -205,32 +267,47 @@ py::str DuckDBPyRelation::GetAlias() {
 	return py::str(string(rel->GetAlias()));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AliasDF(py::object df, const string &expr, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->SetAlias(expr);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AliasDF(const DataFrame &df, const string &expr,
+                                                       DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromDF(df)->SetAlias(expr);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const string &expr) {
 	return make_unique<DuckDBPyRelation>(rel->Filter(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(py::object df, const string &expr, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Filter(expr);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(const DataFrame &df, const string &expr,
+                                                        DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromDF(df)->Filter(expr);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Limit(int64_t n) {
-	return make_unique<DuckDBPyRelation>(rel->Limit(n));
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Limit(int64_t n, int64_t offset) {
+	return make_unique<DuckDBPyRelation>(rel->Limit(n, offset));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(py::object df, int64_t n, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Limit(n);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(const DataFrame &df, int64_t n, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromDF(df)->Limit(n);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Order(const string &expr) {
 	return make_unique<DuckDBPyRelation>(rel->Order(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::OrderDf(py::object df, const string &expr, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Order(expr);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::OrderDf(const DataFrame &df, const string &expr,
+                                                       DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromDF(df)->Order(expr);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, const string &groups) {
@@ -243,7 +320,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	string columns;
 	for (auto &column_rel : rel->Columns()) {
-		columns += column_rel.name + ",";
+		columns += column_rel.Name() + ",";
 	}
 	columns.erase(columns.size() - 1, columns.size());
 	auto expr = GenerateExpressionList("stats", columns);
@@ -322,7 +399,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::STD(const string &std_columns, co
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ValueCounts(const string &count_column, const string &groups) {
 	if (count_column.find(',') != string::npos) {
-		throw std::runtime_error("Only one column is accepted in Value_Counts method");
+		throw InvalidInputException("Only one column is accepted in Value_Counts method");
 	}
 	return GenericAggregator("count", count_column, groups, "", count_column);
 }
@@ -335,8 +412,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Mode(const string &aggr_columns, 
 	return GenericAggregator("mode", aggr_columns, groups);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Abs(const string &aggr_columns, const string &groups) {
-	return GenericAggregator("abs", aggr_columns, groups);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Abs(const string &columns) {
+	auto expr = GenerateExpressionList("abs", columns);
+	return Project(expr);
 }
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Prod(const string &aggr_columns, const string &groups) {
 	return GenericAggregator("product", aggr_columns, groups);
@@ -391,27 +469,33 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns
 	return GenericWindowFunction("min", aggr_columns);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(py::object df, const string &expr, const string &groups,
-                                                           DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Aggregate(expr, groups);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(const DataFrame &df, const string &expr,
+                                                           const string &groups, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromDF(df)->Aggregate(expr, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
 	return make_unique<DuckDBPyRelation>(rel->Distinct());
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(py::object df, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Distinct();
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const DataFrame &df, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromDF(df)->Distinct();
 }
 
-py::object DuckDBPyRelation::ToDF() {
+DataFrame DuckDBPyRelation::ToDF() {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->FetchDF();
 }
@@ -422,10 +506,22 @@ py::object DuckDBPyRelation::Fetchone() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->Fetchone();
+}
+
+py::object DuckDBPyRelation::Fetchmany(idx_t size) {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (res->result->HasError()) {
+		res->result->ThrowError();
+	}
+	return res->Fetchmany(size);
 }
 
 py::object DuckDBPyRelation::Fetchall() {
@@ -434,32 +530,44 @@ py::object DuckDBPyRelation::Fetchall() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->Fetchall();
 }
 
-py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
+py::dict DuckDBPyRelation::FetchNumpy() {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
+	}
+	return res->FetchNumpy();
+}
+
+duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->FetchArrowTable(batch_size);
 }
 
-py::object DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
+duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res->FetchRecordBatchReader(batch_size);
 }
@@ -486,7 +594,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	} else if (type_string == "left") {
 		dtype = JoinType::LEFT;
 	} else {
-		throw std::runtime_error("Unsupported join type " + type_string + ", try 'inner' or 'left'");
+		throw InvalidInputException("Unsupported join type %s try 'inner' or 'left'", type_string);
 	}
 	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }
@@ -495,21 +603,30 @@ void DuckDBPyRelation::WriteCsv(const string &file) {
 	rel->WriteCSV(file);
 }
 
-void DuckDBPyRelation::WriteCsvDF(py::object df, const string &file, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->WriteCsv(file);
+void DuckDBPyRelation::WriteCsvDF(const DataFrame &df, const string &file, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromDF(df)->WriteCsv(file);
 }
 
 // should this return a rel with the new view?
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_name, bool replace) {
 	rel->CreateView(view_name, replace);
+	// We need to pass ownership of any Python Object Dependencies to the connection
+	auto all_dependencies = rel->GetAllDependencies();
+	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
 	auto res = make_unique<DuckDBPyResult>();
-	res->result = rel->Query(view_name, sql_query);
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Query(view_name, sql_query);
+	}
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res;
 }
@@ -520,15 +637,18 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
-		throw std::runtime_error(res->result->error);
+	if (res->result->HasError()) {
+		res->result->ThrowError();
 	}
 	return res;
 }
 
-unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string &view_name, const string &sql_query,
-                                                     DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Query(view_name, sql_query);
+unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(const DataFrame &df, const string &view_name,
+                                                     const string &sql_query, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromDF(df)->Query(view_name, sql_query);
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
@@ -539,7 +659,7 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 	} else {
 		//! Schema defined, we try to insert into it.
 		rel->Insert(parsed_info.schema, parsed_info.name);
-	};
+	}
 }
 
 void DuckDBPyRelation::Insert(py::object params) {
@@ -572,6 +692,10 @@ string DuckDBPyRelation::Print() {
 	       rel_res_string + "\n";
 }
 
+string DuckDBPyRelation::Explain() {
+	return rel->ToString(0);
+}
+
 // TODO: RelationType to a python enum
 py::str DuckDBPyRelation::Type() {
 	return py::str(RelationTypeToString(rel->type));
@@ -580,7 +704,7 @@ py::str DuckDBPyRelation::Type() {
 py::list DuckDBPyRelation::Columns() {
 	py::list res;
 	for (auto &col : rel->Columns()) {
-		res.append(col.name);
+		res.append(col.Name());
 	}
 	return res;
 }
@@ -588,7 +712,7 @@ py::list DuckDBPyRelation::Columns() {
 py::list DuckDBPyRelation::ColumnTypes() {
 	py::list res;
 	for (auto &col : rel->Columns()) {
-		res.append(col.type.ToString());
+		res.append(col.Type().ToString());
 	}
 	return res;
 }

@@ -78,6 +78,7 @@ mutable struct DB <: DBInterface.Connection
 
     function DB(f::AbstractString, config::Config)
         set_config(config, "threads", "1")
+        set_config(config, "external_threads", string(Threads.nthreads() - 1))
         handle = DuckDBHandle(f, config)
         main_connection = Connection(handle)
 
@@ -97,6 +98,7 @@ function close_database(db::DB)
 end
 
 const VECTOR_SIZE = duckdb_vector_size()
+const ROW_GROUP_SIZE = VECTOR_SIZE * 100
 
 DB() = DB(":memory:")
 DBInterface.connect(::Type{DB}) = DB()

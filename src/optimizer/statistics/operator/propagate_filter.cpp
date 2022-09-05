@@ -19,7 +19,7 @@ bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &v
 	}
 	auto &bound_constant = (BoundConstantExpression &)expr;
 	D_ASSERT(bound_constant.value.type() == val.type());
-	return bound_constant.value == val;
+	return Value::NotDistinctFrom(bound_constant.value, val);
 }
 
 bool StatisticsPropagator::ExpressionIsConstantOrNull(Expression &expr, const Value &val) {

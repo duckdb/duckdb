@@ -1,10 +1,10 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -19,7 +19,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
 		if (stmt->withClause) {
-			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), *node);
+			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map);
 		}
 		if (stmt->windowClause) {
 			for (auto window_ele = stmt->windowClause->head; window_ele != nullptr; window_ele = window_ele->next) {
@@ -77,11 +77,12 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 	}
 	case duckdb_libpgquery::PG_SETOP_UNION:
 	case duckdb_libpgquery::PG_SETOP_EXCEPT:
-	case duckdb_libpgquery::PG_SETOP_INTERSECT: {
+	case duckdb_libpgquery::PG_SETOP_INTERSECT:
+	case duckdb_libpgquery::PG_SETOP_UNION_BY_NAME: {
 		node = make_unique<SetOperationNode>();
 		auto result = (SetOperationNode *)node.get();
 		if (stmt->withClause) {
-			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), *node);
+			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map);
 		}
 		result->left = TransformSelectNode(stmt->larg);
 		result->right = TransformSelectNode(stmt->rarg);
@@ -100,6 +101,10 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 			break;
 		case duckdb_libpgquery::PG_SETOP_INTERSECT:
 			result->setop_type = SetOperationType::INTERSECT;
+			break;
+		case duckdb_libpgquery::PG_SETOP_UNION_BY_NAME:
+			select_distinct = !stmt->all;
+			result->setop_type = SetOperationType::UNION_BY_NAME;
 			break;
 		default:
 			throw Exception("Unexpected setop type");

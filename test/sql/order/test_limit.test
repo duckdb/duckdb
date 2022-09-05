@@ -2,6 +2,8 @@
 # description: Test LIMIT keyword
 # group: [order]
 
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 
@@ -19,7 +21,7 @@ SELECT a FROM test LIMIT 1
 
 # decimal limit
 query I
-SELECT a FROM test LIMIT 1.5
+SELECT a FROM test LIMIT 1.25
 ----
 11
 

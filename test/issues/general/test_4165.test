@@ -1,0 +1,34 @@
+# name: test/issues/general/test_4165.test
+# description: Issue 4165: SIGSEGV on Debian Buster amd64
+# group: [general]
+
+statement ok
+SELECT setseed(0.42);
+
+statement ok
+CREATE TABLE df_a AS
+SELECT
+    (100000 + (899999 * RANDOM()))::BIGINT AS ID,
+    (4000 * RANDOM())::BIGINT AS C,
+    (4000 * RANDOM())::BIGINT AS P,
+    substring('abc', 1+(RANDOM() * 2)::BIGINT, 1) AS S
+FROM range(20000)
+
+statement ok
+CREATE TABLE df_b AS
+SELECT * FROM df_a WHERE S='a'
+
+statement ok
+select
+       Case
+           when try_cast(b.c as real) is null
+                and a.s = 'b' then a.p
+           when try_cast(b.c as real) is not null
+                and a.s = 'b'
+                and try_cast(b.c as real) < try_cast(a.p as real)
+                then try_cast(a.p as real)
+           else 0
+       END
+from df_a a
+left join df_b b on Cast(a.ID as real) = cast(b.ID as real)
+left join df_b c on a.ID = c.ID;

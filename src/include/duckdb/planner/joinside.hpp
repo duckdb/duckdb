@@ -22,6 +22,12 @@ public:
 	//! Turns the JoinCondition into an expression; note that this destroys the JoinCondition as the expression inherits
 	//! the left/right expressions
 	static unique_ptr<Expression> CreateExpression(JoinCondition cond);
+	static unique_ptr<Expression> CreateExpression(vector<JoinCondition> conditions);
+
+	//! Serializes a JoinCondition to a stand-alone binary blob
+	void Serialize(Serializer &serializer) const;
+	//! Deserializes a blob back into a JoinCondition
+	static JoinCondition Deserialize(Deserializer &source, PlanDeserializationState &state);
 
 public:
 	unique_ptr<Expression> left;

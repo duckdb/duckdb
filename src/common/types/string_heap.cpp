@@ -9,9 +9,15 @@
 
 namespace duckdb {
 
-#define MINIMUM_HEAP_SIZE 4096
+StringHeap::StringHeap() : allocator(Allocator::DefaultAllocator()) {
+}
 
-StringHeap::StringHeap() : tail(nullptr) {
+void StringHeap::Destroy() {
+	allocator.Destroy();
+}
+
+void StringHeap::Move(StringHeap &other) {
+	other.allocator.Move(allocator);
 }
 
 string_t StringHeap::AddString(const char *data, idx_t len) {
@@ -39,19 +45,13 @@ string_t StringHeap::AddBlob(const char *data, idx_t len) {
 	return insert_string;
 }
 
+string_t StringHeap::AddBlob(const string_t &data) {
+	return AddBlob(data.GetDataUnsafe(), data.GetSize());
+}
+
 string_t StringHeap::EmptyString(idx_t len) {
 	D_ASSERT(len >= string_t::INLINE_LENGTH);
-	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {
-		// have to make a new entry
-		auto new_chunk = make_unique<StringChunk>(MaxValue<idx_t>(len, MINIMUM_HEAP_SIZE));
-		new_chunk->prev = move(chunk);
-		chunk = move(new_chunk);
-		if (!tail) {
-			tail = chunk.get();
-		}
-	}
-	auto insert_pos = chunk->data.get() + chunk->current_position;
-	chunk->current_position += len;
+	auto insert_pos = (const char *)allocator.Allocate(len);
 	return string_t(insert_pos, len);
 }
 

@@ -53,3 +53,18 @@ SELECT 2::DOUBLE::VARCHAR, 0.5::DOUBLE::VARCHAR, (-128.5)::DOUBLE::VARCHAR
 2.0
 0.5
 -128.5
+
+# Casting decimal strings to integral types should round to be consistent.
+foreach inttype TINYINT SMALLINT INTEGER BIGINT HUGEINT
+
+query I
+SELECT '0.5'::${inttype};
+----
+1
+
+query I
+SELECT '-0.5'::${inttype};
+----
+-1
+
+endloop

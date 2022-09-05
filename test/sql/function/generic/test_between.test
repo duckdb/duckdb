@@ -239,3 +239,13 @@ query I
 SELECT * FROM range(4) tbl(i) WHERE i > 1 AND i <= 2
 ----
 2
+
+# Issue #3588 - only one constant bounds
+statement ok
+CREATE TABLE issue3588(c0 INT);
+
+statement ok
+SELECT *
+FROM issue3588
+WHERE (SELECT 0) BETWEEN 0 AND issue3588.c0;
+

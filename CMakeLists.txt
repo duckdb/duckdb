@@ -8,6 +8,10 @@ if(POLICY CMP0051)
   cmake_policy(SET CMP0051 NEW)
 endif()
 
+if(POLICY CMP0054)
+  cmake_policy(SET CMP0054 NEW)
+endif()
+
 project(DuckDB)
 
 find_package(Threads REQUIRED)
@@ -29,6 +33,11 @@ set(CMAKE_MACOSX_RPATH 1)
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
+else()
+  find_program(CCACHE_PROGRAM sccache)
+  if(CCACHE_PROGRAM)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
+  endif()
 endif()
 
 # Determine install paths
@@ -59,7 +68,14 @@ foreach(p LIB BIN INCLUDE CMAKE)
   endif()
 endforeach()
 
-
+# This option allows --gc-sections flag during extension linking to discard any unused functions or data
+if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
+  elseif(WIN32 AND MVSC)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
+  endif()
+endif()
 
 option(DISABLE_UNITY "Disable unity builds." FALSE)
 
@@ -217,6 +233,9 @@ option(AMALGAMATION_BUILD
 option(BUILD_MAIN_DUCKDB_LIBRARY
         "Build the main duckdb library and executable."
         TRUE)
+option(EXTENSION_STATIC_BUILD
+        "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
+        FALSE)
 
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
@@ -228,17 +247,14 @@ option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extensio
 option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
 option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
-option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
+option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
-option(BUILD_SUBSTRAIT_EXTENSION "Enable building of Substrait Extension." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
-
-option(BUILD_REST "Build the DuckDB REST server" FALSE)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
@@ -282,16 +298,16 @@ if(BUILD_PYTHON)
 endif()
 
 if(BUILD_SQLSMITH)
-  set(BUILD_TPCH_EXTENSION TRUE)
+  set(BUILD_SQLSMITH_EXTENSION TRUE)
 endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
 endif()
 
-if(!ASSERT_EXCEPTION)
-  set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -DDUCKDB_USE_STANDARD_ASSERT")
+if(ASSERT_EXCEPTION)
+else()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_CRASH_ON_ASSERT")
 endif()
 
 if(FORCE_ASSERT)
@@ -384,6 +400,8 @@ include_directories(third_party/miniparquet)
 include_directories(third_party/concurrentqueue)
 include_directories(third_party/pcg)
 include_directories(third_party/tdigest)
+include_directories(third_party/mbedtls/include)
+include_directories(third_party/jaro_winkler)
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
@@ -487,24 +505,19 @@ function(add_extension_definitions)
     add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
   endif()
 
-  if(${BUILD_SUBSTRAIT_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/substrait/include)
-    add_definitions(-DBUILD_SUBSTRAIT_EXTENSION=${BUILD_SUBSTRAIT_EXTENSION})
-  endif()
-
   if(${BUILD_TPCDS_EXTENSION})
     include_directories(${PROJECT_SOURCE_DIR}/extension/tpcds/include)
     add_definitions(-DBUILD_TPCDS_EXTENSION=${BUILD_TPCDS_EXTENSION})
   endif()
 
   if(${BUILD_FTS_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/fts/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/fts/include)
     add_definitions(-DBUILD_FTS_EXTENSION=${BUILD_FTS_EXTENSION})
   endif()
 
   if(${BUILD_HTTPFS_EXTENSION})
     find_package(OpenSSL REQUIRED)
-    include_directories(${CMAKE_SOURCE_DIR}/extension/httpfs/include ${OPENSSL_INCLUDE_DIR})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/httpfs/include ${OPENSSL_INCLUDE_DIR})
     add_definitions(-DBUILD_HTTPFS_EXTENSION=${BUILD_HTTPFS_EXTENSION})
   endif()
 
@@ -522,6 +535,11 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/excel/include)
     add_definitions(-DBUILD_EXCEL_EXTENSION=${BUILD_EXCEL_EXTENSION})
   endif()
+
+  if(${BUILD_SQLSMITH_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/sqlsmith/include)
+    add_definitions(-DBUILD_SQLSMITH_EXTENSION=${BUILD_SQLSMITH_EXTENSION})
+  endif()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -535,10 +553,6 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_TPCH_EXTENSION})
     add_dependencies(${LIBRARY} tpch_extension)
-  endif()
-
-  if(${BUILD_SUBSTRAIT_EXTENSION})
-    add_dependencies(${LIBRARY} substrait_extension)
   endif()
 
   if(${BUILD_TPCDS_EXTENSION})
@@ -564,6 +578,11 @@ function(add_extension_dependencies LIBRARY)
   if(${BUILD_EXCEL_EXTENSION})
     add_dependencies(${LIBRARY} excel_extension)
   endif()
+
+  if(${BUILD_SQLSMITH_EXTENSION})
+    add_dependencies(${LIBRARY} sqlsmith_extension)
+  endif()
+
 endfunction()
 
 function(link_extension_libraries LIBRARY)
@@ -581,10 +600,6 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_TPCH_EXTENSION})
     target_link_libraries(${LIBRARY} tpch_extension)
-  endif()
-
-  if(${BUILD_SUBSTRAIT_EXTENSION})
-    target_link_libraries(${LIBRARY} substrait_extension)
   endif()
 
   if(${BUILD_TPCDS_EXTENSION})
@@ -611,6 +626,10 @@ function(link_extension_libraries LIBRARY)
   if(${BUILD_EXCEL_EXTENSION})
     target_link_libraries(${LIBRARY} excel_extension)
   endif()
+
+  if(${BUILD_SQLSMITH_EXTENSION})
+    target_link_libraries(${LIBRARY} sqlsmith_extension)
+  endif()
 endfunction()
 
 function(link_threads LIBRARY)
@@ -622,7 +641,7 @@ function(link_threads LIBRARY)
   endif()
 endfunction()
 
-function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
+function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY IGNORE_WARNINGS)
   #  skip building extensions on mingw because its weird
   if(WIN32 AND NOT MSVC)
     return()
@@ -637,20 +656,53 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   list(REMOVE_AT FILES 0)
 
   add_library(${TARGET_NAME} SHARED ${FILES})
+  # this disables the -Dsome_target_EXPORTS define being added by cmake which otherwise trips clang-tidy (yay)
+  set_target_properties(${TARGET_NAME} PROPERTIES DEFINE_SYMBOL "")
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+  if(IGNORE_WARNINGS)
+    disable_target_warnings(${TARGET_NAME})
   endif()
-  if(WIN32)
-    target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+  # loadable extension binaries can be built two ways:
+  # 1. EXTENSION_STATIC_BUILD=1
+  #    DuckDB is statically linked into each extension binary. This increases portability because in several situations
+  #    DuckDB itself may have been loaded with RTLD_LOCAL. This is currently the main way we distribute the lodable
+  #    extension binaries
+  # 2. EXTENSION_STATIC_BUILD=0
+  #    The DuckDB symbols required by the loadable extensions are left unresolved. This will reduce the size of the binaries
+  #    and works well when running the DuckDB cli directly. For windows this uses delay loading. For MacOS and linux the
+  #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
+  if (EXTENSION_STATIC_BUILD)
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+      # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
+      set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+    elseif (WIN32)
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+    elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+      set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+      # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip -Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version)
+    else()
+      error("EXTENSION static build is only intended for Linux and Windows on MVSC")
+    endif()
+  else()
+    if (WIN32)
+      target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+    elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+      set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+    endif()
   endif()
+
+
   target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
   set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
           ".duckdb_extension")
 
   if(MSVC)
-    target_link_libraries(${TARGET_NAME} delayimp)
+    if (NOT EXTENSION_STATIC_BUILD)
+      target_link_libraries(${TARGET_NAME} delayimp)
+    endif()
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
@@ -659,7 +711,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
   endif()
 
-  if(WIN32)
+  if(WIN32 AND NOT EXTENSION_STATIC_BUILD)
     set_target_properties(${TARGET_NAME}
             PROPERTIES LINK_FLAGS_DEBUG "/DELAYLOAD:duckdb.dll")
     set(CMAKE_EXE_LINKER_FLAGS_DEBUG
@@ -675,12 +727,12 @@ endif()
 
 endfunction()
 
-function(build_loadable_extension NAME)
+function(build_loadable_extension NAME IGNORE_WARNINGS)
   # all parameters after name
   set(FILES ${ARGV})
   list(REMOVE_AT FILES 0)
 
-  build_loadable_extension_directory(${NAME} extension/${NAME} ${FILES})
+  build_loadable_extension_directory(${NAME} extension/${NAME} ${FILES} ${IGNORE_WARNINGS})
 endfunction()
 
 if(${EXPORT_DLL_SYMBOLS})
@@ -743,4 +795,11 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
 
+endif()
+
+# build out-of-tree extensions on demand
+if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
+  # the build path seems to get ignored on windows in just the right way. no idea why.
+  get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
+  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
 endif()

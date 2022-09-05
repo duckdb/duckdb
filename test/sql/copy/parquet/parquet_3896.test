@@ -1,0 +1,78 @@
+# name: test/sql/copy/parquet/parquet_3896.test
+# description: Issue #3896: Error reading parquet file: Struct child row count mismatch
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# single struct with map and scalar key
+statement ok
+CREATE VIEW v1 AS
+SELECT map([2], [{'key1': map([3,4],[1,2]), 'key2':2}]) AS x
+
+query I nosort mapres1
+SELECT * FROM v1;
+----
+
+statement ok
+COPY v1
+TO '__TEST_DIR__/map.parquet' (FORMAT 'parquet');
+
+query I nosort mapres1
+SELECT * FROM '__TEST_DIR__/map.parquet';
+----
+
+# multiple struct with map and scalar key
+statement ok
+CREATE VIEW v2 AS
+SELECT map([2], [{'key1': map([3,4],[1,2]), 'key2':2}]) AS x
+UNION ALL
+SELECT map([2], [{'key1': map([3,4],[1,2]), 'key2':2}])
+
+query I nosort mapres2
+SELECT * FROM v2;
+----
+
+statement ok
+COPY v2
+TO '__TEST_DIR__/map.parquet' (FORMAT 'parquet');
+
+query I nosort mapres2
+SELECT * FROM '__TEST_DIR__/map.parquet';
+----
+
+# struct with struct of lists and scalar key
+statement ok
+CREATE VIEW v3 AS
+SELECT {'key': [2], 'val': [{'key1': {'key': [3,4], 'val': [1,2]}, 'key2':2}]} AS x
+
+query I nosort structres1
+SELECT * FROM v3;
+----
+
+statement ok
+COPY v3
+TO '__TEST_DIR__/map.parquet' (FORMAT 'parquet');
+
+query I nosort structres1
+SELECT * FROM '__TEST_DIR__/map.parquet';
+----
+
+# struct with struct of lists and scalar list key
+statement ok
+CREATE VIEW v4 AS
+SELECT {'key': [2], 'val': [{'key1': {'key': [3,4], 'val': [1,2]}, 'key2':[2]}]} AS x
+
+query I nosort structres2
+SELECT * FROM v4;
+----
+
+statement ok
+COPY v4
+TO '__TEST_DIR__/map.parquet' (FORMAT 'parquet');
+
+query I nosort structres2
+SELECT * FROM '__TEST_DIR__/map.parquet';
+----

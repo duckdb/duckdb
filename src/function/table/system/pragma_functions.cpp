@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-struct PragmaFunctionsData : public FunctionOperatorData {
+struct PragmaFunctionsData : public GlobalTableFunctionState {
 	PragmaFunctionsData() : offset(0), offset_in_entry(0) {
 	}
 
@@ -41,9 +41,7 @@ static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, Tabl
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> PragmaFunctionsInit(ClientContext &context, const FunctionData *bind_data,
-                                                     const vector<column_t> &column_ids,
-                                                     TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaFunctionsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<PragmaFunctionsData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
@@ -69,14 +67,13 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 
 	output.SetValue(3, count, f.varargs.id() != LogicalTypeId::INVALID ? Value(f.varargs.ToString()) : Value());
 	output.SetValue(4, count, f.return_type.ToString());
-	output.SetValue(5, count, Value::BOOLEAN(f.has_side_effects));
+	output.SetValue(5, count, Value::BOOLEAN(f.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS));
 
 	count++;
 }
 
-static void PragmaFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (PragmaFunctionsData &)*operator_state;
+static void PragmaFunctionsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (PragmaFunctionsData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -87,22 +84,24 @@ static void PragmaFunctionsFunction(ClientContext &context, const FunctionData *
 		switch (entry->type) {
 		case CatalogType::SCALAR_FUNCTION_ENTRY: {
 			auto &func = (ScalarFunctionCatalogEntry &)*entry;
-			if (data.offset_in_entry >= func.functions.size()) {
+			if (data.offset_in_entry >= func.functions.Size()) {
 				data.offset++;
 				data.offset_in_entry = 0;
 				break;
 			}
-			AddFunction(func.functions[data.offset_in_entry++], count, output, false);
+			auto entry = func.functions.GetFunctionByOffset(data.offset_in_entry++);
+			AddFunction(entry, count, output, false);
 			break;
 		}
 		case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
 			auto &aggr = (AggregateFunctionCatalogEntry &)*entry;
-			if (data.offset_in_entry >= aggr.functions.size()) {
+			if (data.offset_in_entry >= aggr.functions.Size()) {
 				data.offset++;
 				data.offset_in_entry = 0;
 				break;
 			}
-			AddFunction(aggr.functions[data.offset_in_entry++], count, output, true);
+			auto entry = aggr.functions.GetFunctionByOffset(data.offset_in_entry++);
+			AddFunction(entry, count, output, true);
 			break;
 		}
 		default:

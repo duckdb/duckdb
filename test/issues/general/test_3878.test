@@ -1,0 +1,54 @@
+# name: test/issues/general/test_3878.test
+# description: Issue 3878: Small create table issues
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+#statement error
+#create table ups (primary key(x));
+#
+#statement error
+#create table ups (constraint con foreign key(x) references y(y));
+#
+#statement error
+#create table ups (x int primary key, primary key(x));
+#
+#statement error
+#create table ups (z int, constraint x foreign key (x) references y(y));
+
+statement ok
+create table x (x int primary key);
+
+#statement error
+#create table y (y int references x(z));
+#
+#statement error
+#create table y (y int references x(y));
+
+statement ok
+create table y (y int references x(x));
+
+statement error
+insert into y values (1);
+
+statement ok
+insert into x values (1);
+
+statement ok
+insert into y values (1);
+
+statement error
+insert into x values (NULL);
+
+statement ok
+insert into y values (NULL);
+
+statement error
+delete from x;
+
+statement ok
+delete from y;
+
+statement ok
+delete from x;

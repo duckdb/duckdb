@@ -67,13 +67,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static seed_t *Seed = DBGenGlobals::Seed;
-
-void dss_random64(DSS_HUGE *tgt, DSS_HUGE nLow, DSS_HUGE nHigh, long nStream) {
+void dss_random64(DSS_HUGE *tgt, DSS_HUGE nLow, DSS_HUGE nHigh, seed_t *seed) {
 	DSS_HUGE nTemp;
-
-	if (nStream < 0 || nStream > MAX_STREAM)
-		nStream = 0;
 
 	if (nLow > nHigh) {
 		nTemp = nLow;
@@ -81,15 +76,15 @@ void dss_random64(DSS_HUGE *tgt, DSS_HUGE nLow, DSS_HUGE nHigh, long nStream) {
 		nHigh = nTemp;
 	}
 
-	Seed[nStream].value = NextRand64(Seed[nStream].value);
-	nTemp = Seed[nStream].value;
+	seed->value = NextRand64(seed->value);
+	nTemp = seed->value;
 	if (nTemp < 0)
 		nTemp = -nTemp;
 	nTemp %= (nHigh - nLow + 1);
 	*tgt = nLow + nTemp;
-	Seed[nStream].usage += 1;
+	seed->usage += 1;
 #ifdef RNG_TEST
-	Seed[nStream].nCalls += 1;
+	seed->nCalls += 1;
 #endif
 
 	return;

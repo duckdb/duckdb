@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.sql.SQLException;
 
 public class DuckDBNative {
 	static {
@@ -18,9 +19,9 @@ public class DuckDBNative {
 			if (os_arch_detect.equals("x86_64") || os_arch_detect.equals("amd64")) {
 				os_arch = "amd64";
 			}
-            if (os_arch_detect.equals("aarch64") || os_arch_detect.equals("arm64")) {
-                os_arch = "arm64";
-            }
+			if (os_arch_detect.equals("aarch64") || os_arch_detect.equals("arm64")) {
+				os_arch = "arm64";
+			}
 			// TODO 32 bit gunk
 
 			if (os_name_detect.startsWith("windows")) {
@@ -55,63 +56,66 @@ public class DuckDBNative {
 	 */
 
 	// results db_ref database reference object
-	protected static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only);
+	protected static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only) throws SQLException;
 
 	protected static native void duckdb_jdbc_shutdown(ByteBuffer db_ref);
 
 	// returns conn_ref connection reference object
-	protected static native ByteBuffer duckdb_jdbc_connect(ByteBuffer db_ref);
+	protected static native ByteBuffer duckdb_jdbc_connect(ByteBuffer db_ref) throws SQLException;
 
-	protected static native void duckdb_jdbc_set_auto_commit(ByteBuffer conn_ref, boolean auto_commit);
+	protected static native void duckdb_jdbc_set_auto_commit(ByteBuffer conn_ref, boolean auto_commit) throws SQLException;
 
-	protected static native boolean duckdb_jdbc_get_auto_commit(ByteBuffer conn_ref);
+	protected static native boolean duckdb_jdbc_get_auto_commit(ByteBuffer conn_ref) throws SQLException;
 
 	protected static native void duckdb_jdbc_disconnect(ByteBuffer conn_ref);
 
-	// returns stmt_ref result reference object
-	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, byte[] query);
+	protected static native String duckdb_jdbc_get_schema(ByteBuffer conn_ref);
 
-	protected static native String duckdb_jdbc_prepare_type(ByteBuffer stmt_ref);
+	// returns stmt_ref result reference object
+	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, byte[] query) throws SQLException;
+
+	protected static native String duckdb_jdbc_prepare_type(ByteBuffer stmt_ref) throws SQLException;
 
 	protected static native void duckdb_jdbc_release(ByteBuffer stmt_ref);
 
-	protected static native DuckDBResultSetMetaData duckdb_jdbc_meta(ByteBuffer stmt_ref);
+	protected static native DuckDBResultSetMetaData duckdb_jdbc_meta(ByteBuffer stmt_ref) throws SQLException;
 
 	
 	// returns res_ref result reference object
-	protected static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params);
+	protected static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params) throws SQLException;
 
 
 	protected static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
 
-	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref);
+	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref) throws SQLException;
 	
 	protected static native int duckdb_jdbc_fetch_size();
 
-	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name);
+	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_begin_row(ByteBuffer appender_ref);
+	protected static native void duckdb_jdbc_appender_begin_row(ByteBuffer appender_ref) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_end_row(ByteBuffer appender_ref);
+	protected static native void duckdb_jdbc_appender_end_row(ByteBuffer appender_ref) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_flush(ByteBuffer appender_ref);
+	protected static native void duckdb_jdbc_appender_flush(ByteBuffer appender_ref) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_close(ByteBuffer appender_ref);
+	protected static native void duckdb_jdbc_appender_close(ByteBuffer appender_ref) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_append_boolean(ByteBuffer appender_ref, boolean value);
+	protected static native void duckdb_jdbc_appender_append_boolean(ByteBuffer appender_ref, boolean value) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_append_byte(ByteBuffer appender_ref, byte value);
+	protected static native void duckdb_jdbc_appender_append_byte(ByteBuffer appender_ref, byte value) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_append_short(ByteBuffer appender_ref, short value);
+	protected static native void duckdb_jdbc_appender_append_short(ByteBuffer appender_ref, short value) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_append_int(ByteBuffer appender_ref, int value);
+	protected static native void duckdb_jdbc_appender_append_int(ByteBuffer appender_ref, int value) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_append_long(ByteBuffer appender_ref, long value);
+	protected static native void duckdb_jdbc_appender_append_long(ByteBuffer appender_ref, long value) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_append_float(ByteBuffer appender_ref, float value);
+	protected static native void duckdb_jdbc_appender_append_float(ByteBuffer appender_ref, float value) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_append_double(ByteBuffer appender_ref, double value);
+	protected static native void duckdb_jdbc_appender_append_double(ByteBuffer appender_ref, double value) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, String value);
+	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value) throws SQLException;
 
+	protected static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;
 }

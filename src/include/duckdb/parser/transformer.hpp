@@ -16,6 +16,7 @@
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
@@ -32,12 +33,11 @@ struct GroupingExpressionMap;
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
 class Transformer {
-	static constexpr const idx_t DEFAULT_MAX_EXPRESSION_DEPTH = 1000;
-
 	friend class StackChecker;
 
 public:
-	explicit Transformer(Transformer *parent = nullptr, idx_t max_expression_depth_p = DEFAULT_MAX_EXPRESSION_DEPTH);
+	explicit Transformer(idx_t max_expression_depth_p);
+	explicit Transformer(Transformer *parent);
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements);
@@ -91,8 +91,8 @@ private:
 	unique_ptr<CreateStatement> TransformCreateIndex(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateFunctionStmt node into CreateStatement
 	unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGNode *node);
-	//! Transform a Postgres duckdb_libpgquery::T_PGCreateEnumStmt node into CreateStatement
-	unique_ptr<CreateStatement> TransformCreateEnum(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres duckdb_libpgquery::T_PGCreateTypeStmt node into CreateStatement
+	unique_ptr<CreateStatement> TransformCreateType(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGAlterSeqStmt node into CreateStatement
 	unique_ptr<AlterStatement> TransformAlterSequence(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGDropStmt node into a Drop[Table,Schema]Statement
@@ -115,7 +115,7 @@ private:
 	//! Transform a Postgres duckdb_libpgquery::T_PGImportStmt node into a PragmaStatement
 	unique_ptr<PragmaStatement> TransformImport(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ExplainStatement> TransformExplain(duckdb_libpgquery::PGNode *node);
-	unique_ptr<VacuumStatement> TransformVacuum(duckdb_libpgquery::PGNode *node);
+	unique_ptr<SQLStatement> TransformVacuum(duckdb_libpgquery::PGNode *node);
 	unique_ptr<SQLStatement> TransformShow(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ShowStatement> TransformShowSelect(duckdb_libpgquery::PGNode *node);
 
@@ -150,6 +150,7 @@ private:
 	unique_ptr<ConstantExpression> TransformValue(duckdb_libpgquery::PGValue val);
 	//! Transform a Postgres operator into an Expression
 	unique_ptr<ParsedExpression> TransformAExpr(duckdb_libpgquery::PGAExpr *root);
+	unique_ptr<ParsedExpression> TransformAExprInternal(duckdb_libpgquery::PGAExpr *root);
 	//! Transform a Postgres abstract expression into an Expression
 	unique_ptr<ParsedExpression> TransformExpression(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres function call into an Expression
@@ -196,11 +197,9 @@ private:
 	//===--------------------------------------------------------------------===//
 	OnCreateConflict TransformOnConflict(duckdb_libpgquery::PGOnCreateConflict conflict);
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
-	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, QueryNode &select);
+	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, CommonTableExpressionMap &cte_map);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                                  CommonTableExpressionInfo &info);
-	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
-	ExpressionType OperatorToExpressionType(const string &op);
 
 	unique_ptr<ParsedExpression> TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child);
 	unique_ptr<ParsedExpression> TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,
@@ -269,5 +268,7 @@ private:
 	Transformer &transformer;
 	idx_t stack_usage;
 };
+
+vector<string> ReadPgListToString(duckdb_libpgquery::PGList *column_list);
 
 } // namespace duckdb

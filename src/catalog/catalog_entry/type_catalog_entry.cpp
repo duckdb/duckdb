@@ -14,9 +14,12 @@ namespace duckdb {
 
 TypeCatalogEntry::TypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTypeInfo *info)
     : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info->name), user_type(info->type) {
+	this->temporary = info->temporary;
+	this->internal = info->internal;
 }
 
 void TypeCatalogEntry::Serialize(Serializer &serializer) {
+	D_ASSERT(!internal);
 	FieldWriter writer(serializer);
 	writer.WriteString(schema->name);
 	writer.WriteString(name);

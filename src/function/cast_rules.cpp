@@ -194,9 +194,13 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// anything can be cast to ANY type for no cost
 		return 0;
 	}
-	if (from.id() == LogicalTypeId::SQLNULL || from.id() == LogicalTypeId::UNKNOWN) {
-		// NULL expression or parameter expression can be cast to anything
+	if (from.id() == LogicalTypeId::SQLNULL) {
+		// NULL expression can be cast to anything
 		return TargetTypeCost(to);
+	}
+	if (from.id() == LogicalTypeId::UNKNOWN) {
+		// parameter expression can be cast to anything for no cost
+		return 0;
 	}
 	if (from.id() == LogicalTypeId::BLOB && to.id() == LogicalTypeId::VARCHAR) {
 		// Implicit cast not allowed from BLOB to VARCHAR

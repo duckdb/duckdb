@@ -2,11 +2,13 @@
 
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 
 #include <cstdint>
@@ -21,6 +23,7 @@
 #include <unistd.h>
 #else
 #include <string>
+#include <sysinfoapi.h>
 
 #ifdef __MINGW32__
 // need to manually define this for mingw
@@ -40,7 +43,7 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 }
 
 FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
-	return context.file_opener.get();
+	return ClientData::Get(context).file_opener.get();
 }
 
 #ifndef _WIN32
@@ -58,7 +61,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	errno = 0;
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 	if (errno != 0) {
-		throw IOException("Could not fetch available system memory!");
+		return DConstants::INVALID_INDEX;
 	}
 	return max_memory;
 }
@@ -85,10 +88,17 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 
 idx_t FileSystem::GetAvailableMemory() {
 	ULONGLONG available_memory_kb;
-	if (!GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
-		throw IOException("Could not fetch available system memory!");
+	if (GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
+		return MinValue<idx_t>(available_memory_kb * 1000, UINTPTR_MAX);
 	}
-	return MinValue<idx_t>(available_memory_kb * 1024, UINTPTR_MAX);
+	// fallback: try GlobalMemoryStatusEx
+	MEMORYSTATUSEX mem_state;
+	mem_state.dwLength = sizeof(MEMORYSTATUSEX);
+
+	if (GlobalMemoryStatusEx(&mem_state)) {
+		return MinValue<idx_t>(mem_state.ullTotalPhys, UINTPTR_MAX);
+	}
+	return DConstants::INVALID_INDEX;
 }
 
 string FileSystem::GetWorkingDirectory() {
@@ -135,7 +145,17 @@ string FileSystem::ExtractBaseName(const string &path) {
 	return vec[0];
 }
 
-string FileSystem::GetHomeDirectory() {
+string FileSystem::GetHomeDirectory(FileOpener *opener) {
+	// read the home_directory setting first, if it is set
+	if (opener) {
+		Value result;
+		if (opener->TryGetCurrentSetting("home_directory", result)) {
+			if (!result.IsNull() && !result.ToString().empty()) {
+				return result.ToString();
+			}
+		}
+	}
+	// fallback to the default home directories for the specified system
 #ifdef DUCKDB_WINDOWS
 	const char *homedir = getenv("USERPROFILE");
 #else
@@ -145,6 +165,16 @@ string FileSystem::GetHomeDirectory() {
 		return homedir;
 	}
 	return string();
+}
+
+string FileSystem::ExpandPath(const string &path, FileOpener *opener) {
+	if (path.empty()) {
+		return path;
+	}
+	if (path[0] == '~') {
+		return GetHomeDirectory(opener) + path.substr(1);
+	}
+	return path;
 }
 
 // LCOV_EXCL_START

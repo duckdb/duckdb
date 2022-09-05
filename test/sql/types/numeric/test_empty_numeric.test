@@ -1,0 +1,23 @@
+# name: test/sql/types/numeric/test_empty_numeric.test
+# description: Test empty numeric
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE numerics(i NUMERIC(), j NUMERIC)
+
+statement ok
+INSERT INTO numerics VALUES (0176030871715840, 2.2)
+
+query II
+SELECT * FROM numerics
+----
+176030871715840.000	2.200
+
+# Test cast
+query II
+SELECT 1.25::FLOAT::NUMERIC, 1.25::FLOAT::NUMERIC()
+----
+1.250	1.250

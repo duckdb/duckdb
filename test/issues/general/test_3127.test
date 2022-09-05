@@ -1,0 +1,25 @@
+# name: test/issues/general/test_3127.test
+# description: Issue 3127: Transactional INSERT + ALTER TABLE ADD COLUMN + INSERT erases data values written to new column
+# group: [general]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement ok
+ALTER TABLE test ADD COLUMN k INTEGER
+
+statement ok
+INSERT INTO test VALUES (3, 3, 3)
+
+query III
+SELECT * FROM test
+----
+1	1	NULL
+2	2	NULL
+3	3	3

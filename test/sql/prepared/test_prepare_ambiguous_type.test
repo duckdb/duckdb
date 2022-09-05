@@ -1,0 +1,296 @@
+# name: test/sql/prepared/test_prepare_ambiguous_type.test
+# description: PREPARE of ambiguous types
+# group: [prepared]
+
+# typeof
+statement ok
+PREPARE v1 AS SELECT typeof(?)
+
+query I
+EXECUTE v1(3::int)
+----
+INTEGER
+
+query I
+EXECUTE v1('hello')
+----
+VARCHAR
+
+query I
+EXECUTE v1([1, 2, 3])
+----
+INTEGER[]
+
+# direct select without cast
+statement ok
+PREPARE v2 AS SELECT ?
+
+query I
+EXECUTE v2(3::int)
+----
+3
+
+query I
+EXECUTE v2('hello')
+----
+hello
+
+query I
+EXECUTE v2([1, 2, 3])
+----
+[1, 2, 3]
+
+# ambiguous comparison
+statement ok
+PREPARE v3 AS SELECT ?=?
+
+query I
+EXECUTE v3(3::int, 4::bigint)
+----
+false
+
+query I
+EXECUTE v3('hello', 'hello')
+----
+true
+
+query I
+EXECUTE v3([1, 2, 3], [1, 2, 3])
+----
+true
+
+# ambiguous function usage (date_part)
+statement ok
+PREPARE v4 AS SELECT extract(year from ?)
+
+query I
+EXECUTE v4(DATE '1992-01-01')
+----
+1992
+
+query I
+EXECUTE v4(TIMESTAMP '1992-01-01 23:00:20')
+----
+1992
+
+# printf
+statement ok
+PREPARE v5 AS SELECT printf('%s', ?)
+
+statement error
+EXECUTE v5(4)
+
+query I
+EXECUTE v5('hello')
+----
+hello
+
+statement ok
+PREPARE v6 AS SELECT printf('%d', ?)
+
+query I
+EXECUTE v6(4)
+----
+4
+
+statement error
+EXECUTE v6('hello')
+
+# lists and structs
+statement ok
+PREPARE v7 AS SELECT [?]
+
+query I
+EXECUTE v7(1)
+----
+[1]
+
+query I
+EXECUTE v7('hello')
+----
+[hello]
+
+query I
+EXECUTE v7([1,2,3])
+----
+[[1, 2, 3]]
+
+
+query I
+EXECUTE v7(NULL)
+----
+[NULL]
+
+statement ok
+PREPARE v8 AS SELECT [?, ?, ?]
+
+query I
+EXECUTE v8(1, 2, 3)
+----
+[1, 2, 3]
+
+query I
+EXECUTE v8(NULL, NULL, NULL)
+----
+[NULL, NULL, NULL]
+
+query I
+EXECUTE v8('hello', 'world', NULL)
+----
+[hello, world, NULL]
+
+statement ok
+PREPARE v9 AS SELECT {'a': ?}
+
+query I
+EXECUTE v9(42)
+----
+{'a': 42}
+
+query I
+EXECUTE v9([1,2,3])
+----
+{'a': [1, 2, 3]}
+
+query I
+EXECUTE v9(NULL)
+----
+{'a': NULL}
+
+statement ok
+PREPARE v10 AS SELECT {'a': ?, 'b': 42, 'c': ?}
+
+query I
+EXECUTE v10(33, [1, 2, 3])
+----
+{'a': 33, 'b': 42, 'c': [1, 2, 3]}
+
+query I
+EXECUTE v10(NULL, {'a': 88})
+----
+{'a': NULL, 'b': 42, 'c': {'a': 88}}
+
+statement ok
+PREPARE v11 AS SELECT ROW(?, ?)
+
+query I
+EXECUTE v11(11, 'hello')
+----
+{'v1': 11, 'v2': hello}
+
+statement ok
+PREPARE v12 AS SELECT ? IS NULL
+
+query I
+EXECUTE v12('hello')
+----
+false
+
+query I
+EXECUTE v12([1, 2, 3])
+----
+false
+
+query I
+EXECUTE v12(NULL)
+----
+true
+
+# subqueries
+statement ok
+PREPARE v13 AS SELECT (SELECT ?)
+
+query I
+EXECUTE v13(3::int)
+----
+3
+
+query I
+EXECUTE v13('hello')
+----
+hello
+
+query I
+EXECUTE v13([1, 2, 3])
+----
+[1, 2, 3]
+
+
+# ambiguous aggregate usage
+statement ok
+PREPARE v14 AS SELECT SUM(?) FROM RANGE(100)
+
+query I
+EXECUTE v14(2)
+----
+200
+
+query I
+EXECUTE v14(2::HUGEINT)
+----
+200
+
+query I
+EXECUTE v14(0.005)
+----
+0.5
+
+# ambiguous function usage (addition)
+statement ok
+PREPARE v15 AS SELECT ?+?
+
+query I
+EXECUTE v15(0.25, 0.25)
+----
+0.5
+
+query I
+EXECUTE v15(1000000000000000000000000000000000000::hugeint, 1000000000000000000000000000000000000::hugeint)
+----
+2000000000000000000000000000000000000
+
+# array contains usage
+statement ok
+PREPARE v17 AS SELECT ARRAY_CONTAINS(?, ?)
+
+query I
+EXECUTE v17([1, 2, 3], 1)
+----
+true
+
+query I
+EXECUTE v17([], 1)
+----
+false
+
+query I
+EXECUTE v17(['hello', NULL, 'world'], 'world')
+----
+true
+
+statement ok
+PREPARE v18 AS SELECT ARRAY_CONTAINS([1, 2, 3], ?)
+
+query I
+EXECUTE v18(1)
+----
+true
+
+query I
+EXECUTE v18(0)
+----
+false
+
+statement error
+EXECUTE v18([1])
+
+statement ok
+PREPARE v19 AS SELECT ARRAY_CONTAINS(?, 1)
+
+query I
+EXECUTE v19([1, 2, 3])
+----
+true
+
+statement error
+EXECUTE v19(0)

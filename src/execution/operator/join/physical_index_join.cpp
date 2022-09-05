@@ -14,16 +14,16 @@ namespace duckdb {
 
 class IndexJoinOperatorState : public OperatorState {
 public:
-	explicit IndexJoinOperatorState(const PhysicalIndexJoin &op) {
+	IndexJoinOperatorState(Allocator &allocator, const PhysicalIndexJoin &op) : probe_executor(allocator) {
 		rhs_rows.resize(STANDARD_VECTOR_SIZE);
 		result_sizes.resize(STANDARD_VECTOR_SIZE);
 
-		join_keys.Initialize(op.condition_types);
+		join_keys.Initialize(allocator, op.condition_types);
 		for (auto &cond : op.conditions) {
 			probe_executor.AddExpression(*cond.left);
 		}
 		if (!op.fetch_types.empty()) {
-			rhs_chunk.Initialize(op.fetch_types);
+			rhs_chunk.Initialize(allocator, op.fetch_types);
 		}
 		rhs_sel.Initialize(STANDARD_VECTOR_SIZE);
 	}
@@ -83,8 +83,8 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	}
 }
 
-unique_ptr<OperatorState> PhysicalIndexJoin::GetOperatorState(ClientContext &context) const {
-	return make_unique<IndexJoinOperatorState>(*this);
+unique_ptr<OperatorState> PhysicalIndexJoin::GetOperatorState(ExecutionContext &context) const {
+	return make_unique<IndexJoinOperatorState>(Allocator::Get(context.client), *this);
 }
 
 void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -197,6 +197,21 @@ OperatorResultType PhysicalIndexJoin::Execute(ExecutionContext &context, DataChu
 		Output(context, input, chunk, state_p);
 	}
 	return OperatorResultType::HAVE_MORE_OUTPUT;
+}
+
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
+void PhysicalIndexJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+	// index join: we only continue into the LHS
+	// the right side is probed by the index join
+	// so we don't need to do anything in the pipeline with this child
+	state.AddPipelineOperator(current, this);
+	children[0]->BuildPipelines(executor, current, state);
+}
+
+vector<const PhysicalOperator *> PhysicalIndexJoin::GetSources() const {
+	return children[0]->GetSources();
 }
 
 } // namespace duckdb

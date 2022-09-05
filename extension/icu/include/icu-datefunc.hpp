@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb.hpp"
-#include "icu-collate.hpp"
 
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "unicode/calendar.h"
 
 namespace duckdb {
 
@@ -23,16 +23,20 @@ struct ICUDateFunc {
 		explicit BindData(ClientContext &context);
 		BindData(const BindData &other);
 
+		string tz_setting;
+		string cal_setting;
 		CalendarPtr calendar;
 
-		bool Equals(FunctionData &other_p) override;
-		unique_ptr<FunctionData> Copy() override;
+		bool Equals(const FunctionData &other_p) const override;
+		unique_ptr<FunctionData> Copy() const override;
 	};
 
 	//! Binds a default calendar object for use by the function
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
 
+	//! Sets the time zone for the calendar.
+	static void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
 	static timestamp_t GetTime(icu::Calendar *calendar, uint64_t micros = 0);
 	//! Gets the timestamp from the calendar, assuming it is in range.

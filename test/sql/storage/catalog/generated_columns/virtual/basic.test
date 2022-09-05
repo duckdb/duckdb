@@ -1,0 +1,32 @@
+# name: test/sql/storage/catalog/generated_columns/virtual/basic.test
+# description: Create a table with basic generated column usage and restart
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+# load the DB from disk
+load __TEST_DIR__/generated_column_storage.db
+
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	gcol AS (price)
+);
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES (5);
+
+query I
+SELECT gcol FROM tbl;
+----
+5
+
+restart
+
+query I
+SELECT gcol FROM tbl;
+----
+5

@@ -2,6 +2,8 @@
 # description: Update big table of even and odd values
 # group: [update]
 
+require skip_reload
+
 # create a table with the values [0, ..., 3K]
 statement ok con1
 BEGIN TRANSACTION

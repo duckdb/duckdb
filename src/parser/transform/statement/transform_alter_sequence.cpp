@@ -1,6 +1,9 @@
-#include "duckdb/parser/transformer.hpp"
-#include "duckdb/parser/statement/alter_statement.hpp"
+#include "duckdb/common/enum_class_hash.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/statement/alter_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
@@ -17,12 +20,18 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 		throw InternalException("Expected an argument for ALTER SEQUENCE.");
 	}
 
+	unordered_set<SequenceInfo, EnumClassHash> used;
 	duckdb_libpgquery::PGListCell *cell = nullptr;
 	for_each_cell(cell, stmt->options->head) {
 		auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
 		string opt_name = string(def_elem->defname);
 
 		if (opt_name == "owned_by") {
+			if (used.find(SequenceInfo::SEQ_OWN) != used.end()) {
+				throw ParserException("Owned by value should be passed as most once");
+			}
+			used.insert(SequenceInfo::SEQ_OWN);
+
 			auto val = (duckdb_libpgquery::PGValue *)def_elem->arg;
 			if (!val) {
 				throw InternalException("Expected an argument for option %s", opt_name);
@@ -51,12 +60,13 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 				throw InternalException("Wrong argument for %s. Expected either <schema>.<name> or <name>", opt_name);
 			}
 			auto info = make_unique<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_schema, sequence_name,
-			                                             owner_schema, owner_name);
+			                                             owner_schema, owner_name, stmt->missing_ok);
 			result->info = move(info);
 		} else {
 			throw NotImplementedException("ALTER SEQUENCE option not supported yet!");
 		}
 	}
+	result->info->if_exists = stmt->missing_ok;
 	return result;
 }
 } // namespace duckdb

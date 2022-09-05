@@ -153,3 +153,30 @@ query I
 select age(timestamp '1992-01-01 01:01:01.400', timestamp '1992-01-01 01:01:02.200');
 ----
 -00:00:00.8
+
+#
+# Infinities
+#
+foreach lspecial infinity -infinity
+
+# Unary
+query I
+SELECT AGE('${lspecial}'::TIMESTAMP);
+----
+NULL
+
+foreach rspecial infinity -infinity 2004-01-31T12:00:00.000050-08
+
+query I
+SELECT AGE('${lspecial}'::TIMESTAMP, '${rspecial}'::TIMESTAMP);
+----
+NULL
+
+query I
+SELECT AGE('${rspecial}'::TIMESTAMP, '${lspecial}'::TIMESTAMP);
+----
+NULL
+
+endloop
+
+endloop

@@ -1,0 +1,21 @@
+# name: test/sql/select/test_select_qualified_view.test
+# description: Test selecting a view through a qualified reference
+# group: [select]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA s;
+
+statement ok
+create table s.a as select 'hello' as col1;
+
+statement ok
+create view s.b as select * from s.a;
+
+statement ok
+select s.b.col1 from s.b;
+
+statement ok
+select b.col1 from s.b;

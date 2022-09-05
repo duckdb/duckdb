@@ -80,7 +80,7 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 }
 
 FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
-	LookUpConjunctions(expr.get());
+	//	LookUpConjunctions(expr.get());
 	// try to push the filter into the combiner
 	auto result = AddFilter(expr.get());
 	if (result == FilterResult::UNSUPPORTED) {
@@ -550,7 +550,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 		}
 	}
 
-	GenerateORFilters(table_filters, column_ids);
+	//	GenerateORFilters(table_filters, column_ids);
 
 	return table_filters;
 }
@@ -676,44 +676,75 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_BETWEEN) {
 		auto &comparison = (BoundBetweenExpression &)*expr;
 		//! check if one of the sides is a scalar value
-		bool left_is_scalar = comparison.lower->IsFoldable();
-		bool right_is_scalar = comparison.upper->IsFoldable();
-		if (left_is_scalar || right_is_scalar) {
-			//! comparison with scalar
+		bool lower_is_scalar = comparison.lower->IsFoldable();
+		bool upper_is_scalar = comparison.upper->IsFoldable();
+		if (lower_is_scalar || upper_is_scalar) {
+			//! comparison with scalar - break apart
 			auto node = GetNode(comparison.input.get());
 			idx_t equivalence_set = GetEquivalenceSet(node);
-			auto scalar = comparison.lower.get();
-			auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+			auto result = FilterResult::UNSATISFIABLE;
 
-			// create the ExpressionValueInformation
-			ExpressionValueInformation info;
-			if (comparison.lower_inclusive) {
-				info.comparison_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+			if (lower_is_scalar) {
+				auto scalar = comparison.lower.get();
+				auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+
+				// create the ExpressionValueInformation
+				ExpressionValueInformation info;
+				if (comparison.lower_inclusive) {
+					info.comparison_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+				} else {
+					info.comparison_type = ExpressionType::COMPARE_GREATERTHAN;
+				}
+				info.constant = constant_value;
+
+				// get the current bucket of constant values
+				D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
+				auto &info_list = constant_values.find(equivalence_set)->second;
+				// check the existing constant comparisons to see if we can do any pruning
+				result = AddConstantComparison(info_list, info);
 			} else {
-				info.comparison_type = ExpressionType::COMPARE_GREATERTHAN;
+				D_ASSERT(upper_is_scalar);
+				const auto type = comparison.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
+				                                             : ExpressionType::COMPARE_LESSTHAN;
+				auto left = comparison.lower->Copy();
+				auto right = comparison.input->Copy();
+				auto lower_comp = make_unique<BoundComparisonExpression>(type, move(left), move(right));
+				result = AddBoundComparisonFilter(lower_comp.get());
 			}
-			info.constant = constant_value;
 
-			// get the current bucket of constant values
-			D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
-			auto &info_list = constant_values.find(equivalence_set)->second;
-			// check the existing constant comparisons to see if we can do any pruning
-			AddConstantComparison(info_list, info);
-			scalar = comparison.upper.get();
-			constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+			//	 Stop if we failed
+			if (result != FilterResult::SUCCESS) {
+				return result;
+			}
 
-			// create the ExpressionValueInformation
-			if (comparison.upper_inclusive) {
-				info.comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
+			if (upper_is_scalar) {
+				auto scalar = comparison.upper.get();
+				auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+
+				// create the ExpressionValueInformation
+				ExpressionValueInformation info;
+				if (comparison.upper_inclusive) {
+					info.comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
+				} else {
+					info.comparison_type = ExpressionType::COMPARE_LESSTHAN;
+				}
+				info.constant = constant_value;
+
+				// get the current bucket of constant values
+				D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
+				// check the existing constant comparisons to see if we can do any pruning
+				result = AddConstantComparison(constant_values.find(equivalence_set)->second, info);
 			} else {
-				info.comparison_type = ExpressionType::COMPARE_LESSTHAN;
+				D_ASSERT(lower_is_scalar);
+				const auto type = comparison.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
+				                                             : ExpressionType::COMPARE_LESSTHAN;
+				auto left = comparison.input->Copy();
+				auto right = comparison.upper->Copy();
+				auto upper_comp = make_unique<BoundComparisonExpression>(type, move(left), move(right));
+				result = AddBoundComparisonFilter(upper_comp.get());
 			}
-			info.constant = constant_value;
 
-			// get the current bucket of constant values
-			D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
-			// check the existing constant comparisons to see if we can do any pruning
-			return AddConstantComparison(constant_values.find(equivalence_set)->second, info);
+			return result;
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 		return AddBoundComparisonFilter(expr);
@@ -988,175 +1019,175 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 		return InvertValueComparisonResult(CompareValueInformation(right, left));
 	}
 }
-
-void FilterCombiner::LookUpConjunctions(Expression *expr) {
-	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
-		auto root_or_expr = (BoundConjunctionExpression *)expr;
-		for (const auto &entry : map_col_conjunctions) {
-			for (const auto &conjs_to_push : entry.second) {
-				if (conjs_to_push->root_or->Equals(root_or_expr)) {
-					return;
-				}
-			}
-		}
-
-		cur_root_or = root_or_expr;
-		cur_conjunction = root_or_expr;
-		cur_colref_to_push = nullptr;
-		if (!BFSLookUpConjunctions(cur_root_or)) {
-			if (cur_colref_to_push) {
-				auto entry = map_col_conjunctions.find(cur_colref_to_push);
-				auto &vec_conjs_to_push = entry->second;
-				if (vec_conjs_to_push.size() == 1) {
-					map_col_conjunctions.erase(entry);
-					return;
-				}
-				vec_conjs_to_push.pop_back();
-			}
-		}
-		return;
-	}
-
-	// Verify if the expression has a column already pushed down by other OR expression
-	VerifyOrsToPush(*expr);
-}
-
-bool FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjunction) {
-	vector<BoundConjunctionExpression *> conjunctions_to_visit;
-
-	for (auto &child : conjunction->children) {
-		switch (child->GetExpressionClass()) {
-		case ExpressionClass::BOUND_CONJUNCTION: {
-			auto child_conjunction = (BoundConjunctionExpression *)child.get();
-			conjunctions_to_visit.emplace_back(child_conjunction);
-			break;
-		}
-		case ExpressionClass::BOUND_COMPARISON: {
-			if (!UpdateConjunctionFilter((BoundComparisonExpression *)child.get())) {
-				return false;
-			}
-			break;
-		}
-		default: {
-			return false;
-		}
-		}
-	}
-
-	for (auto child_conjunction : conjunctions_to_visit) {
-		cur_conjunction = child_conjunction;
-		// traverse child conjuction
-		if (!BFSLookUpConjunctions(child_conjunction)) {
-			return false;
-		}
-	}
-	return true;
-}
-
-void FilterCombiner::VerifyOrsToPush(Expression &expr) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto colref = (BoundColumnRefExpression *)&expr;
-		auto entry = map_col_conjunctions.find(colref);
-		if (entry == map_col_conjunctions.end()) {
-			return;
-		}
-		map_col_conjunctions.erase(entry);
-	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { VerifyOrsToPush(child); });
-}
-
-bool FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr) {
-	bool left_is_scalar = comparison_expr->left->IsFoldable();
-	bool right_is_scalar = comparison_expr->right->IsFoldable();
-
-	Expression *non_scalar_expr;
-	if (left_is_scalar || right_is_scalar) {
-		// only support comparison with scalar
-		non_scalar_expr = left_is_scalar ? comparison_expr->right.get() : comparison_expr->left.get();
-
-		if (non_scalar_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			return UpdateFilterByColumn((BoundColumnRefExpression *)non_scalar_expr, comparison_expr);
-		}
-	}
-
-	return false;
-}
-
-bool FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
-                                          BoundComparisonExpression *comparison_expr) {
-	if (cur_colref_to_push == nullptr) {
-		cur_colref_to_push = column_ref;
-
-		auto or_conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
-		or_conjunction->children.emplace_back(comparison_expr->Copy());
-
-		unique_ptr<ConjunctionsToPush> conjs_to_push = make_unique<ConjunctionsToPush>();
-		conjs_to_push->conjunctions.emplace_back(move(or_conjunction));
-		conjs_to_push->root_or = cur_root_or;
-
-		auto &&vec_col_conjs = map_col_conjunctions[column_ref];
-		vec_col_conjs.emplace_back(move(conjs_to_push));
-		vec_colref_insertion_order.emplace_back(column_ref);
-		return true;
-	}
-
-	auto entry = map_col_conjunctions.find(cur_colref_to_push);
-	D_ASSERT(entry != map_col_conjunctions.end());
-	auto &conjunctions_to_push = entry->second.back();
-
-	if (!cur_colref_to_push->Equals(column_ref)) {
-		// check for multiple colunms in the same root OR node
-		if (cur_root_or == cur_conjunction) {
-			return false;
-		}
-		// found an AND using a different column, we should stop the look up
-		if (cur_conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-			return false;
-		}
-
-		// found a different column, AND conditions cannot be preserved anymore
-		conjunctions_to_push->preserve_and = false;
-		return true;
-	}
-
-	auto &last_conjunction = conjunctions_to_push->conjunctions.back();
-	if (cur_conjunction->GetExpressionType() == last_conjunction->GetExpressionType()) {
-		last_conjunction->children.emplace_back(comparison_expr->Copy());
-	} else {
-		auto new_conjunction = make_unique<BoundConjunctionExpression>(cur_conjunction->GetExpressionType());
-		new_conjunction->children.emplace_back(comparison_expr->Copy());
-		conjunctions_to_push->conjunctions.emplace_back(move(new_conjunction));
-	}
-	return true;
-}
-
-void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids) {
-	for (const auto colref : vec_colref_insertion_order) {
-		auto column_index = column_ids[colref->binding.column_index];
-		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
-			break;
-		}
-
-		for (const auto &conjunctions_to_push : map_col_conjunctions[colref]) {
-			// root OR filter to push into the TableFilter
-			auto root_or_filter = make_unique<ConjunctionOrFilter>();
-			// variable to hold the last conjuntion filter pointer
-			// the next filter will be added into it, i.e., we create a chain of conjunction filters
-			ConjunctionFilter *last_conj_filter = root_or_filter.get();
-
-			for (auto &conjunction : conjunctions_to_push->conjunctions) {
-				if (conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND &&
-				    conjunctions_to_push->preserve_and) {
-					GenerateConjunctionFilter<ConjunctionAndFilter>(conjunction.get(), last_conj_filter);
-				} else {
-					GenerateConjunctionFilter<ConjunctionOrFilter>(conjunction.get(), last_conj_filter);
-				}
-			}
-			table_filter.PushFilter(column_index, move(root_or_filter));
-		}
-	}
-	map_col_conjunctions.clear();
-	vec_colref_insertion_order.clear();
-}
+//
+// void FilterCombiner::LookUpConjunctions(Expression *expr) {
+//	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
+//		auto root_or_expr = (BoundConjunctionExpression *)expr;
+//		for (const auto &entry : map_col_conjunctions) {
+//			for (const auto &conjs_to_push : entry.second) {
+//				if (conjs_to_push->root_or->Equals(root_or_expr)) {
+//					return;
+//				}
+//			}
+//		}
+//
+//		cur_root_or = root_or_expr;
+//		cur_conjunction = root_or_expr;
+//		cur_colref_to_push = nullptr;
+//		if (!BFSLookUpConjunctions(cur_root_or)) {
+//			if (cur_colref_to_push) {
+//				auto entry = map_col_conjunctions.find(cur_colref_to_push);
+//				auto &vec_conjs_to_push = entry->second;
+//				if (vec_conjs_to_push.size() == 1) {
+//					map_col_conjunctions.erase(entry);
+//					return;
+//				}
+//				vec_conjs_to_push.pop_back();
+//			}
+//		}
+//		return;
+//	}
+//
+//	// Verify if the expression has a column already pushed down by other OR expression
+//	VerifyOrsToPush(*expr);
+//}
+//
+// bool FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjunction) {
+//	vector<BoundConjunctionExpression *> conjunctions_to_visit;
+//
+//	for (auto &child : conjunction->children) {
+//		switch (child->GetExpressionClass()) {
+//		case ExpressionClass::BOUND_CONJUNCTION: {
+//			auto child_conjunction = (BoundConjunctionExpression *)child.get();
+//			conjunctions_to_visit.emplace_back(child_conjunction);
+//			break;
+//		}
+//		case ExpressionClass::BOUND_COMPARISON: {
+//			if (!UpdateConjunctionFilter((BoundComparisonExpression *)child.get())) {
+//				return false;
+//			}
+//			break;
+//		}
+//		default: {
+//			return false;
+//		}
+//		}
+//	}
+//
+//	for (auto child_conjunction : conjunctions_to_visit) {
+//		cur_conjunction = child_conjunction;
+//		// traverse child conjuction
+//		if (!BFSLookUpConjunctions(child_conjunction)) {
+//			return false;
+//		}
+//	}
+//	return true;
+//}
+//
+// void FilterCombiner::VerifyOrsToPush(Expression &expr) {
+//	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+//		auto colref = (BoundColumnRefExpression *)&expr;
+//		auto entry = map_col_conjunctions.find(colref);
+//		if (entry == map_col_conjunctions.end()) {
+//			return;
+//		}
+//		map_col_conjunctions.erase(entry);
+//	}
+//	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { VerifyOrsToPush(child); });
+//}
+//
+// bool FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr) {
+//	bool left_is_scalar = comparison_expr->left->IsFoldable();
+//	bool right_is_scalar = comparison_expr->right->IsFoldable();
+//
+//	Expression *non_scalar_expr;
+//	if (left_is_scalar || right_is_scalar) {
+//		// only support comparison with scalar
+//		non_scalar_expr = left_is_scalar ? comparison_expr->right.get() : comparison_expr->left.get();
+//
+//		if (non_scalar_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+//			return UpdateFilterByColumn((BoundColumnRefExpression *)non_scalar_expr, comparison_expr);
+//		}
+//	}
+//
+//	return false;
+//}
+//
+// bool FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
+//                                          BoundComparisonExpression *comparison_expr) {
+//	if (cur_colref_to_push == nullptr) {
+//		cur_colref_to_push = column_ref;
+//
+//		auto or_conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+//		or_conjunction->children.emplace_back(comparison_expr->Copy());
+//
+//		unique_ptr<ConjunctionsToPush> conjs_to_push = make_unique<ConjunctionsToPush>();
+//		conjs_to_push->conjunctions.emplace_back(move(or_conjunction));
+//		conjs_to_push->root_or = cur_root_or;
+//
+//		auto &&vec_col_conjs = map_col_conjunctions[column_ref];
+//		vec_col_conjs.emplace_back(move(conjs_to_push));
+//		vec_colref_insertion_order.emplace_back(column_ref);
+//		return true;
+//	}
+//
+//	auto entry = map_col_conjunctions.find(cur_colref_to_push);
+//	D_ASSERT(entry != map_col_conjunctions.end());
+//	auto &conjunctions_to_push = entry->second.back();
+//
+//	if (!cur_colref_to_push->Equals(column_ref)) {
+//		// check for multiple colunms in the same root OR node
+//		if (cur_root_or == cur_conjunction) {
+//			return false;
+//		}
+//		// found an AND using a different column, we should stop the look up
+//		if (cur_conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+//			return false;
+//		}
+//
+//		// found a different column, AND conditions cannot be preserved anymore
+//		conjunctions_to_push->preserve_and = false;
+//		return true;
+//	}
+//
+//	auto &last_conjunction = conjunctions_to_push->conjunctions.back();
+//	if (cur_conjunction->GetExpressionType() == last_conjunction->GetExpressionType()) {
+//		last_conjunction->children.emplace_back(comparison_expr->Copy());
+//	} else {
+//		auto new_conjunction = make_unique<BoundConjunctionExpression>(cur_conjunction->GetExpressionType());
+//		new_conjunction->children.emplace_back(comparison_expr->Copy());
+//		conjunctions_to_push->conjunctions.emplace_back(move(new_conjunction));
+//	}
+//	return true;
+//}
+//
+// void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids) {
+//	for (const auto colref : vec_colref_insertion_order) {
+//		auto column_index = column_ids[colref->binding.column_index];
+//		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+//			break;
+//		}
+//
+//		for (const auto &conjunctions_to_push : map_col_conjunctions[colref]) {
+//			// root OR filter to push into the TableFilter
+//			auto root_or_filter = make_unique<ConjunctionOrFilter>();
+//			// variable to hold the last conjuntion filter pointer
+//			// the next filter will be added into it, i.e., we create a chain of conjunction filters
+//			ConjunctionFilter *last_conj_filter = root_or_filter.get();
+//
+//			for (auto &conjunction : conjunctions_to_push->conjunctions) {
+//				if (conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND &&
+//				    conjunctions_to_push->preserve_and) {
+//					GenerateConjunctionFilter<ConjunctionAndFilter>(conjunction.get(), last_conj_filter);
+//				} else {
+//					GenerateConjunctionFilter<ConjunctionOrFilter>(conjunction.get(), last_conj_filter);
+//				}
+//			}
+//			table_filter.PushFilter(column_index, move(root_or_filter));
+//		}
+//	}
+//	map_col_conjunctions.clear();
+//	vec_colref_insertion_order.clear();
+//}
 
 } // namespace duckdb

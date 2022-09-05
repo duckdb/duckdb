@@ -105,6 +105,24 @@ SELECT strftime('2019-01-23'::DATE, 42);
 ----
 42
 
+#
+# Infinities
+#
+
+foreach datatype DATE TIMESTAMP
+
+foreach special infinity -infinity
+
+# PG to_char returns NULL here
+query I
+SELECT strftime('${special}'::${datatype}, '%Y-%m-%d');
+----
+NULL
+
+endloop
+
+endloop
+
 # non-constant format not supported
 statement error
 SELECT strftime(d, d::VARCHAR) FROM dates ORDER BY d;
@@ -135,3 +153,4 @@ SELECT strptime('1000', '%g');
 # this won't work without explicit casts
 statement error
 SELECT strftime('%Y', '1992-01-01');
+

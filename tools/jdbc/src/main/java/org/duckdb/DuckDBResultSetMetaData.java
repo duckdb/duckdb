@@ -109,7 +109,10 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.TIME;
 		case DATE:
 			return Types.DATE;
+		case TIMESTAMP_S:
+		case TIMESTAMP_MS:
 		case TIMESTAMP:
+		case TIMESTAMP_NS:
 			return Types.TIMESTAMP;
 		case TIMESTAMP_WITH_TIME_ZONE:
 			return Types.TIME_WITH_TIMEZONE;
@@ -213,15 +216,27 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	}
 
 	public int getColumnDisplaySize(int column) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return 0; // most systems will fall back to getPrecision
 	}
 
 	public int getPrecision(int column) throws SQLException {
-		return 0;
+		DuckDBColumnTypeMetaData typeMetaData = typeMetadataForColumn(column);
+
+		if (typeMetaData == null) {
+			return 0;
+		}
+
+		return typeMetaData.width;
 	}
 
 	public int getScale(int column) throws SQLException {
-		return 0;
+		DuckDBColumnTypeMetaData typeMetaData = typeMetadataForColumn(column);
+
+		if (typeMetaData == null) {
+			return 0;
+		}
+
+		return typeMetaData.scale;
 	}
 
 	public String getTableName(int column) throws SQLException {
@@ -238,5 +253,12 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
 	public boolean isWrapperFor(Class<?> iface) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
+	}
+
+	private DuckDBColumnTypeMetaData typeMetadataForColumn(int columnIndex) throws SQLException {
+		if (columnIndex > column_count) {
+			throw new SQLException("Column index out of bounds");
+		}
+		return column_types_meta[columnIndex - 1];
 	}
 }

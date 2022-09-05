@@ -20,6 +20,7 @@ public:
 	SQLRETURN SetValueType(SQLSMALLINT value_type);
 	SQLRETURN SetSqlDescType(SQLSMALLINT type);
 	SQLRETURN SetSqlDataType(SQLSMALLINT type);
+	void SetDescUnsignedField(const duckdb::LogicalType &type);
 
 public:
 	SQLINTEGER sql_desc_auto_unique_value;

@@ -2,6 +2,8 @@
 # description: Test setting of the temporary directory
 # group: [storage]
 
+require skip_reload
+
 # set temporary directory to an empty directory
 statement ok
 PRAGMA temp_directory=''

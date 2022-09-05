@@ -2,6 +2,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
@@ -9,9 +10,14 @@
 
 #include <algorithm>
 #include <cstring>
-#include <queue>
 
 namespace duckdb {
+
+ChunkCollection::ChunkCollection(Allocator &allocator) : allocator(allocator), count(0) {
+}
+
+ChunkCollection::ChunkCollection(ClientContext &context) : ChunkCollection(Allocator::Get(context)) {
+}
 
 void ChunkCollection::Verify() {
 #ifdef DEBUG
@@ -97,7 +103,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		idx_t added_data = MinValue<idx_t>(remaining_data, STANDARD_VECTOR_SIZE - last_chunk.size());
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
-			new_chunk.Normalify();
+			new_chunk.Flatten();
 			// have to be careful here: setting the cardinality without calling normalify can cause incorrect partial
 			// decompression
 			idx_t old_count = new_chunk.size();
@@ -114,7 +120,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 	if (remaining_data > 0) {
 		// create a new chunk and fill it with the remainder
 		auto chunk = make_unique<DataChunk>();
-		chunk->Initialize(types);
+		chunk->Initialize(allocator, types);
 		new_chunk.Copy(*chunk, offset);
 		chunks.push_back(move(chunk));
 	}
@@ -420,7 +426,12 @@ void ChunkCollection::CopyCell(idx_t column, idx_t index, Vector &target, idx_t 
 	VectorOperations::Copy(source, target, source_offset + 1, source_offset, target_offset);
 }
 
-void ChunkCollection::Print() {
+string ChunkCollection::ToString() const {
+	return chunks.empty() ? "ChunkCollection [ 0 ]"
+	                      : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
+}
+
+void ChunkCollection::Print() const {
 	Printer::Print(ToString());
 }
 
@@ -431,14 +442,45 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 	if (ColumnCount() != other.ColumnCount()) {
 		return false;
 	}
-	if (types != other.types) {
-		return false;
-	}
-	// if count is equal amount of chunks should be equal
+	// first try to compare the results as-is
+	bool compare_equals = true;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 			auto lvalue = GetValue(col_idx, row_idx);
 			auto rvalue = other.GetValue(col_idx, row_idx);
+			if (!Value::ValuesAreEqual(lvalue, rvalue)) {
+				compare_equals = false;
+				break;
+			}
+		}
+		if (!compare_equals) {
+			break;
+		}
+	}
+	if (compare_equals) {
+		return true;
+	}
+	for (auto &type : types) {
+		// sort not supported
+		if (type.InternalType() == PhysicalType::LIST || type.InternalType() == PhysicalType::STRUCT) {
+			return false;
+		}
+	}
+	// if the results are not equal,
+	// sort both chunk collections to ensure the comparison is not order insensitive
+	vector<OrderType> desc(ColumnCount(), OrderType::DESCENDING);
+	vector<OrderByNullType> null_order(ColumnCount(), OrderByNullType::NULLS_FIRST);
+	auto this_order = unique_ptr<idx_t[]>(new idx_t[count]);
+	auto other_order = unique_ptr<idx_t[]>(new idx_t[count]);
+	Sort(desc, null_order, this_order.get());
+	other.Sort(desc, null_order, other_order.get());
+
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		auto lrow = this_order[row_idx];
+		auto rrow = other_order[row_idx];
+		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
+			auto lvalue = GetValue(col_idx, lrow);
+			auto rvalue = other.GetValue(col_idx, rrow);
 			if (!Value::ValuesAreEqual(lvalue, rvalue)) {
 				return false;
 			}

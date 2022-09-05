@@ -22,11 +22,11 @@ class FieldReader;
 // Constraint Types
 //===--------------------------------------------------------------------===//
 enum class ConstraintType : uint8_t {
-	INVALID = 0,    // invalid constraint type
-	NOT_NULL = 1,   // NOT NULL constraint
-	CHECK = 2,      // CHECK constraint
-	UNIQUE = 3,     // UNIQUE constraint
-	FOREIGN_KEY = 4 // FOREIGN KEY constraint
+	INVALID = 0,     // invalid constraint type
+	NOT_NULL = 1,    // NOT NULL constraint
+	CHECK = 2,       // CHECK constraint
+	UNIQUE = 3,      // UNIQUE constraint
+	FOREIGN_KEY = 4, // FOREIGN KEY constraint
 };
 
 enum class ForeignKeyType : uint8_t {
@@ -42,7 +42,7 @@ struct ForeignKeyInfo {
 	//! key table
 	string table;
 	//! The set of main key table's column's index
-	vector<idx_t> pk_keys;
+	vector<storage_t> pk_keys;
 	//! The set of foreign key table's column's index
 	vector<idx_t> fk_keys;
 };

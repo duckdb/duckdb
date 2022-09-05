@@ -1,0 +1,86 @@
+# name: test/sql/generated_columns/virtual/referencing_gencols.test
+# description: Test referencing generated columns within generated column expressions
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold),
+	profit_total AS (total_profit * 5)
+);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+INSERT INTO unit VALUES (4,5);
+
+query IIII
+SELECT * FROM unit;
+----
+5	4	20	100
+4	5	20	100
+
+# ON CREATE
+
+#Circular dependency
+statement error
+CREATE TABLE tbl2 (
+	circular INTEGER AS (dependency),
+	dependency INTEGER AS (circular)
+);
+
+# Type is resolved, regardless of order
+statement ok
+CREATE TABLE tbl2 (
+	price INTEGER,
+	circular AS (dependency * price),
+	dependency AS (price),
+);
+
+#Same, but with a provided type
+statement ok
+CREATE TABLE tbl3 (
+	dependency INTEGER AS (price),
+	price INTEGER,
+	circular AS (dependency),
+);
+
+#Example with 'correct' order
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	dependency INTEGER AS (price),
+	circular AS (dependency * price),
+);
+
+statement ok
+CREATE TABLE tbl4 (
+	price INTEGER,
+	dependency AS (price),
+	depth1 AS (dependency),
+	depth2 AS (price * dependency),
+	depth3 AS (depth1 * depth2 * dependency),
+	depth4 aS ((dependency * depth3) + depth1),
+	depth5 AS (depth4 - (depth3 + depth2) + (dependency * depth1))
+);
+
+statement ok
+INSERT INTO tbl4 VALUES (5);
+
+query IIIIIII
+SELECT * FROM tbl4;
+----
+5	5	5	25	625	3130	2505
+
+statement ok
+INSERT INTO tbl VALUES (5);
+
+query III
+SELECT * FROM tbl;
+----
+5	5	25

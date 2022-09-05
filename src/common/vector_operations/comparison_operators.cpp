@@ -137,17 +137,15 @@ inline idx_t ComparisonSelector::Select<duckdb::LessThanEquals>(Vector &left, Ve
 	return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
 }
 
-static idx_t ComparesNotNull(ValidityMask &vleft, ValidityMask &vright, ValidityMask &vresult, idx_t count,
-                             SelectionVector &not_null) {
-	idx_t valid = 0;
+static void ComparesNotNull(UnifiedVectorFormat &ldata, UnifiedVectorFormat &rdata, ValidityMask &vresult,
+                            idx_t count) {
 	for (idx_t i = 0; i < count; ++i) {
-		if (vleft.RowIsValid(i) && vright.RowIsValid(i)) {
-			not_null.set_index(valid++, i);
-		} else {
+		auto lidx = ldata.sel->get_index(i);
+		auto ridx = rdata.sel->get_index(i);
+		if (!ldata.validity.RowIsValid(lidx) || !rdata.validity.RowIsValid(ridx)) {
 			vresult.SetInvalid(i);
 		}
 	}
-	return valid;
 }
 
 template <typename OP>
@@ -174,23 +172,17 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<bool>(result);
-	auto &validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::Validity(result);
 
-	VectorData leftv, rightv;
-	left.Orrify(count, leftv);
-	right.Orrify(count, rightv);
-
+	UnifiedVectorFormat leftv, rightv;
+	left.ToUnifiedFormat(count, leftv);
+	right.ToUnifiedFormat(count, rightv);
+	if (!leftv.validity.AllValid() || !rightv.validity.AllValid()) {
+		ComparesNotNull(leftv, rightv, result_validity, count);
+	}
 	SelectionVector true_sel(count);
 	SelectionVector false_sel(count);
-
-	idx_t match_count = 0;
-	if (leftv.validity.AllValid() && rightv.validity.AllValid()) {
-		match_count = ComparisonSelector::Select<OP>(left, right, nullptr, count, &true_sel, &false_sel);
-	} else {
-		SelectionVector not_null(count);
-		count = ComparesNotNull(leftv.validity, rightv.validity, validity, count, not_null);
-		match_count = ComparisonSelector::Select<OP>(left, right, &not_null, count, &true_sel, &false_sel);
-	}
+	idx_t match_count = ComparisonSelector::Select<OP>(left, right, nullptr, count, &true_sel, &false_sel);
 
 	for (idx_t i = 0; i < match_count; ++i) {
 		const auto idx = true_sel.get_index(i);

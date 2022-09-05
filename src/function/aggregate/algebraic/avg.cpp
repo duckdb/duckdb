@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -46,9 +47,14 @@ struct AverageDecimalBindData : public FunctionData {
 	double scale;
 
 public:
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<AverageDecimalBindData>(scale);
 	};
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (AverageDecimalBindData &)other_p;
+		return scale == other.scale;
+	}
 };
 
 struct AverageSetOperation {
@@ -57,7 +63,7 @@ struct AverageSetOperation {
 		state->Initialize();
 	}
 	template <class STATE>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		target->Combine(source);
 	}
 	template <class STATE>
@@ -78,12 +84,12 @@ static T GetAverageDivident(uint64_t count, FunctionData *bind_data) {
 
 struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, ValidityMask &mask,
-	                     idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
+	                     ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
-			double divident = GetAverageDivident<double>(state->count, bind_data);
+			double divident = GetAverageDivident<double>(state->count, aggr_input_data.bind_data);
 			target[idx] = double(state->value) / divident;
 		}
 	}
@@ -91,12 +97,12 @@ struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 
 struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, ValidityMask &mask,
-	                     idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
+	                     ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
-			long double divident = GetAverageDivident<long double>(state->count, bind_data);
+			long double divident = GetAverageDivident<long double>(state->count, aggr_input_data.bind_data);
 			target[idx] = Hugeint::Cast<long double>(state->value) / divident;
 		}
 	}
@@ -104,12 +110,12 @@ struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperat
 
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, ValidityMask &mask,
-	                     idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
+	                     ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
-			long double divident = GetAverageDivident<long double>(state->count, bind_data);
+			long double divident = GetAverageDivident<long double>(state->count, aggr_input_data.bind_data);
 			target[idx] = Hugeint::Cast<long double>(state->value) / divident;
 		}
 	}
@@ -117,7 +123,7 @@ struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 
 struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
@@ -131,7 +137,7 @@ struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 
 struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, KahanAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
@@ -145,24 +151,22 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 
 AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
-	case PhysicalType::INT16:
+	case PhysicalType::INT16: {
 		return AggregateFunction::UnaryAggregate<AvgState<int64_t>, int16_t, double, IntegerAverageOperation>(
-		    LogicalType::SMALLINT, LogicalType::DOUBLE, true);
+		    LogicalType::SMALLINT, LogicalType::DOUBLE);
+	}
 	case PhysicalType::INT32: {
-		auto function =
-		    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
-		        LogicalType::INTEGER, LogicalType::DOUBLE, true);
-		return function;
+		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
+		    LogicalType::INTEGER, LogicalType::DOUBLE);
 	}
 	case PhysicalType::INT64: {
-		auto function =
-		    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
-		        LogicalType::BIGINT, LogicalType::DOUBLE, true);
-		return function;
+		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
+		    LogicalType::BIGINT, LogicalType::DOUBLE);
 	}
-	case PhysicalType::INT128:
+	case PhysicalType::INT128: {
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
-		    LogicalType::HUGEINT, LogicalType::DOUBLE, true);
+		    LogicalType::HUGEINT, LogicalType::DOUBLE);
+	}
 	default:
 		throw InternalException("Unimplemented average aggregate");
 	}
@@ -181,19 +185,24 @@ unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunctio
 
 void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet avg("avg");
+
 	avg.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, true, nullptr, BindDecimalAvg));
+	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                                  BindDecimalAvg));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT16));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, true));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	set.AddFunction(avg);
+
+	avg.name = "mean";
 	set.AddFunction(avg);
 
 	AggregateFunctionSet favg("favg");
 	favg.AddFunction(AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, true));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(favg);
 }
 

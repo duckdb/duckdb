@@ -18,7 +18,7 @@ TEST_CASE("Test table info api", "[api]") {
 	REQUIRE(info.get() != nullptr);
 	REQUIRE(info->table == "test");
 	REQUIRE(info->columns.size() == 1);
-	REQUIRE(info->columns[0].name == "i");
+	REQUIRE(info->columns[0].Name() == "i");
 
 	// table info is transaction sensitive
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));

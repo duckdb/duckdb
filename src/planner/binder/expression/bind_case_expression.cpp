@@ -23,7 +23,6 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		auto &then_expr = (BoundExpression &)*check.then_expr;
 		return_type = LogicalType::MaxLogicalType(return_type, then_expr.expr->return_type);
 	}
-	ExpressionBinder::ResolveParameterType(return_type);
 
 	// bind all the individual components of the CASE statement
 	auto result = make_unique<BoundCaseExpression>(return_type);

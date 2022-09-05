@@ -18,8 +18,8 @@ void IsNullLoop(Vector &input, Vector &result, idx_t count) {
 		auto result_data = ConstantVector::GetData<bool>(result);
 		*result_data = INVERSE ? !ConstantVector::IsNull(input) : ConstantVector::IsNull(input);
 	} else {
-		VectorData data;
-		input.Orrify(count, data);
+		UnifiedVectorFormat data;
+		input.ToUnifiedFormat(count, data);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<bool>(result);
@@ -45,8 +45,8 @@ bool VectorOperations::HasNotNull(Vector &input, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return !ConstantVector::IsNull(input);
 	} else {
-		VectorData data;
-		input.Orrify(count, data);
+		UnifiedVectorFormat data;
+		input.ToUnifiedFormat(count, data);
 
 		if (data.validity.AllValid()) {
 			return true;
@@ -68,8 +68,8 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return ConstantVector::IsNull(input);
 	} else {
-		VectorData data;
-		input.Orrify(count, data);
+		UnifiedVectorFormat data;
+		input.ToUnifiedFormat(count, data);
 
 		if (data.validity.AllValid()) {
 			return false;
@@ -87,8 +87,8 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 idx_t VectorOperations::CountNotNull(Vector &input, const idx_t count) {
 	idx_t valid = 0;
 
-	VectorData vdata;
-	input.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
 	if (vdata.validity.AllValid()) {
 		return count;
 	}

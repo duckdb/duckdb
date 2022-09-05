@@ -3,6 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 #include "duckdb/common/atomic.hpp"
 
@@ -13,19 +14,19 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class DeleteGlobalState : public GlobalSinkState {
 public:
-	DeleteGlobalState() : deleted_count(0), returned_chunk_count(0) {
+	explicit DeleteGlobalState(ClientContext &context, const vector<LogicalType> &return_types)
+	    : deleted_count(0), return_collection(context, return_types) {
 	}
 
 	mutex delete_lock;
 	idx_t deleted_count;
-	ChunkCollection return_chunk_collection;
-	idx_t returned_chunk_count;
+	ColumnDataCollection return_collection;
 };
 
 class DeleteLocalState : public LocalSinkState {
 public:
-	explicit DeleteLocalState(const vector<LogicalType> &table_types) {
-		delete_chunk.Initialize(table_types);
+	DeleteLocalState(Allocator &allocator, const vector<LogicalType> &table_types) {
+		delete_chunk.Initialize(allocator, table_types);
 	}
 	DataChunk delete_chunk;
 };
@@ -47,9 +48,9 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 
 	lock_guard<mutex> delete_guard(gstate.delete_lock);
 	if (return_chunk) {
-		row_identifiers.Normalify(input.size());
+		row_identifiers.Flatten(input.size());
 		table.Fetch(transaction, ustate.delete_chunk, column_ids, row_identifiers, input.size(), cfs);
-		gstate.return_chunk_collection.Append(ustate.delete_chunk);
+		gstate.return_collection.Append(ustate.delete_chunk);
 	}
 	gstate.deleted_count += table.Delete(tableref, context.client, row_identifiers, input.size());
 
@@ -57,11 +58,11 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<DeleteGlobalState>();
+	return make_unique<DeleteGlobalState>(context, GetTypes());
 }
 
 unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<DeleteLocalState>(table.GetTypes());
+	return make_unique<DeleteLocalState>(Allocator::Get(context.client), table.GetTypes());
 }
 
 //===--------------------------------------------------------------------===//
@@ -69,14 +70,20 @@ unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &c
 //===--------------------------------------------------------------------===//
 class DeleteSourceState : public GlobalSourceState {
 public:
-	DeleteSourceState() : finished(false) {
+	explicit DeleteSourceState(const PhysicalDelete &op) : finished(false) {
+		if (op.return_chunk) {
+			D_ASSERT(op.sink_state);
+			auto &g = (DeleteGlobalState &)*op.sink_state;
+			g.return_collection.InitializeScan(scan_state);
+		}
 	}
 
+	ColumnDataScanState scan_state;
 	bool finished;
 };
 
 unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<DeleteSourceState>();
+	return make_unique<DeleteSourceState>(*this);
 }
 
 void PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
@@ -91,18 +98,10 @@ void PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(g.deleted_count));
 		state.finished = true;
-	}
-
-	idx_t chunk_return = g.returned_chunk_count;
-	if (chunk_return >= g.return_chunk_collection.Chunks().size()) {
 		return;
 	}
-	chunk.Reference(g.return_chunk_collection.GetChunk(chunk_return));
-	chunk.SetCardinality((g.return_chunk_collection.GetChunk(chunk_return)).size());
-	g.returned_chunk_count += 1;
-	if (g.returned_chunk_count >= g.return_chunk_collection.Chunks().size()) {
-		state.finished = true;
-	}
+
+	g.return_collection.Scan(state.scan_state, chunk);
 }
 
 } // namespace duckdb

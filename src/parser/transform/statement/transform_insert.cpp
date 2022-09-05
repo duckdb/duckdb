@@ -28,8 +28,14 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	if (stmt->onConflictClause && stmt->onConflictClause->action != duckdb_libpgquery::PG_ONCONFLICT_NONE) {
 		throw ParserException("ON CONFLICT IGNORE/UPDATE clauses are not supported");
 	}
+	if (!stmt->selectStmt) {
+		throw ParserException("DEFAULT VALUES clause is not supported!");
+	}
 
 	auto result = make_unique<InsertStatement>();
+	if (stmt->withClause) {
+		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
+	}
 
 	// first check if there are any columns specified
 	if (stmt->cols) {
