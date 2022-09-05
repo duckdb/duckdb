@@ -11,10 +11,9 @@ using namespace duckdb;
 using namespace std;
 
 string get_file_name(FileSystem &fs) {
-	auto sep = fs.PathSeparator();
+	auto file_name = string(__FILE_NAME__);
 	auto path = string(__FILE__);
-	auto last_sep = path.find_last_of(sep);
-	return path.substr(0, last_sep) + sep + "serialized_tpch_queries.binary";
+	return path.replace(path.rfind(file_name), file_name.length(), "serialized_tpch_queries.binary");
 }
 
 TEST_CASE("Generate serialized TPCH file", "[.]") {
