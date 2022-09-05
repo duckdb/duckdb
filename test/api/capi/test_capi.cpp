@@ -8,6 +8,13 @@ static void require_hugeint_eq(duckdb_hugeint left, duckdb_hugeint right) {
 	REQUIRE(left.upper == right.upper);
 }
 
+static void require_hugeint_eq(duckdb_hugeint left, uint64_t lower, int64_t upper) {
+	duckdb_hugeint temp;
+	temp.lower = lower;
+	temp.upper = upper;
+	require_hugeint_eq(left, temp);
+}
+
 TEST_CASE("Basic test of C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
@@ -277,7 +284,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(result->Fetch<uint32_t>(0, 0) == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 1);
 	REQUIRE(result->Fetch<uint64_t>(0, 0) == 1);
-	require_hugeint_eq(result->Fetch<duckdb_hugeint>(0, 0), {.lower = 1, .upper = 0});
+	require_hugeint_eq(result->Fetch<duckdb_hugeint>(0, 0), 1, 0);
 	REQUIRE(result->Fetch<float>(0, 0) == 1.2f);
 	REQUIRE(result->Fetch<double>(0, 0) == 1.2);
 	REQUIRE(result->Fetch<string>(0, 0) == "1.2");
