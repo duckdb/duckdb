@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 string get_file_name(FileSystem &fs) {
-	auto file_name = string(__FILE_NAME__);
+	auto file_name = string("test_plan_serialization_bwc.cpp");
 	auto path = string(__FILE__);
 	return path.replace(path.rfind(file_name), file_name.length(), "serialized_tpch_queries.binary");
 }
