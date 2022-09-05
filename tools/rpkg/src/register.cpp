@@ -221,7 +221,6 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
 			children.push_back(
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
-			children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(100000)));
 			table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
 			return table_function;
 		}
