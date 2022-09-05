@@ -171,7 +171,7 @@ INSERT INTO table5 VALUES (1, 0, 0), (2, 0, 0), (3, 0, 1), (4, 0, 1), (5, 0, 2),
 query III
 UPDATE table4
 SET b4 = temp_table.sum_a
-FROM (SELECT sum(a5) as sum_a, c5 FROM table5 GROUP BY c5) as temp_table
+FROM (SELECT sum(a5) as sum_a, c5 FROM table5 GROUP BY c5 ORDER BY sum_a) as temp_table
 WHERE table4.c4 = temp_table.c5
 RETURNING *;
 ----

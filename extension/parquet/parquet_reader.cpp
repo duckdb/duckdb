@@ -448,7 +448,7 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 	// now for each of the expected names, look it up in the name map and fill the column_id_map
 	D_ASSERT(column_id_map.empty());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
+		if (IsRowIdColumnId(column_ids[i])) {
 			continue;
 		}
 		auto &expected_name = expected_names[column_ids[i]];
@@ -892,7 +892,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		uint64_t to_scan_compressed_bytes = 0;
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			// this is a special case where we are not interested in the actual contents of the file
-			if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
+			if (IsRowIdColumnId(state.column_ids[out_col_idx])) {
 				continue;
 			}
 
@@ -933,7 +933,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				// Prefetch column-wise
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 
-					if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
+					if (IsRowIdColumnId(state.column_ids[out_col_idx])) {
 						continue;
 					}
 
@@ -1030,7 +1030,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			auto file_col_idx = state.column_ids[out_col_idx];
 
-			if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+			if (IsRowIdColumnId(file_col_idx)) {
 				Value constant_42 = Value::BIGINT(42);
 				result.data[out_col_idx].Reference(constant_42);
 				continue;

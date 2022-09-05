@@ -1,11 +1,11 @@
 #ifndef JEMALLOC_INTERNAL_MALLOC_IO_H
 #define JEMALLOC_INTERNAL_MALLOC_IO_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
+
 #include "jemalloc/internal/jemalloc_internal_macros.h"
 #include "jemalloc/internal/jemalloc_internal_decls.h"
 #include "jemalloc/internal/jemalloc_internal_types.h"
-
-namespace duckdb_jemalloc {
 
 #ifdef _WIN32
 #  ifdef _WIN64
@@ -36,6 +36,8 @@ namespace duckdb_jemalloc {
 #  define FMTuPTR PRIuPTR
 #  define FMTxPTR PRIxPTR
 #endif
+
+namespace duckdb_jemalloc {
 
 /* Size of stack-allocated buffer passed to buferror(). */
 #define BUFERROR_BUF		64

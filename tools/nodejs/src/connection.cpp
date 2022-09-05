@@ -31,8 +31,29 @@ struct ConnectTask : public Task {
 
 	void DoWork() override {
 		auto &connection = Get<Connection>();
+		if (!connection.database_ref || !connection.database_ref->database) {
+			return;
+		}
 		connection.connection = duckdb::make_unique<duckdb::Connection>(*connection.database_ref->database);
+		success = true;
 	}
+	void Callback() override {
+		auto &connection = Get<Connection>();
+		Napi::Env env = connection.Env();
+
+		std::vector<napi_value> args;
+		if (!success) {
+			args.push_back(Utils::CreateError(env, "Invalid database object"));
+		} else {
+			args.push_back(env.Null());
+		}
+
+		Napi::HandleScope scope(env);
+
+		callback.Value().MakeCallback(connection.Value(), args);
+	}
+
+	bool success = false;
 };
 
 Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connection>(info) {

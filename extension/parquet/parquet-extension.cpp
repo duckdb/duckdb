@@ -182,7 +182,7 @@ public:
 	                                                   column_t column_index) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 
-		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+		if (IsRowIdColumnId(column_index)) {
 			return nullptr;
 		}
 
@@ -638,6 +638,11 @@ void ParquetExtension::Load(DuckDB &db) {
 	con.BeginTransaction();
 	auto &context = *con.context;
 	auto &catalog = Catalog::GetCatalog(context);
+
+	if (catalog.GetEntry<TableFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "parquet_scan", true)) {
+		throw InvalidInputException("Parquet extension is either already loaded or built-in");
+	}
+
 	catalog.CreateCopyFunction(context, &info);
 	catalog.CreateTableFunction(context, &cinfo);
 	catalog.CreateTableFunction(context, &pq_scan);
@@ -656,6 +661,20 @@ std::string ParquetExtension::Name() {
 }
 
 } // namespace duckdb
+
+#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+extern "C" {
+
+DUCKDB_EXTENSION_API void parquet_init(duckdb::DatabaseInstance &db) { // NOLINT
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::ParquetExtension>();
+}
+
+DUCKDB_EXTENSION_API const char *parquet_version() { // NOLINT
+	return duckdb::DuckDB::LibraryVersion();
+}
+}
+#endif
 
 #ifndef DUCKDB_EXTENSION_MAIN
 #error DUCKDB_EXTENSION_MAIN not defined

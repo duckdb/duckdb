@@ -266,7 +266,7 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 		}
 
 		auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
-		AggregateInputData aggr_input_data(aggregate.bind_info.get());
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
 		aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
 		                                 sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
 	}
@@ -320,7 +320,7 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 		Vector source_state(Value::POINTER((uintptr_t)source.state.aggregates[aggr_idx].get()));
 		Vector dest_state(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
 
-		AggregateInputData aggr_input_data(aggregate.bind_info.get());
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
 		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
 #ifdef DEBUG
 		gstate.state.counts[aggr_idx] += source.state.counts[aggr_idx];
@@ -419,7 +419,7 @@ public:
 
 				auto start_of_input = payload_cnt ? &payload_chunk.data[payload_idx] : nullptr;
 				//! Update the aggregate state
-				AggregateInputData aggr_input_data(aggregate.bind_info.get());
+				AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
 				aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
 				                                 gstate.state.aggregates[i].get(), payload_chunk.size());
 			}
@@ -585,7 +585,7 @@ void PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &c
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
 		Vector state_vector(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
-		AggregateInputData aggr_input_data(aggregate.bind_info.get());
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
 		aggregate.function.finalize(state_vector, aggr_input_data, chunk.data[aggr_idx], 1, 0);
 	}
 	VerifyNullHandling(chunk, gstate.state, aggregates);

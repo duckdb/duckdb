@@ -1,0 +1,27 @@
+# name: test/sql/alter/rename_table/test_rename_bug4455_schema.test
+# description: Test ALTER TABLE RENAME COLUMN
+# group: [rename_table]
+
+statement ok
+create schema public;
+
+statement ok
+set schema=public;
+
+statement ok
+create table a1 (c int);
+
+statement ok
+alter table public.a1 rename to a2;
+
+statement ok
+alter table a2 rename to a3;
+
+statement ok
+create view v1 as select 42;
+
+statement ok
+alter view public.v1 rename to v2;
+
+statement ok
+alter view v2 rename to v3;

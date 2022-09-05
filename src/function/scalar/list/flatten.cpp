@@ -37,6 +37,9 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 			result_entries[i].offset = 0;
 			result_entries[i].length = 0;
 		}
+		if (args.AllConstant()) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 		return;
 	}
 
@@ -82,7 +85,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 		offset += length;
 	}
 
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }

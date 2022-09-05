@@ -140,6 +140,6 @@ public:
 };
 
 template <>
-string Deserializer::Read();
+DUCKDB_API string Deserializer::Read();
 
 } // namespace duckdb

@@ -36,10 +36,10 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
-	         py::arg("parameters") = py::list(), py::arg("multiple_parameter_sets") = false)
+	         py::arg("parameters") = py::none(), py::arg("multiple_parameter_sets") = false)
 	    .def("executemany", &DuckDBPyConnection::ExecuteMany,
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
-	         py::arg("query"), py::arg("parameters") = py::list())
+	         py::arg("query"), py::arg("parameters") = py::none())
 	    .def("close", &DuckDBPyConnection::Close, "Close the connection")
 	    .def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
 	    .def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
@@ -64,7 +64,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("table_name"), py::arg("df"))
 	    .def("register", &DuckDBPyConnection::RegisterPythonObject,
 	         "Register the passed Python Object value for querying with a view", py::arg("view_name"),
-	         py::arg("python_object"), py::arg("rows_per_thread") = 1000000)
+	         py::arg("python_object"))
 	    .def("unregister", &DuckDBPyConnection::UnregisterPythonObject, "Unregister the view name",
 	         py::arg("view_name"))
 	    .def("table", &DuckDBPyConnection::Table, "Create a relation object for the name'd table",
@@ -74,7 +74,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("values"))
 	    .def("table_function", &DuckDBPyConnection::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
-	         py::arg("parameters") = py::list())
+	         py::arg("parameters") = py::none())
 	    .def("from_query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
 	         py::arg("query"), py::arg("alias") = "query_relation")
 	    .def("query", &DuckDBPyConnection::RunQuery,
@@ -84,7 +84,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
-	         py::arg("arrow_object"), py::arg("rows_per_thread") = 1000000)
+	         py::arg("arrow_object"))
 	    .def("df", &DuckDBPyConnection::FromDF,
 	         "Create a relation object from the Data.Frame in df. This is an alias of from_df", py::arg("df"))
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
@@ -112,6 +112,9 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 }
 
 DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
+	if (params.is_none()) {
+		params = py::list();
+	}
 	Execute(query, std::move(params), true);
 	return this;
 }
@@ -130,6 +133,9 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
+	}
+	if (params.is_none()) {
+		params = py::list();
 	}
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
@@ -198,8 +204,7 @@ DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, DataFrame val
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
 
-DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object,
-                                                             const idx_t rows_per_tuple) {
+DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -223,15 +228,13 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		    make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr(), connection->context->config);
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
-
 		{
 			py::gil_scoped_release release;
 			temporary_views[name] =
 			    connection
 			        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
 			                                       Value::POINTER((uintptr_t)stream_factory_produce),
-			                                       Value::POINTER((uintptr_t)stream_factory_get_schema),
-			                                       Value::UBIGINT(rows_per_tuple)})
+			                                       Value::POINTER((uintptr_t)stream_factory_get_schema)})
 			        ->CreateView(name, true, true);
 		}
 		vector<shared_ptr<ExternalDependency>> dependencies;
@@ -283,6 +286,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
+	if (params.is_none()) {
+		params = py::list();
+	}
+	if (!py::hasattr(params, "__len__")) {
+		throw InvalidInputException("Type of object passed to parameter 'values' must be iterable");
+	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
 }
@@ -299,6 +308,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fname, py::object params) {
+	if (params.is_none()) {
+		params = py::list();
+	}
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -355,7 +367,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_object, const idx_t rows_per_tuple) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_object) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -373,10 +385,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 
 	auto rel = make_unique<DuckDBPyRelation>(
 	    connection
-	        ->TableFunction("arrow_scan",
-	                        {Value::POINTER((uintptr_t)stream_factory.get()),
-	                         Value::POINTER((uintptr_t)stream_factory_produce),
-	                         Value::POINTER((uintptr_t)stream_factory_get_schema), Value::UBIGINT(rows_per_tuple)})
+	        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+	                                       Value::POINTER((uintptr_t)stream_factory_produce),
+	                                       Value::POINTER((uintptr_t)stream_factory_get_schema)})
 	        ->Alias(name));
 	rel->rel->extra_dependencies =
 	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), arrow_object));
@@ -560,7 +571,7 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory.get())));
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
-		children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(1000000)));
+
 		table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
 		table_function->external_dependency =
 		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), entry));
@@ -600,14 +611,21 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           const py::dict &config_dict) {
+                                                           py::object config_options) {
 	auto res = make_shared<DuckDBPyConnection>();
 
 	DBConfig config;
 
+	if (config_options.is_none()) {
+		config_options = py::dict();
+	}
+	if (!py::isinstance<py::dict>(config_options)) {
+		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");
+	}
 	if (read_only) {
 		config.options.access_mode = AccessMode::READ_ONLY;
 	}
+	py::dict config_dict = config_options;
 	for (auto &kv : config_dict) {
 		string key = py::str(kv.first);
 		string val = py::str(kv.second);

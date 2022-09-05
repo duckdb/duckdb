@@ -1,5 +1,5 @@
-#include "jemalloc/internal/jemalloc_preamble.h"
-#include "jemalloc/internal/jemalloc_internal_includes.h"
+#ifndef JEMALLOC_INTERNAL_ASSERT_H
+#define JEMALLOC_INTERNAL_ASSERT_H
 
 #include "jemalloc/internal/malloc_io.h"
 #include "jemalloc/internal/util.h"
@@ -61,3 +61,5 @@ namespace duckdb_jemalloc {
 #endif
 
 } // namespace duckdb_jemalloc
+
+#endif /* JEMALLOC_INTERNAL_ASSERT_H */

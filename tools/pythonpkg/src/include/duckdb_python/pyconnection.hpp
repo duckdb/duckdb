@@ -60,8 +60,7 @@ public:
 
 	DuckDBPyConnection *Append(const string &name, DataFrame value);
 
-	DuckDBPyConnection *RegisterPythonObject(const string &name, py::object python_object,
-	                                         const idx_t rows_per_tuple = 100000);
+	DuckDBPyConnection *RegisterPythonObject(const string &name, py::object python_object);
 
 	void InstallExtension(const string &extension, bool force_install = false);
 
@@ -72,7 +71,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
-	unique_ptr<DuckDBPyRelation> Values(py::object params = py::list());
+	unique_ptr<DuckDBPyRelation> Values(py::object params = py::none());
 
 	unique_ptr<DuckDBPyRelation> View(const string &vname);
 
@@ -84,7 +83,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string);
 
-	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object, const idx_t rows_per_tuple = 1000000);
+	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
 	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
 
@@ -125,7 +124,7 @@ public:
 
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 

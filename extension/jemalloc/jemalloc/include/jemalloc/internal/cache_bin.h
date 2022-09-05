@@ -1,6 +1,7 @@
 #ifndef JEMALLOC_INTERNAL_CACHE_BIN_H
 #define JEMALLOC_INTERNAL_CACHE_BIN_H
 
+#include "jemalloc/internal/assert.h"
 #include "jemalloc/internal/ql.h"
 #include "jemalloc/internal/sz.h"
 

@@ -320,7 +320,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 #ifdef DEBUG
 	plan->Verify(*this);
 #endif
-	if (config.enable_optimizer) {
+	if (config.enable_optimizer && plan->RequireOptimizer()) {
 		profiler.StartPhase("optimizer");
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
@@ -743,9 +743,8 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 	if (statements.empty()) {
 		// no statements, return empty successful result
 		StatementProperties properties;
-		vector<LogicalType> types;
 		vector<string> names;
-		auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), move(types));
+		auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator());
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(names),
 		                                            move(collection), GetClientProperties());
 	}

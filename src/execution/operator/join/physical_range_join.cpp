@@ -266,9 +266,9 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 	}
 }
 
-void PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
-                                           const SelectionVector &result, const idx_t result_count,
-                                           const idx_t left_cols) {
+BufferHandle PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
+                                                   const SelectionVector &result, const idx_t result_count,
+                                                   const idx_t left_cols) {
 	// There should only be one sorted block if they have been sorted
 	D_ASSERT(state.sorted_blocks.size() == 1);
 	SBScanState read_state(state.buffer_manager, state);
@@ -278,6 +278,7 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &
 	read_state.SetIndices(block_idx, 0);
 	read_state.PinData(sorted_data);
 	const auto data_ptr = read_state.DataPtr(sorted_data);
+	data_ptr_t heap_ptr = nullptr;
 
 	// Set up a batch of pointers to scan data from
 	Vector addresses(LogicalType::POINTER, result_count);
@@ -303,19 +304,18 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &
 
 	// Unswizzle the offsets back to pointers (if needed)
 	if (!sorted_data.layout.AllConstant() && state.external) {
-		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle.Ptr(),
-		                                 addr_count);
-		sorted_data.data_blocks[read_state.block_idx]->block->SetSwizzling("PhysicalRangeJoin::SliceSortedPayload");
+		heap_ptr = read_state.payload_heap_handle.Ptr();
 	}
 
 	// Deserialize the payload data
 	auto sel = FlatVector::IncrementalSelectionVector();
-	for (idx_t col_idx = 0; col_idx < sorted_data.layout.ColumnCount(); col_idx++) {
-		const auto col_offset = sorted_data.layout.GetOffsets()[col_idx];
-		auto &col = payload.data[left_cols + col_idx];
-		RowOperations::Gather(addresses, *sel, col, *sel, addr_count, col_offset, col_idx);
+	for (idx_t col_no = 0; col_no < sorted_data.layout.ColumnCount(); col_no++) {
+		auto &col = payload.data[left_cols + col_no];
+		RowOperations::Gather(addresses, *sel, col, *sel, addr_count, sorted_data.layout, col_no, 0, heap_ptr);
 		col.Slice(gsel, result_count);
 	}
+
+	return move(read_state.payload_heap_handle);
 }
 
 idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,

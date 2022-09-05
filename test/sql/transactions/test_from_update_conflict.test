@@ -16,7 +16,7 @@ INSERT INTO src VALUES (3), (2), (1), (4)
 
 
 query IIII con1
-SELECT src.rowid sr, b, test.rowid tr, a FROM src, test WHERE src.b = test.a;
+SELECT src.rowid sr, b, test.rowid tr, a FROM src, test WHERE src.b = test.a ORDER BY a;
 ----
 2	1	2952	1
 1	2	2953	2

@@ -2,7 +2,7 @@
 #define JEMALLOC_INTERNAL_SC_H
 
 #include "jemalloc/internal/jemalloc_internal_types.h"
-#include "jemalloc_internal_defs.h"
+#include "jemalloc/internal/jemalloc_internal_defs.h"
 
 /*
  * Size class computations:
