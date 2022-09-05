@@ -27,6 +27,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
+#include "extension_functions.hpp"
 
 namespace duckdb {
 
@@ -243,7 +244,14 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		}
 	});
 	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
-
+	if (extension_functions.find(entry_name) != extension_functions.end()) {
+		auto extension_name = extension_functions.find(entry_name)->second;
+		string exception_message = "Function with name " + entry_name +
+		                           " is not on the catalog, but it exists on the " + extension_name + "  extension!\n";
+		exception_message +=
+		    "To Install and Load the extension, run: INSTALL " + extension_name + "; LOAD " + extension_name + ";";
+		return CatalogException(exception_message);
+	}
 	string did_you_mean;
 	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
 		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName() + "\"?";

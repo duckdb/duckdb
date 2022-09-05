@@ -1,0 +1,13 @@
+name
+excel
+fts
+httpfs
+icu
+json
+parquet
+tpcds
+tpch
+visualizer
+sqlite_scanner
+postgres_scanner
+substrait
