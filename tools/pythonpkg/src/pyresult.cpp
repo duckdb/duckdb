@@ -27,7 +27,8 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetchall", &DuckDBPyResult::Fetchall, "Fetch all rows as a list of tuples")
 	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy,
 	         "Fetch all rows as a Python dict mapping each column to one numpy arrays")
-	    .def("df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame",
+	         py::arg("date_as_datetime") = false)
 	    .def("fetchdf", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame",
 	         py::arg("date_as_datetime") = false)
 	    .def("fetch_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame",
