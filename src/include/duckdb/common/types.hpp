@@ -92,6 +92,8 @@ struct dtime_t { // NOLINT
 	static inline dtime_t allballs() {return dtime_t(0); } // NOLINT
 };
 
+struct dtime_tz_t : public dtime_t {};
+
 //! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
 struct timestamp_t { // NOLINT
 	int64_t value;
@@ -124,6 +126,11 @@ struct timestamp_t { // NOLINT
 	static inline timestamp_t ninfinity() {return timestamp_t(-std::numeric_limits<int64_t>::max()); } // NOLINT
 	static inline timestamp_t epoch() {return timestamp_t(0); } // NOLINT
 };
+
+struct timestamp_tz_t : public timestamp_t {};
+struct timestamp_ns_t : public timestamp_t {};
+struct timestamp_ms_t : public timestamp_t {};
+struct timestamp_sec_t : public timestamp_t {};
 
 struct interval_t {
 	int32_t months;
@@ -666,6 +673,7 @@ struct aggregate_state_t {
 
 namespace std {
 
+	//! Date
 	template <>
 	struct hash<duckdb::date_t>
 	{
@@ -675,6 +683,8 @@ namespace std {
 			return hash<int32_t>()((int32_t)k);
 		}
 	};
+
+	//! Time
 	template <>
 	struct hash<duckdb::dtime_t>
 	{
@@ -685,9 +695,56 @@ namespace std {
 		}
 	};
 	template <>
+	struct hash<duckdb::dtime_tz_t>
+	{
+		std::size_t operator()(const duckdb::dtime_tz_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+
+	//! Timestamp
+	template <>
 	struct hash<duckdb::timestamp_t>
 	{
 		std::size_t operator()(const duckdb::timestamp_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_ms_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_ms_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_ns_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_ns_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_sec_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_sec_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_tz_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_tz_t& k) const
 		{
 			using std::hash;
 			return hash<int64_t>()((int64_t)k);

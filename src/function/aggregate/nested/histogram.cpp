@@ -144,11 +144,6 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 
 		for (auto &entry : *state->hist) {
 			Value bucket_value = OP::template HistogramFinalize<T>(entry.first);
-			if (LogicalType::TypeIsTimestamp(bucket_value.type()) &&
-			    LogicalType::TypeIsTimestamp(bucket_list->GetType())) {
-				//! All timestamps use `timestamp_t` so CreateValue can't create a Value of the exact matching type
-				bucket_value.type() = bucket_list->GetType();
-			}
 			ListVector::PushBack(*bucket_list, bucket_value);
 			auto count_value = Value::CreateValue(entry.second);
 			ListVector::PushBack(*count_list, count_value);
@@ -230,17 +225,17 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	case LogicalType::TIMESTAMP:
 		return GetMapType<HistogramFunctor, timestamp_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_TZ:
-		return GetMapType<HistogramFunctor, timestamp_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, timestamp_tz_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_S:
-		return GetMapType<HistogramFunctor, timestamp_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, timestamp_sec_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_MS:
-		return GetMapType<HistogramFunctor, timestamp_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, timestamp_ms_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_NS:
-		return GetMapType<HistogramFunctor, timestamp_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, timestamp_ns_t, IS_ORDERED>(type);
 	case LogicalType::TIME:
 		return GetMapType<HistogramFunctor, dtime_t, IS_ORDERED>(type);
 	case LogicalType::TIME_TZ:
-		return GetMapType<HistogramFunctor, dtime_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, dtime_tz_t, IS_ORDERED>(type);
 	case LogicalType::DATE:
 		return GetMapType<HistogramFunctor, date_t, IS_ORDERED>(type);
 	default:
