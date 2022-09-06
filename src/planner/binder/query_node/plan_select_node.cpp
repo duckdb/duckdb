@@ -121,9 +121,17 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 			prune_expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    projection.expressions[i]->return_type, ColumnBinding(statement.projection_index, i)));
 		}
-		auto prune = make_unique<LogicalProjection>(statement.prune_index, move(prune_expressions));
-		prune->AddChild(move(root));
-		root = move(prune);
+
+		if (root->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+			// we can eagerly prune within the order!
+			auto &order = (LogicalOrder &)*root;
+			order.projections = move(prune_expressions);
+		} else {
+			// push a projection
+			auto prune = make_unique<LogicalProjection>(statement.prune_index, move(prune_expressions));
+			prune->AddChild(move(root));
+			root = move(prune);
+		}
 	}
 	return root;
 }

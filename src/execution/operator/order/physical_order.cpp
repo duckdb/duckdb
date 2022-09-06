@@ -3,14 +3,15 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-
 #include "duckdb/parallel/event.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)) {
+PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders,
+                             vector<unique_ptr<Expression>> projections, idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)),
+      projections(move(projections)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -30,24 +31,31 @@ public:
 
 class OrderLocalState : public LocalSinkState {
 public:
-	OrderLocalState(ExecutionContext &context, const vector<BoundOrderByNode> &orders)
-	    : executor(Allocator::Get(context.client)) {
+	OrderLocalState(Allocator &allocator, const PhysicalOrder &op)
+	    : key_executor(allocator), payload_executor(allocator) {
 		// Initialize order clause expression executor and DataChunk
-		vector<LogicalType> types;
-		for (auto &order : orders) {
-			types.push_back(order.expression->return_type);
-			executor.AddExpression(*order.expression);
+		vector<LogicalType> key_types;
+		for (auto &order : op.orders) {
+			key_types.push_back(order.expression->return_type);
+			key_executor.AddExpression(*order.expression);
 		}
-		sort.Initialize(Allocator::Get(context.client), types);
+		keys.Initialize(allocator, key_types);
+
+		for (auto &proj : op.projections) {
+			payload_executor.AddExpression(*proj);
+		}
+		payload.Initialize(allocator, op.types);
 	}
 
 public:
 	//! The local sort state
 	LocalSortState local_sort_state;
-	//! Local copy of the sorting expression executor
-	ExpressionExecutor executor;
-	//! Holds a vector of incoming sorting columns
-	DataChunk sort;
+	//! Key expression executor, and chunk to hold the vectors
+	ExpressionExecutor key_executor;
+	DataChunk keys;
+	//! Payload expression executor, and chunk to hold the vectors
+	ExpressionExecutor payload_executor;
+	DataChunk payload;
 };
 
 unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &context) const {
@@ -62,8 +70,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 }
 
 unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) const {
-	auto result = make_unique<OrderLocalState>(context, orders);
-	return move(result);
+	return make_unique<OrderLocalState>(Allocator::Get(context.client), *this);
 }
 
 SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
@@ -80,14 +87,18 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &g
 	}
 
 	// Obtain sorting columns
-	auto &sort = lstate.sort;
-	sort.Reset();
-	lstate.executor.Execute(input, sort);
+	auto &keys = lstate.keys;
+	keys.Reset();
+	lstate.key_executor.Execute(input, keys);
+
+	auto &payload = lstate.payload;
+	payload.Reset();
+	lstate.payload_executor.Execute(input, payload);
 
 	// Sink the data into the local sort state
-	sort.Verify();
+	keys.Verify();
 	input.Verify();
-	local_sort_state.SinkChunk(sort, input);
+	local_sort_state.SinkChunk(keys, payload);
 
 	// When sorting data reaches a certain size, we sort it
 	if (local_sort_state.SizeInBytes() >= gstate.memory_per_thread) {

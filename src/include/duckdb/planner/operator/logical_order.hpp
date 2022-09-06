@@ -22,6 +22,14 @@ public:
 	}
 
 	vector<BoundOrderByNode> orders;
+	vector<unique_ptr<Expression>> projections;
+
+public:
+	vector<ColumnBinding> GetColumnBindings() override {
+		return children[0]->GetColumnBindings();
+	}
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 	string ParamsToString() const override {
 		string result;
@@ -34,16 +42,11 @@ public:
 		return result;
 	}
 
-public:
-	vector<ColumnBinding> GetColumnBindings() override {
-		return children[0]->GetColumnBindings();
-	}
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
-
 protected:
 	void ResolveTypes() override {
-		types = children[0]->types;
+		for (auto &proj : projections) {
+			types.push_back(proj->return_type);
+		}
 	}
 };
 } // namespace duckdb
