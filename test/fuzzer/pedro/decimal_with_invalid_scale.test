@@ -2,5 +2,5 @@
 # group: [pedro]
 
 # scale is bigger than width, and both these numbers are ginormous
-statement ok
+statement error
 CREATE TABLE x(x DECIMAL(38763269, 77914819));
