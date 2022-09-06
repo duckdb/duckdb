@@ -1,0 +1,17 @@
+# name: test/fuzzer/pedro/limit_on_any_subquery.test
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 1 WHERE 1 < ANY(SELECT 2 LIMIT 0%);
+----
+
+
+statement ok
+CREATE TABLE test (x INT);
+
+query I
+SELECT 1 WHERE 1 < ANY(SELECT 2 FROM test);
+----
