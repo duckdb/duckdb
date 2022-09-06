@@ -184,9 +184,8 @@ jobs:
 
  check-load-install-extensions:
     name: Checks extension functions
-    runs-on: ubuntu-latest
-    container: ubuntu:16.04
-    needs: linux-release-64
+    runs-on: ubuntu-20.04
+    needs: linux-extensions-64
 
     env:
       CC: gcc-10
@@ -198,6 +197,10 @@ jobs:
       with:
         fetch-depth: 0
 
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
     - name: Install
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
@@ -207,9 +210,6 @@ jobs:
       with:
         key: ${{ github.job }}
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.9'
     - name: Build
       shell: bash
       run: |
