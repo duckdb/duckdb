@@ -2,17 +2,23 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/function/function_serialization.hpp"
 
 namespace duckdb {
 
 void LogicalCreateIndex::Serialize(FieldWriter &writer) const {
+
 	table.Serialize(writer.GetSerializer());
 	writer.WriteList<column_t>(column_ids);
 	writer.WriteSerializableList(unbound_expressions);
 	writer.WriteOptional(info);
+	writer.WriteList<string>(names);
+	writer.WriteRegularSerializableList(returned_types);
+	FunctionSerializer::SerializeBase<TableFunction>(writer, function, bind_data.get());
 }
 
 unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+
 	auto &context = state.gstate.context;
 	auto catalog_info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 	auto &catalog = Catalog::GetCatalog(context);
@@ -33,7 +39,17 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	unique_ptr<CreateIndexInfo> uptr_create_index_info = unique_ptr<CreateIndexInfo> {raw_create_index_info_ptr};
 
 	auto info = unique_ptr<CreateIndexInfo> {static_cast<CreateIndexInfo *>(create_info.release())};
-	return make_unique<LogicalCreateIndex>(*table, column_ids, move(unbound_expressions), move(info));
+
+	auto names = reader.ReadRequiredList<string>();
+	auto returned_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+
+	unique_ptr<FunctionData> bind_data;
+	bool has_deserialize;
+	auto function = FunctionSerializer::DeserializeBaseInternal<TableFunction, TableFunctionCatalogEntry>(
+	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data, has_deserialize);
+
+	return make_unique<LogicalCreateIndex>(*table, column_ids, move(function), move(bind_data),
+	                                       move(unbound_expressions), move(info), move(names), move(returned_types));
 }
 
 } // namespace duckdb

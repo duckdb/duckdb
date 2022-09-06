@@ -94,7 +94,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 	auto &lstate = (CreateIndexLocalSinkState &)lstate_p;
 	auto &allocator = Allocator::Get(table.storage->db);
 
-	// TODO: should I put this into the local state for performance?
+	// TODO: should be put into the local state
 	ExpressionExecutor executor(allocator, expressions);
 
 	// resolve the expressions for this chunk
@@ -158,8 +158,12 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	auto &state = (CreateIndexGlobalSinkState &)gstate_p;
 
-	// TODO: should these index_entry lines go somewhere else before the actual index creation starts?
-	// TODO: maybe even before the source/starting to scan the data
+	// TODO: is this at the correct position?
+	if (!table.storage->GetIsRoot()) {
+		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
+	}
+
+	// TODO: should these index_entry lines go somewhere else?
 	auto &schema = *table.schema;
 	auto index_entry = (IndexCatalogEntry *)schema.CreateIndex(context, info.get(), &table);
 	if (!index_entry) {
@@ -180,17 +184,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class CreateIndexGlobalSourceState : public GlobalSourceState {
-public:
-	CreateIndexGlobalSourceState() : finished(false), initialized(false) {
-	}
-
-	bool finished;
-	bool initialized;
-
-	DataChunk intermediate;
-	CreateIndexScanState create_index_scan_state;
-};
+class CreateIndexGlobalSourceState : public GlobalSourceState {};
 
 unique_ptr<GlobalSourceState> PhysicalCreateIndex::GetGlobalSourceState(ClientContext &context) const {
 	return make_unique<CreateIndexGlobalSourceState>();
@@ -198,55 +192,7 @@ unique_ptr<GlobalSourceState> PhysicalCreateIndex::GetGlobalSourceState(ClientCo
 
 void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                   LocalSourceState &lstate) const {
-
-	// here, we scan the table chunk wise and emit these chunks
-
-	auto &state = (CreateIndexGlobalSourceState &)gstate;
-	if (state.finished) {
-		return;
-	}
-	if (column_ids.empty()) {
-		throw BinderException("CREATE INDEX does not refer to any columns in the base table!");
-	}
-
-	// TODO: is this at the correct position?
-	if (!table.storage->GetIsRoot()) {
-		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
-	}
-
-	if (!state.initialized) {
-		auto &allocator = Allocator::Get(table.storage->db);
-		vector<LogicalType> intermediate_types;
-		for (auto &id : column_ids) {
-			auto &col = table.storage->column_definitions[id];
-			intermediate_types.push_back(col.Type());
-		}
-
-		intermediate_types.emplace_back(LogicalType::ROW_TYPE);
-		state.intermediate.Initialize(allocator, intermediate_types);
-
-		auto column_ids_chunk = column_ids;
-		column_ids_chunk.push_back(COLUMN_IDENTIFIER_ROW_ID);
-
-		table.storage->InitializeCreateIndexScan(state.create_index_scan_state, column_ids);
-		state.initialized = true;
-	}
-
-	// TODO: Do I need locks for scanning the table?
-	// TODO: Or do I only need them once I attempt this in parallel?
-
-	// scan a new chunk from the table
-	state.intermediate.Reset();
-	table.storage->CreateIndexScan(state.create_index_scan_state, state.intermediate,
-	                               TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
-	if (state.intermediate.size() == 0) {
-		// finished scanning
-		state.finished = true;
-		return;
-	}
-
-	// TODO: this can probably be done much more efficient, maybe by not using state.intermediate at all
-	state.intermediate.Copy(chunk, 0);
+	chunk.SetCardinality(0);
 }
 
 } // namespace duckdb
