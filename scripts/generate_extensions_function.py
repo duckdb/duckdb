@@ -61,8 +61,12 @@ else:
     file.write("#include \"duckdb/common/unordered_map.hpp\"")
     file.write("\n\n")
     file.write("namespace duckdb { \n\n")
+    file.write("struct ExtensionFunction { \n")
+    file.write("char extension[48]; \n")
+    file.write("char function[48]; \n")
+    file.write("}; \n")
+    file.write("static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = {\n")
 
-    file.write("static const unordered_map <std::string,std::string> extension_functions = {\n")
     for function_name in function_map:
         file.write("{")
         file.write(f"\"{function_name}\", \"{function_map[function_name]}\"")

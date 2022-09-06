@@ -76,6 +76,8 @@ public:
 	ClientConfig config;
 	//! The set of client-specific data
 	unique_ptr<ClientData> client_data;
+	//! The functions available on extensions
+	unordered_map<string, string> extensions_functions;
 
 public:
 	DUCKDB_API Transaction &ActiveTransaction() {

@@ -12,7 +12,12 @@
 
 namespace duckdb {
 
-static const unordered_map<std::string, std::string> extension_functions = {
+struct ExtensionFunction {
+	char extension[48];
+	char function[48];
+};
+
+static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = {
     {"text", "excel"},
     {"excel_text", "excel"},
     {"drop_fts_index", "fts"},
@@ -72,4 +77,4 @@ static const unordered_map<std::string, std::string> extension_functions = {
     {"from_substrait", "substrait"},
     {"get_substrait", "substrait"},
 };
-}
+} // namespace duckdb
