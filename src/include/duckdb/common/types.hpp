@@ -57,7 +57,7 @@ struct date_t { // NOLINT
 
 //! Type used to represent time (microseconds)
 struct dtime_t { // NOLINT
-    int64_t micros;
+	int64_t micros;
 
 	dtime_t() = default;
 	explicit inline dtime_t(int64_t micros_p) : micros(micros_p) {}
@@ -94,7 +94,7 @@ struct dtime_t { // NOLINT
 
 //! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
 struct timestamp_t { // NOLINT
-    int64_t value;
+	int64_t value;
 
 	timestamp_t() = default;
 	explicit inline timestamp_t(int64_t value_p) : value(value_p) {}
@@ -438,6 +438,16 @@ struct LogicalType {
 	//! Deserializes a blob back into an LogicalType
 	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
 
+	DUCKDB_API static bool TypeIsTimestamp(LogicalTypeId id) {
+		return (id == LogicalTypeId::TIMESTAMP ||
+				id == LogicalTypeId::TIMESTAMP_MS ||
+				id == LogicalTypeId::TIMESTAMP_NS ||
+				id == LogicalTypeId::TIMESTAMP_SEC ||
+				id == LogicalTypeId::TIMESTAMP_TZ);
+	}
+	DUCKDB_API static bool TypeIsTimestamp(const LogicalType& type) {
+		return TypeIsTimestamp(type.id());
+	}
 	DUCKDB_API string ToString() const;
 	DUCKDB_API bool IsIntegral() const;
 	DUCKDB_API bool IsNumeric() const;
@@ -653,3 +663,34 @@ struct aggregate_state_t {
 };
 
 } // namespace duckdb
+
+namespace std {
+
+	template <>
+	struct hash<duckdb::date_t>
+	{
+		std::size_t operator()(const duckdb::date_t& k) const
+		{
+			using std::hash;
+			return hash<int32_t>()((int32_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::dtime_t>
+	{
+		std::size_t operator()(const duckdb::dtime_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+}
