@@ -55,7 +55,6 @@ SELECT stats(x) FROM test LIMIT 1
 ----
 [Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
 
-# y is not yet accurate
 query T
 SELECT stats(y) FROM test LIMIT 1
 ----
