@@ -64,7 +64,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 
 			auto statement = make_unique<LogicalPlanStatement>(move(plan));
 			auto result = con2.Query(move(statement));
-			auto& collection = result->Collection();
+			auto &collection = result->Collection();
 			idx_t num_chunks = collection.ChunkCount();
 			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
 			for (auto &chunk : collection.Chunks()) {
@@ -84,15 +84,15 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 		config.options.allow_unsigned_extensions = true;
 		DuckDB db1(nullptr, &config);
 		Connection con1(db1);
+		REQUIRE_NO_FAIL(con1.Query("LOAD 'parquet'"));
 		REQUIRE_NO_FAIL(con1.Query("LOAD '" DUCKDB_BUILD_DIRECTORY
 		                           "/test/extension/loadable_extension_optimizer_demo.duckdb_extension'"));
 		REQUIRE_NO_FAIL(con1.Query("SET waggle_location_host='127.0.0.1'"));
 		REQUIRE_NO_FAIL(con1.Query("SET waggle_location_port=4242"));
 		usleep(100000); // need to wait a bit till socket is up
 
-		auto result1 = con1.Query(
-		    "SELECT first_name FROM PARQUET_SCAN('data/parquet-testing/userdata1.parquet') GROUP BY first_name");
-		result1->Print();
+		REQUIRE_NO_FAIL(con1.Query(
+		    "SELECT first_name FROM PARQUET_SCAN('data/parquet-testing/userdata1.parquet') GROUP BY first_name"));
 
 		if (kill(pid, SIGKILL) != 0) {
 			FAIL();
