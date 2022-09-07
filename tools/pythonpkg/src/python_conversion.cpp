@@ -201,7 +201,7 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele) {
 	return true;
 }
 
-Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool from_pandas) {
+Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool nan_as_null) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 	if (ele.is_none()) {
@@ -215,7 +215,7 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		}
 		return integer;
 	} else if (py::isinstance<py::float_>(ele)) {
-		if (from_pandas && std::isnan(PyFloat_AsDouble(ele.ptr()))) {
+		if (nan_as_null && std::isnan(PyFloat_AsDouble(ele.ptr()))) {
 			return Value();
 		}
 		return Value::DOUBLE(ele.cast<double>());
