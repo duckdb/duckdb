@@ -91,7 +91,9 @@ struct DateDiff {
 	struct WeekOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::Epoch(enddate) / Interval::SECS_PER_WEEK - Date::Epoch(startdate) / Interval::SECS_PER_WEEK;
+			// Count Sunday midnight crossings
+			return (Date::Epoch(enddate) + 4 * Interval::SECS_PER_DAY) / Interval::SECS_PER_WEEK -
+			       (Date::Epoch(startdate) + 4 * Interval::SECS_PER_DAY) / Interval::SECS_PER_WEEK;
 		}
 	};
 
