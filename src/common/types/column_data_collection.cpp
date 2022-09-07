@@ -42,6 +42,14 @@ struct ColumnDataMetaData {
 	}
 };
 
+//! Explicitly initialized without types
+ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
+	types.clear();
+	count = 0;
+	this->finished_append = false;
+	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+}
+
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
 	Initialize(move(types_p));
 	allocator = make_shared<ColumnDataAllocator>(allocator_p);

@@ -60,8 +60,7 @@ public:
 
 	DuckDBPyConnection *Append(const string &name, DataFrame value);
 
-	DuckDBPyConnection *RegisterPythonObject(const string &name, py::object python_object,
-	                                         const idx_t rows_per_tuple = 100000);
+	DuckDBPyConnection *RegisterPythonObject(const string &name, py::object python_object);
 
 	void InstallExtension(const string &extension, bool force_install = false);
 
@@ -84,7 +83,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string);
 
-	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object, const idx_t rows_per_tuple = 1000000);
+	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
 	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
 

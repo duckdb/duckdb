@@ -279,7 +279,7 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 		join_nodes_in_full_plan.clear();
 	}
 	if (node->set->count < relations.size()) {
-		join_nodes_in_full_plan.insert(node);
+		join_nodes_in_full_plan.insert(node->set->ToString());
 	}
 	UpdateJoinNodesInFullPlan(node->left);
 	UpdateJoinNodesInFullPlan(node->right);
@@ -303,8 +303,8 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 		if (entry != plans.end()) {
 			cardinality_estimator.VerifySymmetry(result, entry->second.get());
 		}
-
-		if (full_plan_found && join_nodes_in_full_plan.count(new_plan.get()) > 0) {
+		if (full_plan_found &&
+		    join_nodes_in_full_plan.find(new_plan->set->ToString()) != join_nodes_in_full_plan.end()) {
 			must_update_full_plan = true;
 		}
 		if (new_set->count == relations.size()) {

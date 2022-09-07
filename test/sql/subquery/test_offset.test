@@ -1,0 +1,8 @@
+# name: test/sql/subquery/test_offset.test
+# description: Test bound offset in subquery
+# group: [subquery]
+
+query I
+SELECT (SELECT c0 OFFSET 1) FROM (VALUES(1)) c0;
+----
+NULL
