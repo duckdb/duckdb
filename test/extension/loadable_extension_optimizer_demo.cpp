@@ -4,8 +4,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 
