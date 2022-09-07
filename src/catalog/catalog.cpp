@@ -246,7 +246,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	if (context.extensions_functions.find(entry_name) != context.extensions_functions.end()) {
 		auto extension_name = context.extensions_functions.find(entry_name)->second;
 		string exception_message = "Function with name " + entry_name +
-		                           " is not on the catalog, but it exists on the " + extension_name + "  extension!\n";
+		                           " is not on the catalog, but it exists in the " + extension_name + "  extension!\n";
 		exception_message +=
 		    "To Install and Load the extension, run: INSTALL " + extension_name + "; LOAD " + extension_name + ";";
 		return CatalogException(exception_message);
