@@ -211,9 +211,8 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	ResizeableBuffer compressed_buffer(reader.allocator, compressed_bytes);
 	trans.read((uint8_t *)compressed_buffer.ptr, compressed_bytes);
 
-	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr,
-	                   compressed_bytes, (char *)block->ptr + uncompressed_bytes,
-					   page_hdr.uncompressed_page_size - uncompressed_bytes);
+	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr, compressed_bytes,
+	                   (char *)block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
@@ -232,8 +231,8 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	ResizeableBuffer compressed_buffer(reader.allocator, page_hdr.compressed_page_size + 1);
 	trans.read((uint8_t *)compressed_buffer.ptr, page_hdr.compressed_page_size);
 
-	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr,
-	                   page_hdr.compressed_page_size, (char *)block->ptr, page_hdr.uncompressed_page_size);
+	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr, page_hdr.compressed_page_size,
+	                   (char *)block->ptr, page_hdr.uncompressed_page_size);
 }
 
 void ColumnReader::DecompressInternal(CompressionCodec::type codec, const char *src, idx_t src_size, char *dst,
