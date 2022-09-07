@@ -6,6 +6,8 @@
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_column_data_get.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 using namespace duckdb;
 
@@ -21,46 +23,6 @@ using namespace duckdb;
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
-
-namespace duckdb {
-
-//! LogicalChunkGet represents a scan operation from a ChunkCollection
-class LogicalChunkGet : public LogicalOperator {
-public:
-	LogicalChunkGet(idx_t table_index, vector<LogicalType> types, unique_ptr<ChunkCollection> collection)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_CHUNK_GET), table_index(table_index),
-	      collection(move(collection)) {
-		D_ASSERT(types.size() > 0);
-		chunk_types = types;
-	}
-
-	//! The table index in the current bind context
-	idx_t table_index;
-	//! The types of the chunk
-	vector<LogicalType> chunk_types;
-	//! The chunk collection to scan
-	unique_ptr<ChunkCollection> collection;
-
-public:
-	vector<ColumnBinding> GetColumnBindings() override {
-		return GenerateColumnBindings(table_index, chunk_types.size());
-	}
-	void Serialize(FieldWriter &writer) const override {
-		throw NotImplementedException(LogicalOperatorToString(type));
-	}
-
-	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
-	                                               FieldReader &reader) {
-		throw NotImplementedException(LogicalOperatorToString(type));
-	}
-
-protected:
-	void ResolveTypes() override {
-		// types are resolved in the constructor
-		this->types = chunk_types;
-	}
-};
-}
 
 class WaggleExtension : public OptimizerExtension {
 public:
@@ -121,7 +83,8 @@ public:
 		D_ASSERT(write(sockfd, &len, sizeof(idx_t)) == sizeof(idx_t));
 		D_ASSERT(write(sockfd, data.data.get(), len) == len);
 
-		auto chunk_collection = make_unique<ChunkCollection>(Allocator::DefaultAllocator());
+		vector<LogicalType> types;
+		auto chunk_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 		idx_t n_chunks;
 		D_ASSERT(read(sockfd, &n_chunks, sizeof(idx_t)) == sizeof(idx_t));
 		for (idx_t i = 0; i < n_chunks; i++) {
@@ -137,8 +100,7 @@ public:
 			free(buffer);
 		}
 
-		auto types = chunk_collection->Types();
-		plan = make_unique<LogicalChunkGet>(0, types, move(chunk_collection));
+		plan = make_unique<LogicalColumnDataGet>(0, types, move(chunk_collection));
 
 		len = 0;
 		(void)len;
