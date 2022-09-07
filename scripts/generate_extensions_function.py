@@ -25,7 +25,8 @@ base_functions = os.popen(f'{duckdb_path} -csv -c "{get_func}" ').read().split("
 base_functions = {x for x in base_functions}
 
 function_map = {}
-for extension_name, in reader:
+for extension in reader:
+    extension_name = extension[0]
     print("Install/Load " + extension_name)
     install = f"INSTALL {extension_name};"
     load = f"LOAD {extension_name};"
@@ -47,30 +48,38 @@ if args.validate:
 else:
     # Generate Header
     file = open(os.path.join("..","src","include","extension_functions.hpp"),'w')
-    file.write("//===----------------------------------------------------------------------===//\n")
-    file.write("//                         DuckDB\n")
-    file.write("//\n")
-    file.write("// extension_functions.hpp\n")
-    file.write("//\n")
-    file.write("//\n")
-    file.write("//===----------------------------------------------------------------------===//\n")
-    file.write("\n")
-    file.write("#pragma once\n")
-    file.write("\n")
-    file.write("#include \"duckdb/common/unordered_map.hpp\"")
-    file.write("\n\n")
-    file.write("namespace duckdb { \n\n")
-    file.write("struct ExtensionFunction { \n")
-    file.write("char extension[48]; \n")
-    file.write("char function[48]; \n")
-    file.write("}; \n")
-    file.write("static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = {\n")
+    header = """//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// extension_functions.hpp
+//
+//
+//===----------------------------------------------------------------------===//
 
-    for function_name, function_ext in function_map.items():
-        file.write("{")
-        file.write(f'"{function_name}", "function_ext}"')
+#pragma once
+
+#include \"duckdb/common/unordered_map.hpp\"
+
+
+namespace duckdb { 
+
+struct ExtensionFunction {
+    char function[48];
+    char extension[48];
+};
+
+static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = { 
+"""
+    file.write(header)
+    # Sort Function Map 
+    sorted_function = sorted(function_map)
+
+    for function_name in sorted_function:
+        file.write("    {")
+        file.write(f'"{function_name}", "{function_map[function_name]}"')
         file.write("}, \n")
-    file.write("}; \n")
-    file.write("}\n")
+    footer = """};
+} // namespace duckdb"""
+    file.write(footer)
 
     file.close()

@@ -41,7 +41,6 @@
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/preserved_error.hpp"
-#include "extension_functions.hpp"
 
 namespace duckdb {
 
@@ -61,9 +60,6 @@ struct ActiveQueryContext {
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false),
       client_data(make_unique<ClientData>(*this)) {
-	for (auto &functions : EXTENSION_FUNCTIONS) {
-		extensions_functions[functions.function] = functions.extension;
-	}
 }
 
 ClientContext::~ClientContext() {

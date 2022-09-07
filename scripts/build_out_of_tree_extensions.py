@@ -40,7 +40,7 @@ for row in reader:
     url = row[1].strip()
     commit = row[2].strip()
     build_on_windows = row[3].strip()
-    if url == "https://github.com/duckdb/duckdb":
+    if not url:
         # This is not an out-of-tree extension
         continue
     if len(name) == 0 or len(url) == 0 or len(commit) != 40 or len(build_on_windows) == 0 :
