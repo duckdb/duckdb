@@ -25,8 +25,7 @@ base_functions = os.popen(f'{duckdb_path} -csv -c "{get_func}" ').read().split("
 base_functions = {x for x in base_functions}
 
 function_map = {}
-for row in reader:
-    extension_name = row[0]
+for extension_name, in reader:
     print("Install/Load " + extension_name)
     install = f"INSTALL {extension_name};"
     load = f"LOAD {extension_name};"
