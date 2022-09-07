@@ -31,10 +31,10 @@ for row in reader:
     install = f"INSTALL {extension_name};"
     load = f"LOAD {extension_name};"
     extension_functions = os.popen(f'{duckdb_path} -csv -c "{install}{load}{get_func}" ').read().split("\n")[1:-1]
-    extension_functions = {x for x in extension_functions}
-    extension_functions = extension_functions.difference(base_functions)
-    for extension_function in extension_functions:
-        function_map[extension_function] = extension_name
+    function_map.update({
+        extension_function: extension_name
+        for extension_function in (set(extension_functions) - base_functions)
+    })
 
 if args.validate:
     cur_function_map = {}
