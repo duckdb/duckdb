@@ -67,9 +67,9 @@ else:
     file.write("}; \n")
     file.write("static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = {\n")
 
-    for function_name in function_map:
+    for function_name, function_ext in function_map.items():
         file.write("{")
-        file.write(f"\"{function_name}\", \"{function_map[function_name]}\"")
+        file.write(f'"{function_name}", "function_ext}"')
         file.write("}, \n")
     file.write("}; \n")
     file.write("}\n")
