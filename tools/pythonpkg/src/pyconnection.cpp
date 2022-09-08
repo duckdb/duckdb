@@ -669,7 +669,7 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 	args.reserve(py::len(params));
 
 	for (auto param : params) {
-		args.emplace_back(TransformPythonValue(param));
+		args.emplace_back(TransformPythonValue(param, LogicalType::UNKNOWN, false));
 	}
 	return args;
 }
