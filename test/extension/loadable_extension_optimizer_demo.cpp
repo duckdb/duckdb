@@ -81,8 +81,7 @@ public:
 		D_ASSERT(write(sockfd, &len, sizeof(idx_t)) == sizeof(idx_t));
 		D_ASSERT(write(sockfd, data.data.get(), len) == len);
 
-		vector<LogicalType> types;
-		auto chunk_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+		auto chunk_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator());
 		idx_t n_chunks;
 		D_ASSERT(read(sockfd, &n_chunks, sizeof(idx_t)) == sizeof(idx_t));
 		for (idx_t i = 0; i < n_chunks; i++) {
@@ -98,6 +97,7 @@ public:
 			free(buffer);
 		}
 
+		auto types = chunk_collection->Types();
 		plan = make_unique<LogicalColumnDataGet>(0, types, move(chunk_collection));
 
 		len = 0;
