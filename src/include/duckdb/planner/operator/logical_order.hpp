@@ -45,12 +45,19 @@ public:
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 	string ParamsToString() const override {
-		string result;
+		string result = "ORDERS:\n";
 		for (idx_t i = 0; i < orders.size(); i++) {
 			if (i > 0) {
 				result += "\n";
 			}
 			result += orders[i].expression->GetName();
+		}
+		result += "\nPROJECTIONS:\n";
+		for (idx_t i = 0; i < projections.size(); i++) {
+			if (i > 0) {
+				result += "\n";
+			}
+			result += projections[i]->GetName();
 		}
 		return result;
 	}

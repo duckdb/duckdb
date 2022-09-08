@@ -229,13 +229,20 @@ void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 }
 
 string PhysicalOrder::ParamsToString() const {
-	string result;
+	string result = "ORDERS:\n";
 	for (idx_t i = 0; i < orders.size(); i++) {
 		if (i > 0) {
 			result += "\n";
 		}
 		result += orders[i].expression->ToString() + " ";
 		result += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
+	}
+	result += "\n\nPROJECTIONS:\n";
+	for (idx_t i = 0; i < projections.size(); i++) {
+		if (i > 0) {
+			result += "\n";
+		}
+		result += projections[i]->ToString();
 	}
 	return result;
 }
