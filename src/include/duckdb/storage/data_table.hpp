@@ -185,7 +185,7 @@ public:
 	//! Initializes a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
 	//! Scans the next chunk for the CREATE INDEX operator
-	bool CreateIndexScan(CreateIndexScanState &state, DataChunk &result, TableScanType type);
+	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
 
 private:
 	//! Verify the new added constraints against current persistent&local data

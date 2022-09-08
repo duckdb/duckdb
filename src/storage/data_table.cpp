@@ -1316,7 +1316,7 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vec
 	InitializeScan(state, column_ids);
 }
 
-bool DataTable::CreateIndexScan(CreateIndexScanState &state, DataChunk &result, TableScanType type) {
+bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type) {
 	auto current_row_group = state.row_group_scan_state.row_group;
 	while (current_row_group) {
 		current_row_group->ScanCommitted(state.row_group_scan_state, result, type);

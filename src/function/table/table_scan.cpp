@@ -50,6 +50,9 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	mutex lock;
 	idx_t max_threads;
 
+	// to acquire table locks when building the index
+	CreateIndexScanState create_index_scan_state;
+
 	idx_t MaxThreads() const override {
 		return max_threads;
 	}
@@ -64,16 +67,24 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 		auto storage_idx = GetStorageIndex(*bind_data.table, col);
 		col = storage_idx;
 	}
+
 	result->scan_state.table_filters = input.filters;
 	TableScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	return move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
+
 	D_ASSERT(input.bind_data);
 	auto &bind_data = (const TableScanBindData &)*input.bind_data;
 	auto result = make_unique<TableScanGlobalState>(context, input.bind_data);
+
 	bind_data.table->storage->InitializeParallelScan(context, result->state);
+	// acquire index scan specific locks
+	if (bind_data.is_create_index) {
+		bind_data.table->storage->InitializeCreateIndexScan(result->create_index_scan_state, input.column_ids);
+	}
+
 	return move(result);
 }
 
@@ -94,7 +105,12 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 	auto &state = (TableScanLocalState &)*data_p.local_state;
 	auto &transaction = Transaction::GetTransaction(context);
 	do {
-		bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
+		if (bind_data.is_create_index) {
+			bind_data.table->storage->CreateIndexScan(
+			    state.scan_state, output, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+		} else {
+			bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
+		}
 		if (output.size() > 0) {
 			return;
 		}
@@ -367,6 +383,7 @@ static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_dat
 	writer.WriteString(bind_data.table->schema->name);
 	writer.WriteString(bind_data.table->name);
 	writer.WriteField<bool>(bind_data.is_index_scan);
+	writer.WriteField<bool>(bind_data.is_create_index);
 	writer.WriteList<row_t>(bind_data.result_ids);
 }
 
@@ -375,6 +392,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, Fie
 	auto schema_name = reader.ReadRequired<string>();
 	auto table_name = reader.ReadRequired<string>();
 	auto is_index_scan = reader.ReadRequired<bool>();
+	auto is_create_index = reader.ReadRequired<bool>();
 	auto result_ids = reader.ReadRequiredList<row_t>();
 
 	auto &catalog = Catalog::GetCatalog(context);
@@ -385,6 +403,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, Fie
 
 	auto result = make_unique<TableScanBindData>((TableCatalogEntry *)catalog_entry);
 	result->is_index_scan = is_index_scan;
+	result->is_create_index = is_create_index;
 	result->result_ids = move(result_ids);
 	return move(result);
 }

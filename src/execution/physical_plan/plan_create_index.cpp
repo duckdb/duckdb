@@ -3,6 +3,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 
@@ -14,6 +15,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	op.types.emplace_back(LogicalType::ROW_TYPE);
 	op.column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 
+	auto &bind_data = (TableScanBindData &)*op.bind_data;
+	bind_data.is_create_index = true;
 	auto table_scan = make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.column_ids, op.names,
 	                                                 move(table_filters), op.estimated_cardinality);
 
