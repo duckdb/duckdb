@@ -102,11 +102,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		plan = deliminator.Optimize(move(plan));
 	});
 
-	RunOptimizer(OptimizerType::PROJECTION_COMBINER, [&]() {
-		ProjectionCombiner combiner;
-		plan = combiner.Optimize(move(plan));
-	});
-
 	RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
 		RemoveUnusedColumns unused(binder, context, true);
 		unused.VisitOperator(*plan);
@@ -138,6 +133,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RunOptimizer(OptimizerType::TOP_N, [&]() {
 		TopN topn;
 		plan = topn.Optimize(move(plan));
+	});
+
+	RunOptimizer(OptimizerType::PROJECTION_COMBINER, [&]() {
+		ProjectionCombiner combiner;
+		plan = combiner.Optimize(move(plan));
 	});
 
 	// apply simple expression heuristics to get an initial reordering
