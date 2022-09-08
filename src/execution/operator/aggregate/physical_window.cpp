@@ -34,12 +34,14 @@ public:
 
 	WindowGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
 	                      const Types &payload_types, idx_t max_mem, bool external)
-	    : memory_per_thread(max_mem), count(0), partition_layout(partitions) {
+	    : memory_per_thread(max_mem), count(0) {
 
 		RowLayout payload_layout;
 		payload_layout.Initialize(payload_types);
 		global_sort = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
 		global_sort->external = external;
+
+		partition_layout = global_sort->sort_layout.GetPrefixComparisonLayout(partitions.size());
 	}
 
 	void Combine(LocalSortState &local_sort) {
