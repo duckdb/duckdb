@@ -94,7 +94,6 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 	auto &lstate = (CreateIndexLocalSinkState &)lstate_p;
 	auto &allocator = Allocator::Get(table.storage->db);
 
-	// TODO: should be put into the local state
 	ExpressionExecutor executor(allocator, expressions);
 
 	// resolve the expressions for this chunk
@@ -158,12 +157,10 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	auto &state = (CreateIndexGlobalSinkState &)gstate_p;
 
-	// TODO: is this at the correct position?
 	if (!table.storage->GetIsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 	}
 
-	// TODO: should these index_entry lines go somewhere else?
 	auto &schema = *table.schema;
 	auto index_entry = (IndexCatalogEntry *)schema.CreateIndex(context, info.get(), &table);
 	if (!index_entry) {

@@ -1332,7 +1332,6 @@ bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableS
 	return false;
 }
 
-// TODO: this is still getting called for some CREATE INDEX code paths, investigate!
 void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions) {
 	auto &allocator = Allocator::Get(db);
 
