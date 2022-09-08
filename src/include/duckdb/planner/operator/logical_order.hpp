@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
@@ -22,12 +23,24 @@ public:
 	}
 
 	vector<BoundOrderByNode> orders;
+
+	idx_t table_index;
 	vector<unique_ptr<Expression>> projections;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
-		return children[0]->GetColumnBindings();
+		auto child_bindings = children[0]->GetColumnBindings();
+		if (projections.empty()) {
+			return child_bindings;
+		}
+
+		vector<ColumnBinding> result;
+		for (idx_t i = 0; i < projections.size(); i++) {
+			result.emplace_back(table_index, i);
+		}
+		return result;
 	}
+
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
@@ -44,8 +57,12 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		for (auto &proj : projections) {
-			types.push_back(proj->return_type);
+		if (projections.empty()) {
+			types = children[0]->types;
+		} else {
+			for (auto &proj : projections) {
+				types.push_back(proj->return_type);
+			}
 		}
 	}
 };

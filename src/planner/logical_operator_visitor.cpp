@@ -34,6 +34,9 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		for (auto &node : order.orders) {
 			callback(&node.expression);
 		}
+		for (auto &proj : order.projections) {
+			callback(&proj);
+		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_TOP_N: {
