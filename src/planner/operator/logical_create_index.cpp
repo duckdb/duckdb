@@ -6,9 +6,21 @@
 
 namespace duckdb {
 
+vector<ColumnBinding> LogicalCreateIndex::GetColumnBindings() {
+	if (column_ids.empty()) {
+		return {ColumnBinding(table_index, 0)};
+	}
+	vector<ColumnBinding> result;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		result.emplace_back(table_index, i);
+	}
+	return result;
+}
+
 void LogicalCreateIndex::Serialize(FieldWriter &writer) const {
 
 	table.Serialize(writer.GetSerializer());
+	writer.WriteField(table_index);
 	writer.WriteList<column_t>(column_ids);
 	writer.WriteSerializableList(unbound_expressions);
 	writer.WriteOptional(info);
@@ -24,6 +36,7 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	auto &catalog = Catalog::GetCatalog(context);
 	TableCatalogEntry *table = catalog.GetEntry<TableCatalogEntry>(context, catalog_info->schema, catalog_info->table);
 
+	auto table_index = reader.ReadRequired<idx_t>();
 	auto column_ids = reader.ReadRequiredList<column_t>();
 
 	auto unbound_expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
@@ -48,7 +61,7 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	auto function = FunctionSerializer::DeserializeBaseInternal<TableFunction, TableFunctionCatalogEntry>(
 	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data, has_deserialize);
 
-	return make_unique<LogicalCreateIndex>(*table, column_ids, move(function), move(bind_data),
+	return make_unique<LogicalCreateIndex>(table_index, *table, column_ids, move(function), move(bind_data),
 	                                       move(unbound_expressions), move(info), move(names), move(returned_types));
 }
 
