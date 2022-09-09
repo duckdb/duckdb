@@ -138,8 +138,8 @@ public:
 
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
-private:
 
+private:
 	//! Creates a new segment within the ColumnDataCollection
 	void CreateSegment();
 
