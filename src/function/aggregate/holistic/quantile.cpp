@@ -16,7 +16,6 @@ namespace duckdb {
 
 // Hugeint arithmetic
 hugeint_t operator*(const hugeint_t &h, const double &d) {
-	D_ASSERT(d >= 0 && d <= 1);
 	return Hugeint::Convert(Hugeint::Cast<double>(h) * d);
 }
 
