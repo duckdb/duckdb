@@ -152,7 +152,7 @@ def find_license(original_file):
         if os.path.exists(potential_license):
             license = potential_license
     if license == "":
-        raise "Could not find license for %s" % original_file
+        raise Exception("Could not find license for %s" % original_file)
 
     if license not in licenses:
         licenses += [license]

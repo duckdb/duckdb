@@ -35,6 +35,25 @@ struct DBConfig;
 
 enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
 
+struct ProxyUri {
+	std::string host;
+	uint32_t port;
+	std::string username;
+	std::string password;
+
+	std::string to_string() const {
+		std::string res = "http://";
+		if (!(username.empty() && password.empty())) {
+			res += username + ":" + password + "@";
+		}
+		res += host;
+		if (port != 0) {
+			res += ":" + std::to_string(port);
+		}
+		return res;
+	}
+};
+
 enum class CheckpointAbort : uint8_t {
 	NO_ABORT = 0,
 	DEBUG_ABORT_BEFORE_TRUNCATE = 1,
@@ -119,6 +138,8 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> set_variables;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	//! HTTP CONNECT proxy
+	std::shared_ptr<ProxyUri> http_proxy;
 };
 struct DBConfig {
 	friend class DatabaseInstance;

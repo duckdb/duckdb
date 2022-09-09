@@ -77,7 +77,7 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	if (fs.FileExists(temp_path)) {
 		fs.RemoveFile(temp_path);
 	}
-	auto is_http_url = StringUtil::Contains(extension, "http://");
+	auto is_http_url = StringUtil::StartsWith(extension, "http://");
 	if (fs.FileExists(extension)) {
 
 		std::ifstream in(extension, std::ios::binary);
@@ -126,6 +126,12 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	auto url_base = "http://" + hostname_without_http;
 	duckdb_httplib::Client cli(url_base.c_str());
 
+	auto proxy = config.options.http_proxy;
+	if (proxy) {
+		cli.set_proxy(proxy->host.c_str(), proxy->port);
+		cli.set_proxy_basic_auth(proxy->username.c_str(), proxy->password.c_str());
+	}
+
 	duckdb_httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),
 	                                                                     DuckDB::SourceID(), DuckDB::Platform())}};
 
@@ -146,8 +152,10 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 				break;
 			}
 		}
-		throw IOException("Failed to download extension \"%s\" at URL \"%s%s\"\n%s", extension_name, url_base,
-		                  url_local_part, message);
+
+		throw IOException("Failed to download extension \"%s\" at URL \"%s%s\"\n%s: %s %s (%s error)", extension_name,
+		                  url_base, url_local_part, message, res ? to_string(res->status) : "Unknown status",
+		                  res ? res->reason : "Unknown reason", to_string(res.error()));
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 	std::ofstream out(temp_path, std::ios::binary);
