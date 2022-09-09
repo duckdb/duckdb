@@ -4,9 +4,9 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
-class ART;
 
 Index::Index(IndexType type, const vector<column_t> &column_ids_p,
              const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type_p)

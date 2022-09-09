@@ -357,7 +357,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				throw BinderException("Cannot create an index on the rowid!");
 			}
 			result.types.push_back(get.returned_types[column_id]);
-			result.names.push_back("Count");
+			result.names.emplace_back("Count");
 		}
 
 		// the logical CREATE INDEX also needs all fields to scan the referenced table

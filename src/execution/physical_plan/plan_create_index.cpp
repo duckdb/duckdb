@@ -28,7 +28,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	    make_unique<PhysicalCreateIndex>(op, op.table, op.column_ids, move(op.expressions), move(op.info),
 	                                     move(op.unbound_expressions), op.estimated_cardinality);
 	physical_create_index->children.push_back(move(table_scan));
-	return physical_create_index;
+	return move(physical_create_index);
 }
 
 } // namespace duckdb
