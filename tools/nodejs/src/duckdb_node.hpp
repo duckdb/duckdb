@@ -4,6 +4,7 @@
 
 #include <napi.h>
 #include <queue>
+#include <list>
 #include <unordered_map>
 
 namespace node_duckdb {
@@ -173,9 +174,23 @@ public:
 public:
 	static Napi::FunctionReference constructor;
 	Napi::Value NextChunk(const Napi::CallbackInfo &info);
+	Napi::Value NextArrowTable(const Napi::CallbackInfo &info);
+	duckdb::shared_ptr<ArrowSchema> cschema;
 
 private:
 	Database *database_ref;
+};
+
+class ArrowTable : public Napi::ObjectWrap<ArrowTable> {
+public:
+	explicit ArrowTable(const Napi::CallbackInfo &info);
+	~ArrowTable() override;
+	static Napi::Object Init(Napi::Env env, Napi::Object exports);
+public:
+	static Napi::FunctionReference constructor;
+	Napi::Value GetCDataPointers(const Napi::CallbackInfo &info);
+	duckdb::shared_ptr<ArrowSchema> cschema;
+	duckdb::unique_ptr<ArrowArray> carray;
 };
 
 struct TaskHolder {

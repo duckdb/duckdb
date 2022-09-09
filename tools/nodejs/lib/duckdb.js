@@ -62,10 +62,27 @@ var Statement = duckdb.Statement;
 var QueryResult = duckdb.QueryResult;
 
 /**
+ * @class
+ */
+var ArrowTable = duckdb.ArrowTable;
+
+/**
  * @method
  * @return data chunk
  */
 QueryResult.prototype.nextChunk;
+
+/**
+ * @method
+ * @return data chunk
+ */
+QueryResult.prototype.nextArrowTable;
+
+/**
+ * @method
+ * @return data chunk
+ */
+ArrowTable.prototype.GetCDataPointers;
 
 /**
  * @name asyncIterator
@@ -146,6 +163,17 @@ Connection.prototype.stream = async function* (sql) {
 Connection.prototype.arrow = function (sql) {
     var statement = new Statement(this, sql);
     return statement.arrow.apply(statement, arguments);
+}
+
+/**
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return QueryResult
+ */
+Connection.prototype.arrowStream = async function (sql) {
+    var statement = new Statement(this, sql);
+    return statement.stream.apply(statement, arguments);
 }
 
 /**
