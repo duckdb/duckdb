@@ -26,7 +26,6 @@ TEST_CASE("Test table_info incorrect 'is_valid' value for 'dflt_value' column", 
 	idx_t col_count = duckdb_column_count(&result);
 	REQUIRE(col_count == 6);
 	idx_t chunk_count = duckdb_result_chunk_count(result);
-	REQUIRE(chunk_count == 1);
 
 	// Loop over the produced chunks
 	for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx++) {
