@@ -1,6 +1,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/dl.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/function/replacement_open.hpp"
 
 namespace duckdb {
 
@@ -19,8 +20,7 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	return (T)function;
 }
 
-void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	auto &db = DatabaseInstance::GetDatabase(context);
+ExtensionInitResult ExtensionHelper::InitialLoad(ClientContext &context, const string &extension) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
@@ -80,13 +80,10 @@ void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string
 	}
 
 	auto basename = fs.ExtractBaseName(filename);
-	auto init_fun_name = basename + "_init";
+
+	ext_version_fun_t version_fun;
 	auto version_fun_name = basename + "_version";
 
-	ext_init_fun_t init_fun;
-	ext_version_fun_t version_fun;
-
-	init_fun = LoadFunctionFromDLL<ext_init_fun_t>(lib_hdl, init_fun_name, filename);
 	version_fun = LoadFunctionFromDLL<ext_version_fun_t>(lib_hdl, version_fun_name, filename);
 
 	std::string engine_version = std::string(DuckDB::LibraryVersion());
@@ -112,11 +109,60 @@ void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string
 		                            extension_version, engine_version);
 	}
 
+	ExtensionInitResult res;
+	res.basename = basename;
+	res.filename = filename;
+	res.lib_hdl = lib_hdl;
+	return res;
+}
+
+void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
+	auto &db = DatabaseInstance::GetDatabase(context);
+
+	auto res = InitialLoad(context, extension);
+	auto init_fun_name = res.basename + "_init";
+
+	ext_init_fun_t init_fun;
+	init_fun = LoadFunctionFromDLL<ext_init_fun_t>(res.lib_hdl, init_fun_name, res.filename);
+
 	try {
 		(*init_fun)(db);
 	} catch (std::exception &e) {
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-		                            init_fun_name, filename, e.what());
+		                            init_fun_name, res.filename, e.what());
+	}
+}
+
+unique_ptr<ReplacementOpenData> ExtensionHelper::ReplacementOpenPre(ClientContext &context, const string &extension,
+                                                                    DBConfig &config) {
+
+	auto res = InitialLoad(context, extension);
+	auto init_fun_name = res.basename + "_replacement_open_pre";
+
+	replacement_open_pre_t open_pre_fun;
+	open_pre_fun = LoadFunctionFromDLL<replacement_open_pre_t>(res.lib_hdl, init_fun_name, res.filename);
+
+	try {
+		return (*open_pre_fun)(config);
+	} catch (std::exception &e) {
+		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
+		                            init_fun_name, res.filename, e.what());
+	}
+}
+
+void ExtensionHelper::ReplacementOpenPost(ClientContext &context, const string &extension, DatabaseInstance &instance,
+                                          ReplacementOpenData *open_data) {
+	auto res = InitialLoad(context, extension);
+	auto init_fun_name = res.basename + "_replacement_open_post";
+
+	replacement_open_post_t open_post_fun;
+	open_post_fun = LoadFunctionFromDLL<replacement_open_post_t>(res.lib_hdl, init_fun_name, res.filename);
+
+	try {
+		(*open_post_fun)(instance, open_data);
+	} catch (std::exception &e) {
+		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
+		                            init_fun_name, res.filename, e.what());
 	}
 }
 

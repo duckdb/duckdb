@@ -22,6 +22,13 @@ struct DefaultExtension {
 	bool statically_loaded;
 };
 
+struct ExtensionInitResult {
+	string filename;
+	string basename;
+
+	void *lib_hdl;
+};
+
 class ExtensionHelper {
 public:
 	static void LoadAllExtensions(DuckDB &db);
@@ -38,8 +45,14 @@ public:
 
 	static const vector<string> GetPublicKeys();
 
+	static unique_ptr<ReplacementOpenData> ReplacementOpenPre(ClientContext &context, const string &extension,
+	                                                          DBConfig &config);
+	static void ReplacementOpenPost(ClientContext &context, const string &extension, DatabaseInstance &instance,
+	                                ReplacementOpenData *open_data);
+
 private:
 	static const vector<string> PathComponents();
+	static ExtensionInitResult InitialLoad(ClientContext &context, const string &extension);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

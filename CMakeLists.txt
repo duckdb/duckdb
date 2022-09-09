@@ -682,7 +682,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY IGNORE_WARNING
     elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
       set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
       # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip -Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version)
+      set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_replacement_open_pre, -Wl,-exported_symbol,_${NAME}_replacement_open_post")
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
     else()
       error("EXTENSION static build is only intended for Linux and Windows on MVSC")
     endif()

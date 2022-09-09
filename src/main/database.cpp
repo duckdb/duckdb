@@ -10,6 +10,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/replacement_opens.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -19,6 +20,8 @@ namespace duckdb {
 
 DBConfig::DBConfig() {
 	compression_functions = make_unique<CompressionFunctionSet>();
+	replacement_opens.push_back(ParquetReplacementOpen());
+	replacement_opens.push_back(ExtensionPrefixReplacementOpen());
 }
 
 DBConfig::~DBConfig() {
@@ -107,30 +110,40 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
-	if (new_config) {
-		// user-supplied configuration
-		Configure(*new_config);
-	} else {
-		// default configuration
-		DBConfig config;
-		Configure(config);
+void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
+	DBConfig default_config;
+	DBConfig *config_ptr = &default_config;
+	if (user_config) {
+		config_ptr = user_config;
 	}
-	if (config.options.temporary_directory.empty() && path) {
+
+	if (config.options.temporary_directory.empty() && database_path) {
 		// no directory specified: use default temp path
-		config.options.temporary_directory = string(path) + ".tmp";
+		config.options.temporary_directory = string(database_path) + ".tmp";
 
 		// special treatment for in-memory mode
-		if (strcmp(path, ":memory:") == 0) {
+		if (strcmp(database_path, ":memory:") == 0) {
 			config.options.temporary_directory = ".tmp";
 		}
 	}
-	if (new_config && !new_config->options.use_temporary_directory) {
+
+	if (database_path && strlen(database_path) > 0 && strcmp(database_path, ":memory:")) {
+		config_ptr->options.database_path = database_path;
+	}
+
+	for (auto &open : config_ptr->replacement_opens) {
+		if (open.pre_func) {
+			open.data = open.pre_func(*config_ptr);
+		}
+	}
+	Configure(*config_ptr);
+
+	if (user_config && !user_config->options.use_temporary_directory) {
 		// temporary directories explicitly disabled
 		config.options.temporary_directory = string();
 	}
 
-	storage = make_unique<StorageManager>(*this, path ? string(path) : string(),
+	storage = make_unique<StorageManager>(*this, config.options.database_path,
 	                                      config.options.access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
@@ -143,6 +156,12 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads);
+
+	for (auto &open : config.replacement_opens) {
+		if (open.post_func) {
+			open.post_func(*this, open.data.get());
+		}
+	}
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
@@ -243,6 +262,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.options.enable_external_access = new_config.options.enable_external_access;
 	config.options.allow_unsigned_extensions = new_config.options.allow_unsigned_extensions;
 	config.replacement_scans = move(new_config.replacement_scans);
+	config.replacement_opens = move(new_config.replacement_opens); // TODO is this okay?
 	config.options.initialize_default_database = new_config.options.initialize_default_database;
 	config.options.disabled_optimizers = move(new_config.options.disabled_optimizers);
 	config.parser_extensions = move(new_config.parser_extensions);
