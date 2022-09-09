@@ -115,7 +115,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		case TIMESTAMP_NS:
 			return Types.TIMESTAMP;
 		case TIMESTAMP_WITH_TIME_ZONE:
-			return Types.TIME_WITH_TIMEZONE;
+			return Types.TIMESTAMP_WITH_TIMEZONE;
 		case INTERVAL:
 			return Types.JAVA_OBJECT;
 		case BLOB:
@@ -157,7 +157,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Date.class.toString();
 		case Types.TIMESTAMP:
 			return Timestamp.class.toString();
-		case Types.TIME_WITH_TIMEZONE:
+		case Types.TIMESTAMP_WITH_TIMEZONE:
 			return OffsetDateTime.class.toString();
 		case Types.BLOB:
 			return DuckDBBlobResult.class.toString();
