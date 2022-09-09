@@ -90,9 +90,8 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 		REQUIRE_NO_FAIL(con1.Query("SET waggle_location_port=4242"));
 		usleep(100000); // need to wait a bit till socket is up
 
-		auto result1 = con1.Query(
-		    "SELECT first_name FROM PARQUET_SCAN('data/parquet-testing/userdata1.parquet') GROUP BY first_name");
-		result1->Print();
+		REQUIRE_NO_FAIL(con1.Query(
+		    "SELECT first_name FROM PARQUET_SCAN('data/parquet-testing/userdata1.parquet') GROUP BY first_name"));
 
 		if (kill(pid, SIGKILL) != 0) {
 			FAIL();
