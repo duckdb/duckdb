@@ -133,7 +133,7 @@ SortLayout SortLayout::GetPrefixComparisonLayout(idx_t num_prefix_cols) const {
 		result.order_by_null_types.push_back(order_by_null_types[col_idx]);
 		result.logical_types.push_back(logical_types[col_idx]);
 
-		result.all_constant = all_constant && constant_size[col_idx];
+		result.all_constant = result.all_constant && constant_size[col_idx];
 		result.constant_size.push_back(constant_size[col_idx]);
 
 		result.comparison_size += column_sizes[col_idx];
