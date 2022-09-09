@@ -4,7 +4,14 @@ namespace duckdb {
 
 static void CombineProjectionOrder(LogicalProjection &projection, unique_ptr<LogicalOperator> &op) {
 	auto &order = (LogicalOrder &)*projection.children[0];
+	if (order.table_index != DConstants::INVALID_INDEX) {
+		// Order is already combined with another projection
+		return;
+	}
 	order.projections = move(projection.expressions);
+	for (auto &proj : order.projections) {
+		proj->alias.clear();
+	}
 	order.table_index = projection.table_index;
 	op = move(op->children[0]);
 }

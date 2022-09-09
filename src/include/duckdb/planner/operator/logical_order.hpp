@@ -24,7 +24,7 @@ public:
 
 	vector<BoundOrderByNode> orders;
 
-	idx_t table_index;
+	idx_t table_index = DConstants::INVALID_INDEX;
 	vector<unique_ptr<Expression>> projections;
 
 public:
