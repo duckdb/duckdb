@@ -92,7 +92,9 @@ public:
 			D_ASSERT(read(sockfd, buffer, chunk_len) == chunk_len);
 			BufferedDeserializer deserializer((data_ptr_t)buffer, chunk_len);
 			DataChunk chunk;
+
 			chunk.Deserialize(deserializer);
+			chunk_collection->Initialize(chunk.GetTypes());
 			chunk_collection->Append(chunk);
 			free(buffer);
 		}
