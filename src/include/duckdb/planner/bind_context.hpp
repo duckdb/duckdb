@@ -28,6 +28,8 @@ class BoundQueryNode;
 
 class StarExpression;
 
+// FIXME: shouldn't this implement a std::hash operator that uses the 'primary_binding'?
+// That way we can confidently place them in an unordered_set without needing to instead put the pointer in it
 struct UsingColumnSet {
 	string primary_binding;
 	unordered_set<string> bindings;

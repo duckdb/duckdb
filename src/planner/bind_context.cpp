@@ -51,6 +51,11 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 }
 
 void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet *set) {
+	auto &using_set = using_columns[column_name];
+	if (!using_set.empty()) {
+		//! No need to add it, the binding on this column_name is already made
+		return;
+	}
 	using_columns[column_name].insert(set);
 }
 
@@ -508,6 +513,7 @@ void BindContext::AddContext(BindContext other) {
 	for (auto &entry : other.using_columns) {
 		for (auto &alias : entry.second) {
 #ifdef DEBUG
+			//! Make sure we don't insert the same alias twice for the same using column
 			for (auto &other_alias : using_columns[entry.first]) {
 				for (auto &col : alias->bindings) {
 					D_ASSERT(other_alias->bindings.find(col) == other_alias->bindings.end());
