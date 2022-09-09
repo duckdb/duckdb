@@ -11,7 +11,7 @@ import sys
 parser = argparse.ArgumentParser(description='Builds out-of-tree extensions for DuckDB')
 
 parser.add_argument('--extensions', action='store',
-                    help='CSV file with DuckDB extensions to build', default=".github/config/extensions.csv")
+                    help='CSV file with DuckDB extensions to build', default="extensions.csv")
 
 
 args = parser.parse_args()
@@ -40,7 +40,9 @@ for row in reader:
     url = row[1].strip()
     commit = row[2].strip()
     build_on_windows = row[3].strip()
-
+    if not url:
+        # This is not an out-of-tree extension
+        continue
     if len(name) == 0 or len(url) == 0 or len(commit) != 40 or len(build_on_windows) == 0 :
        raise ValueError('Row malformed' + str(row))
 
