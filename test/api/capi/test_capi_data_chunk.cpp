@@ -51,6 +51,8 @@ TEST_CASE("Test table_info incorrect 'is_valid' value for 'dflt_value' column", 
 	}
 
 	duckdb_destroy_result(&result);
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
 }
 
 TEST_CASE("Test Logical Types C API", "[capi]") {
