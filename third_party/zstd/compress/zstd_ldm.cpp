@@ -435,7 +435,7 @@ size_t ZSTD_ldm_generateSequences(
     U32 const maxDist = 1U << params->windowLog;
     BYTE const* const istart = (BYTE const*)src;
     BYTE const* const iend = istart + srcSize;
-    size_t const kMaxChunkSize = 1 << 20;
+    size_t const kMaxChunkSize = (size_t)1 << 20;
     size_t const nbChunks = (srcSize / kMaxChunkSize) + ((srcSize % kMaxChunkSize) != 0);
     size_t chunk;
     size_t leftoverSize = 0;

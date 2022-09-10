@@ -238,10 +238,10 @@ static const uint16 char_table[256] = {
 // block sizes, so the decompression code should not rely on the
 // non-existence of long backreferences.
 static const int kBlockLog = 16;
-static const size_t kBlockSize = 1 << kBlockLog;
+static const size_t kBlockSize = (size_t)1 << kBlockLog;
 
 static const int kMaxHashTableBits = 14;
-static const size_t kMaxHashTableSize = 1 << kMaxHashTableBits;
+static const size_t kMaxHashTableSize = (size_t)1 << kMaxHashTableBits;
 
 
 }  // end namespace duckdb_snappy

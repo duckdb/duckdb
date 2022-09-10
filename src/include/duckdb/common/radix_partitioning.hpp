@@ -42,7 +42,7 @@ private:
 struct RadixPartitioning {
 public:
 	static idx_t NumberOfPartitions(idx_t radix_bits) {
-		return 1 << radix_bits;
+		return (idx_t)1 << radix_bits;
 	}
 
 	//! Partition the data in block_collection/string_heap to multiple partitions

@@ -27,14 +27,14 @@ U_CDECL_BEGIN
 #ifndef U_IN_DOXYGEN
 /** @internal */
 typedef union UCPTrieData {
-    /** @internal */
-    const void *ptr0;
-    /** @internal */
-    const uint16_t *ptr16;
-    /** @internal */
-    const uint32_t *ptr32;
-    /** @internal */
-    const uint8_t *ptr8;
+	/** @internal */
+	const void *ptr0;
+	/** @internal */
+	const uint16_t *ptr16;
+	/** @internal */
+	const uint32_t *ptr32;
+	/** @internal */
+	const uint8_t *ptr8;
 } UCPTrieData;
 #endif
 
@@ -57,48 +57,48 @@ typedef union UCPTrieData {
  */
 struct UCPTrie {
 #ifndef U_IN_DOXYGEN
-    /** @internal */
-    const uint16_t *index;
-    /** @internal */
-    UCPTrieData data;
+	/** @internal */
+	const uint16_t *index;
+	/** @internal */
+	UCPTrieData data;
 
-    /** @internal */
-    int32_t indexLength;
-    /** @internal */
-    int32_t dataLength;
-    /** Start of the last range which ends at U+10FFFF. @internal */
-    UChar32 highStart;
-    /** highStart>>12 @internal */
-    uint16_t shifted12HighStart;
+	/** @internal */
+	int32_t indexLength;
+	/** @internal */
+	int32_t dataLength;
+	/** Start of the last range which ends at U+10FFFF. @internal */
+	UChar32 highStart;
+	/** highStart>>12 @internal */
+	uint16_t shifted12HighStart;
 
-    /** @internal */
-    int8_t type;  // UCPTrieType
-    /** @internal */
-    int8_t valueWidth;  // UCPTrieValueWidth
+	/** @internal */
+	int8_t type; // UCPTrieType
+	/** @internal */
+	int8_t valueWidth; // UCPTrieValueWidth
 
-    /** padding/reserved @internal */
-    uint32_t reserved32;
-    /** padding/reserved @internal */
-    uint16_t reserved16;
+	/** padding/reserved @internal */
+	uint32_t reserved32;
+	/** padding/reserved @internal */
+	uint16_t reserved16;
 
-    /**
-     * Internal index-3 null block offset.
-     * Set to an impossibly high value (e.g., 0xffff) if there is no dedicated index-3 null block.
-     * @internal
-     */
-    uint16_t index3NullOffset;
-    /**
-     * Internal data null block offset, not shifted.
-     * Set to an impossibly high value (e.g., 0xfffff) if there is no dedicated data null block.
-     * @internal
-     */
-    int32_t dataNullOffset;
-    /** @internal */
-    uint32_t nullValue;
+	/**
+	 * Internal index-3 null block offset.
+	 * Set to an impossibly high value (e.g., 0xffff) if there is no dedicated index-3 null block.
+	 * @internal
+	 */
+	uint16_t index3NullOffset;
+	/**
+	 * Internal data null block offset, not shifted.
+	 * Set to an impossibly high value (e.g., 0xfffff) if there is no dedicated data null block.
+	 * @internal
+	 */
+	int32_t dataNullOffset;
+	/** @internal */
+	uint32_t nullValue;
 
 #ifdef UCPTRIE_DEBUG
-    /** @internal */
-    const char *name;
+	/** @internal */
+	const char *name;
 #endif
 #endif
 };
@@ -116,22 +116,22 @@ typedef struct UCPTrie UCPTrie;
  * @stable ICU 63
  */
 enum UCPTrieType {
-    /**
-     * For ucptrie_openFromBinary() to accept any type.
-     * ucptrie_getType() will return the actual type.
-     * @stable ICU 63
-     */
-    UCPTRIE_TYPE_ANY = -1,
-    /**
-     * Fast/simple/larger BMP data structure. Use functions and "fast" macros.
-     * @stable ICU 63
-     */
-    UCPTRIE_TYPE_FAST,
-    /**
-     * Small/slower BMP data structure. Use functions and "small" macros.
-     * @stable ICU 63
-     */
-    UCPTRIE_TYPE_SMALL
+	/**
+	 * For ucptrie_openFromBinary() to accept any type.
+	 * ucptrie_getType() will return the actual type.
+	 * @stable ICU 63
+	 */
+	UCPTRIE_TYPE_ANY = -1,
+	/**
+	 * Fast/simple/larger BMP data structure. Use functions and "fast" macros.
+	 * @stable ICU 63
+	 */
+	UCPTRIE_TYPE_FAST,
+	/**
+	 * Small/slower BMP data structure. Use functions and "small" macros.
+	 * @stable ICU 63
+	 */
+	UCPTRIE_TYPE_SMALL
 };
 #ifndef U_IN_DOXYGEN
 typedef enum UCPTrieType UCPTrieType;
@@ -146,29 +146,29 @@ typedef enum UCPTrieType UCPTrieType;
  * @stable ICU 63
  */
 enum UCPTrieValueWidth {
-    /**
-     * For ucptrie_openFromBinary() to accept any data value width.
-     * ucptrie_getValueWidth() will return the actual data value width.
-     * @stable ICU 63
-     */
-    UCPTRIE_VALUE_BITS_ANY = -1,
-    /**
-     * The trie stores 16 bits per data value.
-     * It returns them as unsigned values 0..0xffff=65535.
-     * @stable ICU 63
-     */
-    UCPTRIE_VALUE_BITS_16,
-    /**
-     * The trie stores 32 bits per data value.
-     * @stable ICU 63
-     */
-    UCPTRIE_VALUE_BITS_32,
-    /**
-     * The trie stores 8 bits per data value.
-     * It returns them as unsigned values 0..0xff=255.
-     * @stable ICU 63
-     */
-    UCPTRIE_VALUE_BITS_8
+	/**
+	 * For ucptrie_openFromBinary() to accept any data value width.
+	 * ucptrie_getValueWidth() will return the actual data value width.
+	 * @stable ICU 63
+	 */
+	UCPTRIE_VALUE_BITS_ANY = -1,
+	/**
+	 * The trie stores 16 bits per data value.
+	 * It returns them as unsigned values 0..0xffff=65535.
+	 * @stable ICU 63
+	 */
+	UCPTRIE_VALUE_BITS_16,
+	/**
+	 * The trie stores 32 bits per data value.
+	 * @stable ICU 63
+	 */
+	UCPTRIE_VALUE_BITS_32,
+	/**
+	 * The trie stores 8 bits per data value.
+	 * It returns them as unsigned values 0..0xff=255.
+	 * @stable ICU 63
+	 */
+	UCPTRIE_VALUE_BITS_8
 };
 #ifndef U_IN_DOXYGEN
 typedef enum UCPTrieValueWidth UCPTrieValueWidth;
@@ -200,10 +200,8 @@ typedef enum UCPTrieValueWidth UCPTrieValueWidth;
  * @see ucptrie_toBinary
  * @stable ICU 63
  */
-U_CAPI UCPTrie * U_EXPORT2
-ucptrie_openFromBinary(UCPTrieType type, UCPTrieValueWidth valueWidth,
-                       const void *data, int32_t length, int32_t *pActualLength,
-                       UErrorCode *pErrorCode);
+U_CAPI UCPTrie *U_EXPORT2 ucptrie_openFromBinary(UCPTrieType type, UCPTrieValueWidth valueWidth, const void *data,
+                                                 int32_t length, int32_t *pActualLength, UErrorCode *pErrorCode);
 
 /**
  * Closes a trie and releases associated memory.
@@ -211,8 +209,7 @@ ucptrie_openFromBinary(UCPTrieType type, UCPTrieValueWidth valueWidth,
  * @param trie the trie
  * @stable ICU 63
  */
-U_CAPI void U_EXPORT2
-ucptrie_close(UCPTrie *trie);
+U_CAPI void U_EXPORT2 ucptrie_close(UCPTrie *trie);
 
 /**
  * Returns the trie type.
@@ -223,8 +220,7 @@ ucptrie_close(UCPTrie *trie);
  * @see UCPTRIE_TYPE_ANY
  * @stable ICU 63
  */
-U_CAPI UCPTrieType U_EXPORT2
-ucptrie_getType(const UCPTrie *trie);
+U_CAPI UCPTrieType U_EXPORT2 ucptrie_getType(const UCPTrie *trie);
 
 /**
  * Returns the number of bits in a trie data value.
@@ -235,8 +231,7 @@ ucptrie_getType(const UCPTrie *trie);
  * @see UCPTRIE_VALUE_BITS_ANY
  * @stable ICU 63
  */
-U_CAPI UCPTrieValueWidth U_EXPORT2
-ucptrie_getValueWidth(const UCPTrie *trie);
+U_CAPI UCPTrieValueWidth U_EXPORT2 ucptrie_getValueWidth(const UCPTrie *trie);
 
 /**
  * Returns the value for a code point as stored in the trie, with range checking.
@@ -252,8 +247,7 @@ ucptrie_getValueWidth(const UCPTrie *trie);
  *         or the trie error value if the code point is not in the range 0..U+10FFFF
  * @stable ICU 63
  */
-U_CAPI uint32_t U_EXPORT2
-ucptrie_get(const UCPTrie *trie, UChar32 c);
+U_CAPI uint32_t U_EXPORT2 ucptrie_get(const UCPTrie *trie, UChar32 c);
 
 /**
  * Returns the last code point such that all those from start to there have the same value.
@@ -291,10 +285,9 @@ ucptrie_get(const UCPTrie *trie, UChar32 c);
  * @return the range end code point, or -1 if start is not a valid code point
  * @stable ICU 63
  */
-U_CAPI UChar32 U_EXPORT2
-ucptrie_getRange(const UCPTrie *trie, UChar32 start,
-                 UCPMapRangeOption option, uint32_t surrogateValue,
-                 UCPMapValueFilter *filter, const void *context, uint32_t *pValue);
+U_CAPI UChar32 U_EXPORT2 ucptrie_getRange(const UCPTrie *trie, UChar32 start, UCPMapRangeOption option,
+                                          uint32_t surrogateValue, UCPMapValueFilter *filter, const void *context,
+                                          uint32_t *pValue);
 
 /**
  * Writes a memory-mappable form of the trie into 32-bit aligned memory.
@@ -311,8 +304,7 @@ ucptrie_getRange(const UCPTrie *trie, UChar32 start,
  * @see ucptrie_openFromBinary()
  * @stable ICU 63
  */
-U_CAPI int32_t U_EXPORT2
-ucptrie_toBinary(const UCPTrie *trie, void *data, int32_t capacity, UErrorCode *pErrorCode);
+U_CAPI int32_t U_EXPORT2 ucptrie_toBinary(const UCPTrie *trie, void *data, int32_t capacity, UErrorCode *pErrorCode);
 
 /**
  * Macro parameter value for a trie with 16-bit data values.
@@ -366,8 +358,7 @@ ucptrie_toBinary(const UCPTrie *trie, void *data, int32_t capacity, UErrorCode *
  * @return The code point's trie value.
  * @stable ICU 63
  */
-#define UCPTRIE_SMALL_GET(trie, dataAccess, c) \
-    dataAccess(trie, _UCPTRIE_CP_INDEX(trie, UCPTRIE_SMALL_MAX, c))
+#define UCPTRIE_SMALL_GET(trie, dataAccess, c) dataAccess(trie, _UCPTRIE_CP_INDEX(trie, UCPTRIE_SMALL_MAX, c))
 
 /**
  * UTF-16: Reads the next code point (UChar32 c, out), post-increments src,
@@ -382,23 +373,25 @@ ucptrie_toBinary(const UCPTrie *trie, void *data, int32_t capacity, UErrorCode *
  * @param result (out) variable for the trie lookup result
  * @stable ICU 63
  */
-#define UCPTRIE_FAST_U16_NEXT(trie, dataAccess, src, limit, c, result) UPRV_BLOCK_MACRO_BEGIN { \
-    (c) = *(src)++; \
-    int32_t __index; \
-    if (!U16_IS_SURROGATE(c)) { \
-        __index = _UCPTRIE_FAST_INDEX(trie, c); \
-    } else { \
-        uint16_t __c2; \
-        if (U16_IS_SURROGATE_LEAD(c) && (src) != (limit) && U16_IS_TRAIL(__c2 = *(src))) { \
-            ++(src); \
-            (c) = U16_GET_SUPPLEMENTARY((c), __c2); \
-            __index = _UCPTRIE_SMALL_INDEX(trie, c); \
-        } else { \
-            __index = (trie)->dataLength - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET; \
-        } \
-    } \
-    (result) = dataAccess(trie, __index); \
-} UPRV_BLOCK_MACRO_END
+#define UCPTRIE_FAST_U16_NEXT(trie, dataAccess, src, limit, c, result)                                                 \
+	UPRV_BLOCK_MACRO_BEGIN {                                                                                           \
+		(c) = *(src)++;                                                                                                \
+		int32_t __index;                                                                                               \
+		if (!U16_IS_SURROGATE(c)) {                                                                                    \
+			__index = _UCPTRIE_FAST_INDEX(trie, c);                                                                    \
+		} else {                                                                                                       \
+			uint16_t __c2;                                                                                             \
+			if (U16_IS_SURROGATE_LEAD(c) && (src) != (limit) && U16_IS_TRAIL(__c2 = *(src))) {                         \
+				++(src);                                                                                               \
+				(c) = U16_GET_SUPPLEMENTARY((c), __c2);                                                                \
+				__index = _UCPTRIE_SMALL_INDEX(trie, c);                                                               \
+			} else {                                                                                                   \
+				__index = (trie)->dataLength - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET;                                    \
+			}                                                                                                          \
+		}                                                                                                              \
+		(result) = dataAccess(trie, __index);                                                                          \
+	}                                                                                                                  \
+	UPRV_BLOCK_MACRO_END
 
 /**
  * UTF-16: Reads the previous code point (UChar32 c, out), pre-decrements src,
@@ -413,23 +406,25 @@ ucptrie_toBinary(const UCPTrie *trie, void *data, int32_t capacity, UErrorCode *
  * @param result (out) variable for the trie lookup result
  * @stable ICU 63
  */
-#define UCPTRIE_FAST_U16_PREV(trie, dataAccess, start, src, c, result) UPRV_BLOCK_MACRO_BEGIN { \
-    (c) = *--(src); \
-    int32_t __index; \
-    if (!U16_IS_SURROGATE(c)) { \
-        __index = _UCPTRIE_FAST_INDEX(trie, c); \
-    } else { \
-        uint16_t __c2; \
-        if (U16_IS_SURROGATE_TRAIL(c) && (src) != (start) && U16_IS_LEAD(__c2 = *((src) - 1))) { \
-            --(src); \
-            (c) = U16_GET_SUPPLEMENTARY(__c2, (c)); \
-            __index = _UCPTRIE_SMALL_INDEX(trie, c); \
-        } else { \
-            __index = (trie)->dataLength - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET; \
-        } \
-    } \
-    (result) = dataAccess(trie, __index); \
-} UPRV_BLOCK_MACRO_END
+#define UCPTRIE_FAST_U16_PREV(trie, dataAccess, start, src, c, result)                                                 \
+	UPRV_BLOCK_MACRO_BEGIN {                                                                                           \
+		(c) = *--(src);                                                                                                \
+		int32_t __index;                                                                                               \
+		if (!U16_IS_SURROGATE(c)) {                                                                                    \
+			__index = _UCPTRIE_FAST_INDEX(trie, c);                                                                    \
+		} else {                                                                                                       \
+			uint16_t __c2;                                                                                             \
+			if (U16_IS_SURROGATE_TRAIL(c) && (src) != (start) && U16_IS_LEAD(__c2 = *((src)-1))) {                     \
+				--(src);                                                                                               \
+				(c) = U16_GET_SUPPLEMENTARY(__c2, (c));                                                                \
+				__index = _UCPTRIE_SMALL_INDEX(trie, c);                                                               \
+			} else {                                                                                                   \
+				__index = (trie)->dataLength - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET;                                    \
+			}                                                                                                          \
+		}                                                                                                              \
+		(result) = dataAccess(trie, __index);                                                                          \
+	}                                                                                                                  \
+	UPRV_BLOCK_MACRO_END
 
 /**
  * UTF-8: Post-increments src and gets a value from the trie.
@@ -447,35 +442,38 @@ ucptrie_toBinary(const UCPTrie *trie, void *data, int32_t capacity, UErrorCode *
  * @param result (out) variable for the trie lookup result
  * @stable ICU 63
  */
-#define UCPTRIE_FAST_U8_NEXT(trie, dataAccess, src, limit, result) UPRV_BLOCK_MACRO_BEGIN { \
-    int32_t __lead = (uint8_t)*(src)++; \
-    if (!U8_IS_SINGLE(__lead)) { \
-        uint8_t __t1, __t2, __t3; \
-        if ((src) != (limit) && \
-            (__lead >= 0xe0 ? \
-                __lead < 0xf0 ?  /* U+0800..U+FFFF except surrogates */ \
-                    U8_LEAD3_T1_BITS[__lead &= 0xf] & (1 << ((__t1 = *(src)) >> 5)) && \
-                    ++(src) != (limit) && (__t2 = *(src) - 0x80) <= 0x3f && \
-                    (__lead = ((int32_t)(trie)->index[(__lead << 6) + (__t1 & 0x3f)]) + __t2, 1) \
-                :  /* U+10000..U+10FFFF */ \
-                    (__lead -= 0xf0) <= 4 && \
-                    U8_LEAD4_T1_BITS[(__t1 = *(src)) >> 4] & (1 << __lead) && \
-                    (__lead = (__lead << 6) | (__t1 & 0x3f), ++(src) != (limit)) && \
-                    (__t2 = *(src) - 0x80) <= 0x3f && \
-                    ++(src) != (limit) && (__t3 = *(src) - 0x80) <= 0x3f && \
-                    (__lead = __lead >= (trie)->shifted12HighStart ? \
-                        (trie)->dataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET : \
-                        ucptrie_internalSmallU8Index((trie), __lead, __t2, __t3), 1) \
-            :  /* U+0080..U+07FF */ \
-                __lead >= 0xc2 && (__t1 = *(src) - 0x80) <= 0x3f && \
-                (__lead = (int32_t)(trie)->index[__lead & 0x1f] + __t1, 1))) { \
-            ++(src); \
-        } else { \
-            __lead = (trie)->dataLength - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET;  /* ill-formed*/ \
-        } \
-    } \
-    (result) = dataAccess(trie, __lead); \
-} UPRV_BLOCK_MACRO_END
+#define UCPTRIE_FAST_U8_NEXT(trie, dataAccess, src, limit, result)                                                     \
+	UPRV_BLOCK_MACRO_BEGIN {                                                                                           \
+		int32_t __lead = (uint8_t) * (src)++;                                                                          \
+		if (!U8_IS_SINGLE(__lead)) {                                                                                   \
+			uint8_t __t1, __t2, __t3;                                                                                  \
+			if ((src) != (limit) &&                                                                                    \
+			    (__lead >= 0xe0                                                                                        \
+			         ? __lead < 0xf0 ? /* U+0800..U+FFFF except surrogates */                                          \
+			               U8_LEAD3_T1_BITS[__lead &= 0xf] & (1 << ((__t1 = *(src)) >> 5)) && ++(src) != (limit) &&    \
+			                   (__t2 = *(src)-0x80) <= 0x3f &&                                                         \
+			                   (__lead = ((int32_t)(trie)->index[(__lead << 6) + ((uint64_t)__t1 & 0x3f)]) + __t2, 1)  \
+			                         :              /* U+10000..U+10FFFF */                                            \
+			               (__lead -= 0xf0) <= 4 && /* FIXME: potentially a left shift issue, '__lead' is int32_t,     \
+			                                           lead can have a larger value than 64 */                         \
+			                   U8_LEAD4_T1_BITS[(__t1 = *(src)) >> 4] & (1 << __lead) &&                               \
+			                   (__lead = (__lead << 6) | (__t1 & 0x3f), ++(src) != (limit)) &&                         \
+			                   (__t2 = *(src)-0x80) <= 0x3f && ++(src) != (limit) && (__t3 = *(src)-0x80) <= 0x3f &&   \
+			                   (__lead = __lead >= (trie)->shifted12HighStart                                          \
+			                                 ? (trie)->dataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET                 \
+			                                 : ucptrie_internalSmallU8Index((trie), __lead, __t2, __t3),               \
+			                    1)                                                                                     \
+			         : /* U+0080..U+07FF */                                                                            \
+			         __lead >= 0xc2 && (__t1 = *(src)-0x80) <= 0x3f &&                                                 \
+			             (__lead = (int32_t)(trie)->index[__lead & 0x1f] + __t1, 1))) {                                \
+				++(src);                                                                                               \
+			} else {                                                                                                   \
+				__lead = (trie)->dataLength - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET; /* ill-formed*/                     \
+			}                                                                                                          \
+		}                                                                                                              \
+		(result) = dataAccess(trie, __lead);                                                                           \
+	}                                                                                                                  \
+	UPRV_BLOCK_MACRO_END
 
 /**
  * UTF-8: Pre-decrements src and gets a value from the trie.
@@ -493,16 +491,17 @@ ucptrie_toBinary(const UCPTrie *trie, void *data, int32_t capacity, UErrorCode *
  * @param result (out) variable for the trie lookup result
  * @stable ICU 63
  */
-#define UCPTRIE_FAST_U8_PREV(trie, dataAccess, start, src, result) UPRV_BLOCK_MACRO_BEGIN { \
-    int32_t __index = (uint8_t)*--(src); \
-    if (!U8_IS_SINGLE(__index)) { \
-        __index = ucptrie_internalU8PrevIndex((trie), __index, (const uint8_t *)(start), \
-                                              (const uint8_t *)(src)); \
-        (src) -= __index & 7; \
-        __index >>= 3; \
-    } \
-    (result) = dataAccess(trie, __index); \
-} UPRV_BLOCK_MACRO_END
+#define UCPTRIE_FAST_U8_PREV(trie, dataAccess, start, src, result)                                                     \
+	UPRV_BLOCK_MACRO_BEGIN {                                                                                           \
+		int32_t __index = (uint8_t) * --(src);                                                                         \
+		if (!U8_IS_SINGLE(__index)) {                                                                                  \
+			__index = ucptrie_internalU8PrevIndex((trie), __index, (const uint8_t *)(start), (const uint8_t *)(src));  \
+			(src) -= __index & 7;                                                                                      \
+			__index >>= 3;                                                                                             \
+		}                                                                                                              \
+		(result) = dataAccess(trie, __index);                                                                          \
+	}                                                                                                                  \
+	UPRV_BLOCK_MACRO_END
 
 /**
  * Returns a trie value for an ASCII code point, without range checking.
@@ -550,77 +549,70 @@ ucptrie_toBinary(const UCPTrie *trie, void *data, int32_t capacity, UErrorCode *
  * @internal
  */
 enum {
-    /** @internal */
-    UCPTRIE_FAST_SHIFT = 6,
+	/** @internal */
+	UCPTRIE_FAST_SHIFT = 6,
 
-    /** Number of entries in a data block for code points below the fast limit. 64=0x40 @internal */
-    UCPTRIE_FAST_DATA_BLOCK_LENGTH = 1 << UCPTRIE_FAST_SHIFT,
+	/** Number of entries in a data block for code points below the fast limit. 64=0x40 @internal */
+	UCPTRIE_FAST_DATA_BLOCK_LENGTH = 1 << UCPTRIE_FAST_SHIFT,
 
-    /** Mask for getting the lower bits for the in-fast-data-block offset. @internal */
-    UCPTRIE_FAST_DATA_MASK = UCPTRIE_FAST_DATA_BLOCK_LENGTH - 1,
+	/** Mask for getting the lower bits for the in-fast-data-block offset. @internal */
+	UCPTRIE_FAST_DATA_MASK = UCPTRIE_FAST_DATA_BLOCK_LENGTH - 1,
 
-    /** @internal */
-    UCPTRIE_SMALL_MAX = 0xfff,
+	/** @internal */
+	UCPTRIE_SMALL_MAX = 0xfff,
 
-    /**
-     * Offset from dataLength (to be subtracted) for fetching the
-     * value returned for out-of-range code points and ill-formed UTF-8/16.
-     * @internal
-     */
-    UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET = 1,
-    /**
-     * Offset from dataLength (to be subtracted) for fetching the
-     * value returned for code points highStart..U+10FFFF.
-     * @internal
-     */
-    UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET = 2
+	/**
+	 * Offset from dataLength (to be subtracted) for fetching the
+	 * value returned for out-of-range code points and ill-formed UTF-8/16.
+	 * @internal
+	 */
+	UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET = 1,
+	/**
+	 * Offset from dataLength (to be subtracted) for fetching the
+	 * value returned for code points highStart..U+10FFFF.
+	 * @internal
+	 */
+	UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET = 2
 };
 
 /* Internal functions and macros -------------------------------------------- */
 // Do not conditionalize with #ifndef U_HIDE_INTERNAL_API, needed for public API
 
 /** @internal */
-U_INTERNAL int32_t U_EXPORT2
-ucptrie_internalSmallIndex(const UCPTrie *trie, UChar32 c);
+U_INTERNAL int32_t U_EXPORT2 ucptrie_internalSmallIndex(const UCPTrie *trie, UChar32 c);
 
 /** @internal */
-U_INTERNAL int32_t U_EXPORT2
-ucptrie_internalSmallU8Index(const UCPTrie *trie, int32_t lt1, uint8_t t2, uint8_t t3);
+U_INTERNAL int32_t U_EXPORT2 ucptrie_internalSmallU8Index(const UCPTrie *trie, int32_t lt1, uint8_t t2, uint8_t t3);
 
 /**
  * Internal function for part of the UCPTRIE_FAST_U8_PREVxx() macro implementations.
  * Do not call directly.
  * @internal
  */
-U_INTERNAL int32_t U_EXPORT2
-ucptrie_internalU8PrevIndex(const UCPTrie *trie, UChar32 c,
-                            const uint8_t *start, const uint8_t *src);
+U_INTERNAL int32_t U_EXPORT2 ucptrie_internalU8PrevIndex(const UCPTrie *trie, UChar32 c, const uint8_t *start,
+                                                         const uint8_t *src);
 
 /** Internal trie getter for a code point below the fast limit. Returns the data index. @internal */
-#define _UCPTRIE_FAST_INDEX(trie, c) \
-    ((int32_t)(trie)->index[(c) >> UCPTRIE_FAST_SHIFT] + ((c) & UCPTRIE_FAST_DATA_MASK))
+#define _UCPTRIE_FAST_INDEX(trie, c) ((int32_t)(trie)->index[(c) >> UCPTRIE_FAST_SHIFT] + ((c)&UCPTRIE_FAST_DATA_MASK))
 
 /** Internal trie getter for a code point at or above the fast limit. Returns the data index. @internal */
-#define _UCPTRIE_SMALL_INDEX(trie, c) \
-    ((c) >= (trie)->highStart ? \
-        (trie)->dataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET : \
-        ucptrie_internalSmallIndex(trie, c))
+#define _UCPTRIE_SMALL_INDEX(trie, c)                                                                                  \
+	((c) >= (trie)->highStart ? (trie)->dataLength - UCPTRIE_HIGH_VALUE_NEG_DATA_OFFSET                                \
+	                          : ucptrie_internalSmallIndex(trie, c))
 
 /**
  * Internal trie getter for a code point, with checking that c is in U+0000..10FFFF.
  * Returns the data index.
  * @internal
  */
-#define _UCPTRIE_CP_INDEX(trie, fastMax, c) \
-    ((uint32_t)(c) <= (uint32_t)(fastMax) ? \
-        _UCPTRIE_FAST_INDEX(trie, c) : \
-        (uint32_t)(c) <= 0x10ffff ? \
-            _UCPTRIE_SMALL_INDEX(trie, c) : \
-            (trie)->dataLength - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET)
+#define _UCPTRIE_CP_INDEX(trie, fastMax, c)                                                                            \
+	((uint32_t)(c) <= (uint32_t)(fastMax) ? _UCPTRIE_FAST_INDEX(trie, c)                                               \
+	 : (uint32_t)(c) <= 0x10ffff          ? _UCPTRIE_SMALL_INDEX(trie, c)                                              \
+	                                      : (trie)->dataLength - UCPTRIE_ERROR_VALUE_NEG_DATA_OFFSET)
 
 U_CDECL_END
 
-#endif  // U_IN_DOXYGEN
+#endif // U_IN_DOXYGEN
 
 #if U_SHOW_CPLUSPLUS_API
 
@@ -639,6 +631,6 @@ U_DEFINE_LOCAL_OPEN_POINTER(LocalUCPTriePointer, UCPTrie, ucptrie_close);
 
 U_NAMESPACE_END
 
-#endif  // U_SHOW_CPLUSPLUS_API
+#endif // U_SHOW_CPLUSPLUS_API
 
 #endif

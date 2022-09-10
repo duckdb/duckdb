@@ -159,7 +159,7 @@ void duckdb_validity_set_row_invalid(uint64_t *validity, idx_t row) {
 	}
 	idx_t entry_idx = row / 64;
 	idx_t idx_in_entry = row % 64;
-	validity[entry_idx] &= ~(1 << idx_in_entry);
+	validity[entry_idx] &= ~((uint64_t)1 << idx_in_entry);
 }
 
 void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row) {
@@ -168,5 +168,5 @@ void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row) {
 	}
 	idx_t entry_idx = row / 64;
 	idx_t idx_in_entry = row % 64;
-	validity[entry_idx] |= 1 << idx_in_entry;
+	validity[entry_idx] |= (uint64_t)1 << idx_in_entry;
 }

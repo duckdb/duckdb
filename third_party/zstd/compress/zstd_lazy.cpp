@@ -71,7 +71,7 @@ ZSTD_insertDUBT1(ZSTD_matchState_t* ms,
     const ZSTD_compressionParameters* const cParams = &ms->cParams;
     U32* const bt = ms->chainTable;
     U32  const btLog  = cParams->chainLog - 1;
-    U32  const btMask = (1 << btLog) - 1;
+    U32  const btMask = ((U32)1 << btLog) - 1;
     size_t commonLengthSmaller=0, commonLengthLarger=0;
     const BYTE* const base = ms->window.base;
     const BYTE* const dictBase = ms->window.dictBase;
@@ -179,7 +179,7 @@ ZSTD_DUBT_findBetterDictMatch (
 
     U32*        const dictBt = dms->chainTable;
     U32         const btLog  = dmsCParams->chainLog - 1;
-    U32         const btMask = (1 << btLog) - 1;
+    U32         const btMask = ((U32)1 << btLog) - 1;
     U32         const btLow = (btMask >= dictHighLimit - dictLowLimit) ? dictLowLimit : dictHighLimit - btMask;
 
     size_t commonLengthSmaller=0, commonLengthLarger=0;
@@ -248,7 +248,7 @@ ZSTD_DUBT_findBestMatch(ZSTD_matchState_t* ms,
 
     U32*   const bt = ms->chainTable;
     U32    const btLog  = cParams->chainLog - 1;
-    U32    const btMask = (1 << btLog) - 1;
+    U32    const btMask = ((U32)1 << btLog) - 1;
     U32    const btLow = (btMask >= current) ? 0 : current - btMask;
     U32    const unsortLimit = MAX(btLow, windowLow);
 
@@ -456,7 +456,7 @@ static U32 ZSTD_insertAndFindFirstIndex_internal(
     U32* const hashTable  = ms->hashTable;
     const U32 hashLog = cParams->hashLog;
     U32* const chainTable = ms->chainTable;
-    const U32 chainMask = (1 << cParams->chainLog) - 1;
+    const U32 chainMask = ((U32)1 << cParams->chainLog) - 1;
     const BYTE* const base = ms->window.base;
     const U32 target = (U32)(ip - base);
     U32 idx = ms->nextToUpdate;
@@ -488,7 +488,7 @@ size_t ZSTD_HcFindBestMatch_generic (
 {
     const ZSTD_compressionParameters* const cParams = &ms->cParams;
     U32* const chainTable = ms->chainTable;
-    const U32 chainSize = (1 << cParams->chainLog);
+    const U32 chainSize = ((U32)1 << cParams->chainLog);
     const U32 chainMask = chainSize-1;
     const BYTE* const base = ms->window.base;
     const BYTE* const dictBase = ms->window.dictBase;
@@ -536,7 +536,7 @@ size_t ZSTD_HcFindBestMatch_generic (
     if (dictMode == ZSTD_dictMatchState) {
         const ZSTD_matchState_t* const dms = ms->dictMatchState;
         const U32* const dmsChainTable = dms->chainTable;
-        const U32 dmsChainSize         = (1 << dms->cParams.chainLog);
+        const U32 dmsChainSize         = ((U32)1 << dms->cParams.chainLog);
         const U32 dmsChainMask         = dmsChainSize - 1;
         const U32 dmsLowestIndex       = dms->window.dictLimit;
         const BYTE* const dmsBase      = dms->window.base;

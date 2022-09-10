@@ -1044,7 +1044,7 @@ ZSTD_adjustCParams_internal(ZSTD_compressionParameters cPar,
     if ( (srcSize < maxWindowResize)
       && (dictSize < maxWindowResize) )  {
         U32 const tSize = (U32)(srcSize + dictSize);
-        static U32 const hashSizeMin = 1 << ZSTD_HASHLOG_MIN;
+        static U32 const hashSizeMin = (U32)1 << ZSTD_HASHLOG_MIN;
         U32 const srcLog = (tSize < hashSizeMin) ? ZSTD_HASHLOG_MIN :
                             ZSTD_highbit32(tSize-1) + 1;
         if (cPar.windowLog > srcLog) cPar.windowLog = srcLog;

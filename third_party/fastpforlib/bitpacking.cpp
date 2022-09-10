@@ -10,7 +10,7 @@ namespace internal {
 template <uint8_t DELTA, uint8_t SHR, class TYPE, uint8_t TYPE_SIZE = sizeof(TYPE) * 8>
 typename std::enable_if<(DELTA + SHR) < TYPE_SIZE>::type unpack_single_out(const TYPE *__restrict in,
                                                                            TYPE *__restrict out) {
-	*out = ((*in) >> SHR) % (1 << DELTA);
+	*out = ((*in) >> SHR) % ((TYPE)1 << DELTA);
 }
 
 // Used for uint8_t, uint16_t and uint32_t

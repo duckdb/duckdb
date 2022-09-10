@@ -68,7 +68,7 @@ size_t FSE_buildCTable_wksp(FSE_CTable* ct,
                       const short* normalizedCounter, unsigned maxSymbolValue, unsigned tableLog,
                             void* workSpace, size_t wkspSize)
 {
-    U32 const tableSize = 1 << tableLog;
+    U32 const tableSize = (U32)1 << tableLog;
     U32 const tableMask = tableSize - 1;
     void* const ptr = ct;
     U16* const tableU16 = ( (U16*) ptr) + 2;
@@ -377,7 +377,7 @@ static size_t FSE_normalizeM2(short* norm, U32 tableLog, const unsigned* count, 
 
         norm[s]=NOT_YET_ASSIGNED;
     }
-    ToDistribute = (1 << tableLog) - distributed;
+    ToDistribute = ((U32)1 << tableLog) - distributed;
 
     if (ToDistribute == 0)
         return 0;
@@ -392,7 +392,7 @@ static size_t FSE_normalizeM2(short* norm, U32 tableLog, const unsigned* count, 
                 total -= count[s];
                 continue;
         }   }
-        ToDistribute = (1 << tableLog) - distributed;
+        ToDistribute = ((U32)1 << tableLog) - distributed;
     }
 
     if (distributed == maxSymbolValue+1) {
@@ -498,7 +498,7 @@ size_t FSE_normalizeCount (short* normalizedCounter, unsigned tableLog,
 /* fake FSE_CTable, for raw (uncompressed) input */
 size_t FSE_buildCTable_raw (FSE_CTable* ct, unsigned nbBits)
 {
-    const unsigned tableSize = 1 << nbBits;
+    const unsigned tableSize = (unsigned int)1 << nbBits;
     const unsigned tableMask = tableSize - 1;
     const unsigned maxSymbolValue = tableMask;
     void* const ptr = ct;
@@ -519,7 +519,7 @@ size_t FSE_buildCTable_raw (FSE_CTable* ct, unsigned nbBits)
         tableU16[s] = (U16)(tableSize + s);
 
     /* Build Symbol Transformation Table */
-    {   const U32 deltaNbBits = (nbBits << 16) - (1 << nbBits);
+    {   const U32 deltaNbBits = ((U32)nbBits << 16) - ((U32)1 << nbBits);
         for (s=0; s<=maxSymbolValue; s++) {
             symbolTT[s].deltaNbBits = deltaNbBits;
             symbolTT[s].deltaFindState = s-1;

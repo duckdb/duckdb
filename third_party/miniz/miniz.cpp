@@ -2245,7 +2245,7 @@ void tdefl_compressor_free(tdefl_compressor *pComp)
         {                                    \
             TINFL_NEED_BITS(state_index, n); \
         }                                    \
-        b = bit_buf & ((1 << (n)) - 1);      \
+        b = bit_buf & (((decltype(b))1 << (n)) - 1);      \
         bit_buf >>= (n);                     \
         num_bits -= (n);                     \
     }                                        \
@@ -2486,7 +2486,7 @@ tinfl_status tinfl_decompress(tinfl_decompressor *r, const mz_uint8 *pIn_buf_nex
                         while (rev_code < TINFL_FAST_LOOKUP_SIZE)
                         {
                             pTable->m_look_up[rev_code] = k;
-                            rev_code += (1 << code_size);
+                            rev_code += ((duckdb_miniz::mz_uint)1 << code_size);
                         }
                         continue;
                     }
