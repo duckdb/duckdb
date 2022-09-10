@@ -2245,7 +2245,7 @@ void tdefl_compressor_free(tdefl_compressor *pComp)
         {                                    \
             TINFL_NEED_BITS(state_index, n); \
         }                                    \
-        b = bit_buf & (((decltype(b))1 << (n)) - 1);      \
+        b = bit_buf & (((int64_t)1 << (n)) - 1);      \
         bit_buf >>= (n);                     \
         num_bits -= (n);                     \
     }                                        \
