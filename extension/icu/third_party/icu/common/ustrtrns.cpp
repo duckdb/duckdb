@@ -537,8 +537,7 @@ U_CAPI UChar *U_EXPORT2 u_strFromUTF8Lenient(UChar *dest, int32_t destCapacity, 
 				if ((t1 = pSrc[1]) != 0 && (t2 = pSrc[2]) != 0 && (t3 = pSrc[3]) != 0) {
 					pSrc += 4;
 					/* 0x3c82080 = (0xf0 << 18) + (0x80 << 12) + (0x80 << 6) + 0x80 */
-					// FIXME: shifting a uint8_t by 12 bits seems like an error?
-					ch = (ch << 18) + (t1 << 12) + (t2 << 6) + t3 - 0x3c82080;
+					ch = (ch << 18) + ((uint32_t)t1 << 12) + (t2 << 6) + t3 - 0x3c82080;
 					*(pDest++) = U16_LEAD(ch);
 					if (pDest < pDestLimit) {
 						*(pDest++) = U16_TRAIL(ch);
