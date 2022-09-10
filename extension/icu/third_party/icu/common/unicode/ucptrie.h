@@ -453,10 +453,8 @@ U_CAPI int32_t U_EXPORT2 ucptrie_toBinary(const UCPTrie *trie, void *data, int32
 			               U8_LEAD3_T1_BITS[__lead &= 0xf] & (1 << ((__t1 = *(src)) >> 5)) && ++(src) != (limit) &&    \
 			                   (__t2 = *(src)-0x80) <= 0x3f &&                                                         \
 			                   (__lead = ((int32_t)(trie)->index[(__lead << 6) + ((uint64_t)__t1 & 0x3f)]) + __t2, 1)  \
-			                         :              /* U+10000..U+10FFFF */                                            \
-			               (__lead -= 0xf0) <= 4 && /* FIXME: potentially a left shift issue, '__lead' is int32_t,     \
-			                                           lead can have a larger value than 64 */                         \
-			                   U8_LEAD4_T1_BITS[(__t1 = *(src)) >> 4] & (1 << __lead) &&                               \
+			                         : /* U+10000..U+10FFFF */                                                         \
+			               (__lead -= 0xf0) <= 4 && U8_LEAD4_T1_BITS[(__t1 = *(src)) >> 4] & ((int64_t)1 << __lead) && \
 			                   (__lead = (__lead << 6) | (__t1 & 0x3f), ++(src) != (limit)) &&                         \
 			                   (__t2 = *(src)-0x80) <= 0x3f && ++(src) != (limit) && (__t3 = *(src)-0x80) <= 0x3f &&   \
 			                   (__lead = __lead >= (trie)->shifted12HighStart                                          \
