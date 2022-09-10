@@ -135,9 +135,6 @@ static int8_t highBit(int32_t value) {
 
 static int32_t getPairIndex(UChar32 ch) {
 	int32_t pairedCharCount = UPRV_LENGTHOF(pairedChars);
-	// FIXME: highBit can return a value higher than 32, shifting by this amount could be problematic?
-	//! Furthermore highBit can produce -32, shifting by negative numbers is undefined behavior
-	// https://stackoverflow.com/a/4945765
 	int32_t pairedCharPower = 1 << highBit(pairedCharCount);
 	int32_t pairedCharExtra = pairedCharCount - pairedCharPower;
 
