@@ -405,7 +405,7 @@ class fp {
     assign(d);
     constexpr int min_normal_e = std::numeric_limits<float>::min_exponent -
                                  std::numeric_limits<double>::digits;
-    significand_type half_ulp = (uint64_t)1 << (std::numeric_limits<double>::digits -
+    significand_type half_ulp = 1 << (std::numeric_limits<double>::digits -
                                       std::numeric_limits<float>::digits - 1);
     if (min_normal_e > e) half_ulp <<= min_normal_e - e;
     fp upper = normalize<0>(fp(f + half_ulp, e));
