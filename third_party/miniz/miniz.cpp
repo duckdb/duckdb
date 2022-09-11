@@ -2486,7 +2486,7 @@ tinfl_status tinfl_decompress(tinfl_decompressor *r, const mz_uint8 *pIn_buf_nex
                         while (rev_code < TINFL_FAST_LOOKUP_SIZE)
                         {
                             pTable->m_look_up[rev_code] = k;
-                            rev_code += ((duckdb_miniz::mz_uint)1 << code_size);
+                            rev_code += (1 << code_size);
                         }
                         continue;
                     }

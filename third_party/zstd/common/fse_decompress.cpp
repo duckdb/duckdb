@@ -75,7 +75,7 @@ size_t FSE_buildDTable(FSE_DTable* dt, const short* normalizedCounter, unsigned 
     U16 symbolNext[FSE_MAX_SYMBOL_VALUE+1];
 
     U32 const maxSV1 = maxSymbolValue + 1;
-    U32 const tableSize = (U32)1 << tableLog;
+    U32 const tableSize = 1 << tableLog;
     U32 highThreshold = tableSize-1;
 
     /* Sanity Checks */
@@ -155,7 +155,7 @@ size_t FSE_buildDTable_raw (FSE_DTable* dt, unsigned nbBits)
     FSE_DTableHeader* const DTableH = (FSE_DTableHeader*)ptr;
     void* dPtr = dt + 1;
     FSE_decode_t* const dinfo = (FSE_decode_t*)dPtr;
-    const unsigned tableSize = (unsigned int)1 << nbBits;
+    const unsigned tableSize = 1 << nbBits;
     const unsigned tableMask = tableSize - 1;
     const unsigned maxSV1 = tableMask+1;
     unsigned s;

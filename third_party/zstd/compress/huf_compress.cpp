@@ -220,11 +220,11 @@ static U32 HUF_setMaxHeight(nodeElt* huffNode, U32 lastNonNull, U32 maxNbBits)
 
     /* there are several too large elements (at least >= 2) */
     {   int totalCost = 0;
-        const U32 baseCost = (U32)1 << (largestBits - maxNbBits);
+        const U32 baseCost = 1 << (largestBits - maxNbBits);
         int n = (int)lastNonNull;
 
         while (huffNode[n].nbBits > maxNbBits) {
-            totalCost += baseCost - ((U32)1 << (largestBits - huffNode[n].nbBits));
+            totalCost += baseCost - (1 << (largestBits - huffNode[n].nbBits));
             huffNode[n].nbBits = (BYTE)maxNbBits;
             n --;
         }  /* n stops at huffNode[n].nbBits <= maxNbBits */

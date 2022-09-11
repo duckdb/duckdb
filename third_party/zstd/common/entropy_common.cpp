@@ -199,9 +199,9 @@ size_t HUF_readStats(BYTE* huffWeight, size_t hwSize, U32* rankStats,
         if (tableLog > HUF_TABLELOG_MAX) return ERROR(corruption_detected);
         *tableLogPtr = tableLog;
         /* determine last weight */
-        {   U32 const total = (U32)1 << tableLog;
+        {   U32 const total = 1 << tableLog;
             U32 const rest = total - weightTotal;
-            U32 const verif = (U32)1 << BIT_highbit32(rest);
+            U32 const verif = 1 << BIT_highbit32(rest);
             U32 const lastWeight = BIT_highbit32(rest) + 1;
             if (verif != rest) return ERROR(corruption_detected);    /* last value must be a clean power of 2 */
             huffWeight[oSize] = (BYTE)lastWeight;
