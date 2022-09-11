@@ -583,8 +583,9 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		std::string cpp_table_name = table_name;
 
 		throw InvalidInputException(
-		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nIf you "
-		    "aren't expecting this error, make sure that \"%s\" is of an appropriate type for replacement scans",
+		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
+		    "that \"%s\" is either a pandas.DataFrame, or pyarrow Table, FileSystemDataset, InMemoryDataset, "
+		    "RecordBatchReader, or Scanner",
 		    cpp_table_name, py_object_type, location, cpp_table_name);
 	}
 	return table_function;
