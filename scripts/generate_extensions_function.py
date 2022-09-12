@@ -28,8 +28,7 @@ function_map = {}
 for extension in reader:
     extension_name = extension[0]
     print("Install/Load " + extension_name)
-    install = f"INSTALL {extension_name};"
-    load = f"LOAD {extension_name};"
+    load = f"LOAD /tmp/{extension_name};"
     extension_functions = os.popen(f'{duckdb_path} -csv -c "{install}{load}{get_func}" ').read().split("\n")[1:-1]
     function_map.update({
         extension_function: extension_name
@@ -44,6 +43,8 @@ if args.validate:
         if pattern.match(line):
             split_line = line.split("\"")
             cur_function_map[split_line[1]] = split_line[3]
+    print("Current Functions: " + cur_function_map)
+    print("Function Map: " + function_map)
     assert cur_function_map == function_map
 else:
     # Generate Header
