@@ -32,7 +32,14 @@ applications, and to alter it and redistribute it freely, subject to the followi
 #include <iterator>
 #include <utility>
 
-namespace duckdb {
+namespace duckdb_pdqsort {
+
+using duckdb::idx_t;
+using duckdb::data_t;
+using duckdb::data_ptr_t;
+using duckdb::unique_ptr;
+using duckdb::FastMemcpy;
+using duckdb::FastMemcmp;
 
 enum {
 	// Partitions below this size are sorted using insertion sort.
@@ -683,14 +690,14 @@ inline void pdqsort(const PDQIterator &begin, const PDQIterator &end, const PDQC
 	if (begin == end) {
 		return;
 	}
-	duckdb::pdqsort_loop<false>(begin, end, constants, duckdb::log2(end - begin));
+	pdqsort_loop<false>(begin, end, constants, log2(end - begin));
 }
 
 inline void pdqsort_branchless(const PDQIterator &begin, const PDQIterator &end, const PDQConstants &constants) {
 	if (begin == end) {
 		return;
 	}
-	duckdb::pdqsort_loop<true>(begin, end, constants, duckdb::log2(end - begin));
+	pdqsort_loop<true>(begin, end, constants, log2(end - begin));
 }
 
-} // namespace duckdb
+} // namespace duckdb_pdqsort
