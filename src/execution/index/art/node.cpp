@@ -112,6 +112,26 @@ NodeType Node::GetTypeBySize(idx_t size) {
 	return NodeType::N256;
 }
 
+void Node::NewNode(NodeType &type, Node *&node) {
+
+	switch (type) {
+	case NodeType::N4:
+		node = new Node4();
+		return;
+	case NodeType::N16:
+		node = new Node16();
+		return;
+	case NodeType::N48:
+		node = new Node48();
+		return;
+	case NodeType::N256:
+		node = new Node256();
+		return;
+	default:
+		throw InternalException("Unrecognized type for new node creation!");
+	}
+}
+
 BlockPointer Node::SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, InternalType &internal_type) {
 	// Iterate through children and annotate their offsets
 	vector<BlockPointer> child_offsets;

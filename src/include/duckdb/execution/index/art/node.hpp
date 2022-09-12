@@ -77,6 +77,8 @@ public:
 	static void Erase(Node *&node, idx_t pos, ART &art);
 	//! Get the corresponding node type for the provided size
 	static NodeType GetTypeBySize(idx_t size);
+	//! Create a new node of the specified type
+	static void NewNode(NodeType &type, Node *&node);
 
 	//! Serialize this node
 	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer);

@@ -256,7 +256,8 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 			new_row_ids[i] = row_ids[key_section.start + i];
 		}
 
-		node = new Leaf(start_key, prefix_start, move(new_row_ids), num_row_ids);
+		Prefix prefix(start_key, key_section.depth, start_key.len - key_section.depth);
+		node = new Leaf(move(new_row_ids), num_row_ids, prefix);
 
 	} else { // create a new node and recurse
 
@@ -264,15 +265,8 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 		vector<KeySection> child_sections;
 		GetNodeChildren(child_sections, keys, key_section);
 
-		if (child_sections.size() <= 4) {
-			node = new Node4();
-		} else if (child_sections.size() <= 16) {
-			node = new Node16();
-		} else if (child_sections.size() <= 48) {
-			node = new Node48();
-		} else {
-			node = new Node256();
-		}
+		auto node_type = Node::GetTypeBySize(child_sections.size());
+		Node::NewNode(node_type, node);
 
 		auto prefix_length = key_section.depth - prefix_start;
 		node->prefix = Prefix(start_key, prefix_start, prefix_length);
@@ -282,6 +276,19 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 			Node *new_child = nullptr;
 			Construct(keys, row_ids, new_child, child_sections[i], has_constraint);
 			Node::InsertChildNode(node, child_sections[i].key_byte, new_child);
+		}
+	}
+}
+
+void FindFirstNotNullKey(vector<unique_ptr<Key>> &keys, bool &skipped_all_nulls, idx_t &start_idx) {
+
+	if (!skipped_all_nulls) {
+		for (idx_t i = 0; i < keys.size(); i++) {
+			if (keys[i]) {
+				start_idx = i;
+				skipped_all_nulls = true;
+				return;
+			}
 		}
 	}
 }
@@ -303,9 +310,9 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 		}
 
 		// get the key chunk and the row_identifiers vector
-		DataChunk chunk_row_ids;
-		ordered_chunk.Split(chunk_row_ids, ordered_chunk.ColumnCount() - 1);
-		auto &row_identifiers = chunk_row_ids.data[0];
+		DataChunk row_id_chunk;
+		ordered_chunk.Split(row_id_chunk, ordered_chunk.ColumnCount() - 1);
+		auto &row_identifiers = row_id_chunk.data[0];
 
 		D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
 		D_ASSERT(logical_types[0] == ordered_chunk.data[0].GetType());
@@ -314,16 +321,9 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 		vector<unique_ptr<Key>> keys;
 		GenerateKeys(ordered_chunk, keys);
 
+		// we order NULLS FIRST, so we might have to skip nulls at the start of our sorted data
 		idx_t start_idx = 0;
-		if (!skipped_all_nulls) {
-			for (idx_t i = 0; i < keys.size(); i++) {
-				if (keys[i]) {
-					start_idx = i;
-					skipped_all_nulls = true;
-					break;
-				}
-			}
-		}
+		FindFirstNotNullKey(keys, skipped_all_nulls, start_idx);
 
 		if (start_idx != 0 && IsPrimary()) {
 			throw ConstraintException("NULLs in new data violate the primary key constraint of the index");
@@ -872,6 +872,9 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Serialization
+//===--------------------------------------------------------------------===//
 BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
 	if (tree) {
@@ -880,6 +883,9 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 }
 
+//===--------------------------------------------------------------------===//
+// Merge ARTs
+//===--------------------------------------------------------------------===//
 void ART::Merge(ART *l_art, ART *r_art) {
 	Node *null_parent = nullptr;
 	Node::ResolvePrefixesAndMerge(l_art, r_art, l_art->tree, r_art->tree, 0, null_parent, 0, null_parent, 0);
