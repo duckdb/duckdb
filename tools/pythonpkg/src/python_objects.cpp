@@ -63,6 +63,11 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 		if (exponent_type == PyDecimalExponentType::EXPONENT_POWER) {
 			width += scale;
 		}
+		if (scale > width) {
+			//! The value starts with 1 or more zeros, which are optimized out of the 'digits' array
+			//! 0.001 - width=1, exponent=-3
+			width = scale + 1; // DECIMAL(4,3) - add 1 for the non-decimal values
+		}
 		if (width > Decimal::MAX_WIDTH_INT64) {
 			return false;
 		}
@@ -126,6 +131,10 @@ Value PyDecimal::ToDuckValue() {
 		uint8_t scale = exponent_value;
 		if (width > Decimal::MAX_WIDTH_INT64) {
 			UnsupportedWidth(width);
+		}
+		if (scale > width) {
+			//! Values like '0.001'
+			width = scale + 1; //! leave 1 room for the non-decimal value
 		}
 		int64_t value = 0;
 		for (auto it = digits.begin(); it != digits.end(); it++) {

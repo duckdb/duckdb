@@ -4,6 +4,7 @@ import datetime
 import numpy as np
 import pytest
 import decimal
+from decimal import Decimal
 
 def create_generic_dataframe(data):
     return pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
@@ -346,8 +347,8 @@ class TestResolveObjectColumns(object):
         pd.testing.assert_frame_equal(converted_col, duckdb_col)
 
     def test_ubigint_object_conversion(self, duckdb_cursor):
-		# UBIGINT + TINYINT would result in HUGEINT, but conversion to HUGEINT is not supported yet from pandas->duckdb
-		# So this instead becomes a DOUBLE
+        # UBIGINT + TINYINT would result in HUGEINT, but conversion to HUGEINT is not supported yet from pandas->duckdb
+        # So this instead becomes a DOUBLE
         data = [18446744073709551615, 0]
         x = pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
         converted_col = duckdb.query_df(x, "x", "select * from x").df()
@@ -423,6 +424,39 @@ class TestResolveObjectColumns(object):
         })
         with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
             res = duckdb.query_df(x, "x", "select * from x").df()
+
+    def test_numeric_decimal_zero_fractional(self):
+        duckdb_conn = duckdb.connect()
+        decimals = pd.DataFrame(
+            data={
+                "0": [
+                    Decimal("0.00"),
+                    Decimal("125.90"),
+                    Decimal("0.001"),
+                    Decimal("2502.63"),
+                    Decimal("0.000123"),
+                    Decimal("0.00"),
+                    Decimal("321.00"),
+                ]
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                (0.00),
+                (125.90),
+                (0.001),
+                (2502.63),
+                (0.000123),
+                (0.00),
+                (321.00)
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+
+        assert(conversion == reference)
 
     def test_numeric_decimal_incompatible(self):
         duckdb_conn = duckdb.connect()
