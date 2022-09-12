@@ -87,10 +87,8 @@ public:
 	//! Insert data into the index.
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
-	//! Build an ART from a sorted chunk.
-	void Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_t start_idx, idx_t end_idx, idx_t depth);
-	//! Build ARTs from sorted chunks and merge them.
-	void BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
+	//! Construct ARTs from sorted chunks and merge them.
+	void ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
 
 	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
 	//! Search Equal used for Joins that do not need to fetch data

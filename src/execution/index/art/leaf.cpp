@@ -43,34 +43,6 @@ void Leaf::Insert(row_t row_id) {
 	row_ids[count++] = row_id;
 }
 
-BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
-	auto block_id = writer.block->id;
-	uint32_t offset = writer.offset;
-	// Write Node Type
-	writer.Write(type);
-	// Write compression Info
-	prefix.Serialize(writer);
-	// Write Row Ids
-	// Length
-	writer.Write(count);
-	// Actual Row Ids
-	for (idx_t i = 0; i < count; i++) {
-		writer.Write(row_ids[i]);
-	}
-	return {block_id, offset};
-}
-
-Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
-	Prefix prefix;
-	prefix.Deserialize(reader);
-	auto num_elements = reader.Read<uint16_t>();
-	auto elements = unique_ptr<row_t[]>(new row_t[num_elements]);
-	for (idx_t i = 0; i < num_elements; i++) {
-		elements[i] = reader.Read<row_t>();
-	}
-	return new Leaf(move(elements), num_elements, prefix);
-}
-
 void Leaf::Remove(row_t row_id) {
 	idx_t entry_offset = DConstants::INVALID_INDEX;
 	for (idx_t i = 0; i < count; i++) {
@@ -97,6 +69,34 @@ void Leaf::Remove(row_t row_id) {
 			row_ids[j] = row_ids[j + 1];
 		}
 	}
+}
+
+BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
+	auto block_id = writer.block->id;
+	uint32_t offset = writer.offset;
+	// Write Node Type
+	writer.Write(type);
+	// Write compression Info
+	prefix.Serialize(writer);
+	// Write Row Ids
+	// Length
+	writer.Write(count);
+	// Actual Row Ids
+	for (idx_t i = 0; i < count; i++) {
+		writer.Write(row_ids[i]);
+	}
+	return {block_id, offset};
+}
+
+Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
+	Prefix prefix;
+	prefix.Deserialize(reader);
+	auto num_elements = reader.Read<uint16_t>();
+	auto elements = unique_ptr<row_t[]>(new row_t[num_elements]);
+	for (idx_t i = 0; i < num_elements; i++) {
+		elements[i] = reader.Read<row_t>();
+	}
+	return new Leaf(move(elements), num_elements, prefix);
 }
 
 void Leaf::Merge(bool has_constraint, Node *&l_node, Node *&r_node) {

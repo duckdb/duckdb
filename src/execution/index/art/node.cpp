@@ -6,32 +6,6 @@
 
 namespace duckdb {
 
-Node::Node(NodeType type) : count(0), type(type) {
-}
-
-// LCOV_EXCL_START
-Node *Node::GetChild(ART &art, idx_t pos) {
-	D_ASSERT(0);
-	return nullptr;
-}
-
-void Node::ReplaceChildPointer(idx_t pos, Node *node) {
-	D_ASSERT(0);
-}
-
-idx_t Node::GetMin() {
-	D_ASSERT(0);
-	return 0;
-}
-// LCOV_EXCL_STOP
-
-void InternalType::Set(uint8_t *key_p, uint16_t key_size_p, SwizzleablePointer *children_p, uint16_t children_size_p) {
-	key = key_p;
-	key_size = key_size_p;
-	children = children_p;
-	children_size = children_size_p;
-}
-
 InternalType::InternalType(Node *n) {
 	switch (n->type) {
 	case NodeType::N4: {
@@ -57,6 +31,85 @@ InternalType::InternalType(Node *n) {
 	default:
 		throw InternalException("This is not an Internal ART Node Type");
 	}
+}
+
+void InternalType::Set(uint8_t *key_p, uint16_t key_size_p, SwizzleablePointer *children_p, uint16_t children_size_p) {
+	key = key_p;
+	key_size = key_size_p;
+	children = children_p;
+	children_size = children_size_p;
+}
+
+Node::Node(NodeType type) : count(0), type(type) {
+}
+
+// LCOV_EXCL_START
+idx_t Node::GetMin() {
+	D_ASSERT(0);
+	return 0;
+}
+
+Node *Node::GetChild(ART &art, idx_t pos) {
+	D_ASSERT(0);
+	return nullptr;
+}
+
+void Node::ReplaceChildPointer(idx_t pos, Node *node) {
+	D_ASSERT(0);
+}
+// LCOV_EXCL_STOP
+
+void Node::InsertChildNode(Node *&node, uint8_t key_byte, Node *new_child) {
+	switch (node->type) {
+	case NodeType::N4:
+		Node4::Insert(node, key_byte, new_child);
+		break;
+	case NodeType::N16:
+		Node16::Insert(node, key_byte, new_child);
+		break;
+	case NodeType::N48:
+		Node48::Insert(node, key_byte, new_child);
+		break;
+	case NodeType::N256:
+		Node256::Insert(node, key_byte, new_child);
+		break;
+	default:
+		throw InternalException("Unrecognized leaf type for insert");
+	}
+}
+
+void Node::Erase(Node *&node, idx_t pos, ART &art) {
+	switch (node->type) {
+	case NodeType::N4: {
+		Node4::Erase(node, pos, art);
+		break;
+	}
+	case NodeType::N16: {
+		Node16::Erase(node, pos, art);
+		break;
+	}
+	case NodeType::N48: {
+		Node48::Erase(node, pos, art);
+		break;
+	}
+	case NodeType::N256:
+		Node256::Erase(node, pos, art);
+		break;
+	default:
+		throw InternalException("Unrecognized leaf type for erase");
+	}
+}
+
+NodeType Node::GetTypeBySize(idx_t size) {
+
+	if (size <= 4) {
+		return NodeType::N4;
+	} else if (size <= 16) {
+		return NodeType::N16;
+	} else if (size <= 48) {
+		return NodeType::N48;
+	}
+	return NodeType::N256;
 }
 
 BlockPointer Node::SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, InternalType &internal_type) {
@@ -145,47 +198,6 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	}
 	deserialized_node->DeserializeInternal(reader);
 	return deserialized_node;
-}
-
-void Node::InsertChildNode(Node *&node, uint8_t key_byte, Node *new_child) {
-	switch (node->type) {
-	case NodeType::N4:
-		Node4::Insert(node, key_byte, new_child);
-		break;
-	case NodeType::N16:
-		Node16::Insert(node, key_byte, new_child);
-		break;
-	case NodeType::N48:
-		Node48::Insert(node, key_byte, new_child);
-		break;
-	case NodeType::N256:
-		Node256::Insert(node, key_byte, new_child);
-		break;
-	default:
-		throw InternalException("Unrecognized leaf type for insert");
-	}
-}
-
-void Node::Erase(Node *&node, idx_t pos, ART &art) {
-	switch (node->type) {
-	case NodeType::N4: {
-		Node4::Erase(node, pos, art);
-		break;
-	}
-	case NodeType::N16: {
-		Node16::Erase(node, pos, art);
-		break;
-	}
-	case NodeType::N48: {
-		Node48::Erase(node, pos, art);
-		break;
-	}
-	case NodeType::N256:
-		Node256::Erase(node, pos, art);
-		break;
-	default:
-		throw InternalException("Unrecognized leaf type for erase");
-	}
 }
 
 void Node::ResolvePrefixesAndMerge(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth,

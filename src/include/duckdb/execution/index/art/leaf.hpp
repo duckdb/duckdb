@@ -18,6 +18,7 @@ public:
 	Leaf(Key &value, unsigned depth, row_t row_id);
 	Leaf(Key &value, unsigned depth, unique_ptr<row_t[]> row_ids_p, idx_t num_elements_p);
 	Leaf(unique_ptr<row_t[]> row_ids, idx_t num_elements, Prefix &prefix);
+
 	idx_t capacity;
 
 	row_t GetRowId(idx_t index) {
@@ -25,14 +26,17 @@ public:
 	}
 
 public:
+	//! Insert a row_id into a leaf
 	void Insert(row_t row_id);
+	//! Remove a row_id from a leaf
 	void Remove(row_t row_id);
 
 	//! Merge two NLeaf nodes
 	static void Merge(bool has_constraint, Node *&l_node, Node *&r_node);
 
+	//! Serialize a leaf
 	BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
-
+	// Deserialize a leaf
 	static Leaf *Deserialize(duckdb::MetaBlockReader &reader);
 
 private:

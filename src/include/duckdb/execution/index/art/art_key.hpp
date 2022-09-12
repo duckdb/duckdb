@@ -37,6 +37,8 @@ public:
 		return CreateKey(element.GetValueUnsafe<T>());
 	}
 
+	static bool ByteMatches(Key &key_1, Key &key_2, idx_t depth);
+
 public:
 	data_t &operator[](std::size_t i) {
 		return data[i];

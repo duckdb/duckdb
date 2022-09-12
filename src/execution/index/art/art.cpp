@@ -204,79 +204,89 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	}
 }
 
-struct BuildARTOffsets {
-	BuildARTOffsets(idx_t start_p, idx_t end_p, data_t byte_p) : start(start_p), end(end_p), byte(byte_p) {};
+struct KeySection {
+	KeySection(idx_t start_p, idx_t end_p, idx_t depth_p, data_t key_byte_p)
+	    : start(start_p), end(end_p), depth(depth_p), key_byte(key_byte_p) {};
 	idx_t start;
 	idx_t end;
-	data_t byte;
+	idx_t depth;
+	data_t key_byte;
 };
 
-void ART::Build(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, idx_t start_idx, idx_t end_idx,
-                idx_t depth) {
+void GetNodeChildren(vector<KeySection> &child_sections, vector<unique_ptr<Key>> &keys, KeySection &key_section) {
 
-	// test if we reached a leaf
-	auto prefix_start = depth;
-	while (keys[start_idx]->len != depth && keys[start_idx]->data[depth] == keys[end_idx]->data[depth]) {
-		depth++;
+	idx_t child_start_idx = key_section.start;
+	for (idx_t i = key_section.start + 1; i <= key_section.end; i++) {
+		if (keys[i - 1]->data[key_section.depth] != keys[i]->data[key_section.depth]) {
+			child_sections.emplace_back(child_start_idx, i - 1, key_section.depth + 1,
+			                            keys[i - 1]->data[key_section.depth]);
+			child_start_idx = i;
+		}
+	}
+	child_sections.emplace_back(child_start_idx, key_section.end, key_section.depth + 1,
+	                            keys[key_section.end]->data[key_section.depth]);
+}
+
+void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySection &key_section,
+               bool &has_constraint) {
+
+	auto &start_key = *keys[key_section.start];
+	auto &end_key = *keys[key_section.end];
+
+	// increment the depth until we reach a leaf or find a mismatching byte
+	auto prefix_start = key_section.depth;
+	while (start_key.len != key_section.depth && Key::ByteMatches(start_key, end_key, key_section.depth)) {
+		key_section.depth++;
 	}
 
-	// we reached a leaf
-	if (depth == keys[start_idx]->len) {
+	// we reached a leaf, i.e. all the bytes of start_key and end_key match
+	if (start_key.len == key_section.depth) {
 
 		// end_idx is inclusive
-		auto num_row_ids = end_idx - start_idx + 1;
+		auto num_row_ids = key_section.end - key_section.start + 1;
 
 		// check for possible constraint violation
-		if ((IsUnique() || IsPrimary()) && num_row_ids != 1) {
+		if (has_constraint && num_row_ids != 1) {
 			throw ConstraintException("New data contains duplicates on indexed column(s)");
 		}
 
 		// new row ids of this leaf
 		auto new_row_ids = unique_ptr<row_t[]>(new row_t[num_row_ids]);
 		for (idx_t i = 0; i < num_row_ids; i++) {
-			new_row_ids[i] = row_ids[start_idx + i];
+			new_row_ids[i] = row_ids[key_section.start + i];
 		}
 
-		node = new Leaf(*keys[start_idx], prefix_start, move(new_row_ids), num_row_ids);
+		node = new Leaf(start_key, prefix_start, move(new_row_ids), num_row_ids);
 
 	} else { // create a new node and recurse
 
-		// we will find at least two offset entries, otherwise we'd have reached a leaf
-		vector<BuildARTOffsets> offsets;
-		idx_t offset = start_idx;
-		for (idx_t i = start_idx + 1; i <= end_idx; i++) {
-			if (keys[i - 1]->data[depth] != keys[i]->data[depth]) {
-				BuildARTOffsets entry(offset, i - 1, keys[i - 1]->data[depth]);
-				offsets.push_back(entry);
-				offset = i;
-			}
-		}
-		BuildARTOffsets entry(offset, end_idx, keys[end_idx]->data[depth]);
-		offsets.push_back(entry);
+		// we will find at least two child entries of this node, otherwise we'd have reached a leaf
+		vector<KeySection> child_sections;
+		GetNodeChildren(child_sections, keys, key_section);
 
-		if (offsets.size() < 5) {
+		if (child_sections.size() <= 4) {
 			node = new Node4();
-		} else if (offsets.size() < 17) {
+		} else if (child_sections.size() <= 16) {
 			node = new Node16();
-		} else if (offsets.size() < 49) {
+		} else if (child_sections.size() <= 48) {
 			node = new Node48();
 		} else {
 			node = new Node256();
 		}
 
-		auto prefix_length = depth - prefix_start;
-		node->prefix = Prefix(*keys[start_idx], prefix_start, prefix_length);
+		auto prefix_length = key_section.depth - prefix_start;
+		node->prefix = Prefix(start_key, prefix_start, prefix_length);
 
-		// recurse on each offset
-		for (idx_t i = 0; i < offsets.size(); i++) {
-			Node *child_node = nullptr;
-			Build(keys, row_ids, child_node, offsets[i].start, offsets[i].end, depth + 1);
-			Node::InsertChildNode(node, offsets[i].byte, child_node);
+		// recurse on each child
+		for (idx_t i = 0; i < child_sections.size(); i++) {
+			Node *new_child = nullptr;
+			Construct(keys, row_ids, new_child, child_sections[i], has_constraint);
+			Node::InsertChildNode(node, child_sections[i].key_byte, new_child);
 		}
 	}
 }
 
-void ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) {
+void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) {
 
 	auto payload_types = logical_types;
 	payload_types.emplace_back(LogicalType::ROW_TYPE);
@@ -292,12 +302,12 @@ void ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &all
 			break;
 		}
 
-		// get the key chunk and the row_ids vector
+		// get the key chunk and the row_identifiers vector
 		DataChunk chunk_row_ids;
 		ordered_chunk.Split(chunk_row_ids, ordered_chunk.ColumnCount() - 1);
-		auto &row_ids = chunk_row_ids.data[0];
+		auto &row_identifiers = chunk_row_ids.data[0];
 
-		D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
+		D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
 		D_ASSERT(logical_types[0] == ordered_chunk.data[0].GetType());
 
 		// generate the keys for the given input
@@ -327,13 +337,15 @@ void ART::BuildAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &all
 			continue;
 		}
 
-		// prepare the row_ids
-		row_ids.Flatten(ordered_chunk.size());
-		auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
+		// prepare the row_identifiers
+		row_identifiers.Flatten(ordered_chunk.size());
+		auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
-		// build the ART of this chunk
+		// construct the ART of this chunk
 		auto art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
-		Build(keys, row_identifiers, art->tree, start_idx, ordered_chunk.size() - 1, 0);
+		auto key_section = KeySection(start_idx, ordered_chunk.size() - 1, 0, 0);
+		auto has_constraint = IsPrimary() || IsUnique();
+		Construct(keys, row_ids, art->tree, key_section, has_constraint);
 
 		// merge art into temp_art
 		ART::Merge(temp_art.get(), art.get());

@@ -131,14 +131,14 @@ void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gs
 	lstate.global_sort_state->AddLocalState(lstate.local_sort_state);
 	lstate.global_sort_state->PrepareMergePhase();
 
-	// scan the sorted row data and build the index from it
+	// scan the sorted row data and construct the index from it
 	{
 		IndexLock local_lock;
 		lstate.local_index->InitializeLock(local_lock);
 		if (!lstate.global_sort_state->sorted_blocks.empty()) {
 			PayloadScanner scanner(*lstate.global_sort_state->sorted_blocks[0]->payload_data,
 			                       *lstate.global_sort_state);
-			lstate.local_index->BuildAndMerge(local_lock, scanner, allocator);
+			lstate.local_index->ConstructAndMerge(local_lock, scanner, allocator);
 		}
 	}
 
@@ -157,7 +157,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	auto &state = (CreateIndexGlobalSinkState &)gstate_p;
 
-	if (!table.storage->GetIsRoot()) {
+	if (!table.storage->IsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 	}
 

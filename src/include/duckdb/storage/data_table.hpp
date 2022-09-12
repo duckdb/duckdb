@@ -162,7 +162,7 @@ public:
 	void SetAsRoot() {
 		this->is_root = true;
 	}
-	bool GetIsRoot() {
+	bool IsRoot() {
 		return this->is_root;
 	}
 

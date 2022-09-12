@@ -1415,10 +1415,10 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 		global_sort_state.AddLocalState(local_sort_state);
 		global_sort_state.PrepareMergePhase();
 
-		// scan the sorted row data and build the index from it
+		// scan the sorted row data and construct the index from it
 		if (!global_sort_state.sorted_blocks.empty()) {
 			PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
-			index->BuildAndMerge(lock, scanner, allocator);
+			index->ConstructAndMerge(lock, scanner, allocator);
 		}
 	}
 	info->indexes.AddIndex(move(index));
