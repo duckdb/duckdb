@@ -6,9 +6,9 @@ namespace duckdb_chimp {
 
 //! Set this to uint64_t, not sure what setting a double to 0 does on the bit-level
 template <class INTERNAL_TYPE>
-class BitStream {
+class OutputBitStream {
 public:
-	BitStream(INTERNAL_TYPE* output_stream, size_t stream_size) :
+	OutputBitStream(INTERNAL_TYPE* output_stream, size_t stream_size) :
 		stream(output_stream),
 		capacity(stream_size),
 		current(0),

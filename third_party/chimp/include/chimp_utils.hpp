@@ -38,7 +38,7 @@ static inline int __builtin_clzll(unsigned long long x) {
 }
 #endif
 
-struct ChimpConstants {
+struct ChimpCompressionConstants {
 	static constexpr uint8_t LEADING_REPRESENTATION[] = {
 		0, 0, 0, 0, 0, 0, 0, 0,
 		1, 1, 1, 1, 2, 2, 2, 2,
@@ -62,6 +62,10 @@ struct ChimpConstants {
 	};
 };
 
-
+struct ChimpDecompressionConstants {
+	static constexpr uint8_t LEADING_REPRESENTATION[] = {
+		0, 8, 12, 16, 18, 20, 22, 24
+	};
+};
 
 } //namespace duckdb_chimp

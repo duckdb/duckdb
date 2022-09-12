@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "chimp_utils.hpp"
-#include "bit_stream.hpp"
+#include "output_bit_stream.hpp"
 
 namespace duckdb_chimp {
 
@@ -25,7 +25,7 @@ struct Chimp32CompressionState {
 		state.previous_leading_zeroes = std::numeric_limits<int32_t>::max();
 	}
 
-	BitStream<double> output;
+	OutputBitStream<double> output;
 	int32_t previous_leading_zeroes;
 	int64_t stored_value;
 	bool first;
