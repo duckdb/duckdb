@@ -85,25 +85,8 @@ public:
 	//! Deserialize this node
 	static Node *Deserialize(ART &art, idx_t block_id, idx_t offset);
 
-	//! Resolve the prefixes of two nodes and then merge r_node into l_node
-	static void ResolvePrefixesAndMerge(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth,
-	                                    Node *&l_node_parent, idx_t l_node_pos, Node *&r_node_parent, idx_t r_node_pos);
-	//! Merge r_node into l_node, they have matching prefixes
-	static void Merge(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth, Node *&l_node_parent,
-	                  idx_t l_node_pos, Node *&r_node_parent, idx_t r_node_pos);
-	//! Merge Node with Node16 or Node4
-	template <class R_NODE_TYPE>
-	static void MergeNodeWithNode16OrNode4(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth,
-	                                       Node *&l_node_parent, idx_t l_node_pos);
-	//! Merge Node with Node48
-	static void MergeNodeWithNode48(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth,
-	                                Node *&l_node_parent, idx_t l_node_pos);
-	//! Merge Node with Node256
-	static void MergeNodeWithNode256(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth,
-	                                 Node *&l_node_parent, idx_t l_node_pos);
-	//! Merge a specific byte of two nodes and its possible children
-	static void MergeByte(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node, idx_t depth, idx_t &l_child_pos,
-	                      idx_t &r_pos, uint8_t &key_byte, Node *&l_node_parent, idx_t l_node_pos);
+	//! Merge two ART
+	static void MergeARTs(ART *l_art, ART *r_art);
 
 private:
 	//! Serialize internal nodes

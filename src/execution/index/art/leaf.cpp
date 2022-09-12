@@ -96,17 +96,9 @@ void Leaf::Merge(bool has_constraint, Node *&l_node, Node *&r_node) {
 	Leaf *l_n = (Leaf *)l_node;
 	Leaf *r_n = (Leaf *)r_node;
 
-	// push row_ids of l_n in a map to avoid duplicates
-	unordered_map<row_t, bool> l_n_row_ids;
-	for (idx_t i = 0; i < l_n->count; i++) {
-		l_n_row_ids[l_n->GetRowId(i)] = true;
-	}
-
 	// append non-duplicate row_ids to l_n
 	for (idx_t i = 0; i < r_n->count; i++) {
-		if (!l_n_row_ids[r_n->GetRowId(i)]) {
-			l_n->Insert(r_n->GetRowId(i));
-		}
+		l_n->Insert(r_n->GetRowId(i));
 	}
 
 	if (has_constraint && l_n->count > 1) {

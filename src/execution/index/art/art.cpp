@@ -256,7 +256,7 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 			new_row_ids[i] = row_ids[key_section.start + i];
 		}
 
-		Prefix prefix(start_key, key_section.depth, start_key.len - key_section.depth);
+		Prefix prefix(start_key, prefix_start, start_key.len - prefix_start);
 		node = new Leaf(move(new_row_ids), num_row_ids, prefix);
 
 	} else { // create a new node and recurse
@@ -887,8 +887,14 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 // Merge ARTs
 //===--------------------------------------------------------------------===//
 void ART::Merge(ART *l_art, ART *r_art) {
-	Node *null_parent = nullptr;
-	Node::ResolvePrefixesAndMerge(l_art, r_art, l_art->tree, r_art->tree, 0, null_parent, 0, null_parent, 0);
+
+	if (!l_art->tree) {
+		l_art->tree = r_art->tree;
+		r_art->tree = nullptr;
+		return;
+	}
+
+	Node::MergeARTs(l_art, r_art);
 }
 
 } // namespace duckdb
