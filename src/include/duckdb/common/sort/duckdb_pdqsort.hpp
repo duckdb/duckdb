@@ -141,7 +141,7 @@ struct PDQIterator {
 
 	inline friend idx_t operator-(const PDQIterator &lhs, const PDQIterator &rhs) {
 		D_ASSERT((*lhs - *rhs) % lhs.entry_size == 0);
-		D_ASSERT(*lhs - *rhs > 0);
+		D_ASSERT(*lhs - *rhs >= 0);
 		return (*lhs - *rhs) / lhs.entry_size;
 	}
 
