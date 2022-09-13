@@ -44,8 +44,9 @@ struct Chimp128Compression {
 	//! With 'previous_values' set to 128 this resolves to 7
 	//! The amount of bits needed to store an index between 0-127
 	static constexpr uint8_t INDEX_BITS_SIZE = 7;
-	static constexpr uint8_t FLAG_ZERO_SIZE = INDEX_BITS_SIZE + 2;
-	static constexpr uint8_t FLAG_ONE_SIZE = INDEX_BITS_SIZE + 11;
+	static constexpr uint8_t FLAG_BITS_SIZE = 2;
+	static constexpr uint8_t FLAG_ZERO_SIZE = INDEX_BITS_SIZE + FLAG_BITS_SIZE;
+	static constexpr uint8_t FLAG_ONE_SIZE = INDEX_BITS_SIZE + FLAG_BITS_SIZE + 9;
 	static constexpr uint8_t BIT_SIZE = sizeof(double) * 8;
 
 	//this.threshold = 6 + previousValuesLog2;
@@ -71,13 +72,15 @@ struct Chimp128Compression {
 		uint64_t xor_result;
 		uint32_t previous_index;
 		uint32_t trailing_zeros = 0;
+		bool trailing_zeros_exceed_threshold = false;
 
 		//! Initialize some relevant variables based on the state of the ring_buffer
-		if (state.ring_buffer.Size() - key < RingBuffer::RING_SIZE) {
+		if ((int64_t)state.ring_buffer.Size() - key < RingBuffer::RING_SIZE) {
 			auto current_index = state.ring_buffer.IndexOf(key);
 			uint64_t tempxor_result = (uint64_t)in ^ current_index % RingBuffer::RING_SIZE;
 			auto trailing_zeros = __builtin_ctzll(tempxor_result);
-			if (trailing_zeros > TRAILING_ZERO_THRESHOLD) {
+			trailing_zeros_exceed_threshold = trailing_zeros > TRAILING_ZERO_THRESHOLD;
+			if (trailing_zeros_exceed_threshold) {
 				previous_index = current_index % RingBuffer::RING_SIZE;
 				xor_result = tempxor_result;
 			}
@@ -93,16 +96,17 @@ struct Chimp128Compression {
 
 		//! Compress the value
 		if (xor_result == 0) {
-			//! The two values are identical
+			//! The two values are identical (write 9 bits)
 			//! 2 bits for the flag VALUE_IDENTICAL ('00') + 7 bits for the referenced index value
 			state.output.WriteValue<uint32_t, FLAG_ZERO_SIZE>(previous_index);
 			state.SetLeadingZeros();
 		}
 		else {
-			//! Values are not identical
+			//! Values are not identical (64)
 			uint64_t leading_zeros = ChimpCompressionConstants::LEADING_ROUND[__builtin_clzll(xor_result)];
 
-			if (trailing_zeros > TRAILING_ZERO_THRESHOLD) {
+			if (trailing_zeros_exceed_threshold) {
+				//! write (64 - [0|8|12|16|18|20|22|24] - [14+])(26-50 bits) and 18 bits
 				int32_t significant_bits = BIT_SIZE - leading_zeros - trailing_zeros;
 				auto result = 512 * (RingBuffer::RING_SIZE + previous_index) + BIT_SIZE * ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros] + significant_bits;
 				state.output.WriteValue<int32_t, FLAG_ONE_SIZE>(result);
@@ -110,13 +114,16 @@ struct Chimp128Compression {
 				state.SetLeadingZeros();
 			}
 			else if (leading_zeros == state.previous_leading_zeros) {
+				//! write 2 + [?] bits
 				int32_t significant_bits = BIT_SIZE - leading_zeros;
-				state.output.WriteValue<uint8_t, 2>(2);
+				state.output.WriteValue<uint8_t, 2>(LEADING_ZERO_EQUALITY);
 				state.output.WriteValue<uint64_t>(xor_result, significant_bits);
 			}
 			else {
+				//! write 5 + [?] bits
 				int32_t significant_bits = BIT_SIZE - leading_zeros;
-				state.output.WriteValue<uint32_t, 5>(24 + ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
+				//! 2 bits for the flag LEADING_ZERO_LOAD ('11') + 3 bits for the leading zeros
+				state.output.WriteValue<uint32_t, 5>((LEADING_ZERO_LOAD << 3) + ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
 				state.output.WriteValue<uint64_t>(xor_result, significant_bits);
 				state.SetLeadingZeros(leading_zeros);
 			}
