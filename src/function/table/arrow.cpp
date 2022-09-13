@@ -258,9 +258,9 @@ bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	state.chunk = move(current_chunk);
 	//! have we run out of chunks? we are done
 	if (!state.chunk->arrow_array.release) {
-		return false;
+		parallel_state.done = true;
 	}
-	return true;
+	return !parallel_state.done;
 }
 
 unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(ClientContext &context,
