@@ -45,6 +45,8 @@ public:
 
 	// Compare the key with the prefix of the node, return the position where it mismatches
 	uint32_t KeyMismatchPosition(Key &key, uint64_t depth);
+	//! Compare this prefix to another prefix, return the position where they mismatch, or size otherwise
+	uint32_t MismatchPosition(Prefix &other);
 
 private:
 	unique_ptr<uint8_t[]> prefix;

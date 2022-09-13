@@ -10,10 +10,6 @@ Node4::Node4() : Node(NodeType::N4) {
 	memset(key, 0, sizeof(key));
 }
 
-void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
-	children[pos] = node;
-}
-
 idx_t Node4::GetChildPos(uint8_t k) {
 	for (idx_t pos = 0; pos < count; pos++) {
 		if (key[pos] == k) {
@@ -54,7 +50,11 @@ Node *Node4::GetChild(ART &art, idx_t pos) {
 	return children[pos].Unswizzle(art);
 }
 
-void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
+void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[pos] = node;
+}
+
+void Node4::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 	Node4 *n = (Node4 *)node;
 
 	// Insert new child node into node
@@ -86,11 +86,11 @@ void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 		// Delete old node and replace it with new Node16
 		delete node;
 		node = new_node;
-		Node16::Insert(node, key_byte, new_child);
+		Node16::InsertChild(node, key_byte, new_child);
 	}
 }
 
-void Node4::Erase(Node *&node, int pos, ART &art) {
+void Node4::EraseChild(Node *&node, int pos, ART &art) {
 	Node4 *n = (Node4 *)node;
 	D_ASSERT(pos < n->count);
 	// erase the child and decrease the count
@@ -114,6 +114,17 @@ void Node4::Erase(Node *&node, int pos, ART &art) {
 		n->children[0] = nullptr;
 		delete node;
 		node = child_ref;
+	}
+}
+
+void Node4::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
+
+	Node4 *r_n = (Node4 *)info.r_node;
+
+	for (idx_t i = 0; i < info.r_node->count; i++) {
+
+		auto l_child_pos = info.l_node->GetChildPos(r_n->key[i]);
+		Node::MergeAtByte(info, depth, l_child_pos, i, r_n->key[i], l_parent, l_pos);
 	}
 }
 

@@ -35,6 +35,10 @@ idx_t Node16::GetChildGreaterEqual(uint8_t k, bool &equal) {
 	return Node::GetChildGreaterEqual(k, equal);
 }
 
+idx_t Node16::GetMin() {
+	return 0;
+}
+
 idx_t Node16::GetNextPos(idx_t pos) {
 	if (pos == DConstants::INVALID_INDEX) {
 		return 0;
@@ -48,15 +52,11 @@ Node *Node16::GetChild(ART &art, idx_t pos) {
 	return children[pos].Unswizzle(art);
 }
 
-idx_t Node16::GetMin() {
-	return 0;
-}
-
 void Node16::ReplaceChildPointer(idx_t pos, Node *node) {
 	children[pos] = node;
 }
 
-void Node16::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
+void Node16::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 	Node16 *n = (Node16 *)node;
 
 	// Insert new child node into node
@@ -88,11 +88,11 @@ void Node16::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 		delete node;
 		node = new_node;
 
-		Node48::Insert(node, key_byte, new_child);
+		Node48::InsertChild(node, key_byte, new_child);
 	}
 }
 
-void Node16::Erase(Node *&node, int pos, ART &art) {
+void Node16::EraseChild(Node *&node, int pos, ART &art) {
 	auto n = (Node16 *)node;
 	// erase the child and decrease the count
 	n->children[pos].Reset();
@@ -121,6 +121,17 @@ void Node16::Erase(Node *&node, int pos, ART &art) {
 		new_node->prefix = move(n->prefix);
 		delete node;
 		node = new_node;
+	}
+}
+
+void Node16::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
+
+	Node16 *r_n = (Node16 *)info.r_node;
+
+	for (idx_t i = 0; i < info.r_node->count; i++) {
+
+		auto l_child_pos = info.l_node->GetChildPos(r_n->key[i]);
+		Node::MergeAtByte(info, depth, l_child_pos, i, r_n->key[i], l_parent, l_pos);
 	}
 }
 

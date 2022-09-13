@@ -32,7 +32,7 @@ public:
 	void Remove(row_t row_id);
 
 	//! Merge two NLeaf nodes
-	static void Merge(bool has_constraint, Node *&l_node, Node *&r_node);
+	static void Merge(bool &has_constraint, Node *&l_node, Node *&r_node);
 
 	//! Serialize a leaf
 	BlockPointer Serialize(duckdb::MetaBlockWriter &writer);

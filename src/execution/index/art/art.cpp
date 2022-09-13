@@ -266,7 +266,7 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 		GetNodeChildren(child_sections, keys, key_section);
 
 		auto node_type = Node::GetTypeBySize(child_sections.size());
-		Node::NewNode(node_type, node);
+		Node::New(node_type, node);
 
 		auto prefix_length = key_section.depth - prefix_start;
 		node->prefix = Prefix(start_key, prefix_start, prefix_length);
@@ -275,7 +275,7 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 		for (idx_t i = 0; i < child_sections.size(); i++) {
 			Node *new_child = nullptr;
 			Construct(keys, row_ids, new_child, child_sections[i], has_constraint);
-			Node::InsertChildNode(node, child_sections[i].key_byte, new_child);
+			Node::InsertChild(node, child_sections[i].key_byte, new_child);
 		}
 	}
 }
@@ -468,9 +468,9 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		Node *new_node = new Node4();
 		new_node->prefix = Prefix(key, depth, new_prefix_length);
 		auto key_byte = node->prefix.Reduce(new_prefix_length);
-		Node4::Insert(new_node, key_byte, node);
+		Node4::InsertChild(new_node, key_byte, node);
 		Node *leaf_node = new Leaf(*value, depth + new_prefix_length + 1, row_id);
-		Node4::Insert(new_node, key[depth + new_prefix_length], leaf_node);
+		Node4::InsertChild(new_node, key[depth + new_prefix_length], leaf_node);
 		node = new_node;
 		return true;
 	}
@@ -484,10 +484,10 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 			new_node->prefix = Prefix(key, depth, mismatch_pos);
 			// Break up prefix
 			auto key_byte = node->prefix.Reduce(mismatch_pos);
-			Node4::Insert(new_node, key_byte, node);
+			Node4::InsertChild(new_node, key_byte, node);
 
 			Node *leaf_node = new Leaf(*value, depth + mismatch_pos + 1, row_id);
-			Node4::Insert(new_node, key[depth + mismatch_pos], leaf_node);
+			Node4::InsertChild(new_node, key[depth + mismatch_pos], leaf_node);
 			node = new_node;
 			return true;
 		}
@@ -504,7 +504,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		return insertion_result;
 	}
 	Node *new_node = new Leaf(*value, depth + 1, row_id);
-	Node::InsertChildNode(node, key[depth], new_node);
+	Node::InsertChild(node, key[depth], new_node);
 	return true;
 }
 
@@ -578,7 +578,7 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 			leaf->Remove(row_id);
 			if (leaf->count == 0) {
 				// Leaf is empty, delete leaf, decrement node counter and maybe shrink node
-				Node::Erase(node, pos, *this);
+				Node::EraseChild(node, pos, *this);
 			}
 		} else {
 			// Recurse

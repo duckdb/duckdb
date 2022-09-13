@@ -32,6 +32,24 @@ struct InternalType {
 	uint16_t children_size;
 };
 
+struct MergeInfo {
+	MergeInfo(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node)
+	    : l_art(l_art), r_art(r_art), l_node(l_node), r_node(r_node) {};
+	ART *l_art;
+	ART *r_art;
+	Node *&l_node;
+	Node *&r_node;
+};
+
+struct ParentsOfNodes {
+	ParentsOfNodes(Node *&l_parent, idx_t l_pos, Node *&r_parent, idx_t r_pos)
+	    : l_parent(l_parent), l_pos(l_pos), r_parent(r_parent), r_pos(r_pos) {};
+	Node *&l_parent;
+	idx_t l_pos;
+	Node *&r_parent;
+	idx_t r_pos;
+};
+
 class Node {
 public:
 	static const uint8_t EMPTY_MARKER = 48;
@@ -72,19 +90,22 @@ public:
 	virtual void ReplaceChildPointer(idx_t pos, Node *node);
 
 	//! Insert a new child node at key_byte into the node
-	static void InsertChildNode(Node *&node, uint8_t key_byte, Node *new_child);
+	static void InsertChild(Node *&node, uint8_t key_byte, Node *new_child);
 	//! Erase child node entry from node
-	static void Erase(Node *&node, idx_t pos, ART &art);
+	static void EraseChild(Node *&node, idx_t pos, ART &art);
 	//! Get the corresponding node type for the provided size
 	static NodeType GetTypeBySize(idx_t size);
 	//! Create a new node of the specified type
-	static void NewNode(NodeType &type, Node *&node);
+	static void New(NodeType &type, Node *&node);
 
 	//! Serialize this node
 	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer);
 	//! Deserialize this node
 	static Node *Deserialize(ART &art, idx_t block_id, idx_t offset);
 
+	//! Merge r_node into l_node at the specified byte
+	static void MergeAtByte(MergeInfo &info, idx_t depth, idx_t &l_child_pos, idx_t &r_pos, uint8_t &key_byte,
+	                        Node *&l_parent, idx_t l_pos);
 	//! Merge two ART
 	static void MergeARTs(ART *l_art, ART *r_art);
 

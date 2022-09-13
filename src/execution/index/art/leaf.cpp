@@ -91,7 +91,7 @@ Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
 	return new Leaf(move(elements), num_elements, prefix);
 }
 
-void Leaf::Merge(bool has_constraint, Node *&l_node, Node *&r_node) {
+void Leaf::Merge(bool &has_constraint, Node *&l_node, Node *&r_node) {
 
 	Leaf *l_n = (Leaf *)l_node;
 	Leaf *r_n = (Leaf *)r_node;
