@@ -29,13 +29,14 @@ function_map = {}
 import glob
 
 # root_dir needs a trailing slash (i.e. /root/dir/)
-for filename in glob.iglob('/tmp/' + '**/*', recursive=True):
-     print(filename)
+extension_path = {}
+for filename in glob.iglob('/tmp/' + '**/*.duckdb_extension', recursive=True):
+    extension_path[filename.split("/")[-1].split('.')[0]] = filename
 
 for extension in reader:
     extension_name = extension[0]
-    print("Load " + extension_name)
-    load = f"LOAD '/tmp/{extension_name}.duckdb_extension';"
+    print(f"Load {extension_name} at {extension_path[extension_name]}")
+    load = f"LOAD '{extension_path[extension_name]}';"
     extension_functions = os.popen(f'{duckdb_path} -csv -c "{load}{get_func}" ').read().split("\n")[1:-1]
     function_map.update({
         extension_function: extension_name
