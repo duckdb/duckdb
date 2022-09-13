@@ -11,7 +11,7 @@ duckdb:
 
 main:
 	javac DuckDBExample.java
-	java -cp .:../../build/release/tools/jdbc/duckdb_jdbc-tests.jar DuckDBExample
+	java -cp .:../../build/release/tools/jdbc/duckdb_jdbc.jar:../../build/release/tools/jdbc/duckdb_jdbc-tests.jar DuckDBExample
 
 maven:
 	mvn compile exec:java -Dexec.mainClass="DuckDBExample"
