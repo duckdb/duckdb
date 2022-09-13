@@ -1,0 +1,15 @@
+# name: test/sql/cte/insert_cte_bug_3417.test
+# description: Test for a crash reported in issue #3417
+# group: [cte]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE table1 (id INTEGER, a INTEGER);
+
+statement ok
+CREATE TABLE table2 (table1_id INTEGER);
+
+statement error
+INSERT INTO table2 WITH cte AS (INSERT INTO table1 SELECT 1, 2 RETURNING id) SELECT id FROM cte;

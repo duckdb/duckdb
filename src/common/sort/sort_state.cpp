@@ -123,6 +123,32 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 	blob_layout.Initialize(blob_layout_types);
 }
 
+SortLayout SortLayout::GetPrefixComparisonLayout(idx_t num_prefix_cols) const {
+	SortLayout result;
+	result.column_count = num_prefix_cols;
+	result.all_constant = true;
+	result.comparison_size = 0;
+	for (idx_t col_idx = 0; col_idx < num_prefix_cols; col_idx++) {
+		result.order_types.push_back(order_types[col_idx]);
+		result.order_by_null_types.push_back(order_by_null_types[col_idx]);
+		result.logical_types.push_back(logical_types[col_idx]);
+
+		result.all_constant = result.all_constant && constant_size[col_idx];
+		result.constant_size.push_back(constant_size[col_idx]);
+
+		result.comparison_size += column_sizes[col_idx];
+		result.column_sizes.push_back(column_sizes[col_idx]);
+
+		result.prefix_lengths.push_back(prefix_lengths[col_idx]);
+		result.stats.push_back(stats[col_idx]);
+		result.has_null.push_back(has_null[col_idx]);
+	}
+	result.entry_size = entry_size;
+	result.blob_layout = blob_layout;
+	result.sorting_to_blob_col = sorting_to_blob_col;
+	return result;
+}
+
 LocalSortState::LocalSortState() : initialized(false) {
 }
 

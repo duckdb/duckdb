@@ -37,8 +37,8 @@ public:
 	DUCKDB_API AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size);
 	DUCKDB_API ~AllocatedData();
 	// disable copy constructors
-	DUCKDB_API AllocatedData(const AllocatedData &other) = delete;
-	DUCKDB_API AllocatedData &operator=(const AllocatedData &) = delete;
+	AllocatedData(const AllocatedData &other) = delete;
+	AllocatedData &operator=(const AllocatedData &) = delete;
 	//! enable move constructors
 	DUCKDB_API AllocatedData(AllocatedData &&other) noexcept;
 	DUCKDB_API AllocatedData &operator=(AllocatedData &&) noexcept;

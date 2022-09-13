@@ -2,20 +2,20 @@
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/row_data_collection_scanner.hpp"
-#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/partitionable_hashtable.hpp"
 #include "duckdb/execution/window_segment_tree.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/parallel/event.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/parallel/event.hpp"
-#include "duckdb/execution/partitionable_hashtable.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -34,12 +34,14 @@ public:
 
 	WindowGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
 	                      const Types &payload_types, idx_t max_mem, bool external)
-	    : memory_per_thread(max_mem), count(0), partition_layout(partitions) {
+	    : memory_per_thread(max_mem), count(0) {
 
 		RowLayout payload_layout;
 		payload_layout.Initialize(payload_types);
 		global_sort = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
 		global_sort->external = external;
+
+		partition_layout = global_sort->sort_layout.GetPrefixComparisonLayout(partitions.size());
 	}
 
 	void Combine(LocalSortState &local_sort) {
@@ -712,7 +714,10 @@ struct WindowInputExpression {
 
 	inline bool CellIsNull(idx_t i) const {
 		D_ASSERT(!chunk.data.empty());
-		return FlatVector::IsNull(chunk.data[0], scalar ? 0 : i);
+		if (chunk.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			return ConstantVector::IsNull(chunk.data[0]);
+		}
+		return FlatVector::IsNull(chunk.data[0], i);
 	}
 
 	inline void CopyCell(Vector &target, idx_t target_offset) const {
