@@ -32,7 +32,7 @@ def exec(cmd):
   print(cmd)
   return subprocess.run(cmd.split(' '), check=True, stdout=subprocess.PIPE).stdout
 
-combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64']
+combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64', 'linux-aarch64']
 
 staging_dir = tempfile.mkdtemp()
 release_tag = sys.argv[1]
@@ -65,11 +65,17 @@ pom_template = """
   </licenses>
 
   <developers>
+      <developer>
+      <name>Mark Raasveldt</name>
+      <email>mark@duckdblabs.com</email>
+      <organization>DuckDB Labs</organization>
+      <organizationUrl>https://www.duckdblabs.com</organizationUrl>
+    </developer>
     <developer>
       <name>Hannes Muehleisen</name>
-      <email>hannes@cwi.nl</email>
-      <organization>CWI</organization>
-      <organizationUrl>https://www.cwi.nl</organizationUrl>
+      <email>hannes@duckdblabs.com</email>
+      <organization>DuckDB Labs</organization>
+      <organizationUrl>https://www.duckdblabs.com</organizationUrl>
     </developer>
   </developers>
 

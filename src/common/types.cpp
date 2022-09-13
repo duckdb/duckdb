@@ -806,6 +806,7 @@ public:
 				if (!alias.empty()) {
 					return false;
 				}
+				//! We only need to compare aliases when both types have them in this case
 				return true;
 			}
 			if (alias != other_p->alias) {
@@ -819,8 +820,7 @@ public:
 		if (type != other_p->type) {
 			return false;
 		}
-		auto &other = (ExtraTypeInfo &)*other_p;
-		return alias == other.alias && EqualsInternal(other_p);
+		return alias == other_p->alias && EqualsInternal(other_p);
 	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
 	virtual void Serialize(FieldWriter &writer) const {};
@@ -1499,10 +1499,7 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 	return LogicalType(id, move(info));
 }
 
-bool LogicalType::operator==(const LogicalType &rhs) const {
-	if (id_ != rhs.id_) {
-		return false;
-	}
+bool LogicalType::EqualTypeInfo(const LogicalType &rhs) const {
 	if (type_info_.get() == rhs.type_info_.get()) {
 		return true;
 	}
@@ -1512,6 +1509,13 @@ bool LogicalType::operator==(const LogicalType &rhs) const {
 		D_ASSERT(rhs.type_info_);
 		return rhs.type_info_->Equals(type_info_.get());
 	}
+}
+
+bool LogicalType::operator==(const LogicalType &rhs) const {
+	if (id_ != rhs.id_) {
+		return false;
+	}
+	return EqualTypeInfo(rhs);
 }
 
 } // namespace duckdb

@@ -273,12 +273,49 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::INT32:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int32_t>(
-			    result, state_vector.state_vector, count);
+			if (key_type.id() == LogicalTypeId::DATE) {
+				FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, date_t>(
+				    result, state_vector.state_vector, count);
+			} else {
+				FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int32_t>(
+				    result, state_vector.state_vector, count);
+			}
 			break;
 		case PhysicalType::INT64:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int64_t>(
-			    result, state_vector.state_vector, count);
+			switch (key_type.id()) {
+			case LogicalTypeId::TIME:
+				FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, dtime_t>(
+				    result, state_vector.state_vector, count);
+				break;
+			case LogicalTypeId::TIME_TZ:
+				FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, dtime_tz_t>(
+				    result, state_vector.state_vector, count);
+				break;
+			case LogicalTypeId::TIMESTAMP:
+				FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, timestamp_t>(
+				    result, state_vector.state_vector, count);
+				break;
+			case LogicalTypeId::TIMESTAMP_MS:
+				FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, timestamp_ms_t>(
+				    result, state_vector.state_vector, count);
+				break;
+			case LogicalTypeId::TIMESTAMP_NS:
+				FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, timestamp_ns_t>(
+				    result, state_vector.state_vector, count);
+				break;
+			case LogicalTypeId::TIMESTAMP_SEC:
+				FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, timestamp_sec_t>(
+				    result, state_vector.state_vector, count);
+				break;
+			case LogicalTypeId::TIMESTAMP_TZ:
+				FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, timestamp_tz_t>(
+				    result, state_vector.state_vector, count);
+				break;
+			default:
+				FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int64_t>(
+				    result, state_vector.state_vector, count);
+				break;
+			}
 			break;
 		case PhysicalType::FLOAT:
 			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, float>(
@@ -295,6 +332,10 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 		default:
 			throw InternalException("Unimplemented histogram aggregate");
 		}
+	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

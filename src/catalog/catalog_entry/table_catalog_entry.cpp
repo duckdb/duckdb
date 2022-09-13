@@ -2,28 +2,28 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
-#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
-#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
-#include "duckdb/common/algorithm.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -43,6 +43,10 @@ column_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) 
 			}
 			throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
 		}
+	}
+	if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
+		column_name = "rowid";
+		return COLUMN_IDENTIFIER_ROW_ID;
 	}
 	column_name = GetColumnName(entry->second);
 	return entry->second;
@@ -296,6 +300,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, AddColumnInfo &info) {
+	auto col_name = info.new_column.GetName();
+
+	// We're checking for the opposite condition (ADD COLUMN IF _NOT_ EXISTS ...).
+	if (info.if_column_not_exists && GetColumnIndex(col_name, true) != DConstants::INVALID_INDEX) {
+		return nullptr;
+	}
+
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 
@@ -322,7 +333,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
-	auto removed_index = GetColumnIndex(info.removed_column, info.if_exists);
+	auto removed_index = GetColumnIndex(info.removed_column, info.if_column_exists);
 	if (removed_index == DConstants::INVALID_INDEX) {
 		return nullptr;
 	}
