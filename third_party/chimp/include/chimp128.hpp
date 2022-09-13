@@ -198,9 +198,9 @@ public:
 	static constexpr uint8_t LEADING_SHIFT_AMOUNT = INDEX_SHIFT_AMOUNT - LEADING_BITS_SIZE;
 
 	//|----------------|	//! INITIAL_FILL(16) bits
-	//|IIIIIII|				//! Index (7 bits, shifted by 9)
-	//      |LLL|			//! LeadingZeros (3 bits, shifted by 6)
-	//          |SSSSSS|	//! SignificantBits (6 bits)
+	// IIIIIII				//! Index (7 bits, shifted by 9)
+	//        LLL			//! LeadingZeros (3 bits, shifted by 6)
+	//           SSSSSS 	//! SignificantBits (6 bits)
 	static void UnpackPackedData(uint16_t packed_data, uint16_t& index, uint16_t leading_zeros, uint16_t significant_bits) {
 		index = packed_data >> INDEX_SHIFT_AMOUNT & INDEX_MASK;
 		leading_zeros = packed_data >> LEADING_SHIFT_AMOUNT & LEADING_MASK;
