@@ -11,10 +11,6 @@
 
 namespace duckdb {
 
-static bool HasPhysicalColumns(TableCatalogEntry *table) {
-	return !table->GetTypes().empty();
-}
-
 BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	BoundStatement result;
 
@@ -25,10 +21,6 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	}
 	auto &table_binding = (BoundBaseTableRef &)*bound_table;
 	auto table = table_binding.table;
-
-	if (!HasPhysicalColumns(table)) {
-		throw BinderException("Deleting from table without physical (non-generated) columns is not supported");
-	}
 
 	auto root = CreatePlan(*bound_table);
 	auto &get = (LogicalGet &)*root;
