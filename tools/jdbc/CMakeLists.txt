@@ -55,7 +55,7 @@ add_custom_target(
     ${CMAKE_COMMAND} -E copy
     $<TARGET_FILE_DIR:duckdb_java>/$<TARGET_FILE_NAME:duckdb_java>
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main/resources
-  COMMAND ${MVN_COMMAND} package -Dmaven.test.skip=true
+  COMMAND ${MVN_COMMAND} package jar:test-jar
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_custom_command(
@@ -63,8 +63,12 @@ add_custom_command(
   POST_BUILD
   COMMAND
     ${CMAKE_COMMAND} -E copy
-    ${CMAKE_CURRENT_SOURCE_DIR}/target/duckdb_jdbc-1.0-SNAPSHOT.jar
-    duckdb_jdbc.jar)
+    ${CMAKE_CURRENT_SOURCE_DIR}/target/duckdb_jdbc-${JDBC_VERSION}.jar
+    ${CMAKE_CURRENT_BINARY_DIR}/duckdb_jdbc.jar
+  COMMAND
+    ${CMAKE_COMMAND} -E copy
+    ${CMAKE_CURRENT_SOURCE_DIR}/target/duckdb_jdbc-${JDBC_VERSION}-tests.jar
+    ${CMAKE_CURRENT_BINARY_DIR}/duckdb_jdbc-tests.jar)
 
 add_test(
   USES_TERMINAL
