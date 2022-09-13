@@ -43,8 +43,10 @@ if args.validate:
         if pattern.match(line):
             split_line = line.split("\"")
             cur_function_map[split_line[1]] = split_line[3]
-    print("Current Functions: " + cur_function_map)
-    print("Function Map: " + function_map)
+    print("Cur Function Map: ")
+    print(cur_function_map)
+    print("Function Map: ")
+    print(function_map)
     assert cur_function_map == function_map
 else:
     # Generate Header
