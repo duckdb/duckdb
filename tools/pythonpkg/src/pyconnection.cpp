@@ -580,6 +580,7 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		location += ":";
 		location += py::cast<py::str>(current_frame.attr("f_lineno"));
 		std::string cpp_table_name = table_name;
+		auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
 
 		throw InvalidInputException(
 		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
