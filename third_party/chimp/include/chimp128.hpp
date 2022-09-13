@@ -108,6 +108,8 @@ struct Chimp128Compression {
 			if (trailing_zeros_exceed_threshold) {
 				//! write (64 - [0|8|12|16|18|20|22|24] - [14+])(26-50 bits) and 18 bits
 				int32_t significant_bits = BIT_SIZE - leading_zeros - trailing_zeros;
+				//! FIXME: it feels like this would produce '11', indicating LEADING_ZERO_LOAD
+				//! Instead of indicating TRAILING_EXCEEDS_THRESHOLD '01'
 				auto result = 512 * (RingBuffer::RING_SIZE + previous_index) + BIT_SIZE * ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros] + significant_bits;
 				state.output.WriteValue<int32_t, FLAG_ONE_SIZE>(result);
 				state.output.WriteValue<int64_t>(xor_result >> trailing_zeros, significant_bits);
