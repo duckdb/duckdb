@@ -64,7 +64,7 @@ var QueryResult = duckdb.QueryResult;
 /**
  * @class
  */
-var ArrowTable = duckdb.ArrowTable;
+var RecordBatchWrapper = duckdb.RecordBatchWrapper;
 
 /**
  * @method
@@ -76,13 +76,13 @@ QueryResult.prototype.nextChunk;
  * @method
  * @return data chunk
  */
-QueryResult.prototype.nextArrowTable;
+QueryResult.prototype.nextRecordBatch;
 
 /**
  * @method
  * @return data chunk
  */
-ArrowTable.prototype.GetCDataPointers;
+RecordBatchWrapper.prototype.GetCDataPointers;
 
 /**
  * @name asyncIterator

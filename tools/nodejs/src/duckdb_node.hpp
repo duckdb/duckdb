@@ -174,17 +174,17 @@ public:
 public:
 	static Napi::FunctionReference constructor;
 	Napi::Value NextChunk(const Napi::CallbackInfo &info);
-	Napi::Value NextArrowTable(const Napi::CallbackInfo &info);
+	Napi::Value NextRecordBatch(const Napi::CallbackInfo &info);
 	duckdb::shared_ptr<ArrowSchema> cschema;
 
 private:
 	Database *database_ref;
 };
 
-class ArrowTable : public Napi::ObjectWrap<ArrowTable> {
+class RecordBatchWrapper : public Napi::ObjectWrap<RecordBatchWrapper> {
 public:
-	explicit ArrowTable(const Napi::CallbackInfo &info);
-	~ArrowTable() override;
+	explicit RecordBatchWrapper(const Napi::CallbackInfo &info);
+	~RecordBatchWrapper() override;
 	static Napi::Object Init(Napi::Env env, Napi::Object exports);
 public:
 	static Napi::FunctionReference constructor;

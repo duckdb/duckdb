@@ -477,12 +477,12 @@ Napi::Value Statement::Finish(const Napi::CallbackInfo &info) {
 }
 
 Napi::FunctionReference QueryResult::constructor;
-Napi::FunctionReference ArrowTable::constructor;
+Napi::FunctionReference RecordBatchWrapper::constructor;
 
 Napi::Object QueryResult::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
-	Napi::Function t = DefineClass(env, "QueryResult", {InstanceMethod("nextChunk", &QueryResult::NextChunk), InstanceMethod("nextArrowTable", &QueryResult::NextArrowTable)});
+	Napi::Function t = DefineClass(env, "QueryResult", {InstanceMethod("nextChunk", &QueryResult::NextChunk), InstanceMethod("nextRecordBatch", &QueryResult::NextRecordBatch)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -491,15 +491,15 @@ Napi::Object QueryResult::Init(Napi::Env env, Napi::Object exports) {
 	return exports;
 }
 
-Napi::Object ArrowTable::Init(Napi::Env env, Napi::Object exports) {
+Napi::Object RecordBatchWrapper::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
-	Napi::Function t = DefineClass(env, "ArrowTable", {InstanceMethod("GetCDataPointers", &ArrowTable::GetCDataPointers)});
+	Napi::Function t = DefineClass(env, "RecordBatchWrapper", {InstanceMethod("GetCDataPointers", &RecordBatchWrapper::GetCDataPointers)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
 
-	exports.Set("ArrowTable", t);
+	exports.Set("RecordBatchWrapper", t);
 	return exports;
 }
 
@@ -513,10 +513,10 @@ QueryResult::~QueryResult() {
 	database_ref = nullptr;
 }
 
-ArrowTable::ArrowTable(const Napi::CallbackInfo &info) : Napi::ObjectWrap<ArrowTable>(info) {
+RecordBatchWrapper::RecordBatchWrapper(const Napi::CallbackInfo &info) : Napi::ObjectWrap<RecordBatchWrapper>(info) {
 }
 
-ArrowTable::~ArrowTable() {
+RecordBatchWrapper::~RecordBatchWrapper() {
 }
 
 struct GetChunkTask : public Task {
@@ -550,8 +550,8 @@ struct GetChunkTask : public Task {
 	std::unique_ptr<duckdb::DataChunk> chunk;
 };
 
-struct GetArrowTableTask : public Task {
-	GetArrowTableTask(QueryResult &query_result, Napi::Promise::Deferred deferred, duckdb::idx_t batch_size_p) : Task(query_result), batch_size(batch_size_p), deferred(deferred){
+struct GetRecordBatchTask : public Task {
+	GetRecordBatchTask(QueryResult &query_result, Napi::Promise::Deferred deferred, duckdb::idx_t batch_size_p) : Task(query_result), batch_size(batch_size_p), deferred(deferred){
 	}
 
 	void DoWork() override {
@@ -584,8 +584,8 @@ struct GetArrowTableTask : public Task {
 			return;
 		}
 
-		auto return_value = duckdb::make_unique<Napi::Object>(ArrowTable::constructor.New({}));
-		auto unwrapped = Napi::ObjectWrap<ArrowTable>::Unwrap(*return_value);
+		auto return_value = duckdb::make_unique<Napi::Object>(RecordBatchWrapper::constructor.New({}));
+		auto unwrapped = Napi::ObjectWrap<RecordBatchWrapper>::Unwrap(*return_value);
 
 		// Copy shared pointer into result object to hand over buffer to JS TODO: verify this is how it should go
 		unwrapped->cschema = query_result.cschema;
@@ -610,7 +610,7 @@ Napi::Value QueryResult::NextChunk(const Napi::CallbackInfo &info) {
 	return deferred.Promise();
 }
 
-Napi::Value QueryResult::NextArrowTable(const Napi::CallbackInfo &info) {
+Napi::Value QueryResult::NextRecordBatch(const Napi::CallbackInfo &info) {
 	duckdb::idx_t batch_size;
 	auto env = info.Env();
 	auto deferred = Napi::Promise::Deferred::New(env);
@@ -620,12 +620,12 @@ Napi::Value QueryResult::NextArrowTable(const Napi::CallbackInfo &info) {
 	} else {
 		batch_size = 1024;
 	}
-	database_ref->Schedule(env, duckdb::make_unique<GetArrowTableTask>(*this, deferred, batch_size));
+	database_ref->Schedule(env, duckdb::make_unique<GetRecordBatchTask>(*this, deferred, batch_size));
 
 	return deferred.Promise();
 }
 
-Napi::Value ArrowTable::GetCDataPointers(const Napi::CallbackInfo &info) {
+Napi::Value RecordBatchWrapper::GetCDataPointers(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	Napi::HandleScope scope(env);
 
