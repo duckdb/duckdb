@@ -11,6 +11,13 @@
 
 namespace duckdb_chimp {
 
+enum CompressionFlags {
+	VALUE_IDENTICAL = 0,
+	TRAILING_EXCEEDS_THRESHOLD = 1,
+	LEADING_ZERO_EQUALITY = 2,
+	LEADING_ZERO_LOAD = 3
+};
+
 //===--------------------------------------------------------------------===//
 // Compression
 //===--------------------------------------------------------------------===//
@@ -87,8 +94,7 @@ struct Chimp128Compression {
 		//! Compress the value
 		if (xor_result == 0) {
 			//! The two values are identical
-			//! FIXME: 'previous_index' is guaranteed to be only 8 bits, because it's less than 128
-			//! Yet we use 9 bits to write it to the output stream
+			//! 2 bits for the flag VALUE_IDENTICAL ('00') + 7 bits for the referenced index value
 			state.output.WriteValue<uint32_t, FLAG_ZERO_SIZE>(previous_index);
 			state.SetLeadingZeros();
 		}
@@ -130,13 +136,6 @@ struct Chimp128Compression {
 #define RETURN_IF_EOF(x) do { \
   if ((x) == NAN_LONG) { state.end_of_stream = true; return;} \
 } while (0)
-
-enum DecompressionFlags {
-	VALUE_IDENTICAL = 0,
-	TRAILING_EXCEEDS_THRESHOLD = 1,
-	LEADING_ZERO_EQUALITY = 2,
-	LEADING_ZERO_LOAD = 3
-};
 
 struct Chimp128DecompressionState {
 public:
