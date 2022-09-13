@@ -63,7 +63,7 @@ jobs:
       shell: bash
       run: |
         python3.7 tools/shell/shell-test.py build/release/duckdb
-        java -cp "build/release/tools/jdbc/duckdb_jdbc.jar;build/release/tools/jdbc/duckdb_jdbc-tests.jar" org.duckdb.test.TestDuckDBJDBC
+        java -cp "build/release/tools/jdbc/duckdb_jdbc.jar:build/release/tools/jdbc/duckdb_jdbc-tests.jar" org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
       shell: bash
