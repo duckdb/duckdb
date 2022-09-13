@@ -44,14 +44,10 @@ body:
     attributes:
       label: "Full Name:"
       placeholder: e.g. John Doe
-    validations:
-      required: true
   - type: input
     attributes:
       label: "Affiliation:"
       placeholder: e.g. Oracle
-    validations:
-      required: true
 
   - type: markdown
     attributes:
