@@ -47,6 +47,8 @@ string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${OS_ARCH})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
 
+set(JDBC_VERSION "${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-SNAPSHOT")
+
 add_custom_target(
   dummy_jdbc_target
   DEPENDS duckdb_java duckdb_jdbc
@@ -55,6 +57,7 @@ add_custom_target(
     ${CMAKE_COMMAND} -E copy
     $<TARGET_FILE_DIR:duckdb_java>/$<TARGET_FILE_NAME:duckdb_java>
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main/resources
+  COMMAND ${MVN_COMMAND} versions:set -DnewVersion="${JDBC_VERSION}"
   COMMAND ${MVN_COMMAND} package jar:test-jar
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
