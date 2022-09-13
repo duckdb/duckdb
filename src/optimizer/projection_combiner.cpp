@@ -1,5 +1,8 @@
 #include "duckdb/optimizer/projection_combiner.hpp"
 
+#include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+
 namespace duckdb {
 
 static void CombineProjectionOrder(LogicalProjection &projection, unique_ptr<LogicalOperator> &op) {
@@ -44,7 +47,7 @@ static void CombineProjections(unique_ptr<LogicalOperator> &op) {
 
 unique_ptr<LogicalOperator> ProjectionCombiner::Optimize(unique_ptr<LogicalOperator> op) {
 	CombineProjections(op);
-	return move(op);
+	return op;
 }
 
 } // namespace duckdb
