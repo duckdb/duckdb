@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-Leaf::Leaf(Key &value, unsigned depth, row_t row_id) : Node(NodeType::NLeaf) {
+Leaf::Leaf(Key &value, uint32_t depth, row_t row_id) : Node(NodeType::NLeaf) {
 	capacity = 1;
 	row_ids = unique_ptr<row_t[]>(new row_t[capacity]);
 	row_ids[0] = row_id;

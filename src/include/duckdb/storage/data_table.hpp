@@ -136,9 +136,6 @@ public:
 	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
-	//! Add an index to the DataTable
-	void AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions);
-
 	//! Begin appending structs to this table, obtaining necessary locks, etc
 	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
 	//! Append a chunk to the table using the AppendState obtained from BeginAppend

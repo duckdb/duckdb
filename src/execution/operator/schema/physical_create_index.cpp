@@ -181,15 +181,10 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class CreateIndexGlobalSourceState : public GlobalSourceState {};
-
-unique_ptr<GlobalSourceState> PhysicalCreateIndex::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateIndexGlobalSourceState>();
-}
 
 void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                   LocalSourceState &lstate) const {
-	chunk.SetCardinality(0);
+	// NOP
 }
 
 } // namespace duckdb

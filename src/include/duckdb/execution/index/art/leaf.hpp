@@ -15,8 +15,7 @@ namespace duckdb {
 
 class Leaf : public Node {
 public:
-	Leaf(Key &value, unsigned depth, row_t row_id);
-	Leaf(Key &value, unsigned depth, unique_ptr<row_t[]> row_ids_p, idx_t num_elements_p);
+	Leaf(Key &value, uint32_t depth, row_t row_id);
 	Leaf(unique_ptr<row_t[]> row_ids, idx_t num_elements, Prefix &prefix);
 
 	idx_t capacity;
