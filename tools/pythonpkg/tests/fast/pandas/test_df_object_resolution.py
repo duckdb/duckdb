@@ -346,8 +346,8 @@ class TestResolveObjectColumns(object):
         pd.testing.assert_frame_equal(converted_col, duckdb_col)
 
     def test_ubigint_object_conversion(self, duckdb_cursor):
-		# UBIGINT + TINYINT would result in HUGEINT, but conversion to HUGEINT is not supported yet from pandas->duckdb
-		# So this instead becomes a DOUBLE
+        # UBIGINT + TINYINT would result in HUGEINT, but conversion to HUGEINT is not supported yet from pandas->duckdb
+        # So this instead becomes a DOUBLE
         data = [18446744073709551615, 0]
         x = pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
         converted_col = duckdb.query_df(x, "x", "select * from x").df()
@@ -407,6 +407,20 @@ class TestResolveObjectColumns(object):
         conversion = duckdb.query_df(x, "x", "select * from x").fetchall()
 
         assert(conversion == reference)
+
+    # Test that the column 'offset' is actually used when converting,
+    # and that the same 1024 (STANDARD_VECTOR_SIZE) values are not being scanned over and over again
+    def test_multiple_chunks(self):
+        standard_vector_size = 1024
+
+        data = []
+        data += [datetime.date(2022, 9, 13) for x in range(standard_vector_size)]
+        data += [datetime.date(2022, 9, 14) for x in range(standard_vector_size)]
+        data += [datetime.date(2022, 9, 15) for x in range(standard_vector_size)]
+        data += [datetime.date(2022, 9, 16) for x in range(standard_vector_size)]
+        x = pd.DataFrame({'dates': pd.Series(data=data, dtype='object')})
+        res = duckdb.query_df(x, "x", "select distinct * from x").df()
+        assert(len(res['dates'].__array__()) == 4)
 
     def test_mixed_object_types(self):
         x = pd.DataFrame({
