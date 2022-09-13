@@ -11,7 +11,7 @@ include(UseJava)
 project(DuckDBJDummy NONE)
 
 if(WIN32)
-  set(MVN_COMMAND cmd /c mvnw.bat)
+  set(MVN_COMMAND cmd /c mvnw.cmd)
 else()
   set(MVN_COMMAND sh mvnw)
 endif()
