@@ -25,6 +25,13 @@ base_functions = os.popen(f'{duckdb_path} -csv -c "{get_func}" ').read().split("
 base_functions = {x for x in base_functions}
 
 function_map = {}
+
+import glob
+
+# root_dir needs a trailing slash (i.e. /root/dir/)
+for filename in glob.iglob('/tmp/' + '**/*', recursive=True):
+     print(filename)
+
 for extension in reader:
     extension_name = extension[0]
     print("Load " + extension_name)
