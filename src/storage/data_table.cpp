@@ -1316,6 +1316,12 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vec
 	InitializeScan(state, column_ids);
 }
 
+void DataTable::InitializeParallelCreateIndexScan(ParallelTableScanState &state) {
+	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
+	state.append_lock = std::unique_lock<mutex>(append_lock);
+	state.delete_lock = std::unique_lock<mutex>(row_groups->node_lock);
+}
+
 bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type) {
 	auto current_row_group = state.row_group_scan_state.row_group;
 	while (current_row_group) {

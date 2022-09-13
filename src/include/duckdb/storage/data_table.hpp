@@ -62,6 +62,11 @@ struct ParallelTableScanState {
 	idx_t max_row;
 	LocalScanState local_state;
 	bool transaction_local_data;
+
+	// for CREATE INDEX scans
+	vector<unique_ptr<StorageLockKey>> locks;
+	unique_lock<mutex> append_lock;
+	unique_lock<mutex> delete_lock;
 };
 
 //! DataTable represents a physical table on disk
@@ -184,6 +189,8 @@ public:
 
 	//! Initializes a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
+	//! Acquires additional locks for the parallel CREATE INDEX scan
+	void InitializeParallelCreateIndexScan(ParallelTableScanState &state);
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
 

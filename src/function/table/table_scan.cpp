@@ -50,9 +50,6 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	mutex lock;
 	idx_t max_threads;
 
-	// to acquire table locks when building the index
-	CreateIndexScanState create_index_scan_state;
-
 	idx_t MaxThreads() const override {
 		return max_threads;
 	}
@@ -80,9 +77,10 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	auto result = make_unique<TableScanGlobalState>(context, input.bind_data);
 
 	bind_data.table->storage->InitializeParallelScan(context, result->state);
+
 	// acquire index scan specific locks
 	if (bind_data.is_create_index) {
-		bind_data.table->storage->InitializeCreateIndexScan(result->create_index_scan_state, input.column_ids);
+		bind_data.table->storage->InitializeParallelCreateIndexScan(result->state);
 	}
 
 	return move(result);
