@@ -373,8 +373,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	}
 	py::gil_scoped_acquire acquire;
 	string name = "arrow_object_" + GenerateRandomName();
-	auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
-	if (!IsAcceptedArrowObject(py_object_type)) {
+	if (!IsAcceptedArrowObject(arrow_object)) {
+		auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object Type %s is not an accepted Arrow Object.", py_object_type);
 	}
 	auto stream_factory =
