@@ -35,13 +35,14 @@ struct Chimp128Compression {
 
 	//this.previousValuesLog2 =  (int)(Math.log(previousValues) / Math.log(2));
 	//! With 'previous_values' set to 128 this resolves to 7
-	static constexpr uint8_t PREVIOUS_VALUES_LOG2 = 7;
-	static constexpr uint8_t FLAG_ZERO_SIZE = PREVIOUS_VALUES_LOG2 + 2;
-	static constexpr uint8_t FLAG_ONE_SIZE = PREVIOUS_VALUES_LOG2 + 11;
+	//! The amount of bits needed to store an index between 0-127
+	static constexpr uint8_t INDEX_BITS_SIZE = 7;
+	static constexpr uint8_t FLAG_ZERO_SIZE = INDEX_BITS_SIZE + 2;
+	static constexpr uint8_t FLAG_ONE_SIZE = INDEX_BITS_SIZE + 11;
 	static constexpr uint8_t BIT_SIZE = sizeof(double) * 8;
 
 	//this.threshold = 6 + previousValuesLog2;
-	static constexpr uint8_t TRAILING_ZERO_THRESHOLD = 6 + PREVIOUS_VALUES_LOG2;
+	static constexpr uint8_t TRAILING_ZERO_THRESHOLD = 6 + INDEX_BITS_SIZE;
 
 	template <bool FIRST>
 	static void Store(double in, Chimp128CompressionState& state) {
@@ -124,8 +125,10 @@ struct Chimp128Compression {
 
 #define NAN_LONG 0x7ff8000000000000L
 
+//! Check if the returned value is NAN_LONG, in which case set the end_of_stream to true
+//! And return from the method
 #define RETURN_IF_EOF(x) do { \
-  if ((x) == NAN_LONG) { state.end_of_stream = false; return;} \
+  if ((x) == NAN_LONG) { state.end_of_stream = true; return;} \
 } while (0)
 
 enum DecompressionFlags {
@@ -179,13 +182,31 @@ struct StoredZeros {
 	uint8_t trailing;
 };
 
-//! TODO: figure out if we want to store the values and retrieve later,
-// or retrieve one value at a time
 struct Chimp128Decompression {
 public:
-	static constexpr uint8_t PREVIOUS_VALUES_LOG2 = 7;
-	static constexpr uint8_t INITIAL_FILL = PREVIOUS_VALUES_LOG2 + 9;
+	//! Index value is between 1 and 127, so it's saved in 7 bits at most
+	static constexpr uint8_t INDEX_BITS_SIZE = 7;
+	static constexpr uint8_t LEADING_BITS_SIZE = 3;
+	static constexpr uint8_t SIGNIFICANT_BITS_SIZE = 6;
+	static constexpr uint8_t INITIAL_FILL = INDEX_BITS_SIZE + LEADING_BITS_SIZE + SIGNIFICANT_BITS_SIZE;
 	static constexpr uint8_t BIT_SIZE = sizeof(double) * 8;
+
+	static constexpr uint8_t INDEX_MASK = ((uint8_t)1 << INDEX_BITS_SIZE) - 1;
+	static constexpr uint8_t LEADING_MASK = ((uint8_t)1 << LEADING_BITS_SIZE) - 1;
+	static constexpr uint8_t SIGNIFICANT_MASK = ((uint8_t)1 << SIGNIFICANT_BITS_SIZE) - 1;
+
+	static constexpr uint8_t INDEX_SHIFT_AMOUNT = INITIAL_FILL - INDEX_BITS_SIZE;
+	static constexpr uint8_t LEADING_SHIFT_AMOUNT = INDEX_SHIFT_AMOUNT - LEADING_BITS_SIZE;
+
+	//|----------------|	//! INITIAL_FILL(16) bits
+	//|IIIIIII|				//! Index (7 bits, shifted by 9)
+	//      |LLL|			//! LeadingZeros (3 bits, shifted by 6)
+	//          |SSSSSS|	//! SignificantBits (6 bits)
+	static void UnpackPackedData(uint16_t packed_data, uint16_t& index, uint16_t leading_zeros, uint16_t significant_bits) {
+		index = packed_data >> INDEX_SHIFT_AMOUNT & INDEX_MASK;
+		leading_zeros = packed_data >> LEADING_SHIFT_AMOUNT & LEADING_MASK;
+		significant_bits = packed_data & SIGNIFICANT_MASK;
+	}
 
 	template <bool FIRST = false>
 	static void Load(Chimp128DecompressionState& state) {
@@ -211,7 +232,7 @@ public:
 		uint64_t value;
 		switch (flag) {
 		case LEADING_ZERO_LOAD:
-			auto deserialized_leading_zeros = state.input.ReadValue<uint8_t, 3>();
+			auto deserialized_leading_zeros = state.input.ReadValue<uint8_t, LEADING_BITS_SIZE>();
 			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[deserialized_leading_zeros]);
             value = state.input.ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
             value ^= state.reference_value;
@@ -227,10 +248,10 @@ public:
 			state.ring_buffer.Insert(value);
 			break;
 		case TRAILING_EXCEEDS_THRESHOLD:
-			uint64_t temp = state.input.ReadValue<uint64_t, INITIAL_FILL>();
-			int32_t index = temp >> (INITIAL_FILL - PREVIOUS_VALUES_LOG2) & (1 << PREVIOUS_VALUES_LOG2) - 1;
-			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[temp >> (INITIAL_FILL - 3) & (1 << 3) - 1]);
-			int32_t significant_bits = temp >> PREVIOUS_VALUES_LOG2 & (1 << 6) - 1;
+			uint16_t index, leading_zeros, significant_bits;
+			uint16_t temp = state.input.ReadValue<uint64_t, INITIAL_FILL>();
+			UnpackPackedData(temp, index, leading_zeros, significant_bits);
+			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
 			state.reference_value = state.ring_buffer.Value(index);
 			if (significant_bits == 0) {
 				significant_bits = BIT_SIZE;
@@ -245,7 +266,7 @@ public:
 			break;
 		case VALUE_IDENTICAL:
 			//! Value is identical to previous value
-			auto index = state.input.ReadValue<uint8_t>(PREVIOUS_VALUES_LOG2);
+			auto index = state.input.ReadValue<uint8_t>(INDEX_BITS_SIZE);
 			value = state.ring_buffer.Value(index);
 			state.reference_value = value;
 			state.ring_buffer.Insert(state.reference_value);
