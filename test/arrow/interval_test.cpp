@@ -44,20 +44,19 @@ std::unique_ptr<duckdb::QueryResult> FromArrow(int32_t month, int64_t day_time_m
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::GetSchema));
-	params.push_back(duckdb::Value::UBIGINT(1000000));
 	auto result = conn.TableFunction("arrow_scan", params)->Execute();
 	return result;
 }
 TEST_CASE("Test Interval", "[arrow]") {
 	//! Test Conversion
 	auto result = FromArrow(1, 1000);
-	REQUIRE(result->success);
+	REQUIRE(!result->HasError());
 	REQUIRE(CHECK_COLUMN(result, 0, {"00:00:01"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"1 month"}));
 
 	//! Test Nulls
 	result = FromArrow(0, 0, true);
-	REQUIRE(result->success);
+	REQUIRE(!result->HasError());
 	REQUIRE(CHECK_COLUMN(result, 0, {nullptr}));
 	REQUIRE(CHECK_COLUMN(result, 1, {nullptr}));
 }

@@ -13,7 +13,7 @@ public:
 
 public:
 	static bool check_(const py::handle &object) {
-		return !py::none().is(object);
+		return !object.is_none();
 	}
 };
 

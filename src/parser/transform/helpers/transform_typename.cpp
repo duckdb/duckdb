@@ -68,7 +68,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 
 		result_type = LogicalType::MAP(move(children));
 	} else {
-		int8_t width, scale;
+		int64_t width, scale;
 		if (base_type == LogicalTypeId::DECIMAL) {
 			// default decimal width/scale
 			width = 18;

@@ -12,7 +12,7 @@ MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, S
       collection(move(collection_p)), scan_initialized(false) {
 }
 
-MaterializedQueryResult::MaterializedQueryResult(string error)
+MaterializedQueryResult::MaterializedQueryResult(PreservedError error)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, move(error)), scan_initialized(false) {
 }
 
@@ -34,7 +34,7 @@ string MaterializedQueryResult::ToString() {
 		}
 		result += "\n";
 	} else {
-		result = error + "\n";
+		result = GetError() + "\n";
 	}
 	return result;
 }
@@ -51,9 +51,9 @@ idx_t MaterializedQueryResult::RowCount() const {
 }
 
 ColumnDataCollection &MaterializedQueryResult::Collection() {
-	if (!success) {
+	if (HasError()) {
 		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
-		                            error);
+		                            GetError());
 	}
 	if (!collection) {
 		throw InternalException("Missing collection from materialized query result");
@@ -66,8 +66,8 @@ unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
 }
 
 unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
-	if (!success) {
-		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", error);
+	if (HasError()) {
+		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
 	}
 	auto result = make_unique<DataChunk>();
 	collection->InitializeScanChunk(*result);

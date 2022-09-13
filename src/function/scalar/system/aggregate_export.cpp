@@ -96,7 +96,7 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 		state_vec_ptr[i] = (data_ptr_t)target_ptr;
 	}
 
-	AggregateInputData aggr_input_data(nullptr);
+	AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
 	bind_data.aggr.finalize(local_state.addresses, aggr_input_data, result, input.size(), 0);
 
 	for (idx_t i = 0; i < input.size(); i++) {
@@ -160,7 +160,7 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		memcpy(local_state.state_buffer0.get(), state0.GetDataUnsafe(), bind_data.state_size);
 		memcpy(local_state.state_buffer1.get(), state1.GetDataUnsafe(), bind_data.state_size);
 
-		AggregateInputData aggr_input_data(nullptr);
+		AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
 		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
 
 		result_ptr[i] =

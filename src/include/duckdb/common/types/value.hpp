@@ -407,7 +407,17 @@ Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(dtime_t value);
 template <>
+Value DUCKDB_API Value::CreateValue(dtime_tz_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(timestamp_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_sec_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_ms_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_ns_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_tz_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(const char *value);
 template <>

@@ -35,7 +35,7 @@ class TestArrowReplacementScan(object):
         
         con.execute("create view x as select * from userdata_parquet_table")
         del userdata_parquet_table
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.CatalogException, match='Table with name userdata_parquet_table does not exist'):
             assert con.execute("select count(*) from x").fetchone()
 
     def test_arrow_dataset_replacement_scan(self, duckdb_cursor):
@@ -50,5 +50,6 @@ class TestArrowReplacementScan(object):
 
     def test_replacement_scan_fail(self, duckdb_cursor):
         random_object = "I love salmiak rondos"
-        with pytest.raises(Exception):
+        con = duckdb.connect()
+        with pytest.raises(duckdb.InvalidInputException, match=r'Python Object "random_object" of type "str" found on line .* not suitable for replacement scans.'):
             con.execute("select count(*) from random_object").fetchone()

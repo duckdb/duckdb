@@ -417,7 +417,7 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void HomeDirectorySetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.home_directory = input.IsNull() ? input.ToString() : string();
+	config.home_directory = input.IsNull() ? string() : input.ToString();
 }
 
 Value HomeDirectorySetting::GetSetting(ClientContext &context) {

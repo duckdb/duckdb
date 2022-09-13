@@ -5,6 +5,9 @@
 require tpch
 
 statement ok
+pragma verify_external
+
+statement ok
 PRAGMA verify_serializer
 
 statement ok

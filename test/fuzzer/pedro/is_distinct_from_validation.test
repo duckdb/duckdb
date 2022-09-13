@@ -1,0 +1,15 @@
+# name: test/fuzzer/pedro/is_distinct_from_validation.test
+# group: [pedro]
+
+statement ok
+pragma enable_verification
+
+query I
+SELECT (0 IS DISTINCT FROM 2) = 0;
+----
+false
+
+query I
+SELECT CASE 8 WHEN(0 IS DISTINCT FROM 0) THEN 2 END;
+----
+NULL

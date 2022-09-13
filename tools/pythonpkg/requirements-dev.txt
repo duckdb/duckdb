@@ -7,5 +7,3 @@ pandas
 pyarrow
 mypy
 psutil>=5.9.0
-ibis-framework[duckdb]
-ibis-substrait

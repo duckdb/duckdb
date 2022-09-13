@@ -10,6 +10,15 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test comment in CPP API", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	con.SendQuery("--ups");
+	//! Should not crash
+	REQUIRE(1);
+}
+
 TEST_CASE("Test using connection after database is gone", "[api]") {
 	auto db = make_unique<DuckDB>(nullptr);
 	auto conn = make_unique<Connection>(*db);
@@ -53,7 +62,7 @@ static void long_running_query(Connection *conn, bool *correct) {
 	                          "integers i6, integers i7, integers i8, integers i9, integers i10,"
 	                          "integers i11, integers i12, integers i13");
 	// the query should fail
-	*correct = !result->success;
+	*correct = result->HasError();
 }
 
 TEST_CASE("Test closing database during long running query", "[api]") {
@@ -237,7 +246,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// error in stream that only happens after fetching
 	result = con.SendQuery(
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
-	while (result->success) {
+	while (!result->HasError()) {
 		auto chunk = result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
@@ -257,7 +266,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// same query but call materialize after fetching
 	result = con.SendQuery(
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
-	while (result->success) {
+	while (!result->HasError()) {
 		auto chunk = result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;

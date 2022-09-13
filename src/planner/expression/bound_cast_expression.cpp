@@ -109,7 +109,6 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	}
 	if (source_type.id() == LogicalTypeId::VARCHAR) {
 		switch (target_type.id()) {
-		case LogicalTypeId::DATE:
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_NS:
