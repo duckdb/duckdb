@@ -73,9 +73,4 @@ add_custom_command(
     ${CMAKE_CURRENT_SOURCE_DIR}/target/duckdb_jdbc-${JDBC_VERSION}-tests.jar
     ${CMAKE_CURRENT_BINARY_DIR}/duckdb_jdbc-tests.jar)
 
-add_test(
-  USES_TERMINAL
-  COMMAND ${MVN_COMMAND} test
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-
 add_custom_target(jdbc ALL DEPENDS dummy_jdbc_target)
