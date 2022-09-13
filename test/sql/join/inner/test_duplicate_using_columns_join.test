@@ -1,0 +1,29 @@
+# name: test/sql/join/inner/test_duplicate_using_columns_join.test
+# group: [inner]
+
+statement ok
+pragma enable_verification
+
+#statement ok
+#CREATE TABLE t1(c0 INT);
+
+## c0 is used twice in the USING clause
+#query II
+#SELECT * FROM (t1 JOIN t1 t2 USING (c0, c0)), (SELECT 2);
+#----
+
+statement ok
+create table tbl as select 42 AS i;
+
+query III
+select * from tbl t1 join tbl t2 using (i, i) join tbl t3 using (i, i, i);
+----
+42	42	42
+
+statement ok
+create or replace table tbl as select 42 AS i, 84 as j;
+
+query III
+select * from tbl t1 join tbl t2 using (i, j, i) join tbl t3 using (i, i, i, j, i);
+----
+42	84

@@ -51,11 +51,6 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 }
 
 void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet *set) {
-	auto &using_set = using_columns[column_name];
-	if (!using_set.empty()) {
-		//! No need to add it, the binding on this column_name is already made
-		return;
-	}
 	using_columns[column_name].insert(set);
 }
 
