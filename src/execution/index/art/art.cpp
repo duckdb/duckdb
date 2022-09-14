@@ -213,7 +213,7 @@ struct KeySection {
 	data_t key_byte;
 };
 
-void GetNodeChildren(vector<KeySection> &child_sections, vector<unique_ptr<Key>> &keys, KeySection &key_section) {
+void GetChildSections(vector<KeySection> &child_sections, vector<unique_ptr<Key>> &keys, KeySection &key_section) {
 
 	idx_t child_start_idx = key_section.start;
 	for (idx_t i = key_section.start + 1; i <= key_section.end; i++) {
@@ -230,12 +230,16 @@ void GetNodeChildren(vector<KeySection> &child_sections, vector<unique_ptr<Key>>
 void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySection &key_section,
                bool &has_constraint) {
 
+	D_ASSERT(key_section.start < keys.size());
+	D_ASSERT(key_section.end < keys.size());
+	D_ASSERT(key_section.start <= key_section.end);
+
 	auto &start_key = *keys[key_section.start];
 	auto &end_key = *keys[key_section.end];
 
 	// increment the depth until we reach a leaf or find a mismatching byte
 	auto prefix_start = key_section.depth;
-	while (start_key.len != key_section.depth && Key::ByteMatches(start_key, end_key, key_section.depth)) {
+	while (start_key.len != key_section.depth && start_key.ByteMatches(end_key, key_section.depth)) {
 		key_section.depth++;
 	}
 
@@ -263,7 +267,7 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 
 		// we will find at least two child entries of this node, otherwise we'd have reached a leaf
 		vector<KeySection> child_sections;
-		GetNodeChildren(child_sections, keys, key_section);
+		GetChildSections(child_sections, keys, key_section);
 
 		auto node_type = Node::GetTypeBySize(child_sections.size());
 		Node::New(node_type, node);
@@ -272,10 +276,10 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 		node->prefix = Prefix(start_key, prefix_start, prefix_length);
 
 		// recurse on each child section
-		for (idx_t i = 0; i < child_sections.size(); i++) {
+		for (auto &child_section : child_sections) {
 			Node *new_child = nullptr;
-			Construct(keys, row_ids, new_child, child_sections[i], has_constraint);
-			Node::InsertChild(node, child_sections[i].key_byte, new_child);
+			Construct(keys, row_ids, new_child, child_section, has_constraint);
+			Node::InsertChild(node, child_section.key_byte, new_child);
 		}
 	}
 }

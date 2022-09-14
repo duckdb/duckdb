@@ -25,10 +25,6 @@ unique_ptr<Key> Key::CreateKey(const char *value) {
 	return Key::CreateKey(string_t(value, strlen(value)));
 }
 
-bool Key::ByteMatches(Key &key_1, Key &key_2, idx_t depth) {
-	return key_1[depth] == key_2[depth];
-}
-
 bool Key::operator>(const Key &k) const {
 	for (idx_t i = 0; i < MinValue<idx_t>(len, k.len); i++) {
 		if (data[i] > k.data[i]) {
@@ -72,5 +68,9 @@ bool Key::operator==(const Key &k) const {
 		}
 	}
 	return true;
+}
+
+bool Key::ByteMatches(Key &other, idx_t &depth) {
+	return data[depth] == other[depth];
 }
 } // namespace duckdb

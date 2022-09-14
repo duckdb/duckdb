@@ -20,6 +20,9 @@ public:
 
 class CreateIndexLocalSinkState : public LocalSinkState {
 public:
+	CreateIndexLocalSinkState(ExpressionExecutor executor) : executor(move(executor)) {
+	}
+
 	//! Local indexes build from chunks of the scanned data
 	unique_ptr<Index> local_index;
 
@@ -29,6 +32,8 @@ public:
 
 	RowLayout payload_layout;
 	vector<LogicalType> payload_types;
+
+	ExpressionExecutor executor;
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
@@ -51,7 +56,8 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
 
 	auto &allocator = Allocator::Get(table.storage->db);
-	auto state = make_unique<CreateIndexLocalSinkState>();
+	ExpressionExecutor executor(allocator, expressions);
+	auto state = make_unique<CreateIndexLocalSinkState>(move(executor));
 
 	// create the local index
 	switch (info->index_type) {
@@ -90,15 +96,11 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
                                          DataChunk &input) const {
 
 	// here, we sink all incoming data into the local_sink_state after executing the expression executor
-
 	auto &lstate = (CreateIndexLocalSinkState &)lstate_p;
-	auto &allocator = Allocator::Get(table.storage->db);
-
-	ExpressionExecutor executor(allocator, expressions);
 
 	// resolve the expressions for this chunk
 	lstate.key_chunk.Reset();
-	executor.Execute(input, lstate.key_chunk);
+	lstate.executor.Execute(input, lstate.key_chunk);
 
 	// create the payload chunk
 	DataChunk payload_chunk;

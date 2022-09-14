@@ -350,19 +350,15 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 
 		auto &get = (LogicalGet &)*plan;
-		result.types.clear();
-		result.names.clear();
 		for (auto &column_id : get.column_ids) {
 			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot create an index on the rowid!");
 			}
-			result.types.push_back(get.returned_types[column_id]);
-			result.names.emplace_back("Count");
 		}
 
 		// the logical CREATE INDEX also needs all fields to scan the referenced table
 		result.plan = make_unique<LogicalCreateIndex>(
-		    get.table_index, *table, get.column_ids, move(get.function), move(get.bind_data), move(expressions),
+		    *table, get.column_ids, move(get.function), move(get.bind_data), move(expressions),
 		    unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)), move(get.names), move(get.returned_types));
 		break;
 	}

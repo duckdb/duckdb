@@ -3,6 +3,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
+#include "duckdb/common/swap.hpp"
 
 namespace duckdb {
 
@@ -238,8 +239,8 @@ void Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 
 	if (info.l_node->type < info.r_node->type) {
 		// swap subtrees to ensure that l_node has the bigger node type
-		std::swap(info.l_art, info.r_art);
-		std::swap(info.l_node, info.r_node);
+		swap(info.l_art, info.r_art);
+		swap(info.l_node, info.r_node);
 		UpdateParentsOfNodes(info.l_node, info.r_node, parents);
 	}
 
@@ -272,8 +273,8 @@ void ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 
 	// make sure that r_node has the longer (or equally long) prefix
 	if (l_node->prefix.Size() > r_node->prefix.Size()) {
-		std::swap(info.l_art, info.r_art);
-		std::swap(l_node, r_node);
+		swap(info.l_art, info.r_art);
+		swap(l_node, r_node);
 		UpdateParentsOfNodes(l_node, r_node, parents);
 	}
 
