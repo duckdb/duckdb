@@ -116,13 +116,13 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr = user_config;
 	}
 
-	if (config.options.temporary_directory.empty() && database_path) {
+	if (config_ptr->options.temporary_directory.empty() && database_path) {
 		// no directory specified: use default temp path
-		config.options.temporary_directory = string(database_path) + ".tmp";
+		config_ptr->options.temporary_directory = string(database_path) + ".tmp";
 
 		// special treatment for in-memory mode
 		if (strcmp(database_path, ":memory:") == 0) {
-			config.options.temporary_directory = ".tmp";
+			config_ptr->options.temporary_directory = ".tmp";
 		}
 	}
 
@@ -226,6 +226,7 @@ Allocator &Allocator::Get(DatabaseInstance &db) {
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config) {
+	config.options.database_path = new_config.options.database_path;
 	config.options.access_mode = AccessMode::READ_WRITE;
 	if (new_config.options.access_mode != AccessMode::UNDEFINED) {
 		config.options.access_mode = new_config.options.access_mode;

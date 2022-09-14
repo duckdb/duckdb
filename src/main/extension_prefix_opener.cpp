@@ -29,10 +29,9 @@ static unique_ptr<ReplacementOpenData> ExtensionPrefixPreOpen(DBConfig &config, 
 		return nullptr;
 	}
 
-	config.options.database_path = string(); // db runs in in-memory mode
-
 	auto extension_data = ExtensionHelper::ReplacementOpenPre(extension, config);
 	if (extension_data) {
+		config.options.database_path = string(); // db runs in in-memory mode
 		return make_unique<ExtensionPrefixOpenData>(extension, path, move(extension_data));
 	}
 	return nullptr;
