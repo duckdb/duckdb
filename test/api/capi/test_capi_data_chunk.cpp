@@ -39,7 +39,6 @@ TEST_CASE("Test table_info incorrect 'is_valid' value for 'dflt_value' column", 
 				uint64_t *validity = duckdb_vector_get_validity(vector);
 				bool is_valid = duckdb_validity_row_is_valid(validity, row_idx);
 
-				printf("Is row %d, col %d valid? %s\n", (int)row_idx, (int)col_idx, is_valid ? "yes" : "no");
 				if (col_idx == 4) {
 					//'dflt_value' column
 					REQUIRE(is_valid == false);
