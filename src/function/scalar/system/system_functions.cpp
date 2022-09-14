@@ -52,6 +52,7 @@ static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vec
 		throw NotImplementedException("current_schemas requires a constant input");
 	}
 	if (ConstantVector::IsNull(input.data[0])) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
 		return;
 	}
