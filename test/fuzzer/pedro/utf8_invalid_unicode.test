@@ -22,6 +22,10 @@ SELECT upper(decode('\xE0\x9F\x98\x84'::BLOB)::VARCHAR);
 statement error
 SELECT upper(decode('\xF0\xDF\x98\x84'::BLOB)::VARCHAR);
 
+# invalid utf8, incomplete sequence
+statement error
+SELECT upper(decode('\xF0\x9F\x98'::BLOB)::VARCHAR);
+
 # NULL character not supported
 statement error
 SELECT upper(decode('\xF0\x9F\x98\x84\x00'::BLOB)::VARCHAR);

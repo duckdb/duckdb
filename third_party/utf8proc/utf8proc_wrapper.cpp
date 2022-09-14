@@ -91,6 +91,11 @@ UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *i
 			return UnicodeType::INVALID;
 		}
 	}
+	if (n > 0) {
+		/* incomplete byte sequence */
+		AssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::BYTE_MISMATCH);
+		return UnicodeType::INVALID;
+	}
 	return type;
 }
 
