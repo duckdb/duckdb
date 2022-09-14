@@ -480,6 +480,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 	}
 
 	idx_t not_null_idx = GetColumnIndex(info.column_name);
+	if (columns[not_null_idx].Generated()) {
+		throw BinderException("Unsupported constraint for generated column!");
+	}
 	bool has_not_null = false;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
