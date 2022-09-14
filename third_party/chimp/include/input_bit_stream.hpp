@@ -83,7 +83,7 @@ private:
 	T GetMask(uint8_t value_size) const {
 		return (T)1 << value_size;
 	}
-	template <class T, uint8_T VALUE_SIZE>
+	template <class T, uint8_t VALUE_SIZE>
 	T GetMask() const {
 		return (T)1 << VALUE_SIZE;
 	}
