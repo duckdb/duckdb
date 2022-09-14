@@ -25,3 +25,15 @@ query I
 EXECUTE v1(1)
 ----
 0
+
+statement ok
+PREPARE v2 AS SELECT $1 FROM t0 WHERE $1 IN (1);
+
+query I
+EXECUTE v2(0)
+----
+
+query I
+EXECUTE v2(1)
+----
+1
