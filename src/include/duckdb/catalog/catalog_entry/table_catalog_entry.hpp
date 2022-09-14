@@ -65,6 +65,9 @@ public:
 	vector<LogicalType> GetTypes();
 	string ToSQL() override;
 
+	//! Get statistics of a column (physical or virtual) within the table
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo

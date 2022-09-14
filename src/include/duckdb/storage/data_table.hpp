@@ -163,7 +163,9 @@ public:
 		this->is_root = true;
 	}
 
+	//! Get statistics of a physical column within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	//! Sets statistics of a physical column within the table
 	void SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun);
 
 	//! Checkpoint the table to the specified table data writer

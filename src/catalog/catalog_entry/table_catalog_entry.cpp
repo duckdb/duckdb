@@ -166,6 +166,19 @@ idx_t TableCatalogEntry::StandardColumnCount() const {
 	return count;
 }
 
+unique_ptr<BaseStatistics> TableCatalogEntry::GetStatistics(ClientContext &context, column_t column_id) {
+	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+		return nullptr;
+	}
+	if (column_id >= columns.size()) {
+		throw InternalException("TableCatalogEntry::GetStatistics column_id out of range");
+	}
+	if (columns[column_id].Generated()) {
+		return nullptr;
+	}
+	return storage->GetStatistics(context, columns[column_id].StorageOid());
+}
+
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
 	D_ASSERT(!internal);
 	if (info->type != AlterType::ALTER_TABLE) {
