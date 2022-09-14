@@ -271,7 +271,7 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 		auto prefix_length = key_section.depth - prefix_start;
 		node->prefix = Prefix(start_key, prefix_start, prefix_length);
 
-		// recurse on each child
+		// recurse on each child section
 		for (idx_t i = 0; i < child_sections.size(); i++) {
 			Node *new_child = nullptr;
 			Construct(keys, row_ids, new_child, child_sections[i], has_constraint);
