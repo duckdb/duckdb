@@ -1,0 +1,10 @@
+# name: test/fuzzer/pedro/utf8_invalid_unicode.test
+# group: [pedro]
+
+# invalid utf8, unicode value too high
+statement error
+SELECT upper(decode('\xF6\x96\xB0\x85'::BLOB)::VARCHAR);
+
+# invalid utf8, unicode value too high
+statement error
+SELECT decode('\xF6\x96\xB0\x85'::BLOB)::VARCHAR ILIKE '1';

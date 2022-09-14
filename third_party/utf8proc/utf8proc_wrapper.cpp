@@ -32,46 +32,66 @@ static void AssignInvalidUTF8Reason(UnicodeInvalidReason *invalid_reason, size_t
 
 UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *invalid_reason, size_t *invalid_pos) {
 	UnicodeType type = UnicodeType::ASCII;
-	char c;
-	for (size_t i = 0; i < len; i++) {
-		c = s[i];
-		if (c == '\0') {
-			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::NULL_BYTE);
-			return UnicodeType::INVALID;
-		}
-		// 1 Byte / ASCII
-		if ((c & 0x80) == 0) {
-			continue;
-		}
-		type = UnicodeType::UNICODE;
-		if ((s[++i] & 0xC0) != 0x80) {
-			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
-			return UnicodeType::INVALID;
-		}
-		if ((c & 0xE0) == 0xC0) {
-			continue;
-		}
-		if ((s[++i] & 0xC0) != 0x80) {
-			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
-			return UnicodeType::INVALID;
-		}
-		if ((c & 0xF0) == 0xE0) {
-			continue;
-		}
-		if ((s[++i] & 0xC0) != 0x80) {
-			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
-			return UnicodeType::INVALID;
-		}
-		if ((c & 0xF8) == 0xF0) {
-			continue;
-		}
-		AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
-		return UnicodeType::INVALID;
-	}
+	int n = 0, c, utf8char = 0, first_pos_seq = 0;
 
+	for (size_t i = 0; i < len; i++) {
+		c = (int) s[i];
+
+		if (n > 0) {
+			/* now validate the extra bytes */
+			if ((c & 0xC0) != 0x80) {
+				/* extra byte is not in the format 10xxxxxx */
+				AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
+				return UnicodeType::INVALID;
+			}
+			utf8char = (utf8char << 6) | (c & 0x3F);
+			n--;
+			if (n == 0) {
+				/* last byte in the sequence */
+				if (utf8char > 0x10FFFF) {
+					/* value not representable by Unicode */
+					AssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE);
+					return UnicodeType::INVALID;
+				}
+				if ((utf8char & 0x1FFF800) == 0xD800) {
+					/* low or high surrogate encoded as UTF-8 */
+					AssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE);
+					return UnicodeType::INVALID;
+				}
+			}
+		} else if ((c & 0x80) == 0) {
+			/* 1 byte sequence */
+			if (c == '\0') {
+				/* NULL byte not allowed */
+				AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::NULL_BYTE);
+				return UnicodeType::INVALID;
+			}
+		} else if ((c & 0xE0) == 0xC0) {
+			/* 2 byte sequence */
+			n = 1;
+			utf8char = c & 0x1F;
+			type = UnicodeType::UNICODE;
+			first_pos_seq = i;
+		} else if ((c & 0xF0) == 0xE0) {
+			/* 3 byte sequence */
+			n = 2;
+			utf8char = c & 0x0F;
+			type = UnicodeType::UNICODE;
+			first_pos_seq = i;
+		} else if ((c & 0xF8) == 0xF0) {
+			/* 4 byte sequence */
+			n = 3;
+			utf8char = c & 0x07;
+			type = UnicodeType::UNICODE;
+			first_pos_seq = i;
+		} else {
+			/* invalid UTF-8 start byte */
+			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
+			return UnicodeType::INVALID;
+		}
+	}
 	return type;
 }
-
 
 char* Utf8Proc::Normalize(const char *s, size_t len) {
 	assert(s);
