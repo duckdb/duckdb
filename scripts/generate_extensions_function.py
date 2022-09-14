@@ -2,6 +2,7 @@ import os
 import csv
 import re
 import argparse
+import glob
 
 os.chdir(os.path.dirname(__file__))
 
@@ -26,12 +27,10 @@ base_functions = {x for x in base_functions}
 
 function_map = {}
 
-import glob
-
 # root_dir needs a trailing slash (i.e. /root/dir/)
 extension_path = {}
 for filename in glob.iglob('/tmp/' + '**/*.duckdb_extension', recursive=True):
-    extension_path[filename.split("/")[-1].split('.')[0]] = filename
+    extension_path[os.path.splitext(os.path.basename(filename))[0]] = filename
 
 for extension in reader:
     extension_name = extension[0]
@@ -44,13 +43,9 @@ for extension in reader:
     })
 
 if args.validate:
-    cur_function_map = {}
     file = open(os.path.join("..","src","include","extension_functions.hpp"),'r')
-    pattern = re.compile("(.*?){\"(.*?)\", \"(.*?)\"},")
-    for line in file:
-        if pattern.match(line):
-            split_line = line.split("\"")
-            cur_function_map[split_line[1]] = split_line[3]
+    pattern = re.compile("{\"(.*?)\", \"(.*?)\"},")
+    cur_function_map = dict(pattern.findall(file.read()))
     print("Cur Function Map: ")
     print(cur_function_map)
     print("Function Map: ")
