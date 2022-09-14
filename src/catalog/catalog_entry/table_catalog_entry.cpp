@@ -468,7 +468,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		auto copy = columns[i].Copy();
 		if (default_idx == i) {
 			// set the default value of this column
-			D_ASSERT(!copy.Generated()); // Shouldnt reach here - DEFAULT value isn't supported for Generated Columns
+			if (copy.Generated()) {
+				throw BinderException("Cannot SET DEFAULT for generated column \"%s\"", columns[i].Name());
+			}
 			copy.SetDefaultValue(info.expression ? info.expression->Copy() : nullptr);
 		}
 		create_info->columns.push_back(move(copy));
