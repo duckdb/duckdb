@@ -52,8 +52,6 @@ jobs:
     - name: Build
       shell: bash
       run: make
-      
-    - run: find . | grep "\\.jar"
 
     - name: Test
       shell: bash
