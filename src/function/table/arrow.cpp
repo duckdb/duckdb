@@ -249,6 +249,9 @@ idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const Func
 bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p, ArrowScanLocalState &state,
                                 ArrowScanGlobalState &parallel_state) {
 	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
+	if (parallel_state.done) {
+		return false;
+	}
 	state.chunk_offset = 0;
 
 	auto current_chunk = parallel_state.stream->GetNextChunk();
@@ -259,8 +262,9 @@ bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	//! have we run out of chunks? we are done
 	if (!state.chunk->arrow_array.release) {
 		parallel_state.done = true;
+		return false;
 	}
-	return !parallel_state.done;
+	return true;
 }
 
 unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(ClientContext &context,
