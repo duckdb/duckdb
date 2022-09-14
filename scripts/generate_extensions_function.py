@@ -46,7 +46,7 @@ for extension in reader:
 if args.validate:
     cur_function_map = {}
     file = open(os.path.join("..","src","include","extension_functions.hpp"),'r')
-    pattern = re.compile("{\"(.*?)\", \"(.*?)\"},")
+    pattern = re.compile("(.*?){\"(.*?)\", \"(.*?)\"},")
     for line in file:
         if pattern.match(line):
             split_line = line.split("\"")
