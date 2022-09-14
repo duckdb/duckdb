@@ -45,14 +45,13 @@ public:
 
 	static const vector<string> GetPublicKeys();
 
-	static unique_ptr<ReplacementOpenData> ReplacementOpenPre(ClientContext &context, const string &extension,
-	                                                          DBConfig &config);
+	static unique_ptr<ReplacementOpenData> ReplacementOpenPre(const string &extension, DBConfig &config);
 	static void ReplacementOpenPost(ClientContext &context, const string &extension, DatabaseInstance &instance,
 	                                ReplacementOpenData *open_data);
 
 private:
 	static const vector<string> PathComponents();
-	static ExtensionInitResult InitialLoad(ClientContext &context, const string &extension);
+	static ExtensionInitResult InitialLoad(DBConfig &context, FileOpener *opener, const string &extension);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

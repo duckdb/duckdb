@@ -20,7 +20,13 @@ struct ReplacementOpenData {
 	}
 };
 
-typedef unique_ptr<ReplacementOpenData> (*replacement_open_pre_t)(DBConfig &config);
+struct ReplacementOpenStaticData {
+	virtual ~ReplacementOpenStaticData() {
+	}
+};
+
+typedef unique_ptr<ReplacementOpenData> (*replacement_open_pre_t)(DBConfig &config,
+                                                                  ReplacementOpenStaticData *static_data);
 typedef void (*replacement_open_post_t)(DatabaseInstance &instance, ReplacementOpenData *open_data);
 
 struct ReplacementOpen {
@@ -32,6 +38,8 @@ struct ReplacementOpen {
 	replacement_open_post_t post_func;
 
 	unique_ptr<ReplacementOpenData> data;
+
+	shared_ptr<ReplacementOpenStaticData> static_data;
 };
 
 } // namespace duckdb

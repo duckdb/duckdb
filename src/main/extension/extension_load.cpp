@@ -2,6 +2,7 @@
 #include "duckdb/common/dl.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/function/replacement_open.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 
 namespace duckdb {
 
@@ -20,17 +21,17 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	return (T)function;
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(ClientContext &context, const string &extension) {
-	auto &config = DBConfig::GetConfig(context);
+ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *opener, const string &extension) {
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
-	auto &fs = FileSystem::GetFileSystem(context);
+	VirtualFileSystem fallback_file_system; // config may not contain one yet
+	auto &fs = config.file_system ? *config.file_system : fallback_file_system;
 	auto filename = fs.ConvertSeparators(extension);
 
 	// shorthand case
 	if (!StringUtil::Contains(extension, ".") && !StringUtil::Contains(extension, fs.PathSeparator())) {
-		string local_path = fs.GetHomeDirectory(FileSystem::GetFileOpener(context));
+		string local_path = fs.GetHomeDirectory(opener);
 		auto path_components = PathComponents();
 		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);
@@ -119,7 +120,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(ClientContext &context, const s
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
 	auto &db = DatabaseInstance::GetDatabase(context);
 
-	auto res = InitialLoad(context, extension);
+	auto res = InitialLoad(DBConfig::GetConfig(context), FileSystem::GetFileOpener(context), extension);
 	auto init_fun_name = res.basename + "_init";
 
 	ext_init_fun_t init_fun;
@@ -133,17 +134,16 @@ void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string
 	}
 }
 
-unique_ptr<ReplacementOpenData> ExtensionHelper::ReplacementOpenPre(ClientContext &context, const string &extension,
-                                                                    DBConfig &config) {
+unique_ptr<ReplacementOpenData> ExtensionHelper::ReplacementOpenPre(const string &extension, DBConfig &config) {
 
-	auto res = InitialLoad(context, extension);
+	auto res = InitialLoad(config, nullptr, extension); // TODO opener
 	auto init_fun_name = res.basename + "_replacement_open_pre";
 
 	replacement_open_pre_t open_pre_fun;
 	open_pre_fun = LoadFunctionFromDLL<replacement_open_pre_t>(res.lib_hdl, init_fun_name, res.filename);
 
 	try {
-		return (*open_pre_fun)(config);
+		return (*open_pre_fun)(config, nullptr);
 	} catch (std::exception &e) {
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
 		                            init_fun_name, res.filename, e.what());
@@ -152,7 +152,7 @@ unique_ptr<ReplacementOpenData> ExtensionHelper::ReplacementOpenPre(ClientContex
 
 void ExtensionHelper::ReplacementOpenPost(ClientContext &context, const string &extension, DatabaseInstance &instance,
                                           ReplacementOpenData *open_data) {
-	auto res = InitialLoad(context, extension);
+	auto res = InitialLoad(DBConfig::GetConfig(context), FileSystem::GetFileOpener(context), extension);
 	auto init_fun_name = res.basename + "_replacement_open_post";
 
 	replacement_open_post_t open_post_fun;

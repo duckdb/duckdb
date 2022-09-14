@@ -20,7 +20,6 @@ namespace duckdb {
 
 DBConfig::DBConfig() {
 	compression_functions = make_unique<CompressionFunctionSet>();
-	replacement_opens.push_back(ParquetReplacementOpen());
 	replacement_opens.push_back(ExtensionPrefixReplacementOpen());
 }
 
@@ -133,7 +132,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	for (auto &open : config_ptr->replacement_opens) {
 		if (open.pre_func) {
-			open.data = open.pre_func(*config_ptr);
+			open.data = open.pre_func(*config_ptr, open.static_data.get());
+			if (open.data) {
+				break;
+			}
 		}
 	}
 	Configure(*config_ptr);
@@ -143,6 +145,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
+	//	config.create_storage_manager(config.options.database_path,
+	//	                              config.options.access_mode == AccessMode::READ_ONLY);
 	storage = make_unique<StorageManager>(*this, config.options.database_path,
 	                                      config.options.access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*this);
@@ -158,8 +162,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	scheduler->SetThreads(config.options.maximum_threads);
 
 	for (auto &open : config.replacement_opens) {
-		if (open.post_func) {
+		if (open.post_func && open.data) {
 			open.post_func(*this, open.data.get());
+			break;
 		}
 	}
 }

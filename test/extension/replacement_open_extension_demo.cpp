@@ -23,7 +23,6 @@ DUCKDB_EXTENSION_API void replacement_open_extension_demo_replacement_open_post(
 	D_ASSERT(open_data_p);
 	auto open_data = (MyOpenData *)open_data_p;
 	auto &config = DBConfig::GetConfig(db);
-	config.AddExtensionOption("my_new_option", "some description", LogicalType::VARCHAR);
 	config.options.set_variables["my_new_option"] = Value(open_data->my_flag);
 	printf("post\n");
 }
