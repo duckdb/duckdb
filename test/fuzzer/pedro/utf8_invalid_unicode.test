@@ -14,6 +14,11 @@ SELECT upper(decode('\xF0\x9F\x98\x84'::BLOB)::VARCHAR);
 ----
 😄
 
+query I
+SELECT decode('\xF0\x9F\x98\x84'::BLOB)::VARCHAR ILIKE '😄';
+----
+1
+
 # invalid utf8, invalid first byte
 statement error
 SELECT upper(decode('\xE0\x9F\x98\x84'::BLOB)::VARCHAR);
