@@ -705,8 +705,33 @@ Value Value::CreateValue(dtime_t value) {
 }
 
 template <>
+Value Value::CreateValue(dtime_tz_t value) {
+	return Value::TIMETZ(value);
+}
+
+template <>
 Value Value::CreateValue(timestamp_t value) {
 	return Value::TIMESTAMP(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_sec_t value) {
+	return Value::TIMESTAMPSEC(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_ms_t value) {
+	return Value::TIMESTAMPMS(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_ns_t value) {
+	return Value::TIMESTAMPNS(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_tz_t value) {
+	return Value::TIMESTAMPTZ(value);
 }
 
 template <>

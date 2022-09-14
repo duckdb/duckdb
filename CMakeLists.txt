@@ -375,6 +375,8 @@ set(OS_ARCH "amd64")
 string(REGEX MATCH "(arm64|aarch64)" IS_ARM "${CMAKE_SYSTEM_PROCESSOR}")
 if(IS_ARM)
   set(OS_ARCH "arm64")
+elseif(FORCE_32_BIT)
+  set(OS_ARCH "i386")
 endif()
 
 if(APPLE)

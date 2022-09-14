@@ -191,11 +191,15 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 				throw CatalogException(rename_err_msg, original_name, value->name);
 			}
 		}
-		PutMapping(context, value->name, entry_index);
-		DeleteMapping(context, original_name);
 	}
 	//! Check the dependency manager to verify that there are no conflicting dependencies with this alter
 	catalog.dependency_manager->AlterObject(context, entry, value.get());
+
+	if (value->name != original_name) {
+		// Do PutMapping and DeleteMapping after dependency check
+		PutMapping(context, value->name, entry_index);
+		DeleteMapping(context, original_name);
+	}
 
 	value->timestamp = transaction.transaction_id;
 	value->child = move(entries[entry_index]);
