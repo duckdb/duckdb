@@ -117,10 +117,10 @@ private:
 	size_t capacity;		//! The total amount of (bytes / sizeof(INTERNAL_TYPE)) are in the stream
 
 	INTERNAL_TYPE current;	//! The current value we're reading from
-	uint8_t	bit_index;		//! How many bits are already read from in the current value
 	// |-|-|-|-|-|-|-|-|	//! 8 bit value as example
 	// |0|1|2|3|4|5|6|7|
 	//          ^			//! If 4 bits are already read from, 4 is the value of 'bit_index'
+	uint8_t	bit_index;		//! How many bits are already read from in the current value
 	size_t stream_index;	//! Index used to keep track of which index we're at in the stream
 };
 

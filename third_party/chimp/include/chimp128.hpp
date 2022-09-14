@@ -22,6 +22,7 @@ enum CompressionFlags {
 // Compression
 //===--------------------------------------------------------------------===//
 
+template <class Writer>
 struct Chimp128CompressionState {
 
 	Chimp128CompressionState(double* output_stream, size_t stream_size) :
@@ -33,12 +34,14 @@ struct Chimp128CompressionState {
 		this->previous_leading_zeros = value;
 	}
 
-	OutputBitStream<uint64_t>	output; //The stream to write to
-	RingBuffer			ring_buffer; //! The ring buffer that holds the previous values
-	int32_t				previous_leading_zeros; //! The leading zeros of the reference value
+	OutputBitStream<Writer>	output; //The stream to write to
+	RingBuffer				ring_buffer; //! The ring buffer that holds the previous values
+	int32_t					previous_leading_zeros; //! The leading zeros of the reference value
 };
 
+template <class Writer>
 struct Chimp128Compression {
+	using State = Chimp128CompressionState<Writer>;
 
 	//this.previousValuesLog2 =  (int)(Math.log(previousValues) / Math.log(2));
 	//! With 'previous_values' set to 128 this resolves to 7
@@ -53,7 +56,7 @@ struct Chimp128Compression {
 	static constexpr uint8_t TRAILING_ZERO_THRESHOLD = 6 + INDEX_BITS_SIZE;
 
 	template <bool FIRST>
-	static void Store(double in, Chimp128CompressionState& state) {
+	static void Store(double in, State& state) {
 		if (FIRST) {
 			state.output.WriteValue<double, BIT_SIZE>(in);
 		}
@@ -62,12 +65,12 @@ struct Chimp128Compression {
 		}
 	}
 
-	static void WriteFirst(double in, Chimp128CompressionState& state) {
+	static void WriteFirst(double in, State& state) {
 		state.ring_buffer.Insert(in);
 		state.output.WriteValue<double, BIT_SIZE>(in);
 	}
 
-	static void CompressValue(double in, Chimp128CompressionState& state) {
+	static void CompressValue(double in, State& state) {
 		auto key = state.ring_buffer.Key(in);
 		uint64_t xor_result;
 		uint32_t previous_index;
