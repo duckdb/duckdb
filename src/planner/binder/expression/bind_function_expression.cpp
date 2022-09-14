@@ -178,11 +178,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function,
                                            idx_t depth) {
-	throw BinderException(binder.FormatError(expr, UnsupportedAggregateMessage()));
+	return BindResult(binder.FormatError(expr, UnsupportedAggregateMessage()));
 }
 
 BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth) {
-	throw BinderException(binder.FormatError(expr, UnsupportedUnnestMessage()));
+	return BindResult(binder.FormatError(expr, UnsupportedUnnestMessage()));
 }
 
 string ExpressionBinder::UnsupportedAggregateMessage() {
