@@ -122,16 +122,15 @@ struct ModeIncluded {
 	const idx_t bias;
 };
 
-
 struct ModeAssignmentStandard {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
 		return RESULT_TYPE(input);
 	}
 };
 
 struct ModeAssignmentString {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
 		return StringVector::AddString(result, input);
 	}
@@ -266,7 +265,7 @@ struct ModeFunction {
 	}
 };
 
-template <typename INPUT_TYPE, typename KEY_TYPE, typename ASSIGN_OP=ModeAssignmentStandard>
+template <typename INPUT_TYPE, typename KEY_TYPE, typename ASSIGN_OP = ModeAssignmentStandard>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<KEY_TYPE>;
 	using OP = ModeFunction<KEY_TYPE, ASSIGN_OP>;
