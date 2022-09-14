@@ -441,7 +441,16 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 		                                      storage);
 	}
-	auto new_storage = make_shared<DataTable>(context, *storage, removed_index);
+
+	// We need to skip generated columns because they are not in 'storage'
+	column_t storage_index = removed_index;
+	for (column_t i = 0; i < removed_index; i++) {
+		if (columns[i].Generated()) {
+			storage_index--;
+		}
+	}
+
+	auto new_storage = make_shared<DataTable>(context, *storage, storage_index);
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }
