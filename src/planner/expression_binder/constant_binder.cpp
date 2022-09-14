@@ -10,13 +10,13 @@ BindResult ConstantBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr
 	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
-		return BindResult(clause + " cannot contain column names");
+		throw BinderException(clause + " cannot contain column names");
 	case ExpressionClass::SUBQUERY:
-		return BindResult(clause + " cannot contain subqueries");
+		throw BinderException(clause + " cannot contain subqueries");
 	case ExpressionClass::DEFAULT:
-		return BindResult(clause + " cannot contain DEFAULT clause");
+		throw BinderException(clause + " cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindResult(clause + " cannot contain window functions!");
+		throw BinderException(clause + " cannot contain window functions!");
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
@@ -24,10 +24,6 @@ BindResult ConstantBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr
 
 string ConstantBinder::UnsupportedAggregateMessage() {
 	return clause + " cannot contain aggregates!";
-}
-
-bool ConstantBinder::CanContainSubqueries() {
-	return false;
 }
 
 } // namespace duckdb

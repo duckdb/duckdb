@@ -28,9 +28,9 @@ BindResult WhereBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
-		return BindResult("WHERE clause cannot contain DEFAULT clause");
+		throw BinderException("WHERE clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindResult("WHERE clause cannot contain window functions!");
+		throw BinderException("WHERE clause cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:
