@@ -847,6 +847,26 @@ static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bo
 	});
 }
 
+vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
+	vector<string> result;
+	if (FileExists(path) || IsPipe(path)) {
+		result.push_back(path);
+	} else if (!absolute_path) {
+		Value value;
+		if (opener->TryGetCurrentSetting("file_search_path", value)) {
+			auto search_paths_str = value.ToString();
+			std::vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
+			for (const auto &search_path : search_paths) {
+				auto joined_path = JoinPath(search_path, path);
+				if (FileExists(joined_path) || IsPipe(joined_path)) {
+					result.push_back(joined_path);
+				}
+			}
+		}
+	}
+	return result;
+}
+
 vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
 		return vector<string>();
@@ -893,23 +913,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	// Check if the path has a glob at all
 	if (!HasGlob(path)) {
 		// no glob: return only the file (if it exists or is a pipe)
-		vector<string> result;
-		if (FileExists(path) || IsPipe(path)) {
-			result.push_back(path);
-		} else if (!absolute_path) {
-			Value value;
-			if (opener->TryGetCurrentSetting("file_search_path", value)) {
-				auto search_paths_str = value.ToString();
-				std::vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
-				for (const auto &search_path : search_paths) {
-					auto joined_path = JoinPath(search_path, path);
-					if (FileExists(joined_path) || IsPipe(joined_path)) {
-						result.push_back(joined_path);
-					}
-				}
-			}
-		}
-		return result;
+		return FetchFileWithoutGlob(path, opener, absolute_path);
 	}
 	vector<string> previous_directories;
 	if (absolute_path) {
@@ -943,7 +947,12 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 				}
 			}
 		}
-		if (is_last_chunk || result.empty()) {
+		if (result.empty()) {
+			// no result found that matches the glob
+			// last ditch effort: search the path as a string literal
+			return FetchFileWithoutGlob(path, opener, absolute_path);
+		}
+		if (is_last_chunk) {
 			return result;
 		}
 		previous_directories = move(result);
