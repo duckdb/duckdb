@@ -142,6 +142,7 @@ protected:
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();
+	virtual bool CanContainSubqueries();
 
 	Binder &binder;
 	ClientContext &context;
