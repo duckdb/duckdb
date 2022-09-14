@@ -173,6 +173,9 @@ unittest: debug
 	build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
+unittest-parallel: debug
+	build/debug/test/unittest -t "[fast]" | sed -n -r '/^.*([[].*[]])/ s//\1/p' | egrep -v '[[]fast[]]' | xargs -P $$(nproc) -n 1 build/debug/test/unittest "[fast]"
+
 unittestci:
 	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
