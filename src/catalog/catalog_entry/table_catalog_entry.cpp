@@ -503,8 +503,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 		                                      storage);
 	}
 
-	// Return with new storage info
-	auto new_storage = make_shared<DataTable>(context, *storage, make_unique<NotNullConstraint>(not_null_idx));
+	// Return with new storage info. Note that we need the bound column index here.
+	auto new_storage = make_shared<DataTable>(context, *storage,
+	                                          make_unique<BoundNotNullConstraint>(columns[not_null_idx].StorageOid()));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }
