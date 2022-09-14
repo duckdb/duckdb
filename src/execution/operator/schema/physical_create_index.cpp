@@ -40,9 +40,10 @@ void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, G
 		return;
 	}
 
-	// convert transient column ids to storage column ids
+	// convert virtual column ids to storage column ids
 	vector<column_t> storage_ids;
 	for (auto &column_id : column_ids) {
+		D_ASSERT(column_id < table.columns.size());
 		storage_ids.push_back(table.columns[column_id].StorageOid());
 	}
 
