@@ -54,7 +54,8 @@ UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *i
 					return UnicodeType::INVALID;
 				}
 				if ((utf8char & 0x1FFF800) == 0xD800) {
-					/* low or high surrogate encoded as UTF-8 */
+					/* Unicode characters from U+D800 to U+DFFF are surrogate
+					   characters used by UTF-16 which are invalid in UTF-8 */
 					AssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE);
 					return UnicodeType::INVALID;
 				}
