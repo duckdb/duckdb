@@ -1,0 +1,18 @@
+# name: test/fuzzer/sqlsmith/fuzzer_window_varchar.test
+# description: Fuzzer #76: invalid string assertion in window function
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE all_types("varchar" VARCHAR, "double" DOUBLE);;
+
+statement ok
+INSERT INTO all_types VALUES('🦆🦆🦆🦆🦆🦆',0);
+
+statement ok
+INSERT INTO all_types VALUES('goose',1);
+
+statement ok
+SELECT mode(t0."varchar") OVER (PARTITION BY t0."double") AS c18 FROM all_types AS t0;
