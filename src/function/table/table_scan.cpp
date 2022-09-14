@@ -77,12 +77,6 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	auto result = make_unique<TableScanGlobalState>(context, input.bind_data);
 
 	bind_data.table->storage->InitializeParallelScan(context, result->state);
-
-	// acquire index scan specific locks
-	if (bind_data.is_create_index) {
-		bind_data.table->storage->InitializeParallelCreateIndexScan(result->state);
-	}
-
 	return move(result);
 }
 
