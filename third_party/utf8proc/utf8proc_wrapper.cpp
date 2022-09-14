@@ -67,28 +67,27 @@ UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *i
 				AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::NULL_BYTE);
 				return UnicodeType::INVALID;
 			}
-		} else if ((c & 0xE0) == 0xC0) {
-			/* 2 byte sequence */
-			n = 1;
-			utf8char = c & 0x1F;
-			type = UnicodeType::UNICODE;
-			first_pos_seq = i;
-		} else if ((c & 0xF0) == 0xE0) {
-			/* 3 byte sequence */
-			n = 2;
-			utf8char = c & 0x0F;
-			type = UnicodeType::UNICODE;
-			first_pos_seq = i;
-		} else if ((c & 0xF8) == 0xF0) {
-			/* 4 byte sequence */
-			n = 3;
-			utf8char = c & 0x07;
-			type = UnicodeType::UNICODE;
-			first_pos_seq = i;
 		} else {
-			/* invalid UTF-8 start byte */
-			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
-			return UnicodeType::INVALID;
+			type = UnicodeType::UNICODE;
+			first_pos_seq = i;
+
+			if ((c & 0xE0) == 0xC0) {
+				/* 2 byte sequence */
+				n = 1;
+				utf8char = c & 0x1F;
+			} else if ((c & 0xF0) == 0xE0) {
+				/* 3 byte sequence */
+				n = 2;
+				utf8char = c & 0x0F;
+			} else if ((c & 0xF8) == 0xF0) {
+				/* 4 byte sequence */
+				n = 3;
+				utf8char = c & 0x07;
+			} else {
+				/* invalid UTF-8 start byte */
+				AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
+				return UnicodeType::INVALID;
+			}
 		}
 	}
 	if (n > 0) {
