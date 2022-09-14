@@ -37,7 +37,7 @@ for extension in reader:
     extension_name = extension[0]
     print(f"Load {extension_name} at {extension_path[extension_name]}")
     load = f"LOAD '{extension_path[extension_name]}';"
-    extension_functions = os.popen(f'{duckdb_path} -csv -c "{load}{get_func}" ').read().split("\n")[1:-1]
+    extension_functions = os.popen(f'{duckdb_path} -unsigned -csv -c "{load}{get_func}" ').read().split("\n")[1:-1]
     function_map.update({
         extension_function: extension_name
         for extension_function in (set(extension_functions) - base_functions)
