@@ -19,6 +19,27 @@
 
 namespace duckdb {
 
+enum class PythonObjectType {
+	Other,
+	None,
+	Integer,
+	Float,
+	Bool,
+	Decimal,
+	Uuid,
+	Datetime,
+	Date,
+	Time,
+	Timedelta,
+	String,
+	ByteArray,
+	MemoryView,
+	Bytes,
+	List,
+	Dict,
+	NdArray,
+};
+
 bool TryTransformPythonNumeric(Value &res, py::handle ele);
 bool DictionaryHasMapFormat(const PyDictionary &dict);
 Value TransformPythonValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN,
