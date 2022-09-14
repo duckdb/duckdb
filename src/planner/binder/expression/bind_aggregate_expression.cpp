@@ -125,8 +125,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	if (aggr.filter) {
 		auto &child = (BoundExpression &)*aggr.filter;
-		bound_filter = move(child.expr);
+		bound_filter = BoundCastExpression::AddCastToType(move(child.expr), LogicalType::BOOLEAN);
 	}
+
 	// all children bound successfully
 	// extract the children and types
 	vector<LogicalType> types;
