@@ -546,7 +546,8 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 	}
 	return result->FetchRecordBatchReader(chunk_size);
 }
-static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config) {
+static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
+                                                   py::object &current_frame) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
@@ -576,7 +577,16 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		table_function->external_dependency =
 		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), entry));
 	} else {
-		throw InvalidInputException("Python Object %s not suitable for replacement scans", py_object_type);
+		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
+		location += ":";
+		location += py::cast<py::str>(current_frame.attr("f_lineno"));
+		std::string cpp_table_name = table_name;
+
+		throw InvalidInputException(
+		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
+		    "that \"%s\" is either a pandas.DataFrame, or pyarrow Table, FileSystemDataset, InMemoryDataset, "
+		    "RecordBatchReader, or Scanner",
+		    cpp_table_name, py_object_type, location, cpp_table_name);
 	}
 	return table_function;
 }
@@ -591,7 +601,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
 		// search local dictionary
 		if (local_dict) {
-			auto result = TryReplacement(local_dict, py_table_name, context.config);
+			auto result = TryReplacement(local_dict, py_table_name, context.config, current_frame);
 			if (result) {
 				return result;
 			}
@@ -599,7 +609,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 		// search global dictionary
 		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
 		if (global_dict) {
-			auto result = TryReplacement(global_dict, py_table_name, context.config);
+			auto result = TryReplacement(global_dict, py_table_name, context.config, current_frame);
 			if (result) {
 				return result;
 			}
