@@ -88,7 +88,7 @@ jobs:
         path: |
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
-          build/release/tools/jdbc/duckdb_jdbc.jar
+          build/release/tools/jdbc/
 
 
  linux-release-aarch64:
@@ -156,7 +156,7 @@ jobs:
            libduckdb-linux-aarch64.zip
            duckdb_odbc-linux-aarch64.zip
            duckdb_cli-linux-aarch64.zip
-           build/release/tools/jdbc/duckdb_jdbc.jar
+           build/release/tools/jdbc/
 
  linux-extensions-64:
     name: Linux Extensions (64 Bit)
@@ -263,7 +263,7 @@ jobs:
       with:
         name: duckdb-binaries-linux-32bit
         path: |
-          build/release/tools/jdbc/duckdb_jdbc.jar
+          build/release/tools/jdbc/
 
 
  linux-rpi:

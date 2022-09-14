@@ -72,6 +72,14 @@ add_custom_command(
     ${CMAKE_CURRENT_BINARY_DIR}/duckdb_jdbc.jar
   COMMAND
     ${CMAKE_COMMAND} -E copy
+    ${CMAKE_CURRENT_SOURCE_DIR}/target/duckdb_jdbc-${JDBC_VERSION}-javadoc.jar
+    ${CMAKE_CURRENT_BINARY_DIR}/duckdb_jdbc-javadoc.jar
+  COMMAND
+    ${CMAKE_COMMAND} -E copy
+    ${CMAKE_CURRENT_SOURCE_DIR}/target/duckdb_jdbc-${JDBC_VERSION}-sources.jar
+    ${CMAKE_CURRENT_BINARY_DIR}/duckdb_jdbc-sources.jar
+  COMMAND
+    ${CMAKE_COMMAND} -E copy
     ${CMAKE_CURRENT_SOURCE_DIR}/target/duckdb_jdbc-${JDBC_VERSION}-tests.jar
     ${CMAKE_CURRENT_BINARY_DIR}/duckdb_jdbc-tests.jar)
 
