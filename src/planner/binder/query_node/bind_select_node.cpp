@@ -49,6 +49,8 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 		delimiter_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(type);
 		return nullptr;
 	}
+	// move any correlated columns to this binder
+	MoveCorrelatedExpressions(*new_binder);
 	return expr;
 }
 
