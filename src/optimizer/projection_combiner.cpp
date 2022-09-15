@@ -5,6 +5,42 @@
 
 namespace duckdb {
 
+static void SwapProjection(unique_ptr<LogicalOperator> &op) {
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
+
+	// Cut out the projection's child
+	auto child = move(op->children[0]);
+	op->children[0] = move(child->children[0]);
+
+	// Move the projection under the original child
+	child->children[0] = move(op);
+	op = move(child);
+}
+
+static void PushDownProjections(unique_ptr<LogicalOperator> &op) {
+	if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		for (auto &expr : op->expressions) {
+			if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+				// We only push down projections with bound column references
+				return;
+			}
+		}
+
+		// TODO: add more operators
+		switch (op->children[0]->type) {
+		case LogicalOperatorType::LOGICAL_LIMIT:
+			SwapProjection(op);
+			break;
+		default:
+			break;
+		}
+	}
+
+	for (auto &child : op->children) {
+		PushDownProjections(child);
+	}
+}
+
 static void CombineProjectionOrder(LogicalProjection &projection, unique_ptr<LogicalOperator> &op) {
 	auto &order = (LogicalOrder &)*projection.children[0];
 	if (order.table_index != DConstants::INVALID_INDEX) {
@@ -36,6 +72,7 @@ static void CombineProjections(unique_ptr<LogicalOperator> &op) {
 	}
 
 	auto &projection = (LogicalProjection &)*op;
+	// TODO: add more operators
 	switch (op->children[0]->type) {
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		CombineProjectionOrder(projection, op);
@@ -46,6 +83,9 @@ static void CombineProjections(unique_ptr<LogicalOperator> &op) {
 }
 
 unique_ptr<LogicalOperator> ProjectionCombiner::Optimize(unique_ptr<LogicalOperator> op) {
+	// Push down projections through non-blocking operators that do not alter the columns in any way
+	PushDownProjections(op);
+	// Combine projections into operators so we don't need to immediately project them out
 	CombineProjections(op);
 	return op;
 }
