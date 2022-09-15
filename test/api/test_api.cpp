@@ -546,7 +546,8 @@ TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0 (c0 int);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (1);"));
 
-	result = con.SendQuery("INSERT INTO t0(VALUES('\\x15\\x00\\x00\\x00\\x00@\\x01\\x0A\\x27:!\\x0A\\x00\\x00x12e\"\\x00'::BLOB));");
+	result = con.SendQuery(
+	    "INSERT INTO t0(VALUES('\\x15\\x00\\x00\\x00\\x00@\\x01\\x0A\\x27:!\\x0A\\x00\\x00x12e\"\\x00'::BLOB));");
 	//! Should not terminate the process
 	REQUIRE_FAIL(result);
 
