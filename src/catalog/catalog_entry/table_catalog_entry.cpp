@@ -863,7 +863,7 @@ void TableCatalogEntry::CommitAlter(AlterInfo &info) {
 		}
 	}
 	D_ASSERT(removed_index != DConstants::INVALID_INDEX);
-	storage->CommitDropColumn(removed_index);
+	storage->CommitDropColumn(columns[removed_index].StorageOid());
 }
 
 void TableCatalogEntry::CommitDrop() {
