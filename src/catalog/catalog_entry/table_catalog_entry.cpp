@@ -454,7 +454,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 		                                      storage);
 	}
-	auto new_storage = make_shared<DataTable>(context, *storage, removed_index);
+	auto new_storage = make_shared<DataTable>(context, *storage, columns[removed_index].StorageOid());
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }
@@ -882,7 +882,7 @@ void TableCatalogEntry::CommitAlter(AlterInfo &info) {
 		}
 	}
 	D_ASSERT(removed_index != DConstants::INVALID_INDEX);
-	storage->CommitDropColumn(removed_index);
+	storage->CommitDropColumn(columns[removed_index].StorageOid());
 }
 
 void TableCatalogEntry::CommitDrop() {
