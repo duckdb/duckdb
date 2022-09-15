@@ -1,6 +1,6 @@
 # name: test/fuzzer/pedro/hash_finalize_race.test
 # description: Issue #4694: Race condition at HashJoinFinalizeEvent
-# group: [sqlsmith]
+# group: [pedro]
 
 statement ok
 PRAGMA enable_verification
