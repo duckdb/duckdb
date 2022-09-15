@@ -26,4 +26,8 @@ string ConstantBinder::UnsupportedAggregateMessage() {
 	return clause + " cannot contain aggregates!";
 }
 
+bool ConstantBinder::CanContainSubqueries() {
+	return false;
+}
+
 } // namespace duckdb

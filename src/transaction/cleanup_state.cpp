@@ -50,6 +50,7 @@ void CleanupState::CleanupUpdate(UpdateInfo *info) {
 
 void CleanupState::CleanupDelete(DeleteInfo *info) {
 	auto version_table = info->table;
+	D_ASSERT(version_table->info->cardinality >= info->count);
 	version_table->info->cardinality -= info->count;
 	if (version_table->info->indexes.Empty()) {
 		// this table has no indexes: no cleanup to be done
