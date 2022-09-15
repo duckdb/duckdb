@@ -1389,6 +1389,9 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 		return nullptr;
 	}
 	lock_guard<mutex> stats_guard(stats_lock);
+	if (column_id >= column_stats.size()) {
+		throw InternalException("Call to GetStatistics is out of range");
+	}
 	return column_stats[column_id]->stats->Copy();
 }
 

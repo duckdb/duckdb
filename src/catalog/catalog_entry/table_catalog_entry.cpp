@@ -166,6 +166,19 @@ idx_t TableCatalogEntry::StandardColumnCount() const {
 	return count;
 }
 
+unique_ptr<BaseStatistics> TableCatalogEntry::GetStatistics(ClientContext &context, column_t column_id) {
+	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+		return nullptr;
+	}
+	if (column_id >= columns.size()) {
+		throw InternalException("TableCatalogEntry::GetStatistics column_id out of range");
+	}
+	if (columns[column_id].Generated()) {
+		return nullptr;
+	}
+	return storage->GetStatistics(context, columns[column_id].StorageOid());
+}
+
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
 	D_ASSERT(!internal);
 	if (info->type != AlterType::ALTER_TABLE) {
@@ -455,7 +468,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		auto copy = columns[i].Copy();
 		if (default_idx == i) {
 			// set the default value of this column
-			D_ASSERT(!copy.Generated()); // Shouldnt reach here - DEFAULT value isn't supported for Generated Columns
+			if (copy.Generated()) {
+				throw BinderException("Cannot SET DEFAULT for generated column \"%s\"", columns[i].Name());
+			}
 			copy.SetDefaultValue(info.expression ? info.expression->Copy() : nullptr);
 		}
 		create_info->columns.push_back(move(copy));
