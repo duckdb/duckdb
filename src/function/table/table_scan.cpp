@@ -85,8 +85,7 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
 	}
-	auto storage_idx = GetStorageIndex(*bind_data.table, column_id);
-	return bind_data.table->storage->GetStatistics(context, storage_idx);
+	return bind_data.table->GetStatistics(context, column_id);
 }
 
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

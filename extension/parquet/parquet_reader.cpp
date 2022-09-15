@@ -95,8 +95,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
 	}
-	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && s_ele.__isset.logicalType && s_ele.logicalType.__isset.UUID) {
-		return LogicalType::UUID;
+	if (s_ele.__isset.logicalType) {
+		if (s_ele.logicalType.__isset.UUID) {
+			if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY) {
+				return LogicalType::UUID;
+			}
+		} else if (s_ele.logicalType.__isset.TIMESTAMP) {
+			return LogicalType::TIMESTAMP;
+		}
 	}
 	if (s_ele.__isset.converted_type) {
 		switch (s_ele.converted_type) {
