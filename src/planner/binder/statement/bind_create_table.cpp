@@ -298,11 +298,13 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		BindDefaultValues(base.columns, result->bound_defaults);
 	}
 
+	idx_t regular_column_count = 0;
 	// bind collations to detect any unsupported collation errors
 	for (auto &column : base.columns) {
 		if (column.Generated()) {
 			continue;
 		}
+		regular_column_count++;
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
@@ -313,6 +315,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			// Only if the USER comes from a create type
 			result->dependencies.insert(type_dependency);
 		}
+	}
+	if (regular_column_count == 0) {
+		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
 	}
 	properties.allow_stream_result = false;
 	return result;

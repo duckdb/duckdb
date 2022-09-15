@@ -2,6 +2,7 @@ import os
 import csv
 import re
 import argparse
+import glob
 
 os.chdir(os.path.dirname(__file__))
 
@@ -25,26 +26,31 @@ base_functions = os.popen(f'{duckdb_path} -csv -c "{get_func}" ').read().split("
 base_functions = {x for x in base_functions}
 
 function_map = {}
+
+# root_dir needs a trailing slash (i.e. /root/dir/)
+extension_path = {}
+for filename in glob.iglob('/tmp/' + '**/*.duckdb_extension', recursive=True):
+    extension_path[os.path.splitext(os.path.basename(filename))[0]] = filename
+
 for extension in reader:
     extension_name = extension[0]
-    print("Install/Load " + extension_name)
-    install = f"INSTALL {extension_name};"
-    load = f"LOAD {extension_name};"
-    extension_functions = os.popen(f'{duckdb_path} -csv -c "{install}{load}{get_func}" ').read().split("\n")[1:-1]
+    print(f"Load {extension_name} at {extension_path[extension_name]}")
+    load = f"LOAD '{extension_path[extension_name]}';"
+    extension_functions = os.popen(f'{duckdb_path} -unsigned -csv -c "{load}{get_func}" ').read().split("\n")[1:-1]
     function_map.update({
         extension_function: extension_name
         for extension_function in (set(extension_functions) - base_functions)
     })
 
 if args.validate:
-    cur_function_map = {}
     file = open(os.path.join("..","src","include","extension_functions.hpp"),'r')
     pattern = re.compile("{\"(.*?)\", \"(.*?)\"},")
-    for line in file:
-        if pattern.match(line):
-            split_line = line.split("\"")
-            cur_function_map[split_line[1]] = split_line[3]
-    assert cur_function_map == function_map
+    cur_function_map = dict(pattern.findall(file.read()))
+    print("Cur Function Map: ")
+    print(cur_function_map)
+    print("Function Map: ")
+    print(function_map)
+    assert cur_function_map == function_map and len(cur_function_map) != 0
 else:
     # Generate Header
     file = open(os.path.join("..","src","include","extension_functions.hpp"),'w')
