@@ -5,6 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
+# Creating tables with only generated columns is not supported
+statement error
+CREATE TEMP TABLE t0(c0 AS (1));
+
 #Function doesnt exist, neither does the referenced column
 statement error
 CREATE TABLE unit (

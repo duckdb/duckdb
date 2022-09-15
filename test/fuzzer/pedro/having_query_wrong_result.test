@@ -2,6 +2,8 @@
 # description: Issue #4680: Having query with wrong result?
 # group: [pedro]
 
+require skip_reload
+
 statement ok
 CREATE SEQUENCE seq;
 

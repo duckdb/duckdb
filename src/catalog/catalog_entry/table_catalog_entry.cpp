@@ -495,6 +495,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 	}
 
 	idx_t not_null_idx = GetColumnIndex(info.column_name);
+	if (columns[not_null_idx].Generated()) {
+		throw BinderException("Unsupported constraint for generated column!");
+	}
 	bool has_not_null = false;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
@@ -518,8 +521,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 		                                      storage);
 	}
 
-	// Return with new storage info
-	auto new_storage = make_shared<DataTable>(context, *storage, make_unique<NotNullConstraint>(not_null_idx));
+	// Return with new storage info. Note that we need the bound column index here.
+	auto new_storage = make_shared<DataTable>(context, *storage,
+	                                          make_unique<BoundNotNullConstraint>(columns[not_null_idx].StorageOid()));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }

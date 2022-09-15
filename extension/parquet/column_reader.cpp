@@ -1140,15 +1140,29 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 			return make_unique<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(
 			    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 		case Type::INT64:
-			switch (schema_p.converted_type) {
-			case ConvertedType::TIMESTAMP_MICROS:
-				return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			case ConvertedType::TIMESTAMP_MILLIS:
-				return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			default:
-				break;
+			if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIMESTAMP) {
+				if (schema_p.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.MICROS) {
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.NANOS) {
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				}
+
+			} else if (schema_p.__isset.converted_type) {
+				switch (schema_p.converted_type) {
+				case ConvertedType::TIMESTAMP_MICROS:
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				case ConvertedType::TIMESTAMP_MILLIS:
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				default:
+					break;
+				}
 			}
 		default:
 			break;
