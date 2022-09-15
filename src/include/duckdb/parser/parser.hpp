@@ -26,6 +26,7 @@ struct ParserOptions {
 	bool preserve_identifier_case = true;
 	idx_t max_expression_depth = 1000;
 	const vector<ParserExtension> *extensions = nullptr;
+	bool verify_generated_columns = false;
 };
 
 //! The parser is responsible for parsing the query and converting it into a set

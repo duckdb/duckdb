@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
@@ -20,8 +21,9 @@ StackChecker::StackChecker(StackChecker &&other) noexcept
 	other.stack_usage = 0;
 }
 
-Transformer::Transformer(idx_t max_expression_depth_p)
-    : parent(nullptr), max_expression_depth(max_expression_depth_p), stack_depth(DConstants::INVALID_INDEX) {
+Transformer::Transformer(ParserOptions &options)
+    : parent(nullptr), max_expression_depth(options.max_expression_depth),
+      verify_generated_columns(options.verify_generated_columns), stack_depth(DConstants::INVALID_INDEX) {
 }
 
 Transformer::Transformer(Transformer *parent)

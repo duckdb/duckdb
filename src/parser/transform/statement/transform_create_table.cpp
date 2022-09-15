@@ -6,6 +6,9 @@
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
+#include <random>
+#include <iterator>
+
 namespace duckdb {
 
 string Transformer::TransformCollation(duckdb_libpgquery::PGCollateClause *collate) {
@@ -67,6 +70,52 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 	return ColumnDefinition(colname, target_type);
 }
 
+static std::string GenerateRandomName(idx_t size) {
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<> dis(0, 15);
+
+	std::stringstream ss;
+	idx_t i;
+	ss << std::hex;
+	for (i = 0; i < size; i++) {
+		ss << dis(gen);
+	}
+	return ss.str();
+}
+
+void Transformer::AddRandomGeneratedColumn(unordered_set<string> &columns, data_ptr_t info_p) {
+	// Get the minimum size for the random column, as to not collide with any existing column
+	idx_t size = 10;
+	for (auto &column : columns) {
+		if (column.size() > size) {
+			size = column.size() + 1;
+		}
+	}
+	// Random name for the generated column ('a' to make it start with a letter)
+	auto random_name = "a" + GenerateRandomName(size);
+	auto info = (CreateTableInfo *)info_p;
+
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<> dis(0, columns.size() - 1);
+
+	// The column it will reference
+	auto chosen_column = columns.begin();
+	std::advance(chosen_column, (int)dis(gen));
+
+	duckdb_libpgquery::PGColumnDef cdef;
+	cdef.colname = (char *)random_name.c_str();
+	cdef.category = duckdb_libpgquery::COL_GENERATED;
+	cdef.typeName = NULL;
+	cdef.collClause = NULL;
+
+	auto gcol_reference = make_unique_base<ParsedExpression, ColumnRefExpression>(*chosen_column);
+	auto centry = TransformColumnDefinition(&cdef);
+	centry.SetGeneratedExpression(move(gcol_reference));
+	info->columns.insert(info->columns.begin(), move(centry));
+}
+
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateStmt *>(node);
 	D_ASSERT(stmt);
@@ -96,6 +145,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 	}
 
 	idx_t column_count = 0;
+	std::unordered_set<string> column_names;
 	for (auto c = stmt->tableElts->head; c != nullptr; c = lnext(c)) {
 		auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(c->data.ptr_value);
 		switch (node->type) {
@@ -104,12 +154,15 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			auto centry = TransformColumnDefinition(cdef);
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
-					auto constraint = TransformConstraint(constr, centry, info->columns.size());
+					// Verify generated columns adds a GENERATED COLUMN at index 0, so we offset everything by 1
+					auto constraint =
+					    TransformConstraint(constr, centry, verify_generated_columns + info->columns.size());
 					if (constraint) {
 						info->constraints.push_back(move(constraint));
 					}
 				}
 			}
+			column_names.insert(centry.GetName());
 			info->columns.push_back(move(centry));
 			column_count++;
 			break;
@@ -125,6 +178,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 
 	if (!column_count) {
 		throw ParserException("Table must have at least one column!");
+	}
+	if (verify_generated_columns) {
+		// Add a single generated column to the front to test if generated columns are properly supported
+		AddRandomGeneratedColumn(column_names, (data_ptr_t)info.get());
 	}
 
 	result->info = move(info);

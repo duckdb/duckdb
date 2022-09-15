@@ -17,6 +17,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
@@ -36,7 +37,7 @@ class Transformer {
 	friend class StackChecker;
 
 public:
-	explicit Transformer(idx_t max_expression_depth_p);
+	explicit Transformer(ParserOptions &options);
 	explicit Transformer(Transformer *parent);
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements
@@ -50,6 +51,7 @@ public:
 private:
 	Transformer *parent;
 	idx_t max_expression_depth;
+	bool verify_generated_columns;
 	//! The current prepared statement parameter index
 	idx_t prepared_statement_parameter_index = 0;
 	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
@@ -248,6 +250,9 @@ private:
 	void TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
 
 	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
+
+private:
+	void AddRandomGeneratedColumn(unordered_set<string> &columns, data_ptr_t info_p);
 
 private:
 	//! Current stack depth
