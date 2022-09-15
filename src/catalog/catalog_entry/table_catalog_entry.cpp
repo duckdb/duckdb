@@ -629,12 +629,19 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	vector<column_t> storage_cids;
 	if (bound_columns.empty()) {
-		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
+		storage_cids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	}
+	// transform to storage_id
+	else {
+		for (idx_t i = 0; i < bound_columns.size(); i++) {
+			storage_cids.push_back(columns[bound_columns[i]].StorageOid());
+		}
 	}
 
-	auto new_storage =
-	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
+	auto new_storage = make_shared<DataTable>(context, *storage, columns[change_idx].StorageOid(), info.target_type,
+	                                          move(storage_cids), *bound_expression);
 	auto result =
 	    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
 	return move(result);
