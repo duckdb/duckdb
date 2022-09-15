@@ -8,7 +8,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
-#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include <functional>
@@ -442,15 +442,14 @@ private:
 };
 
 // TODO: Create tasks and run these in parallel instead of doing this all in Schedule, single threaded
-class DistinctAggregateFinalizeEvent : public Event {
+class DistinctAggregateFinalizeEvent : public BasePipelineEvent {
 public:
 	DistinctAggregateFinalizeEvent(const PhysicalUngroupedAggregate &op_p, UngroupedAggregateGlobalState &gstate_p,
-	                               Pipeline *pipeline_p, ClientContext &context)
-	    : Event(pipeline_p->executor), op(op_p), gstate(gstate_p), pipeline(pipeline_p), context(context) {
+	                               Pipeline &pipeline_p, ClientContext &context)
+	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), context(context) {
 	}
 	const PhysicalUngroupedAggregate &op;
 	UngroupedAggregateGlobalState &gstate;
-	Pipeline *pipeline;
 	ClientContext &context;
 
 public:
@@ -463,16 +462,15 @@ public:
 	}
 };
 
-class DistinctCombineFinalizeEvent : public Event {
+class DistinctCombineFinalizeEvent : public BasePipelineEvent {
 public:
 	DistinctCombineFinalizeEvent(const PhysicalUngroupedAggregate &op_p, UngroupedAggregateGlobalState &gstate_p,
-	                             Pipeline *pipeline_p, ClientContext &client)
-	    : Event(pipeline_p->executor), op(op_p), gstate(gstate_p), pipeline(pipeline_p), client(client) {
+	                             Pipeline &pipeline_p, ClientContext &client)
+	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), client(client) {
 	}
 
 	const PhysicalUngroupedAggregate &op;
 	UngroupedAggregateGlobalState &gstate;
-	Pipeline *pipeline;
 	ClientContext &client;
 
 public:
@@ -488,7 +486,7 @@ public:
 		SetTasks(move(tasks));
 
 		//! Now that all tables are combined, it's time to do the distinct aggregations
-		auto new_event = make_shared<DistinctAggregateFinalizeEvent>(op, gstate, pipeline, client);
+		auto new_event = make_shared<DistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
 		this->InsertEvent(move(new_event));
 	}
 };
@@ -517,12 +515,12 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 		}
 	}
 	if (any_partitioned) {
-		auto new_event = make_shared<DistinctCombineFinalizeEvent>(*this, gstate, &pipeline, context);
+		auto new_event = make_shared<DistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
 		event.InsertEvent(move(new_event));
 	} else {
 		//! Hashtables aren't partitioned, they dont need to be joined first
 		//! So we can compute the aggregate already
-		auto new_event = make_shared<DistinctAggregateFinalizeEvent>(*this, gstate, &pipeline, context);
+		auto new_event = make_shared<DistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
 		event.InsertEvent(move(new_event));
 	}
 	return SinkFinalizeType::READY;
