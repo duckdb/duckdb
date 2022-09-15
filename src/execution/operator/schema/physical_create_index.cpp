@@ -40,10 +40,17 @@ void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, G
 		return;
 	}
 
+	// convert virtual column ids to storage column ids
+	vector<column_t> storage_ids;
+	for (auto &column_id : column_ids) {
+		D_ASSERT(column_id < table.columns.size());
+		storage_ids.push_back(table.columns[column_id].StorageOid());
+	}
+
 	unique_ptr<Index> index;
 	switch (info->index_type) {
 	case IndexType::ART: {
-		index = make_unique<ART>(column_ids, unbound_expressions, info->constraint_type, *context.client.db);
+		index = make_unique<ART>(storage_ids, unbound_expressions, info->constraint_type, *context.client.db);
 		break;
 	}
 	default:
