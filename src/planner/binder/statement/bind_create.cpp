@@ -356,10 +356,17 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 		}
 
+		auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info));
+		for (auto &index : get.column_ids) {
+			create_index_info->scan_types.push_back(get.returned_types[index]);
+		}
+		create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
+		create_index_info->names = get.names;
+		create_index_info->column_ids = get.column_ids;
+
 		// the logical CREATE INDEX also needs all fields to scan the referenced table
-		result.plan = make_unique<LogicalCreateIndex>(
-		    *table, get.column_ids, move(get.function), move(get.bind_data), move(expressions),
-		    unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)), move(get.names), move(get.returned_types));
+		result.plan = make_unique<LogicalCreateIndex>(move(get.bind_data), move(create_index_info), move(expressions),
+		                                              *table, move(get.function));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {

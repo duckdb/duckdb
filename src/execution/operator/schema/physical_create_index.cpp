@@ -20,7 +20,7 @@ public:
 
 class CreateIndexLocalSinkState : public LocalSinkState {
 public:
-	CreateIndexLocalSinkState(ExpressionExecutor executor) : executor(move(executor)) {
+	explicit CreateIndexLocalSinkState(ExpressionExecutor executor) : executor(move(executor)) {
 	}
 
 	//! Local indexes build from chunks of the scanned data

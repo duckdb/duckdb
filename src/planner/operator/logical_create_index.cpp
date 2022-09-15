@@ -8,13 +8,12 @@ namespace duckdb {
 
 void LogicalCreateIndex::Serialize(FieldWriter &writer) const {
 
-	table.Serialize(writer.GetSerializer());
-	writer.WriteList<column_t>(column_ids);
-	writer.WriteSerializableList(unbound_expressions);
 	writer.WriteOptional(info);
-	writer.WriteList<string>(names);
-	writer.WriteRegularSerializableList(returned_types);
+	table.Serialize(writer.GetSerializer());
 	FunctionSerializer::SerializeBase<TableFunction>(writer, function, bind_data.get());
+	writer.WriteSerializableList(unbound_expressions);
+
+	writer.Finalize();
 }
 
 unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -23,8 +22,6 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	auto catalog_info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 	auto &catalog = Catalog::GetCatalog(context);
 	TableCatalogEntry *table = catalog.GetEntry<TableCatalogEntry>(context, catalog_info->schema, catalog_info->table);
-
-	auto column_ids = reader.ReadRequiredList<column_t>();
 
 	auto unbound_expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
@@ -37,19 +34,16 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	CreateInfo *raw_create_info_ptr = create_info.release();
 	CreateIndexInfo *raw_create_index_info_ptr = static_cast<CreateIndexInfo *>(raw_create_info_ptr);
 	unique_ptr<CreateIndexInfo> uptr_create_index_info = unique_ptr<CreateIndexInfo> {raw_create_index_info_ptr};
-
 	auto info = unique_ptr<CreateIndexInfo> {static_cast<CreateIndexInfo *>(create_info.release())};
-
-	auto names = reader.ReadRequiredList<string>();
-	auto returned_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 
 	unique_ptr<FunctionData> bind_data;
 	bool has_deserialize;
 	auto function = FunctionSerializer::DeserializeBaseInternal<TableFunction, TableFunctionCatalogEntry>(
 	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data, has_deserialize);
 
-	return make_unique<LogicalCreateIndex>(*table, column_ids, move(function), move(bind_data),
-	                                       move(unbound_expressions), move(info), move(names), move(returned_types));
+	reader.Finalize();
+	return make_unique<LogicalCreateIndex>(move(bind_data), move(info), move(unbound_expressions), *table,
+	                                       move(function));
 }
 
 } // namespace duckdb

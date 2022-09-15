@@ -12,18 +12,19 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	D_ASSERT(op.children.empty());
 
 	unique_ptr<TableFilterSet> table_filters;
-	op.column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+	op.info->column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	auto &bind_data = (TableScanBindData &)*op.bind_data;
 	bind_data.is_create_index = true;
-	auto table_scan = make_unique<PhysicalTableScan>(op.scan_types, op.function, move(op.bind_data), op.column_ids,
-	                                                 op.names, move(table_filters), op.estimated_cardinality);
+	auto table_scan =
+	    make_unique<PhysicalTableScan>(op.info->scan_types, op.function, move(op.bind_data), op.info->column_ids,
+	                                   op.info->names, move(table_filters), op.estimated_cardinality);
 
 	dependencies.insert(&op.table);
-	op.column_ids.pop_back();
+	op.info->column_ids.pop_back();
 
 	auto physical_create_index =
-	    make_unique<PhysicalCreateIndex>(op, op.table, op.column_ids, move(op.expressions), move(op.info),
+	    make_unique<PhysicalCreateIndex>(op, op.table, op.info->column_ids, move(op.expressions), move(op.info),
 	                                     move(op.unbound_expressions), op.estimated_cardinality);
 	physical_create_index->children.push_back(move(table_scan));
 	return move(physical_create_index);
