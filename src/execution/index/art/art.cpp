@@ -260,8 +260,7 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 			new_row_ids[i] = row_ids[key_section.start + i];
 		}
 
-		Prefix prefix(start_key, prefix_start, start_key.len - prefix_start);
-		node = new Leaf(move(new_row_ids), num_row_ids, prefix);
+		node = new Leaf(start_key, prefix_start, move(new_row_ids), num_row_ids);
 
 	} else { // create a new node and recurse
 
