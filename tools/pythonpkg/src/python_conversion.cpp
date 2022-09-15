@@ -247,9 +247,6 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 	auto object_type = GetObjectType(ele);
-	if (object_type != PythonObjectType::Date) {
-		;
-	}
 
 	switch (object_type) {
 	case PythonObjectType::None:
