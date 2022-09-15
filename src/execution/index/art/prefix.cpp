@@ -20,6 +20,17 @@ Prefix::Prefix(Key &key, uint32_t depth, uint32_t size) : size(size) {
 	}
 }
 
+Prefix::Prefix(FKey &key, uint32_t depth, uint32_t size) : size(size) {
+	// allocate new prefix
+	prefix = unique_ptr<uint8_t[]>(new uint8_t[size]);
+
+	// copy key to prefix
+	idx_t prefix_idx = 0;
+	for (idx_t i = depth; i < size + depth; i++) {
+		prefix[prefix_idx++] = key.data[i];
+	}
+}
+
 Prefix::Prefix(Prefix &other_prefix, uint32_t size) : size(size) {
 	// allocate new prefix
 	prefix = unique_ptr<uint8_t[]>(new uint8_t[size]);

@@ -17,6 +17,7 @@
 #include "duckdb/storage/meta_block_writer.hpp"
 
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/faster_art_key.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
@@ -116,6 +117,7 @@ private:
 	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
 	                      vector<row_t> &result_ids);
 
+	void GenerateFKeys(ArenaAllocator &allocator, DataChunk &input, vector<unique_ptr<FKey>> &keys);
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 
 	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);

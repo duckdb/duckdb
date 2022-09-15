@@ -24,6 +24,14 @@ Leaf::Leaf(Key &value, uint32_t depth, unique_ptr<row_t[]> row_ids_p, idx_t num_
 	prefix = Prefix(value, depth, value.len - depth);
 }
 
+Leaf::Leaf(FKey &value, uint32_t depth, unique_ptr<row_t[]> row_ids_p, idx_t num_elements_p) : Node(NodeType::NLeaf) {
+	capacity = num_elements_p;
+	row_ids = move(row_ids_p);
+	count = num_elements_p;
+	D_ASSERT(value.len >= depth);
+	prefix = Prefix(value, depth, value.len - depth);
+}
+
 Leaf::Leaf(unique_ptr<row_t[]> row_ids_p, idx_t num_elements_p, Prefix &prefix_p) : Node(NodeType::NLeaf) {
 	capacity = num_elements_p;
 	row_ids = move(row_ids_p);
@@ -112,6 +120,10 @@ void Leaf::Merge(bool &has_constraint, Node *&l_node, Node *&r_node) {
 	if (has_constraint && l_n->count > 1) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
+
+	// this speeds up the destruction of the leafs
+	r_n->count = 0;
+	r_n->row_ids.reset(nullptr);
 }
 
 } // namespace duckdb

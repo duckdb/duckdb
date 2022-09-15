@@ -3,6 +3,7 @@
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -69,6 +70,24 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 // Insert
 //===--------------------------------------------------------------------===//
+
+template <class T>
+static void TemplatedGenerateFKeys(ArenaAllocator &allocator, Vector &input, idx_t count,
+                                   vector<unique_ptr<FKey>> &keys) {
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
+
+	auto input_data = (T *)idata.data;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = idata.sel->get_index(i);
+		if (idata.validity.RowIsValid(idx)) {
+			keys.push_back(FKey::CreateKey<T>(allocator, input_data[idx]));
+		} else {
+			keys.push_back(nullptr);
+		}
+	}
+}
+
 template <class T>
 static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys) {
 	UnifiedVectorFormat idata;
@@ -81,6 +100,30 @@ static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<
 			keys.push_back(Key::CreateKey<T>(input_data[idx]));
 		} else {
 			keys.push_back(nullptr);
+		}
+	}
+}
+
+template <class T>
+static void ConcatenateFKeys(ArenaAllocator &allocator, Vector &input, idx_t count, vector<unique_ptr<FKey>> &keys) {
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
+
+	auto input_data = (T *)idata.data;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = idata.sel->get_index(i);
+		if (!idata.validity.RowIsValid(idx) || !keys[i]) {
+			// either this column is NULL, or the previous column is NULL!
+			keys[i] = nullptr;
+		} else {
+			// concatenate the keys
+			auto old_key = move(keys[i]);
+			auto new_key = FKey::CreateKey<T>(allocator, input_data[idx]);
+			auto key_len = old_key->len + new_key->len;
+			auto compound_data = allocator.Allocate(key_len);
+			memcpy(compound_data, old_key->data, old_key->len);
+			memcpy(compound_data + old_key->len, new_key->data, new_key->len);
+			keys[i] = make_unique<FKey>(compound_data, key_len);
 		}
 	}
 }
@@ -105,6 +148,101 @@ static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> 
 			memcpy(compound_data.get(), old_key->data.get(), old_key->len);
 			memcpy(compound_data.get() + old_key->len, new_key->data.get(), new_key->len);
 			keys[i] = make_unique<Key>(move(compound_data), key_len);
+		}
+	}
+}
+
+void ART::GenerateFKeys(ArenaAllocator &allocator, DataChunk &input, vector<unique_ptr<FKey>> &keys) {
+	keys.reserve(STANDARD_VECTOR_SIZE);
+	// generate keys for the first input column
+	switch (input.data[0].GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		TemplatedGenerateFKeys<bool>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::INT8:
+		TemplatedGenerateFKeys<int8_t>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::INT16:
+		TemplatedGenerateFKeys<int16_t>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::INT32:
+		TemplatedGenerateFKeys<int32_t>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::INT64:
+		TemplatedGenerateFKeys<int64_t>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::INT128:
+		TemplatedGenerateFKeys<hugeint_t>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedGenerateFKeys<uint8_t>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedGenerateFKeys<uint16_t>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedGenerateFKeys<uint32_t>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedGenerateFKeys<uint64_t>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::FLOAT:
+		TemplatedGenerateFKeys<float>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::DOUBLE:
+		TemplatedGenerateFKeys<double>(allocator, input.data[0], input.size(), keys);
+		break;
+	case PhysicalType::VARCHAR:
+		TemplatedGenerateFKeys<string_t>(allocator, input.data[0], input.size(), keys);
+		break;
+	default:
+		throw InternalException("Invalid type for index");
+	}
+
+	for (idx_t i = 1; i < input.ColumnCount(); i++) {
+		// for each of the remaining columns, concatenate
+		switch (input.data[i].GetType().InternalType()) {
+		case PhysicalType::BOOL:
+			ConcatenateFKeys<bool>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::INT8:
+			ConcatenateFKeys<int8_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::INT16:
+			ConcatenateFKeys<int16_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::INT32:
+			ConcatenateFKeys<int32_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::INT64:
+			ConcatenateFKeys<int64_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::INT128:
+			ConcatenateFKeys<hugeint_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::UINT8:
+			ConcatenateFKeys<uint8_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::UINT16:
+			ConcatenateFKeys<uint16_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::UINT32:
+			ConcatenateFKeys<uint32_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::UINT64:
+			ConcatenateFKeys<uint64_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::FLOAT:
+			ConcatenateFKeys<float>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::DOUBLE:
+			ConcatenateFKeys<double>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::VARCHAR:
+			ConcatenateFKeys<string_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		default:
+			throw InternalException("Invalid type for index");
 		}
 	}
 }
@@ -213,7 +351,7 @@ struct KeySection {
 	data_t key_byte;
 };
 
-void GetChildSections(vector<KeySection> &child_sections, vector<unique_ptr<Key>> &keys, KeySection &key_section) {
+void GetChildSections(vector<KeySection> &child_sections, vector<unique_ptr<FKey>> &keys, KeySection &key_section) {
 
 	idx_t child_start_idx = key_section.start;
 	for (idx_t i = key_section.start + 1; i <= key_section.end; i++) {
@@ -227,7 +365,7 @@ void GetChildSections(vector<KeySection> &child_sections, vector<unique_ptr<Key>
 	                            keys[key_section.end]->data[key_section.depth]);
 }
 
-void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySection &key_section,
+void Construct(vector<unique_ptr<FKey>> &keys, row_t *row_ids, Node *&node, KeySection &key_section,
                bool &has_constraint) {
 
 	D_ASSERT(key_section.start < keys.size());
@@ -283,7 +421,7 @@ void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySe
 	}
 }
 
-void FindFirstNotNullKey(vector<unique_ptr<Key>> &keys, bool &skipped_all_nulls, idx_t &start_idx) {
+void FindFirstNotNullKey(vector<unique_ptr<FKey>> &keys, bool &skipped_all_nulls, idx_t &start_idx) {
 
 	if (!skipped_all_nulls) {
 		for (idx_t i = 0; i < keys.size(); i++) {
@@ -300,6 +438,8 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 
 	auto payload_types = logical_types;
 	payload_types.emplace_back(LogicalType::ROW_TYPE);
+
+	ArenaAllocator arena_allocator(allocator);
 
 	auto skipped_all_nulls = false;
 	auto temp_art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
@@ -321,8 +461,8 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 		D_ASSERT(logical_types[0] == ordered_chunk.data[0].GetType());
 
 		// generate the keys for the given input
-		vector<unique_ptr<Key>> keys;
-		GenerateKeys(ordered_chunk, keys);
+		vector<unique_ptr<FKey>> keys;
+		GenerateFKeys(arena_allocator, ordered_chunk, keys);
 
 		// we order NULLS FIRST, so we might have to skip nulls at the start of our sorted data
 		idx_t start_idx = 0;
