@@ -3,13 +3,11 @@
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
-#include "re2/re2.h"
-
 namespace duckdb {
 
 struct ExtensionPrefixOpenData : public ReplacementOpenData {
 	ExtensionPrefixOpenData(string extension, string path, unique_ptr<ReplacementOpenData> data)
-	    : extension(extension), path(path), data(move(data)) {
+	    : extension(move(extension)), path(move(path)), data(move(data)) {
 	}
 	string extension;
 	string path;
@@ -18,17 +16,18 @@ struct ExtensionPrefixOpenData : public ReplacementOpenData {
 
 static unique_ptr<ReplacementOpenData> ExtensionPrefixPreOpen(DBConfig &config, ReplacementOpenStaticData *) {
 	auto path = config.options.database_path;
-	duckdb_re2::RE2 pattern("([a-zA-Z_]{2,}):.+");
-	D_ASSERT(pattern.ok());
-
-	string extension;
-	string s;
-	if (duckdb_re2::RE2::FullMatch(path, pattern, &s)) {
-		extension = s;
-	} else {
+	auto first_colon = path.find(':');
+	if (first_colon == string::npos || first_colon < 2) { // needs to be at least two characters because windows c: ...
 		return nullptr;
 	}
-
+	auto extension = path.substr(0, first_colon);
+	D_ASSERT(extension.size() > 1);
+	// needs to be alphanumeric
+	for (auto &ch : extension) {
+		if (!isalnum(ch) && ch != '_') {
+			return nullptr;
+		}
+	}
 	auto extension_data = ExtensionHelper::ReplacementOpenPre(extension, config);
 	if (extension_data) {
 		config.options.database_path = string(); // db runs in in-memory mode

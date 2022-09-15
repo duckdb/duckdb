@@ -126,7 +126,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		}
 	}
 
-	if (database_path && strlen(database_path) > 0 && strcmp(database_path, ":memory:")) {
+	if (database_path && strlen(database_path) > 0 && strcmp(database_path, ":memory:") != 0) {
 		config_ptr->options.database_path = database_path;
 	}
 
