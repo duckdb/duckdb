@@ -536,3 +536,20 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 
 	REQUIRE(connection_manager.connections.size() == remainingConnections);
 }
+
+TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	con.EnableQueryVerification();
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0 (c0 int);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (1);"));
+
+	result = con.SendQuery("INSERT INTO t0(VALUES('\\x15\\x00\\x00\\x00\\x00@\\x01\\x0A\\x27:!\\x0A\\x00\\x00x12e\"\\x00'::BLOB));");
+	//! Should not terminate the process
+	REQUIRE_FAIL(result);
+
+	result = con.SendQuery("SELECT MIN(c0) FROM t0;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
