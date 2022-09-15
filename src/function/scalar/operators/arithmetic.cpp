@@ -834,6 +834,24 @@ interval_t DivideOperator::Operation(interval_t left, int64_t right) {
 	return left;
 }
 
+struct BinaryNumericDivideWrapper {
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
+		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
+			throw OutOfRangeException("Overflow in division of %d / %d", left, right);
+		} else if (right == 0) {
+			mask.SetInvalid(idx);
+			return left;
+		} else {
+			return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
+		}
+	}
+
+	static bool AddsNulls() {
+		return true;
+	}
+};
+
 struct BinaryZeroIsNullWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
@@ -875,13 +893,13 @@ template <class OP>
 static scalar_function_t GetBinaryFunctionIgnoreZero(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
-		return BinaryScalarFunctionIgnoreZero<int8_t, int8_t, int8_t, OP>;
+		return BinaryScalarFunctionIgnoreZero<int8_t, int8_t, int8_t, OP, BinaryNumericDivideWrapper>;
 	case LogicalTypeId::SMALLINT:
-		return BinaryScalarFunctionIgnoreZero<int16_t, int16_t, int16_t, OP>;
+		return BinaryScalarFunctionIgnoreZero<int16_t, int16_t, int16_t, OP, BinaryNumericDivideWrapper>;
 	case LogicalTypeId::INTEGER:
-		return BinaryScalarFunctionIgnoreZero<int32_t, int32_t, int32_t, OP>;
+		return BinaryScalarFunctionIgnoreZero<int32_t, int32_t, int32_t, OP, BinaryNumericDivideWrapper>;
 	case LogicalTypeId::BIGINT:
-		return BinaryScalarFunctionIgnoreZero<int64_t, int64_t, int64_t, OP>;
+		return BinaryScalarFunctionIgnoreZero<int64_t, int64_t, int64_t, OP, BinaryNumericDivideWrapper>;
 	case LogicalTypeId::UTINYINT:
 		return BinaryScalarFunctionIgnoreZero<uint8_t, uint8_t, uint8_t, OP>;
 	case LogicalTypeId::USMALLINT:

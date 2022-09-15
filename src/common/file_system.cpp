@@ -147,6 +147,7 @@ string FileSystem::ExtractBaseName(const string &path) {
 	auto splits = StringUtil::Split(normalized_path, sep);
 	D_ASSERT(!splits.empty());
 	auto vec = StringUtil::Split(splits.back(), ".");
+	D_ASSERT(!vec.empty());
 	return vec[0];
 }
 
