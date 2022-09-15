@@ -1,0 +1,11 @@
+# name: test/fuzzer/pedro/subquery_assertion_error.test
+# description: Issue #4562: Subquery error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT (VALUES(1 != ALL(SELECT 2)));
+----
+true
