@@ -29,16 +29,12 @@ create table t2 (id int, v_map map(integer, decimal), k integer[]);
 statement ok
 insert into t2 select id, map(k,v), k from t1;
 
-query I
+query II
 select id, v_map[array_sort(k, 'DESC', 'NULLS LAST')[1]] from t2 where id > 3 limit 10;
 ----
-[4.000]
-[8.000]
-[12.000]
-[16.000]
-[20.000]
-[24.000]
-[28.000]
-[32.000]
-[36.000]
-[40.000]
+4	[20.000]
+5	[24.000]
+6	[28.000]
+7	[32.000]
+8	[36.000]
+9	[40.000]
