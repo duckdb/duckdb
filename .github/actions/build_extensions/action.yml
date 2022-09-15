@@ -95,8 +95,8 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
-        CC: ${{ inputs.aarch64_cross_compile && 'aarch64-linux-gnu-gcc' || '' }}
-        CXX: ${{ inputs.aarch64_cross_compile && 'aarch64-linux-gnu-g++' || '' }}
+        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || '' }}
+        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || '' }}
 
       run: |
         ls -al

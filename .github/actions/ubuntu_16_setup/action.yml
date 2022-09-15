@@ -7,6 +7,9 @@ inputs:
   python:
     description: 'Python'
     default: 1
+  aarch64_cross_compile:
+    description: 'Enable Linux aarch64 cross-compiling'
+    default: 0
 runs:
   using: "composite"
   steps:
@@ -59,6 +62,9 @@ runs:
     - name: Install OpenSSL 1.1.1
       if: ${{ inputs.openssl }} == 1
       shell: bash
+      env:
+        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || '' }}
+        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || '' }}
       run: |
         wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
         tar -xf openssl-1.1.1c.tar.gz
