@@ -56,7 +56,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	string error =
 	    MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, positionals, defaults);
 	if (!error.empty()) {
-		return BindResult(binder.FormatError(*expr->get(), error));
+		throw BinderException(binder.FormatError(*expr->get(), error));
 	}
 
 	// create a MacroBinding to bind this macro's parameters to its arguments

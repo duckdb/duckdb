@@ -89,7 +89,7 @@ string QueryNode::ResultModifiersToString() const {
 		} else if (modifier.type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
 			auto &limit_p_modifier = (LimitPercentModifier &)modifier;
 			if (limit_p_modifier.limit) {
-				result += " LIMIT " + limit_p_modifier.limit->ToString() + " %";
+				result += " LIMIT (" + limit_p_modifier.limit->ToString() + ") %";
 			}
 			if (limit_p_modifier.offset) {
 				result += " OFFSET " + limit_p_modifier.offset->ToString();

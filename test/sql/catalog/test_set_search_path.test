@@ -104,9 +104,14 @@ SELECT current_schema();
 test
 
 query I
-SELECT current_schemas(false);
+SELECT current_schemas(true);
 ----
 [temp, test, main, pg_catalog]
+
+query I
+SELECT current_schemas(false);
+----
+[test]
 
 # Case insensitivity
 

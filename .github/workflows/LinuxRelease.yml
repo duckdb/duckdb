@@ -182,6 +182,58 @@ jobs:
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: linux-extensions-64
+        path: |
+          build/release/extension/*/*.duckdb_extension
+
+ check-load-install-extensions:
+    name: Checks extension functions
+    runs-on: ubuntu-20.04
+    needs: linux-extensions-64
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: |
+        mkdir -p build/release
+        cd build/release
+        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ../.. 
+        cmake --build . --config Release
+
+    - uses: actions/download-artifact@v3
+      with:
+        name: linux-extensions-64
+        path: /tmp
+
+    - name: Check if extension_functions.hpp is up to date
+      shell: bash
+      run: |
+        python scripts/generate_extensions_function.py --validate
+
  linux-release-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
@@ -218,6 +270,10 @@ jobs:
         path: |
           libduckdb-linux-i386.zip
           duckdb_cli-linux-i386.zip
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-linux-32bit
+        path: |
           build/release/tools/jdbc/duckdb_jdbc.jar
 
 

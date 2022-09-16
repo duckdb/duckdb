@@ -409,6 +409,49 @@ class TestResolveObjectColumns(object):
 
         assert(conversion == reference)
 
+    # Test that the column 'offset' is actually used when converting,
+    # and that the same 1024 (STANDARD_VECTOR_SIZE) values are not being scanned over and over again
+    def test_multiple_chunks(self):
+        standard_vector_size = 1024
+
+        data = []
+        data += [datetime.date(2022, 9, 13) for x in range(standard_vector_size)]
+        data += [datetime.date(2022, 9, 14) for x in range(standard_vector_size)]
+        data += [datetime.date(2022, 9, 15) for x in range(standard_vector_size)]
+        data += [datetime.date(2022, 9, 16) for x in range(standard_vector_size)]
+        x = pd.DataFrame({'dates': pd.Series(data=data, dtype='object')})
+        res = duckdb.query_df(x, "x", "select distinct * from x").df()
+        assert(len(res['dates'].__array__()) == 4)
+
+    def test_multiple_chunks_aggregate(self):
+        conn = duckdb.connect()
+        conn.execute("create table dates as select '2022-09-14'::DATE + INTERVAL (i::INTEGER) DAY as i from range(0, 4096) tbl(i);")
+        res = duckdb.query("select * from dates", connection=conn).df()
+        date_df = res.copy()
+        # Convert the values to `datetime.date` values, and the dtype of the column to 'object'
+        date_df['i'] = pd.to_datetime(res['i']).dt.date
+        assert(str(date_df['i'].dtype) == 'object')
+        expected_res = duckdb.query('select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from dates;', connection=conn).fetchall()
+        actual_res = duckdb.query_df(date_df, 'x', 'select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from x').fetchall()
+        assert(expected_res == actual_res)
+
+        conn.execute('drop table dates')
+        # Now with nulls interleaved
+        for i in range(0, len(res['i']), 2):
+            res['i'][i] = None
+
+
+        date_view = conn.register("date_view", res)
+        date_view.execute('create table dates as select * from date_view')
+        expected_res = duckdb.query("select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from dates", connection=conn).fetchall()
+
+        date_df = res.copy()
+        # Convert the values to `datetime.date` values, and the dtype of the column to 'object'
+        date_df['i'] = pd.to_datetime(res['i']).dt.date
+        assert(str(date_df['i'].dtype) == 'object')
+        actual_res = duckdb.query_df(date_df, 'x', 'select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from x').fetchall()
+        assert(expected_res == actual_res)
+
     def test_mixed_object_types(self):
         x = pd.DataFrame({
             'nested': pd.Series(data=[{'a': 1, 'b': 2}, [5, 4, 3], {'key': [1,2,3], 'value': ['a', 'b', 'c']}], dtype='object'),
