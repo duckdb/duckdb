@@ -35,6 +35,8 @@ public:
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
 
+	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
+
 	void InitializeAppend(ColumnAppendState &state) override;
 	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
 	void RevertAppend(row_t start_row) override;
