@@ -91,8 +91,8 @@ struct ArrowScanLocalState : public LocalTableFunctionState {
 struct ArrowScanGlobalState : public GlobalTableFunctionState {
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	mutex main_mutex;
-	bool ready = false;
 	idx_t max_threads = 1;
+	bool done = false;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
