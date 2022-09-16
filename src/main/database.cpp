@@ -126,8 +126,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		}
 	}
 
-	if (database_path && strlen(database_path) > 0 && strcmp(database_path, ":memory:") != 0) {
+	if (database_path) {
 		config_ptr->options.database_path = database_path;
+	} else {
+		config_ptr->options.database_path.clear();
 	}
 
 	for (auto &open : config_ptr->replacement_opens) {
