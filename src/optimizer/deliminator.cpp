@@ -37,8 +37,8 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 				continue;
 			}
 			Expression *rhs = cond.right.get();
-			while(rhs->type == ExpressionType::OPERATOR_CAST) {
-				auto &cast = (BoundCastExpression &) *rhs;
+			while (rhs->type == ExpressionType::OPERATOR_CAST) {
+				auto &cast = (BoundCastExpression &)*rhs;
 				rhs = cast.child.get();
 			}
 			if (rhs->type != ExpressionType::BOUND_COLUMN_REF) {
