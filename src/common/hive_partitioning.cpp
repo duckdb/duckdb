@@ -10,6 +10,9 @@
 
 namespace duckdb {
 
+// use precompiled pattern
+const duckdb_re2::RE2 HivePartitioning::compiled_regex(("[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)"));
+
 static unordered_map<column_t, string> GetKnownColumnValues(string &filename,
                                                             unordered_map<string, column_t> &column_map,
                                                             bool filename_col, bool hive_partition_cols) {
@@ -63,13 +66,11 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 //  - folder/folder/folder/../var1=value1/etc/.//var2=value2
 std::map<string, string> HivePartitioning::Parse(string &filename) {
 	std::map<string, string> result;
-
-	string regex = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
 	duckdb_re2::StringPiece input(filename); // Wrap a StringPiece around it
 
 	string var;
 	string value;
-	while (RE2::FindAndConsume(&input, regex, &var, &value)) {
+	while (RE2::FindAndConsume(&input, compiled_regex, &var, &value)) {
 		result.insert(std::pair<string, string>(var, value));
 	}
 	return result;

@@ -27,6 +27,8 @@ public:
 	DUCKDB_API static void ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters,
 	                                              unordered_map<string, column_t> &column_map, idx_t table_index,
 	                                              bool hive_enabled, bool filename_enabled);
+
+	static const duckdb_re2::RE2 compiled_regex;
 };
 
 } // namespace duckdb
