@@ -482,3 +482,53 @@ class TestResolveObjectColumns(object):
 
         assert(conversion == reference)
 
+    #result: [('1E-28',), ('10000000000000000000000000.0',)]
+    def test_numeric_decimal_combined(self):
+        duckdb_conn = duckdb.connect()
+        decimals = pd.DataFrame(
+            data={
+                "0": [
+                    Decimal("0.0000000000000000000000000001"),
+                    Decimal("10000000000000000000000000.0")
+                ]
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                (0.0000000000000000000000000001),
+                (10000000000000000000000000.0),
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+        print(conversion)
+
+    #result: [('1234.0',), ('123456789.0',), ('1234567890123456789.0',), ('0.1234567890123456789',)]
+    def test_numeric_decimal_varying_sizes(self):
+        duckdb_conn = duckdb.connect()
+        decimals = pd.DataFrame(
+            data={
+                "0": [
+                    Decimal("1234.0"),
+                    Decimal("123456789.0"),
+                    Decimal("1234567890123456789.0"),
+                    Decimal("0.1234567890123456789")
+                ]
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                    (1234.0),
+                    (123456789.0),
+                    (1234567890123456789.0),
+                    (0.1234567890123456789)
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+        print(conversion)
+
