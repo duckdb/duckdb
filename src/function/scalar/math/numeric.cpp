@@ -1,14 +1,16 @@
-#include "duckdb/function/scalar/math_functions.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/scalar/trigonometric_functions.hpp"
-#include "duckdb/common/operator/abs.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/math_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/trigonometric_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include <cmath>
 #include <errno.h>
 
@@ -950,6 +952,92 @@ void CosFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
 	    ScalarFunction("cos", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CosOperator>>));
+}
+
+//===--------------------------------------------------------------------===//
+// dec2bin
+//===--------------------------------------------------------------------===//
+
+// This code was inspired from the example here: https://www.geeksforgeeks.org/program-decimal-binary-conversion/
+template <class INPUT>
+static string DecToBinStringFunction(const INPUT &dec) {
+	string str;
+	string sign;
+
+	if (dec < 0) {
+		sign = '-';
+	}
+	auto input = (dec > 0 ? dec : -1 * dec);
+	while (input) {
+		if (input & 1) // 1
+			str = '1' + str;
+		else // 0
+			str = '0' + str;
+		input >>= 1; // Right Shift by 1
+	}
+	str = sign + str;
+
+	return str;
+}
+
+static string_t StringTUpdateResultVector(const string &str, vector<char> &result) {
+	auto str_t = string_t(str);
+	auto input_str = str_t.GetDataUnsafe();
+	auto size_str = str_t.GetSize();
+
+	result.clear();
+	result.insert(result.end(), input_str, input_str + size_str);
+
+	return string_t(result.data(), result.size());
+}
+
+static string_t DecToBinScalarFunction(const int64_t &dec, vector<char> &result) {
+	auto str = DecToBinStringFunction(dec);
+
+	return StringTUpdateResultVector(str, result);
+}
+
+static void DecToBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &int_vector = args.data[0];
+
+	vector<char> buffer;
+	UnaryExecutor::Execute<int64_t, string_t>(int_vector, result, args.size(), [&](int64_t dec) {
+		return StringVector::AddString(result, DecToBinScalarFunction(dec, buffer));
+	});
+}
+
+static string_t DecToBinHugeIntScalarFunction(const hugeint_t &dec, vector<char> &result) {
+	string str;
+	if (dec.lower != 0) {
+		str += DecToBinStringFunction(dec.lower);
+	}
+	if (dec.upper != 0) {
+		string padded_lower = str;
+		padded_lower.insert(padded_lower.begin(), 64 - padded_lower.length(), '0');
+		str = DecToBinStringFunction(dec.upper) + padded_lower;
+	}
+
+	return StringTUpdateResultVector(str, result);
+}
+
+static void DecToBinHugeIntFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &int_vector = args.data[0];
+
+	vector<char> buffer;
+	UnaryExecutor::Execute<hugeint_t, string_t>(int_vector, result, args.size(), [&](hugeint_t dec) {
+		return StringVector::AddString(result, DecToBinHugeIntScalarFunction(dec, buffer));
+	});
+}
+
+void DecToBinFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet functions("decimal_to_binary");
+	functions.AddFunction(ScalarFunction({LogicalType::BIGINT}, // argument list
+	                                     LogicalType::VARCHAR,  // return type
+	                                     DecToBinFunction));
+	functions.AddFunction(ScalarFunction({LogicalType::HUGEINT}, // argument list
+	                                     LogicalType::VARCHAR,   // return type
+	                                     DecToBinHugeIntFunction));
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
