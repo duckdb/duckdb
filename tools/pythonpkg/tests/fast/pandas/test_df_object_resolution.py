@@ -532,3 +532,26 @@ class TestResolveObjectColumns(object):
         conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
         print(conversion)
 
+    #result: [('1.234567890123456789012345678901234567890',), ('123456789012345678901234567890123456789.0',)]
+    def test_numeric_decimal_out_of_range(self):
+        duckdb_conn = duckdb.connect()
+        decimals = pd.DataFrame(
+            data={
+                "0": [
+                    Decimal("1.234567890123456789012345678901234567890"),
+                    Decimal("123456789012345678901234567890123456789.0")
+                ]
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                    (1.234567890123456789012345678901234567890),
+                    (123456789012345678901234567890123456789.0)
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+        print(conversion)
+
