@@ -166,6 +166,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 void PhysicalRecursiveCTE::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	op_state.reset();
 	sink_state.reset();
+	pipelines.clear();
 
 	// recursive CTE
 	state.SetPipelineSource(current, this);

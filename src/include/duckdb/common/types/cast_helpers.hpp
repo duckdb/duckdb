@@ -522,14 +522,16 @@ struct IntervalToStringCast {
 			if (micros < 0) {
 				// negative time: append negative sign
 				buffer[length++] = '-';
+			} else {
 				micros = -micros;
 			}
-			int64_t hour = micros / Interval::MICROS_PER_HOUR;
-			micros -= hour * Interval::MICROS_PER_HOUR;
-			int64_t min = micros / Interval::MICROS_PER_MINUTE;
-			micros -= min * Interval::MICROS_PER_MINUTE;
-			int64_t sec = micros / Interval::MICROS_PER_SEC;
-			micros -= sec * Interval::MICROS_PER_SEC;
+			int64_t hour = -(micros / Interval::MICROS_PER_HOUR);
+			micros += hour * Interval::MICROS_PER_HOUR;
+			int64_t min = -(micros / Interval::MICROS_PER_MINUTE);
+			micros += min * Interval::MICROS_PER_MINUTE;
+			int64_t sec = -(micros / Interval::MICROS_PER_SEC);
+			micros += sec * Interval::MICROS_PER_SEC;
+			micros = -micros;
 
 			if (hour < 10) {
 				buffer[length++] = '0';

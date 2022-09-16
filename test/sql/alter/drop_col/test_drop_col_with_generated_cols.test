@@ -1,0 +1,18 @@
+# name: test/sql/alter/drop_col/test_drop_col_with_generated_cols.test
+# description: Test ALTER TABLE DROP COLUMN with generated cols in the table
+# group: [drop_col]
+
+statement ok
+create table t(i int, j as (2), k int, m as (3), n int);
+
+statement ok
+alter table t drop column n;
+
+statement ok
+alter table t drop column m;
+
+statement ok
+alter table t drop column k;
+
+statement ok
+alter table t drop column j;

@@ -172,7 +172,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 }
 
 // Alter column to add new constraint
-DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Constraint> constraint)
+DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint)
     : info(parent.info), db(parent.db), total_rows(parent.total_rows.load()), row_groups(parent.row_groups),
       is_root(true) {
 
@@ -347,7 +347,7 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
                                  const vector<column_t> &column_ids) {
-	while (state.current_row_group) {
+	while (state.current_row_group && state.current_row_group->count > 0) {
 		idx_t vector_index;
 		idx_t max_row;
 		if (ClientConfig::GetConfig(context).verify_parallelism) {
@@ -361,13 +361,8 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 			max_row = state.current_row_group->start + state.current_row_group->count;
 		}
 		max_row = MinValue<idx_t>(max_row, state.max_row);
-		bool need_to_scan;
-		if (state.current_row_group->count == 0) {
-			need_to_scan = false;
-		} else {
-			need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters,
-			                                        state.current_row_group, vector_index, max_row);
-		}
+		bool need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters,
+		                                             state.current_row_group, vector_index, max_row);
 		if (ClientConfig::GetConfig(context).verify_parallelism) {
 			state.vector_index++;
 			if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
@@ -626,14 +621,15 @@ static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bf
 	VerifyForeignKeyConstraint(bfk, context, chunk, false);
 }
 
-void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, const Constraint *constraint) {
+void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint) {
 	if (constraint->type != ConstraintType::NOT_NULL) {
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 	// scan the original table, check if there's any null value
-	auto &not_null_constraint = (NotNullConstraint &)*constraint;
+	auto &not_null_constraint = (BoundNotNullConstraint &)*constraint;
 	auto &transaction = Transaction::GetTransaction(context);
 	vector<LogicalType> scan_types;
+	D_ASSERT(not_null_constraint.index < parent.column_definitions.size());
 	scan_types.push_back(parent.column_definitions[not_null_constraint.index].Type());
 	DataChunk scan_chunk;
 	auto &allocator = Allocator::Get(context);
@@ -1337,6 +1333,9 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 		return nullptr;
 	}
 	lock_guard<mutex> stats_guard(stats_lock);
+	if (column_id >= column_stats.size()) {
+		throw InternalException("Call to GetStatistics is out of range");
+	}
 	return column_stats[column_id]->stats->Copy();
 }
 
