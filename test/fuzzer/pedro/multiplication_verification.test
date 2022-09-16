@@ -1,0 +1,14 @@
+# name: test/fuzzer/pedro/multiplication_verification.test
+# description: Issue #4567: Multiplication verification issue
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT 1 * (1 < 1);
+
+query I
+SELECT 2 * (1 << 2);
+----
+8

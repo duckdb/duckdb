@@ -3,6 +3,7 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -134,18 +135,17 @@ private:
 	OrderGlobalState &state;
 };
 
-class OrderMergeEvent : public Event {
+class OrderMergeEvent : public BasePipelineEvent {
 public:
 	OrderMergeEvent(OrderGlobalState &gstate_p, Pipeline &pipeline_p)
-	    : Event(pipeline_p.executor), gstate(gstate_p), pipeline(pipeline_p) {
+	    : BasePipelineEvent(pipeline_p), gstate(gstate_p) {
 	}
 
 	OrderGlobalState &gstate;
-	Pipeline &pipeline;
 
 public:
 	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
+		auto &context = pipeline->GetClientContext();
 
 		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 		auto &ts = TaskScheduler::GetScheduler(context);
@@ -164,7 +164,7 @@ public:
 		global_sort_state.CompleteMergeRound();
 		if (global_sort_state.sorted_blocks.size() > 1) {
 			// Multiple blocks remaining: Schedule the next round
-			PhysicalOrder::ScheduleMergeTasks(pipeline, *this, gstate);
+			PhysicalOrder::ScheduleMergeTasks(*pipeline, *this, gstate);
 		}
 	}
 };
