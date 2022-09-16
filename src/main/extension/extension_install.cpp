@@ -22,7 +22,7 @@ const string ExtensionHelper::NormalizeVersionTag(const string &version_tag) {
 	return version_tag;
 }
 
-const bool ExtensionHelper::IsRelease(const string& version_tag) {
+bool ExtensionHelper::IsRelease(const string &version_tag) {
 	return !StringUtil::Contains(version_tag, "-dev");
 }
 

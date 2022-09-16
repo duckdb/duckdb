@@ -44,7 +44,7 @@ private:
 	static const string GetVersionDirectoryName();
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
-	static const bool IsRelease(const string& version_tag);
+	static bool IsRelease(const string &version_tag);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);
