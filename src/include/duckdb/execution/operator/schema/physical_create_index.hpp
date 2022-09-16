@@ -25,14 +25,19 @@ public:
 	                    vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInfo> info,
 	                    vector<unique_ptr<Expression>> unbound_expressions, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality), table(table),
-	      column_ids(column_ids), expressions(move(expressions)), info(std::move(info)),
-	      unbound_expressions(move(unbound_expressions)) {
+	      expressions(move(expressions)), info(std::move(info)), unbound_expressions(move(unbound_expressions)) {
+
+		// convert virtual column ids to storage column ids
+		for (auto &column_id : column_ids) {
+			D_ASSERT(column_id < table.columns.size());
+			storage_ids.push_back(table.columns[column_id].StorageOid());
+		}
 	}
 
 	//! The table to create the index for
 	TableCatalogEntry &table;
 	//! The list of column IDs required for the index
-	vector<column_t> column_ids;
+	vector<column_t> storage_ids;
 	//! Set of expressions to index by
 	vector<unique_ptr<Expression>> expressions;
 	//! Info for index creation
