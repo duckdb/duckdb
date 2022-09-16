@@ -121,8 +121,12 @@ runs:
         DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh ${{ inputs.deploy_as }}
+        if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
+            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
+          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ ]] ; then
+            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
+          fi
         fi
 
     - name: Test
