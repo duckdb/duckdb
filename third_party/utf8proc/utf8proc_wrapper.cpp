@@ -30,7 +30,7 @@ static void AssignInvalidUTF8Reason(UnicodeInvalidReason *invalid_reason, size_t
 	}
 }
 
-template <int nextra_bytes>
+template <const int nextra_bytes, const int mask>
 static inline UnicodeType
 UTF8ExtraByteLoop(const int first_pos_seq, int utf8char, size_t& i,
 				  const char *s, const size_t len, UnicodeInvalidReason *invalid_reason, size_t *invalid_pos) {
@@ -48,6 +48,11 @@ UTF8ExtraByteLoop(const int first_pos_seq, int utf8char, size_t& i,
 			return UnicodeType::INVALID;
 		}
 		utf8char = (utf8char << 6) | (c & 0x3F);
+	}
+	if ((utf8char & mask) == 0) {
+		/* invalid UTF-8 codepoint, not shortest possible */
+		AssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE);
+		return UnicodeType::INVALID;
 	}
 	if (utf8char > 0x10FFFF) {
 		/* value not representable by Unicode */
@@ -81,15 +86,15 @@ UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *i
 			if ((c & 0xE0) == 0xC0) {
 				/* 2 byte sequence */
 				int utf8char = c & 0x1F;
-				type = UTF8ExtraByteLoop<1>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
+				type = UTF8ExtraByteLoop<1, 0x000780>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
 			} else if ((c & 0xF0) == 0xE0) {
 				/* 3 byte sequence */
 				int utf8char = c & 0x0F;
-				type = UTF8ExtraByteLoop<2>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
+				type = UTF8ExtraByteLoop<2, 0x00F800>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
 			} else if ((c & 0xF8) == 0xF0) {
 				/* 4 byte sequence */
 				int utf8char = c & 0x07;
-				type = UTF8ExtraByteLoop<3>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
+				type = UTF8ExtraByteLoop<3, 0x1F0000>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
 			} else {
 				/* invalid UTF-8 start byte */
 				AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
