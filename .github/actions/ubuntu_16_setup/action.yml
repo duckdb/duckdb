@@ -85,7 +85,7 @@ runs:
         mkdir -p build/openssl
         cd build/openssl
         mkdir sources build
-        curl https://www.openssl.org/source/openssl-3.0.5.tar.gz | tar xv -C sources --strip-components 1
+        curl https://www.openssl.org/source/openssl-3.0.5.tar.gz | tar zxv -C sources --strip-components 1
         export OPENSSL_ROOT_DIR=`pwd`/build
         cd sources
         export CC="aarch64-linux-gnu-gcc"
