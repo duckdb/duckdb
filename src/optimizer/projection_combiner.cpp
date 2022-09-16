@@ -1,11 +1,12 @@
 #include "duckdb/optimizer/projection_combiner.hpp"
 
+#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
-static void SwapProjection(unique_ptr<LogicalOperator> &op) {
+static void SwapOperators(unique_ptr<LogicalOperator> &op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
 
 	// Cut out the projection's child
@@ -15,6 +16,15 @@ static void SwapProjection(unique_ptr<LogicalOperator> &op) {
 	// Move the projection under the original child
 	child->children[0] = move(op);
 	op = move(child);
+}
+
+static void TrySwapProjection(unique_ptr<LogicalOperator> &op) {
+	auto &limit = (LogicalLimit &)*op->children[0];
+	if (limit.limit || limit.offset) {
+		// We cannot push it down if there are expressions in the limit
+		return;
+	}
+	SwapOperators(op);
 }
 
 static void PushDownProjections(unique_ptr<LogicalOperator> &op) {
@@ -29,7 +39,7 @@ static void PushDownProjections(unique_ptr<LogicalOperator> &op) {
 		// TODO: add more operators
 		switch (op->children[0]->type) {
 		case LogicalOperatorType::LOGICAL_LIMIT:
-			SwapProjection(op);
+			TrySwapProjection(op);
 			break;
 		default:
 			break;
