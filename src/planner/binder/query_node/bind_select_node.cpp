@@ -39,6 +39,9 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
                                              Value &delimiter_value) {
 	auto new_binder = Binder::CreateBinder(context, this, true);
 	if (delimiter->HasSubquery()) {
+		if (!order_binder.HasExtraList()) {
+			throw BinderException("Subquery in LIMIT/OFFSET not supported in set operation");
+		}
 		return order_binder.CreateExtraReference(move(delimiter));
 	}
 	ExpressionBinder expr_binder(*new_binder, context);
@@ -49,6 +52,8 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 		delimiter_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(type);
 		return nullptr;
 	}
+	// move any correlated columns to this binder
+	MoveCorrelatedExpressions(*new_binder);
 	return expr;
 }
 

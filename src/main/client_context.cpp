@@ -624,9 +624,19 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		case StatementType::INSERT_STATEMENT:
 		case StatementType::DELETE_STATEMENT:
 		case StatementType::UPDATE_STATEMENT: {
-			auto sql = statement->ToString();
 			Parser parser;
-			parser.ParseQuery(sql);
+			PreservedError error;
+			try {
+				parser.ParseQuery(statement->ToString());
+			} catch (const Exception &ex) {
+				error = PreservedError(ex);
+			} catch (std::exception &ex) {
+				error = PreservedError(ex);
+			}
+			if (error) {
+				// error in verifying query
+				return make_unique<PendingQueryResult>(error);
+			}
 			statement = move(parser.statements[0]);
 			break;
 		}

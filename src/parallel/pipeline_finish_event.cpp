@@ -3,8 +3,7 @@
 
 namespace duckdb {
 
-PipelineFinishEvent::PipelineFinishEvent(shared_ptr<Pipeline> pipeline_p)
-    : Event(pipeline_p->executor), pipeline(move(pipeline_p)) {
+PipelineFinishEvent::PipelineFinishEvent(shared_ptr<Pipeline> pipeline_p) : BasePipelineEvent(move(pipeline_p)) {
 }
 
 void PipelineFinishEvent::Schedule() {

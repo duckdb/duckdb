@@ -1,0 +1,16 @@
+# name: test/fuzzer/pedro/incorrect_offset_result.test
+# description: Issue #4575: OFFSET query with wrong results
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c0 INT, c1 INT);
+
+statement ok
+INSERT INTO t0 (VALUES (1, 1),(2, 2),(3, 3));
+
+query I
+SELECT c0 FROM t0 WHERE ((c0 + c1) = 2) OFFSET 10;
+----

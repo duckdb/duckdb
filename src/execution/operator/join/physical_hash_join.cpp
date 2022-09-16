@@ -6,7 +6,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -252,18 +252,17 @@ private:
 	bool parallel;
 };
 
-class HashJoinFinalizeEvent : public Event {
+class HashJoinFinalizeEvent : public BasePipelineEvent {
 public:
 	HashJoinFinalizeEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink)
-	    : Event(pipeline_p.executor), pipeline(pipeline_p), sink(sink) {
+	    : BasePipelineEvent(pipeline_p), sink(sink) {
 	}
 
-	Pipeline &pipeline;
 	HashJoinGlobalSinkState &sink;
 
 public:
 	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
+		auto &context = pipeline->GetClientContext();
 		auto parallel_construct_count =
 		    context.config.verify_parallelism ? STANDARD_VECTOR_SIZE : PARALLEL_CONSTRUCT_COUNT;
 
@@ -330,20 +329,19 @@ private:
 	JoinHashTable &local_ht;
 };
 
-class HashJoinPartitionEvent : public Event {
+class HashJoinPartitionEvent : public BasePipelineEvent {
 public:
 	HashJoinPartitionEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink,
 	                       vector<unique_ptr<JoinHashTable>> &local_hts)
-	    : Event(pipeline_p.executor), pipeline(pipeline_p), sink(sink), local_hts(local_hts) {
+	    : BasePipelineEvent(pipeline_p), sink(sink), local_hts(local_hts) {
 	}
 
-	Pipeline &pipeline;
 	HashJoinGlobalSinkState &sink;
 	vector<unique_ptr<JoinHashTable>> &local_hts;
 
 public:
 	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
+		auto &context = pipeline->GetClientContext();
 		vector<unique_ptr<Task>> partition_tasks;
 		partition_tasks.reserve(local_hts.size());
 		for (auto &local_ht : local_hts) {
@@ -356,7 +354,7 @@ public:
 	void FinishEvent() override {
 		local_hts.clear();
 		sink.hash_table->PrepareExternalFinalize();
-		sink.ScheduleFinalize(pipeline, *this);
+		sink.ScheduleFinalize(*pipeline, *this);
 	}
 };
 
