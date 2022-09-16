@@ -96,7 +96,7 @@ void StructColumnData::Skip(ColumnScanState &state, idx_t count) {
 	validity.Skip(state.child_states[0], count);
 
 	// skip inside the sub-columns
-	for(idx_t child_idx = 0; child_idx < sub_columns.size(); child_idx++) {
+	for (idx_t child_idx = 0; child_idx < sub_columns.size(); child_idx++) {
 		sub_columns[child_idx]->Skip(state.child_states[child_idx + 1], count);
 	}
 }
