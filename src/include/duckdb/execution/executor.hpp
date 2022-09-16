@@ -132,6 +132,8 @@ private:
 	atomic<idx_t> completed_pipelines;
 	//! The total amount of pipelines in the query
 	idx_t total_pipelines;
+	//! Whether or not execution is cancelled
+	bool cancelled;
 
 	//! The adjacent union pipelines of each pipeline
 	//! Union pipelines have the same sink, but can be run concurrently along with this pipeline
