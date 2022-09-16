@@ -481,6 +481,8 @@ class TestResolveObjectColumns(object):
         conversion = duckdb.query_df(x, "x", "select * from x").fetchall()
 
         assert(conversion == reference)
+        print(reference)
+        print(conversion)
 
     #result: [('1E-28',), ('10000000000000000000000000.0',)]
     def test_numeric_decimal_combined(self):
@@ -503,6 +505,8 @@ class TestResolveObjectColumns(object):
         duckdb_conn.execute(reference_query)
         reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
         conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+        assert(conversion == reference)
+        print(reference)
         print(conversion)
 
     #result: [('1234.0',), ('123456789.0',), ('1234567890123456789.0',), ('0.1234567890123456789',)]
@@ -530,6 +534,8 @@ class TestResolveObjectColumns(object):
         duckdb_conn.execute(reference_query)
         reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
         conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+        assert(conversion == reference)
+        print(reference)
         print(conversion)
 
     #result: [('1.234567890123456789012345678901234567890',), ('123456789012345678901234567890123456789.0',)]
@@ -553,5 +559,7 @@ class TestResolveObjectColumns(object):
         duckdb_conn.execute(reference_query)
         reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
         conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
-        print(conversion)
+        print(reference[1][0].__class__)
+        print(conversion[1][0].__class__)
+        assert(conversion == reference)
 
