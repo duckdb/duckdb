@@ -44,6 +44,9 @@ timestamp_t ParquetTimestampMicrosToTimestamp(const int64_t &raw_ts) {
 timestamp_t ParquetTimestampMsToTimestamp(const int64_t &raw_ts) {
 	return Timestamp::FromEpochMs(raw_ts);
 }
+timestamp_t ParquetTimestampNsToTimestamp(const int64_t &raw_ts) {
+	return Timestamp::FromEpochNanoSeconds(raw_ts);
+}
 
 date_t ParquetIntToDate(const int32_t &raw_date) {
 	return date_t(raw_date);

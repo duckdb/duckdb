@@ -1,0 +1,25 @@
+# name: test/fuzzer/pedro/natural_join_generated_heap_overflow.test
+# description: Issue #4675: Natural join with generated column heap overflow
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c1 AS (1), c0 INT);
+
+query I
+SELECT 1 FROM t0 JOIN (SELECT 8) t1(c0) USING (c0);
+----
+
+query I
+SELECT 1 FROM t0 NATURAL INNER JOIN (SELECT 8) t1(c0);
+----
+
+statement ok
+INSERT INTO t0 VALUES (8)
+
+query I
+SELECT 1 FROM t0 NATURAL INNER JOIN (SELECT 8) t1(c0);
+----
+1

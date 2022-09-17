@@ -1,0 +1,13 @@
+# name: test/fuzzer/pedro/correlated_subquery_downcast_error.test
+# description: Issue #4568: UndefinedBehaviorSanitizer on downcast from correlated subquery
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+query I
+SELECT count(*) OVER() = ANY(SELECT * FROM t0 t1 WHERE(c0 = t0.c0)) FROM t0;
+----

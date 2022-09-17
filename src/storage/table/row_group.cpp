@@ -885,9 +885,15 @@ void VersionDeleteState::Flush() {
 		return;
 	}
 	// delete in the current info
-	delete_count += current_info->Delete(transaction, rows, count);
-	// now push the delete into the undo buffer
-	transaction.PushDelete(table, current_info, rows, count, base_row + chunk_row);
+	// it is possible for delete statements to delete the same tuple multiple times when combined with a USING clause
+	// in the current_info->Delete, we check which tuples are actually deleted (excluding duplicate deletions)
+	// this is returned in the actual_delete_count
+	auto actual_delete_count = current_info->Delete(transaction, rows, count);
+	delete_count += actual_delete_count;
+	if (actual_delete_count > 0) {
+		// now push the delete into the undo buffer, but only if any deletes were actually performed
+		transaction.PushDelete(table, current_info, rows, actual_delete_count, base_row + chunk_row);
+	}
 	count = 0;
 }
 

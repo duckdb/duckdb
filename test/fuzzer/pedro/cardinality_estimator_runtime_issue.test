@@ -1,0 +1,19 @@
+# name: test/fuzzer/pedro/cardinality_estimator_runtime_issue.test
+# description: Issue #4682: Cardinality estimator runtime issue
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 AS (SELECT 2);
+
+statement ok
+DELETE FROM t0 USING generate_series(1);
+
+query I
+SELECT * FROM t0
+----
+
+statement ok
+DELETE FROM t0 USING generate_series(1);

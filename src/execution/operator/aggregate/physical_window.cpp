@@ -13,7 +13,7 @@
 #include "duckdb/execution/window_segment_tree.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -1502,19 +1502,18 @@ private:
 	WindowGlobalHashGroup &hash_group;
 };
 
-class WindowMergeEvent : public Event {
+class WindowMergeEvent : public BasePipelineEvent {
 public:
 	WindowMergeEvent(WindowGlobalSinkState &gstate_p, Pipeline &pipeline_p, WindowGlobalHashGroup &hash_group_p)
-	    : Event(pipeline_p.executor), gstate(gstate_p), pipeline(pipeline_p), hash_group(hash_group_p) {
+	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), hash_group(hash_group_p) {
 	}
 
 	WindowGlobalSinkState &gstate;
-	Pipeline &pipeline;
 	WindowGlobalHashGroup &hash_group;
 
 public:
 	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
+		auto &context = pipeline->GetClientContext();
 
 		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 		auto &ts = TaskScheduler::GetScheduler(context);
@@ -1529,7 +1528,7 @@ public:
 
 	void FinishEvent() override {
 		hash_group.global_sort->CompleteMergeRound(true);
-		CreateMergeTasks(pipeline, *this, gstate, hash_group);
+		CreateMergeTasks(*pipeline, *this, gstate, hash_group);
 	}
 
 	static void CreateMergeTasks(Pipeline &pipeline, Event &event, WindowGlobalSinkState &state,

@@ -392,9 +392,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			// Get HLL stats here
 			auto actual_binding = relation_column_to_original_column[key];
 
-			// sometimes base stats is null (test_709.test) returns null for base stats while
-			// there is still a catalog table. Anybody know anything about this?
-			auto base_stats = catalog_table->storage->GetStatistics(context, actual_binding.column_index);
+			auto base_stats = catalog_table->GetStatistics(context, actual_binding.column_index);
 			if (base_stats) {
 				count = base_stats->GetDistinctCount();
 			}
