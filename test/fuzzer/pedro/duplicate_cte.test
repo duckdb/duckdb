@@ -1,0 +1,17 @@
+# name: test/fuzzer/pedro/duplicate_cte.test
+# description: Issue #4571: Duplicate table name at CTE in INSERT statement
+# group: [pedro]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+WITH t0 AS (SELECT 2) INSERT INTO t0 (WITH t0 AS (SELECT 2) SELECT 2);
+
+query I
+SELECT * FROM t0
+----
+2

@@ -377,7 +377,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 
 	auto &config = DBConfig::GetConfig(db);
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
-		throw IOException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
+		throw FatalException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
 	}
 
 	if (!use_direct_io) {
