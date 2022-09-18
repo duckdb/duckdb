@@ -123,6 +123,16 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
 
+	for(auto it : header_map){
+		std::cout << "key: " << it.first << "value" << it.second << std::endl;
+	}
+
+	for(auto it : *headers){
+		std::cout << "key: " << it.first << "value" << it.second << std::endl;
+	}
+
+	std::cout << "Sending HEAD request\n" << url << "\n" << path << "\n" << proto_host_port << std::endl; 
+
 	auto res = hfs.http_client->Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
@@ -333,6 +343,7 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 	InitializeClient();
 
+	std::cout << "INITIALIZE\n";
 	auto &hfs = (HTTPFileSystem &)file_system;
 	auto res = hfs.HeadRequest(*this, path, {});
 
@@ -345,6 +356,7 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 			length = 0;
 			return res;
 		} else {
+			std::cerr << "Error here " << std::endl;
 			throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + std::to_string(res->code) + " (" +
 			                         res->error + ")");
 		}

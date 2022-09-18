@@ -360,7 +360,8 @@ unique_ptr<TableFunctionRef> ReadCSVReplacement(ClientContext &context, const st
 	} else if (StringUtil::EndsWith(lower_name, ".zst")) {
 		lower_name = lower_name.substr(0, lower_name.size() - 4);
 	}
-	if (!StringUtil::EndsWith(lower_name, ".csv") && !StringUtil::EndsWith(lower_name, ".tsv")) {
+	auto path = lower_name.substr(0, lower_name.find('?'));
+	if (!StringUtil::EndsWith(path, ".csv") && !StringUtil::EndsWith(path, ".tsv")) {
 		return nullptr;
 	}
 	auto table_function = make_unique<TableFunctionRef>();

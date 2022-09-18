@@ -12,13 +12,13 @@
 namespace duckdb {
 
 struct S3AuthParams {
-	const std::string region;
-	const std::string access_key_id;
-	const std::string secret_access_key;
-	const std::string session_token;
-	const std::string endpoint;
-	const std::string url_style;
-	const bool use_ssl;
+	std::string region;
+	std::string access_key_id;
+	std::string secret_access_key;
+	std::string session_token;
+	std::string endpoint;
+	std::string url_style;
+	bool use_ssl;
 
 	static S3AuthParams ReadFrom(FileOpener *opener);
 };
@@ -73,10 +73,12 @@ class S3FileHandle : public HTTPFileHandle {
 	friend class S3FileSystem;
 
 public:
-	S3FileHandle(FileSystem &fs, std::string path_p, uint8_t flags, const HTTPParams &http_params,
+	S3FileHandle(FileSystem &fs, std::string path_p, std::string &stripped_path_p, uint8_t flags, const HTTPParams &http_params,
 	             const S3AuthParams &auth_params_p, const S3ConfigParams &config_params_p)
 	    : HTTPFileHandle(fs, std::move(path_p), flags, http_params), auth_params(auth_params_p),
-	      config_params(config_params_p) {
+	      config_params(config_params_p), stripped_path(stripped_path_p) {
+
+		std::cout << "construct s3 filehandle\n";
 
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
@@ -84,8 +86,9 @@ public:
 			throw NotImplementedException("Cannot open an HTTP file for appending");
 		}
 	}
-	const S3AuthParams auth_params;
+	S3AuthParams auth_params;
 	const S3ConfigParams config_params;
+	string stripped_path;
 
 public:
 	void Close() override;
@@ -138,7 +141,7 @@ public:
 	unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map, idx_t file_offset,
 	                                            char *buffer_out, idx_t buffer_out_len) override;
 
-	static void Verify();
+	void Verify();
 
 	bool CanHandleFile(const string &fpath) override;
 	bool OnDiskFile(FileHandle &handle) override {
@@ -152,7 +155,8 @@ public:
 
 	void FlushAllBuffers(S3FileHandle &handle);
 
-	static ParsedS3Url S3UrlParse(string url, const S3AuthParams &params);
+	void	readQueryParams(string &url, S3AuthParams &params);
+	static ParsedS3Url S3UrlParse(string url, S3AuthParams &params);
 
 	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
 	static std::string UrlDecode(std::string input);

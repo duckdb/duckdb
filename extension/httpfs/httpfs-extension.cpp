@@ -8,7 +8,7 @@
 namespace duckdb {
 
 static void LoadInternal(DatabaseInstance &instance) {
-	S3FileSystem::Verify(); // run some tests to see if all the hashes work out
+	// S3FileSystem::Verify(); // run some tests to see if all the hashes work out
 	auto &fs = instance.GetFileSystem();
 
 	fs.RegisterSubSystem(make_unique<HTTPFileSystem>());
