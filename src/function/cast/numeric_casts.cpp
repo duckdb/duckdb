@@ -33,18 +33,18 @@ static BoundCastInfo InternalNumericCastSwitch(const LogicalType &source, const 
 	case LogicalTypeId::DOUBLE:
 		return VectorTryCastLoop<SRC, double, duckdb::NumericTryCast>;
 	case LogicalTypeId::DECIMAL:
-		return ToDecimalCast<SRC>;
+		throw InternalException("numeric -> decimal");
+		//		return ToDecimalCast<SRC>;
 	case LogicalTypeId::JSON:
-	case LogicalTypeId::VARCHAR: {
-		VectorStringCast<SRC, duckdb::StringCast>(source, result, count);
-		return true;
-	}
+	case LogicalTypeId::VARCHAR:
+		return VectorStringCast<SRC, duckdb::StringCast>;
 	default:
-		return nullptr;
+		return DefaultCasts::TryVectorNullCast;
 	}
 }
 
-BoundCastInfo DefaultCasts::NumericCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+BoundCastInfo DefaultCasts::NumericCastSwitch(BindCastInput &input, const LogicalType &source,
+                                              const LogicalType &target) {
 	switch (source.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return InternalNumericCastSwitch<bool>(source, target);
@@ -75,5 +75,4 @@ BoundCastInfo DefaultCasts::NumericCastSwitch(BindCastInput &input, const Logica
 	}
 }
 
-
-}
+} // namespace duckdb

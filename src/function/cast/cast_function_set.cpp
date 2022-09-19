@@ -4,9 +4,9 @@
 
 namespace duckdb {
 
-BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<BindCastInfo> info_p) :
-	function(function_p), info(move(info_p)) {}
-
+BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<BindCastInfo> info_p)
+    : function(function_p), info(move(info_p)) {
+}
 
 CastFunctionSet::CastFunctionSet() : map_info(nullptr) {
 	bind_functions.push_back(DefaultCasts::GetDefaultCastFunction);
@@ -26,7 +26,7 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 	}
 	// the first function is the default
 	// we iterate the set of bind functions backwards
-	for(idx_t i = bind_functions.size(); i > 0; i--) {
+	for (idx_t i = bind_functions.size(); i > 0; i--) {
 		auto &bind_function = bind_functions[i - 1];
 		BindCastInput input(*this, bind_function.info.get());
 		auto result = bind_function.function(input, source, target);
@@ -45,7 +45,7 @@ struct MapCastInfo : public BindCastInfo {
 
 BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	D_ASSERT(input.info);
-	auto &map_info = (MapCastInfo &) *input.info;
+	auto &map_info = (MapCastInfo &)*input.info;
 	auto &casts = map_info.casts;
 
 	auto entry = casts.find(source);
@@ -61,7 +61,8 @@ BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, c
 	return target_entry->second.Copy();
 }
 
-void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function) {
+void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const LogicalType &target,
+                                           BoundCastInfo function) {
 	if (!map_info) {
 		// create the cast map and the cast map function
 		auto info = make_unique<MapCastInfo>();
@@ -71,5 +72,4 @@ void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const Logi
 	map_info->casts[source][target] = move(function);
 }
 
-
-}
+} // namespace duckdb

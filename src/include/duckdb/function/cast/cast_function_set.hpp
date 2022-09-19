@@ -13,10 +13,12 @@
 namespace duckdb {
 struct MapCastInfo;
 
-typedef BoundCastInfo (*bind_cast_function_t)(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+typedef BoundCastInfo (*bind_cast_function_t)(BindCastInput &input, const LogicalType &source,
+                                              const LogicalType &target);
 
 struct BindCastFunction {
-	BindCastFunction(bind_cast_function_t function, unique_ptr<BindCastInfo> info = nullptr); // NOLINT: allow implicit cast
+	BindCastFunction(bind_cast_function_t function,
+	                 unique_ptr<BindCastInfo> info = nullptr); // NOLINT: allow implicit cast
 
 	bind_cast_function_t function;
 	unique_ptr<BindCastInfo> info;
@@ -41,6 +43,5 @@ private:
 	//! If any custom cast functions have been defined using RegisterCastFunction, this holds the map
 	MapCastInfo *map_info;
 };
-
 
 } // namespace duckdb

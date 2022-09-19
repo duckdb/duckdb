@@ -168,6 +168,7 @@ public:
 	DUCKDB_API CompressionFunction *GetCompressionFunction(CompressionType type, PhysicalType data_type);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<CastFunctionSet> cast_functions;

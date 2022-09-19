@@ -96,6 +96,12 @@ struct VectorTryCastStringOperator {
 };
 
 template <class SRC, class DST, class OP>
+static bool TemplatedVectorCastLoop(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	UnaryExecutor::Execute<SRC, DST, OP>(source, result, count);
+	return true;
+}
+
+template <class SRC, class DST, class OP>
 static bool TemplatedVectorTryCastLoop(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	VectorTryCastData input(result, parameters.error_message, parameters.strict);
 	UnaryExecutor::GenericExecute<SRC, DST, OP>(source, result, count, &input, parameters.error_message);
@@ -123,9 +129,10 @@ static bool VectorTryCastStringLoop(Vector &source, Vector &result, idx_t count,
 }
 
 template <class SRC, class OP>
-static void VectorStringCast(Vector &source, Vector &result, idx_t count) {
+static bool VectorStringCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 	UnaryExecutor::GenericExecute<SRC, string_t, VectorStringCastOperator<OP>>(source, result, count, (void *)&result);
+	return true;
 }
 
 } // namespace duckdb

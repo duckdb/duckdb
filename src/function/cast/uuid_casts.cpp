@@ -1,4 +1,6 @@
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/function/cast/vector_cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -8,11 +10,10 @@ BoundCastInfo DefaultCasts::UUIDCastSwitch(BindCastInput &input, const LogicalTy
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::JSON:
 		// uuid to varchar
-		VectorStringCast<hugeint_t, duckdb::CastFromUUID>(source, result, count);
-		break;
+		return VectorStringCast<hugeint_t, duckdb::CastFromUUID>;
 	default:
-		return nullptr;
+		return TryVectorNullCast;
 	}
 }
 
-}
+} // namespace duckdb

@@ -1,10 +1,11 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 
 namespace duckdb {
 
 template <class SRC_TYPE, class RES_TYPE>
-bool FillEnum(Vector &source, Vector &result, idx_t count, string *error_message) {
+bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool all_converted = true;
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
@@ -33,10 +34,10 @@ bool FillEnum(Vector &source, Vector &result, idx_t count, string *error_message
 		auto key = EnumType::GetPos(res_enum_type, str);
 		if (key == -1) {
 			// key doesn't exist on result enum
-			if (!error_message) {
+			if (!parameters.error_message) {
 				result_data[i] = HandleVectorCastError::Operation<RES_TYPE>(
-				    CastExceptionText<SRC_TYPE, RES_TYPE>(source_data[src_idx]), result_mask, i, error_message,
-				    all_converted);
+				    CastExceptionText<SRC_TYPE, RES_TYPE>(source_data[src_idx]), result_mask, i,
+				    parameters.error_message, all_converted);
 			} else {
 				result_mask.SetInvalid(i);
 			}
@@ -48,98 +49,120 @@ bool FillEnum(Vector &source, Vector &result, idx_t count, string *error_message
 }
 
 template <class SRC_TYPE>
-cast_function_t FillEnumResultTemplate(Vector &source, Vector &result, idx_t count, string *error_message) {
-	switch (source.GetType().InternalType()) {
+BoundCastInfo EnumEnumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	switch (target.InternalType()) {
 	case PhysicalType::UINT8:
-		return FillEnum<SRC_TYPE, uint8_t>(source, result, count, error_message);
+		return EnumEnumCast<SRC_TYPE, uint8_t>;
 	case PhysicalType::UINT16:
-		return FillEnum<SRC_TYPE, uint16_t>(source, result, count, error_message);
+		return EnumEnumCast<SRC_TYPE, uint16_t>;
 	case PhysicalType::UINT32:
-		return FillEnum<SRC_TYPE, uint32_t>(source, result, count, error_message);
+		return EnumEnumCast<SRC_TYPE, uint32_t>;
 	default:
 		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 	}
 }
 
-void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enum_physical_type) {
+template <class SRC>
+static bool EnumToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(source.GetVectorType());
 	} else {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 	}
-	auto &str_vec = EnumType::GetValuesInsertOrder(source.GetType());
-	auto str_vec_ptr = FlatVector::GetData<string_t>(str_vec);
-	auto res_vec_ptr = FlatVector::GetData<string_t>(result);
+	auto &enum_dictionary = EnumType::GetValuesInsertOrder(source.GetType());
+	auto dictionary_data = FlatVector::GetData<string_t>(enum_dictionary);
+	auto result_data = FlatVector::GetData<string_t>(result);
+	auto &result_mask = FlatVector::Validity(result);
 
-	// TODO remove value api from this loop
+	UnifiedVectorFormat vdata;
+	source.ToUnifiedFormat(count, vdata);
+
+	auto source_data = (SRC *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		auto src_val = source.GetValue(i);
-		if (src_val.IsNull()) {
-			result.SetValue(i, Value());
+		auto source_idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(source_idx)) {
+			result_mask.SetInvalid(i);
 			continue;
 		}
-
-		uint64_t enum_idx;
-		switch (enum_physical_type) {
-		case PhysicalType::UINT8:
-			enum_idx = UTinyIntValue::Get(src_val);
-			break;
-		case PhysicalType::UINT16:
-			enum_idx = USmallIntValue::Get(src_val);
-			break;
-		case PhysicalType::UINT32:
-			enum_idx = UIntegerValue::Get(src_val);
-			break;
-		case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
-		{
-			res_vec_ptr[i] = (const char *)UBigIntValue::Get(src_val);
-			continue;
-		}
-
-		default:
-			throw InternalException("ENUM can only have unsigned integers as physical types");
-		}
-		res_vec_ptr[i] = str_vec_ptr[enum_idx];
+		auto enum_idx = source_data[source_idx];
+		result_data[i] = dictionary_data[enum_idx];
 	}
+	return true;
 }
 
-static cast_function_t EnumCastSwitch(const LogicalType &source, const LogicalType &target) {
-	auto enum_physical_type = source.GetType().InternalType();
-	switch (result.GetType().id()) {
+struct EnumBoundCastData : public BoundCastData {
+	EnumBoundCastData(BoundCastInfo to_varchar_cast, BoundCastInfo from_varchar_cast)
+	    : to_varchar_cast(move(to_varchar_cast)), from_varchar_cast(move(from_varchar_cast)) {
+	}
+
+	BoundCastInfo to_varchar_cast;
+	BoundCastInfo from_varchar_cast;
+
+public:
+	unique_ptr<BoundCastData> Copy() const override {
+		return make_unique<EnumBoundCastData>(to_varchar_cast.Copy(), from_varchar_cast.Copy());
+	}
+};
+
+unique_ptr<BoundCastData> BindEnumCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	auto to_varchar_cast = input.function_set.GetCastFunction(source, LogicalType::VARCHAR);
+	auto from_varchar_cast = input.function_set.GetCastFunction(LogicalType::VARCHAR, target);
+	return make_unique<EnumBoundCastData>(move(to_varchar_cast), move(from_varchar_cast));
+}
+
+static bool EnumToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &cast_data = (EnumBoundCastData &)*parameters.cast_data;
+
+	Vector varchar_cast(LogicalType::VARCHAR, count);
+
+	// cast to varchar
+	CastParameters to_varchar_params(parameters, cast_data.to_varchar_cast.cast_data.get());
+	cast_data.to_varchar_cast.function(source, varchar_cast, count, to_varchar_params);
+
+	// cast from varchar to the target
+	CastParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data.get());
+	cast_data.from_varchar_cast.function(varchar_cast, result, count, from_varchar_params);
+	return true;
+}
+
+BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	auto enum_physical_type = source.InternalType();
+	switch (target.id()) {
 	case LogicalTypeId::ENUM: {
 		// This means they are both ENUMs, but of different types.
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:
-			return FillEnumResultTemplate<uint8_t>(source, result, count, error_message);
+			return EnumEnumCastSwitch<uint8_t>(input, source, target);
 		case PhysicalType::UINT16:
-			return FillEnumResultTemplate<uint16_t>(source, result, count, error_message);
+			return EnumEnumCastSwitch<uint16_t>(input, source, target);
 		case PhysicalType::UINT32:
-			return FillEnumResultTemplate<uint32_t>(source, result, count, error_message);
+			return EnumEnumCastSwitch<uint32_t>(input, source, target);
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 	}
 	case LogicalTypeId::JSON:
-	case LogicalTypeId::VARCHAR: {
-		EnumToVarchar(source, result, count, enum_physical_type);
-		break;
-	}
+	case LogicalTypeId::VARCHAR:
+		switch (enum_physical_type) {
+		case PhysicalType::UINT8:
+			return EnumToVarcharCast<uint8_t>;
+		case PhysicalType::UINT16:
+			return EnumToVarcharCast<uint16_t>;
+		case PhysicalType::UINT32:
+			return EnumToVarcharCast<uint32_t>;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
 	default: {
-		// Cast to varchar
-		Vector varchar_cast(LogicalType::VARCHAR, count);
-		EnumToVarchar(source, varchar_cast, count, enum_physical_type);
-		// Try to cast from varchar to whatever we wanted before
-		VectorOperations::TryCast(varchar_cast, result, count, error_message, strict);
-		break;
+		return BoundCastInfo(EnumToAnyCast, BindEnumCast(input, source, target));
 	}
 	}
-	return true;
 }
 
 template <class T>
-bool FillEnum(string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type, T *result_data,
-              ValidityMask &result_mask, const LogicalType &result_type, idx_t count, string *error_message,
-              const SelectionVector *sel) {
+bool EnumEnumCast(string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type, T *result_data,
+                  ValidityMask &result_mask, const LogicalType &result_type, idx_t count, string *error_message,
+                  const SelectionVector *sel) {
 	bool all_converted = true;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t source_idx = i;
@@ -164,7 +187,7 @@ bool FillEnum(string_t *source_data, ValidityMask &source_mask, const LogicalTyp
 }
 
 template <class T>
-cast_function_t TransformEnum(Vector &source, Vector &result, idx_t count, string *error_message) {
+bool TransformEnum(Vector &source, Vector &result, idx_t count, string *error_message) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
 	auto enum_name = EnumType::GetTypeName(result.GetType());
 	switch (source.GetVectorType()) {
@@ -176,8 +199,8 @@ cast_function_t TransformEnum(Vector &source, Vector &result, idx_t count, strin
 		auto result_data = ConstantVector::GetData<T>(result);
 		auto &result_mask = ConstantVector::Validity(result);
 
-		return FillEnum(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(), 1,
-		                error_message, nullptr);
+		return EnumEnumCast(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(), 1,
+		                    error_message, nullptr);
 	}
 	default: {
 		UnifiedVectorFormat vdata;
@@ -191,10 +214,10 @@ cast_function_t TransformEnum(Vector &source, Vector &result, idx_t count, strin
 		auto result_data = FlatVector::GetData<T>(result);
 		auto &result_mask = FlatVector::Validity(result);
 
-		return FillEnum(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(), count,
-		                error_message, source_sel);
+		return EnumEnumCast(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(),
+		                    count, error_message, source_sel);
 	}
 	}
 }
 
-}
+} // namespace duckdb
