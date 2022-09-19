@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_storage_segment
   OBJECT
+  chimp.cpp
   numeric_constant.cpp
   fixed_size_uncompressed.cpp
   rle.cpp

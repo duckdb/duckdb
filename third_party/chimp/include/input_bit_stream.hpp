@@ -28,13 +28,13 @@ public:
 	}
 
 	template <class T>
-	void ReadBit(bool value, T& value, uint8_t bit) {
+	void ReadBit(T& value, uint8_t bit) {
 		auto& byte = GetCurrentByte();
 
 		const auto bit_offset = INTERNAL_TYPE_BITSIZE - 1 - bit_index;
 		//! Shift the bit at 'bit_index' to the front
 		//! Then check if it's set
-		auto current >> (bit_offset) & 1;
+		auto current = byte >> (bit_offset) & 1;
 		if (current) {
 			value |= (T)1 << ((sizeof(T) * 8) - 1 - bit);
 		}
@@ -44,16 +44,11 @@ public:
 	template <class T, uint8_t VALUE_SIZE>
 	T ReadValue() {
 		if (LoadedEnough(VALUE_SIZE)) {
-			return ReadFromCurrent<T>(value, value_size);
+			return ReadFromCurrent<T, VALUE_SIZE>();
 		}
 		T result = 0;
 		for (uint8_t i = 0; i < VALUE_SIZE; i++) {
-			if (((value >> i) << (BITS - 1 - i)) & 1) {
-				ReadBit(true, result, i);
-			}
-			else {
-				ReadBit(false, result, i);
-			}
+			ReadBit(result, i);
 		}
 		return result;
 	}
@@ -66,12 +61,7 @@ public:
 		}
 		T result = 0;
 		for (uint8_t i = 0; i < value_size; i++) {
-			if (((value >> i) << (BITS - 1 - i)) & 1) {
-				ReadBit(true, result, i);
-			}
-			else {
-				ReadBit(false, result, i);
-			}
+			ReadBit(result, i);
 		}
 		return result;
 	}
@@ -102,13 +92,13 @@ private:
 	}
 	template <class T, uint8_t VALUE_SIZE>
 	T ReadFromCurrent() {
-		T result = current >> (bit_index + VALUE_SIZE) & GetMask<VALUE_SIZE>() - 1;
+		T result = current >> (bit_index + VALUE_SIZE) & GetMask<T, VALUE_SIZE>() - 1;
 		DecreaseLoadedBits(VALUE_SIZE);
 		return result;
 	}
 	template <class T>
 	T ReadFromCurrent(uint8_t value_size) {
-		T result = current >> (bit_index + value_size) & GetMask(value_size) - 1;
+		T result = current >> (bit_index + value_size) & GetMask<T>(value_size) - 1;
 		DecreaseLoadedBits(value_size);
 		return result;
 	}

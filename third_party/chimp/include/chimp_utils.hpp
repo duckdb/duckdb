@@ -20,21 +20,25 @@ static inline int __builtin_ctzll(unsigned long long x) {
 	return low_set ? low : high;
 #  endif
 }
-static inline int __builtin_clzll(unsigned long long x) {
-#  ifdef _WIN64
-	unsigned long ret;
-	_BitScanReverse64(&ret, x);
-	return (int)ret;
-#  else
-	unsigned long ret;
-	// Scan the high 32 bits.
-	if (_BitScanReverse(&ret, (uint32_t)(x >> 32))) {
-		return (63 ^ (ret + 32));
-	}
-	// Scan the low 32 bits.
-	_BitScanReverse(&ret, (uint32_t)x);
-	return (63 ^ (int)ret);
-#  endif
+static inline int __builtin_clzll(unsigned long long mask) {
+  unsigned long where;
+// BitScanReverse scans from MSB to LSB for first set bit.
+// Returns 0 if no set bit is found.
+#if defined(_WIN64)
+  if (_BitScanReverse64(&where, mask))
+    return static_cast<int>(63 - where);
+#elif defined(_WIN32)
+  // Scan the high 32 bits.
+  if (_BitScanReverse(&where, static_cast<unsigned long>(mask >> 32)))
+    return static_cast<int>(63 -
+                            (where + 32)); // Create a bit offset from the MSB.
+  // Scan the low 32 bits.
+  if (_BitScanReverse(&where, static_cast<unsigned long>(mask)))
+    return static_cast<int>(63 - where);
+#else
+#error "Implementation of __builtin_clzll required"
+#endif
+  return 64; // Undefined Behavior.
 }
 #endif
 
