@@ -699,8 +699,9 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		auto &constraint = table.bound_constraints[i];
 		switch (base_constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
-			VerifyNotNullConstraint(table, chunk.data[not_null.index], chunk.size(),
+			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
+			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
+			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index], chunk.size(),
 			                        table.columns[not_null.index].Name());
 			break;
 		}
