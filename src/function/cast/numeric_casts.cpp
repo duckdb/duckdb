@@ -1,6 +1,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
+#include "duckdb/common/vector_operations/decimal_cast.hpp"
 
 namespace duckdb {
 
@@ -33,8 +34,7 @@ static BoundCastInfo InternalNumericCastSwitch(const LogicalType &source, const 
 	case LogicalTypeId::DOUBLE:
 		return VectorTryCastLoop<SRC, double, duckdb::NumericTryCast>;
 	case LogicalTypeId::DECIMAL:
-		throw InternalException("numeric -> decimal");
-		//		return ToDecimalCast<SRC>;
+		return ToDecimalCast<SRC>;
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return VectorStringCast<SRC, duckdb::StringCast>;

@@ -55,23 +55,23 @@ bool TemplatedVectorDecimalCast(Vector &source, Vector &result, idx_t count, str
 }
 
 template <class T>
-static bool ToDecimalCast(Vector &source, Vector &result, idx_t count, string *error_message) {
+static bool ToDecimalCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &result_type = result.GetType();
 	auto width = DecimalType::GetWidth(result_type);
 	auto scale = DecimalType::GetScale(result_type);
 	switch (result_type.InternalType()) {
 	case PhysicalType::INT16:
-		return TemplatedVectorDecimalCast<T, int16_t, TryCastToDecimal>(source, result, count, error_message, width,
-		                                                                scale);
+		return TemplatedVectorDecimalCast<T, int16_t, TryCastToDecimal>(source, result, count, parameters.error_message,
+		                                                                width, scale);
 	case PhysicalType::INT32:
-		return TemplatedVectorDecimalCast<T, int32_t, TryCastToDecimal>(source, result, count, error_message, width,
-		                                                                scale);
+		return TemplatedVectorDecimalCast<T, int32_t, TryCastToDecimal>(source, result, count, parameters.error_message,
+		                                                                width, scale);
 	case PhysicalType::INT64:
-		return TemplatedVectorDecimalCast<T, int64_t, TryCastToDecimal>(source, result, count, error_message, width,
-		                                                                scale);
+		return TemplatedVectorDecimalCast<T, int64_t, TryCastToDecimal>(source, result, count, parameters.error_message,
+		                                                                width, scale);
 	case PhysicalType::INT128:
-		return TemplatedVectorDecimalCast<T, hugeint_t, TryCastToDecimal>(source, result, count, error_message, width,
-		                                                                  scale);
+		return TemplatedVectorDecimalCast<T, hugeint_t, TryCastToDecimal>(source, result, count,
+		                                                                  parameters.error_message, width, scale);
 	default:
 		throw InternalException("Unimplemented internal type for decimal");
 	}
