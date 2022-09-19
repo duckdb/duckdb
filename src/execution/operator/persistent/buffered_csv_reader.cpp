@@ -324,6 +324,8 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		has_escape = true;
 	} else if (loption == "ignore_errors") {
 		ignore_errors = ParseBoolean(value, loption);
+	} else if (loption == "union_by_name") {
+		union_by_name = ParseBoolean(value, loption);
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}

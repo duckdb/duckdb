@@ -115,6 +115,8 @@ struct BufferedCSVReaderOptions {
 	bool include_file_name = false;
 	//! Whether or not to include a parsed hive partition columns
 	bool include_parsed_hive_partitions = false;
+	//! Whether or not to union files with different (but compatible) columns
+	bool union_by_name = false;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
