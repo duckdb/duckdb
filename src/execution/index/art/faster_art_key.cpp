@@ -4,6 +4,9 @@
 
 namespace duckdb {
 
+FKey::FKey() : len(0) {
+}
+
 FKey::FKey(data_ptr_t data, idx_t len) : len(len), data(data) {
 }
 
@@ -12,16 +15,16 @@ FKey::FKey(ArenaAllocator &allocator, idx_t len) : len(len) {
 }
 
 template <>
-unique_ptr<FKey> FKey::CreateKey(ArenaAllocator &allocator, string_t value) {
+FKey FKey::CreateKey(ArenaAllocator &allocator, string_t value) {
 	idx_t len = value.GetSize() + 1;
 	auto data = allocator.Allocate(len);
 	memcpy(data, value.GetDataUnsafe(), len - 1);
 	data[len - 1] = '\0';
-	return make_unique<FKey>(data, len);
+	return FKey(data, len);
 }
 
 template <>
-unique_ptr<FKey> FKey::CreateKey(ArenaAllocator &allocator, const char *value) {
+FKey FKey::CreateKey(ArenaAllocator &allocator, const char *value) {
 	return FKey::CreateKey(allocator, string_t(value, strlen(value)));
 }
 

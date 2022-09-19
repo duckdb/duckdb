@@ -72,8 +72,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 
 template <class T>
-static void TemplatedGenerateFKeys(ArenaAllocator &allocator, Vector &input, idx_t count,
-                                   vector<unique_ptr<FKey>> &keys) {
+static void TemplatedGenerateFKeys(ArenaAllocator &allocator, Vector &input, idx_t count, vector<FKey> &keys) {
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
@@ -81,9 +80,9 @@ static void TemplatedGenerateFKeys(ArenaAllocator &allocator, Vector &input, idx
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if (idata.validity.RowIsValid(idx)) {
-			keys.push_back(FKey::CreateKey<T>(allocator, input_data[idx]));
+			keys.emplace_back(FKey::CreateKey<T>(allocator, input_data[idx]));
 		} else {
-			keys.push_back(nullptr);
+			keys.emplace_back(FKey());
 		}
 	}
 }
@@ -105,25 +104,26 @@ static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<
 }
 
 template <class T>
-static void ConcatenateFKeys(ArenaAllocator &allocator, Vector &input, idx_t count, vector<unique_ptr<FKey>> &keys) {
+static void ConcatenateFKeys(ArenaAllocator &allocator, Vector &input, idx_t count, vector<FKey> &keys) {
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
 	auto input_data = (T *)idata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
-		if (!idata.validity.RowIsValid(idx) || !keys[i]) {
-			// either this column is NULL, or the previous column is NULL!
-			keys[i] = nullptr;
-		} else {
-			// concatenate the keys
-			auto old_key = move(keys[i]);
-			auto new_key = FKey::CreateKey<T>(allocator, input_data[idx]);
-			auto key_len = old_key->len + new_key->len;
-			auto compound_data = allocator.Allocate(key_len);
-			memcpy(compound_data, old_key->data, old_key->len);
-			memcpy(compound_data + old_key->len, new_key->data, new_key->len);
-			keys[i] = make_unique<FKey>(compound_data, key_len);
+		if (keys[i].len != 0) {
+			if (!idata.validity.RowIsValid(idx)) {
+				// either this column is NULL, or the previous column is NULL!
+				keys[i] = FKey();
+			} else {
+				// concatenate the keys
+				auto new_key = FKey::CreateKey<T>(allocator, input_data[idx]);
+				auto key_len = keys[i].len + new_key.len;
+				auto compound_data = allocator.Allocate(key_len);
+				memcpy(compound_data, keys[i].data, keys[i].len);
+				memcpy(compound_data + keys[i].len, new_key.data, new_key.len);
+				keys[i] = FKey(compound_data, key_len);
+			}
 		}
 	}
 }
@@ -152,8 +152,7 @@ static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> 
 	}
 }
 
-void ART::GenerateFKeys(ArenaAllocator &allocator, DataChunk &input, vector<unique_ptr<FKey>> &keys) {
-	keys.reserve(STANDARD_VECTOR_SIZE);
+void ART::GenerateFKeys(ArenaAllocator &allocator, DataChunk &input, vector<FKey> &keys) {
 	// generate keys for the first input column
 	switch (input.data[0].GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -351,29 +350,28 @@ struct KeySection {
 	data_t key_byte;
 };
 
-void GetChildSections(vector<KeySection> &child_sections, vector<unique_ptr<FKey>> &keys, KeySection &key_section) {
+void GetChildSections(vector<KeySection> &child_sections, vector<FKey> &keys, KeySection &key_section) {
 
 	idx_t child_start_idx = key_section.start;
 	for (idx_t i = key_section.start + 1; i <= key_section.end; i++) {
-		if (keys[i - 1]->data[key_section.depth] != keys[i]->data[key_section.depth]) {
+		if (keys[i - 1].data[key_section.depth] != keys[i].data[key_section.depth]) {
 			child_sections.emplace_back(child_start_idx, i - 1, key_section.depth + 1,
-			                            keys[i - 1]->data[key_section.depth]);
+			                            keys[i - 1].data[key_section.depth]);
 			child_start_idx = i;
 		}
 	}
 	child_sections.emplace_back(child_start_idx, key_section.end, key_section.depth + 1,
-	                            keys[key_section.end]->data[key_section.depth]);
+	                            keys[key_section.end].data[key_section.depth]);
 }
 
-void Construct(vector<unique_ptr<FKey>> &keys, row_t *row_ids, Node *&node, KeySection &key_section,
-               bool &has_constraint) {
+void Construct(vector<FKey> &keys, row_t *row_ids, Node *&node, KeySection &key_section, bool &has_constraint) {
 
 	D_ASSERT(key_section.start < keys.size());
 	D_ASSERT(key_section.end < keys.size());
 	D_ASSERT(key_section.start <= key_section.end);
 
-	auto &start_key = *keys[key_section.start];
-	auto &end_key = *keys[key_section.end];
+	auto &start_key = keys[key_section.start];
+	auto &end_key = keys[key_section.end];
 
 	// increment the depth until we reach a leaf or find a mismatching byte
 	auto prefix_start = key_section.depth;
@@ -421,11 +419,11 @@ void Construct(vector<unique_ptr<FKey>> &keys, row_t *row_ids, Node *&node, KeyS
 	}
 }
 
-void FindFirstNotNullKey(vector<unique_ptr<FKey>> &keys, bool &skipped_all_nulls, idx_t &start_idx) {
+void FindFirstNotNullKey(vector<FKey> &keys, bool &skipped_all_nulls, idx_t &start_idx) {
 
 	if (!skipped_all_nulls) {
 		for (idx_t i = 0; i < keys.size(); i++) {
-			if (keys[i]) {
+			if (keys[i].len != 0) {
 				start_idx = i;
 				skipped_all_nulls = true;
 				return;
@@ -440,6 +438,8 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 	payload_types.emplace_back(LogicalType::ROW_TYPE);
 
 	ArenaAllocator arena_allocator(allocator);
+	vector<FKey> keys;
+	keys.reserve(STANDARD_VECTOR_SIZE);
 
 	auto skipped_all_nulls = false;
 	auto temp_art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
@@ -461,7 +461,7 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 		D_ASSERT(logical_types[0] == ordered_chunk.data[0].GetType());
 
 		// generate the keys for the given input
-		vector<unique_ptr<FKey>> keys;
+		keys.clear();
 		GenerateFKeys(arena_allocator, ordered_chunk, keys);
 
 		// we order NULLS FIRST, so we might have to skip nulls at the start of our sorted data

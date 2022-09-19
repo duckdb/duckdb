@@ -60,6 +60,7 @@ public:
 	Node *tree;
 
 	DatabaseInstance &db;
+	ArenaAllocator arena;
 
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate
@@ -117,7 +118,7 @@ private:
 	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
 	                      vector<row_t> &result_ids);
 
-	void GenerateFKeys(ArenaAllocator &allocator, DataChunk &input, vector<unique_ptr<FKey>> &keys);
+	void GenerateFKeys(ArenaAllocator &allocator, DataChunk &input, vector<FKey> &keys);
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 
 	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);

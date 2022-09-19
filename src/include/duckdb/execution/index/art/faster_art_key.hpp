@@ -19,6 +19,7 @@ namespace duckdb {
 
 class FKey {
 public:
+	FKey();
 	FKey(data_ptr_t data, idx_t len);
 	FKey(ArenaAllocator &allocator, idx_t len);
 
@@ -27,13 +28,13 @@ public:
 
 public:
 	template <class T>
-	static inline unique_ptr<FKey> CreateKey(ArenaAllocator &allocator, T element) {
+	static inline FKey CreateKey(ArenaAllocator &allocator, T element) {
 		auto data = FKey::CreateData<T>(allocator, element);
-		return make_unique<FKey>(data, sizeof(element));
+		return FKey(data, sizeof(element));
 	}
 
 	template <class T>
-	static inline unique_ptr<FKey> CreateKey(ArenaAllocator &allocator, const Value &element) {
+	static inline FKey CreateKey(ArenaAllocator &allocator, const Value &element) {
 		return CreateKey(allocator, element.GetValueUnsafe<T>());
 	}
 
@@ -61,8 +62,8 @@ private:
 };
 
 template <>
-unique_ptr<FKey> FKey::CreateKey(ArenaAllocator &allocator, string_t value);
+FKey FKey::CreateKey(ArenaAllocator &allocator, string_t value);
 template <>
-unique_ptr<FKey> FKey::CreateKey(ArenaAllocator &allocator, const char *value);
+FKey FKey::CreateKey(ArenaAllocator &allocator, const char *value);
 
 } // namespace duckdb
