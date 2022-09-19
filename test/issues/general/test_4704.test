@@ -8,12 +8,16 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE t0(c0 AS (1), c1 INT NOT NULL)
 
+statement ok
+INSERT INTO t0 SELECT 1 FROM RANGE(1024)
+
 # How to verify the error message?
 statement error
 INSERT INTO t0 VALUES(NULL)
 
-statement ok
-INSERT INTO t0 SELECT 1 FROM RANGE(1024)
+# How to verify the error message?
+statement error
+UPDATE t0 SET c1 = NULL
 
 query T
 SELECT column_name FROM PRAGMA_STORAGE_INFO('t0')
@@ -24,12 +28,16 @@ c1
 statement ok
 CREATE TABLE t1(c0 INT NOT NULL, c1 AS (1))
 
+statement ok
+INSERT INTO t1 SELECT 1 FROM RANGE(1024)
+
 # How to verify the error message?
 statement error
 INSERT INTO t1 VALUES(NULL)
 
-statement ok
-INSERT INTO t1 SELECT 1 FROM RANGE(1024)
+# How to verify the error message?
+statement error
+UPDATE t1 SET c0 = NULL
 
 query T
 SELECT column_name FROM PRAGMA_STORAGE_INFO('t1')

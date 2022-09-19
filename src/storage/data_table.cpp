@@ -1172,13 +1172,16 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &co
 
 void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk,
                                         const vector<column_t> &column_ids) {
-	for (auto &constraint : table.bound_constraints) {
+	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
+		auto &base_constraint = table.constraints[i];
+		auto &constraint = table.bound_constraints[i];
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
+			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
+			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
 			// check if the constraint is in the list of column_ids
 			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (column_ids[i] == not_null.index) {
+				if (column_ids[i] == bound_not_null.index) {
 					// found the column id: check the data in
 					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), table.columns[not_null.index].Name());
 					break;
