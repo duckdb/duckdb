@@ -3,6 +3,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
@@ -36,7 +37,7 @@ interval_t PyTimeDelta::ToInterval() {
 	return interval;
 }
 
-PyDecimal::PyDecimal(py::handle &obj) {
+PyDecimal::PyDecimal(py::handle &obj) : obj(obj) {
 	auto as_tuple = obj.attr("as_tuple")();
 
 	py::object exponent = as_tuple.attr("exponent");
@@ -69,7 +70,8 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 			width = scale + 1; // DECIMAL(4,3) - add 1 for the non-decimal values
 		}
 		if (width > Decimal::MAX_WIDTH_INT128) {
-			return false;
+			type = LogicalType::DOUBLE;
+			return true;
 		}
 		type = LogicalType::DECIMAL(width, scale);
 		return true;
@@ -118,10 +120,12 @@ void PyDecimal::SetExponent(py::handle &exponent) {
 	ExponentNotRecognized();
 }
 
-static void UnsupportedWidth(uint16_t width) {
-	throw ConversionException(
-	    "Failed to convert to a DECIMAL value with a width of %d because it exceeds the max supported with of %d",
-	    width, Decimal::MAX_WIDTH_INT128);
+static bool WidthIsCorrect(int32_t width) {
+	return width >= 0 && width <= Decimal::MAX_WIDTH_DECIMAL;
+}
+
+static void DoubleConversionFail(const string &decimal) {
+	throw ConversionException("Failed to fall back to a DOUBLE for DECIMAL '%s'", decimal);
 }
 
 template <class OP>
@@ -138,14 +142,27 @@ Value PyDecimalCastSwitch(PyDecimal &decimal, uint8_t width, uint8_t scale) {
 	return OP::template Operation<int16_t>(decimal.signed_value, decimal.digits, width, scale);
 }
 
+//! Wont fit in a DECIMAL, fall back to DOUBLE
+static Value FallbackToDouble(py::handle &obj) {
+	string converted = py::str(obj);
+	string_t decimal_string(converted);
+	double double_val;
+	bool try_cast = TryCast::Operation<string_t, double>(decimal_string, double_val, true);
+	if (!try_cast) {
+		DoubleConversionFail(converted);
+	}
+	return Value::DOUBLE(double_val);
+}
+
 Value PyDecimal::ToDuckValue() {
 	int32_t width = digits.size();
+	if (!WidthIsCorrect(width)) {
+		return FallbackToDouble(obj);
+	}
 	switch (exponent_type) {
 	case PyDecimalExponentType::EXPONENT_SCALE: {
 		uint8_t scale = exponent_value;
-		if (width > Decimal::MAX_WIDTH_INT128) {
-			UnsupportedWidth(width);
-		}
+		D_ASSERT(WidthIsCorrect(width));
 		if (scale > width) {
 			//! Values like '0.001'
 			width = scale + 1; //! leave 1 room for the non-decimal value
@@ -155,8 +172,8 @@ Value PyDecimal::ToDuckValue() {
 	case PyDecimalExponentType::EXPONENT_POWER: {
 		uint8_t scale = exponent_value;
 		width += scale;
-		if (width > Decimal::MAX_WIDTH_INT128) {
-			UnsupportedWidth(width);
+		if (!WidthIsCorrect(width)) {
+			return FallbackToDouble(obj);
 		}
 		return PyDecimalCastSwitch<PyDecimalPowerConverter>(*this, width, scale);
 	}

@@ -581,6 +581,28 @@ class TestResolveObjectColumns(object):
         print(reference)
         print(conversion)
 
+    def test_numeric_decimal_fallback_to_double(self):
+        duckdb_conn = duckdb.connect()
+        # The widths of these decimal values are bigger than the max supported width for DECIMAL
+        data = [Decimal("1.234567890123456789012345678901234567890123456789"), Decimal("123456789012345678901234567890123456789012345678.0")]
+        decimals = pd.DataFrame(
+            data={
+                "0": data
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                    (1.234567890123456789012345678901234567890123456789),
+                    (123456789012345678901234567890123456789012345678.0)
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+        assert(conversion == reference)
+        assert(isinstance(conversion[0][0], float))
+
     def test_numeric_decimal_out_of_range(self):
         duckdb_conn = duckdb.connect()
         data = [Decimal("1.234567890123456789012345678901234567"), Decimal("123456789012345678901234567890123456.0")]
