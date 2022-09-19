@@ -64,11 +64,6 @@ BoundCastInfo EnumEnumCastSwitch(BindCastInput &input, const LogicalType &source
 
 template <class SRC>
 static bool EnumToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(source.GetVectorType());
-	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-	}
 	auto &enum_dictionary = EnumType::GetValuesInsertOrder(source.GetType());
 	auto dictionary_data = FlatVector::GetData<string_t>(enum_dictionary);
 	auto result_data = FlatVector::GetData<string_t>(result);
@@ -86,6 +81,11 @@ static bool EnumToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 		}
 		auto enum_idx = source_data[source_idx];
 		result_data[i] = dictionary_data[enum_idx];
+	}
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	} else {
+		result.SetVectorType(VectorType::FLAT_VECTOR);
 	}
 	return true;
 }
