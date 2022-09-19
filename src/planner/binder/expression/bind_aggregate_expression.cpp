@@ -125,7 +125,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	if (aggr.filter) {
 		auto &child = (BoundExpression &)*aggr.filter;
-		bound_filter = BoundCastExpression::AddCastToType(move(child.expr), LogicalType::BOOLEAN);
+		bound_filter = BoundCastExpression::AddCastToType(context, move(child.expr), LogicalType::BOOLEAN);
 	}
 
 	// all children bound successfully

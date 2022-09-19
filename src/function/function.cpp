@@ -465,7 +465,7 @@ void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> 
 		// except for one special case: if the function accepts ANY argument
 		// in that case we don't add a cast
 		if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-			children[i] = BoundCastExpression::AddCastToType(move(children[i]), target_type);
+			children[i] = BoundCastExpression::AddDefaultCastToType(move(children[i]), target_type);
 		}
 	}
 }
