@@ -1,6 +1,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/types/type_map.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -69,7 +70,7 @@ void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const Logi
 		map_info = info.get();
 		bind_functions.emplace_back(MapCastFunction, move(info));
 	}
-	map_info->casts[source][target] = move(function);
+	map_info->casts[source].insert(make_pair(target, move(function)));
 }
 
 } // namespace duckdb

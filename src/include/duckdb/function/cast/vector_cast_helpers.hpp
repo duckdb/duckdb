@@ -12,6 +12,7 @@
 #include "duckdb/common/vector_operations/decimal_cast.hpp"
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/likely.hpp"
 
 namespace duckdb {
 

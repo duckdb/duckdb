@@ -29,6 +29,9 @@ struct BoundCastData {
 struct CastParameters {
 	CastParameters() {
 	}
+	CastParameters(BoundCastData *cast_data, bool strict, string *error_message)
+	    : cast_data(cast_data), strict(strict), error_message(error_message) {
+	}
 	CastParameters(CastParameters &parent, BoundCastData *cast_data = nullptr)
 	    : cast_data(cast_data), strict(parent.strict), error_message(parent.error_message) {
 	}
