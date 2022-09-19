@@ -78,6 +78,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;
 
 	bool has_primary_key = false;
+	unordered_set<idx_t> not_null_columns;
 	vector<idx_t> primary_keys;
 	for (idx_t i = 0; i < base.constraints.size(); i++) {
 		auto &cond = base.constraints[i];
@@ -90,6 +91,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			auto &not_null = (NotNullConstraint &)*cond;
 			auto &col = base.columns[not_null.index];
 			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(col.StorageOid()));
+			not_null_columns.insert(not_null.index);
 			break;
 		}
 		case ConstraintType::UNIQUE: {
@@ -177,6 +179,10 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	if (has_primary_key) {
 		// if there is a primary key index, also create a NOT NULL constraint for each of the columns
 		for (auto &column_index : primary_keys) {
+			if (not_null_columns.count(column_index)) {
+				//! No need to create a NotNullConstraint, it's already present
+				continue;
+			}
 			auto &column = base.columns[column_index];
 			base.constraints.push_back(make_unique<NotNullConstraint>(column_index));
 			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column.StorageOid()));
@@ -292,11 +298,13 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		BindDefaultValues(base.columns, result->bound_defaults);
 	}
 
+	idx_t regular_column_count = 0;
 	// bind collations to detect any unsupported collation errors
 	for (auto &column : base.columns) {
 		if (column.Generated()) {
 			continue;
 		}
+		regular_column_count++;
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
@@ -307,6 +315,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			// Only if the USER comes from a create type
 			result->dependencies.insert(type_dependency);
 		}
+	}
+	if (regular_column_count == 0) {
+		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
 	}
 	properties.allow_stream_result = false;
 	return result;

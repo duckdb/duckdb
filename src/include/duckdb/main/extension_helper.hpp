@@ -28,10 +28,10 @@ public:
 
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
-	static void InstallExtension(DatabaseInstance &db, const string &extension, bool force_install);
-	static void LoadExternalExtension(DatabaseInstance &db, const string &extension);
+	static void InstallExtension(ClientContext &context, const string &extension, bool force_install);
+	static void LoadExternalExtension(ClientContext &context, const string &extension);
 
-	static string ExtensionDirectory(FileSystem &fs);
+	static string ExtensionDirectory(ClientContext &context);
 
 	static idx_t DefaultExtensionCount();
 	static DefaultExtension GetDefaultExtension(idx_t index);
@@ -40,6 +40,11 @@ public:
 
 private:
 	static const vector<string> PathComponents();
+	//! For tagged releases we use the tag, else we use the git commit hash
+	static const string GetVersionDirectoryName();
+	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
+	static const string NormalizeVersionTag(const string &version_tag);
+	static bool IsRelease(const string &version_tag);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

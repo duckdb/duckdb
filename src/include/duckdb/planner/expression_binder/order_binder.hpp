@@ -29,10 +29,13 @@ public:
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> expr);
 
-	idx_t MaxCount() {
+	idx_t MaxCount() const {
 		return max_count;
 	}
 
+	bool HasExtraList() const {
+		return extra_list;
+	}
 	unique_ptr<Expression> CreateExtraReference(unique_ptr<ParsedExpression> expr);
 
 private:

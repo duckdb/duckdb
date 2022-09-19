@@ -36,6 +36,7 @@ class VacuumStatement;
 class RelationStatement;
 class SetStatement;
 class LoadStatement;
+class LogicalPlanStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

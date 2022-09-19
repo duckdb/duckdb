@@ -29,9 +29,20 @@ public:
 	string name;
 	shared_ptr<PreparedStatementData> prepared;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BOOLEAN);
+	}
+
+	bool RequireOptimizer() const override {
+		if (!prepared->properties.bound_all_parameters) {
+			return false;
+		}
+		return children[0]->RequireOptimizer();
 	}
 };
 } // namespace duckdb

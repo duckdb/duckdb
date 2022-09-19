@@ -66,12 +66,13 @@ inputs:
   python_name:
     description: 'Python binary name because wtf Python'
     default: 'python3'
-  substrait:
-    description: 'Build Substrait'
-    default: 0
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
+  aarch64_cross_compile:
+    description: 'Enable Linux aarch64 cross-compiling'
+    default: 0
+
 runs:
   using: "composite"
   steps:
@@ -87,7 +88,6 @@ runs:
         BUILD_JSON: ${{ inputs.json }}
         BUILD_EXCEL: ${{ inputs.excel }}
         FORCE_32_BIT: ${{ inputs.force_32_bit }}
-        BUILD_SUBSTRAIT_EXTENSION: ${{ inputs.substrait }}
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
         STATIC_OPENSSL: 1
@@ -95,6 +95,8 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
+        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || '' }}
+        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || '' }}
 
       run: |
         ls -al
@@ -108,7 +110,7 @@ runs:
       shell: bash
       run: |
         mkdir -p build/release/extension/out_of_tree
-        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py
+        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py ${{ inputs.aarch64_cross_compile == 1 && '--aarch64-cc' || '' }}
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
@@ -125,8 +127,12 @@ runs:
         DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh ${{ inputs.deploy_as }}
+        if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
+            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
+          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ ]] ; then
+            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
+          fi
         fi
 
     - name: Test

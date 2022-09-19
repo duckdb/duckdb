@@ -138,7 +138,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	// parse select statement and add to logical plan
-	auto root_select = Bind(*stmt.select_statement);
+	auto select_binder = Binder::CreateBinder(context, this);
+	auto root_select = select_binder->Bind(*stmt.select_statement);
+	MoveCorrelatedExpressions(*select_binder);
+
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 

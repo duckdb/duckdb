@@ -230,7 +230,7 @@ inner join main.observation_period op1
         on tc1.subject_id = op1.person_id
        and tc1.cohort_start_date >= op1.observation_period_start_date
        and tc1.cohort_start_date <= op1.observation_period_end_date
-where cohort_definition_id in (100);
+where cohort_definition_id in (100) order by subject_id, cohort_start_date;
 ----
 100	1	2002-12-25	2002-12-25	1963-12-31	2010-01-01	true	true
 100	1	2007-03-01	2007-03-01	1963-12-31	2010-01-01	true	true

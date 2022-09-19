@@ -39,6 +39,9 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
                                              Value &delimiter_value) {
 	auto new_binder = Binder::CreateBinder(context, this, true);
 	if (delimiter->HasSubquery()) {
+		if (!order_binder.HasExtraList()) {
+			throw BinderException("Subquery in LIMIT/OFFSET not supported in set operation");
+		}
 		return order_binder.CreateExtraReference(move(delimiter));
 	}
 	ExpressionBinder expr_binder(*new_binder, context);
@@ -49,6 +52,8 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 		delimiter_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(type);
 		return nullptr;
 	}
+	// move any correlated columns to this binder
+	MoveCorrelatedExpressions(*new_binder);
 	return expr;
 }
 
@@ -209,7 +214,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			}
 			for (auto &target_distinct : distinct.target_distincts) {
 				auto &bound_colref = (BoundColumnRefExpression &)*target_distinct;
-				auto sql_type = sql_types[bound_colref.binding.column_index];
+				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					target_distinct = ExpressionBinder::PushCollation(context, move(target_distinct),
 					                                                  StringType::GetCollation(sql_type), true);
@@ -239,7 +244,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 					throw BinderException("Ambiguous name in ORDER BY!");
 				}
 				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
-				auto sql_type = sql_types[bound_colref.binding.column_index];
+				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					order_node.expression = ExpressionBinder::PushCollation(context, move(order_node.expression),

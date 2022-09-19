@@ -60,8 +60,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 		auto &vector = perfect_hash_table[i];
 		D_ASSERT(vector.GetType() == ht.build_types[i]);
 		const auto col_no = ht.condition_types.size() + i;
-		const auto col_offset = ht.layout.GetOffsets()[col_no];
-		RowOperations::Gather(tuples_addresses, sel_tuples, vector, sel_build, keys_count, col_offset, col_no,
+		RowOperations::Gather(tuples_addresses, sel_tuples, vector, sel_build, keys_count, ht.layout, col_no,
 		                      build_size);
 	}
 	return true;

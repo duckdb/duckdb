@@ -168,7 +168,7 @@ string OdbcUtils::GetQueryDuckdbColumns(const string &catalog_filter, const stri
 	if (!schema_filter.empty()) {
 		sql_duckdb_columns += schema_filter + " AND ";
 	}
-	if (table_filter.empty()) {
+	if (!table_filter.empty()) {
 		sql_duckdb_columns += table_filter + " AND ";
 	}
 	sql_duckdb_columns += column_filter;

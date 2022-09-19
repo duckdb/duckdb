@@ -31,8 +31,29 @@ struct ConnectTask : public Task {
 
 	void DoWork() override {
 		auto &connection = Get<Connection>();
+		if (!connection.database_ref || !connection.database_ref->database) {
+			return;
+		}
 		connection.connection = duckdb::make_unique<duckdb::Connection>(*connection.database_ref->database);
+		success = true;
 	}
+	void Callback() override {
+		auto &connection = Get<Connection>();
+		Napi::Env env = connection.Env();
+
+		std::vector<napi_value> args;
+		if (!success) {
+			args.push_back(Utils::CreateError(env, "Invalid database object"));
+		} else {
+			args.push_back(env.Null());
+		}
+
+		Napi::HandleScope scope(env);
+
+		callback.Value().MakeCallback(connection.Value(), args);
+	}
+
+	bool success = false;
 };
 
 Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connection>(info) {
@@ -78,7 +99,7 @@ struct JSArgs {
 	duckdb::DataChunk *args;
 	duckdb::Vector *result;
 	bool done;
-	std::string error;
+	duckdb::PreservedError error;
 };
 
 void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *, JSArgs *jsargs) {
@@ -188,8 +209,10 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 			}
 		}
 		}
+	} catch (const duckdb::Exception &e) {
+		jsargs->error = duckdb::PreservedError(e);
 	} catch (const std::exception &e) {
-		jsargs->error = e.what();
+		jsargs->error = duckdb::PreservedError(e);
 	}
 	jsargs->done = true;
 }
@@ -219,8 +242,8 @@ struct RegisterTask : public Task {
 			while (!jsargs.done) {
 				std::this_thread::yield();
 			}
-			if (!jsargs.error.empty()) {
-				throw duckdb::IOException(jsargs.error);
+			if (jsargs.error) {
+				jsargs.error.Throw();
 			}
 		};
 
@@ -327,18 +350,17 @@ struct ExecTask : public Task {
 				return;
 			}
 
-			// thanks Mark
 			for (duckdb::idx_t i = 0; i < statements.size(); i++) {
 				auto res = connection.connection->Query(move(statements[i]));
-				if (!res->success) {
+				if (res->HasError()) {
 					success = false;
-					error = res->error;
+					error = res->GetErrorObject();
 					break;
 				}
 			}
 		} catch (duckdb::ParserException &e) {
 			success = false;
-			error = e.what();
+			error = duckdb::PreservedError(e);
 			return;
 		}
 	}
@@ -346,12 +368,12 @@ struct ExecTask : public Task {
 	void Callback() override {
 		auto env = object.Env();
 		Napi::HandleScope scope(env);
-		callback.Value().MakeCallback(object.Value(), {success ? env.Null() : Napi::String::New(env, error)});
+		callback.Value().MakeCallback(object.Value(), {success ? env.Null() : Napi::String::New(env, error.Message())});
 	};
 
 	std::string sql;
 	bool success;
-	std::string error;
+	duckdb::PreservedError error;
 };
 
 Napi::Value Connection::Exec(const Napi::CallbackInfo &info) {

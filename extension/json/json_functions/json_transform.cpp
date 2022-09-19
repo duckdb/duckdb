@@ -390,6 +390,10 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 	// Transform
 	Transform(vals, result, count, strict);
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformFunction() {

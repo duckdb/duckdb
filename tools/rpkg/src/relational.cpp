@@ -76,7 +76,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 // DuckDB Relations
 
 [[cpp11::register]] SEXP rapi_rel_from_df(duckdb::conn_eptr_t con, data_frame df) {
-	if (!con->conn) {
+	if (!con || !con.get() || !con->conn) {
 		stop("rel_from_df: Invalid connection");
 	}
 	if (df.size() == 0) {
@@ -196,8 +196,8 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 }
 
 static SEXP result_to_df(unique_ptr<QueryResult> res) {
-	if (!res->success) {
-		stop(res->error);
+	if (res->HasError()) {
+		stop(res->GetError());
 	}
 	if (res->type == QueryResultType::STREAM_RESULT) {
 		res = ((StreamQueryResult &)*res).Materialize();
@@ -207,7 +207,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 
 	writable::integers row_names;
 	row_names.push_back(NA_INTEGER);
-	row_names.push_back(-mat_res->collection.Count());
+	row_names.push_back(-mat_res->RowCount());
 
 	// TODO this thing we can probably statically cache
 	writable::strings classes;
@@ -243,8 +243,8 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 
 [[cpp11::register]] SEXP rapi_rel_sql(duckdb::rel_extptr_t rel, std::string sql) {
 	auto res = rel->rel->Query("_", sql);
-	if (!res->success) {
-		stop(res->error);
+	if (res->HasError()) {
+		stop(res->GetError());
 	}
 	return result_to_df(move(res));
 }

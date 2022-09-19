@@ -15,14 +15,36 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Install Extension
 //===--------------------------------------------------------------------===//
-const vector<string> ExtensionHelper::PathComponents() {
-	return vector<string> {".duckdb", "extensions", DuckDB::SourceID(), DuckDB::Platform()};
+const string ExtensionHelper::NormalizeVersionTag(const string &version_tag) {
+	if (version_tag.length() > 0 && version_tag[0] != 'v') {
+		return "v" + version_tag;
+	}
+	return version_tag;
 }
 
-string ExtensionHelper::ExtensionDirectory(FileSystem &fs) {
-	string local_path = fs.GetHomeDirectory();
+bool ExtensionHelper::IsRelease(const string &version_tag) {
+	return !StringUtil::Contains(version_tag, "-dev");
+}
+
+const string ExtensionHelper::GetVersionDirectoryName() {
+	if (IsRelease(DuckDB::LibraryVersion())) {
+		return NormalizeVersionTag(DuckDB::LibraryVersion());
+	} else {
+		return DuckDB::SourceID();
+	}
+}
+
+const vector<string> ExtensionHelper::PathComponents() {
+	return vector<string> {".duckdb", "extensions", GetVersionDirectoryName(), DuckDB::Platform()};
+}
+
+string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	string local_path = fs.GetHomeDirectory(FileSystem::GetFileOpener(context));
 	if (!fs.DirectoryExists(local_path)) {
-		throw InternalException("Can't find the home directory at " + local_path);
+		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
+		                  "home_directory='/path/to/dir' option.",
+		                  local_path);
 	}
 	auto path_components = PathComponents();
 	for (auto &path_ele : path_components) {
@@ -34,14 +56,14 @@ string ExtensionHelper::ExtensionDirectory(FileSystem &fs) {
 	return local_path;
 }
 
-void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &extension, bool force_install) {
-	auto &config = DBConfig::GetConfig(db);
+void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install) {
+	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Installing extensions is disabled through configuration");
 	}
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetFileSystem(context);
 
-	string local_path = ExtensionDirectory(fs);
+	string local_path = ExtensionDirectory(context);
 
 	auto extension_name = fs.ExtractBaseName(extension);
 
@@ -86,7 +108,7 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 		extension_name = "";
 	}
 
-	auto url = StringUtil::Replace(url_template, "${REVISION}", DuckDB::SourceID());
+	auto url = StringUtil::Replace(url_template, "${REVISION}", GetVersionDirectoryName());
 	url = StringUtil::Replace(url, "${PLATFORM}", DuckDB::Platform());
 	url = StringUtil::Replace(url, "${NAME}", extension_name);
 

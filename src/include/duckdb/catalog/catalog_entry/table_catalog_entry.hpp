@@ -30,6 +30,8 @@ struct RemoveColumnInfo;
 struct SetDefaultInfo;
 struct ChangeColumnTypeInfo;
 struct AlterForeignKeyInfo;
+struct SetNotNullInfo;
+struct DropNotNullInfo;
 
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
@@ -59,14 +61,17 @@ public:
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
 	ColumnDefinition &GetColumn(const string &name);
-	//! Returns a list of types of the table
+	//! Returns a list of types of the table, excluding generated columns
 	vector<LogicalType> GetTypes();
 	string ToSQL() override;
+
+	//! Get statistics of a column (physical or virtual) within the table
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
 
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
-	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source);
+	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source, ClientContext &context);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
 
@@ -77,8 +82,8 @@ public:
 
 	//! Returns the column index of the specified column name.
 	//! If the column does not exist:
-	//! If if_exists is true, returns DConstants::INVALID_INDEX
-	//! If if_exists is false, throws an exception
+	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
+	//! If if_column_exists is false, throws an exception
 	column_t GetColumnIndex(string &name, bool if_exists = false);
 
 private:
@@ -88,6 +93,9 @@ private:
 	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);
 	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo &info);
 	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
-	unique_ptr<CatalogEntry> SetForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
+	unique_ptr<CatalogEntry> SetNotNull(ClientContext &context, SetNotNullInfo &info);
+	unique_ptr<CatalogEntry> DropNotNull(ClientContext &context, DropNotNullInfo &info);
+	unique_ptr<CatalogEntry> AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
+	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 };
 } // namespace duckdb

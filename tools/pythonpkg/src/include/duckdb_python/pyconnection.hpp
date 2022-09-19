@@ -46,9 +46,7 @@ public:
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 
-	static shared_ptr<DuckDBPyConnection> Enter(DuckDBPyConnection &self,
-	                                            const string &database = ":memory:", bool read_only = false,
-	                                            const py::dict &config = py::dict());
+	DuckDBPyConnection *Enter();
 
 	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
 	                 const py::object &traceback);
@@ -60,10 +58,9 @@ public:
 
 	DuckDBPyConnection *Execute(const string &query, py::object params = py::list(), bool many = false);
 
-	DuckDBPyConnection *Append(const string &name, data_frame value);
+	DuckDBPyConnection *Append(const string &name, DataFrame value);
 
-	DuckDBPyConnection *RegisterPythonObject(const string &name, py::object python_object,
-	                                         const idx_t rows_per_tuple = 100000);
+	DuckDBPyConnection *RegisterPythonObject(const string &name, py::object python_object);
 
 	void InstallExtension(const string &extension, bool force_install = false);
 
@@ -74,19 +71,19 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
-	unique_ptr<DuckDBPyRelation> Values(py::object params = py::list());
+	unique_ptr<DuckDBPyRelation> Values(py::object params = py::none());
 
 	unique_ptr<DuckDBPyRelation> View(const string &vname);
 
 	unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list());
 
-	unique_ptr<DuckDBPyRelation> FromDF(const data_frame &value);
+	unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &value);
 
 	unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string);
 
-	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object, const idx_t rows_per_tuple = 1000000);
+	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
 	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
 
@@ -114,18 +111,20 @@ public:
 	// these should be functions on the result but well
 	py::object FetchOne();
 
+	py::list FetchMany(idx_t size);
+
 	py::list FetchAll();
 
 	py::dict FetchNumpy();
-	data_frame FetchDF();
+	DataFrame FetchDF();
 
-	data_frame FetchDFChunk(const idx_t vectors_per_chunk = 1) const;
+	DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1) const;
 
-	py::object FetchArrow(idx_t chunk_size);
+	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
 
-	py::object FetchRecordBatchReader(const idx_t chunk_size) const;
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 

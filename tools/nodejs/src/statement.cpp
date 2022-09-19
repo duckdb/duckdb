@@ -40,8 +40,8 @@ struct PrepareTask : public Task {
 		Napi::HandleScope scope(env);
 
 		auto cb = callback.Value();
-		if (!statement.statement->success) {
-			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
+		if (statement.statement->HasError()) {
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error.Message())});
 			return;
 		}
 		cb.MakeCallback(statement.Value(), {env.Null(), statement.Value()});
@@ -139,17 +139,35 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 	case duckdb::LogicalTypeId::BOOLEAN: {
 		value = Napi::Boolean::New(env, duckdb::BooleanValue::Get(dval));
 	} break;
+	case duckdb::LogicalTypeId::TINYINT: {
+		value = Napi::Number::New(env, duckdb::TinyIntValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::SMALLINT: {
+		value = Napi::Number::New(env, duckdb::SmallIntValue::Get(dval));
+	} break;
 	case duckdb::LogicalTypeId::INTEGER: {
 		value = Napi::Number::New(env, duckdb::IntegerValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::BIGINT: {
+		value = Napi::Number::New(env, duckdb::BigIntValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::UTINYINT: {
+		value = Napi::Number::New(env, duckdb::UTinyIntValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::USMALLINT: {
+		value = Napi::Number::New(env, duckdb::USmallIntValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::UINTEGER: {
+		value = Napi::Number::New(env, duckdb::UIntegerValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::UBIGINT: {
+		value = Napi::Number::New(env, duckdb::UBigIntValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::FLOAT: {
 		value = Napi::Number::New(env, duckdb::FloatValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::DOUBLE: {
 		value = Napi::Number::New(env, duckdb::DoubleValue::Get(dval));
-	} break;
-	case duckdb::LogicalTypeId::BIGINT: {
-		value = Napi::Number::New(env, duckdb::BigIntValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::HUGEINT: {
 		value = Napi::Number::New(env, dval.GetValue<double>());
@@ -253,7 +271,7 @@ struct RunPreparedTask : public Task {
 	void DoWork() override {
 		auto &statement = Get<Statement>();
 		// ignorant folk arrive here without caring about the prepare callback error
-		if (!statement.statement || !statement.statement->success) {
+		if (!statement.statement || statement.statement->HasError()) {
 			return;
 		}
 
@@ -271,12 +289,12 @@ struct RunPreparedTask : public Task {
 			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, "statement was finalized")});
 			return;
 		}
-		if (!statement.statement->success) {
-			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
+		if (statement.statement->HasError()) {
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->GetError())});
 			return;
 		}
-		if (!result->success) {
-			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, result->error)});
+		if (result->HasError()) {
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, result->GetError())});
 			return;
 		}
 
@@ -311,7 +329,7 @@ struct RunPreparedTask : public Task {
 		}
 		case RunType::ALL: {
 			auto materialized_result = (duckdb::MaterializedQueryResult *)result.get();
-			Napi::Array result_arr(Napi::Array::New(env, materialized_result->collection.Count()));
+			Napi::Array result_arr(Napi::Array::New(env, materialized_result->RowCount()));
 
 			duckdb::idx_t out_idx = 0;
 			while (true) {
@@ -346,7 +364,7 @@ struct RunQueryTask : public Task {
 
 	void DoWork() override {
 		auto &statement = Get<Statement>();
-		if (!statement.statement || !statement.statement->success) {
+		if (!statement.statement || statement.statement->HasError()) {
 			return;
 		}
 
@@ -360,10 +378,10 @@ struct RunQueryTask : public Task {
 
 		if (!statement.statement) {
 			deferred.Reject(Utils::CreateError(env, "statement was finalized"));
-		} else if (!statement.statement->success) {
-			deferred.Reject(Utils::CreateError(env, statement.statement->error));
-		} else if (!result->success) {
-			deferred.Reject(Utils::CreateError(env, result->error));
+		} else if (statement.statement->HasError()) {
+			deferred.Reject(Utils::CreateError(env, statement.statement->GetError()));
+		} else if (result->HasError()) {
+			deferred.Reject(Utils::CreateError(env, result->GetError()));
 		} else {
 			auto db = statement.connection_ref->database_ref->Value();
 			auto query_result = QueryResult::constructor.New({db});

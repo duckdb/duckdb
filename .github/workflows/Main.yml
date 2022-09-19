@@ -41,7 +41,6 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_PARQUET: 1
-      BUILD_SUBSTRAIT_EXTENSION: 1
       GEN: ninja
 
     steps:
@@ -394,7 +393,7 @@ jobs:
       shell: bash
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout d4d9097b87c46ddee5c8ae015c3ea27a6bd8938e && make debug)
+        (cd psqlodbc && git checkout 50097b950e6cbdfaaf13208fbc7160538f796912 && make debug)
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main

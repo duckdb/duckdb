@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "duckdb/planner/operator/logical_chunk_get.hpp"
+#include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -34,7 +34,6 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar
 	for (idx_t i = 1; i < expr.children.size(); i++) {
-		D_ASSERT(expr.children[i]->return_type == in_type);
 		if (!expr.children[i]->IsFoldable()) {
 			// non-scalar expression
 			all_scalar = false;
@@ -63,9 +62,12 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	}
 	// IN clause with many constant children
 	// generate a mark join that replaces this IN expression
-	// first generate a ChunkCollection from the set of expressions
+	// first generate a ColumnDataCollection from the set of expressions
 	vector<LogicalType> types = {in_type};
-	auto collection = make_unique<ChunkCollection>(context);
+	auto collection = make_unique<ColumnDataCollection>(context, types);
+	ColumnDataAppendState append_state;
+	collection->InitializeAppend(append_state);
+
 	DataChunk chunk;
 	chunk.Initialize(context, types);
 	for (idx_t i = 1; i < expr.children.size(); i++) {
@@ -76,13 +78,13 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		chunk.SetValue(0, index, value);
 		if (chunk.size() == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
 			// chunk full: append to chunk collection
-			collection->Append(chunk);
+			collection->Append(append_state, chunk);
 			chunk.Reset();
 		}
 	}
 	// now generate a ChunkGet that scans this collection
 	auto chunk_index = optimizer.binder.GenerateTableIndex();
-	auto chunk_scan = make_unique<LogicalChunkGet>(chunk_index, types, move(collection));
+	auto chunk_scan = make_unique<LogicalColumnDataGet>(chunk_index, types, move(collection));
 
 	// then we generate the MARK join with the chunk scan on the RHS
 	auto join = make_unique<LogicalComparisonJoin>(JoinType::MARK);
