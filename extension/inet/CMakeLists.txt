@@ -4,8 +4,7 @@ project(INETExtension)
 
 include_directories(include)
 
-set(INET_EXTENSION_FILES
-    inet-extension.cpp)
+set(INET_EXTENSION_FILES inet-extension.cpp)
 
 add_library(inet_extension STATIC ${INET_EXTENSION_FILES})
 set(INGORE_WARNINGS OFF)

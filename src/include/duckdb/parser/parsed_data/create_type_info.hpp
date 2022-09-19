@@ -18,10 +18,9 @@ namespace duckdb {
 struct CreateTypeInfo : public CreateInfo {
 	CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY) {
 	}
-	CreateTypeInfo(string name_p, LogicalType type_p) :
-	    CreateInfo(CatalogType::TYPE_ENTRY), name(move(name_p)), type(move(type_p)) {
+	CreateTypeInfo(string name_p, LogicalType type_p)
+	    : CreateInfo(CatalogType::TYPE_ENTRY), name(move(name_p)), type(move(type_p)) {
 	}
-
 
 	//! Name of the Type
 	string name;
