@@ -145,7 +145,7 @@ static void SetInvalidRecursive(Vector &out, idx_t index) {
 }
 
 //! 'count' is the amount of rows in the 'out' vector
-//! offset is the current row number within this vector
+//! 'offset' is the current row number within this vector
 void ScanPandasObject(PandasColumnBindData &bind_data, PyObject *object, idx_t offset, Vector &out) {
 
 	// handle None
@@ -192,12 +192,15 @@ void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx
 	auto gil = make_unique<PythonGILWrapper>(); // We're creating python objects here, so we need the GIL
 
 	for (idx_t i = 0; i < count; i++) {
-		ScanPandasObject(bind_data, col[i], i, out);
+		idx_t source_idx = offset + i;
+		ScanPandasObject(bind_data, col[source_idx], i, out);
 	}
 	gil.reset();
 	VerifyTypeConstraints(out, count);
 }
 
+//! 'offset' is the offset within the column
+//! 'count' is the amount of values we will convert in this batch
 void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
                                      Vector &out) {
 	switch (bind_data.pandas_type) {

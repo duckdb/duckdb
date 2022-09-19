@@ -7,15 +7,6 @@ require vector_size 1024
 require skip_reload
 
 statement ok
-CREATE TABLE t0(c0 AS (1));
-
-statement ok
-VACUUM t0;
-
-statement ok
-DROP TABLE t0;
-
-statement ok
 CREATE TABLE test (x INT, y AS (x + 100));
 
 # Error: Vacuum the same column twice
