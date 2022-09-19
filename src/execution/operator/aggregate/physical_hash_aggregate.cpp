@@ -9,7 +9,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
@@ -168,16 +168,15 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 	}
 }
 
-class HashAggregateFinalizeEvent : public Event {
+class HashAggregateFinalizeEvent : public BasePipelineEvent {
 public:
 	HashAggregateFinalizeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p,
 	                           Pipeline *pipeline_p)
-	    : Event(pipeline_p->executor), op(op_p), gstate(gstate_p), pipeline(pipeline_p) {
+	    : BasePipelineEvent(*pipeline_p), op(op_p), gstate(gstate_p) {
 	}
 
 	const PhysicalHashAggregate &op;
 	HashAggregateGlobalState &gstate;
-	Pipeline *pipeline;
 
 public:
 	void Schedule() override {

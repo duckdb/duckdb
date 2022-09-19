@@ -63,7 +63,12 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 		if (exponent_type == PyDecimalExponentType::EXPONENT_POWER) {
 			width += scale;
 		}
-		if (width > Decimal::MAX_WIDTH_INT64) {
+		if (scale > width) {
+			//! The value starts with 1 or more zeros, which are optimized out of the 'digits' array
+			//! 0.001 - width=1, exponent=-3
+			width = scale + 1; // DECIMAL(4,3) - add 1 for the non-decimal values
+		}
+		if (width > Decimal::MAX_WIDTH_INT128) {
 			return false;
 		}
 		type = LogicalType::DECIMAL(width, scale);
@@ -116,7 +121,21 @@ void PyDecimal::SetExponent(py::handle &exponent) {
 static void UnsupportedWidth(uint16_t width) {
 	throw ConversionException(
 	    "Failed to convert to a DECIMAL value with a width of %d because it exceeds the max supported with of %d",
-	    width, Decimal::MAX_WIDTH_INT64);
+	    width, Decimal::MAX_WIDTH_INT128);
+}
+
+template <class OP>
+Value PyDecimalCastSwitch(PyDecimal &decimal, uint8_t width, uint8_t scale) {
+	if (width > DecimalWidth<int64_t>::max) {
+		return OP::template Operation<hugeint_t>(decimal.signed_value, decimal.digits, width, scale);
+	}
+	if (width > DecimalWidth<int32_t>::max) {
+		return OP::template Operation<int64_t>(decimal.signed_value, decimal.digits, width, scale);
+	}
+	if (width > DecimalWidth<int16_t>::max) {
+		return OP::template Operation<int32_t>(decimal.signed_value, decimal.digits, width, scale);
+	}
+	return OP::template Operation<int16_t>(decimal.signed_value, decimal.digits, width, scale);
 }
 
 Value PyDecimal::ToDuckValue() {
@@ -124,39 +143,22 @@ Value PyDecimal::ToDuckValue() {
 	switch (exponent_type) {
 	case PyDecimalExponentType::EXPONENT_SCALE: {
 		uint8_t scale = exponent_value;
-		if (width > Decimal::MAX_WIDTH_INT64) {
+		if (width > Decimal::MAX_WIDTH_INT128) {
 			UnsupportedWidth(width);
 		}
-		int64_t value = 0;
-		for (auto it = digits.begin(); it != digits.end(); it++) {
-			value = value * 10 + *it;
+		if (scale > width) {
+			//! Values like '0.001'
+			width = scale + 1; //! leave 1 room for the non-decimal value
 		}
-		if (signed_value) {
-			value = -value;
-		}
-		return Value::DECIMAL(value, width, scale);
+		return PyDecimalCastSwitch<PyDecimalScaleConverter>(*this, width, scale);
 	}
 	case PyDecimalExponentType::EXPONENT_POWER: {
 		uint8_t scale = exponent_value;
 		width += scale;
-		if (width > Decimal::MAX_WIDTH_INT64) {
+		if (width > Decimal::MAX_WIDTH_INT128) {
 			UnsupportedWidth(width);
 		}
-		int64_t value = 0;
-		for (auto &digit : digits) {
-			value = value * 10 + digit;
-		}
-		D_ASSERT(scale >= 0);
-		int64_t multiplier =
-		    NumericHelper::POWERS_OF_TEN[MinValue<uint8_t>(scale, NumericHelper::CACHED_POWERS_OF_TEN - 1)];
-		for (auto power = scale; power > NumericHelper::CACHED_POWERS_OF_TEN; power--) {
-			multiplier *= 10;
-		}
-		value *= multiplier;
-		if (signed_value) {
-			value = -value;
-		}
-		return Value::DECIMAL(value, width, scale);
+		return PyDecimalCastSwitch<PyDecimalPowerConverter>(*this, width, scale);
 	}
 	case PyDecimalExponentType::EXPONENT_NAN: {
 		return Value::FLOAT(NAN);

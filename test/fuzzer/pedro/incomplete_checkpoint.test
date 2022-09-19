@@ -1,0 +1,44 @@
+# name: test/fuzzer/pedro/incomplete_checkpoint.test
+# description: Issue #4644: Incomplete checkpoints issue
+# group: [pedro]
+
+load __TEST_DIR__/incomplete_checkpoint.db
+
+require skip_reload
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CHECKPOINT;
+
+statement ok
+DROP SCHEMA s1;
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PRAGMA DEBUG_CHECKPOINT_ABORT = 'after_free_list_write';
+
+statement ok
+CREATE SCHEMA s3;
+
+# error IO Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
+statement error
+CHECKPOINT;
+
+# error IO Error: Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
+statement error
+CHECKPOINT;
+
+restart
+
+statement ok
+CREATE TABLE s3.integers(i INTEGER)
