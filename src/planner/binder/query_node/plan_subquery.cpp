@@ -1,3 +1,5 @@
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -6,13 +8,11 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/planner/subquery/flatten_dependent_join.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
-#include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/main/client_config.hpp"
+#include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 
 namespace duckdb {
 
@@ -265,7 +265,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, move(root), perform_delim);
 		delim_join->mark_index = mark_index;
 		// RHS
-		FlattenDependentJoins flatten(binder, correlated_columns, perform_delim);
+		FlattenDependentJoins flatten(binder, correlated_columns, perform_delim, true);
 		flatten.DetectCorrelatedExpressions(plan.get());
 		auto dependent_join = flatten.PushDownDependentJoin(move(plan));
 
@@ -292,7 +292,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, move(root), perform_delim);
 		delim_join->mark_index = mark_index;
 		// RHS
-		FlattenDependentJoins flatten(binder, correlated_columns, true);
+		FlattenDependentJoins flatten(binder, correlated_columns, true, true);
 		flatten.DetectCorrelatedExpressions(plan.get());
 		auto dependent_join = flatten.PushDownDependentJoin(move(plan));
 
