@@ -1,0 +1,24 @@
+# name: test/sql/inet/test_inet_type.test
+# description: Test inet type
+# group: [inet]
+
+require inet
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT '127.0.0.1'::INET
+----
+127.0.0.1
+
+query I
+select '127.000.0000.1'::inet;
+----
+127.0.0.1
+
+statement error
+select '127'::inet;
+
+statement error
+select '127..1'::inet;
