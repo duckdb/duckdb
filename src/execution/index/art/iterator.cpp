@@ -204,7 +204,7 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 		for (idx_t i = 0; i < top.node->prefix.Size(); i++) {
 			cur_key.Push(top.node->prefix[i]);
 		}
-        // greater case: find leftmost leaf node directly
+		// greater case: find leftmost leaf node directly
 		if (!equal) {
 			while (node->type != NodeType::NLeaf) {
 				auto min_pos = node->GetMin();
@@ -254,7 +254,7 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 			}
 			return false;
 		}
-        // equal case:
+		// equal case:
 		uint32_t mismatch_pos = node->prefix.KeyMismatchPosition(key, depth);
 		if (mismatch_pos != node->prefix.Size()) {
 			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
@@ -275,8 +275,8 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 		depth += node->prefix.Size();
 
 		top.pos = node->GetChildGreaterEqual(key[depth], equal);
-        // The maximum key byte of the current node is less than the key
-        // So fall back to the previous node
+		// The maximum key byte of the current node is less than the key
+		// So fall back to the previous node
 		if (top.pos == DConstants::INVALID_INDEX) {
 			auto cur_node = top.node;
 			idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
