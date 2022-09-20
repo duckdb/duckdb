@@ -165,7 +165,7 @@ public:
 //! Check if the returned value is NAN_LONG, in which case set the end_of_stream to true
 //! And return from the method
 #define RETURN_IF_EOF(x) do { \
-  if ((x) == NAN_LONG) { state.end_of_stream = true; return;} \
+  if ((x) == NAN_LONG) { state.end_of_stream = true; return false;} \
 } while (0)
 
 struct StoredZeros {
@@ -178,7 +178,8 @@ public:
 	Chimp128DecompressionState(uint64_t* input_stream, size_t stream_size) :
 		input(input_stream, stream_size),
 		reference_value(0),
-		initial_fill()
+		initial_fill(),
+		first(true)
 	{
 		SetLeadingZeros();
 		SetTrailingZeros();
@@ -208,11 +209,11 @@ public:
 	RingBuffer	ring_buffer;
 
 	bool end_of_stream = false;
-	std::queue<uint64_t> output_values;
 	int32_t initial_fill;
+	bool first;
 };
 
-
+template <class RETURN_TYPE>
 struct Chimp128Decompression {
 public:
 	//! Index value is between 1 and 127, so it's saved in 7 bits at most
@@ -239,28 +240,25 @@ public:
 		significant_bits = packed_data & SIGNIFICANT_MASK;
 	}
 
-	template <bool FIRST = false>
-	static void Load(Chimp128DecompressionState& state) {
-		if (FIRST) {
-			LoadFirst(state);
+	static RETURN_TYPE Load(RETURN_TYPE &value, Chimp128DecompressionState& state) {
+		if (state.first) {
+			return LoadFirst(value, state);
 		}
 		else {
-			DecompressValue(state);
+			return DecompressValue(value, state);
 		}
 	}
 
-	static void LoadFirst(Chimp128DecompressionState& state) {
-		uint64_t value = state.input.template ReadValue<uint64_t>();
-		state.output_values.push(value);
+	static bool LoadFirst(RETURN_TYPE &value, Chimp128DecompressionState& state) {
+		value = state.input.template ReadValue<RETURN_TYPE>();
 		state.ring_buffer.Insert(value);
-		if (value == NAN_LONG) {
-			state.end_of_stream = true;
-		}
+		state.first = false;
+		RETURN_IF_EOF(value);
+		return true;
 	}
 
-	static void DecompressValue(Chimp128DecompressionState& state) {
+	static bool DecompressValue(RETURN_TYPE &value, Chimp128DecompressionState& state) {
 		auto flag = state.input.template ReadValue<uint8_t, 2>();
-		uint64_t value;
 		switch (flag) {
 		case LEADING_ZERO_LOAD: {
 			auto deserialized_leading_zeros = state.input.template ReadValue<uint8_t, LEADING_BITS_SIZE>();
@@ -309,6 +307,7 @@ public:
 			//! This should not happen, value isn't properly (de)serialized if it does
 			assert(flag != 0);
 		}
+		return true;
 	}
 
 };

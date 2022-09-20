@@ -43,7 +43,6 @@ public:
 		return (stream_index * INTERNAL_TYPE_BITSIZE) + (INTERNAL_TYPE_BITSIZE - free_bits);
 	}
 
-	//! Hopefully the compiler can unroll this since VALUE_SIZE is known at compile time?
 	template <class T, uint8_t VALUE_SIZE>
 	void WriteValue(T value) {
 		bits_written += VALUE_SIZE;
@@ -77,7 +76,6 @@ public:
 		if (i > 15) WriteInCurrent<INTERNAL_TYPE_BITSIZE>((INTERNAL_TYPE)(value >> 8));
 		if (i > 7) WriteInCurrent<INTERNAL_TYPE_BITSIZE>(value);
 	}
-	//TODO: optimize this to be unrolled?
 	template <class T>
 	void WriteValue(T value, uint8_t value_size) {
 		bits_written += value_size;

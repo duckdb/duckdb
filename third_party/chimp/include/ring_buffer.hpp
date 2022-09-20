@@ -19,7 +19,7 @@ public:
 		if (!FIRST) {
 			index++;
 		}
-		printf("FIRST = %s | INSERTED_VALUE: %f\n", FIRST ? "True" : "False", value);
+		printf("FIRST = %s | INSERTED_VALUE: %llu\n", FIRST ? "True" : "False", value);
 		buffer[index % RING_SIZE] = value;
 		indices[IndexOf(Key(value))] = index;
 	}
