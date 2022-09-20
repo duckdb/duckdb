@@ -151,6 +151,7 @@ void Iterator::PopNode() {
 	auto cur_node = nodes.top();
 	idx_t elements_to_pop = cur_node.node->prefix.Size() + (nodes.size() != 1);
 	cur_key.Pop(elements_to_pop);
+	nodes.pop();
 }
 
 bool Iterator::Next() {
