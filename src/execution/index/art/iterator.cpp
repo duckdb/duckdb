@@ -147,14 +147,18 @@ bool Iterator::Scan(Key *bound, idx_t max_count, vector<row_t> &result_ids, bool
 	return true;
 }
 
+void Iterator::PopNode() {
+	auto cur_node = nodes.top();
+	idx_t elements_to_pop = cur_node.node->prefix.Size() + (nodes.size() != 1);
+	cur_key.Pop(elements_to_pop);
+}
+
 bool Iterator::Next() {
 	if (!nodes.empty()) {
 		auto cur_node = nodes.top().node;
 		if (cur_node->type == NodeType::NLeaf) {
 			// Pop Leaf (We must pop the prefix size + the key to the node (unless we are popping the root)
-			idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
-			cur_key.Pop(elements_to_pop);
-			nodes.pop();
+			PopNode();
 		}
 	}
 
@@ -182,10 +186,7 @@ bool Iterator::Next() {
 			nodes.push(IteratorEntry(next_node, DConstants::INVALID_INDEX));
 		} else {
 			// no node found: move up the tree and Pop prefix and key of current node
-			auto cur_node = nodes.top().node;
-			idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
-			cur_key.Pop(elements_to_pop);
-			nodes.pop();
+			PopNode();
 		}
 	}
 	return false;
@@ -259,10 +260,7 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 		if (mismatch_pos != node->prefix.Size()) {
 			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
 				// Less
-				auto cur_node = top.node;
-				idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
-				cur_key.Pop(elements_to_pop);
-				nodes.pop();
+				PopNode();
 				return Next();
 			} else {
 				// Greater
@@ -278,10 +276,7 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 		// The maximum key byte of the current node is less than the key
 		// So fall back to the previous node
 		if (top.pos == DConstants::INVALID_INDEX) {
-			auto cur_node = top.node;
-			idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
-			cur_key.Pop(elements_to_pop);
-			nodes.pop();
+			PopNode();
 			return Next();
 		}
 		PushKey(node, top.pos);
