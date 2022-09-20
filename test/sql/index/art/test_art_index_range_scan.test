@@ -1,0 +1,27 @@
+# name: test/sql/index/art/test_art_index_range_scan.test
+# description: Test ART index scan
+# group: [art]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (x VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO test VALUES ('abc');
+
+statement ok
+INSERT INTO test VALUES ('def');
+
+query I
+SELECT * FROM test WHERE x > 'z';
+----
+
+statement ok
+INSERT INTO test VALUES ('abcd');
+
+query I
+SELECT x FROM test WHERE x > 'abce';
+----
+def
