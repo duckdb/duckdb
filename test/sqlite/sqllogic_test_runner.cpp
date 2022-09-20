@@ -1,11 +1,12 @@
 
-#include "catch.hpp"
-
 #include "sqllogic_test_runner.hpp"
-#include "test_helpers.hpp"
+
+#include "catch.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "sqllogic_parser.hpp"
-#include "test_helpers.hpp"
+#ifdef OUT_OF_TREE
+#include EXTENSION_HEADER
+#endif
 #include "test_helper_extension.hpp"
 
 namespace duckdb {
@@ -195,6 +196,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	if (!success) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
+
+#ifdef OUT_OF_TREE
+	db->LoadExtension<duckdb::EXTENSION_CLASS>();
+#endif
 
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
