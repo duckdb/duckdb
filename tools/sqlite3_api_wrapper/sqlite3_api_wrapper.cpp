@@ -446,7 +446,7 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType 
 		return false;
 	}
 	try {
-		val = pStmt->current_chunk->data[iCol].GetValue(pStmt->current_row).DefaultCastAs(target_type);
+		val = pStmt->current_chunk->data[iCol].GetValue(pStmt->current_row).CastAs(*pStmt->db->con->context, target_type);
 	} catch (...) {
 		return false;
 	}
