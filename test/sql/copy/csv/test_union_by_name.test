@@ -1,0 +1,43 @@
+# name: test/sql/copy/csv/test_union_by_name.test
+# description: UNION_BY_NAME test
+# group: [csv]
+
+statement ok
+CREATE TABLE ubn1(a INTEGER);
+
+statement ok
+CREATE TABLE ubn2(a INTEGER, b INTEGER);
+
+statement ok
+CREATE TABLE ubn3(a INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO ubn1 VALUES (1), (2);
+
+statement ok
+INSERT INTO ubn2 VALUES (3,4), (5, 6);
+
+statement ok
+INSERT INTO ubn3 VALUES (100,101), (102, 103);
+
+statement ok
+COPY ubn1 TO '__TEST_DIR__/ubn1.csv' WITH (HEADER 1, DELIMITER ',');
+
+statement ok
+COPY ubn2 TO '__TEST_DIR__/ubn2.csv' WITH (HEADER 1, DELIMITER ',');
+
+statement ok
+COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (HEADER 1, DELIMITER ',');
+
+statement error
+SELECT * FROM '__TEST_DIR__/ubn*.csv';
+
+query II
+SELECT * FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE);
+----
+1	NULL	NULL
+2	NULL	NULL
+3	4	NULL
+5	6	NULL
+100	NULL	101
+102	NULL	103
