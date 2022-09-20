@@ -68,9 +68,17 @@ parse_mask:
 	if (data[c] != '/') {
 		return IPAddressError(input, error_message, "Expected a slash");
 	}
+	c++;
+	start = c;
+	while (c < size && data[c] >= '0' && data[c] <= '9') {
+		c++;
+	}
 	uint8_t mask;
 	if (!TryCast::Operation<string_t, uint8_t>(string_t(data + start, c - start), mask)) {
-		return IPAddressError(input, error_message, "Expected a number between 0 and 255");
+		return IPAddressError(input, error_message, "Expected a number between 0 and 32");
+	}
+	if (mask > 32) {
+		return IPAddressError(input, error_message, "Expected a number between 0 and 32");
 	}
 	result.mask = mask;
 	return true;
