@@ -74,6 +74,12 @@ public:
 		}
 	}
 
+	static void Close(State& state) {
+		if (!EMPTY) {
+			state.output->Flush();
+		}
+	}
+
 	static void WriteFirst(uint64_t in, State& state) {
 		//printf("First value: %f\n", in);
 		state.ring_buffer.template Insert<true>(in);
@@ -209,7 +215,7 @@ public:
 
 	InputBitStream input;
 	StoredZeros zeros;
-	int64_t reference_value = 0;
+	uint64_t reference_value = 0;
 	RingBuffer	ring_buffer;
 
 	bool end_of_stream = false;
@@ -258,6 +264,7 @@ public:
 		printf("value: %lluu\n", value);
 		state.ring_buffer.Insert<true>(value);
 		state.first = false;
+		state.reference_value = value;
 		RETURN_IF_EOF(value);
 		return true;
 	}
@@ -276,8 +283,6 @@ public:
 			printf("value: %llu\n", value);
             value ^= state.reference_value;
 			RETURN_IF_EOF(value);
-			state.reference_value = value;
-			state.ring_buffer.Insert(value);
 			break;
 		}
 		case LEADING_ZERO_EQUALITY: {
@@ -286,8 +291,6 @@ public:
 			printf("value: %llu\n", value);
 			value ^= state.reference_value;
 			RETURN_IF_EOF(value);
-			state.reference_value = value;
-			state.ring_buffer.Insert(value);
 			break;
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
@@ -307,8 +310,6 @@ public:
 			value <<= state.TrailingZeros();
 			value ^= state.reference_value;
 			RETURN_IF_EOF(value);
-			state.reference_value = value;
-			state.ring_buffer.Insert(value);
 			break;
 		}
 		case VALUE_IDENTICAL: {
@@ -317,13 +318,13 @@ public:
 			auto index = state.input.template ReadValue<uint8_t>(INDEX_BITS_SIZE);
 			printf("index: %u\n", (uint32_t)index);
 			value = state.ring_buffer.Value(index);
-			state.reference_value = value;
-			state.ring_buffer.Insert(state.reference_value);
 		}
 		default:
 			//! This should not happen, value isn't properly (de)serialized if it does
 			assert(flag != 0);
 		}
+		state.reference_value = value;
+		state.ring_buffer.Insert(value);
 		return true;
 	}
 

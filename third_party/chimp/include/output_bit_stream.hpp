@@ -30,6 +30,10 @@ public:
 		return bits_written;
 	}
 	
+	void Flush() {
+		WriteToStream();
+	}
+
 	uint64_t* Stream() {
 		return (uint64_t*)stream;
 	}
