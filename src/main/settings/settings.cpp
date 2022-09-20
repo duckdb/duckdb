@@ -436,6 +436,7 @@ static shared_ptr<ProxyUri> SetHttpProxy(DBConfig &config, const string &url) {
 			throw InvalidInputException("Invalid proxy url (only http proxies supported): %s", url);
 		}
 
+		config.options.http_proxy = std::make_shared<ProxyUri>();
 		config.options.http_proxy->username = proxy->get_username();
 		config.options.http_proxy->password = proxy->get_password();
 		config.options.http_proxy->port = proxy->get_port();
