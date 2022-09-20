@@ -20,7 +20,7 @@ statement error
 UPDATE t0 SET c1 = NULL
 
 query T
-SELECT column_name FROM PRAGMA_STORAGE_INFO('t0')
+SELECT column_name FROM PRAGMA_STORAGE_INFO('t0') LIMIT 2
 ----
 c1
 c1
@@ -40,7 +40,7 @@ statement error
 UPDATE t1 SET c0 = NULL
 
 query T
-SELECT column_name FROM PRAGMA_STORAGE_INFO('t1')
+SELECT column_name FROM PRAGMA_STORAGE_INFO('t1') LIMIT 2
 ----
 c0
 c0
