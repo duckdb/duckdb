@@ -1,7 +1,8 @@
 
-#include "sqllogic_test_runner.hpp"
-
 #include "catch.hpp"
+
+#include "sqllogic_test_runner.hpp"
+#include "test_helpers.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "sqllogic_parser.hpp"
 #ifdef OUT_OF_TREE
