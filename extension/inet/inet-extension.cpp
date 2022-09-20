@@ -8,6 +8,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
 #include "inet-extension.hpp"
@@ -43,7 +44,8 @@ parse_number:
 	if (!TryCast::Operation<string_t, uint8_t>(string_t(data + start, c - start), number)) {
 		return IPAddressError(input, error_message, "Expected a number between 0 and 255");
 	}
-	address += number << (8 * number_count);
+	address <<= 8;
+	address += number;
 	number_count++;
 	result.address = address;
 	if (number_count == 4) {
@@ -75,15 +77,18 @@ parse_mask:
 }
 
 static bool VarcharToINETCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+
 	UnifiedVectorFormat vdata;
 	source.ToUnifiedFormat(count, vdata);
 
 	auto &entries = StructVector::GetEntries(result);
 	auto address_data = FlatVector::GetData<hugeint_t>(*entries[0]);
-	auto mask_data = FlatVector::GetData<int32_t>(*entries[1]);
+	auto mask_data = FlatVector::GetData<uint16_t>(*entries[1]);
 
 	auto input = (string_t *)vdata.data;
-	for (idx_t i = 0; i < count; i++) {
+	bool success = true;
+	for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 		auto idx = vdata.sel->get_index(i);
 
 		if (!vdata.validity.RowIsValid(idx)) {
@@ -92,16 +97,60 @@ static bool VarcharToINETCast(Vector &source, Vector &result, idx_t count, CastP
 		}
 		IPAddress inet;
 		if (!TryParseIPAddress(input[idx], inet, parameters.error_message)) {
-			return false;
+			FlatVector::SetNull(result, i, true);
+			success = false;
+			continue;
 		}
 		address_data[i] = inet.address;
 		mask_data[i] = inet.mask;
 	}
-	return true;
+	if (constant) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+	return success;
+}
+
+static string INETToVarchar(IPAddress inet) {
+	string result;
+	for (idx_t i = 0; i < 4; i++) {
+		if (i > 0) {
+			result += ".";
+		}
+		uint8_t byte = Hugeint::Cast<uint8_t>((inet.address >> (3 - i) * 8) & 0xFF);
+		auto str = to_string(byte);
+		result += str;
+	}
+	if (inet.mask != 32) {
+		result += "/" + to_string(inet.mask);
+	}
+	return result;
 }
 
 static bool INETToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	throw InternalException("INET to Varchar cast");
+	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	source.Flatten(count);
+
+	auto &entries = StructVector::GetEntries(source);
+	auto &validity = FlatVector::Validity(source);
+	auto address_data = FlatVector::GetData<hugeint_t>(*entries[0]);
+	auto mask_data = FlatVector::GetData<uint16_t>(*entries[1]);
+	auto result_data = FlatVector::GetData<string_t>(result);
+
+	for (idx_t i = 0; i < (constant ? 1 : count); i++) {
+		if (!validity.RowIsValid(i)) {
+			FlatVector::SetNull(result, i, true);
+			continue;
+		}
+		IPAddress inet;
+		inet.address = address_data[i];
+		inet.mask = mask_data[i];
+		auto str = INETToVarchar(inet);
+		result_data[i] = StringVector::AddString(result, str);
+	}
+	if (constant) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+	return true;
 }
 
 void INETExtension::Load(DuckDB &db) {
@@ -118,6 +167,8 @@ void INETExtension::Load(DuckDB &db) {
 	inet_type.SetAlias("inet");
 
 	CreateTypeInfo info("inet", inet_type);
+	info.temporary = true;
+	info.internal = true;
 	catalog.CreateType(*con.context, &info);
 
 	// add inet casts

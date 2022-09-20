@@ -12,6 +12,8 @@ SELECT '127.0.0.1'::INET::VARCHAR
 ----
 127.0.0.1
 
+mode skip
+
 query I
 SELECT '127.0.0.1'::INET
 ----
