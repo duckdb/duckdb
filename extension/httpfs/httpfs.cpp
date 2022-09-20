@@ -123,16 +123,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
 
-	for(auto it : header_map){
-		std::cout << "key: " << it.first << "value" << it.second << std::endl;
-	}
-
-	for(auto it : *headers){
-		std::cout << "key: " << it.first << "value" << it.second << std::endl;
-	}
-
-	std::cout << "Sending HEAD request\n" << url << "\n" << path << "\n" << proto_host_port << std::endl; 
-
 	auto res = hfs.http_client->Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
@@ -205,17 +195,31 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path, uint8_t flags, 
       file_offset(0), buffer_start(0), buffer_end(0) {
 }
 
-std::unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+std::unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, const string &query_param,
+                                                             uint8_t flags, FileLockType lock,
                                                              FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_unique<HTTPFileHandle>(*this, path, flags,
+	return duckdb::make_unique<HTTPFileHandle>(*this, query_param.empty() ? path : path + "?" + query_param, flags,
 	                                           opener ? HTTPParams::ReadFrom(opener) : HTTPParams());
 }
 
 std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                      FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	auto handle = CreateHandle(path, flags, lock, compression, opener);
+
+	// splitting query params from base path
+	string stripped_path, query_param;
+
+	auto question_pos = path.find('?');
+	if (question_pos == std::string::npos) {
+		stripped_path = path;
+		query_param = "";
+	} else {
+		stripped_path = path.substr(0, question_pos);
+		query_param = path.substr(question_pos + 1);
+	}
+
+	auto handle = CreateHandle(stripped_path, query_param, flags, lock, compression, opener);
 	handle->Initialize();
 	return move(handle);
 }
@@ -343,7 +347,6 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 	InitializeClient();
 
-	std::cout << "INITIALIZE\n";
 	auto &hfs = (HTTPFileSystem &)file_system;
 	auto res = hfs.HeadRequest(*this, path, {});
 
@@ -356,7 +359,6 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 			length = 0;
 			return res;
 		} else {
-			std::cerr << "Error here " << std::endl;
 			throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + std::to_string(res->code) + " (" +
 			                         res->error + ")");
 		}

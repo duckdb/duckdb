@@ -116,8 +116,9 @@ public:
 	static void Verify();
 
 protected:
-	virtual std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
-	                                                     FileCompressionType compression, FileOpener *opener);
+	virtual std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,
+	                                                     FileLockType lock, FileCompressionType compression,
+	                                                     FileOpener *opener);
 };
 
 } // namespace duckdb

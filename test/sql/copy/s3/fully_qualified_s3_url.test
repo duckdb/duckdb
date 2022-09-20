@@ -14,6 +14,7 @@ set ignore_error_messages
 statement ok
 CREATE TABLE test as SELECT * FROM range(0,10) tbl(i);
 
+#set some false credentials to verify query param override
 statement ok
 SET s3_secret_access_key='false_pw';SET s3_access_key_id='false_key';
 
@@ -23,15 +24,6 @@ SET s3_region='eu-west-1'; SET s3_endpoint='duckdb-minio.com:9000'; SET s3_use_s
 #test with .csv file
 statement ok
 COPY test TO 's3://test-bucket/s3_query_params/test.csv?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password' WITH (HEADER 1);
-
-#testing with invalid parameters
-#statement error
-query I
-SELECT i FROM "s3://test-bucket/s3_query_params/test.csv?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password" LIMIT 3
-----
-0
-1
-2
 
 query I
 SELECT i FROM "s3://test-bucket/s3_query_params/test.csv?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password" LIMIT 3
@@ -86,32 +78,76 @@ SELECT T1.i, T2.j FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_
 1	101
 2	102
 
-
-#&s3_region=eu-west-1&s3_endpoint=duckdb-minio.com:9000&s3_use_ssl=false&s3_url_style=path
-
-# #test region param
-# statement ok
-# SET s3_region='false_region';
-
-# statement ok
-# SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password&s3_region=eu-west-1" LIMIT 3
-
-#test endpoint param
-# statement ok
-# SET s3_endpoint='duckdb-minio.com:9000';
-
-# statement ok
-# SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password&s3_region=eu_west_1" LIMIT 3
-
 statement ok
 SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='minio_duckdb_user';
 
+#test region param
 statement ok
-SET s3_region='eu-west-1'; SET s3_endpoint='duckdb-minio.com:9000'; SET s3_use_ssl=false;SET s3_url_style='path';
+SET s3_region='false_region';
+
+statement ok
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1" LIMIT 3
+
+statement ok
+SET s3_region='eu-west-1';
 
 #test endpoint param
-# statement ok
-# SET s3_region='false_region';
+statement ok
+SET s3_endpoint='false_endpoint';
 
 statement ok
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_endpoint=duckdb-minio.com:9000" LIMIT 3
+
+statement ok
+SET s3_endpoint='duckdb-minio.com:9000';
+
+#test secret_access_key
+statement ok
+SET s3_secret_access_key='false_acces_key';
+
+statement ok
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_secret_access_key=minio_duckdb_user_password" LIMIT 3
+
+statement ok
+SET s3_secret_access_key='minio_duckdb_user_password';
+
+#test access_key
+statement ok
+SET s3_access_key_id='false_acces_key_id';
+
+statement ok
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=minio_duckdb_user" LIMIT 3
+
+statement ok
+SET s3_access_key_id='minio_duckdb_user';
+
+#test use_ssl
+statement ok
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_use_ssl=false" LIMIT 3
+
+statement error
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_use_ssl=bla" LIMIT 3
+
+#test url_style
+statement ok
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_url_style=vhost" LIMIT 3
+
+statement ok
+SET s3_url_style='path';
+
+# test combinations
+statement ok
+SET s3_access_key_id='false_id'; SET s3_region='false_region';
+
+statement ok
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1&s3_access_key_id=minio_duckdb_user&s3_endpoint=duckdb-minio.com:9000" LIMIT 3
+
+statement ok
+SET s3_access_key_id='minio_duckdb_user'; SET s3_region='eu-west-1';
+
+# test faulty input
+statement error
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1&s3_access_key_id=incorrect_key_id" LIMIT 3
+
+statement error
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1&bla=bla" LIMIT 3

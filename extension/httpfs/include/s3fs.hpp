@@ -73,12 +73,11 @@ class S3FileHandle : public HTTPFileHandle {
 	friend class S3FileSystem;
 
 public:
-	S3FileHandle(FileSystem &fs, std::string path_p, std::string &stripped_path_p, uint8_t flags, const HTTPParams &http_params,
-	             const S3AuthParams &auth_params_p, const S3ConfigParams &config_params_p)
+	S3FileHandle(FileSystem &fs, std::string path_p, std::string &stripped_path_p, uint8_t flags,
+	             const HTTPParams &http_params, const S3AuthParams &auth_params_p,
+	             const S3ConfigParams &config_params_p)
 	    : HTTPFileHandle(fs, std::move(path_p), flags, http_params), auth_params(auth_params_p),
 	      config_params(config_params_p), stripped_path(stripped_path_p) {
-
-		std::cout << "construct s3 filehandle\n";
 
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
@@ -155,7 +154,7 @@ public:
 
 	void FlushAllBuffers(S3FileHandle &handle);
 
-	void	readQueryParams(string &url, S3AuthParams &params);
+	void readQueryParams(const string &url_query_param, S3AuthParams &params);
 	static ParsedS3Url S3UrlParse(string url, S3AuthParams &params);
 
 	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
@@ -168,8 +167,9 @@ public:
 	vector<string> Glob(const string &glob_pattern, FileOpener *opener = nullptr) override;
 
 protected:
-	std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
-	                                             FileCompressionType compression, FileOpener *opener) override;
+	std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,
+	                                             FileLockType lock, FileCompressionType compression,
+	                                             FileOpener *opener) override;
 
 	void FlushBuffer(S3FileHandle &handle, std::shared_ptr<S3WriteBuffer> write_buffer);
 	string GetPayloadHash(char *buffer, idx_t buffer_len);
