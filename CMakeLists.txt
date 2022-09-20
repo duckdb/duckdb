@@ -248,6 +248,7 @@ option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
 option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
+option(BUILD_ARROW_EXTENSION "Enable building of the Arrow extension." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
@@ -540,6 +541,12 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/sqlsmith/include)
     add_definitions(-DBUILD_SQLSMITH_EXTENSION=${BUILD_SQLSMITH_EXTENSION})
   endif()
+
+  if(${BUILD_ARROW_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/arrow/include)
+    add_definitions(-DBUILD_ARROW_EXTENSION=${BUILD_ARROW_EXTENSION})
+  endif()
+
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -581,6 +588,10 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_SQLSMITH_EXTENSION})
     add_dependencies(${LIBRARY} sqlsmith_extension)
+  endif()
+
+  if(${BUILD_ARROW_EXTENSION})
+    add_dependencies(${LIBRARY} arrow_extension)
   endif()
 
 endfunction()
@@ -629,6 +640,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_SQLSMITH_EXTENSION})
     target_link_libraries(${LIBRARY} sqlsmith_extension)
+  endif()
+
+  if(${BUILD_ARROW_EXTENSION})
+    target_link_libraries(${LIBRARY} arrow_extension)
   endif()
 endfunction()
 
