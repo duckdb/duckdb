@@ -7,22 +7,20 @@ require inet
 statement ok
 PRAGMA enable_verification
 
-#query I
-#SELECT '127.0.0.1'::INET::VARCHAR
-#----
-#127.0.0.1
-#
-#query I
-#SELECT '127.0.0.1/17'::INET::VARCHAR
-#----
-#127.0.0.1/17
+query I
+SELECT '127.0.0.1'::INET::VARCHAR
+----
+127.0.0.1
+
+query I
+SELECT '127.0.0.1/17'::INET::VARCHAR
+----
+127.0.0.1/17
 
 query I
 SELECT '127.0.0.1'::INET
 ----
 127.0.0.1
-
-mode skip
 
 query I
 select '127.000.0000.1'::inet;
@@ -34,8 +32,6 @@ select '127'::inet;
 
 statement error
 select '127..1'::inet;
-
-mode skip
 
 statement error
 SELECT '256.0.0.1'::INET::VARCHAR
