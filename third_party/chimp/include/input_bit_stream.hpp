@@ -40,20 +40,24 @@ public:
 
 		if (LoadedEnough(value_size)) {
 			// Can directly read from current
-			return ReadFromCurrent(value_size);
+			return (T)ReadFromCurrent(value_size);
 		}
 
 		value_size -= fill;
-		value = ReadFromCurrent(fill);
+		// Empty the current bit buffer
+		value = (T)ReadFromCurrent(fill);
 
 		i = value_size >> 3;
 		while(i-- != 0) {
-			value = value << 8 | ReadFromStream();
+			value = value << 8 | (T)ReadFromCurrent(8);
 		}
 
+		// Get the last (< 8) bits of the value
 		value_size &= 7;
-
-		return (value << value_size) | ReadFromCurrent(value_size);
+		if (value_size) {
+			(value << value_size) | ReadFromCurrent(value_size);
+		}
+		return value;
 	}
 private:
 
@@ -86,7 +90,8 @@ private:
 	uint32_t ReadFromCurrent(uint8_t value_size) {
 		assert(fill >= value_size);
 		const auto shift_amount = fill - value_size;
-		uint32_t result = current >> shift_amount & bitmask<uint64_t>(value_size);
+		const auto mask = bitmask<uint32_t>(value_size);
+		uint32_t result = (current >> shift_amount) & mask;
 		DecreaseLoadedBits(value_size);
 		return result;
 	}
