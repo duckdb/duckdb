@@ -60,7 +60,6 @@ public:
 	Node *tree;
 
 	DatabaseInstance &db;
-	ArenaAllocator arena;
 
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate
