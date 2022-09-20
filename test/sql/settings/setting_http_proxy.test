@@ -1,0 +1,12 @@
+# name: test/sql/settings/setting_http_proxy.test
+# description: Test HTTP_PROXY setting
+# group: [settings]
+
+statement error
+SET http_proxy TO 's3://hello'
+
+statement ok
+SET http_proxy TO 'http://localhost:8025'
+
+statement error
+select * from 's3://bucket/file.parquet';  # can't actually test the proxy, so just test for an error
