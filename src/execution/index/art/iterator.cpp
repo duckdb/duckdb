@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/art/iterator.hpp"
+
 #include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
@@ -191,7 +192,7 @@ bool Iterator::Next() {
 }
 
 bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
-	bool equal = false;
+	bool equal = true;
 	if (!node) {
 		return false;
 	}
@@ -203,6 +204,7 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 		for (idx_t i = 0; i < top.node->prefix.Size(); i++) {
 			cur_key.Push(top.node->prefix[i]);
 		}
+        // greater case: find leftmost leaf node directly
 		if (!equal) {
 			while (node->type != NodeType::NLeaf) {
 				auto min_pos = node->GetMin();
@@ -252,10 +254,14 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 			}
 			return false;
 		}
+        // equal case:
 		uint32_t mismatch_pos = node->prefix.KeyMismatchPosition(key, depth);
 		if (mismatch_pos != node->prefix.Size()) {
 			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
 				// Less
+				auto cur_node = top.node;
+				idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
+				cur_key.Pop(elements_to_pop);
 				nodes.pop();
 				return Next();
 			} else {
@@ -264,14 +270,21 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 				return Next();
 			}
 		}
+
 		// prefix matches, search inside the child for the key
 		depth += node->prefix.Size();
 
 		top.pos = node->GetChildGreaterEqual(key[depth], equal);
+        // The maximum key byte of the current node is less than the key
+        // So fall back to the previous node
 		if (top.pos == DConstants::INVALID_INDEX) {
-			// Find min leaf
-			top.pos = node->GetMin();
+			auto cur_node = top.node;
+			idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
+			cur_key.Pop(elements_to_pop);
+			nodes.pop();
+			return Next();
 		}
+		PushKey(node, top.pos);
 		node = node->GetChild(*art, top.pos);
 		// This means all children of this node qualify as geq
 		depth++;
