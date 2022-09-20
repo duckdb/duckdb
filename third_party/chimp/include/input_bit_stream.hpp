@@ -1,20 +1,26 @@
 #pragma once
 
 #include <stdint.h>
+#include "bit_utils.hpp"
+#include <assert.h>
 
 namespace duckdb_chimp {
 
 //! Set this to uint64_t, not sure what setting a double to 0 does on the bit-level
-template <class INTERNAL_TYPE>
 class InputBitStream {
 public:
-	InputBitStream(INTERNAL_TYPE* input_stream, size_t stream_size) :
+	using INTERNAL_TYPE = uint8_t;
+
+	InputBitStream(uint8_t* input_stream, size_t stream_size) :
 		stream(input_stream),
 		capacity(stream_size),
 		current(0),
-		bit_index(0),
+		fill(0),
 		stream_index(0)
-		{}
+		{
+			Refill();
+			Refill();
+		}
 public:
 	static constexpr uint8_t INTERNAL_TYPE_BITSIZE = sizeof(INTERNAL_TYPE) * 8;
 
@@ -24,81 +30,63 @@ public:
 	}
 	//! The amount of bits we've read from the stream
 	size_t BitSize() const {
-		return (stream_index * INTERNAL_TYPE_BITSIZE) + bit_index;
-	}
-
-	template <class T>
-	void ReadBit(T& value, uint8_t bit) {
-		auto& byte = GetCurrentByte();
-
-		const auto bit_offset = INTERNAL_TYPE_BITSIZE - 1 - bit_index;
-		//! Shift the bit at 'bit_index' to the front
-		//! Then check if it's set
-		auto current = byte >> (bit_offset) & 1;
-		if (current) {
-			value |= (T)1 << ((sizeof(T) * 8) - 1 - bit);
-		}
-		DecreaseLoadedBits();
-	}
-
-	template <class T, uint8_t VALUE_SIZE>
-	T ReadValue() {
-		if (LoadedEnough(VALUE_SIZE)) {
-			return ReadFromCurrent<T, VALUE_SIZE>();
-		}
-		T result = 0;
-		for (uint8_t i = 0; i < VALUE_SIZE; i++) {
-			ReadBit(result, i);
-		}
-		return result;
+		return (stream_index * INTERNAL_TYPE_BITSIZE) + fill;
 	}
 
 	template <class T>
 	T ReadValue(uint8_t value_size = (sizeof(T) * 8)) {
+		int32_t i;
+		T value = 0;
+
 		if (LoadedEnough(value_size)) {
-			//! We can read the entire value without loading inbetween
-			return ReadFromCurrent<T>(value_size);
+			// Can directly read from current
+			return ReadFromCurrent(value_size);
 		}
-		T result = 0;
-		for (uint8_t i = 0; i < value_size; i++) {
-			ReadBit(result, i);
+
+		value_size -= fill;
+		value = ReadFromCurrent(fill);
+
+		i = value_size >> 3;
+		while(i-- != 0) {
+			value = value << 8 | ReadFromStream();
 		}
-		return result;
+
+		value_size &= 7;
+
+		return (value << value_size) | ReadFromCurrent(value_size);
 	}
 private:
+
 	bool LoadedEnough(uint8_t bits) {
-		return bit_index + bits < INTERNAL_TYPE_BITSIZE;
+		return fill >= bits;
 	}
-	template <class T>
-	T GetMask(uint8_t value_size) const {
-		return (T)1 << value_size;
-	}
-	template <class T, uint8_t VALUE_SIZE>
-	T GetMask() const {
-		return (T)1 << VALUE_SIZE;
-	}
-	INTERNAL_TYPE& GetCurrentByte() {
-		return current;
-	}
-	void FetchData() {
-		current = stream[stream_index++];
-		bit_index = 0;
+	void Refill() {
+		current = current << 16 | ReadFromStream() << 8 | ReadFromStream();
+		fill += 16;
 	}
 	void DecreaseLoadedBits(uint8_t value = 1) {
-		bit_index += value;
-		if (bit_index == INTERNAL_TYPE_BITSIZE) {
-			FetchData();
+		fill -= value;
+		if (fill < 16) {
+			Refill();
 		}
 	}
-	template <class T, uint8_t VALUE_SIZE>
-	T ReadFromCurrent() {
-		T result = current >> (bit_index + VALUE_SIZE) & GetMask<T, VALUE_SIZE>() - 1;
+
+	INTERNAL_TYPE ReadFromStream() {
+		return stream[stream_index++];
+	}
+
+	template <uint8_t VALUE_SIZE>
+	uint32_t ReadFromCurrent() {
+		assert(fill >= VALUE_SIZE);
+		const auto shift_amount = fill - VALUE_SIZE;
+		uint32_t result = current >> shift_amount & bitmask<uint64_t>(VALUE_SIZE);
 		DecreaseLoadedBits(VALUE_SIZE);
 		return result;
 	}
-	template <class T>
-	T ReadFromCurrent(uint8_t value_size) {
-		T result = current >> (bit_index + value_size) & GetMask<T>(value_size) - 1;
+	uint32_t ReadFromCurrent(uint8_t value_size) {
+		assert(fill >= value_size);
+		const auto shift_amount = fill - value_size;
+		uint32_t result = current >> shift_amount & bitmask<uint64_t>(value_size);
 		DecreaseLoadedBits(value_size);
 		return result;
 	}
@@ -106,11 +94,8 @@ private:
 	INTERNAL_TYPE* stream;	//! The stream we're writing our output to
 	size_t capacity;		//! The total amount of (bytes / sizeof(INTERNAL_TYPE)) are in the stream
 
-	INTERNAL_TYPE current;	//! The current value we're reading from
-	// |-|-|-|-|-|-|-|-|	//! 8 bit value as example
-	// |0|1|2|3|4|5|6|7|
-	//          ^			//! If 4 bits are already read from, 4 is the value of 'bit_index'
-	uint8_t	bit_index;		//! How many bits are already read from in the current value
+	uint32_t current;		//! The current value we're reading from (bit buffer)
+	uint8_t	fill;			//! How many bits of 'current' are "full"
 	size_t stream_index;	//! Index used to keep track of which index we're at in the stream
 };
 

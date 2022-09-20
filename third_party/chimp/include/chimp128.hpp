@@ -8,6 +8,7 @@
 #include "input_bit_stream.hpp"
 #include "ring_buffer.hpp"
 #include <queue>
+#include <memory>
 
 namespace duckdb_chimp {
 
@@ -25,8 +26,7 @@ enum CompressionFlags {
 template <bool EMPTY>
 struct Chimp128CompressionState {
 
-	Chimp128CompressionState(uint64_t* output_stream, size_t stream_size) :
-		output(output_stream, stream_size),
+	Chimp128CompressionState() :
 		ring_buffer(),
 		previous_leading_zeros(std::numeric_limits<uint8_t>::max()) {}
 
@@ -34,13 +34,17 @@ struct Chimp128CompressionState {
 		this->previous_leading_zeros = value;
 	}
 
-	size_t CompressedSize() const {
-		return output.BitsWritten();
+	void	SetOutputBuffer(uint8_t* stream) {
+		output = std::unique_ptr<OutputBitStream<EMPTY>>(new OutputBitStream<EMPTY>(stream));
 	}
 
-	OutputBitStream<EMPTY>	output; //The stream to write to
-	RingBuffer				ring_buffer; //! The ring buffer that holds the previous values
-	uint8_t					previous_leading_zeros; //! The leading zeros of the reference value
+	size_t CompressedSize() const {
+		return output->BitsWritten();
+	}
+
+	std::unique_ptr<OutputBitStream<EMPTY>>	output; //The stream to write to
+	RingBuffer								ring_buffer; //! The ring buffer that holds the previous values
+	uint8_t									previous_leading_zeros; //! The leading zeros of the reference value
 };
 
 template <bool EMPTY>
@@ -71,9 +75,9 @@ public:
 	}
 
 	static void WriteFirst(uint64_t in, State& state) {
-		printf("First value: %f\n", in);
+		//printf("First value: %f\n", in);
 		state.ring_buffer.template Insert<true>(in);
-		state.output.template WriteValue<uint64_t, BIT_SIZE>(in);
+		state.output->template WriteValue<uint64_t, BIT_SIZE>(in);
 	}
 
 	static void CompressValue(uint64_t in, State& state) {
@@ -86,12 +90,12 @@ public:
 		//! Initialize some relevant variables based on the state of the ring_buffer
 		if (((int64_t)state.ring_buffer.Size() - (int64_t)key) < (int64_t)RingBuffer::RING_SIZE) {
 			auto current_index = state.ring_buffer.IndexOf(key);
-			printf("current_index: %llu\n", current_index);
+			//printf("current_index: %llu\n", current_index);
 			auto reference_value = state.ring_buffer.Value(current_index % RingBuffer::RING_SIZE);
-			printf("reference_value: %llu\n", reference_value);
+			//printf("reference_value: %llu\n", reference_value);
 			uint64_t tempxor_result = (uint64_t)in ^ reference_value;
 			auto trailing_zeros = __builtin_ctzll(tempxor_result);
-			printf("trailing_zeros: %llu\n", trailing_zeros);
+			//printf("trailing_zeros: %llu\n", trailing_zeros);
 			trailing_zeros_exceed_threshold = trailing_zeros > TRAILING_ZERO_THRESHOLD;
 			if (trailing_zeros_exceed_threshold) {
 				previous_index = current_index % RingBuffer::RING_SIZE;
@@ -110,45 +114,45 @@ public:
 
 		//! Compress the value
 		if (xor_result == 0) {
-			printf("IDENTICAL\n");
+			//printf("IDENTICAL\n");
 			//! The two values are identical (write 9 bits)
 			//! 2 bits for the flag VALUE_IDENTICAL ('00') + 7 bits for the referenced index value
-			state.output.template WriteValue<uint32_t, FLAG_ZERO_SIZE>(previous_index);
+			state.output->template WriteValue<uint32_t, FLAG_ZERO_SIZE>(previous_index);
 			state.SetLeadingZeros();
 		}
 		else {
 			//! Values are not identical (64)
-			printf("Xor: %llu\n", xor_result);
+			//printf("Xor: %llu\n", xor_result);
 			auto leading_zeros_raw = __builtin_clzll(xor_result);
-			printf("leading_zeros_raw = %d\n", leading_zeros_raw);
+			//printf("leading_zeros_raw = %d\n", leading_zeros_raw);
 			uint8_t leading_zeros = ChimpCompressionConstants::LEADING_ROUND[leading_zeros_raw];
-			printf("leading_zeros = %d\n", leading_zeros);
+			//printf("leading_zeros = %d\n", leading_zeros);
 
 			if (trailing_zeros_exceed_threshold) {
-				printf("EXCEEDS THRESHOLD\n");
+				//printf("EXCEEDS THRESHOLD\n");
 				//! write (64 - [0|8|12|16|18|20|22|24] - [14+])(26-50 bits) and 18 bits
 				int32_t significant_bits = BIT_SIZE - leading_zeros - trailing_zeros;
 				//! FIXME: it feels like this would produce '11', indicating LEADING_ZERO_LOAD
 				//! Instead of indicating TRAILING_EXCEEDS_THRESHOLD '01'
 				auto result = 512 * (RingBuffer::RING_SIZE + previous_index) + BIT_SIZE * ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros] + significant_bits;
-				state.output.template WriteValue<int32_t, FLAG_ONE_SIZE>(result);
-				state.output.template WriteValue<int64_t>(xor_result >> trailing_zeros, significant_bits);
+				state.output->template WriteValue<int32_t, FLAG_ONE_SIZE>(result);
+				state.output->template WriteValue<int64_t>(xor_result >> trailing_zeros, significant_bits);
 				state.SetLeadingZeros();
 			}
 			else if (leading_zeros == state.previous_leading_zeros) {
-				printf("LEADING_ZERO_EQUALITY\n");
+				//printf("LEADING_ZERO_EQUALITY\n");
 				//! write 2 + [?] bits
 				int32_t significant_bits = BIT_SIZE - leading_zeros;
-				state.output.template WriteValue<uint8_t, 2>(LEADING_ZERO_EQUALITY);
-				state.output.template WriteValue<uint64_t>(xor_result, significant_bits);
+				state.output->template WriteValue<uint8_t, 2>(LEADING_ZERO_EQUALITY);
+				state.output->template WriteValue<uint64_t>(xor_result, significant_bits);
 			}
 			else {
-				printf("OUTLIER\n");
+				//printf("OUTLIER\n");
 				//! write 5 + [?] bits
 				int32_t significant_bits = BIT_SIZE - leading_zeros;
 				//! 2 bits for the flag LEADING_ZERO_LOAD ('11') + 3 bits for the leading zeros
-				state.output.template WriteValue<uint32_t, 5>(((uint8_t)LEADING_ZERO_LOAD << 3) + ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
-				state.output.template WriteValue<uint64_t>(xor_result, significant_bits);
+				state.output->template WriteValue<uint32_t, 5>(((uint8_t)LEADING_ZERO_LOAD << 3) + ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
+				state.output->template WriteValue<uint64_t>(xor_result, significant_bits);
 				state.SetLeadingZeros(leading_zeros);
 			}
 		}
@@ -176,7 +180,7 @@ struct StoredZeros {
 struct Chimp128DecompressionState {
 public:
 	Chimp128DecompressionState(uint64_t* input_stream, size_t stream_size) :
-		input(input_stream, stream_size),
+		input((uint8_t*)input_stream, stream_size),
 		reference_value(0),
 		initial_fill(),
 		first(true)
@@ -203,7 +207,7 @@ public:
 		return end_of_stream;
 	}
 
-	InputBitStream<uint64_t> input;
+	InputBitStream input;
 	StoredZeros zeros;
 	int64_t reference_value = 0;
 	RingBuffer	ring_buffer;
@@ -251,17 +255,17 @@ public:
 
 	static bool LoadFirst(RETURN_TYPE &value, Chimp128DecompressionState& state) {
 		value = state.input.template ReadValue<RETURN_TYPE>();
-		state.ring_buffer.Insert(value);
+		state.ring_buffer.Insert<true>(value);
 		state.first = false;
 		RETURN_IF_EOF(value);
 		return true;
 	}
 
 	static bool DecompressValue(RETURN_TYPE &value, Chimp128DecompressionState& state) {
-		auto flag = state.input.template ReadValue<uint8_t, 2>();
+		auto flag = state.input.template ReadValue<uint8_t>(2);
 		switch (flag) {
 		case LEADING_ZERO_LOAD: {
-			auto deserialized_leading_zeros = state.input.template ReadValue<uint8_t, LEADING_BITS_SIZE>();
+			auto deserialized_leading_zeros = state.input.template ReadValue<uint8_t>(LEADING_BITS_SIZE);
 			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[deserialized_leading_zeros]);
             value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
             value ^= state.reference_value;
@@ -280,7 +284,7 @@ public:
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
 			uint16_t index, leading_zeros, significant_bits;
-			uint16_t temp = state.input.template ReadValue<uint64_t, INITIAL_FILL>();
+			uint16_t temp = state.input.template ReadValue<uint64_t>(INITIAL_FILL);
 			UnpackPackedData(temp, index, leading_zeros, significant_bits);
 			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
 			state.reference_value = state.ring_buffer.Value(index);

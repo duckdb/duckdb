@@ -16,9 +16,8 @@ class OutputBitStream {
 public:
 	friend class BitStreamWriter;
 	friend class EmptyWriter;
-	OutputBitStream(uint64_t* output_stream, size_t stream_size) :
+	OutputBitStream(uint8_t* output_stream) :
 		stream((INTERNAL_TYPE*)output_stream),
-		capacity(stream_size),
 		current(0),
 		free_bits(INTERNAL_TYPE_BITSIZE),
 		stream_index(0),
@@ -164,7 +163,6 @@ private:
 
 private:
 	uint8_t* stream;		//! The stream we're writing our output to
-	size_t capacity;		//! The total amount of (bytes / sizeof(uint64_t)) are in the stream
 
 	INTERNAL_TYPE current;	//! The current value we're writing into (zero-initialized)
 	uint8_t	free_bits;		//! How many bits are still unwritten in 'current'
