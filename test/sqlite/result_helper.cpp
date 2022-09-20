@@ -436,7 +436,7 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 			case LogicalTypeId::DECIMAL:
 			case LogicalTypeId::FLOAT:
 			case LogicalTypeId::DOUBLE:
-				return value.CastAs(LogicalType::BIGINT).ToString();
+				return value.DefaultCastAs(LogicalType::BIGINT).ToString();
 			default:
 				break;
 			}
@@ -609,7 +609,7 @@ bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, idx_t
 			converted_lvalue = true;
 		} else {
 			lvalue = Value(lvalue_str);
-			if (lvalue.TryCastAs(sql_type)) {
+			if (lvalue.DefaultTryCastAs(sql_type)) {
 				converted_lvalue = true;
 			}
 		}
@@ -618,12 +618,12 @@ bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, idx_t
 			converted_rvalue = true;
 		} else {
 			rvalue = Value(rvalue_str);
-			if (rvalue.TryCastAs(sql_type)) {
+			if (rvalue.DefaultTryCastAs(sql_type)) {
 				converted_rvalue = true;
 			}
 		}
 		if (converted_lvalue && converted_rvalue) {
-			error = !Value::ValuesAreEqual(lvalue, rvalue);
+			error = !Value::DefaultValuesAreEqual(lvalue, rvalue);
 		} else {
 			error = true;
 		}
@@ -643,7 +643,7 @@ bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, idx_t
 		} else if (low_r_val == false_str || rvalue_str == "0") {
 			rvalue = Value(0);
 		}
-		error = !Value::ValuesAreEqual(lvalue, rvalue);
+		error = !Value::DefaultValuesAreEqual(lvalue, rvalue);
 
 	} else {
 		// for other types we just mark the result as incorrect

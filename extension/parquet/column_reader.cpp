@@ -773,7 +773,7 @@ idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 			}
 		}
 	}
-	VectorOperations::Cast(intermediate_vector, result, amount);
+	VectorOperations::DefaultCast(intermediate_vector, result, amount);
 	return amount;
 }
 

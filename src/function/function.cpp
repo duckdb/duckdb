@@ -393,7 +393,7 @@ idx_t Function::BindFunction(const string &name, PragmaFunctionSet &functions, P
 	for (idx_t i = 0; i < info.parameters.size(); i++) {
 		auto target_type =
 		    i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
-		info.parameters[i] = info.parameters[i].CastAs(target_type);
+		info.parameters[i] = info.parameters[i].DefaultCastAs(target_type);
 	}
 	return entry;
 }

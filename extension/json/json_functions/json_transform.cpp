@@ -221,7 +221,7 @@ static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 	}
 
 	string error_message;
-	if (!VectorOperations::TryCast(string_vector, result, count, &error_message, strict) && strict) {
+	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &error_message, strict) && strict) {
 		throw InvalidInputException(error_message);
 	}
 }

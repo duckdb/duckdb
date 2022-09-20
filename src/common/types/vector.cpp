@@ -299,7 +299,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
 	if (val.type() != GetType()) {
-		SetValue(index, val.CastAs(GetType()));
+		SetValue(index, val.DefaultCastAs(GetType()));
 		return;
 	}
 	D_ASSERT(val.type().InternalType() == GetType().InternalType());

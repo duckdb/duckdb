@@ -634,7 +634,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::DATE:
 		case LogicalTypeId::INTERVAL: {
 			Vector string_vec(LogicalType::VARCHAR);
-			VectorOperations::Cast(vec, string_vec, row_count);
+			VectorOperations::DefaultCast(vec, string_vec, row_count);
 			vec.ReferenceAndSetType(string_vec);
 			// fall through on purpose
 		}

@@ -26,6 +26,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 
 #include <utility>
 #include <cmath>
@@ -132,9 +133,9 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::TIMESTAMP(Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY),
 		                        dtime_t(0));
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return MinimumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_S);
+		return MinimumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return MinimumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_MS);
+		return MinimumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_MS);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
@@ -201,11 +202,11 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_MS:
-		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_MS);
+		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_MS);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_S);
+		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIME_TZ:
 		return Value::TIMETZ(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -561,7 +562,7 @@ Value Value::LIST(LogicalType child_type, vector<Value> values) {
 		return Value::EMPTYLIST(move(child_type));
 	}
 	for (auto &val : values) {
-		val = val.CastAs(child_type);
+		val = val.DefaultCastAs(child_type);
 	}
 	return Value::LIST(move(values));
 }
@@ -819,7 +820,7 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::INTERVAL:
 		return Cast::Operation<interval_t, T>(value_.interval);
 	case LogicalTypeId::DECIMAL:
-		return CastAs(LogicalType::DOUBLE).GetValueInternal<T>();
+		return DefaultCastAs(LogicalType::DOUBLE).GetValueInternal<T>();
 	case LogicalTypeId::ENUM: {
 		switch (type_.InternalType()) {
 		case PhysicalType::UINT8:
@@ -1011,7 +1012,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 Value Value::Numeric(const LogicalType &type, hugeint_t value) {
 #ifdef DEBUG
 	// perform a throwing cast to verify that the type fits
-	Value::HUGEINT(value).CastAs(type);
+	Value::HUGEINT(value).DefaultCastAs(type);
 #endif
 	switch (type.id()) {
 	case LogicalTypeId::HUGEINT:
@@ -1649,33 +1650,54 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type_, rhs);
 }
 
-bool Value::TryCastAs(const LogicalType &target_type, Value &new_value, string *error_message, bool strict) const {
+bool Value::TryCastAs(CastFunctionSet &set, const LogicalType &target_type, Value &new_value, string *error_message,
+                      bool strict) const {
 	if (type_ == target_type) {
 		new_value = Copy();
 		return true;
 	}
 	Vector input(*this);
 	Vector result(target_type);
-	if (!VectorOperations::TryCast(input, result, 1, error_message, strict)) {
+	if (!VectorOperations::TryCast(set, input, result, 1, error_message, strict)) {
 		return false;
 	}
 	new_value = result.GetValue(0);
 	return true;
 }
 
-Value Value::CastAs(const LogicalType &target_type, bool strict) const {
+bool Value::TryCastAs(ClientContext &context, const LogicalType &target_type, Value &new_value, string *error_message,
+                      bool strict) const {
+	return TryCastAs(CastFunctionSet::Get(context), target_type, new_value, error_message, strict);
+}
+
+bool Value::DefaultTryCastAs(const LogicalType &target_type, Value &new_value, string *error_message,
+                             bool strict) const {
+	CastFunctionSet set;
+	return TryCastAs(set, target_type, new_value, error_message, strict);
+}
+
+Value Value::CastAs(CastFunctionSet &set, const LogicalType &target_type, bool strict) const {
 	Value new_value;
 	string error_message;
-	if (!TryCastAs(target_type, new_value, &error_message, strict)) {
+	if (!TryCastAs(set, target_type, new_value, &error_message, strict)) {
 		throw InvalidInputException("Failed to cast value: %s", error_message);
 	}
 	return new_value;
 }
 
-bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
+Value Value::CastAs(ClientContext &context, const LogicalType &target_type, bool strict) const {
+	return CastAs(CastFunctionSet::Get(context), target_type, strict);
+}
+
+Value Value::DefaultCastAs(const LogicalType &target_type, bool strict) const {
+	CastFunctionSet set;
+	return CastAs(set, target_type, strict);
+}
+
+bool Value::TryCastAs(CastFunctionSet &set, const LogicalType &target_type, bool strict) {
 	Value new_value;
 	string error_message;
-	if (!TryCastAs(target_type, new_value, &error_message, strict)) {
+	if (!TryCastAs(set, target_type, new_value, &error_message, strict)) {
 		return false;
 	}
 	type_ = target_type;
@@ -1685,6 +1707,15 @@ bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
 	struct_value = new_value.struct_value;
 	list_value = new_value.list_value;
 	return true;
+}
+
+bool Value::TryCastAs(ClientContext &context, const LogicalType &target_type, bool strict) {
+	return TryCastAs(CastFunctionSet::Get(context), target_type, strict);
+}
+
+bool Value::DefaultTryCastAs(const LogicalType &target_type, bool strict) {
+	CastFunctionSet set;
+	return TryCastAs(set, target_type, strict);
 }
 
 void Value::Serialize(Serializer &main_serializer) const {
@@ -1819,7 +1850,7 @@ bool Value::NotDistinctFrom(const Value &lvalue, const Value &rvalue) {
 	return ValueOperations::NotDistinctFrom(lvalue, rvalue);
 }
 
-bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
+bool Value::ValuesAreEqual(CastFunctionSet &set, const Value &result_value, const Value &value) {
 	if (result_value.IsNull() != value.IsNull()) {
 		return false;
 	}
@@ -1829,19 +1860,19 @@ bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 	}
 	switch (value.type_.id()) {
 	case LogicalTypeId::FLOAT: {
-		auto other = result_value.CastAs(LogicalType::FLOAT);
+		auto other = result_value.CastAs(set, LogicalType::FLOAT);
 		float ldecimal = value.value_.float_;
 		float rdecimal = other.value_.float_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
 	case LogicalTypeId::DOUBLE: {
-		auto other = result_value.CastAs(LogicalType::DOUBLE);
+		auto other = result_value.CastAs(set, LogicalType::DOUBLE);
 		double ldecimal = value.value_.double_;
 		double rdecimal = other.value_.double_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
 	case LogicalTypeId::VARCHAR: {
-		auto other = result_value.CastAs(LogicalType::VARCHAR);
+		auto other = result_value.CastAs(set, LogicalType::VARCHAR);
 		// some results might contain padding spaces, e.g. when rendering
 		// VARCHAR(10) and the string only has 6 characters, they will be padded
 		// with spaces to 10 in the rendering. We don't do that here yet as we
@@ -1855,10 +1886,18 @@ bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 	}
 	default:
 		if (result_value.type_.id() == LogicalTypeId::FLOAT || result_value.type_.id() == LogicalTypeId::DOUBLE) {
-			return Value::ValuesAreEqual(value, result_value);
+			return Value::ValuesAreEqual(set, value, result_value);
 		}
 		return value == result_value;
 	}
+}
+
+bool Value::ValuesAreEqual(ClientContext &context, const Value &result_value, const Value &value) {
+	return Value::ValuesAreEqual(CastFunctionSet::Get(context), result_value, value);
+}
+bool Value::DefaultValuesAreEqual(const Value &result_value, const Value &value) {
+	CastFunctionSet set;
+	return Value::ValuesAreEqual(set, result_value, value);
 }
 
 } // namespace duckdb

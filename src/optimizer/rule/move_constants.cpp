@@ -54,7 +54,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			return nullptr;
 		}
 		auto result_value = Value::HUGEINT(outer_value);
-		if (!result_value.TryCastAs(constant_type)) {
+		if (!result_value.DefaultTryCastAs(constant_type)) {
 			// if the cast is not possible then the comparison is not possible
 			// for example, if we have x + 5 = 3, where x is an unsigned number, we will get x = -2
 			// since this is not possible we can remove the entire branch here
@@ -72,7 +72,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 				return nullptr;
 			}
 			auto result_value = Value::HUGEINT(outer_value);
-			if (!result_value.TryCastAs(constant_type)) {
+			if (!result_value.DefaultTryCastAs(constant_type)) {
 				// if the cast is not possible then the comparison is not possible
 				return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
 				                                          Value::BOOLEAN(false));
@@ -85,7 +85,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 				return nullptr;
 			}
 			auto result_value = Value::HUGEINT(inner_value);
-			if (!result_value.TryCastAs(constant_type)) {
+			if (!result_value.DefaultTryCastAs(constant_type)) {
 				// if the cast is not possible then the comparison is not possible
 				return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
 				                                          Value::BOOLEAN(false));
@@ -129,7 +129,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 		// we need to do a range check on the cast even though we do a division
 		// because e.g. -128 / -1 = 128, which is out of range
 		auto result_value = Value::HUGEINT(outer_value / inner_value);
-		if (!result_value.TryCastAs(constant_type)) {
+		if (!result_value.DefaultTryCastAs(constant_type)) {
 			return ExpressionRewriter::ConstantOrNull(move(arithmetic->children[arithmetic_child_index]),
 			                                          Value::BOOLEAN(false));
 		}
