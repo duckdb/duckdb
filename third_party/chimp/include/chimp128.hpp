@@ -255,6 +255,7 @@ public:
 
 	static bool LoadFirst(RETURN_TYPE &value, Chimp128DecompressionState& state) {
 		value = state.input.template ReadValue<RETURN_TYPE>();
+		printf("value: %lluu\n", value);
 		state.ring_buffer.Insert<true>(value);
 		state.first = false;
 		RETURN_IF_EOF(value);
@@ -263,11 +264,16 @@ public:
 
 	static bool DecompressValue(RETURN_TYPE &value, Chimp128DecompressionState& state) {
 		auto flag = state.input.template ReadValue<uint8_t>(2);
+		printf("flag: %u\n", (uint32_t)flag);
 		switch (flag) {
 		case LEADING_ZERO_LOAD: {
+			printf("LEADING ZERO LOAD\n");
 			auto deserialized_leading_zeros = state.input.template ReadValue<uint8_t>(LEADING_BITS_SIZE);
+			printf("deserialized_leading_zeros: %u\n", (uint32_t)deserialized_leading_zeros);
 			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[deserialized_leading_zeros]);
+			printf("leading_zeros: %u\n", state.LeadingZeros());
             value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
+			printf("value: %llu\n", value);
             value ^= state.reference_value;
 			RETURN_IF_EOF(value);
 			state.reference_value = value;
@@ -275,7 +281,9 @@ public:
 			break;
 		}
 		case LEADING_ZERO_EQUALITY: {
+			printf("LEADING ZERO EQUALITY\n");
 			value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
+			printf("value: %llu\n", value);
 			value ^= state.reference_value;
 			RETURN_IF_EOF(value);
 			state.reference_value = value;
@@ -283,8 +291,10 @@ public:
 			break;
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
+			printf("TRAILING EXCEEDS THRESHOLD\n");
 			uint16_t index, leading_zeros, significant_bits;
 			uint16_t temp = state.input.template ReadValue<uint64_t>(INITIAL_FILL);
+			printf("temp: %lu\n", temp);
 			UnpackPackedData(temp, index, leading_zeros, significant_bits);
 			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
 			state.reference_value = state.ring_buffer.Value(index);
@@ -293,6 +303,7 @@ public:
 			}
 			state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
 			value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros() - state.TrailingZeros());
+			printf("value: %llu\n", value);
 			value <<= state.TrailingZeros();
 			value ^= state.reference_value;
 			RETURN_IF_EOF(value);
@@ -301,8 +312,10 @@ public:
 			break;
 		}
 		case VALUE_IDENTICAL: {
+			printf("VALUE IDENTICAL\n");
 			//! Value is identical to previous value
 			auto index = state.input.template ReadValue<uint8_t>(INDEX_BITS_SIZE);
+			printf("index: %u\n", (uint32_t)index);
 			value = state.ring_buffer.Value(index);
 			state.reference_value = value;
 			state.ring_buffer.Insert(state.reference_value);

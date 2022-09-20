@@ -51,7 +51,7 @@ public:
 		}
 		if (FitsInCurrent(VALUE_SIZE)) {
 			//! If we can write the entire value in one go
-			WriteInCurrent((INTERNAL_TYPE)value, VALUE_SIZE);
+			WriteInCurrent<VALUE_SIZE>((INTERNAL_TYPE)value);
 			return;
 		}
 		auto i = VALUE_SIZE - free_bits;
@@ -62,18 +62,21 @@ public:
 			WriteInCurrent(value >> i, free_bits);
 		}
 		if (queue != 0) {
+			// We dont fill the entire 'current' buffer,
+			// so we can write these to 'current' first without flushing to the stream
+			// And then write the remaining bytes directly to the stream
 			i -= queue;
 			WriteInCurrent((INTERNAL_TYPE)value, queue);
 			value >>= queue;
 		}
-		if (i == 64) WriteInCurrent<INTERNAL_TYPE_BITSIZE>((INTERNAL_TYPE)(value >> 56));
-		if (i > 55) WriteInCurrent<INTERNAL_TYPE_BITSIZE>((INTERNAL_TYPE)(value >> 48));
-		if (i > 47) WriteInCurrent<INTERNAL_TYPE_BITSIZE>((INTERNAL_TYPE)(value >> 40));
-		if (i > 39) WriteInCurrent<INTERNAL_TYPE_BITSIZE>((INTERNAL_TYPE)(value >> 32));
-		if (i > 31) WriteInCurrent<INTERNAL_TYPE_BITSIZE>((INTERNAL_TYPE)(value >> 24));
-		if (i > 23) WriteInCurrent<INTERNAL_TYPE_BITSIZE>((INTERNAL_TYPE)(value >> 16));
-		if (i > 15) WriteInCurrent<INTERNAL_TYPE_BITSIZE>((INTERNAL_TYPE)(value >> 8));
-		if (i > 7) WriteInCurrent<INTERNAL_TYPE_BITSIZE>(value);
+		if (i == 64) WriteToStream((INTERNAL_TYPE)(value >> 56));
+		if (i > 55) WriteToStream((INTERNAL_TYPE)(value >> 48));
+		if (i > 47) WriteToStream((INTERNAL_TYPE)(value >> 40));
+		if (i > 39) WriteToStream((INTERNAL_TYPE)(value >> 32));
+		if (i > 31) WriteToStream((INTERNAL_TYPE)(value >> 24));
+		if (i > 23) WriteToStream((INTERNAL_TYPE)(value >> 16));
+		if (i > 15) WriteToStream((INTERNAL_TYPE)(value >> 8));
+		if (i > 7) WriteToStream(value);
 	}
 	template <class T>
 	void WriteValue(T value, uint8_t value_size) {

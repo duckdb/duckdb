@@ -47,15 +47,16 @@ public:
 		// Empty the current bit buffer
 		value = (T)ReadFromCurrent(fill);
 
-		i = value_size >> 3;
+		// Read multiples of 8
+		i = value_size >> 4;
 		while(i-- != 0) {
-			value = value << 8 | (T)ReadFromCurrent(8);
+			value = value << 16 | (T)ReadFromCurrent(16);
 		}
 
 		// Get the last (< 8) bits of the value
-		value_size &= 7;
+		value_size &= 15;
 		if (value_size) {
-			(value << value_size) | ReadFromCurrent(value_size);
+			value = value << value_size | (T)ReadFromCurrent(value_size);
 		}
 		return value;
 	}
