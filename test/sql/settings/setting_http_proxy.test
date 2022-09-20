@@ -9,4 +9,7 @@ statement ok
 SET http_proxy TO 'http://localhost:8025'
 
 statement error
-select * from 's3://bucket/file.parquet';  # can't actually test the proxy, so just test for an error
+select * from 's3://bucket/file.parquet';  # cant actually test the proxy, so just test for an error
+
+statement ok
+SET http_proxy = '';
