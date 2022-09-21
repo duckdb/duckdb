@@ -427,21 +427,7 @@ Value HomeDirectorySetting::GetSetting(ClientContext &context) {
 }
 
 static shared_ptr<ProxyUri> SetHttpProxy(DBConfig &config, const string &url) {
-	if (url.empty()) {
-		config.options.http_proxy = nullptr;
-	} else {
-		auto proxy = std::make_shared<uri>(url);
-
-		if (proxy->get_scheme() != "http") {
-			throw InvalidInputException("Invalid proxy url (only http proxies supported): %s", url);
-		}
-
-		config.options.http_proxy = std::make_shared<ProxyUri>();
-		config.options.http_proxy->username = proxy->get_username();
-		config.options.http_proxy->password = proxy->get_password();
-		config.options.http_proxy->port = proxy->get_port();
-		config.options.http_proxy->host = proxy->get_host();
-	}
+	config.options.http_proxy = ProxyUri::FromString(url);
 
 	return config.options.http_proxy;
 }

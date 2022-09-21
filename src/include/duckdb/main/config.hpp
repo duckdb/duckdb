@@ -41,6 +41,10 @@ struct ProxyUri {
 	std::string username;
 	std::string password;
 
+	ProxyUri(const string &host, uint32_t port, const string &username, const string &password);
+
+	static shared_ptr<ProxyUri> FromString(const string &url);
+
 	std::string to_string() const;
 };
 
