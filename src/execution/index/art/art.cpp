@@ -207,6 +207,8 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 struct KeySection {
 	KeySection(idx_t start_p, idx_t end_p, idx_t depth_p, data_t key_byte_p)
 	    : start(start_p), end(end_p), depth(depth_p), key_byte(key_byte_p) {};
+	KeySection(idx_t start_p, idx_t end_p, vector<unique_ptr<Key>> &keys, KeySection &key_section)
+	    : start(start_p), end(end_p), depth(key_section.depth + 1), key_byte(keys[end_p]->data[key_section.depth]) {};
 	idx_t start;
 	idx_t end;
 	idx_t depth;
@@ -218,13 +220,11 @@ void GetChildSections(vector<KeySection> &child_sections, vector<unique_ptr<Key>
 	idx_t child_start_idx = key_section.start;
 	for (idx_t i = key_section.start + 1; i <= key_section.end; i++) {
 		if (keys[i - 1]->data[key_section.depth] != keys[i]->data[key_section.depth]) {
-			child_sections.emplace_back(child_start_idx, i - 1, key_section.depth + 1,
-			                            keys[i - 1]->data[key_section.depth]);
+			child_sections.emplace_back(child_start_idx, i - 1, keys, key_section);
 			child_start_idx = i;
 		}
 	}
-	child_sections.emplace_back(child_start_idx, key_section.end, key_section.depth + 1,
-	                            keys[key_section.end]->data[key_section.depth]);
+	child_sections.emplace_back(child_start_idx, key_section.end, keys, key_section);
 }
 
 void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySection &key_section,
@@ -354,10 +354,8 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 		ART::Merge(temp_art.get(), art.get());
 	}
 
-	// FIXME: currently this code is only used for index creation, so we can assume that there are no
-	// FIXME: duplicate violations between the existing index and the new data
-	// FIXME: instead of throwing exceptions in the merge code we need to do a 'cold' merge first
-	// FIXME: that does not change the tree but checks for violations (if IsPrimary or IsUnique)
+	// NOTE: currently this code is only used for index creation, so we can assume that there are no
+	// duplicate violations between the existing index and the new data
 	ART::Merge(this, temp_art.get());
 }
 

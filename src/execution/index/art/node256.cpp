@@ -94,4 +94,8 @@ void Node256::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) 
 	}
 }
 
+idx_t Node256::GetSize() {
+	return 256;
+}
+
 } // namespace duckdb

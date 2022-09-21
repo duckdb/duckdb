@@ -128,4 +128,8 @@ void Node48::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
 	}
 }
 
+idx_t Node48::GetSize() {
+	return 48;
+}
+
 } // namespace duckdb

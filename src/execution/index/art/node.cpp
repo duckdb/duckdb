@@ -46,17 +46,15 @@ Node::Node(NodeType type) : count(0), type(type) {
 
 // LCOV_EXCL_START
 idx_t Node::GetMin() {
-	D_ASSERT(0);
-	return 0;
+	throw InternalException("GetMin not implemented for the specific node type.");
 }
 
 Node *Node::GetChild(ART &art, idx_t pos) {
-	D_ASSERT(0);
-	return nullptr;
+	throw InternalException("GetChild not implemented for the specific node type.");
 }
 
 void Node::ReplaceChildPointer(idx_t pos, Node *node) {
-	D_ASSERT(0);
+	throw InternalException("ReplaceChildPointer not implemented for the specific node type.");
 }
 // LCOV_EXCL_STOP
 
@@ -103,13 +101,14 @@ void Node::EraseChild(Node *&node, idx_t pos, ART &art) {
 
 NodeType Node::GetTypeBySize(idx_t size) {
 
-	if (size <= 4) {
+	if (size <= Node4::GetSize()) {
 		return NodeType::N4;
-	} else if (size <= 16) {
+	} else if (size <= Node16::GetSize()) {
 		return NodeType::N16;
-	} else if (size <= 48) {
+	} else if (size <= Node48::GetSize()) {
 		return NodeType::N48;
 	}
+	D_ASSERT(size <= Node256::GetSize());
 	return NodeType::N256;
 }
 
