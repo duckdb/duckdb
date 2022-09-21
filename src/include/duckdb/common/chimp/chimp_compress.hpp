@@ -52,14 +52,7 @@ public:
 				}
 			}
 
-			if (count) {
-				state_wrapper->WriteValues((uint64_t *)values, count);
-			}
-			if (count == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
-				auto row_start = state_wrapper->current_segment->start + state_wrapper->current_segment->count;
-				state_wrapper->FlushSegment();
-				state_wrapper->CreateEmptySegment(row_start);
-			}
+			state_wrapper->WriteValues((uint64_t *)values, count);
 		}
 	};
 
@@ -121,14 +114,10 @@ public:
 	}
 
 	void WriteValues(uint64_t *values, idx_t count) {
-		D_ASSERT(count);
-
 		printf("COMPRESS\n");
-		printf("--- %f ---\n", values[0]);
-		duckdb_chimp::Chimp128Compression<false>::template Store<true>(values[0], state.chimp_state);
-		for (idx_t i = 1; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			printf("--- %f ---\n", values[i]);
-			duckdb_chimp::Chimp128Compression<false>::template Store<false>(values[i], state.chimp_state);
+			duckdb_chimp::Chimp128Compression<false>::Store(values[i], state.chimp_state);
 		}
 		auto bits_written = state.chimp_state.output->BitsWritten();
 		printf("writtenBits: %llu\n", bits_written);

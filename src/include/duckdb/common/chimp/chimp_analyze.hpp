@@ -32,13 +32,10 @@ public:
 
 public:
 	void WriteValues(uint64_t *values, idx_t count) {
-		D_ASSERT(count);
 		printf("ANALYZE\n");
-		printf("--- %f ---\n", values[0]);
-		duckdb_chimp::Chimp128Compression<true>::template Store<true>(values[0], state.chimp_state);
-		for (idx_t i = 1; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			printf("--- %f ---\n", values[i]);
-			duckdb_chimp::Chimp128Compression<true>::template Store<false>(values[i], state.chimp_state);
+			duckdb_chimp::Chimp128Compression<true>::Store(values[i], state.chimp_state);
 		}
 		duckdb_chimp::Chimp128Compression<true>::Flush(state.chimp_state);
 		auto bits_written = state.chimp_state.output->BitsWritten();
