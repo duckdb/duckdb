@@ -79,7 +79,7 @@ SELECT list_transform(l, x -> x < 2) FROM lists
 [true]
 [true, false, false]
 NULL
-[true, NULL, f	alse]
+[true, NULL, false]
 
 # test other operators and more complex/nested functions
 

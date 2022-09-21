@@ -76,83 +76,58 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	auto &children = StructVector::GetEntries(varchar_struct);
 	auto &validity = FlatVector::Validity(varchar_struct);
 	auto result_data = FlatVector::GetData<string_t>(result);
-	// first compute the sizes of each of the strings
-	vector<idx_t> string_lengths(count, 0);
-	static constexpr const idx_t INITIAL_LENGTH = 2;
 	static constexpr const idx_t SEP_LENGTH = 2;
+	static constexpr const idx_t NAME_SEP_LENGTH = 4;
 	static constexpr const idx_t NULL_LENGTH = 4;
-	// set up nulls
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
-		string_lengths[i] = INITIAL_LENGTH; // {}
-	}
-	// add the sizes of each of the children
-	for (idx_t c = 0; c < children.size(); c++) {
-		auto &child_validity = FlatVector::Validity(*children[c]);
-		auto data = FlatVector::GetData<string_t>(*children[c]);
-		auto last_child = c + 1 == children.size();
-		auto &name = child_types[c].first;
-		for (idx_t i = 0; i < count; i++) {
-			if (string_lengths[i] == 0) {
-				// NULL
-				continue;
-			}
+		idx_t string_length = 2; // {}
+		for (idx_t c = 0; c < children.size(); c++) {
 			if (c > 0) {
-				string_lengths[i] += SEP_LENGTH; // ", "
+				string_length += SEP_LENGTH;
 			}
-			string_lengths[i] += name.size() + 4; // "'{name}': "
-			string_lengths[i] += child_validity.RowIsValid(i) ? data[i].GetSize() : NULL_LENGTH;
-			if (last_child) {
-				// initialize the empty strings if the length is known
-				result_data[i] = StringVector::EmptyString(result, string_lengths[i]);
-			}
+			auto &child_validity = FlatVector::Validity(*children[c]);
+			auto data = FlatVector::GetData<string_t>(*children[c]);
+			auto &name = child_types[c].first;
+			string_length += name.size() + NAME_SEP_LENGTH; // "'{name}': "
+			string_length += child_validity.RowIsValid(i) ? data[i].GetSize() : NULL_LENGTH;
 		}
-	}
-	// now copy over the data
-	vector<idx_t> offsets(count, 1);
-	for (idx_t c = 0; c < children.size(); c++) {
-		auto &child_validity = FlatVector::Validity(*children[c]);
-		auto data = FlatVector::GetData<string_t>(*children[c]);
-		auto &name = child_types[c].first;
-		auto last_child = c + 1 == children.size();
-		for (idx_t i = 0; i < count; i++) {
-			if (string_lengths[i] == 0) {
-				// NULL
-				continue;
-			}
-			auto dataptr = result_data[i].GetDataWriteable();
+		result_data[i] = StringVector::EmptyString(result, string_length);
+		auto dataptr = result_data[i].GetDataWriteable();
+		idx_t offset = 0;
+		dataptr[offset++] = '{';
+		for (idx_t c = 0; c < children.size(); c++) {
 			if (c > 0) {
-				memcpy(dataptr + offsets[i], ", ", SEP_LENGTH);
-				offsets[i] += SEP_LENGTH;
+				memcpy(dataptr + offset, ", ", SEP_LENGTH);
+				offset += SEP_LENGTH;
 			}
-			dataptr[offsets[i]] = '\'';
-			offsets[i]++;
-
-			memcpy(dataptr + offsets[i], name.c_str(), name.size());
-			offsets[i] += name.size();
-
-			memcpy(dataptr + offsets[i], "': ", 3);
-			offsets[i] += 3;
-
+			auto &child_validity = FlatVector::Validity(*children[c]);
+			auto data = FlatVector::GetData<string_t>(*children[c]);
+			auto &name = child_types[c].first;
+			// "'{name}': "
+			dataptr[offset++] = '\'';
+			memcpy(dataptr + offset, name.c_str(), name.size());
+			offset += name.size();
+			dataptr[offset++] = '\'';
+			dataptr[offset++] = ':';
+			dataptr[offset++] = ' ';
+			// value
 			if (child_validity.RowIsValid(i)) {
 				auto len = data[i].GetSize();
-				memcpy(dataptr + offsets[i], data[i].GetDataUnsafe(), len);
-				offsets[i] += len;
+				memcpy(dataptr + offset, data[i].GetDataUnsafe(), len);
+				offset += len;
 			} else {
-				memcpy(dataptr + offsets[i], "NULL", NULL_LENGTH);
-				offsets[i] += NULL_LENGTH;
-			}
-			if (last_child) {
-				// initialize the empty strings if the length is known
-				dataptr[0] = '{';
-				dataptr[string_lengths[i] - 1] = '}';
-				result_data[i].Finalize();
+				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
+				offset += NULL_LENGTH;
 			}
 		}
+		dataptr[offset++] = '}';
+		result_data[i].Finalize();
 	}
+
 	if (constant) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
