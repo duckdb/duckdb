@@ -41,17 +41,7 @@ struct ProxyUri {
 	std::string username;
 	std::string password;
 
-	std::string to_string() const {
-		std::string res = "http://";
-		if (!(username.empty() && password.empty())) {
-			res += username + ":" + password + "@";
-		}
-		res += host;
-		if (port != 0) {
-			res += ":" + std::to_string(port);
-		}
-		return res;
-	}
+	std::string to_string() const;
 };
 
 enum class CheckpointAbort : uint8_t {

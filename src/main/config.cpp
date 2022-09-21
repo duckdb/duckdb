@@ -167,4 +167,16 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	return (idx_t)multiplier * limit;
 }
 
+std::string ProxyUri::to_string() const {
+	std::string res = "http://";
+	if (!(username.empty() && password.empty())) {
+		res += username + ":" + password + "@";
+	}
+	res += host;
+	if (port != 0) {
+		res += ":" + std::to_string(port);
+	}
+	return res;
+}
+
 } // namespace duckdb
