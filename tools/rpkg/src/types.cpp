@@ -129,6 +129,8 @@ string RApiTypes::DetectLogicalType(const LogicalType &stype, const char *caller
 	case LogicalTypeId::DECIMAL:
 		return "numeric";
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::JSON:
 		return "character";
 	case LogicalTypeId::BLOB:
 		return "raw";
