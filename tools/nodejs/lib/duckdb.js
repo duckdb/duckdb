@@ -80,6 +80,12 @@ QueryResult.prototype.nextRecordBatch;
 
 /**
  * @method
+ * @return Blob containing IPC buffer
+ */
+QueryResult.prototype.nextIpcBuffer;
+
+/**
+ * @method
  * @return data chunk
  */
 RecordBatchWrapper.prototype.GetCDataPointers;
@@ -174,6 +180,12 @@ Connection.prototype.arrow = function (sql) {
 Connection.prototype.arrowStream = async function (sql) {
     var statement = new Statement(this, sql);
     return statement.stream.apply(statement, arguments);
+}
+
+Connection.prototype.arrowStream2 = async function (sql) {
+    // TODO: allow prepared statements too
+    const statement = new Statement(this, "SELECT * FROM get_arrow_ipc('" + sql + "', 1);");
+    return statement.streamArrowIpc.apply(statement, arguments);
 }
 
 /**
@@ -538,3 +550,11 @@ Statement.prototype.stream;
  * @yield callback
  */
 Statement.prototype.arrow;
+
+/**
+ * @method
+ * @arg sql
+ * @param {...*} params
+ * @yield callback
+ */
+Statement.prototype.streamArrowIpc;

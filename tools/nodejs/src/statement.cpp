@@ -16,7 +16,8 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	    DefineClass(env, "Statement",
 	                {InstanceMethod("run", &Statement::Run), InstanceMethod("all", &Statement::All),
 	                 InstanceMethod("each", &Statement::Each), InstanceMethod("finalize", &Statement::Finish),
-	                 InstanceMethod("stream", &Statement::Stream), InstanceMethod("arrow", &Statement::Arrow)});
+	                 InstanceMethod("stream", &Statement::Stream), InstanceMethod("arrow", &Statement::Arrow),
+	                 InstanceMethod("streamArrowIpc", &Statement::StreamArrowIpc)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -452,6 +453,13 @@ Napi::Value Statement::Stream(const Napi::CallbackInfo &info) {
 	return deferred.Promise();
 }
 
+Napi::Value Statement::StreamArrowIpc(const Napi::CallbackInfo &info) {
+	auto deferred = Napi::Promise::Deferred::New(info.Env());
+	connection_ref->database_ref->Schedule(info.Env(),
+	                                       duckdb::make_unique<RunQueryTask>(*this, HandleArgs(info), deferred));
+	return deferred.Promise();
+}
+
 struct FinishTask : public Task {
 	FinishTask(Statement &statement, Napi::Function callback) : Task(statement, callback) {
 	}
@@ -482,7 +490,9 @@ Napi::FunctionReference RecordBatchWrapper::constructor;
 Napi::Object QueryResult::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
-	Napi::Function t = DefineClass(env, "QueryResult", {InstanceMethod("nextChunk", &QueryResult::NextChunk), InstanceMethod("nextRecordBatch", &QueryResult::NextRecordBatch)});
+	Napi::Function t = DefineClass(env, "QueryResult", {InstanceMethod("nextChunk", &QueryResult::NextChunk),
+	                                                    InstanceMethod("nextRecordBatch", &QueryResult::NextRecordBatch),
+	                                                    InstanceMethod("nextIpcBuffer", &QueryResult::NextIpcBuffer)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -602,6 +612,43 @@ struct GetRecordBatchTask : public Task {
 	Napi::Promise::Deferred deferred;
 };
 
+struct GetNextArrowIpcTask : public Task {
+	GetNextArrowIpcTask(QueryResult &query_result, Napi::Promise::Deferred deferred) : Task(query_result), deferred(deferred) {
+	}
+
+	void DoWork() override {
+		auto &query_result = Get<QueryResult>();
+		chunk = query_result.result->Fetch();
+	}
+
+	void DoCallback() override {
+		auto &query_result = Get<QueryResult>();
+		Napi::Env env = query_result.Env();
+		Napi::HandleScope scope(env);
+
+		if (chunk == nullptr || chunk->size() == 0) {
+			deferred.Resolve(env.Null());
+			return;
+		}
+
+		// Arrow IPC streams should be a single column of a single blob
+		D_ASSERT(chunk->size() == 1 && chunk->ColumnCount() == 1);
+		D_ASSERT(chunk->data[0].GetType() == duckdb::LogicalType::BLOB);
+
+		duckdb::Value ipc_blob = chunk->GetValue(0, 0);
+
+		// TODO There's so many copies happening here
+		auto blob_str = duckdb::StringValue::Get(ipc_blob);
+		auto buf = Napi::ArrayBuffer::New(env, blob_str.size());
+		memcpy(buf.Data(), (const void *) blob_str.c_str(), blob_str.size());
+
+		deferred.Resolve(buf);
+	}
+
+	Napi::Promise::Deferred deferred;
+	std::unique_ptr<duckdb::DataChunk> chunk;
+};
+
 Napi::Value QueryResult::NextChunk(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	auto deferred = Napi::Promise::Deferred::New(env);
@@ -622,6 +669,14 @@ Napi::Value QueryResult::NextRecordBatch(const Napi::CallbackInfo &info) {
 	}
 	database_ref->Schedule(env, duckdb::make_unique<GetRecordBatchTask>(*this, deferred, batch_size));
 
+	return deferred.Promise();
+}
+
+// Should only be called on an arrow ipc query
+Napi::Value QueryResult::NextIpcBuffer(const Napi::CallbackInfo &info) {
+	auto env = info.Env();
+	auto deferred = Napi::Promise::Deferred::New(env);
+	database_ref->Schedule(env, duckdb::make_unique<GetNextArrowIpcTask>(*this, deferred));
 	return deferred.Promise();
 }
 

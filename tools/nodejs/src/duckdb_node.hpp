@@ -152,6 +152,7 @@ public:
 	Napi::Value Finish(const Napi::CallbackInfo &info);
 	Napi::Value Stream(const Napi::CallbackInfo &info);
 	Napi::Value Arrow(const Napi::CallbackInfo &info);
+	Napi::Value StreamArrowIpc(const Napi::CallbackInfo &info);
 
 public:
 	static Napi::FunctionReference constructor;
@@ -175,6 +176,7 @@ public:
 	static Napi::FunctionReference constructor;
 	Napi::Value NextChunk(const Napi::CallbackInfo &info);
 	Napi::Value NextRecordBatch(const Napi::CallbackInfo &info);
+	Napi::Value NextIpcBuffer(const Napi::CallbackInfo &info);
 	duckdb::shared_ptr<ArrowSchema> cschema;
 
 private:
