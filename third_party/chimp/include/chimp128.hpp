@@ -74,7 +74,8 @@ public:
 		}
 	}
 
-	static void Close(State& state) {
+	//! Write the content of the bit buffer to the stream
+	static void Flush(State& state) {
 		if (!EMPTY) {
 			state.output->Flush();
 		}

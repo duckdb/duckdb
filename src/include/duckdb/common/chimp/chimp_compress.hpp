@@ -138,7 +138,7 @@ public:
 			auto temp_string = toBinaryString<uint8_t>(stream[i]);
 			printf("%s\n", temp_string.c_str());
 		}
-		duckdb_chimp::Chimp128Compression<false>::Close(state.chimp_state);
+		duckdb_chimp::Chimp128Compression<false>::Flush(state.chimp_state);
 		current_segment->count += count;
 	}
 

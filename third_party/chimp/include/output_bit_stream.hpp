@@ -31,7 +31,10 @@ public:
 	}
 	
 	void Flush() {
-		WriteToStream();
+		if (free_bits != INTERNAL_TYPE_BITSIZE) {
+			//the bit buffer is empty, nothing to write
+			WriteToStream();
+		}
 	}
 
 	uint64_t* Stream() {

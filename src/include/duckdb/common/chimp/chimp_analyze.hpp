@@ -40,7 +40,7 @@ public:
 			printf("--- %f ---\n", values[i]);
 			duckdb_chimp::Chimp128Compression<true>::template Store<false>(values[i], state.chimp_state);
 		}
-		duckdb_chimp::Chimp128Compression<true>::Close(state.chimp_state);
+		duckdb_chimp::Chimp128Compression<true>::Flush(state.chimp_state);
 		auto bits_written = state.chimp_state.output->BitsWritten();
 		printf("writtenBits: %llu\n", bits_written);
 	}
