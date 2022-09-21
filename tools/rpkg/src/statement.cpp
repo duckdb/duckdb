@@ -215,6 +215,7 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::INTERVAL:
 		varvalue = r_varvalue.Protect(NEW_NUMERIC(nrows));
 		break;
 	case LogicalTypeId::LIST:
@@ -375,12 +376,24 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 			if (!mask.RowIsValid(row_idx)) {
 				dest_ptr[row_idx] = NA_REAL;
 			} else {
-				dtime_t n = src_data[row_idx];
-				dest_ptr[row_idx] = n.micros / Interval::MICROS_PER_SEC;
+				dest_ptr[row_idx] = src_data[row_idx].micros / Interval::MICROS_PER_SEC;
 			}
 		}
-
-		// some dress-up for R
+		SET_CLASS(dest, RStrings::get().difftime_str);
+		Rf_setAttrib(dest, RStrings::get().units_sym, RStrings::get().secs_str);
+		break;
+	}
+	case LogicalTypeId::INTERVAL: {
+		auto src_data = FlatVector::GetData<interval_t>(src_vec);
+		auto &mask = FlatVector::Validity(src_vec);
+		double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+		for (size_t row_idx = 0; row_idx < n; row_idx++) {
+			if (!mask.RowIsValid(row_idx)) {
+				dest_ptr[row_idx] = NA_REAL;
+			} else {
+				dest_ptr[row_idx] = Interval::GetMicro(src_data[row_idx]) / Interval::MICROS_PER_SEC;
+			}
+		}
 		SET_CLASS(dest, RStrings::get().difftime_str);
 		Rf_setAttrib(dest, RStrings::get().units_sym, RStrings::get().secs_str);
 		break;
