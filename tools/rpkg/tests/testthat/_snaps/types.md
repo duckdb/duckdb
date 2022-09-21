@@ -2,7 +2,7 @@
 
     Code
       as.list(dbGetQuery(con,
-        "SELECT * EXCLUDE (timestamp_tz, time_tz, uuid, interval, json, map) FROM test_all_types()"))
+        "SELECT * EXCLUDE (timestamp_tz, time_tz, uuid, json, map) FROM test_all_types()"))
     Output
       $bool
       [1] FALSE  TRUE    NA
@@ -54,7 +54,7 @@
       [3] NA                                
       
       $timestamp_ns
-      [1] "1677-09-21 00:12:43.145223 UTC" "2262-04-11 23:47:16.854776 UTC"
+      [1] "1677-09-21 00:12:44.145223 UTC" "2262-04-11 23:47:16.854776 UTC"
       [3] NA                              
       
       $float
@@ -74,6 +74,10 @@
       
       $dec38_10
       [1] -1e+28  1e+28     NA
+      
+      $interval
+      Time differences in secs
+      [1]          0 2675722599         NA
       
       $varchar
       [1] "🦆🦆🦆🦆🦆🦆" "goose"        NA            
@@ -142,7 +146,7 @@
       
       $timestamp_array[[2]]
       [1] "1970-01-01 00:00:00.00000 UTC"    "294247-01-10 04:00:54.77539 UTC" 
-      [3] "-290308-12-21 19:59:05.22460 UTC" NA                                
+      [3] "-290308-12-21 19:59:06.22460 UTC" NA                                
       [5] "2022-05-12 16:23:45.00000 UTC"   
       
       $timestamp_array[[3]]
@@ -155,7 +159,7 @@
       
       $timestamptz_array[[2]]
       [1] "1970-01-01 00:00:00.00000 UTC"    "294247-01-10 04:00:54.77539 UTC" 
-      [3] "-290308-12-21 19:59:05.22460 UTC" NA                                
+      [3] "-290308-12-21 19:59:06.22460 UTC" NA                                
       [5] "2022-05-12 23:23:45.00000 UTC"   
       
       $timestamptz_array[[3]]
