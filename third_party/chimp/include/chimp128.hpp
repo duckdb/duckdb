@@ -44,7 +44,9 @@ struct Chimp128CompressionState {
 
 	//TODO: reset the state
 	void Reset() {
-		//! 
+		first = true;
+		ring_buffer.Reset();
+		previous_leading_zeros = SetLeadingZeros();
 	}
 
 	std::unique_ptr<OutputBitStream<EMPTY>>	output; //The stream to write to

@@ -12,6 +12,12 @@ public:
 	//! Since threshold is now always set to (6 + 7), we can hardcode this to
 	static constexpr uint16_t INDICES_SIZE = 1 << (6 + 7 + 1); //16384
 public:
+	void Reset() {
+		index = 0;
+		memset((void*)indices, 0, INDICES_SIZE);
+		memset((void*)buffer, 0, RING_SIZE);
+	}
+
 	RingBuffer() : index(0) {
 	}
 	template <bool FIRST = false>
