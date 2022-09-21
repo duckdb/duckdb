@@ -19,9 +19,10 @@ public:
 		if (!FIRST) {
 			index++;
 		}
-		printf("FIRST = %s | INSERTED_VALUE: %llu\n", FIRST ? "True" : "False", value);
+		auto key = Key(value);
+		printf("[%llu] FIRST = %s | KEY: %llu | INSERTED_VALUE: %llu\n", index, FIRST ? "True" : "False", key, value);
 		buffer[index % RING_SIZE] = value;
-		indices[IndexOf(Key(value))] = index;
+		indices[Key(value)] = index;
 	}
 	const uint64_t& Top() const {
 		return buffer[index % RING_SIZE];
@@ -32,7 +33,6 @@ public:
 	}
 	//! Get the value at position 'index' of the buffer
 	uint64_t Value(uint8_t index_p) {
-		printf("index: %d\n", index_p);
 		return buffer[index_p];
 	}
 	//! Get the amount of values that are inserted
