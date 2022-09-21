@@ -318,7 +318,7 @@ struct ThreadsSetting {
 struct HttpProxySetting {
 	static constexpr const char *Name = "http_proxy";
 	static constexpr const char *Description =
-	    "The HTTP CONNECT proxy used to download extensions"; // TODO: add proxy support for s3/httpfs
+	    "The HTTP CONNECT proxy used to download extensions, and make http calls in the httpfs extension";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
