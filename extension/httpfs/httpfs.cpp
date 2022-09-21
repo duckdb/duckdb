@@ -120,8 +120,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 
 	auto res = client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + to_string(res.error()) +
-		                         ")");
+		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + to_string(res.error()) + ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
@@ -134,8 +133,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 
 	auto res = hfs.http_client->Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + to_string(res.error()) +
-		                         ")");
+		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + to_string(res.error()) + ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
 }
