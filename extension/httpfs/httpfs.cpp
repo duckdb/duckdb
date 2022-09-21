@@ -23,6 +23,7 @@ static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(Heade
 HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	uint64_t timeout;
 	Value value;
+	std::shared_ptr<ProxyUri> proxy;
 
 	if (opener->TryGetCurrentSetting("http_timeout", value)) {
 		timeout = value.GetValue<uint64_t>();
@@ -30,7 +31,11 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 		timeout = DEFAULT_TIMEOUT;
 	}
 
-	return {timeout};
+	if (opener->TryGetCurrentSetting("http_proxy", value)) {
+		proxy = ProxyUri::FromString(value.GetValue<string>());
+	}
+
+	return {timeout, proxy};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -97,6 +102,10 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	client->set_write_timeout(http_params.timeout);
 	client->set_read_timeout(http_params.timeout);
 	client->set_connection_timeout(http_params.timeout);
+	if (http_params.proxy) {
+		client->set_proxy(http_params.proxy->host.c_str(), http_params.proxy->port);
+		client->set_proxy_basic_auth(http_params.proxy->username.c_str(), http_params.proxy->password.c_str());
+	}
 	return client;
 }
 
@@ -111,7 +120,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 
 	auto res = client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
+		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + to_string(res.error()) +
 		                         ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());
@@ -125,7 +134,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 
 	auto res = hfs.http_client->Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
+		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + to_string(res.error()) +
 		                         ")");
 	}
 	return make_unique<ResponseWrapper>(res.value());

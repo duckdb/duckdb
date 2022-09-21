@@ -1,9 +1,10 @@
 #pragma once
 
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb_httplib_openssl {
 struct Response;
@@ -27,6 +28,7 @@ struct HTTPParams {
 	static constexpr uint64_t DEFAULT_TIMEOUT = 30000; // 30 sec
 
 	uint64_t timeout;
+	shared_ptr<ProxyUri> proxy;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
 };
