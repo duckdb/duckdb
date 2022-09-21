@@ -14,8 +14,7 @@ replacement_open_extension_demo_replacement_open_pre(DBConfig &config) {
 	auto res = make_unique<MyOpenData>();
 	res->my_flag = config.options.database_path;
 	config.options.database_path.clear(); // meaning in-memory
-	printf("pre\n");
-	return res;
+	return move(res);
 }
 
 DUCKDB_EXTENSION_API void replacement_open_extension_demo_replacement_open_post(DatabaseInstance &db,
@@ -24,7 +23,6 @@ DUCKDB_EXTENSION_API void replacement_open_extension_demo_replacement_open_post(
 	auto open_data = (MyOpenData *)open_data_p;
 	auto &config = DBConfig::GetConfig(db);
 	config.options.set_variables["my_new_option"] = Value(open_data->my_flag);
-	printf("post\n");
 }
 
 DUCKDB_EXTENSION_API void replacement_open_extension_demo_init(duckdb::DatabaseInstance &db) {

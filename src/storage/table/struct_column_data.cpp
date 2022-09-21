@@ -92,6 +92,15 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 	return scan_count;
 }
 
+void StructColumnData::Skip(ColumnScanState &state, idx_t count) {
+	validity.Skip(state.child_states[0], count);
+
+	// skip inside the sub-columns
+	for (idx_t child_idx = 0; child_idx < sub_columns.size(); child_idx++) {
+		sub_columns[child_idx]->Skip(state.child_states[child_idx + 1], count);
+	}
+}
+
 void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 	ColumnAppendState validity_append;
 	validity.InitializeAppend(validity_append);

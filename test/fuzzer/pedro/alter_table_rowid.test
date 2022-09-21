@@ -1,0 +1,21 @@
+# name: test/fuzzer/pedro/alter_table_rowid.test
+# description: Issue #4587: Alter table statements with rowid column
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 INTEGER, c1 INTEGER);
+
+statement error
+ALTER TABLE t0 DROP COLUMN rowid;
+
+statement error
+ALTER TABLE t0 RENAME rowid TO ups;
+
+statement error
+ALTER TABLE t0 ALTER rowid TYPE VARCHAR;
+
+statement error
+ALTER TABLE t0 ALTER rowidx SET DEFAULT 0;

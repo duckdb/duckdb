@@ -42,6 +42,7 @@ public:
 	DUCKDB_API ~ColumnDataCollection();
 
 public:
+	//! The types of columns in the ColumnDataCollection
 	DUCKDB_API vector<LogicalType> &Types() {
 		return types;
 	}

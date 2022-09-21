@@ -12,7 +12,8 @@ namespace duckdb {
 
 static unordered_map<column_t, string> GetKnownColumnValues(string &filename,
                                                             unordered_map<string, column_t> &column_map,
-                                                            bool filename_col, bool hive_partition_cols) {
+                                                            duckdb_re2::RE2 &compiled_regex, bool filename_col,
+                                                            bool hive_partition_cols) {
 	unordered_map<column_t, string> result;
 
 	if (filename_col) {
@@ -23,7 +24,7 @@ static unordered_map<column_t, string> GetKnownColumnValues(string &filename,
 	}
 
 	if (hive_partition_cols) {
-		auto partitions = HivePartitioning::Parse(filename);
+		auto partitions = HivePartitioning::Parse(filename, compiled_regex);
 		for (auto &partition : partitions) {
 			auto lookup_column_id = column_map.find(partition.first);
 			if (lookup_column_id != column_map.end()) {
@@ -61,10 +62,10 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 // 	- s3://bucket/var1=value1/bla/bla/var2=value2
 //  - http(s)://domain(:port)/lala/kasdl/var1=value1/?not-a-var=not-a-value
 //  - folder/folder/folder/../var1=value1/etc/.//var2=value2
-std::map<string, string> HivePartitioning::Parse(string &filename) {
-	std::map<string, string> result;
+const string HivePartitioning::REGEX_STRING = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
 
-	string regex = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
+std::map<string, string> HivePartitioning::Parse(string &filename, duckdb_re2::RE2 &regex) {
+	std::map<string, string> result;
 	duckdb_re2::StringPiece input(filename); // Wrap a StringPiece around it
 
 	string var;
@@ -75,6 +76,11 @@ std::map<string, string> HivePartitioning::Parse(string &filename) {
 	return result;
 }
 
+std::map<string, string> HivePartitioning::Parse(string &filename) {
+	duckdb_re2::RE2 regex(REGEX_STRING);
+	return Parse(filename, regex);
+}
+
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
 void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters,
@@ -82,6 +88,7 @@ void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<uniq
                                               bool hive_enabled, bool filename_enabled) {
 	vector<string> pruned_files;
 	vector<unique_ptr<Expression>> pruned_filters;
+	duckdb_re2::RE2 regex(REGEX_STRING);
 
 	if ((!filename_enabled && !hive_enabled) || filters.empty()) {
 		return;
@@ -90,7 +97,7 @@ void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<uniq
 	for (idx_t i = 0; i < files.size(); i++) {
 		auto &file = files[i];
 		bool should_prune_file = false;
-		auto known_values = GetKnownColumnValues(file, column_map, filename_enabled, hive_enabled);
+		auto known_values = GetKnownColumnValues(file, column_map, regex, filename_enabled, hive_enabled);
 
 		FilterCombiner combiner;
 		for (auto &filter : filters) {

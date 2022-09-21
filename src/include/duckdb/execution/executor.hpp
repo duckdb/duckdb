@@ -57,6 +57,7 @@ public:
 
 	//! Push a new error
 	void PushError(PreservedError exception);
+
 	//! True if an error has been thrown
 	bool HasError();
 	//! Throw the exception that was pushed using PushError.
@@ -104,13 +105,13 @@ private:
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
-	void ThrowExceptionInternal();
 
 private:
 	PhysicalOperator *physical_plan;
 	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
+	mutex error_lock;
 	//! The pipelines of the current query
 	vector<shared_ptr<Pipeline>> pipelines;
 	//! The root pipeline of the query

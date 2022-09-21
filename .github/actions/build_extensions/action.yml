@@ -69,6 +69,10 @@ inputs:
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
+  aarch64_cross_compile:
+    description: 'Enable Linux aarch64 cross-compiling'
+    default: 0
+
 runs:
   using: "composite"
   steps:
@@ -91,6 +95,8 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
+        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || '' }}
+        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || '' }}
 
       run: |
         ls -al
@@ -104,7 +110,7 @@ runs:
       shell: bash
       run: |
         mkdir -p build/release/extension/out_of_tree
-        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py
+        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py ${{ inputs.aarch64_cross_compile == 1 && '--aarch64-cc' || '' }}
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
@@ -121,8 +127,12 @@ runs:
         DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh ${{ inputs.deploy_as }}
+        if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
+            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
+          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ ]] ; then
+            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
+          fi
         fi
 
     - name: Test
