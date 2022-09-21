@@ -185,11 +185,19 @@ public:
 	Chimp128DecompressionState(uint64_t* input_stream, size_t stream_size) :
 		input((uint8_t*)input_stream, stream_size),
 		reference_value(0),
-		initial_fill(),
 		first(true)
 	{
 		SetLeadingZeros();
 		SetTrailingZeros();
+	}
+
+	void Reset() {
+		SetLeadingZeros();
+		SetTrailingZeros();
+		reference_value = 0;
+		ring_buffer.Reset();
+		end_of_stream = false;
+		first = true;
 	}
 
 	void SetLeadingZeros(uint8_t value = std::numeric_limits<uint8_t>::max()) {
@@ -215,8 +223,8 @@ public:
 	uint64_t reference_value = 0;
 	RingBuffer	ring_buffer;
 
+	//FIXME: 'end_of_stream' unused, left in here in case it might be necessary to use it
 	bool end_of_stream = false;
-	int32_t initial_fill;
 	bool first;
 };
 
