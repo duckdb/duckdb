@@ -77,9 +77,9 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto &child_validity = FlatVector::Validity(child);
 
 	auto result_data = FlatVector::GetData<string_t>(result);
+	static constexpr const idx_t SEP_LENGTH = 2;
+	static constexpr const idx_t NULL_LENGTH = 4;
 	for (idx_t i = 0; i < count; i++) {
-		static constexpr const idx_t SEP_LENGTH = 2;
-		static constexpr const idx_t NULL_LENGTH = 4;
 		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
