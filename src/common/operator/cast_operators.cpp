@@ -1277,6 +1277,14 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast From Pointer
+//===--------------------------------------------------------------------===//
+template <>
+string_t CastFromPointer::Operation(uintptr_t input, Vector &vector) {
+	return string_t(std::to_string(input));
+}
+
+//===--------------------------------------------------------------------===//
 // Cast To Blob
 //===--------------------------------------------------------------------===//
 template <>

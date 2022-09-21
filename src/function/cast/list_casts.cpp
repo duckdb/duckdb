@@ -62,19 +62,41 @@ static bool ListToListCast(Vector &source, Vector &result, idx_t count, CastPara
 }
 
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(source.GetVectorType());
-	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-	}
+	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	// first cast the child vector to varchar
+	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR));
+	ListToListCast(source, varchar_list, count, parameters);
+
+	// now construct the actual varchar vector
+	varchar_list.Flatten(count);
+	auto &child = ListVector::GetEntry(varchar_list);
+	auto list_data = FlatVector::GetData<list_entry_t>(varchar_list);
+	auto &validity = FlatVector::Validity(varchar_list);
+
+	auto child_data = FlatVector::GetData<string_t>(child);
+	auto &child_validity = FlatVector::Validity(child);
+
+	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
-		auto src_val = source.GetValue(i);
-		if (src_val.IsNull()) {
-			result.SetValue(i, Value(result.GetType()));
-		} else {
-			auto str_val = src_val.ToString();
-			result.SetValue(i, Value(str_val));
+		if (!validity.RowIsValid(i)) {
+			FlatVector::SetNull(result, i, true);
+			continue;
 		}
+		auto list = list_data[i];
+		string ret = "[";
+		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
+			auto idx = list.offset + list_idx;
+			if (list_idx > 0) {
+				ret += ", ";
+			}
+			ret += child_validity.RowIsValid(idx) ? child_data[idx].GetString() : "NULL";
+		}
+		ret += "]";
+		result_data[i] = StringVector::AddString(result, ret);
+	}
+
+	if (constant) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	return true;
 }
@@ -85,7 +107,8 @@ BoundCastInfo DefaultCasts::ListCastSwitch(BindCastInput &input, const LogicalTy
 		return BoundCastInfo(ListToListCast, BindListToListCast(input, source, target));
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::JSON:
-		return ListToVarcharCast;
+		return BoundCastInfo(ListToVarcharCast,
+		                     BindListToListCast(input, source, LogicalType::LIST(LogicalType::VARCHAR)));
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}

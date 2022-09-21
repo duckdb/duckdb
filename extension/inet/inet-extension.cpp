@@ -6,6 +6,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
@@ -161,6 +162,19 @@ static bool INETToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	return true;
 }
 
+static void INETHost(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &entries = StructVector::GetEntries(args.data[0]);
+
+	UnaryExecutor::Execute<hugeint_t, string_t>(*entries[0], result, args.size(), [&](hugeint_t input) {
+		IPAddress inet;
+		inet.address = input;
+		inet.mask = 32;
+
+		auto str = INETToVarchar(inet);
+		return StringVector::AddString(result, str);
+	});
+}
+
 void INETExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
@@ -179,11 +193,15 @@ void INETExtension::Load(DuckDB &db) {
 	info.internal = true;
 	catalog.CreateType(*con.context, &info);
 
+	auto host_fun = ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INETHost);
+	CreateScalarFunctionInfo host_info(host_fun);
+	catalog.CreateFunction(*con.context, &host_info);
+
 	// add inet casts
 	auto &config = DBConfig::GetConfig(*con.context);
 
 	auto &casts = config.GetCastFunctions();
-	casts.RegisterCastFunction(LogicalType::VARCHAR, inet_type, VarcharToINETCast);
+	casts.RegisterCastFunction(LogicalType::VARCHAR, inet_type, VarcharToINETCast, 100);
 	casts.RegisterCastFunction(inet_type, LogicalType::VARCHAR, INETToVarcharCast);
 
 	con.Commit();

@@ -76,10 +76,10 @@ NULL
 query I
 SELECT list_transform(l, x -> x < 2) FROM lists
 ----
-[True]
-[True, False, False]
+[true]
+[true, false, false]
 NULL
-[True, NULL, False]
+[true, NULL, f	alse]
 
 # test other operators and more complex/nested functions
 

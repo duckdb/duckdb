@@ -2,6 +2,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/function/cast_rules.hpp"
 
 namespace duckdb {
 
@@ -40,9 +41,33 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 	return DefaultCasts::TryVectorNullCast;
 }
 
-struct MapCastInfo : public BindCastInfo {
-	type_map_t<type_map_t<BoundCastInfo>> casts;
+struct MapCastNode {
+	MapCastNode(BoundCastInfo info, int64_t implicit_cast_cost)
+	    : cast_info(move(info)), implicit_cast_cost(implicit_cast_cost) {
+	}
+
+	BoundCastInfo cast_info;
+	int64_t implicit_cast_cost;
 };
+
+struct MapCastInfo : public BindCastInfo {
+	type_map_t<type_map_t<MapCastNode>> casts;
+};
+
+int64_t CastFunctionSet::ImplicitCastCost(const LogicalType &source, const LogicalType &target) {
+	// check if a cast has been registered
+	if (map_info) {
+		auto source_entry = map_info->casts.find(source);
+		if (source_entry != map_info->casts.end()) {
+			auto target_entry = source_entry->second.find(target);
+			if (target_entry != source_entry->second.end()) {
+				return target_entry->second.implicit_cast_cost;
+			}
+		}
+	}
+	// if not, fallback to the default implicit cast rules
+	return CastRules::ImplicitCast(source, target);
+}
 
 BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	D_ASSERT(input.info);
@@ -59,18 +84,18 @@ BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, c
 		// target type not found
 		return nullptr;
 	}
-	return target_entry->second.Copy();
+	return target_entry->second.cast_info.Copy();
 }
 
-void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const LogicalType &target,
-                                           BoundCastInfo function) {
+void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function,
+                                           int64_t implicit_cast_cost) {
 	if (!map_info) {
 		// create the cast map and the cast map function
 		auto info = make_unique<MapCastInfo>();
 		map_info = info.get();
 		bind_functions.emplace_back(MapCastFunction, move(info));
 	}
-	map_info->casts[source].insert(make_pair(target, move(function)));
+	map_info->casts[source].insert(make_pair(target, MapCastNode(move(function), implicit_cast_cost)));
 }
 
 } // namespace duckdb

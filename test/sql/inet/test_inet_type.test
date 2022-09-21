@@ -27,6 +27,16 @@ select '127.000.0000.1'::inet;
 ----
 127.0.0.1
 
+query II
+SELECT INET '0.0.0.0/0', INET '255.255.255.255/31'
+----
+0.0.0.0/0	255.255.255.255/31
+
+query I
+SELECT typeof('127.0.0.1/17'::INET)
+----
+inet
+
 statement error
 select '127'::inet;
 

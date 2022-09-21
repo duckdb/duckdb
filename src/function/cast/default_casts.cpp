@@ -82,6 +82,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 		return NumericCastSwitch(input, source, target);
+	case LogicalTypeId::POINTER:
+		return PointerCastSwitch(input, source, target);
 	case LogicalTypeId::UUID:
 		return UUIDCastSwitch(input, source, target);
 	case LogicalTypeId::DECIMAL:
@@ -112,6 +114,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::SQLNULL:
 		return NullTypeCast;
 	case LogicalTypeId::MAP:
+		return MapCastSwitch(input, source, target);
 	case LogicalTypeId::STRUCT:
 		return StructCastSwitch(input, source, target);
 	case LogicalTypeId::LIST:

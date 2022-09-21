@@ -6,7 +6,9 @@ add_library_unity(
   default_casts.cpp
   enum_casts.cpp
   list_casts.cpp
+  map_cast.cpp
   numeric_casts.cpp
+  pointer_cast.cpp
   string_cast.cpp
   struct_cast.cpp
   time_casts.cpp

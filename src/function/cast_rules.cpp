@@ -202,6 +202,14 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// parameter expression can be cast to anything for no cost
 		return 0;
 	}
+	if (from.GetAlias() != to.GetAlias()) {
+		// if aliases are different, an implicit cast is not possible
+		return -1;
+	}
+	if (from.id() == to.id()) {
+		// arguments match: do nothing
+		return 0;
+	}
 	if (from.id() == LogicalTypeId::BLOB && to.id() == LogicalTypeId::VARCHAR) {
 		// Implicit cast not allowed from BLOB to VARCHAR
 		return -1;

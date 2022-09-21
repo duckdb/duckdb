@@ -30,8 +30,7 @@ bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &p
 			result_mask.SetInvalid(i);
 			continue;
 		}
-		auto str = str_vec_ptr[source_data[src_idx]].GetString();
-		auto key = EnumType::GetPos(res_enum_type, str);
+		auto key = EnumType::GetPos(res_enum_type, str_vec_ptr[source_data[src_idx]]);
 		if (key == -1) {
 			// key doesn't exist on result enum
 			if (!parameters.error_message) {

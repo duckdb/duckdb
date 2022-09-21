@@ -260,14 +260,6 @@ static int64_t BindFunctionCost(const SimpleFunction &func, const vector<Logical
 	}
 	int64_t cost = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		// Check alias first
-		if (arguments[i].GetAlias() != func.arguments[i].GetAlias()) {
-			return -1;
-		}
-		if (arguments[i].id() == func.arguments[i].id()) {
-			// arguments match: do nothing
-			continue;
-		}
 		int64_t cast_cost = CastRules::ImplicitCast(arguments[i], func.arguments[i]);
 		if (cast_cost >= 0) {
 			// we can implicitly cast, add the cost to the total cost

@@ -15,8 +15,7 @@ bool StringEnumCastLoop(string_t *source_data, ValidityMask &source_mask, const 
 			source_idx = sel->get_index(i);
 		}
 		if (source_mask.RowIsValid(source_idx)) {
-			auto string_value = source_data[source_idx].GetString();
-			auto pos = EnumType::GetPos(result_type, string_value);
+			auto pos = EnumType::GetPos(result_type, source_data[source_idx]);
 			if (pos == -1) {
 				result_data[i] =
 				    HandleVectorCastError::Operation<T>(CastExceptionText<string_t, T>(source_data[source_idx]),
