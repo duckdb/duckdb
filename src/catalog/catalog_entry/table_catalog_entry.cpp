@@ -246,6 +246,9 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
 	auto rename_idx = GetColumnIndex(info.old_name);
+	if (rename_idx == COLUMN_IDENTIFIER_ROW_ID) {
+		throw CatalogException("Cannot rename rowid column");
+	}
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -348,6 +351,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
 	auto removed_index = GetColumnIndex(info.removed_column, info.if_column_exists);
 	if (removed_index == DConstants::INVALID_INDEX) {
+		if (!info.if_column_exists) {
+			throw CatalogException("Cannot drop column: rowid column cannot be dropped");
+		}
 		return nullptr;
 	}
 
@@ -462,6 +468,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	auto default_idx = GetColumnIndex(info.column_name);
+	if (default_idx == COLUMN_IDENTIFIER_ROW_ID) {
+		throw CatalogException("Cannot SET DEFAULT for rowid column");
+	}
 
 	// Copy all the columns, changing the value of the one that was specified by 'column_name'
 	for (idx_t i = 0; i < columns.size(); i++) {

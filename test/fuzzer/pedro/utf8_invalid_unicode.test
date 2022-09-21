@@ -1,0 +1,88 @@
+# name: test/fuzzer/pedro/utf8_invalid_unicode.test
+# group: [pedro]
+
+# invalid utf8, unicode value too high
+statement error
+SELECT upper(decode('\xF6\x96\xB0\x85'::BLOB)::VARCHAR);
+
+# invalid utf8, unicode value too high
+statement error
+SELECT decode('\xF6\x96\xB0\x85'::BLOB)::VARCHAR ILIKE '1';
+
+query I
+SELECT upper(decode('\xF0\x9F\x98\x84'::BLOB)::VARCHAR);
+----
+😄
+
+query I
+SELECT decode('\xF0\x9F\x98\x84'::BLOB)::VARCHAR ILIKE '😄';
+----
+1
+
+query I
+SELECT upper(decode('\xC2\xA3'::BLOB)::VARCHAR);
+----
+£
+
+query I
+SELECT decode('\xC2\xA3'::BLOB)::VARCHAR ILIKE '£';
+----
+1
+
+query I
+SELECT upper(decode('\xF0\x90\x8D\x88'::BLOB)::VARCHAR);
+----
+𐍈
+
+query I
+SELECT decode('\xF0\x90\x8D\x88'::BLOB)::VARCHAR ILIKE '𐍈';
+----
+1
+
+# invalid utf8, invalid first byte
+statement error
+SELECT upper(decode('\xE0\x9F\x98\x84'::BLOB)::VARCHAR);
+
+# invalid utf8, invalid continuation byte
+statement error
+SELECT upper(decode('\xF0\xDF\x98\x84'::BLOB)::VARCHAR);
+
+# invalid utf8, incomplete sequence
+statement error
+SELECT upper(decode('\xF0\x9F\x98'::BLOB)::VARCHAR);
+
+# NULL character not supported
+statement error
+SELECT upper(decode('\xF0\x9F\x98\x84\x00'::BLOB)::VARCHAR);
+
+# invalid utf8, UTF-16 surrogate character
+statement error
+SELECT upper(decode('\xED\xA0\xBD'::BLOB)::VARCHAR);
+
+# invalid utf8, UTF-16 surrogate character
+statement error
+SELECT upper(decode('\xED\xB8\x8D'::BLOB)::VARCHAR);
+
+# invalid utf8, not shortest possible for 2 byte character
+statement error
+SELECT upper(decode('\xc0\x80'::BLOB)::VARCHAR);
+
+# invalid utf8, not shortest possible for 2 byte character
+statement error
+SELECT upper(decode('\xc1\x80'::BLOB)::VARCHAR);
+
+# invalid utf8, not shortest possible for 2 byte character
+statement error
+SELECT upper(decode('\xc0\x81'::BLOB)::VARCHAR);
+
+# invalid utf8, not shortest possible for 2 byte character
+statement error
+SELECT upper(decode('\xc1\x81'::BLOB)::VARCHAR);
+
+# invalid utf8, not shortest possible for 2 byte character
+statement error
+SELECT upper(decode('\xc0\x82'::BLOB)::VARCHAR);
+
+# invalid utf8, not shortest possible for 2 byte character
+statement error
+SELECT upper(decode('\xc1\x82'::BLOB)::VARCHAR);

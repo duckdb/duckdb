@@ -405,6 +405,11 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			query_progress = active_query->progress_bar->GetCurrentPercentage();
 		}
 		return result;
+	} catch (FatalException &ex) {
+		// fatal exceptions invalidate the entire database
+		result.SetError(PreservedError(ex));
+		auto &db = DatabaseInstance::GetDatabase(*this);
+		db.Invalidate();
 	} catch (const Exception &ex) {
 		result.SetError(PreservedError(ex));
 	} catch (std::exception &ex) {

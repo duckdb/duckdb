@@ -33,15 +33,21 @@ bool NO_FAIL(unique_ptr<QueryResult> result) {
 
 void TestDeleteDirectory(string path) {
 	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	if (fs->DirectoryExists(path)) {
-		fs->RemoveDirectory(path);
+	try {
+		if (fs->DirectoryExists(path)) {
+			fs->RemoveDirectory(path);
+		}
+	} catch (...) {
 	}
 }
 
 void TestDeleteFile(string path) {
 	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	if (fs->FileExists(path)) {
-		fs->RemoveFile(path);
+	try {
+		if (fs->FileExists(path)) {
+			fs->RemoveFile(path);
+		}
+	} catch (...) {
 	}
 }
 
