@@ -78,21 +78,44 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
+		static constexpr const idx_t SEP_LENGTH = 2;
+		static constexpr const idx_t NULL_LENGTH = 4;
 		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
 		auto list = list_data[i];
-		string ret = "[";
+		// figure out how long the result needs to be
+		idx_t list_length = 2; // "[" and "]"
 		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 			auto idx = list.offset + list_idx;
 			if (list_idx > 0) {
-				ret += ", ";
+				list_length += SEP_LENGTH; // ", "
 			}
-			ret += child_validity.RowIsValid(idx) ? child_data[idx].GetString() : "NULL";
+			// string length, or "NULL"
+			list_length += child_validity.RowIsValid(idx) ? child_data[idx].GetSize() : NULL_LENGTH;
 		}
-		ret += "]";
-		result_data[i] = StringVector::AddString(result, ret);
+		result_data[i] = StringVector::EmptyString(result, list_length);
+		auto dataptr = result_data[i].GetDataWriteable();
+		auto offset = 0;
+		dataptr[offset++] = '[';
+		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
+			auto idx = list.offset + list_idx;
+			if (list_idx > 0) {
+				memcpy(dataptr + offset, ", ", SEP_LENGTH);
+				offset += SEP_LENGTH;
+			}
+			if (child_validity.RowIsValid(idx)) {
+				auto len = child_data[idx].GetSize();
+				memcpy(dataptr + offset, child_data[idx].GetDataUnsafe(), len);
+				offset += len;
+			} else {
+				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
+				offset += NULL_LENGTH;
+			}
+		}
+		dataptr[offset] = ']';
+		result_data[i].Finalize();
 	}
 
 	if (constant) {
