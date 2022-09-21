@@ -1,0 +1,30 @@
+# name: test/sql/storage/compression/chimp/chimp_simple.test
+# description: Test storage bitpacking, but simple
+# group: [chimp]
+
+# load the DB from disk
+load __TEST_DIR__/test_chimp.db
+
+statement ok
+PRAGMA force_compression='chimp'
+
+#statement error
+#select random() * 100 from range(1024);
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a double);
+
+statement ok
+COPY test FROM 'test/sql/copy/csv/data/test/chimp_simple.csv';
+
+statement ok
+checkpoint
+
+query I nosort r1
+select * from 'test/sql/copy/csv/data/test/chimp_simple.csv'
+----
+
+query I nosort r1
+select a from test
+----
