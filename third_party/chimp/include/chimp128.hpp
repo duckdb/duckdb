@@ -35,21 +35,21 @@ struct Chimp128CompressionState {
 	}
 
 	void	SetOutputBuffer(uint8_t* stream) {
-		output = std::unique_ptr<OutputBitStream<EMPTY>>(new OutputBitStream<EMPTY>(stream));
+		output.SetStream(stream);
 	}
 
 	size_t CompressedSize() const {
-		return output->BitsWritten();
+		return output.BitsWritten();
 	}
 
 	//TODO: reset the state
 	void Reset() {
 		first = true;
 		ring_buffer.Reset();
-		previous_leading_zeros = SetLeadingZeros();
+		SetLeadingZeros();
 	}
 
-	std::unique_ptr<OutputBitStream<EMPTY>>	output; //The stream to write to
+	OutputBitStream<EMPTY>					output; //The stream to write to
 	RingBuffer								ring_buffer; //! The ring buffer that holds the previous values
 	uint8_t									previous_leading_zeros; //! The leading zeros of the reference value
 	bool									first = true;
@@ -84,13 +84,13 @@ public:
 	//! Write the content of the bit buffer to the stream
 	static void Flush(State& state) {
 		if (!EMPTY) {
-			state.output->Flush();
+			state.output.Flush();
 		}
 	}
 
 	static void WriteFirst(uint64_t in, State& state) {
 		state.ring_buffer.template Insert<true>(in);
-		state.output->template WriteValue<uint64_t, BIT_SIZE>(in);
+		state.output.template WriteValue<uint64_t, BIT_SIZE>(in);
 		state.first = false;
 	}
 
@@ -127,7 +127,7 @@ public:
 		if (xor_result == 0) {
 			//! The two values are identical (write 9 bits)
 			//! 2 bits for the flag VALUE_IDENTICAL ('00') + 7 bits for the referenced index value
-			state.output->template WriteValue<uint32_t, FLAG_ZERO_SIZE>(previous_index);
+			state.output.template WriteValue<uint32_t, FLAG_ZERO_SIZE>(previous_index);
 			state.SetLeadingZeros();
 		}
 		else {
@@ -141,21 +141,21 @@ public:
 				//! FIXME: it feels like this would produce '11', indicating LEADING_ZERO_LOAD
 				//! Instead of indicating TRAILING_EXCEEDS_THRESHOLD '01'
 				auto result = 512U * (RingBuffer::RING_SIZE + previous_index) + BIT_SIZE * ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros] + significant_bits;
-				state.output->template WriteValue<uint32_t, FLAG_ONE_SIZE>(result);
-				state.output->template WriteValue<uint64_t>(xor_result >> trailing_zeros, significant_bits);
+				state.output.template WriteValue<uint32_t, FLAG_ONE_SIZE>(result);
+				state.output.template WriteValue<uint64_t>(xor_result >> trailing_zeros, significant_bits);
 				state.SetLeadingZeros();
 			}
 			else if (leading_zeros == state.previous_leading_zeros) {
 				//! write 2 + [?] bits
 				int32_t significant_bits = BIT_SIZE - leading_zeros;
-				state.output->template WriteValue<uint8_t, 2>(LEADING_ZERO_EQUALITY);
-				state.output->template WriteValue<uint64_t>(xor_result, significant_bits);
+				state.output.template WriteValue<uint8_t, 2>(LEADING_ZERO_EQUALITY);
+				state.output.template WriteValue<uint64_t>(xor_result, significant_bits);
 			}
 			else {
 				int32_t significant_bits = BIT_SIZE - leading_zeros;
 				//! 2 bits for the flag LEADING_ZERO_LOAD ('11') + 3 bits for the leading zeros
-				state.output->template WriteValue<uint32_t, 5>(((uint8_t)LEADING_ZERO_LOAD << 3) + ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
-				state.output->template WriteValue<uint64_t>(xor_result, significant_bits);
+				state.output.template WriteValue<uint32_t, 5>(((uint8_t)LEADING_ZERO_LOAD << 3) + ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
+				state.output.template WriteValue<uint64_t>(xor_result, significant_bits);
 				state.SetLeadingZeros(leading_zeros);
 			}
 		}
@@ -182,8 +182,7 @@ struct StoredZeros {
 
 struct Chimp128DecompressionState {
 public:
-	Chimp128DecompressionState(uint64_t* input_stream, size_t stream_size) :
-		input((uint8_t*)input_stream, stream_size),
+	Chimp128DecompressionState() :
 		reference_value(0),
 		first(true)
 	{

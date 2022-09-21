@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdio.h>
+#include <cstring>
 
 namespace duckdb_chimp {
 
@@ -14,8 +15,8 @@ public:
 public:
 	void Reset() {
 		index = 0;
-		memset((void*)indices, 0, INDICES_SIZE);
-		memset((void*)buffer, 0, RING_SIZE);
+		std::memset((void*)indices, 0, INDICES_SIZE);
+		std::memset((void*)buffer, 0, RING_SIZE);
 	}
 
 	RingBuffer() : index(0) {

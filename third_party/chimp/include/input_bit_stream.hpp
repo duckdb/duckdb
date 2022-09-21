@@ -11,18 +11,24 @@ class InputBitStream {
 public:
 	using INTERNAL_TYPE = uint8_t;
 
-	InputBitStream(uint8_t* input_stream, size_t stream_size) :
-		stream(input_stream),
-		capacity(stream_size),
+	InputBitStream() :
+		stream(nullptr),
 		current(0),
 		fill(0),
 		stream_index(0)
 		{
-			Refill();
-			Refill();
 		}
 public:
 	static constexpr uint8_t INTERNAL_TYPE_BITSIZE = sizeof(INTERNAL_TYPE) * 8;
+
+	void SetStream(uint8_t* input_stream) {
+		stream = input_stream;
+		stream_index = 0;
+		current = 0;
+		fill = 0;
+		Refill();
+		Refill();
+	}
 
 	//! The amount of bytes we've read from the stream (ceiling)
 	size_t ByteSize() const {
@@ -98,7 +104,6 @@ private:
 	}
 private:
 	INTERNAL_TYPE* stream;	//! The stream we're writing our output to
-	size_t capacity;		//! The total amount of (bytes / sizeof(INTERNAL_TYPE)) are in the stream
 
 	uint32_t current;		//! The current value we're reading from (bit buffer)
 	uint8_t	fill;			//! How many bits of 'current' are "full"

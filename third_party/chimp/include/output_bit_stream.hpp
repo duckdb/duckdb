@@ -16,8 +16,8 @@ class OutputBitStream {
 public:
 	friend class BitStreamWriter;
 	friend class EmptyWriter;
-	OutputBitStream(uint8_t* output_stream) :
-		stream((INTERNAL_TYPE*)output_stream),
+	OutputBitStream() :
+		stream(nullptr),
 		current(0),
 		free_bits(INTERNAL_TYPE_BITSIZE),
 		stream_index(0),
@@ -35,6 +35,14 @@ public:
 			//the bit buffer is empty, nothing to write
 			WriteToStream();
 		}
+	}
+
+	void	SetStream(uint8_t* output_stream) {
+		stream = output_stream;
+		stream_index = 0;
+		bits_written = 0;
+		free_bits = INTERNAL_TYPE_BITSIZE;
+		current = 0;
 	}
 
 	uint64_t* Stream() {

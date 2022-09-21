@@ -34,6 +34,8 @@ struct ChimpType<float> {
 class ChimpPrimitives {
 public:
 	static constexpr uint32_t CHIMP_SEQUENCE_SIZE = 1024;
+	static constexpr uint8_t MAX_BITS_PER_VALUE = 68;
+	static constexpr uint8_t MAX_BYTES_PER_VALUE = (MAX_BITS_PER_VALUE / 8) + (MAX_BITS_PER_VALUE % 8 != 0);
 };
 
 //! Where all the magic happens
@@ -47,32 +49,17 @@ public:
 	void *data_ptr;
 	duckdb_chimp::Chimp128CompressionState<EMPTY> chimp_state;
 
-	T compression_buffer[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
-	idx_t compression_buffer_idx = 0;
-	bool compression_buffer_validity[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
-
 public:
-	//! Called when either our internal buffer is full or there are no more values left to process
 	template <class OP>
 	void Flush() {
-		OP::template Operation<T>((T *)compression_buffer, (bool *)compression_buffer_validity, compression_buffer_idx,
-		                          data_ptr);
-		compression_buffer_idx = 0;
+		chimp_state.output.Flush();
 	}
 
 	//! Called for every single value that's decompressed
 	template <class OP>
-	bool Update(T *uncompressed_data, ValidityMask &validity, idx_t idx) {
-		if (validity.RowIsValid(idx)) {
-			compression_buffer_validity[compression_buffer_idx] = true;
-			compression_buffer[compression_buffer_idx++] = uncompressed_data[idx];
-		} else {
-			compression_buffer_validity[compression_buffer_idx] = false;
-			compression_buffer[compression_buffer_idx++] = 0;
-		}
-
-		if (compression_buffer_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
-			Flush<OP>();
+	bool Update(T uncompressed_value, bool is_valid) {
+		if (is_valid) {
+			OP::template Operation<T>(uncompressed_value, is_valid, data_ptr);
 		}
 		return true;
 	}

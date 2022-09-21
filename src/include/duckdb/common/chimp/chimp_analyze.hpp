@@ -15,12 +15,12 @@
 
 namespace duckdb {
 
-template <typename T>
-std::string toBinaryString(const T &x) {
-	std::stringstream ss;
-	ss << std::bitset<sizeof(T) * 8>(x);
-	return ss.str();
-}
+// template <typename T>
+// std::string toBinaryString(const T &x) {
+//	std::stringstream ss;
+//	ss << std::bitset<sizeof(T) * 8>(x);
+//	return ss.str();
+// }
 
 template <class T>
 struct ChimpAnalyzeState : public AnalyzeState {
@@ -31,25 +31,17 @@ public:
 	ChimpState<T, true> state;
 
 public:
-	void WriteValues(uint64_t *values, idx_t count) {
+	void WriteValue(uint64_t value) {
 		printf("ANALYZE\n");
-		for (idx_t i = 0; i < count; i++) {
-			printf("--- %f ---\n", values[i]);
-			duckdb_chimp::Chimp128Compression<true>::Store(values[i], state.chimp_state);
-		}
-		duckdb_chimp::Chimp128Compression<true>::Flush(state.chimp_state);
-		auto bits_written = state.chimp_state.output->BitsWritten();
-		printf("writtenBits: %llu\n", bits_written);
+		duckdb_chimp::Chimp128Compression<true>::Store(value, state.chimp_state);
 	}
 };
 
 struct EmptyChimpWriter {
 	template <class VALUE_TYPE>
-	static void Operation(VALUE_TYPE *values, bool *validity, idx_t count, void *state_p) {
+	static void Operation(VALUE_TYPE uncompressed_value, bool is_valid, void *state_p) {
 		auto state_wrapper = (ChimpAnalyzeState<VALUE_TYPE> *)state_p;
-		if (count) {
-			state_wrapper->WriteValues((uint64_t *)values, count);
-		}
+		state_wrapper->WriteValue(*(typename ChimpType<VALUE_TYPE>::type *)(&uncompressed_value));
 	}
 };
 
@@ -67,10 +59,9 @@ bool ChimpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		if (!analyze_state.state.template Update<EmptyChimpWriter>(data, vdata.validity, idx)) {
-			return false;
-		}
+		analyze_state.state.template Update<EmptyChimpWriter>(data[idx], vdata.validity.RowIsValid(idx));
 	}
+	analyze_state.state.template Flush<EmptyChimpWriter>();
 	return true;
 }
 

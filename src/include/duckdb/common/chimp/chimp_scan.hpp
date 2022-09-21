@@ -30,13 +30,13 @@ public:
 
 	explicit ChimpScanState(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+
 		handle = buffer_manager.Pin(segment.block);
 		auto dataptr = handle.Ptr();
-		chimp_state =
-		    make_unique<duckdb_chimp::Chimp128DecompressionState>((uint64_t *)dataptr, sizeof(T) * CHIMP_SEQUENCE_SIZE);
+		chimp_state.input.SetStream((uint8_t *)dataptr);
 	}
 
-	unique_ptr<duckdb_chimp::Chimp128DecompressionState> chimp_state;
+	duckdb_chimp::Chimp128DecompressionState chimp_state;
 	BufferHandle handle;
 
 	void (*decompress_function)(data_ptr_t, data_ptr_t);
@@ -79,7 +79,7 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
                       idx_t result_offset) {
 	using INTERNAL_TYPE = typename ChimpType<T>::type;
 	auto &scan_state = (ChimpScanState<T> &)*state.scan_state;
-	auto &chimp_state = *scan_state.chimp_state.get();
+	auto &chimp_state = scan_state.chimp_state;
 
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);

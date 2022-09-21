@@ -36,23 +36,23 @@ public:
 	struct ChimpWriter {
 
 		template <class VALUE_TYPE>
-		static void Operation(VALUE_TYPE *values, bool *validity, idx_t count, void *state_p) {
+		static void Operation(VALUE_TYPE value, bool is_valid, void *state_p) {
+			if (!is_valid) {
+				return;
+			}
 			//! Need access to the CompressionState to be able to flush the segment
 			auto state_wrapper = (ChimpCompressionState<VALUE_TYPE> *)state_p;
 
-			//! We might need to check this based on how much is already written
-			//! We could check this for every 128 values, but then we would need to cut our sequence down to 128,
-			//! because our space calculation for 1024 values would not be correct anymore Realistically this should
-			//! never happen, because these values should always fit in a Block, unless CHIMP_SEQUENCE_SIZE gets changed
-			D_ASSERT(state_wrapper->HasEnoughSpace());
-
-			for (idx_t i = 0; i < count; i++) {
-				if (validity[i]) {
-					NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, values[i]);
-				}
+			if (!state_wrapper->HasEnoughSpace()) {
+				// Segment is full
+				auto row_start = state_wrapper->current_segment->start + state_wrapper->current_segment->count;
+				state_wrapper->FlushSegment();
+				state_wrapper->CreateEmptySegment(row_start);
 			}
 
-			state_wrapper->WriteValues((uint64_t *)values, count);
+			NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
+
+			state_wrapper->WriteValue(*(typename ChimpType<VALUE_TYPE>::type *)(&value));
 		}
 	};
 
@@ -82,12 +82,15 @@ public:
 	ChimpState<T, false> state;
 
 public:
-	idx_t RequiredSpace() {
-		return bytes_needed_to_compress;
+	idx_t RequiredSpace() const {
+		return ChimpPrimitives::MAX_BITS_PER_VALUE;
+	}
+	idx_t UsedSpace() const {
+		return state.chimp_state.output.BitsWritten();
 	}
 
 	bool HasEnoughSpace() {
-		return RequiredSpace() <= Storage::BLOCK_SIZE;
+		return UsedSpace() + RequiredSpace() <= (Storage::BLOCK_SIZE * 8);
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -102,6 +105,7 @@ public:
 
 		data_ptr = handle.Ptr() + current_segment->GetBlockOffset();
 		state.chimp_state.SetOutputBuffer(data_ptr);
+		state.chimp_state.Reset();
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
@@ -109,29 +113,17 @@ public:
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			state.template Update<ChimpWriter>(data, vdata.validity, idx);
+			state.template Update<ChimpWriter>(data[idx], vdata.validity.RowIsValid(idx));
 		}
 	}
 
-	void WriteValues(uint64_t *values, idx_t count) {
-		printf("COMPRESS\n");
-		for (idx_t i = 0; i < count; i++) {
-			printf("--- %f ---\n", values[i]);
-			duckdb_chimp::Chimp128Compression<false>::Store(values[i], state.chimp_state);
-		}
-		auto bits_written = state.chimp_state.output->BitsWritten();
-		printf("writtenBits: %llu\n", bits_written);
-		auto bytes_written = (bits_written / 8) + (bits_written % 8 != 0);
-		auto stream = (uint8_t *)state.chimp_state.output->Stream();
-		for (idx_t i = 0; i < bytes_written; i++) {
-			auto temp_string = toBinaryString<uint8_t>(stream[i]);
-			printf("%s\n", temp_string.c_str());
-		}
-		duckdb_chimp::Chimp128Compression<false>::Flush(state.chimp_state);
-		current_segment->count += count;
+	void WriteValue(uint64_t value) {
+		duckdb_chimp::Chimp128Compression<false>::Store(value, state.chimp_state);
+		current_segment->count++;
 	}
 
 	void FlushSegment() {
+		state.chimp_state.output.Flush();
 		auto &checkpoint_state = checkpointer.GetCheckpointState();
 		handle.Destroy();
 
@@ -141,7 +133,6 @@ public:
 	}
 
 	void Finalize() {
-		state.template Flush<ChimpWriter>();
 		FlushSegment();
 		current_segment.reset();
 	}
