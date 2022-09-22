@@ -45,7 +45,7 @@ struct ProxyUri {
 
 	static shared_ptr<ProxyUri> FromString(const string &url);
 
-	std::string to_string() const;
+	std::string ToString() const;
 };
 
 enum class CheckpointAbort : uint8_t {

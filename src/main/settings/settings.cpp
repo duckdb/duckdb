@@ -443,7 +443,7 @@ Value HttpProxySetting::GetSetting(duckdb::ClientContext &context) {
 		}
 	}
 
-	return http_proxy ? Value(http_proxy->to_string()) : nullptr;
+	return http_proxy ? Value(http_proxy->ToString()) : nullptr;
 }
 
 void HttpProxySetting::SetGlobal(duckdb::DatabaseInstance *db, duckdb::DBConfig &config,

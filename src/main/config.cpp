@@ -168,7 +168,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	return (idx_t)multiplier * limit;
 }
 
-std::string ProxyUri::to_string() const {
+std::string ProxyUri::ToString() const {
 	std::string res = "http://";
 	if (!(username.empty() && password.empty())) {
 		res += username + ":" + password + "@";
