@@ -59,3 +59,21 @@ query I
 INSERT INTO test VALUES(1) RETURNING {'i' : x, 'j' : y};
 ----
 {'i': 1, 'j': 101}
+
+query I
+INSERT INTO test VALUES (1), (2) RETURNING y;
+----
+101
+102
+
+query IIII
+INSERT INTO test VALUES (1), (2) RETURNING y, y, y, x;
+----
+101	101	101	1
+102	102	102	2
+
+query II
+INSERT INTO test VALUES (1), (2) RETURNING y + y, x + y;
+----
+202	102
+204	104
