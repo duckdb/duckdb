@@ -24,8 +24,4 @@ struct HandleVectorCastError {
 	}
 };
 
-static string UnimplementedCastMessage(const LogicalType &source_type, const LogicalType &target_type) {
-	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(), target_type.ToString());
-}
-
 } // namespace duckdb

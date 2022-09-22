@@ -1,7 +1,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
-#include "duckdb/common/vector_operations/decimal_cast.hpp"
+#include "duckdb/common/operator/numeric_cast.hpp"
 
 namespace duckdb {
 
@@ -10,34 +10,34 @@ static BoundCastInfo InternalNumericCastSwitch(const LogicalType &source, const 
 	// now switch on the result type
 	switch (target.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return VectorTryCastLoop<SRC, bool, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, bool, duckdb::NumericTryCast>;
 	case LogicalTypeId::TINYINT:
-		return VectorTryCastLoop<SRC, int8_t, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, int8_t, duckdb::NumericTryCast>;
 	case LogicalTypeId::SMALLINT:
-		return VectorTryCastLoop<SRC, int16_t, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, int16_t, duckdb::NumericTryCast>;
 	case LogicalTypeId::INTEGER:
-		return VectorTryCastLoop<SRC, int32_t, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, int32_t, duckdb::NumericTryCast>;
 	case LogicalTypeId::BIGINT:
-		return VectorTryCastLoop<SRC, int64_t, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, int64_t, duckdb::NumericTryCast>;
 	case LogicalTypeId::UTINYINT:
-		return VectorTryCastLoop<SRC, uint8_t, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, uint8_t, duckdb::NumericTryCast>;
 	case LogicalTypeId::USMALLINT:
-		return VectorTryCastLoop<SRC, uint16_t, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, uint16_t, duckdb::NumericTryCast>;
 	case LogicalTypeId::UINTEGER:
-		return VectorTryCastLoop<SRC, uint32_t, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, uint32_t, duckdb::NumericTryCast>;
 	case LogicalTypeId::UBIGINT:
-		return VectorTryCastLoop<SRC, uint64_t, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, uint64_t, duckdb::NumericTryCast>;
 	case LogicalTypeId::HUGEINT:
-		return VectorTryCastLoop<SRC, hugeint_t, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, hugeint_t, duckdb::NumericTryCast>;
 	case LogicalTypeId::FLOAT:
-		return VectorTryCastLoop<SRC, float, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, float, duckdb::NumericTryCast>;
 	case LogicalTypeId::DOUBLE:
-		return VectorTryCastLoop<SRC, double, duckdb::NumericTryCast>;
+		return VectorCastHelpers::TryCastLoop<SRC, double, duckdb::NumericTryCast>;
 	case LogicalTypeId::DECIMAL:
-		return ToDecimalCast<SRC>;
+		return VectorCastHelpers::ToDecimalCast<SRC>;
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
-		return VectorStringCast<SRC, duckdb::StringCast>;
+		return VectorCastHelpers::StringCast<SRC, duckdb::StringCast>;
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}

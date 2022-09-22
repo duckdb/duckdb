@@ -8,7 +8,7 @@ BoundCastInfo DefaultCasts::BlobCastSwitch(BindCastInput &input, const LogicalTy
 	switch (target.id()) {
 	case LogicalTypeId::VARCHAR:
 		// blob to varchar
-		return VectorStringCast<string_t, duckdb::CastFromBlob>;
+		return VectorCastHelpers::StringCast<string_t, duckdb::CastFromBlob>;
 	case LogicalTypeId::AGGREGATE_STATE:
 		return DefaultCasts::ReinterpretCast;
 	default:

@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   blob_cast.cpp
   cast_function_set.cpp
+  decimal_cast.cpp
   default_casts.cpp
   enum_casts.cpp
   list_casts.cpp

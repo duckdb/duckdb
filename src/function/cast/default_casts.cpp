@@ -30,6 +30,10 @@ bool DefaultCasts::NopCast(Vector &source, Vector &result, idx_t count, CastPara
 	return true;
 }
 
+static string UnimplementedCastMessage(const LogicalType &source_type, const LogicalType &target_type) {
+	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(), target_type.ToString());
+}
+
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool success = true;
