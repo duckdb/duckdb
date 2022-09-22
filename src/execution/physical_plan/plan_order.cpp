@@ -9,10 +9,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOrder &op)
 
 	auto plan = CreatePlan(*op.children[0]);
 	if (!op.orders.empty()) {
-		vector<unique_ptr<Expression>> projections;
+		vector<idx_t> projections;
 		if (op.projections.empty()) {
 			for (idx_t i = 0; i < plan->types.size(); i++) {
-				projections.push_back(make_unique<BoundReferenceExpression>("", plan->types[i], i));
+				projections.push_back(i);
 			}
 		} else {
 			projections = move(op.projections);

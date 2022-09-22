@@ -23,9 +23,7 @@ public:
 	}
 
 	vector<BoundOrderByNode> orders;
-
-	idx_t table_index = DConstants::INVALID_INDEX;
-	vector<unique_ptr<Expression>> projections;
+	vector<idx_t> projections;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
@@ -35,8 +33,8 @@ public:
 		}
 
 		vector<ColumnBinding> result;
-		for (idx_t i = 0; i < projections.size(); i++) {
-			result.emplace_back(table_index, i);
+		for (auto &col_idx : projections) {
+			result.push_back(child_bindings[col_idx]);
 		}
 		return result;
 	}
@@ -52,23 +50,17 @@ public:
 			}
 			result += orders[i].expression->GetName();
 		}
-		result += "\nPROJECTIONS:\n";
-		for (idx_t i = 0; i < projections.size(); i++) {
-			if (i > 0) {
-				result += "\n";
-			}
-			result += projections[i]->GetName();
-		}
 		return result;
 	}
 
 protected:
 	void ResolveTypes() override {
+		const auto child_types = children[0]->types;
 		if (projections.empty()) {
-			types = children[0]->types;
+			types = child_types;
 		} else {
-			for (auto &proj : projections) {
-				types.push_back(proj->return_type);
+			for (auto &col_idx : projections) {
+				types.push_back(child_types[col_idx]);
 			}
 		}
 	}

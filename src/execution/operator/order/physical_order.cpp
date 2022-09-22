@@ -9,8 +9,8 @@
 
 namespace duckdb {
 
-PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders,
-                             vector<unique_ptr<Expression>> projections, idx_t estimated_cardinality)
+PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
+                             idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)),
       projections(move(projections)) {
 }
@@ -32,8 +32,7 @@ public:
 
 class OrderLocalState : public LocalSinkState {
 public:
-	OrderLocalState(Allocator &allocator, const PhysicalOrder &op)
-	    : key_executor(allocator), payload_executor(allocator) {
+	OrderLocalState(Allocator &allocator, const PhysicalOrder &op) : key_executor(allocator) {
 		// Initialize order clause expression executor and DataChunk
 		vector<LogicalType> key_types;
 		for (auto &order : op.orders) {
@@ -41,10 +40,6 @@ public:
 			key_executor.AddExpression(*order.expression);
 		}
 		keys.Initialize(allocator, key_types);
-
-		for (auto &proj : op.projections) {
-			payload_executor.AddExpression(*proj);
-		}
 		payload.Initialize(allocator, op.types);
 	}
 
@@ -54,8 +49,7 @@ public:
 	//! Key expression executor, and chunk to hold the vectors
 	ExpressionExecutor key_executor;
 	DataChunk keys;
-	//! Payload expression executor, and chunk to hold the vectors
-	ExpressionExecutor payload_executor;
+	//! Payload chunk to hold the vectors
 	DataChunk payload;
 };
 
@@ -94,7 +88,10 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &g
 
 	auto &payload = lstate.payload;
 	payload.Reset();
-	lstate.payload_executor.Execute(input, payload);
+	for (idx_t col_idx = 0; col_idx < projections.size(); col_idx++) {
+		payload.data[col_idx].Reference(input.data[projections[col_idx]]);
+	}
+	payload.SetCardinality(input.size());
 
 	// Sink the data into the local sort state
 	keys.Verify();
@@ -236,13 +233,6 @@ string PhysicalOrder::ParamsToString() const {
 		}
 		result += orders[i].expression->ToString() + " ";
 		result += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
-	}
-	result += "\n\nPROJECTIONS:\n";
-	for (idx_t i = 0; i < projections.size(); i++) {
-		if (i > 0) {
-			result += "\n";
-		}
-		result += projections[i]->ToString();
 	}
 	return result;
 }

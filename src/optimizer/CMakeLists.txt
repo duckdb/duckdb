@@ -22,7 +22,6 @@ add_library_unity(
   cardinality_estimator.cpp
   estimated_properties.cpp
   optimizer.cpp
-  projection_combiner.cpp
   expression_rewriter.cpp
   regex_range_filter.cpp
   remove_unused_columns.cpp

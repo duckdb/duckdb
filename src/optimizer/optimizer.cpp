@@ -13,7 +13,6 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
-#include "duckdb/optimizer/projection_combiner.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
@@ -133,11 +132,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RunOptimizer(OptimizerType::TOP_N, [&]() {
 		TopN topn;
 		plan = topn.Optimize(move(plan));
-	});
-
-	RunOptimizer(OptimizerType::PROJECTION_COMBINER, [&]() {
-		ProjectionCombiner combiner;
-		plan = combiner.Optimize(move(plan));
 	});
 
 	// apply simple expression heuristics to get an initial reordering
