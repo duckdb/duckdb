@@ -64,7 +64,7 @@ static bool ListToListCast(Vector &source, Vector &result, idx_t count, CastPara
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast the child vector to varchar
-	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR));
+	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
 	ListToListCast(source, varchar_list, count, parameters);
 
 	// now construct the actual varchar vector

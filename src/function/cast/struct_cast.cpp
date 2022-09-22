@@ -67,7 +67,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast all child elements to varchar
 	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
-	Vector varchar_struct(cast_data.target);
+	Vector varchar_struct(cast_data.target, count);
 	StructToStructCast(source, varchar_struct, count, parameters);
 
 	// now construct the actual varchar vector

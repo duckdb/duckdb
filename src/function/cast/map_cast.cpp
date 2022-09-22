@@ -52,7 +52,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast the child elements to varchar
 	auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-	Vector varchar_map(varchar_type);
+	Vector varchar_map(varchar_type, count);
 	MapToMapCast(source, varchar_map, count, parameters);
 
 	// now construct the actual varchar vector
