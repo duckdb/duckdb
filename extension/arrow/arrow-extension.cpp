@@ -16,15 +16,115 @@
 #include "arrow/type_fwd.h"
 #include "arrow/c/bridge.h"
 #include "arrow-extension.hpp"
+#include "arrow_stream_buffer.hpp"
+#include <iostream>
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/function/table/arrow.hpp"
 #endif
 
 namespace duckdb {
+
+struct ArrowIPCScanFunctionData : public ArrowScanFunctionData {
+public:
+	using ArrowScanFunctionData::ArrowScanFunctionData;
+	unique_ptr<BufferingArrowIPCStreamDecoder> stream_decoder = nullptr;
+//	~ArrowIPCScanFunctionData() {}; TODO: this may be required?
+
+};
+
+// IPC Table scan is identical to regular arrow scan except we need to produce the stream from the ipc pointers beforehand
+struct ArrowIPCTableFunction : public ArrowTableFunction {
+public:
+	static TableFunction GetFunction() {
+		child_list_t<LogicalType> make_buffer_struct_children {
+		    {"ptr", LogicalType::UBIGINT}, {"size", LogicalType::UBIGINT}};
+
+		TableFunction scan_arrow_ipc_func("scan_arrow_ipc",
+		                                  {LogicalType::LIST(LogicalType::STRUCT(make_buffer_struct_children))},
+		                                  ArrowTableFunction::ArrowScanFunction, ArrowIPCTableFunction::ArrowScanBind,
+		                                  ArrowTableFunction::ArrowScanInitGlobal, ArrowTableFunction::ArrowScanInitLocal);
+
+		scan_arrow_ipc_func.cardinality = ArrowTableFunction::ArrowScanCardinality;
+		scan_arrow_ipc_func.projection_pushdown = true;
+		scan_arrow_ipc_func.filter_pushdown = true;
+		scan_arrow_ipc_func.table_scan_progress = ArrowTableFunction::ArrowProgress;
+
+		return scan_arrow_ipc_func;
+	}
+
+	static void RegisterFunction(BuiltinFunctions &set) {
+		set.AddFunction(GetFunction());
+	}
+
+private:
+	// need this to parse different args and produce pointer to streamreader myself
+	static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
+	                                              vector<LogicalType> &return_types, vector<string> &names) {
+		auto stream_decoder = make_unique<BufferingArrowIPCStreamDecoder>();
+
+		auto buffer_ptr_list = ListValue::GetChildren(input.inputs[0]);
+		for (auto& buffer_ptr_struct : buffer_ptr_list) {
+			auto unpacked = StructValue::GetChildren(buffer_ptr_struct);
+			uint64_t ptr = unpacked[0].GetValue<uint64_t>();
+			uint64_t size = unpacked[1].GetValue<uint64_t>();
+
+			// Feed stream into decoder
+			auto res = stream_decoder->Consume((const uint8_t *)ptr, size);
+
+			if (!res.ok()) {
+				throw IOException("Invalid IPC stream");
+			}
+		}
+
+		// TODO the issue here is that the stream appears to not be closed?
+		if (!stream_decoder->buffer()->is_eos()) {
+			throw IOException("IPC buffers passed to arrow scan should contain entire stream");
+		}
+
+		// These are the params I need to produce from the ipc buffers using the WebDB.cc code
+		auto stream_factory_ptr = (uintptr_t)&stream_decoder->buffer();
+		auto stream_factory_produce = (stream_factory_produce_t)&ArrowIPCStreamBufferReader::CreateStream;
+		auto stream_factory_get_schema = (stream_factory_get_schema_t)&ArrowIPCStreamBufferReader::GetSchema;
+		auto rows_per_thread = 1000000;
+
+		auto res = make_unique<ArrowIPCScanFunctionData>(rows_per_thread, stream_factory_produce, stream_factory_ptr);
+
+		// TODO Everything below this is identical to arrow.cpp
+
+		// Store decoder
+		res->stream_decoder = std::move(stream_decoder);
+
+		auto &data = *res;
+		stream_factory_get_schema(stream_factory_ptr, data.schema_root);
+		for (idx_t col_idx = 0; col_idx < (idx_t)data.schema_root.arrow_schema.n_children; col_idx++) {
+			auto &schema = *data.schema_root.arrow_schema.children[col_idx];
+			if (!schema.release) {
+				throw InvalidInputException("arrow_scan: released schema passed");
+			}
+			if (schema.dictionary) {
+				res->arrow_convert_data[col_idx] =
+				    make_unique<ArrowConvertData>(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
+				return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->arrow_convert_data, col_idx));
+			} else {
+				return_types.emplace_back(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
+			}
+			auto format = string(schema.format);
+			auto name = string(schema.name);
+			if (name.empty()) {
+				name = string("v") + to_string(col_idx);
+			}
+			names.push_back(name);
+		}
+		RenameArrowColumns(names);
+		return move(res);
+	}
+};
+
 
 //! note: this is the number of vectors per chunk
 static constexpr idx_t DEFAULT_CHUNK_SIZE = 120;
@@ -38,6 +138,7 @@ struct ToArrowIpcFunctionData : public TableFunctionData {
 	shared_ptr<arrow::Schema> schema;
 };
 
+// TODO allow omitting argument to use default
 static unique_ptr<FunctionData>
 ToArrowIpcBind(ClientContext &context, TableFunctionBindInput &input,
                 vector<LogicalType> &return_types, vector<string> &names) {
@@ -106,6 +207,10 @@ static void LoadInternal(DatabaseInstance &instance) {
 	                                 ToArrowIpcFunction, ToArrowIpcBind);
 	CreateTableFunctionInfo get_arrow_ipc_info(get_arrow_ipc_func);
 	catalog.CreateTableFunction(*con.context, &get_arrow_ipc_info);
+
+	TableFunction scan_arrow_ipc = ArrowIPCTableFunction::GetFunction();
+	CreateTableFunctionInfo scan_arrow_ipc_info(scan_arrow_ipc);
+	catalog.CreateTableFunction(*con.context, &scan_arrow_ipc_info);
 
 	con.Commit();
 }

@@ -4,6 +4,9 @@
 
 #include <algorithm>
 #include <cassert>
+#include <iostream>
+#include <string>
+#include <regex>
 
 namespace node_duckdb {
 
@@ -65,11 +68,36 @@ Statement::Statement(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Statemen
 	connection_ref = Napi::ObjectWrap<Connection>::Unwrap(info[0].As<Napi::Object>());
 	connection_ref->Ref();
 
-	sql = info[1].As<Napi::String>();
-
+	// TODO: This should be info[1] right? Is not used anyways i think
 	Napi::Function callback;
 	if (info.Length() > 1 && info[2].IsFunction()) {
 		callback = info[2].As<Napi::Function>();
+	}
+
+	// TODO we should do this using replacement scans probably? or at least define a macro? or maybe add a view
+	if (info.Length() > 2 && info[2].IsArray()) {
+		std::string table_scan_str = "scan_arrow_ipc([";
+		auto b = info[2].As<Napi::Array>();
+		for(uint64_t i = 0; i<b.Length(); i++) {
+			table_scan_str += "{";
+			Napi::Value v = b[i];
+			if (!v.IsObject()) {
+				throw std::runtime_error("Expected Object");
+			}
+			Napi::Uint8Array arr = v.As<Napi::Uint8Array>();
+			auto raw_ptr = reinterpret_cast<uint64_t>(arr.ArrayBuffer().Data());
+			auto length = (uint64_t)arr.ElementLength();
+
+			table_scan_str += "'ptr': " + std::to_string(raw_ptr) + "::UBIGINT, ";
+			table_scan_str += "'size': " + std::to_string(length) + "},";
+		}
+	    table_scan_str += "])";
+
+		std::string sql_preprocessed = info[1].As<Napi::String>().Utf8Value();
+		sql_preprocessed = std::regex_replace(sql_preprocessed, std::regex("_arrow_ipc_stream"), table_scan_str);
+		sql = Napi::String::New(env, sql_preprocessed);
+	} else {
+		sql = info[1].As<Napi::String>();
 	}
 
 	// TODO we can have parameters here as well. Forward if that is the case.

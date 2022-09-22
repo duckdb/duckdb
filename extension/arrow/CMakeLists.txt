@@ -7,9 +7,9 @@ add_extension_definitions()
 include_directories(include ../.. ../../third_party/httplib
                     ../../third_party/picohash ../parquet/include)
 
-add_library(arrow_extension STATIC arrow-extension.cpp)
+add_library(arrow_extension STATIC arrow-extension.cpp arrow_stream_buffer.cpp)
 set(INGORE_WARNINGS OFF)
-build_loadable_extension(arrow arrow-extension.cpp ${IGNORE_WARNINGS})
+build_loadable_extension(arrow arrow-extension.cpp arrow_stream_buffer.cpp ${IGNORE_WARNINGS})
 
 # set arrow path
 set(ARROW_PATH /opt/homebrew/Cellar/apache-arrow/9.0.0_1)

@@ -131,6 +131,17 @@ Connection.prototype.run = function (sql) {
  * @param callback
  * @return {void}
  */
+Connection.prototype.scanArrowIpc = function (sql, ipc_buffers) {
+    var statement = new Statement(this, sql, ipc_buffers);
+    return statement.all.apply(statement, [arguments[0], arguments[2]]);
+}
+
+/**
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
 Connection.prototype.all = function (sql) {
     var statement = new Statement(this, sql);
     return statement.all.apply(statement, arguments);
@@ -426,6 +437,17 @@ Database.prototype.run = function () {
  * @param callback
  * @return {void}
  */
+Database.prototype.scanArrowIpc = function () {
+    default_connection(this).scanArrowIpc.apply(this.default_connection, arguments);
+    return this;
+}
+
+/**
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
 Database.prototype.each = function () {
     default_connection(this).each.apply(this.default_connection, arguments);
     return this;
@@ -558,3 +580,11 @@ Statement.prototype.arrow;
  * @yield callback
  */
 Statement.prototype.streamArrowIpc;
+
+/**
+ * @method
+ * @arg sql
+ * @param {...*} params
+ * @yield callback
+ */
+Statement.prototype.scanArrowIpc;
