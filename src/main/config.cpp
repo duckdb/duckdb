@@ -169,15 +169,16 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 }
 
 std::string ProxyUri::ToString() const {
-	std::string res = "http://";
-	if (!(username.empty() && password.empty())) {
-		res += username + ":" + password + "@";
-	}
-	res += host;
-	if (port != 0) {
-		res += ":" + std::to_string(port);
-	}
-	return res;
+	std::map<uri::component, string> components = {
+	    {uri::component::Scheme, "http"},
+	    {uri::component::Username, username},
+	    {uri::component::Password, password},
+	    {uri::component::Host, host},
+	    {uri::component::Port, std::to_string(port)},
+	    {uri::component::Path, ""}
+	};
+
+	return uri(components, uri::scheme_category::Hierarchical, false).to_string();
 }
 
 shared_ptr<ProxyUri> ProxyUri::FromString(const string &url) {
