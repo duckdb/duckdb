@@ -193,7 +193,6 @@ public:
 		SetTrailingZeros();
 		reference_value = 0;
 		ring_buffer.Reset();
-		end_of_stream = false;
 		first = true;
 	}
 
@@ -212,17 +211,11 @@ public:
 		return zeros.trailing;
 	}
 
-	bool StreamEndReached() const {
-		return end_of_stream;
-	}
-
 	InputBitStream input;
 	StoredZeros zeros;
 	uint64_t reference_value = 0;
 	RingBuffer	ring_buffer;
 
-	//FIXME: 'end_of_stream' unused, left in here in case it might be necessary to use it
-	bool end_of_stream = false;
 	bool first;
 };
 
