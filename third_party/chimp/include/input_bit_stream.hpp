@@ -16,7 +16,6 @@ namespace duckdb_chimp {
 
 static constexpr uint32_t BLOCK_SIZE = 262136;
 
-//! Set this to uint64_t, not sure what setting a double to 0 does on the bit-level
 class InputBitStream {
 public:
 	using INTERNAL_TYPE = uint8_t;
@@ -64,13 +63,13 @@ public:
 		// Empty the current bit buffer
 		value = (T)ReadFromCurrent(fill);
 
-		// Read multiples of 8
+		// Read multiples of 16
 		i = value_size >> 4;
 		while(i-- != 0) {
 			value = value << 16 | (T)ReadFromCurrent(16);
 		}
 
-		// Get the last (< 8) bits of the value
+		// Get the last (< 16) bits of the value
 		value_size &= 15;
 		if (value_size) {
 			value = value << value_size | (T)ReadFromCurrent(value_size);
@@ -100,7 +99,7 @@ private:
 	}
 	void DecreaseLoadedBits(uint8_t value = 1) {
 		fill -= value;
-		if (fill < 16 && bits_read + 8 < BLOCK_SIZE * 8) {
+		if (fill < 16) {
 			Refill();
 		}
 	}

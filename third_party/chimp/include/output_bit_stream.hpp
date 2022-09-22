@@ -10,14 +10,12 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <assert.h>
 
 #include "bit_utils.hpp"
 
 namespace duckdb_chimp {
 
-//! Set this to uint64_t, not sure what setting a double to 0 does on the bit-level
 template <bool EMPTY>
 class OutputBitStream {
 	using INTERNAL_TYPE = uint8_t;
