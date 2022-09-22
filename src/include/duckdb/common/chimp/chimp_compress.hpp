@@ -37,22 +37,21 @@ public:
 
 		template <class VALUE_TYPE>
 		static void Operation(VALUE_TYPE value, bool is_valid, void *state_p) {
-			if (!is_valid) {
-				return;
-			}
 			//! Need access to the CompressionState to be able to flush the segment
 			auto state_wrapper = (ChimpCompressionState<VALUE_TYPE> *)state_p;
 
-			if (!state_wrapper->HasEnoughSpace()) {
+			if (is_valid && !state_wrapper->HasEnoughSpace()) {
 				// Segment is full
 				auto row_start = state_wrapper->current_segment->start + state_wrapper->current_segment->count;
 				state_wrapper->FlushSegment();
 				state_wrapper->CreateEmptySegment(row_start);
 			}
 
-			NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
+			if (is_valid) {
+				NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
+			}
 
-			state_wrapper->WriteValue(*(typename ChimpType<VALUE_TYPE>::type *)(&value));
+			state_wrapper->WriteValue(*(typename ChimpType<VALUE_TYPE>::type *)(&value), is_valid);
 		}
 	};
 
@@ -75,6 +74,8 @@ public:
 	CompressionFunction *function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
+	idx_t written_bits = 0;
+	idx_t group_idx = 0;
 
 	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;
@@ -94,6 +95,7 @@ public:
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
+		written_bits = 0;
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
@@ -117,9 +119,18 @@ public:
 		}
 	}
 
-	void WriteValue(uint64_t value) {
-		duckdb_chimp::Chimp128Compression<false>::Store(value, state.chimp_state);
+	void WriteValue(uint64_t value, bool is_valid) {
 		current_segment->count++;
+		if (!is_valid) {
+			return;
+		}
+		duckdb_chimp::Chimp128Compression<false>::Store(value, state.chimp_state);
+		group_idx++;
+		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
+			group_idx = 0;
+			written_bits += UsedSpace();
+			state.chimp_state.Reset();
+		}
 	}
 
 	void FlushSegment() {
@@ -127,8 +138,8 @@ public:
 		auto &checkpoint_state = checkpointer.GetCheckpointState();
 		handle.Destroy();
 
-		auto bits_written = state.chimp_state.CompressedSize();
-		auto total_segment_size = bits_written / 8 + (bits_written % 8 != 0);
+		idx_t total_bits_written = written_bits + UsedSpace();
+		idx_t total_segment_size = total_bits_written + (total_bits_written % 8 != 0);
 		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);
 	}
 

@@ -31,8 +31,10 @@ public:
 	ChimpState<T, true> state;
 
 public:
-	void WriteValue(uint64_t value) {
-		printf("ANALYZE\n");
+	void WriteValue(uint64_t value, bool is_valid) {
+		if (!is_valid) {
+			return;
+		}
 		duckdb_chimp::Chimp128Compression<true>::Store(value, state.chimp_state);
 	}
 };
@@ -41,7 +43,7 @@ struct EmptyChimpWriter {
 	template <class VALUE_TYPE>
 	static void Operation(VALUE_TYPE uncompressed_value, bool is_valid, void *state_p) {
 		auto state_wrapper = (ChimpAnalyzeState<VALUE_TYPE> *)state_p;
-		state_wrapper->WriteValue(*(typename ChimpType<VALUE_TYPE>::type *)(&uncompressed_value));
+		state_wrapper->WriteValue(*(typename ChimpType<VALUE_TYPE>::type *)(&uncompressed_value), is_valid);
 	}
 };
 

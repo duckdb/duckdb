@@ -58,9 +58,7 @@ public:
 	//! Called for every single value that's decompressed
 	template <class OP>
 	bool Update(T uncompressed_value, bool is_valid) {
-		if (is_valid) {
-			OP::template Operation<T>(uncompressed_value, is_valid, data_ptr);
-		}
+		OP::template Operation<T>(uncompressed_value, is_valid, data_ptr);
 		return true;
 	}
 };
