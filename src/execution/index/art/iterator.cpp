@@ -240,11 +240,11 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 				return true;
 			}
 			// Case1: When the ART has only one leaf node, the Next() will return false
-			// Case2: This means the previous node prefix(if any) + a_key(one element of previous node key arrary)
+			// Case2: This means the previous node prefix(if any) + a_key(one element of of key array of previous node)
 			//         + leaf prefix(if any) == key[q..=w..=e]
 			// But key[e+1..=z] is not checked.
 			// One fact is key[w] is alawys equal to a_key
-			// and the next element of previous node key array is always > a_key
+			// and the next element of key array of previous node is always > a_key
 			// So we just call Next() once.
 
 			return Next();
