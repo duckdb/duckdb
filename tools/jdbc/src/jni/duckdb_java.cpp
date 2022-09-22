@@ -419,7 +419,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 					jobject str_val = env->CallObjectMethod(param, J_Decimal_toPlainString);
 					auto *str_char = env->GetStringUTFChars((jstring)str_val, 0);
 					Value val = Value(str_char);
-					val = val.CastAs(LogicalType::DECIMAL(precision, scale));
+					val = val.DefaultCastAs(LogicalType::DECIMAL(precision, scale));
 
 					duckdb_params.push_back(val);
 					env->ReleaseStringUTFChars((jstring)str_val, str_char);
