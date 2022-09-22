@@ -60,7 +60,6 @@ public:
 	template <class T, uint8_t VALUE_SIZE>
 	void WriteValue(T value) {
 		bits_written += VALUE_SIZE;
-		printf("value %llu, bits: %d\n", value, VALUE_SIZE);
 		if (EMPTY) {
 			return;
 		}
@@ -70,7 +69,7 @@ public:
 			return;
 		}
 		auto i = VALUE_SIZE - free_bits;
-		const uint8_t queue = i & 0b00000111;
+		const uint8_t queue = i & 7;
 
 		if (free_bits != 0) {
 			// Reset the number of free bits
@@ -84,10 +83,12 @@ public:
 			WriteInCurrent((INTERNAL_TYPE)value, queue);
 			value >>= queue;
 		}
-		if (i == 64) WriteToStream((INTERNAL_TYPE)(value >> 56));
-		if (i > 55) WriteToStream((INTERNAL_TYPE)(value >> 48));
-		if (i > 47) WriteToStream((INTERNAL_TYPE)(value >> 40));
-		if (i > 39) WriteToStream((INTERNAL_TYPE)(value >> 32));
+		if (sizeof(T) * 8 > 32) {
+			if (i == 64) WriteToStream((INTERNAL_TYPE)(value >> 56));
+			if (i > 55) WriteToStream((INTERNAL_TYPE)(value >> 48));
+			if (i > 47) WriteToStream((INTERNAL_TYPE)(value >> 40));
+			if (i > 39) WriteToStream((INTERNAL_TYPE)(value >> 32));
+		}
 		if (i > 31) WriteToStream((INTERNAL_TYPE)(value >> 24));
 		if (i > 23) WriteToStream((INTERNAL_TYPE)(value >> 16));
 		if (i > 15) WriteToStream((INTERNAL_TYPE)(value >> 8));
@@ -96,7 +97,6 @@ public:
 	template <class T>
 	void WriteValue(T value, uint8_t value_size) {
 		bits_written += value_size;
-		printf("value %llu, bits: %d\n", value, value_size);
 		if (EMPTY) {
 			return;
 		}
@@ -106,7 +106,7 @@ public:
 			return;
 		}
 		auto i = value_size - free_bits;
-		const uint8_t queue = i & 0b00000111;
+		const uint8_t queue = i & 7;
 
 		if (free_bits != 0) {
 			// Reset the number of free bits
@@ -120,10 +120,12 @@ public:
 			WriteInCurrent((INTERNAL_TYPE)value, queue);
 			value >>= queue;
 		}
-		if (i == 64) WriteToStream((INTERNAL_TYPE)(value >> 56));
-		if (i > 55) WriteToStream((INTERNAL_TYPE)(value >> 48));
-		if (i > 47) WriteToStream((INTERNAL_TYPE)(value >> 40));
-		if (i > 39) WriteToStream((INTERNAL_TYPE)(value >> 32));
+		if (sizeof(T) * 8 > 32) {
+			if (i == 64) WriteToStream((INTERNAL_TYPE)(value >> 56));
+			if (i > 55) WriteToStream((INTERNAL_TYPE)(value >> 48));
+			if (i > 47) WriteToStream((INTERNAL_TYPE)(value >> 40));
+			if (i > 39) WriteToStream((INTERNAL_TYPE)(value >> 32));
+		}
 		if (i > 31) WriteToStream((INTERNAL_TYPE)(value >> 24));
 		if (i > 23) WriteToStream((INTERNAL_TYPE)(value >> 16));
 		if (i > 15) WriteToStream((INTERNAL_TYPE)(value >> 8));

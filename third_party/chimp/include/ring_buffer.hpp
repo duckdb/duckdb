@@ -26,8 +26,6 @@ public:
 		if (!FIRST) {
 			index++;
 		}
-		auto key = Key(value);
-		printf("[%llu] FIRST = %s | KEY: %llu | INSERTED_VALUE: %llu\n", index, FIRST ? "True" : "False", key, value);
 		buffer[index % RING_SIZE] = value;
 		indices[Key(value)] = index;
 	}
