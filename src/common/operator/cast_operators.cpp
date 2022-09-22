@@ -1281,7 +1281,8 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 //===--------------------------------------------------------------------===//
 template <>
 string_t CastFromPointer::Operation(uintptr_t input, Vector &vector) {
-	return string_t(std::to_string(input));
+	std::string s = duckdb_fmt::format("0x{:x}", input);
+	return StringVector::AddString(vector, s);
 }
 
 //===--------------------------------------------------------------------===//
