@@ -9,7 +9,7 @@ BoundCastInfo DefaultCasts::PointerCastSwitch(BindCastInput &input, const Logica
 	switch (target.id()) {
 	case LogicalTypeId::VARCHAR:
 		// pointer to varchar
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uintptr_t, duckdb::CastFromPointer>);;
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uintptr_t, duckdb::CastFromPointer>);
 	default:
 		return nullptr;
 	}
