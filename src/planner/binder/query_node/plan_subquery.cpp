@@ -13,6 +13,7 @@
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -30,7 +31,9 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
 		auto count_star_fun = CountStarFun::GetFunction();
-		auto count_star = AggregateFunction::BindAggregateFunction(binder.context, count_star_fun, {}, nullptr, false);
+
+		FunctionBinder function_binder(binder.context);
+		auto count_star = function_binder.BindAggregateFunction(count_star_fun, {}, nullptr, false);
 		auto idx_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
@@ -80,8 +83,10 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		auto bound = make_unique<BoundColumnRefExpression>(expr.return_type, ColumnBinding(table_idx, 0));
 		vector<unique_ptr<Expression>> first_children;
 		first_children.push_back(move(bound));
-		auto first_agg = AggregateFunction::BindAggregateFunction(
-		    binder.context, FirstFun::GetFunction(expr.return_type), move(first_children), nullptr, false);
+
+		FunctionBinder function_binder(binder.context);
+		auto first_agg = function_binder.BindAggregateFunction(FirstFun::GetFunction(expr.return_type),
+		                                                       move(first_children), nullptr, false);
 
 		expressions.push_back(move(first_agg));
 		auto aggr_index = binder.GenerateTableIndex();

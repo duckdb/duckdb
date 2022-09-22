@@ -14,6 +14,7 @@
 
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -53,7 +54,9 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		}
 		vector<unique_ptr<Expression>> children;
 		children.push_back(move(source));
-		auto function = ScalarFunction::BindScalarFunction(context, collation_entry->function, move(children));
+
+		FunctionBinder function_binder(context);
+		auto function = function_binder.BindScalarFunction(collation_entry->function, move(children));
 		source = move(function);
 	}
 	return source;

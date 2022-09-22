@@ -16,6 +16,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/tableref/bound_table_function.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -217,7 +218,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	}
 
 	// select the function based on the input parameters
-	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);
+	FunctionBinder function_binder(context);
+	idx_t best_function_idx = function_binder.BindFunction(function->name, function->functions, arguments, error);
 	if (best_function_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(ref, error));
 	}

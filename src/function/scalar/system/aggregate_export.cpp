@@ -3,6 +3,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -203,7 +204,10 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	auto aggr = (AggregateFunctionCatalogEntry *)func;
 
 	string error;
-	idx_t best_function = Function::BindFunction(aggr->name, aggr->functions, state_type.bound_argument_types, error);
+
+	FunctionBinder function_binder(context);
+	idx_t best_function =
+	    function_binder.BindFunction(aggr->name, aggr->functions, state_type.bound_argument_types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name, error);
 	}
