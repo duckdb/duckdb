@@ -311,7 +311,7 @@ static AggregateFunction GetFirstOperator(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::DECIMAL) {
 		throw InternalException("FIXME: this shouldn't happen...");
 	}
-	return GetFirstFunction<false, false>(type);
+	return GetFirstFunction<LAST, SKIP_NULLS>(type);
 }
 
 template <bool LAST, bool SKIP_NULLS>
