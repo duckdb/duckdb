@@ -15,14 +15,14 @@
 namespace duckdb {
 
 struct CreateScalarFunctionInfo : public CreateFunctionInfo {
-	explicit CreateScalarFunctionInfo(ScalarFunction function);
-	explicit CreateScalarFunctionInfo(ScalarFunctionSet set);
+	DUCKDB_API explicit CreateScalarFunctionInfo(ScalarFunction function);
+	DUCKDB_API explicit CreateScalarFunctionInfo(ScalarFunctionSet set);
 
 	ScalarFunctionSet functions;
 
 public:
-	unique_ptr<CreateInfo> Copy() const override;
-	unique_ptr<AlterInfo> GetAlterInfo() const override;
+	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
+	DUCKDB_API unique_ptr<AlterInfo> GetAlterInfo() const override;
 };
 
 } // namespace duckdb
