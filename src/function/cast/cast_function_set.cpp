@@ -11,7 +11,7 @@ BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<B
 }
 
 CastFunctionSet::CastFunctionSet() : map_info(nullptr) {
-	bind_functions.push_back(DefaultCasts::GetDefaultCastFunction);
+	bind_functions.emplace_back(DefaultCasts::GetDefaultCastFunction);
 }
 
 CastFunctionSet &CastFunctionSet::Get(ClientContext &context) {

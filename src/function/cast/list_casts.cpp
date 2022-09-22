@@ -4,7 +4,7 @@
 namespace duckdb {
 
 struct ListBoundCastData : public BoundCastData {
-	ListBoundCastData(BoundCastInfo child_cast) : child_cast_info(move(child_cast)) {
+	explicit ListBoundCastData(BoundCastInfo child_cast) : child_cast_info(move(child_cast)) {
 	}
 
 	BoundCastInfo child_cast_info;
