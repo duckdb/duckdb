@@ -317,7 +317,7 @@ public:
     full_uri.append(m_scheme);
     full_uri.append(":");
 
-    if (m_content.length() > m_path.length())
+    if (m_category == scheme_category::Hierarchical)
     {
       full_uri.append("//");
       if (!(m_username.empty() || m_password.empty()))
