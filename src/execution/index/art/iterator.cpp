@@ -239,22 +239,15 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 			if (cur_key > key) {
 				return true;
 			}
-			// Leaf is lower than key
-			// Check if next leaf is still lower than key
-			while (Next()) {
-				if (cur_key == key) {
-					// if it's not inclusive check if there is a next leaf
-					if (!inclusive && !Next()) {
-						return false;
-					} else {
-						return true;
-					}
-				} else if (cur_key > key) {
-					// if it's not inclusive check if there is a next leaf
-					return true;
-				}
-			}
-			return false;
+			// Case1: When the ART has only one leaf node, the Next() will return false
+			// Case2: This means the previous node prefix(if any) + a_key(one element of previous node key arrary)
+			//         + leaf prefix(if any) == key[q..=w..=e]
+			// But key[e+1..=z] is not checked.
+			// One fact is key[w] is alawys equal to a_key
+			// and the next element of previous node key array is always > a_key
+			// So we just call Next() once.
+
+			return Next();
 		}
 		// equal case:
 		uint32_t mismatch_pos = node->prefix.KeyMismatchPosition(key, depth);
