@@ -33,9 +33,15 @@ void INETExtension::Load(DuckDB &db) {
 	info.internal = true;
 	catalog.CreateType(*con.context, &info);
 
+	// add inet functions
 	auto host_fun = ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INetFunctions::Host);
 	CreateScalarFunctionInfo host_info(host_fun);
 	catalog.CreateFunction(*con.context, &host_info);
+
+	auto substract_fun = ScalarFunction("-", {inet_type, LogicalType::BIGINT}, inet_type, INetFunctions::Subtract);
+	CreateScalarFunctionInfo subtract_info(substract_fun);
+	subtract_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	catalog.CreateFunction(*con.context, &subtract_info);
 
 	// add inet casts
 	auto &config = DBConfig::GetConfig(*con.context);

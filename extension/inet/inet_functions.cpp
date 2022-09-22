@@ -4,7 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/vector_operations/struct_executor.hpp"
+#include "duckdb/common/vector_operations/generic_executor.hpp"
 
 namespace duckdb {
 
@@ -45,9 +45,9 @@ bool INetFunctions::CastVarcharToINET(Vector &source, Vector &result, idx_t coun
 }
 
 bool INetFunctions::CastINETToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	StructExecutor::Execute<hugeint_t, uint16_t, uint8_t, string_t>(
-	    source, result, count, [&](hugeint_t address, uint16_t mask, uint8_t ip_type) {
-		    IPAddress inet(address, mask, IPAddressType(ip_type));
+	GenericExecutor::ExecuteUnary<StructTypeTernary<hugeint_t, uint16_t, uint8_t>, PrimitiveType<string_t>>(
+	    source, result, count, [&](StructTypeTernary<hugeint_t, uint16_t, uint8_t> input) {
+		    IPAddress inet(input.a_val, input.b_val, IPAddressType(input.c_val));
 		    auto str = inet.ToString();
 		    return StringVector::AddString(result, str);
 	    });
@@ -55,11 +55,28 @@ bool INetFunctions::CastINETToVarchar(Vector &source, Vector &result, idx_t coun
 }
 
 void INetFunctions::Host(DataChunk &args, ExpressionState &state, Vector &result) {
-	StructExecutor::Execute<hugeint_t, uint16_t, uint8_t, string_t>(
-	    args.data[0], result, args.size(), [&](hugeint_t address, uint16_t mask, uint8_t ip_type) {
-		    IPAddress inet(address, 32, IPAddressType(ip_type));
+	GenericExecutor::ExecuteUnary<StructTypeTernary<hugeint_t, uint16_t, uint8_t>, PrimitiveType<string_t>>(
+	    args.data[0], result, args.size(), [&](StructTypeTernary<hugeint_t, uint16_t, uint8_t> input) {
+		    IPAddress inet(input.a_val, IPAddress::IPV4_DEFAULT_MASK, IPAddressType(input.c_val));
 		    auto str = inet.ToString();
 		    return StringVector::AddString(result, str);
+	    });
+}
+
+void INetFunctions::Subtract(DataChunk &args, ExpressionState &state, Vector &result) {
+	GenericExecutor::ExecuteBinary<StructTypeTernary<hugeint_t, uint16_t, uint8_t>, PrimitiveType<int32_t>,
+	                               StructTypeTernary<hugeint_t, uint16_t, uint8_t>>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](StructTypeTernary<hugeint_t, uint16_t, uint8_t> ip, PrimitiveType<int32_t> val) {
+		    auto new_address = ip.a_val - val.val;
+		    if (new_address < 0) {
+			    throw NotImplementedException("Out of range!?");
+		    }
+		    StructTypeTernary<hugeint_t, uint16_t, uint8_t> result;
+		    result.a_val = new_address;
+		    result.b_val = ip.b_val;
+		    result.c_val = ip.c_val;
+		    return result;
 	    });
 }
 

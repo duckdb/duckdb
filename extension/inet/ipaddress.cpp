@@ -58,8 +58,8 @@ parse_dot:
 	goto parse_number;
 parse_mask:
 	if (c == size) {
-		// no mask, default to 32
-		result.mask = 32;
+		// no mask, set to default
+		result.mask = IPAddress::IPV4_DEFAULT_MASK;
 		return true;
 	}
 	if (data[c] != '/') {
@@ -91,7 +91,7 @@ string IPAddress::ToString() const {
 		auto str = to_string(byte);
 		result += str;
 	}
-	if (mask != 32) {
+	if (mask != IPAddress::IPV4_DEFAULT_MASK) {
 		result += "/" + to_string(mask);
 	}
 	return result;

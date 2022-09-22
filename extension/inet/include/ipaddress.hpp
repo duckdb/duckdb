@@ -18,6 +18,9 @@ enum class IPAddressType : uint8_t { IP_ADDRESS_V4 = 0, IP_ADDRESS_V6 = 1 };
 
 class IPAddress {
 public:
+	constexpr static const int32_t IPV4_DEFAULT_MASK = 32;
+
+public:
 	IPAddress();
 	IPAddress(hugeint_t address, uint16_t mask, IPAddressType type);
 
