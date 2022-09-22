@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-enum class IPAddressType : uint8_t { IP_ADDRESS_V4 = 0, IP_ADDRESS_V6 = 1 };
+enum class IPAddressType : uint8_t { IP_ADDRESS_INVALID = 0, IP_ADDRESS_V4 = 1, IP_ADDRESS_V6 = 2 };
 
 class IPAddress {
 public:
@@ -22,11 +22,11 @@ public:
 
 public:
 	IPAddress();
-	IPAddress(hugeint_t address, uint16_t mask, IPAddressType type);
+	IPAddress(IPAddressType type, hugeint_t address, uint16_t mask);
 
+	IPAddressType type;
 	hugeint_t address;
 	uint16_t mask;
-	IPAddressType type;
 
 public:
 	static IPAddress FromIPv4(int32_t address, uint16_t mask);

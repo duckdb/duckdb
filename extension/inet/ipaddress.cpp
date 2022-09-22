@@ -4,17 +4,17 @@
 
 namespace duckdb {
 
-IPAddress::IPAddress() {
+IPAddress::IPAddress() : type(IPAddressType::IP_ADDRESS_INVALID) {
 }
 
-IPAddress::IPAddress(hugeint_t address, uint16_t mask, IPAddressType type) : address(address), mask(mask), type(type) {
+IPAddress::IPAddress(IPAddressType type, hugeint_t address, uint16_t mask) : type(type), address(address), mask(mask) {
 }
 
 IPAddress IPAddress::FromIPv4(int32_t address, uint16_t mask) {
-	return IPAddress(address, mask, IPAddressType::IP_ADDRESS_V4);
+	return IPAddress(IPAddressType::IP_ADDRESS_V4, address, mask);
 }
 IPAddress IPAddress::FromIPv6(hugeint_t address, uint16_t mask) {
-	return IPAddress(address, mask, IPAddressType::IP_ADDRESS_V6);
+	return IPAddress(IPAddressType::IP_ADDRESS_V6, address, mask);
 }
 
 static bool IPAddressError(string_t input, string *error_message, string error) {
@@ -28,7 +28,8 @@ bool IPAddress::TryParse(string_t input, IPAddress &result, string *error_messag
 	auto size = input.GetSize();
 	idx_t c = 0;
 	idx_t number_count = 0;
-	int32_t address = 0;
+	uint32_t address = 0;
+	result.type = IPAddressType::IP_ADDRESS_V4;
 parse_number:
 	idx_t start = c;
 	while (c < size && data[c] >= '0' && data[c] <= '9') {

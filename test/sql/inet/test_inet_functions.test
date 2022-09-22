@@ -35,5 +35,6 @@ SELECT INET '127.0.0.31' - -32;
 ----
 127.0.0.63
 
+# underflow
 statement error
 SELECT INET '0.0.0.0' - 32;

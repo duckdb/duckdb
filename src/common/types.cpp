@@ -1447,7 +1447,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 			return make_shared<ExtraTypeInfo>(type, alias);
 		}
 		return nullptr;
-	} break;
+	}
 	case ExtraTypeInfoType::GENERIC_TYPE_INFO: {
 		extra_info = make_shared<ExtraTypeInfo>(type);
 	} break;
