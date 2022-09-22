@@ -154,7 +154,8 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
 	// now add the table function to the bind context so its columns can be bound
-	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, *get);
+	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
+	                              get->GetTable());
 	return move(get);
 }
 
