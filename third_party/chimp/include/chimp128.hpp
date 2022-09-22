@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// third_party/chimp/include/chimp128.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include <limits>
@@ -7,8 +15,6 @@
 #include "output_bit_stream.hpp"
 #include "input_bit_stream.hpp"
 #include "ring_buffer.hpp"
-#include <queue>
-#include <memory>
 #include <assert.h>
 
 namespace duckdb_chimp {
@@ -101,7 +107,7 @@ public:
 		uint32_t trailing_zeros = 0;
 		bool trailing_zeros_exceed_threshold = false;
 
-		//! Initialize some relevant variables based on the state of the ring_buffer
+		//! Find the reference value to use when compressing the current value
 		if (((int64_t)state.ring_buffer.Size() - (int64_t)key) < (int64_t)RingBuffer::RING_SIZE) {
 			auto current_index = state.ring_buffer.IndexOf(key);
 			auto reference_value = state.ring_buffer.Value(current_index % RingBuffer::RING_SIZE);
@@ -166,14 +172,6 @@ public:
 //===--------------------------------------------------------------------===//
 // Decompression
 //===--------------------------------------------------------------------===//
-
-#define NAN_LONG 0x7ff8000000000000L
-
-//! Check if the returned value is NAN_LONG, in which case set the end_of_stream to true
-//! And return from the method
-#define RETURN_IF_EOF(x) do { \
-  if ((x) == NAN_LONG) { state.end_of_stream = true; return false;} \
-} while (0)
 
 struct StoredZeros {
 	uint8_t leading;
@@ -269,7 +267,6 @@ public:
 		state.ring_buffer.Insert<true>(value);
 		state.first = false;
 		state.reference_value = value;
-		RETURN_IF_EOF(value);
 		return true;
 	}
 
@@ -281,13 +278,11 @@ public:
 			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[deserialized_leading_zeros]);
             value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
             value ^= state.reference_value;
-			RETURN_IF_EOF(value);
 			break;
 		}
 		case LEADING_ZERO_EQUALITY: {
 			value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
 			value ^= state.reference_value;
-			RETURN_IF_EOF(value);
 			break;
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
@@ -296,22 +291,13 @@ public:
 			UnpackPackedData(temp, index, leading_zeros, significant_bits);
 			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
 			state.reference_value = state.ring_buffer.Value(index);
-			if (significant_bits == 0) {
-				significant_bits = BIT_SIZE;
-			}
-			//FIXME: if significant_bits == BIT_SIZE and LeadingZeros != 0, this underflows
-			//state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
-			if (significant_bits + state.LeadingZeros() > BIT_SIZE) {
-				state.SetTrailingZeros(0);
-			}
-			else {
-				state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
-			}
+			// if (significant_bits == 0) { significant_bits = 64 } branchless
+			significant_bits += (BIT_SIZE * (significant_bits == 0));
+			state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
 			auto bits_to_read = BIT_SIZE - state.LeadingZeros() - state.TrailingZeros();
 			value = state.input.template ReadValue<uint64_t>(bits_to_read);
 			value <<= state.TrailingZeros();
 			value ^= state.reference_value;
-			RETURN_IF_EOF(value);
 			break;
 		}
 		case VALUE_IDENTICAL: {

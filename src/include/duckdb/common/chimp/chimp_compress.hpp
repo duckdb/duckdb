@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/bitpacking.hpp
+// duckdb/common/chimp/chimp_compress.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,8 +21,6 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
-
-#include <stdio.h>
 
 #include <functional>
 
@@ -56,7 +54,7 @@ public:
 	};
 
 	explicit ChimpCompressionState(ColumnDataCheckpointer &checkpointer, ChimpAnalyzeState<T> *analyze_state)
-	    : bytes_needed_to_compress(analyze_state->state.chimp_state.CompressedSize()), checkpointer(checkpointer) {
+	    : checkpointer(checkpointer) {
 
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
@@ -67,9 +65,6 @@ public:
 		state.data_ptr = (void *)this;
 	}
 
-	//! Computed in the Analyze step
-	idx_t bytes_needed_to_compress;
-
 	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction *function;
 	unique_ptr<ColumnSegment> current_segment;
@@ -77,12 +72,13 @@ public:
 	idx_t group_idx = 0;
 
 	// Ptr to next free spot in segment;
-	data_ptr_t data_ptr;
+	data_ptr_t segment_data;
 
 	ChimpState<T, false> state;
 
 public:
 	idx_t RequiredSpace() const {
+		// FIXME add padding to avoid having to check if we have enough data in Scan (InputBitStream)
 		return ChimpPrimitives::MAX_BITS_PER_VALUE;
 	}
 	idx_t UsedSpace() const {
@@ -104,8 +100,8 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
-		data_ptr = handle.Ptr() + current_segment->GetBlockOffset();
-		state.chimp_state.SetOutputBuffer(data_ptr);
+		segment_data = handle.Ptr() + current_segment->GetBlockOffset();
+		state.chimp_state.SetOutputBuffer(segment_data);
 		state.chimp_state.Reset();
 	}
 

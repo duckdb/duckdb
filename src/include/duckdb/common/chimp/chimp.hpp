@@ -35,14 +35,12 @@ class ChimpPrimitives {
 public:
 	static constexpr uint32_t CHIMP_SEQUENCE_SIZE = 1024;
 	static constexpr uint8_t MAX_BITS_PER_VALUE = 68;
-	static constexpr uint8_t MAX_BYTES_PER_VALUE = (MAX_BITS_PER_VALUE / 8) + (MAX_BITS_PER_VALUE % 8 != 0);
 };
 
 //! Where all the magic happens
 template <class T, bool EMPTY>
 struct ChimpState {
 public:
-	//! Compress CHIMP_SEQUENCE_SIZE values at once
 	ChimpState(void *state_p = nullptr) : data_ptr(state_p), chimp_state() {
 	}
 	//! The Compress/Analyze State
@@ -55,7 +53,6 @@ public:
 		chimp_state.output.Flush();
 	}
 
-	//! Called for every single value that's decompressed
 	template <class OP>
 	bool Update(T uncompressed_value, bool is_valid) {
 		OP::template Operation<T>(uncompressed_value, is_valid, data_ptr);

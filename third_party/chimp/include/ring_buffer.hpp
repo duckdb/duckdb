@@ -1,6 +1,13 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// third_party/chimp/include/ring_buffer.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
-#include <stdio.h>
 #include <cstring>
 
 namespace duckdb_chimp {

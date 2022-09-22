@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/bitpacking.hpp
+// duckdb/common/chimp/chimp_analyze.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,8 +10,6 @@
 
 #include "duckdb/common/chimp/chimp.hpp"
 #include "duckdb/function/compression_function.hpp"
-
-#include <stdio.h>
 
 namespace duckdb {
 
@@ -62,6 +60,8 @@ public:
 	}
 
 	bool HasEnoughSpace() {
+		// FIXME: leave 2 bytes extra room so we dont need to check inside
+		// InputBitStream if there is enough to read 2 bytes at once
 		return UsedSpace() + ChimpPrimitives::MAX_BITS_PER_VALUE <= Storage::BLOCK_SIZE * 8;
 	}
 

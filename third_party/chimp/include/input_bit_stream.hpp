@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// third_party/chimp/include/input_bit_stream.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include <stdint.h>
@@ -77,6 +85,7 @@ private:
 	void Refill() {
 
 		uint8_t additional_load = 0;
+		// FIXME: Get rid of this by always leaving enough room
 		if (bits_read + 16 <= BLOCK_SIZE * 8) {
 			current = current << 16 | ReadFromStream() << 8 | ReadFromStream();
 			bits_read += 16;

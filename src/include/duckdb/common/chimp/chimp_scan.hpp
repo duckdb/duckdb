@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/bitpacking.hpp
+// duckdb/common/chimp/chimp_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -32,7 +32,7 @@ public:
 		handle = buffer_manager.Pin(segment.block);
 		auto dataptr = handle.Ptr();
 		// ScanStates never exceed the boundaries of a Segment,
-		// but are not guaranteed to start at the beginning of the segment
+		// but are not guaranteed to start at the beginning of the Block
 		chimp_state.input.SetStream((uint8_t *)(dataptr + segment.GetBlockOffset()));
 	}
 
