@@ -47,7 +47,7 @@ void INETExtension::Load(DuckDB &db) {
 	auto &config = DBConfig::GetConfig(*con.context);
 
 	auto &casts = config.GetCastFunctions();
-	casts.RegisterCastFunction(LogicalType::VARCHAR, inet_type, INetFunctions::CastVarcharToINET);
+	casts.RegisterCastFunction(LogicalType::VARCHAR, inet_type, INetFunctions::CastVarcharToINET, 100);
 	casts.RegisterCastFunction(inet_type, LogicalType::VARCHAR, INetFunctions::CastINETToVarchar);
 
 	con.Commit();

@@ -673,6 +673,13 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
+	// we always prefer aliased types
+	if (!left.GetAlias().empty()) {
+		return left;
+	}
+	if (!right.GetAlias().empty()) {
+		return right;
+	}
 	if (left.id() != right.id() && left.IsNumeric() && right.IsNumeric()) {
 		return CombineNumericTypes(left, right);
 	} else if (left.id() == LogicalTypeId::UNKNOWN) {

@@ -34,6 +34,7 @@ jobs:
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       BUILD_VISUALIZER: 1
+      BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
@@ -75,6 +76,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
+      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
@@ -114,6 +116,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
+      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
@@ -185,6 +188,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
+      BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1

@@ -26,10 +26,10 @@ void AlterFunctionInfo::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<AlterInfo> AlterFunctionInfo::Deserialize(FieldReader &reader) {
-	auto type = reader.ReadRequired<AlterFunctionType>();
-	auto schema = reader.ReadRequired<string>();
-	auto table = reader.ReadRequired<string>();
-	auto if_exists = reader.ReadRequired<bool>();
+	//	auto type = reader.ReadRequired<AlterFunctionType>();
+	//	auto schema = reader.ReadRequired<string>();
+	//	auto table = reader.ReadRequired<string>();
+	//	auto if_exists = reader.ReadRequired<bool>();
 
 	throw NotImplementedException("AlterFunctionInfo cannot be deserialized");
 }

@@ -13,8 +13,11 @@ SELECT host(INET '127.0.0.1/17')
 ----
 127.0.0.1
 
-statement error
+# we support auto-cast from varchar to inet
+query I
 SELECT host('127.0.0.1/17')
+----
+127.0.0.1
 
 # subtract
 query I
