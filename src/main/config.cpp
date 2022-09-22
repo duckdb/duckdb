@@ -169,14 +169,12 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 }
 
 std::string ProxyUri::ToString() const {
-	std::map<uri::component, string> components = {
-	    {uri::component::Scheme, "http"},
-	    {uri::component::Username, username},
-	    {uri::component::Password, password},
-	    {uri::component::Host, host},
-	    {uri::component::Port, std::to_string(port)},
-	    {uri::component::Path, ""}
-	};
+	std::map<uri::component, string> components = {{uri::component::Scheme, "http"},
+	                                               {uri::component::Username, username},
+	                                               {uri::component::Password, password},
+	                                               {uri::component::Host, host},
+	                                               {uri::component::Port, std::to_string(port)},
+	                                               {uri::component::Path, ""}};
 
 	return uri(components, uri::scheme_category::Hierarchical, false).to_string();
 }
