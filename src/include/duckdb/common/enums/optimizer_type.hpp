@@ -28,8 +28,7 @@ enum class OptimizerType : uint32_t {
 	COLUMN_LIFETIME,
 	TOP_N,
 	REORDER_FILTER,
-	EXTENSION,
-	PROJECTION_COMBINER
+	EXTENSION
 };
 
 string OptimizerTypeToString(OptimizerType type);
