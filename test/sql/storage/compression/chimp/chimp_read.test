@@ -1,0 +1,44 @@
+# name: test/sql/storage/compression/chimp/chimp_read.test
+# group: [chimp]
+
+load __TEST_DIR__/test_chimp.db
+
+statement ok
+DROP TABLE IF EXISTS temperatures;
+
+statement ok
+PRAGMA force_compression='chimp';
+
+statement ok
+CREATE TABLE temperatures (
+	temperature DOUBLE
+);
+
+statement ok
+COPY temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv'
+
+statement ok
+CHECKPOINT;
+
+statement ok
+create table reference_temperatures (
+	temperature DOUBLE
+);
+
+statement ok
+PRAGMA force_compression='uncompressed';
+
+statement ok
+COPY reference_temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv';
+
+statement ok
+checkpoint;
+
+query I nosort r1
+select temperature from reference_temperatures;
+----
+
+query I nosort r1
+select temperature from temperatures
+----
+

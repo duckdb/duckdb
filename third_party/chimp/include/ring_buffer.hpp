@@ -15,8 +15,8 @@ public:
 public:
 	void Reset() {
 		index = 0;
-		std::memset((void*)indices, 0, INDICES_SIZE);
-		std::memset((void*)buffer, 0, RING_SIZE);
+		std::memset((void*)indices, 0, INDICES_SIZE * sizeof(uint64_t));
+		std::memset((void*)buffer, 0, RING_SIZE * sizeof(uint64_t));
 	}
 
 	RingBuffer() : index(0) {

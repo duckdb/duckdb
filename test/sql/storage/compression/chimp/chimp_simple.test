@@ -16,13 +16,13 @@ statement ok
 CREATE TABLE test (a double);
 
 statement ok
-COPY test FROM 'test/sql/copy/csv/data/test/chimp_simple.csv';
+COPY test FROM 'test/sql/copy/csv/data/test/chimp_identical.csv';
 
 statement ok
 checkpoint
 
 query I nosort r1
-select * from 'test/sql/copy/csv/data/test/chimp_simple.csv'
+select * from 'test/sql/copy/csv/data/test/chimp_identical.csv'
 ----
 
 query I nosort r1

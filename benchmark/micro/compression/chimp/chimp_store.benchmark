@@ -1,0 +1,19 @@
+# name: benchmark/micro/compression/chimp/chimp_store.benchmark
+# description: Scanning a large amount of doubles
+# group: [chimp]
+
+name Chimp Insert
+group chimp
+storage persistent
+require_reinit
+
+load
+PRAGMA force_compression='chimp';
+DROP TABLE IF EXISTS temperatures;
+CREATE TABLE temperatures (
+	temperature DOUBLE
+);
+COPY temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv';
+
+run
+checkpoint;

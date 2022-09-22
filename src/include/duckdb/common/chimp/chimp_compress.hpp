@@ -74,7 +74,6 @@ public:
 	CompressionFunction *function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
-	idx_t written_bits = 0;
 	idx_t group_idx = 0;
 
 	// Ptr to next free spot in segment;
@@ -95,7 +94,7 @@ public:
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
-		written_bits = 0;
+		group_idx = 0;
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
@@ -128,7 +127,6 @@ public:
 		group_idx++;
 		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
 			group_idx = 0;
-			written_bits += UsedSpace();
 			state.chimp_state.Reset();
 		}
 	}
@@ -138,8 +136,8 @@ public:
 		auto &checkpoint_state = checkpointer.GetCheckpointState();
 		handle.Destroy();
 
-		idx_t total_bits_written = written_bits + UsedSpace();
-		idx_t total_segment_size = total_bits_written + (total_bits_written % 8 != 0);
+		idx_t total_bits_written = UsedSpace();
+		idx_t total_segment_size = (total_bits_written / 8) + (total_bits_written % 8 != 0);
 		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);
 	}
 

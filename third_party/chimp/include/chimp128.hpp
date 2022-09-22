@@ -9,6 +9,7 @@
 #include "ring_buffer.hpp"
 #include <queue>
 #include <memory>
+#include <assert.h>
 
 namespace duckdb_chimp {
 
@@ -42,7 +43,6 @@ struct Chimp128CompressionState {
 		return output.BitsWritten();
 	}
 
-	//TODO: reset the state
 	void Reset() {
 		first = true;
 		ring_buffer.Reset();
@@ -203,6 +203,7 @@ public:
 		this->zeros.leading = value;
 	}
 	void SetTrailingZeros(uint8_t value = 0) {
+		assert(value <= sizeof(uint64_t) * 8);
 		this->zeros.trailing = value;
 	}
 
@@ -298,7 +299,14 @@ public:
 			if (significant_bits == 0) {
 				significant_bits = BIT_SIZE;
 			}
-			state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
+			//FIXME: if significant_bits == BIT_SIZE and LeadingZeros != 0, this underflows
+			//state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
+			if (significant_bits + state.LeadingZeros() > BIT_SIZE) {
+				state.SetTrailingZeros(0);
+			}
+			else {
+				state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
+			}
 			auto bits_to_read = BIT_SIZE - state.LeadingZeros() - state.TrailingZeros();
 			value = state.input.template ReadValue<uint64_t>(bits_to_read);
 			value <<= state.TrailingZeros();

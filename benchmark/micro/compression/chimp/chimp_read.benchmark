@@ -1,0 +1,22 @@
+# name: benchmark/micro/compression/chimp/chimp_read.benchmark
+# description: Scanning a large amount of doubles
+# group: [chimp]
+
+name Chimp Scan
+group chimp
+storage persistent
+
+load
+DROP TABLE IF EXISTS integers;
+PRAGMA force_compression='chimp';
+CREATE TABLE temperatures (
+	temperature DOUBLE
+);
+COPY temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv';
+checkpoint;
+
+run
+select avg(temperature) from temperatures;
+
+result I
+56.028391124637494

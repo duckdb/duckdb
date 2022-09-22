@@ -26,16 +26,31 @@ namespace duckdb {
 template <class T>
 struct ChimpScanState : public SegmentScanState {
 public:
-	explicit ChimpScanState(ColumnSegment &segment) {
+	explicit ChimpScanState(ColumnSegment &segment) : segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
 		handle = buffer_manager.Pin(segment.block);
 		auto dataptr = handle.Ptr();
-		chimp_state.input.SetStream((uint8_t *)dataptr);
+		// ScanStates never exceed the boundaries of a Segment,
+		// but are not guaranteed to start at the beginning of the segment
+		chimp_state.input.SetStream((uint8_t *)(dataptr + segment.GetBlockOffset()));
 	}
 
 	duckdb_chimp::Chimp128DecompressionState chimp_state;
 	BufferHandle handle;
+	idx_t group_idx = 0;
+	ColumnSegment &segment;
+
+	template <class CHIMP_TYPE>
+	bool ScanSingle(CHIMP_TYPE &value) {
+		bool result = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::Load(value, chimp_state);
+		group_idx++;
+		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
+			chimp_state.Reset();
+			group_idx = 0;
+		}
+		return result;
+	}
 
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
@@ -46,7 +61,7 @@ public:
 		for (idx_t i = 0; i < skip_count; i++) {
 
 			// We still need to run through all the values to record them in the ring buffer
-			if (!duckdb_chimp::Chimp128Decompression<INTERNAL_TYPE>::Load(unused, chimp_state)) {
+			if (!ScanSingle(unused)) {
 				//! End of stream is reached
 				break;
 			}
@@ -68,7 +83,6 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
                       idx_t result_offset) {
 	using INTERNAL_TYPE = typename ChimpType<T>::type;
 	auto &scan_state = (ChimpScanState<T> &)*state.scan_state;
-	auto &chimp_state = scan_state.chimp_state;
 
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -76,7 +90,7 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 	for (idx_t scanned = 0; scanned < scan_count; scanned++) {
 
 		auto current_result_ptr = (INTERNAL_TYPE *)(result_data + result_offset + scanned);
-		if (!duckdb_chimp::Chimp128Decompression<INTERNAL_TYPE>::Load(*current_result_ptr, chimp_state)) {
+		if (!scan_state.template ScanSingle<INTERNAL_TYPE>(*current_result_ptr)) {
 			//! End of stream is reached
 			break;
 		}
