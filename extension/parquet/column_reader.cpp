@@ -239,8 +239,7 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const char *
                                       idx_t dst_size) {
 	switch (codec) {
 	case CompressionCodec::UNCOMPRESSED:
-		D_ASSERT(false);
-		break;
+		throw InternalException("Parquet data unexpectedly uncompressed");
 	case CompressionCodec::GZIP: {
 		MiniZStream s;
 		s.Decompress(src, src_size, dst, dst_size);
