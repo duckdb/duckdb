@@ -513,8 +513,6 @@ void S3FileSystem::readQueryParams(const string &url_query_param, S3AuthParams &
 	if (found_param != query_params.end()) {
 		params.session_token = found_param->second;
 		query_params.erase(found_param);
-		query_params.erase(found_param);
-		query_params.erase(found_param);
 	}
 	found_param = query_params.find("s3_endpoint");
 	if (found_param != query_params.end()) {
