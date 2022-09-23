@@ -1,0 +1,39 @@
+# name: test/fuzzer/pedro/in_clause_optimization_error.test
+# description: Issue #4584: In clause optimization error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0 VALUES (42)
+
+statement error
+SELECT 0 FROM t0 WHERE ? IN (1);
+
+statement ok
+PREPARE v1 AS SELECT 0 FROM t0 WHERE ? IN (1);
+
+query I
+EXECUTE v1(0)
+----
+
+query I
+EXECUTE v1(1)
+----
+0
+
+statement ok
+PREPARE v2 AS SELECT $1 FROM t0 WHERE $1 IN (1);
+
+query I
+EXECUTE v2(0)
+----
+
+query I
+EXECUTE v2(1)
+----
+1

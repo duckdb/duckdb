@@ -169,6 +169,19 @@ idx_t TableCatalogEntry::StandardColumnCount() const {
 	return count;
 }
 
+unique_ptr<BaseStatistics> TableCatalogEntry::GetStatistics(ClientContext &context, column_t column_id) {
+	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+		return nullptr;
+	}
+	if (column_id >= columns.size()) {
+		throw InternalException("TableCatalogEntry::GetStatistics column_id out of range");
+	}
+	if (columns[column_id].Generated()) {
+		return nullptr;
+	}
+	return storage->GetStatistics(context, columns[column_id].StorageOid());
+}
+
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
 	D_ASSERT(!internal);
 	if (info->type != AlterType::ALTER_TABLE) {
@@ -444,7 +457,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 		                                      storage);
 	}
-	auto new_storage = make_shared<DataTable>(context, *storage, removed_index);
+	auto new_storage = make_shared<DataTable>(context, *storage, columns[removed_index].StorageOid());
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }
@@ -458,7 +471,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		auto copy = columns[i].Copy();
 		if (default_idx == i) {
 			// set the default value of this column
-			D_ASSERT(!copy.Generated()); // Shouldnt reach here - DEFAULT value isn't supported for Generated Columns
+			if (copy.Generated()) {
+				throw BinderException("Cannot SET DEFAULT for generated column \"%s\"", columns[i].Name());
+			}
 			copy.SetDefaultValue(info.expression ? info.expression->Copy() : nullptr);
 		}
 		create_info->columns.push_back(move(copy));
@@ -483,6 +498,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 	}
 
 	idx_t not_null_idx = GetColumnIndex(info.column_name);
+	if (columns[not_null_idx].Generated()) {
+		throw BinderException("Unsupported constraint for generated column!");
+	}
 	bool has_not_null = false;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
@@ -506,8 +524,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 		                                      storage);
 	}
 
-	// Return with new storage info
-	auto new_storage = make_shared<DataTable>(context, *storage, make_unique<NotNullConstraint>(not_null_idx));
+	// Return with new storage info. Note that we need the bound column index here.
+	auto new_storage = make_shared<DataTable>(context, *storage,
+	                                          make_unique<BoundNotNullConstraint>(columns[not_null_idx].StorageOid()));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }
@@ -613,12 +632,19 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	vector<column_t> storage_oids;
 	if (bound_columns.empty()) {
-		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
+		storage_oids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	}
+	// transform to storage_oid
+	else {
+		for (idx_t i = 0; i < bound_columns.size(); i++) {
+			storage_oids.push_back(columns[bound_columns[i]].StorageOid());
+		}
 	}
 
-	auto new_storage =
-	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
+	auto new_storage = make_shared<DataTable>(context, *storage, columns[change_idx].StorageOid(), info.target_type,
+	                                          move(storage_oids), *bound_expression);
 	auto result =
 	    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
 	return move(result);
@@ -866,7 +892,7 @@ void TableCatalogEntry::CommitAlter(AlterInfo &info) {
 		}
 	}
 	D_ASSERT(removed_index != DConstants::INVALID_INDEX);
-	storage->CommitDropColumn(removed_index);
+	storage->CommitDropColumn(columns[removed_index].StorageOid());
 }
 
 void TableCatalogEntry::CommitDrop() {

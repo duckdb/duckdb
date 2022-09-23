@@ -1,0 +1,19 @@
+# name: test/fuzzer/pedro/hash_finalize_race.test
+# description: Issue #4694: Race condition at HashJoinFinalizeEvent
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SEQUENCE t4;
+
+statement ok
+PRAGMA DEBUG_FORCE_EXTERNAL=1;
+
+loop i 0 10
+
+statement error
+SELECT 1 FROM ((SELECT 2) INTERSECT (SELECT 2)) t2(c3) WHERE "currval"('t4') = EXISTS (SELECT 2);
+
+endloop

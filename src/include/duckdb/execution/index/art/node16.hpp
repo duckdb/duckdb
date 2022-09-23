@@ -39,5 +39,7 @@ public:
 	static void EraseChild(Node *&node, int pos, ART &art);
 	//! Merge Node16 into l_node
 	static void Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos);
+	//! Returns the size (maximum capacity) of the Node16
+	static idx_t GetSize();
 };
 } // namespace duckdb

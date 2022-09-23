@@ -73,9 +73,7 @@ void Leaf::Remove(row_t row_id) {
 		row_ids = move(new_row_id);
 	} else {
 		// Copy the rest
-		for (idx_t j = entry_offset; j < count; j++) {
-			row_ids[j] = row_ids[j + 1];
-		}
+		memmove(row_ids.get() + entry_offset, row_ids.get() + entry_offset + 1, (count - entry_offset) * sizeof(row_t));
 	}
 }
 

@@ -28,6 +28,9 @@ Executor &Executor::Get(ClientContext &context) {
 
 void Executor::AddEvent(shared_ptr<Event> event) {
 	lock_guard<mutex> elock(executor_lock);
+	if (cancelled) {
+		return;
+	}
 	events.push_back(move(event));
 }
 
@@ -331,6 +334,7 @@ void Executor::CancelTasks() {
 	vector<weak_ptr<Pipeline>> weak_references;
 	{
 		lock_guard<mutex> elock(executor_lock);
+		cancelled = true;
 		weak_references.reserve(pipelines.size());
 		for (auto &pipeline : pipelines) {
 			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
@@ -419,6 +423,7 @@ PendingExecutionResult Executor::ExecuteTask() {
 void Executor::Reset() {
 	lock_guard<mutex> elock(executor_lock);
 	physical_plan = nullptr;
+	cancelled = false;
 	owned_plan.reset();
 	root_executor.reset();
 	root_pipelines.clear();

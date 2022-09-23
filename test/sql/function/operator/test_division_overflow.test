@@ -1,0 +1,38 @@
+# name: test/sql/function/operator/test_division_overflow.test
+# description: Test division overflow
+# group: [operator]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT (-128)::TINYINT / (-1)::TINYINT
+
+query I
+SELECT (-127)::TINYINT / (-1)::TINYINT
+----
+127
+
+statement error
+SELECT (-32768)::SMALLINT / (-1)::SMALLINT
+
+query I
+SELECT (-32767)::SMALLINT / (-1)::SMALLINT
+----
+32767
+
+statement error
+SELECT (-2147483648)::INTEGER / (-1)::INTEGER
+
+query I
+SELECT (-2147483647)::INTEGER / (-1)::INTEGER
+----
+2147483647
+
+statement error
+SELECT (-9223372036854775808)::BIGINT / (-1)::BIGINT
+
+query I
+SELECT (-9223372036854775807)::BIGINT / (-1)::BIGINT
+----
+9223372036854775807
