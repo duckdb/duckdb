@@ -15,7 +15,8 @@
 #include <iostream>
 
 
-// NOTE: this code is copied from DuckDB-WASM project
+/// File copied from
+/// https://github.com/duckdb/duckdb-wasm/blob/0ad10e7db4ef4025f5f4120be37addc4ebe29618/lib/include/duckdb/web/arrow_stream_buffer.h
 
 namespace duckdb {
 

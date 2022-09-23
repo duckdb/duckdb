@@ -29,12 +29,19 @@
 
 namespace duckdb {
 
+class ArrowStringVectorBuffer : public VectorBuffer {
+public:
+	explicit ArrowStringVectorBuffer(std::shared_ptr<arrow::Buffer> buffer_p)
+	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), buffer(move(buffer_p)) {
+	}
+private:
+	std::shared_ptr<arrow::Buffer> buffer;
+};
+
 struct ArrowIPCScanFunctionData : public ArrowScanFunctionData {
 public:
 	using ArrowScanFunctionData::ArrowScanFunctionData;
-	unique_ptr<BufferingArrowIPCStreamDecoder> stream_decoder = nullptr;
-//	~ArrowIPCScanFunctionData() {}; TODO: this may be required?
-
+	unique_ptr<BufferingArrowIPCStreamDecoder> stream_decoder = nullptr; // TODO do we even need this?
 };
 
 // IPC Table scan is identical to regular arrow scan except we need to produce the stream from the ipc pointers beforehand
@@ -81,7 +88,6 @@ private:
 			}
 		}
 
-		// TODO the issue here is that the stream appears to not be closed?
 		if (!stream_decoder->buffer()->is_eos()) {
 			throw IOException("IPC buffers passed to arrow scan should contain entire stream");
 		}
@@ -94,7 +100,7 @@ private:
 
 		auto res = make_unique<ArrowIPCScanFunctionData>(rows_per_thread, stream_factory_produce, stream_factory_ptr);
 
-		// TODO Everything below this is identical to arrow.cpp
+		// TODO Everything below this is identical to the bind in duckdb/src/function/table/arrow.cpp
 
 		// Store decoder
 		res->stream_decoder = std::move(stream_decoder);
@@ -194,8 +200,17 @@ static void ToArrowIpcFunction(ClientContext &context, TableFunctionInput &data_
 
 	output.SetCardinality(1);
 
-	// TODO this copy
-	output.SetValue(0, 0, Value::BLOB((duckdb::const_data_ptr_t)arrow_serialized_ipc_buffer->data(), arrow_serialized_ipc_buffer->size()));
+	if (false) {
+		auto wrapped_buffer = make_buffer<ArrowStringVectorBuffer>(arrow_serialized_ipc_buffer);
+
+		// Instead of calling setvalue which copies the blob, we need to move it into there
+		auto& vector = output.data[0];
+		StringVector::AddBuffer(vector, wrapped_buffer);
+		auto data_ptr = (string_t*)vector.GetData();
+		*data_ptr = string_t((const char*)arrow_serialized_ipc_buffer->data(), arrow_serialized_ipc_buffer->size());
+	} else {
+		output.SetValue(0, 0, Value::BLOB((duckdb::const_data_ptr_t)arrow_serialized_ipc_buffer->data(), arrow_serialized_ipc_buffer->size()));
+	}
 }
 
 static void LoadInternal(DatabaseInstance &instance) {

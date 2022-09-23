@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+/// File copied from
+/// https://github.com/duckdb/duckdb-wasm/blob/0ad10e7db4ef4025f5f4120be37addc4ebe29618/lib/src/arrow_stream_buffer.cc
 namespace duckdb {
 
 /// Constructor
