@@ -52,7 +52,11 @@ public:
 		}
 		vector<LogicalType> types;
 		for (auto col_id : op.column_ids) {
-			types.push_back(op.returned_types[col_id]);
+			if (col_id == COLUMN_IDENTIFIER_ROW_ID) {
+				types.emplace_back(LogicalType::ROW_TYPE);
+			} else {
+				types.push_back(op.returned_types[col_id]);
+			}
 		}
 		table_function_chunk.Initialize(Allocator::Get(context.client), types);
 	}

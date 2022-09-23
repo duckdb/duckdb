@@ -30,7 +30,7 @@ void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBi
 }
 
 template <class T>
-void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx) {
+void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace) {
 	idx_t offset = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
 		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
@@ -40,7 +40,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 			list.erase(list.begin() + col_idx);
 			offset++;
 			col_idx--;
-		} else if (offset > 0) {
+		} else if (offset > 0 && replace) {
 			// column is used but the ColumnBinding has changed because of removed columns
 			ReplaceBinding(current_binding, ColumnBinding(table_idx, col_idx));
 		}
@@ -214,13 +214,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		if (!everything_referenced) {
 			auto &get = (LogicalGet &)op;
 
-			// If we have "SELECT b FROM test WHERE a = 42", we don't want 'a' to leave the table scan at all
-			auto all_bindings = get.GetColumnBindings();
-			for (idx_t col_idx = 0; col_idx < all_bindings.size(); col_idx++) {
-				if (column_references.find(all_bindings[col_idx]) != column_references.end()) {
-					get.projection_ids.push_back(col_idx);
-				}
-			}
+			// Get projection indices (excluding filter columns that are unused)
+			auto proj_column_ids = get.column_ids;
+			ClearUnusedExpressions(proj_column_ids, get.table_index, false);
 
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
@@ -240,8 +236,19 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					column_references.insert(make_pair(filter_binding, vector<BoundColumnRefExpression *>()));
 				}
 			}
+
 			// table scan: figure out which columns are referenced
 			ClearUnusedExpressions(get.column_ids, get.table_index);
+
+			// If we have "SELECT b FROM test WHERE a = 42", we don't want 'a' to leave the table scan at all
+			// So, we put the projection columns within the GET
+			for (idx_t proj_id : proj_column_ids) {
+				for (idx_t col_idx = 0; col_idx < get.column_ids.size(); col_idx++) {
+					if (get.column_ids[col_idx] == proj_id) {
+						get.projection_ids.push_back(col_idx);
+					}
+				}
+			}
 
 			if (get.column_ids.empty()) {
 				// this generally means we are only interested in whether or not anything exists in the table (e.g.

@@ -11,9 +11,6 @@ CREATE TABLE test (a INTEGER, b INTEGER);
 statement ok
 INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);
 
-statement ok
-UPDATE test SET a = 1 WHERE b=22
-
 # simple ORDER BY
 query I
 SELECT b FROM test ORDER BY a DESC;

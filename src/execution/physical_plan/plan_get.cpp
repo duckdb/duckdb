@@ -51,7 +51,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
 		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, move(op.bind_data),
-		                                           op.returned_types, op.column_ids, op.column_ids, op.names,
+		                                           op.returned_types, op.column_ids, vector<column_t>(), op.names,
 		                                           move(table_filters), op.estimated_cardinality);
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {

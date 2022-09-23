@@ -1,13 +1,12 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/function/table/table_scan.hpp"
-
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function_serialization.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -62,12 +61,23 @@ void LogicalGet::ResolveTypes() {
 	if (column_ids.empty()) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
-	auto &col_indices = projection_ids.empty() ? column_ids : projection_ids;
-	for (auto &index : col_indices) {
-		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			types.emplace_back(LogicalType::ROW_TYPE);
-		} else {
-			types.push_back(returned_types[index]);
+
+	if (projection_ids.empty()) {
+		for (auto &index : column_ids) {
+			if (index == COLUMN_IDENTIFIER_ROW_ID) {
+				types.emplace_back(LogicalType::ROW_TYPE);
+			} else {
+				types.push_back(returned_types[index]);
+			}
+		}
+	} else {
+		for (auto &proj_index : projection_ids) {
+			auto &index = column_ids[proj_index];
+			if (index == COLUMN_IDENTIFIER_ROW_ID) {
+				types.emplace_back(LogicalType::ROW_TYPE);
+			} else {
+				types.push_back(returned_types[index]);
+			}
 		}
 	}
 }
@@ -87,6 +97,7 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 	writer.WriteRegularSerializableList(returned_types);
 	writer.WriteList<string>(names);
 	writer.WriteList<column_t>(column_ids);
+	writer.WriteList<column_t>(projection_ids);
 	writer.WriteSerializable(table_filters);
 
 	FunctionSerializer::SerializeBase<TableFunction>(writer, function, bind_data.get());
@@ -109,6 +120,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 	auto returned_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto returned_names = reader.ReadRequiredList<string>();
 	auto column_ids = reader.ReadRequiredList<column_t>();
+	auto projection_ids = reader.ReadRequiredList<column_t>();
 	auto table_filters = reader.ReadRequiredSerializable<TableFilterSet>();
 
 	unique_ptr<FunctionData> bind_data;
@@ -153,6 +165,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 
 	auto result = make_unique<LogicalGet>(table_index, function, move(bind_data), returned_types, returned_names);
 	result->column_ids = move(column_ids);
+	result->projection_ids = move(projection_ids);
 	result->table_filters = move(*table_filters);
 	result->parameters = move(parameters);
 	result->named_parameters = move(named_parameters);
