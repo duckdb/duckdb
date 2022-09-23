@@ -218,7 +218,7 @@ jobs:
           deploy_as: linux_aarch64
           static_link_build: 1
           treat_warn_as_error: 0
-          out_of_tree_ext: 0 # TODO: currently postgres scanner does not like to be cross compiled
+          out_of_tree_ext: 1
           s3_id: ${{ secrets.S3_ID }}
           s3_key: ${{ secrets.S3_KEY }}
           signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
