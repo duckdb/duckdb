@@ -42,6 +42,26 @@ uint8_t masks[] = {
 	0b10000000,
 };
 
+uint8_t remainder_masks[] = {
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0b10000000,
+	0b11000000,
+	0b11100000,
+	0b11110000,
+	0b11111000,
+	0b11111100,
+	0b11111110,
+	0b11111111,
+};
+
 //! Left shifts
 uint8_t shifts[] = {
 	0, //unused
@@ -105,31 +125,35 @@ public:
 	uint8_t InnerRead(uint8_t size) {
 		const uint8_t left_shift = 8 - size;
 		uint8_t result = ((input[byte_index] & CreateMask(size, bit_index)) << bit_index) >> left_shift;
-		if (size + bit_index <= 8) {
-			bit_index += size;
-			if (bit_index == 8) {
-				bit_index = 0;
-				byte_index++;
-			}
-			return result;
-		}
-		byte_index++;
-		//! This next byte is guaranteed to be at bit_index 0 here
+		byte_index += (size + bit_index >= 8);
 		const uint8_t bit_remainder = (size + bit_index) - 8;
-		result |= ((input[byte_index] & masks[bit_remainder]) >> (8 - bit_remainder));
-		//! Set the bit_index in the new byte
-		bit_index = (size + bit_index) - 8;
+		result |= ((input[byte_index] & remainder_masks[size + bit_index]) >> (8 - bit_remainder));
+		bit_index = (size + bit_index) & 7;
+		return result;
+	}
+
+	template <class T, uint8_t SIZE>
+	inline T ReadValue() {
+		T result = 0;
+		uint8_t iterations = SIZE >> 3; //divide by 8;
+		while (iterations-- != 0) {
+			result = result << 8 | InnerRead(8);
+		}
+		const uint8_t remainder = SIZE & 7;
+		if (remainder) {
+			result = result << remainder | InnerRead(remainder);
+		}
 		return result;
 	}
 
 	template <class T>
-	T ReadValue(uint8_t size = sizeof(T) * __CHAR_BIT__) {
+	inline T ReadValue(uint8_t size = sizeof(T) * __CHAR_BIT__) {
 		T result = 0;
 		uint8_t iterations = size >> 3; //divide by 8;
 		while (iterations-- != 0) {
 			result = result << 8 | InnerRead(8);
 		}
-		uint8_t remainder = size & 7;
+		const uint8_t remainder = size & 7;
 		if (remainder) {
 			result = result << remainder | InnerRead(remainder);
 		}

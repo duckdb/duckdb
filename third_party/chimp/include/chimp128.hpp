@@ -283,7 +283,7 @@ public:
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
 			uint16_t index, leading_zeros, significant_bits;
-			uint16_t temp = state.input.template ReadValue<uint64_t>(INITIAL_FILL);
+			uint16_t temp = state.input.template ReadValue<uint64_t, INITIAL_FILL>();
 			UnpackPackedData(temp, index, leading_zeros, significant_bits);
 			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
 			state.reference_value = state.ring_buffer.Value(index);
@@ -299,7 +299,7 @@ public:
 		}
 		case VALUE_IDENTICAL: {
 			//! Value is identical to previous value
-			auto index = state.input.template ReadValue<uint8_t>(INDEX_BITS_SIZE);
+			auto index = state.input.template ReadValue<uint8_t, INDEX_BITS_SIZE>();
 			value = state.ring_buffer.Value(index);
 			break;
 		}
