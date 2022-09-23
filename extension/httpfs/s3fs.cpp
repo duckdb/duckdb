@@ -848,8 +848,6 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	string shared_path = glob_pattern.substr(0, first_wildcard_pos);
 
 	auto s3_auth_params = S3AuthParams::ReadFrom(opener);
-	// string s3path = glob_pattern;
-	// readQueryParams(s3path, s3_auth_params);
 	auto http_params = HTTPParams::ReadFrom(opener);
 
 	// Parse pattern
