@@ -1,6 +1,6 @@
 # name: test/sql/order/persistent_list_of_varchar_order.test_coverage
 # description: Test ORDER BY on persistent list of varchars
-# group: [vacuum]
+# group: [order]
 
 require parquet
 
