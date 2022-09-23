@@ -358,22 +358,17 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 }
 
 void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &dst_chunk) {
-	throw InternalException("FetchChunk");
-	//	auto storage = GetStorage(table);
-	//	idx_t chunk_idx = GetChunk(row_ids);
-	//	auto &chunk = storage->collection.GetChunk(chunk_idx);
-	//
-	//	UnifiedVectorFormat row_ids_data;
-	//	row_ids.ToUnifiedFormat(count, row_ids_data);
-	//	auto row_identifiers = (const row_t *)row_ids_data.data;
-	//	SelectionVector sel(count);
-	//	for (idx_t i = 0; i < count; ++i) {
-	//		const auto idx = row_ids_data.sel->get_index(i);
-	//		sel.set_index(i, row_identifiers[idx] - MAX_ROW_ID);
-	//	}
-	//
-	//	dst_chunk.InitializeEmpty(chunk.GetTypes());
-	//	dst_chunk.Slice(chunk, sel, count);
+	auto storage = GetStorage(table);
+
+	ColumnFetchState fetch_state;
+	vector<column_t> col_ids;
+	vector<LogicalType> types = storage->table.GetTypes();
+	DataChunk verify_chunk;
+	for (idx_t i = 0; i < types.size(); i++) {
+		col_ids.push_back(i);
+	}
+	verify_chunk.Initialize(storage->allocator, types);
+	storage->row_groups->Fetch(transaction, verify_chunk, col_ids, row_ids, count, fetch_state);
 }
 
 TableIndexList &LocalStorage::GetIndexes(DataTable *table) {
