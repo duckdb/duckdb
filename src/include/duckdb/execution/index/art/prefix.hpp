@@ -8,9 +8,8 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/execution/index/art/faster_art_key.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 class Prefix {
@@ -18,8 +17,6 @@ public:
 	Prefix();
 	// Prefix created from key starting on `depth`
 	Prefix(Key &key, uint32_t depth, uint32_t size);
-	// Prefix created from key starting on `depth`
-	Prefix(FKey &key, uint32_t depth, uint32_t size);
 	// Prefix created from other prefix up to size
 	Prefix(Prefix &other_prefix, uint32_t size);
 

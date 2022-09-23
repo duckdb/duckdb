@@ -72,7 +72,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 
 template <class T>
-static void TemplatedGenerateFKeys(ArenaAllocator &allocator, Vector &input, idx_t count, vector<FKey> &keys) {
+static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, vector<Key> &keys) {
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
@@ -80,31 +80,15 @@ static void TemplatedGenerateFKeys(ArenaAllocator &allocator, Vector &input, idx
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if (idata.validity.RowIsValid(idx)) {
-			keys.emplace_back(FKey::CreateKey<T>(allocator, input_data[idx]));
+			keys.emplace_back(Key::CreateKey<T>(allocator, input_data[idx]));
 		} else {
-			keys.emplace_back(FKey());
+			keys.emplace_back(Key());
 		}
 	}
 }
 
 template <class T>
-static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys) {
-	UnifiedVectorFormat idata;
-	input.ToUnifiedFormat(count, idata);
-
-	auto input_data = (T *)idata.data;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = idata.sel->get_index(i);
-		if (idata.validity.RowIsValid(idx)) {
-			keys.push_back(Key::CreateKey<T>(input_data[idx]));
-		} else {
-			keys.push_back(nullptr);
-		}
-	}
-}
-
-template <class T>
-static void ConcatenateFKeys(ArenaAllocator &allocator, Vector &input, idx_t count, vector<FKey> &keys) {
+static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, vector<Key> &keys) {
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
@@ -114,85 +98,61 @@ static void ConcatenateFKeys(ArenaAllocator &allocator, Vector &input, idx_t cou
 		if (keys[i].len != 0) {
 			if (!idata.validity.RowIsValid(idx)) {
 				// either this column is NULL, or the previous column is NULL!
-				keys[i] = FKey();
+				keys[i] = Key();
 			} else {
 				// concatenate the keys
-				auto new_key = FKey::CreateKey<T>(allocator, input_data[idx]);
+				auto new_key = Key::CreateKey<T>(allocator, input_data[idx]);
 				auto key_len = keys[i].len + new_key.len;
 				auto compound_data = allocator.Allocate(key_len);
 				memcpy(compound_data, keys[i].data, keys[i].len);
 				memcpy(compound_data + keys[i].len, new_key.data, new_key.len);
-				keys[i] = FKey(compound_data, key_len);
+				keys[i] = Key(compound_data, key_len);
 			}
 		}
 	}
 }
 
-template <class T>
-static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys) {
-	UnifiedVectorFormat idata;
-	input.ToUnifiedFormat(count, idata);
-
-	auto input_data = (T *)idata.data;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = idata.sel->get_index(i);
-		if (!idata.validity.RowIsValid(idx) || !keys[i]) {
-			// either this column is NULL, or the previous column is NULL!
-			keys[i] = nullptr;
-		} else {
-			// concatenate the keys
-			auto old_key = move(keys[i]);
-			auto new_key = Key::CreateKey<T>(input_data[idx]);
-			auto key_len = old_key->len + new_key->len;
-			auto compound_data = unique_ptr<data_t[]>(new data_t[key_len]);
-			memcpy(compound_data.get(), old_key->data.get(), old_key->len);
-			memcpy(compound_data.get() + old_key->len, new_key->data.get(), new_key->len);
-			keys[i] = make_unique<Key>(move(compound_data), key_len);
-		}
-	}
-}
-
-void ART::GenerateFKeys(ArenaAllocator &allocator, DataChunk &input, vector<FKey> &keys) {
+void ART::GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys) {
 	// generate keys for the first input column
 	switch (input.data[0].GetType().InternalType()) {
 	case PhysicalType::BOOL:
-		TemplatedGenerateFKeys<bool>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<bool>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT8:
-		TemplatedGenerateFKeys<int8_t>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<int8_t>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT16:
-		TemplatedGenerateFKeys<int16_t>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<int16_t>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT32:
-		TemplatedGenerateFKeys<int32_t>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<int32_t>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT64:
-		TemplatedGenerateFKeys<int64_t>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<int64_t>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT128:
-		TemplatedGenerateFKeys<hugeint_t>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<hugeint_t>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedGenerateFKeys<uint8_t>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<uint8_t>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedGenerateFKeys<uint16_t>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<uint16_t>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedGenerateFKeys<uint32_t>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<uint32_t>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedGenerateFKeys<uint64_t>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<uint64_t>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedGenerateFKeys<float>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<float>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedGenerateFKeys<double>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<double>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedGenerateFKeys<string_t>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<string_t>(allocator, input.data[0], input.size(), keys);
 		break;
 	default:
 		throw InternalException("Invalid type for index");
@@ -202,138 +162,43 @@ void ART::GenerateFKeys(ArenaAllocator &allocator, DataChunk &input, vector<FKey
 		// for each of the remaining columns, concatenate
 		switch (input.data[i].GetType().InternalType()) {
 		case PhysicalType::BOOL:
-			ConcatenateFKeys<bool>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<bool>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT8:
-			ConcatenateFKeys<int8_t>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<int8_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT16:
-			ConcatenateFKeys<int16_t>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<int16_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT32:
-			ConcatenateFKeys<int32_t>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<int32_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT64:
-			ConcatenateFKeys<int64_t>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<int64_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT128:
-			ConcatenateFKeys<hugeint_t>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<hugeint_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT8:
-			ConcatenateFKeys<uint8_t>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<uint8_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT16:
-			ConcatenateFKeys<uint16_t>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<uint16_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT32:
-			ConcatenateFKeys<uint32_t>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<uint32_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT64:
-			ConcatenateFKeys<uint64_t>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<uint64_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::FLOAT:
-			ConcatenateFKeys<float>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<float>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::DOUBLE:
-			ConcatenateFKeys<double>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<double>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::VARCHAR:
-			ConcatenateFKeys<string_t>(allocator, input.data[i], input.size(), keys);
-			break;
-		default:
-			throw InternalException("Invalid type for index");
-		}
-	}
-}
-
-void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
-	keys.reserve(STANDARD_VECTOR_SIZE);
-	// generate keys for the first input column
-	switch (input.data[0].GetType().InternalType()) {
-	case PhysicalType::BOOL:
-		TemplatedGenerateKeys<bool>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::INT8:
-		TemplatedGenerateKeys<int8_t>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::INT16:
-		TemplatedGenerateKeys<int16_t>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::INT32:
-		TemplatedGenerateKeys<int32_t>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::INT64:
-		TemplatedGenerateKeys<int64_t>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::INT128:
-		TemplatedGenerateKeys<hugeint_t>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedGenerateKeys<uint8_t>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedGenerateKeys<uint16_t>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedGenerateKeys<uint32_t>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedGenerateKeys<uint64_t>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedGenerateKeys<float>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedGenerateKeys<double>(input.data[0], input.size(), keys);
-		break;
-	case PhysicalType::VARCHAR:
-		TemplatedGenerateKeys<string_t>(input.data[0], input.size(), keys);
-		break;
-	default:
-		throw InternalException("Invalid type for index");
-	}
-
-	for (idx_t i = 1; i < input.ColumnCount(); i++) {
-		// for each of the remaining columns, concatenate
-		switch (input.data[i].GetType().InternalType()) {
-		case PhysicalType::BOOL:
-			ConcatenateKeys<bool>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::INT8:
-			ConcatenateKeys<int8_t>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::INT16:
-			ConcatenateKeys<int16_t>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::INT32:
-			ConcatenateKeys<int32_t>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::INT64:
-			ConcatenateKeys<int64_t>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::INT128:
-			ConcatenateKeys<hugeint_t>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::UINT8:
-			ConcatenateKeys<uint8_t>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::UINT16:
-			ConcatenateKeys<uint16_t>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::UINT32:
-			ConcatenateKeys<uint32_t>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::UINT64:
-			ConcatenateKeys<uint64_t>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::FLOAT:
-			ConcatenateKeys<float>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::DOUBLE:
-			ConcatenateKeys<double>(input.data[i], input.size(), keys);
-			break;
-		case PhysicalType::VARCHAR:
-			ConcatenateKeys<string_t>(input.data[i], input.size(), keys);
+			ConcatenateKeys<string_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		default:
 			throw InternalException("Invalid type for index");
@@ -344,7 +209,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 struct KeySection {
 	KeySection(idx_t start_p, idx_t end_p, idx_t depth_p, data_t key_byte_p)
 	    : start(start_p), end(end_p), depth(depth_p), key_byte(key_byte_p) {};
-	KeySection(idx_t start_p, idx_t end_p, vector<FKey> &keys, KeySection &key_section)
+	KeySection(idx_t start_p, idx_t end_p, vector<Key> &keys, KeySection &key_section)
 	    : start(start_p), end(end_p), depth(key_section.depth + 1), key_byte(keys[end_p].data[key_section.depth]) {};
 	idx_t start;
 	idx_t end;
@@ -352,7 +217,7 @@ struct KeySection {
 	data_t key_byte;
 };
 
-void GetChildSections(vector<KeySection> &child_sections, vector<FKey> &keys, KeySection &key_section) {
+void GetChildSections(vector<KeySection> &child_sections, vector<Key> &keys, KeySection &key_section) {
 
 	idx_t child_start_idx = key_section.start;
 	for (idx_t i = key_section.start + 1; i <= key_section.end; i++) {
@@ -364,7 +229,7 @@ void GetChildSections(vector<KeySection> &child_sections, vector<FKey> &keys, Ke
 	child_sections.emplace_back(child_start_idx, key_section.end, keys, key_section);
 }
 
-void Construct(vector<FKey> &keys, row_t *row_ids, Node *&node, KeySection &key_section, bool &has_constraint) {
+void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_section, bool &has_constraint) {
 
 	D_ASSERT(key_section.start < keys.size());
 	D_ASSERT(key_section.end < keys.size());
@@ -419,7 +284,7 @@ void Construct(vector<FKey> &keys, row_t *row_ids, Node *&node, KeySection &key_
 	}
 }
 
-void FindFirstNotNullKey(vector<FKey> &keys, bool &skipped_all_nulls, idx_t &start_idx) {
+void FindFirstNotNullKey(vector<Key> &keys, bool &skipped_all_nulls, idx_t &start_idx) {
 
 	if (!skipped_all_nulls) {
 		for (idx_t i = 0; i < keys.size(); i++) {
@@ -438,7 +303,7 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 	payload_types.emplace_back(LogicalType::ROW_TYPE);
 
 	ArenaAllocator arena_allocator(allocator);
-	vector<FKey> keys;
+	vector<Key> keys;
 	keys.reserve(STANDARD_VECTOR_SIZE);
 
 	auto skipped_all_nulls = false;
@@ -462,7 +327,7 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 
 		// generate the keys for the given input
 		keys.clear();
-		GenerateFKeys(arena_allocator, ordered_chunk, keys);
+		GenerateKeys(arena_allocator, ordered_chunk, keys);
 
 		// we order NULLS FIRST, so we might have to skip nulls at the start of our sorted data
 		idx_t start_idx = 0;
@@ -504,20 +369,21 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
 
 	// generate the keys for the given input
-	vector<unique_ptr<Key>> keys;
-	GenerateKeys(input, keys);
+	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	vector<Key> keys;
+	GenerateKeys(arena_allocator, input, keys);
 
 	// now insert the elements into the index
 	row_ids.Flatten(input.size());
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 	idx_t failed_index = DConstants::INVALID_INDEX;
 	for (idx_t i = 0; i < input.size(); i++) {
-		if (!keys[i]) {
+		if (keys[i].len == 0) {
 			continue;
 		}
 
 		row_t row_id = row_identifiers[i];
-		if (!Insert(tree, move(keys[i]), 0, row_id)) {
+		if (!Insert(tree, keys[i], 0, row_id)) {
 			// failed to insert because of constraint violation
 			failed_index = i;
 			break;
@@ -525,18 +391,19 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	}
 	if (failed_index != DConstants::INVALID_INDEX) {
 		// failed to insert because of constraint violation: remove previously inserted entries
+
+		// TODO: re-generation might not be necessary anymore, because we no longer move keys out of the vector
 		// generate keys again
 		keys.clear();
-		GenerateKeys(input, keys);
-		unique_ptr<Key> key;
+		GenerateKeys(arena_allocator, input, keys);
 
 		// now erase the entries
 		for (idx_t i = 0; i < failed_index; i++) {
-			if (!keys[i]) {
+			if (keys[i].len == 0) {
 				continue;
 			}
 			row_t row_id = row_identifiers[i];
-			Erase(tree, *keys[i], 0, row_id);
+			Erase(tree, keys[i], 0, row_id);
 		}
 		return false;
 	}
@@ -579,11 +446,11 @@ bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
 	return true;
 }
 
-bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_id) {
-	Key &key = *value;
+bool ART::Insert(Node *&node, Key &key, unsigned depth, row_t row_id) {
+
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		node = new Leaf(*value, depth, row_id);
+		node = new Leaf(key, depth, row_id);
 		return true;
 	}
 
@@ -610,7 +477,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		new_node->prefix = Prefix(key, depth, new_prefix_length);
 		auto key_byte = node->prefix.Reduce(new_prefix_length);
 		Node4::InsertChild(new_node, key_byte, node);
-		Node *leaf_node = new Leaf(*value, depth + new_prefix_length + 1, row_id);
+		Node *leaf_node = new Leaf(key, depth + new_prefix_length + 1, row_id);
 		Node4::InsertChild(new_node, key[depth + new_prefix_length], leaf_node);
 		node = new_node;
 		return true;
@@ -627,7 +494,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 			auto key_byte = node->prefix.Reduce(mismatch_pos);
 			Node4::InsertChild(new_node, key_byte, node);
 
-			Node *leaf_node = new Leaf(*value, depth + mismatch_pos + 1, row_id);
+			Node *leaf_node = new Leaf(key, depth + mismatch_pos + 1, row_id);
 			Node4::InsertChild(new_node, key[depth + mismatch_pos], leaf_node);
 			node = new_node;
 			return true;
@@ -640,11 +507,11 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 	idx_t pos = node->GetChildPos(key[depth]);
 	if (pos != DConstants::INVALID_INDEX) {
 		auto child = node->GetChild(*this, pos);
-		bool insertion_result = Insert(child, move(value), depth + 1, row_id);
+		bool insertion_result = Insert(child, key, depth + 1, row_id);
 		node->ReplaceChildPointer(pos, child);
 		return insertion_result;
 	}
-	Node *new_node = new Leaf(*value, depth + 1, row_id);
+	Node *new_node = new Leaf(key, depth + 1, row_id);
 	Node::InsertChild(node, key[depth], new_node);
 	return true;
 }
@@ -660,20 +527,21 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	ExecuteExpressions(input, expression);
 
 	// then generate the keys for the given input
-	vector<unique_ptr<Key>> keys;
-	GenerateKeys(expression, keys);
+	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	vector<Key> keys;
+	GenerateKeys(arena_allocator, expression, keys);
 
 	// now erase the elements from the database
 	row_ids.Flatten(input.size());
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 
 	for (idx_t i = 0; i < input.size(); i++) {
-		if (!keys[i]) {
+		if (keys[i].len == 0) {
 			continue;
 		}
-		Erase(tree, *keys[i], 0, row_identifiers[i]);
+		Erase(tree, keys[i], 0, row_identifiers[i]);
 #ifdef DEBUG
-		auto node = Lookup(tree, *keys[i], 0);
+		auto node = Lookup(tree, keys[i], 0);
 		if (node) {
 			auto leaf = static_cast<Leaf *>(node);
 			for (idx_t k = 0; k < leaf->count; k++) {
@@ -732,43 +600,48 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 //===--------------------------------------------------------------------===//
 // Point Query
 //===--------------------------------------------------------------------===//
-static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
+static Key CreateKey(ArenaAllocator &allocator, ART &art, PhysicalType type, Value &value) {
 	D_ASSERT(type == value.type().InternalType());
 	switch (type) {
 	case PhysicalType::BOOL:
-		return Key::CreateKey<bool>(value);
+		return Key::CreateKey<bool>(allocator, value);
 	case PhysicalType::INT8:
-		return Key::CreateKey<int8_t>(value);
+		return Key::CreateKey<int8_t>(allocator, value);
 	case PhysicalType::INT16:
-		return Key::CreateKey<int16_t>(value);
+		return Key::CreateKey<int16_t>(allocator, value);
 	case PhysicalType::INT32:
-		return Key::CreateKey<int32_t>(value);
+		return Key::CreateKey<int32_t>(allocator, value);
 	case PhysicalType::INT64:
-		return Key::CreateKey<int64_t>(value);
+		return Key::CreateKey<int64_t>(allocator, value);
 	case PhysicalType::UINT8:
-		return Key::CreateKey<uint8_t>(value);
+		return Key::CreateKey<uint8_t>(allocator, value);
 	case PhysicalType::UINT16:
-		return Key::CreateKey<uint16_t>(value);
+		return Key::CreateKey<uint16_t>(allocator, value);
 	case PhysicalType::UINT32:
-		return Key::CreateKey<uint32_t>(value);
+		return Key::CreateKey<uint32_t>(allocator, value);
 	case PhysicalType::UINT64:
-		return Key::CreateKey<uint64_t>(value);
+		return Key::CreateKey<uint64_t>(allocator, value);
 	case PhysicalType::INT128:
-		return Key::CreateKey<hugeint_t>(value);
+		return Key::CreateKey<hugeint_t>(allocator, value);
 	case PhysicalType::FLOAT:
-		return Key::CreateKey<float>(value);
+		return Key::CreateKey<float>(allocator, value);
 	case PhysicalType::DOUBLE:
-		return Key::CreateKey<double>(value);
+		return Key::CreateKey<double>(allocator, value);
 	case PhysicalType::VARCHAR:
-		return Key::CreateKey<string_t>(value);
+		return Key::CreateKey<string_t>(allocator, value);
 	default:
 		throw InternalException("Invalid type for index");
 	}
 }
 
 bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids) {
-	auto key = CreateKey(*this, types[0], state->values[0]);
-	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
+
+	// TODO: the key directly owning the data for a single key might be more efficient
+	// TODO: the index join should be refactored anyways, look-ups should be vectorized for multiple keys
+	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	auto key = CreateKey(arena_allocator, *this, types[0], state->values[0]);
+
+	auto leaf = static_cast<Leaf *>(Lookup(tree, key, 0));
 	if (!leaf) {
 		return true;
 	}
@@ -783,9 +656,14 @@ bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &
 }
 
 void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
-	//! We need to look for a leaf
-	auto key = CreateKey(*this, types[0], equal_value);
-	auto leaf = (Leaf *)(Lookup(tree, *key, 0));
+
+	// we need to look for a leaf
+	// TODO: the key directly owning the data for a single key might be more efficient
+	// TODO: the index join should be refactored anyways, look-ups should be vectorized for multiple keys
+	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	auto key = CreateKey(arena_allocator, *this, types[0], equal_value);
+
+	auto leaf = (Leaf *)(Lookup(tree, key, 0));
 	if (!leaf) {
 		return;
 	}
@@ -831,20 +709,24 @@ Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
 //===--------------------------------------------------------------------===//
 bool ART::SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids) {
 	Iterator *it = &state->iterator;
-	auto key = CreateKey(*this, types[0], state->values[0]);
+
+	// TODO: the key directly owning the data for a single key might be more efficient
+	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	auto key = CreateKey(arena_allocator, *this, types[0], state->values[0]);
 
 	// greater than scan: first set the iterator to the node at which we will start our scan by finding the lowest node
 	// that satisfies our requirement
 	if (!it->art) {
 		it->art = this;
-		bool found = it->LowerBound(tree, *key, inclusive);
+		bool found = it->LowerBound(tree, key, inclusive);
 		if (!found) {
 			return true;
 		}
 	}
 	// after that we continue the scan; we don't need to check the bounds as any value following this value is
 	// automatically bigger and hence satisfies our predicate
-	return it->Scan(nullptr, max_count, result_ids, false);
+	Key empty_key = Key();
+	return it->Scan(empty_key, max_count, result_ids, false);
 }
 
 //===--------------------------------------------------------------------===//
@@ -856,19 +738,22 @@ bool ART::SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, 
 	}
 
 	Iterator *it = &state->iterator;
-	auto upper_bound = CreateKey(*this, types[0], state->values[0]);
+
+	// TODO: the key directly owning the data for a single key might be more efficient
+	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	auto upper_bound = CreateKey(arena_allocator, *this, types[0], state->values[0]);
 
 	if (!it->art) {
 		it->art = this;
 		// first find the minimum value in the ART: we start scanning from this value
 		it->FindMinimum(*tree);
 		// early out min value higher than upper bound query
-		if (it->cur_key > *upper_bound) {
+		if (it->cur_key > upper_bound) {
 			return true;
 		}
 	}
 	// now continue the scan until we reach the upper bound
-	return it->Scan(upper_bound.get(), max_count, result_ids, inclusive);
+	return it->Scan(upper_bound, max_count, result_ids, inclusive);
 }
 
 //===--------------------------------------------------------------------===//
@@ -876,19 +761,23 @@ bool ART::SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, 
 //===--------------------------------------------------------------------===//
 bool ART::SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
                            vector<row_t> &result_ids) {
-	auto lower_bound = CreateKey(*this, types[0], state->values[0]);
-	auto upper_bound = CreateKey(*this, types[0], state->values[1]);
+
+	// TODO: the key directly owning the data for a single key might be more efficient
+	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	auto lower_bound = CreateKey(arena_allocator, *this, types[0], state->values[0]);
+	auto upper_bound = CreateKey(arena_allocator, *this, types[0], state->values[1]);
+
 	Iterator *it = &state->iterator;
 	// first find the first node that satisfies the left predicate
 	if (!it->art) {
 		it->art = this;
-		bool found = it->LowerBound(tree, *lower_bound, left_inclusive);
+		bool found = it->LowerBound(tree, lower_bound, left_inclusive);
 		if (!found) {
 			return true;
 		}
 	}
 	// now continue the scan until we reach the upper bound
-	return it->Scan(upper_bound.get(), max_count, result_ids, right_inclusive);
+	return it->Scan(upper_bound, max_count, result_ids, right_inclusive);
 }
 
 bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table_state, idx_t max_count,
@@ -963,14 +852,16 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	ExecuteExpressions(chunk, expression_chunk);
 
 	// generate the keys for the given input
-	vector<unique_ptr<Key>> keys;
-	GenerateKeys(expression_chunk, keys);
+	// TODO: no new allocator for each chunk, pass to method
+	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	vector<Key> keys;
+	GenerateKeys(arena_allocator, expression_chunk, keys);
 
 	for (idx_t i = 0; i < chunk.size(); i++) {
-		if (!keys[i]) {
+		if (keys[i].len == 0) {
 			continue;
 		}
-		Node *node_ptr = Lookup(tree, *keys[i], 0);
+		Node *node_ptr = Lookup(tree, keys[i], 0);
 		bool throw_exception =
 		    verify_type == VerifyExistenceType::APPEND_FK ? node_ptr == nullptr : node_ptr != nullptr;
 		if (!throw_exception) {

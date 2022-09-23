@@ -8,8 +8,8 @@
 
 #pragma once
 
+#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/faster_art_key.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
@@ -18,7 +18,6 @@ class Leaf : public Node {
 public:
 	Leaf(Key &value, uint32_t depth, row_t row_id);
 	Leaf(Key &value, uint32_t depth, unique_ptr<row_t[]> row_ids, idx_t num_elements);
-	Leaf(FKey &value, uint32_t depth, unique_ptr<row_t[]> row_ids, idx_t num_elements);
 	Leaf(unique_ptr<row_t[]> row_ids, idx_t num_elements, Prefix &prefix);
 
 	idx_t capacity;

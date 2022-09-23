@@ -11,20 +11,18 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/iterator.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/node256.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
-
-#include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/execution/index/art/faster_art_key.hpp"
-#include "duckdb/execution/index/art/leaf.hpp"
-#include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/node4.hpp"
-#include "duckdb/execution/index/art/node16.hpp"
-#include "duckdb/execution/index/art/node48.hpp"
-#include "duckdb/execution/index/art/node256.hpp"
-#include "duckdb/execution/index/art/iterator.hpp"
 
 namespace duckdb {
 
@@ -104,7 +102,7 @@ private:
 	//! Insert a row id into a leaf node
 	bool InsertToLeaf(Leaf &leaf, row_t row_id);
 	//! Insert the leaf value into the tree
-	bool Insert(Node *&node, unique_ptr<Key> key, unsigned depth, row_t row_id);
+	bool Insert(Node *&node, Key &key, unsigned depth, row_t row_id);
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
 	void Erase(Node *&node, Key &key, unsigned depth, row_t row_id);
@@ -117,8 +115,7 @@ private:
 	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
 	                      vector<row_t> &result_ids);
 
-	void GenerateFKeys(ArenaAllocator &allocator, DataChunk &input, vector<FKey> &keys);
-	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
+	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys);
 
 	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);
 };

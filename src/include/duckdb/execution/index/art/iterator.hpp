@@ -51,7 +51,7 @@ public:
 	ART *art = nullptr;
 
 	//! Scan the tree
-	bool Scan(Key *bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive);
+	bool Scan(Key &bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive);
 	//! Finds minimum value of the tree
 	void FindMinimum(Node &node);
 	//! Goes to lower bound
