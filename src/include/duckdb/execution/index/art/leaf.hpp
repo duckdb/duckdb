@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 
