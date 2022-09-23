@@ -4,6 +4,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 
 namespace duckdb {
 
@@ -522,6 +523,36 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 	}
 
 	return result;
+}
+
+void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint) {
+	// scan the original table, check if there's any null value
+	auto &not_null_constraint = (BoundNotNullConstraint &)constraint;
+	vector<LogicalType> scan_types;
+	D_ASSERT(not_null_constraint.index < types.size());
+	scan_types.push_back(types[not_null_constraint.index]);
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(GetAllocator(), scan_types);
+
+	CreateIndexScanState state;
+	vector<column_t> cids;
+	cids.push_back(not_null_constraint.index);
+	// Use ScanCreateIndex to scan the latest committed data
+	InitializeCreateIndexScan(state);
+	state.Initialize(cids, nullptr);
+	InitializeScan(state.table_state, cids, nullptr);
+	while (true) {
+		scan_chunk.Reset();
+		state.table_state.ScanCommitted(scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+		if (scan_chunk.size() == 0) {
+			break;
+		}
+		// Check constraint
+		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
+			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
+			                          parent.column_definitions[not_null_constraint.index].GetName());
+		}
+	}
 }
 
 } // namespace duckdb

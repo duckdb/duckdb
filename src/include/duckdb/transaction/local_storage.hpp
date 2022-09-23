@@ -101,6 +101,8 @@ public:
 	void FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &chunk);
 	TableIndexList &GetIndexes(DataTable *table);
 
+	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
+
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
 

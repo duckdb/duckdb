@@ -377,4 +377,12 @@ TableIndexList &LocalStorage::GetIndexes(DataTable *table) {
 	return storage->indexes;
 }
 
+void LocalStorage::VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint) {
+	auto storage = GetStorage(&parent);
+	if (!storage) {
+		return;
+	}
+	storage->row_groups->VerifyNewConstraint(parent, constraint);
+}
+
 } // namespace duckdb

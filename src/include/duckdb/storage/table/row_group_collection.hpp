@@ -73,6 +73,7 @@ public:
 	shared_ptr<RowGroupCollection> AlterType(idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<column_t> bound_columns, Expression &cast_expr,
 	                                         ColumnStatistics &stats);
+	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 private:
 	//! The number of rows in the table

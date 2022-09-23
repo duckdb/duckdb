@@ -427,56 +427,9 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 
-	throw InternalException("VerifyNewConstraint");
-	//
-	//	// scan the original table, check if there's any null value
-	//	auto &not_null_constraint = (BoundNotNullConstraint &)*constraint;
-	//	auto &transaction = Transaction::GetTransaction(context);
-	//	vector<LogicalType> scan_types;
-	//	D_ASSERT(not_null_constraint.index < parent.column_definitions.size());
-	//	scan_types.push_back(parent.column_definitions[not_null_constraint.index].Type());
-	//	DataChunk scan_chunk;
-	//	auto &allocator = Allocator::Get(context);
-	//	scan_chunk.Initialize(allocator, scan_types);
-	//
-	//	CreateIndexScanState state;
-	//	vector<column_t> cids;
-	//	cids.push_back(not_null_constraint.index);
-	//	// Use ScanCreateIndex to scan the latest committed data
-	//	InitializeCreateIndexScan(state, cids);
-	//	while (true) {
-	//		scan_chunk.Reset();
-	//		ScanCreateIndex(state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
-	//		if (scan_chunk.size() == 0) {
-	//			break;
-	//		}
-	//		// Check constraint
-	//		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-	//			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
-	//			                          column_definitions[not_null_constraint.index].GetName());
-	//		}
-	//	}
-	//
-	//	TableScanState scan_state;
-	//	scan_state.column_ids.push_back(not_null_constraint.index);
-	//	scan_state.max_row = total_rows;
-	//
-	//	// For local storage
-	//	transaction.storage.InitializeScan(&parent, scan_state.local_state, nullptr);
-	//	if (scan_state.local_state.GetStorage()) {
-	//		while (scan_state.local_state.chunk_index <= scan_state.local_state.max_index) {
-	//			scan_chunk.Reset();
-	//			transaction.storage.Scan(scan_state.local_state, scan_state.column_ids, scan_chunk);
-	//			if (scan_chunk.size() == 0) {
-	//				break;
-	//			}
-	//			// Check constraint
-	//			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-	//				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
-	//				                          column_definitions[not_null_constraint.index].GetName());
-	//			}
-	//		}
-	//	}
+	parent.row_groups->VerifyNewConstraint(parent, *constraint);
+	auto &transaction = Transaction::GetTransaction(context);
+	transaction.storage.VerifyNewConstraint(parent, *constraint);
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
@@ -761,6 +714,8 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 	auto first_id = ids[0];
 
 	// verify any constraints on the delete rows
+	// FIXME: we only need to fetch in case we have a foreign key constraint
+	// and we only need to fetch columns that are part of this constraint
 	DataChunk verify_chunk;
 	if (first_id >= MAX_ROW_ID) {
 		transaction.storage.FetchChunk(this, row_identifiers, count, verify_chunk);
