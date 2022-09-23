@@ -110,6 +110,9 @@ public:
 		//! Find the reference value to use when compressing the current value
 		if (((int64_t)state.ring_buffer.Size() - (int64_t)key) < (int64_t)RingBuffer::RING_SIZE) {
 			auto current_index = state.ring_buffer.IndexOf(key);
+			if (current_index > state.ring_buffer.Size()) {
+				current_index = 0;
+			}
 			auto reference_value = state.ring_buffer.Value(current_index % RingBuffer::RING_SIZE);
 			uint64_t tempxor_result = (uint64_t)in ^ reference_value;
 			trailing_zeros = __builtin_ctzll(tempxor_result);
@@ -284,8 +287,9 @@ public:
 			UnpackPackedData(temp, index, leading_zeros, significant_bits);
 			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
 			state.reference_value = state.ring_buffer.Value(index);
-			// if (significant_bits == 0) { significant_bits = 64 } branchless
-			significant_bits += (BIT_SIZE * (significant_bits == 0));
+			if (significant_bits == 0) {
+				significant_bits = 64;
+			}
 			state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
 			auto bits_to_read = BIT_SIZE - state.LeadingZeros() - state.TrailingZeros();
 			value = state.input.template ReadValue<uint64_t>(bits_to_read);

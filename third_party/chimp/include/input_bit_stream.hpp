@@ -50,7 +50,7 @@ public:
 	}
 
 	template <class T>
-	T ReadValue(uint8_t value_size = (sizeof(T) * 8)) {
+	inline T ReadValue(uint8_t value_size = (sizeof(T) * 8)) {
 		int32_t i;
 		T value = 0;
 
