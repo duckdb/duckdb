@@ -32,6 +32,8 @@ public:
 	vector<string> names;
 	//! Bound column IDs
 	vector<column_t> column_ids;
+	//! Columns that are used outside of the scan
+	vector<column_t> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
 	//! The set of input parameters for the table function

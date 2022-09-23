@@ -45,8 +45,9 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	if (column_ids.empty()) {
 		return {ColumnBinding(table_index, 0)};
 	}
+	auto num_cols = projection_ids.empty() ? column_ids.size() : projection_ids.size();
 	vector<ColumnBinding> result;
-	for (idx_t i = 0; i < column_ids.size(); i++) {
+	for (idx_t i = 0; i < num_cols; i++) {
 		result.emplace_back(table_index, i);
 	}
 	return result;
@@ -56,7 +57,8 @@ void LogicalGet::ResolveTypes() {
 	if (column_ids.empty()) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
-	for (auto &index : column_ids) {
+	auto &col_indices = projection_ids.empty() ? column_ids : projection_ids;
+	for (auto &index : col_indices) {
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
 			types.emplace_back(LogicalType::ROW_TYPE);
 		} else {

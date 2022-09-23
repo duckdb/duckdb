@@ -10,11 +10,13 @@
 namespace duckdb {
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
-                                     unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
+                                     unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
+                                     vector<column_t> column_ids_p, vector<column_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
                                      idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types), estimated_cardinality),
-      function(move(function_p)), bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)),
+      function(move(function_p)), bind_data(move(bind_data_p)), returned_types(move(returned_types_p)),
+      column_ids(move(column_ids_p)), projection_ids(move(projection_ids_p)), names(move(names_p)),
       table_filters(move(table_filters_p)) {
 }
 
@@ -48,9 +50,15 @@ public:
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.table_filters.get());
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
+		vector<LogicalType> types;
+		for (auto col_id : op.column_ids) {
+			types.push_back(op.returned_types[col_id]);
+		}
+		table_function_chunk.Initialize(Allocator::Get(context.client), types);
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
+	DataChunk table_function_chunk;
 };
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
@@ -69,7 +77,18 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 	auto &state = (TableScanLocalSourceState &)lstate;
 
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
-	function.function(context.client, data, chunk);
+
+	if (projection_ids.empty()) {
+		function.function(context.client, data, chunk);
+	} else {
+		state.table_function_chunk.Reset();
+		function.function(context.client, data, state.table_function_chunk);
+
+		for (idx_t col_idx = 0; col_idx < projection_ids.size(); col_idx++) {
+			chunk.data[col_idx].Reference(state.table_function_chunk.data[projection_ids[col_idx]]);
+		}
+		chunk.SetCardinality(state.table_function_chunk);
+	}
 }
 
 double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
