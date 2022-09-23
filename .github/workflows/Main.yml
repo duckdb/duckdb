@@ -397,7 +397,7 @@ jobs:
       shell: bash
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout 30015eea2b7dc544c683a37dcdff34b23edf2b4b && make debug)
+        (cd psqlodbc && git checkout 70fa016bde0b326d98803742aa570a1e5b3f6e89 && make debug)
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
