@@ -8,10 +8,6 @@
 #include "duckdb/function/scalar/strftime.hpp"
 #endif
 
-#define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "httplib.hpp"
-
-#include <chrono>
 #include <duckdb/function/scalar/string_functions.hpp>
 #include <duckdb/storage/buffer_manager.hpp>
 #include <iostream>
@@ -19,10 +15,9 @@
 
 namespace duckdb {
 
-static HeaderMap create_s3_header(std::string url, std::string query, std::string host, std::string service,
-                                  std::string method, const S3AuthParams &auth_params, std::string date_now = "",
-                                  std::string datetime_now = "", std::string payload_hash = "",
-                                  std::string content_type = "") {
+static HeaderMap create_s3_header(string url, string query, string host, string service, string method,
+                                  const S3AuthParams &auth_params, string date_now = "", string datetime_now = "",
+                                  string payload_hash = "", string content_type = "") {
 
 	HeaderMap res;
 	res["Host"] = host;
@@ -49,7 +44,7 @@ static HeaderMap create_s3_header(std::string url, std::string query, std::strin
 		res["x-amz-security-token"] = auth_params.session_token;
 	}
 
-	std::string signed_headers = "";
+	string signed_headers = "";
 	hash_bytes canonical_request_hash;
 	hash_str canonical_request_hash_str;
 	if (content_type.length() > 0) {
@@ -73,8 +68,7 @@ static HeaderMap create_s3_header(std::string url, std::string query, std::strin
 
 	hex256(canonical_request_hash, canonical_request_hash_str);
 	auto string_to_sign = "AWS4-HMAC-SHA256\n" + datetime_now + "\n" + date_now + "/" + auth_params.region + "/" +
-	                      service + "/aws4_request\n" +
-	                      std::string((char *)canonical_request_hash_str, sizeof(hash_str));
+	                      service + "/aws4_request\n" + string((char *)canonical_request_hash_str, sizeof(hash_str));
 	// compute signature
 	hash_bytes k_date, k_region, k_service, signing_key, signature;
 	hash_str signature_str;
@@ -88,7 +82,7 @@ static HeaderMap create_s3_header(std::string url, std::string query, std::strin
 
 	res["Authorization"] = "AWS4-HMAC-SHA256 Credential=" + auth_params.access_key_id + "/" + date_now + "/" +
 	                       auth_params.region + "/" + service + "/aws4_request, SignedHeaders=" + signed_headers +
-	                       ", Signature=" + std::string((char *)signature_str, sizeof(hash_str));
+	                       ", Signature=" + string((char *)signature_str, sizeof(hash_str));
 
 	return res;
 }
@@ -101,11 +95,11 @@ static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(Heade
 	return headers;
 }
 
-std::string S3FileSystem::UrlDecode(std::string input) {
-	std::string result;
+string S3FileSystem::UrlDecode(string input) {
+	string result;
 	result.reserve(input.size());
 	char ch;
-	std::replace(input.begin(), input.end(), '+', ' ');
+	replace(input.begin(), input.end(), '+', ' ');
 	for (idx_t i = 0; i < input.length(); i++) {
 		if (int(input[i]) == 37) {
 			int ii;
@@ -120,10 +114,10 @@ std::string S3FileSystem::UrlDecode(std::string input) {
 	return result;
 }
 
-std::string S3FileSystem::UrlEncode(const std::string &input, bool encode_slash) {
+string S3FileSystem::UrlEncode(const string &input, bool encode_slash) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 	static const char *hex_digit = "0123456789ABCDEF";
-	std::string result;
+	string result;
 	result.reserve(input.size());
 	for (idx_t i = 0; i < input.length(); i++) {
 		char ch = input[i];
@@ -132,12 +126,12 @@ std::string S3FileSystem::UrlEncode(const std::string &input, bool encode_slash)
 			result += ch;
 		} else if (ch == '/') {
 			if (encode_slash) {
-				result += std::string("%2F");
+				result += string("%2F");
 			} else {
 				result += ch;
 			}
 		} else {
-			result += std::string("%");
+			result += string("%");
 			result += hex_digit[static_cast<unsigned char>(ch) >> 4];
 			result += hex_digit[static_cast<unsigned char>(ch) & 15];
 		}
@@ -146,12 +140,12 @@ std::string S3FileSystem::UrlEncode(const std::string &input, bool encode_slash)
 }
 
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
-	std::string region;
-	std::string access_key_id;
-	std::string secret_access_key;
-	std::string session_token;
-	std::string endpoint;
-	std::string url_style;
+	string region;
+	string access_key_id;
+	string secret_access_key;
+	string session_token;
+	string endpoint;
+	string url_style;
 	bool use_ssl;
 	Value value;
 
@@ -274,7 +268,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 
 	bool success = false;
 	string last_error = "";
-	auto time_at_start = duration_cast<std::chrono::milliseconds>(system_clock::now().time_since_epoch()).count();
+	auto time_at_start = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
 	// Retry loop to make large uploads resilient to brief connection issues
 	while (true) {
@@ -285,7 +279,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 				success = true;
 				break;
 			} else {
-				last_error = res->error + " (HTTP code " + std::to_string(res->code) + ")";
+				last_error = res->error + " (HTTP code " + to_string(res->code) + ")";
 			}
 		} catch (std::runtime_error &e) {
 			if (strncmp(e.what(), "HTTP PUT error", 14) != 0) {
@@ -299,12 +293,12 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 			break;
 		}
 
-		auto current_time = duration_cast<std::chrono::milliseconds>(system_clock::now().time_since_epoch()).count();
+		auto current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 		if ((uint64_t)(current_time - time_at_start) > file_handle.http_params.timeout) {
 			break;
 		}
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS + 1));
+		std::this_thread::sleep_for(milliseconds(MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS + 1));
 	}
 
 	if (!success) {
@@ -334,7 +328,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 	file_handle.uploads_in_progress_cv.notify_one();
 }
 
-void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, std::shared_ptr<S3WriteBuffer> write_buffer) {
+void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
 	if (write_buffer->idx == 0) {
 		return;
 	}
@@ -362,7 +356,7 @@ void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, std::shared_ptr<S3Writ
 // TODO: we can fix this by keeping the last partially written buffer in memory and allow reuploading it with new data.
 void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 	//  Collect references to all buffers to check
-	std::vector<std::shared_ptr<S3WriteBuffer>> to_flush;
+	vector<shared_ptr<S3WriteBuffer>> to_flush;
 	file_handle.write_buffers_lock.lock();
 	for (auto &item : file_handle.write_buffers) {
 		to_flush.push_back(item.second);
@@ -375,7 +369,7 @@ void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 			FlushBuffer(file_handle, write_buffer);
 		}
 	}
-	std::unique_lock<std::mutex> lck(file_handle.uploads_in_progress_lock);
+	unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
 	file_handle.uploads_in_progress_cv.wait(lck,
 	                                        [&file_handle] { return file_handle.uploads_in_progress.load() == 0; });
 }
@@ -413,21 +407,21 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	file_handle.upload_finalized = true;
 }
 
-std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle, uint16_t write_buffer_idx) {
+shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle, uint16_t write_buffer_idx) {
 	auto &s3fs = (S3FileSystem &)file_handle.file_system;
 	// Check if write buffer already exists
 	{
-		std::unique_lock<std::mutex> lck(file_handle.write_buffers_lock);
+		unique_lock<mutex> lck(file_handle.write_buffers_lock);
 		auto lookup_result = file_handle.write_buffers.find(write_buffer_idx);
 		if (lookup_result != file_handle.write_buffers.end()) {
-			std::shared_ptr<S3WriteBuffer> buffer = lookup_result->second;
+			shared_ptr<S3WriteBuffer> buffer = lookup_result->second;
 			return buffer;
 		}
 	}
 
 	// Wait for a buffer to become available
 	{
-		std::unique_lock<std::mutex> lck(s3fs.buffers_available_lock);
+		unique_lock<mutex> lck(s3fs.buffers_available_lock);
 		s3fs.buffers_available_cv.wait(lck, [&s3fs] { return s3fs.buffers_available > 0; });
 		s3fs.buffers_available--;
 	}
@@ -458,7 +452,7 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle
 
 				// Wait for more buffers to become available before trying again
 				{
-					std::unique_lock<std::mutex> lck(s3fs.buffers_available_lock);
+					unique_lock<mutex> lck(s3fs.buffers_available_lock);
 					s3fs.buffers_available_cv.wait(
 					    lck, [&s3fs, &buffers_available] { return s3fs.buffers_available > buffers_available; });
 				}
@@ -470,61 +464,44 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle
 	                                                   move(duckdb_buffer));
 
 	{
-		std::unique_lock<std::mutex> lck(file_handle.write_buffers_lock);
+		unique_lock<mutex> lck(file_handle.write_buffers_lock);
 		auto lookup_result = file_handle.write_buffers.find(write_buffer_idx);
 
 		// Check if other thread has created the same buffer, if so we return theirs and drop ours.
 		if (lookup_result != file_handle.write_buffers.end()) {
 			// write_buffer_idx << std::endl;
-			std::shared_ptr<S3WriteBuffer> write_buffer = lookup_result->second;
+			shared_ptr<S3WriteBuffer> write_buffer = lookup_result->second;
 			file_handle.write_buffers_lock.unlock();
 			return write_buffer;
 		}
-		file_handle.write_buffers.insert(
-		    std::pair<uint16_t, std::shared_ptr<S3WriteBuffer>>(write_buffer_idx, new_write_buffer));
+		file_handle.write_buffers.insert(pair<uint16_t, shared_ptr<S3WriteBuffer>>(write_buffer_idx, new_write_buffer));
 	}
 
 	return new_write_buffer;
 }
 
-void S3FileSystem::readQueryParams(const string &url_query_param, S3AuthParams &params) {
+void S3FileSystem::GetQueryParam(const string &key, string &param, duckdb_httplib_openssl::Params &query_params) {
+	auto found_param = query_params.find(key);
+	if (found_param != query_params.end()) {
+		param = found_param->second;
+		query_params.erase(found_param);
+	}
+}
+
+void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &params) {
 	if (url_query_param.empty())
 		return;
 
 	duckdb_httplib_openssl::Params query_params;
 	duckdb_httplib_openssl::detail::parse_query_text(url_query_param, query_params);
 
-	auto found_param = query_params.find("s3_region");
-	if (found_param != query_params.end()) {
-		params.region = found_param->second;
-		query_params.erase(found_param);
-	}
-	found_param = query_params.find("s3_access_key_id");
-	if (found_param != query_params.end()) {
-		params.access_key_id = found_param->second;
-		query_params.erase(found_param);
-	}
-	found_param = query_params.find("s3_secret_access_key");
-	if (found_param != query_params.end()) {
-		params.secret_access_key = found_param->second;
-		query_params.erase(found_param);
-	}
-	found_param = query_params.find("s3_session_token");
-	if (found_param != query_params.end()) {
-		params.session_token = found_param->second;
-		query_params.erase(found_param);
-	}
-	found_param = query_params.find("s3_endpoint");
-	if (found_param != query_params.end()) {
-		params.endpoint = found_param->second;
-		query_params.erase(found_param);
-	}
-	found_param = query_params.find("s3_url_style");
-	if (found_param != query_params.end()) {
-		params.url_style = found_param->second;
-		query_params.erase(found_param);
-	}
-	found_param = query_params.find("s3_use_ssl");
+	GetQueryParam("s3_region", params.region, query_params);
+	GetQueryParam("s3_access_key_id", params.access_key_id, query_params);
+	GetQueryParam("s3_secret_access_key", params.secret_access_key, query_params);
+	GetQueryParam("s3_session_token", params.session_token, query_params);
+	GetQueryParam("s3_endpoint", params.endpoint, query_params);
+	GetQueryParam("s3_url_style", params.url_style, query_params);
+	auto found_param = query_params.find("s3_use_ssl");
 	if (found_param != query_params.end()) {
 		if (found_param->second == "true") {
 			params.use_ssl = true;
@@ -549,7 +526,7 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		throw std::runtime_error("URL needs to start with s3://");
 	}
 	auto slash_pos = url.find('/', 5);
-	if (slash_pos == std::string::npos) {
+	if (slash_pos == string::npos) {
 		throw std::runtime_error("URL needs to contain a '/' after the host");
 	}
 	bucket = url.substr(5, slash_pos - 5);
@@ -565,7 +542,7 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		path = "";
 	}
 
-	if (question_pos == std::string::npos) {
+	if (question_pos == string::npos) {
 		path += url.substr(slash_pos);
 		query_param = "";
 	} else {
@@ -593,7 +570,7 @@ string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
 		hash_str payload_hash_str;
 		sha256(buffer, buffer_len, payload_hash_bytes);
 		hex256(payload_hash_bytes, payload_hash_str);
-		return std::string((char *)payload_hash_str, sizeof(payload_hash_str));
+		return string((char *)payload_hash_str, sizeof(payload_hash_str));
 	} else {
 		return "";
 	}
@@ -658,15 +635,15 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, st
 	return HTTPFileSystem::GetRangeRequest(handle, full_url, headers, file_offset, buffer_out, buffer_out_len);
 }
 
-std::unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, const string &query_param, uint8_t flags,
-                                                           FileLockType lock, FileCompressionType compression,
-                                                           FileOpener *opener) {
+unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, const string &query_param, uint8_t flags,
+                                                      FileLockType lock, FileCompressionType compression,
+                                                      FileOpener *opener) {
 	if (!opener) {
 		throw std::runtime_error("CreateHandle called on S3FileSystem without FileOpener");
 	}
 	auto s3authparams = S3AuthParams::ReadFrom(opener);
 	string stripped_path = path;
-	readQueryParams(query_param, s3authparams);
+	ReadQueryParams(query_param, s3authparams);
 	string full_path = query_param.empty() ? path : path + "?" + query_param;
 
 	return duckdb::make_unique<S3FileHandle>(*this, full_path, stripped_path, flags,
@@ -701,7 +678,7 @@ void S3FileSystem::Verify() {
 	// AWS_SECRET_ACCESS_KEY="vs1BZPxSL2qVARBSg5vCMKJsavCoEPlo/HSHRaVe" AWS_ACCESS_KEY_ID="ASIAYSPIOYDTHTBIITVC"
 	// AWS_SESSION_TOKEN="IQoJb3JpZ2luX2VjENX//////////wEaCWV1LXdlc3QtMSJHMEUCIQDfjzs9BYHrEXDMU/NR+PHV1uSTr7CSVSQdjKSfiPRLdgIgCCztF0VMbi9+uHHAfBVKhV4t9MlUrQg3VAOIsLxrWyoqlAIIHRAAGgw1ODk0MzQ4OTY2MTQiDOGl2DsYxENcKCbh+irxARe91faI+hwUhT60sMGRFg0GWefKnPclH4uRFzczrDOcJlAAaQRJ7KOsT8BrJlrY1jSgjkO7PkVjPp92vi6lJX77bg99MkUTJActiOKmd84XvAE5bFc/jFbqechtBjXzopAPkKsGuaqAhCenXnFt6cwq+LZikv/NJGVw7TRphLV+Aq9PSL9XwdzIgsW2qXwe1c3rxDNj53yStRZHVggdxJ0OgHx5v040c98gFphzSULHyg0OY6wmCMTYcswpb4kO2IIi6AiD9cY25TlwPKRKPi5CdBsTPnyTeW62u7PvwK0fTSy4ZuJUuGKQnH2cKmCXquEwoOHEiQY6nQH9fzY/EDGHMRxWWhxu0HiqIfsuFqC7GS0p0ToKQE+pzNsvVwMjZc+KILIDDQpdCWRIwu53I5PZy2Cvk+3y4XLvdZKQCsAKqeOc4c94UAS4NmUT7mCDOuRV0cLBVM8F0JYBGrUxyI+YoIvHhQWmnRLuKgTb5PkF7ZWrXBHFWG5/tZDOvBbbaCWTlRCL9b0Vpg5+BM/81xd8jChP4w83"
 	// aws --region eu-west-1 --debug s3 ls my-precious-bucket 2>&1 | less
-	std::string canonical_query_string = "delimiter=%2F&encoding-type=url&list-type=2&prefix="; // aws s3 ls <bucket>
+	string canonical_query_string = "delimiter=%2F&encoding-type=url&list-type=2&prefix="; // aws s3 ls <bucket>
 
 	S3AuthParams auth_params2 = {
 	    "eu-west-1",
@@ -954,7 +931,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    listobjectv2_url.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
-			    std::cout << response.reason << std::endl;
+			    std::cerr << response.reason << std::endl;
 			    throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
 			                             std::to_string(response.status) + ")");
 		    }
@@ -966,7 +943,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    });
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (Error code " +
-		                         std::to_string((int)res.error()) + ")");
+		                         to_string((int)res.error()) + ")");
 	}
 
 	return response.str();
