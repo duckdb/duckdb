@@ -83,11 +83,7 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 	} else {
 		state.table_function_chunk.Reset();
 		function.function(context.client, data, state.table_function_chunk);
-
-		for (idx_t col_idx = 0; col_idx < projection_ids.size(); col_idx++) {
-			chunk.data[col_idx].Reference(state.table_function_chunk.data[projection_ids[col_idx]]);
-		}
-		chunk.SetCardinality(state.table_function_chunk);
+		chunk.ReferenceColumns(state.table_function_chunk, projection_ids);
 	}
 }
 

@@ -214,9 +214,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		if (!everything_referenced) {
 			auto &get = (LogicalGet &)op;
 
-			// If we have "SELECT b FROM test WHERE a = 12", we don't want 'a' to leave the table scan at all
+			// If we have "SELECT b FROM test WHERE a = 42", we don't want 'a' to leave the table scan at all
 			auto all_bindings = get.GetColumnBindings();
-			for (idx_t col_idx = 0; col_idx < get.column_ids.size(); col_idx++) {
+			for (idx_t col_idx = 0; col_idx < all_bindings.size(); col_idx++) {
 				if (column_references.find(all_bindings[col_idx]) != column_references.end()) {
 					get.projection_ids.push_back(col_idx);
 				}

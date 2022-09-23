@@ -45,10 +45,15 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	if (column_ids.empty()) {
 		return {ColumnBinding(table_index, 0)};
 	}
-	auto num_cols = projection_ids.empty() ? column_ids.size() : projection_ids.size();
 	vector<ColumnBinding> result;
-	for (idx_t i = 0; i < num_cols; i++) {
-		result.emplace_back(table_index, i);
+	if (projection_ids.empty()) {
+		for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+			result.emplace_back(table_index, col_idx);
+		}
+	} else {
+		for (auto proj_id : projection_ids) {
+			result.emplace_back(table_index, proj_id);
+		}
 	}
 	return result;
 }
