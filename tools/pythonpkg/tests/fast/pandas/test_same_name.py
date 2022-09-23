@@ -20,7 +20,7 @@ class TestMultipleColumnsSameName(object):
         df = df.rename(columns={ df.columns[1]: "a" })
         con = duckdb.connect()
         rel = con.from_df(df)
-        assert rel.query("df_view","DESCRIBE df_view;").fetchall() == [('a', 'BIGINT', 'YES', None, None, None), ('a_1', 'BIGINT', 'YES', None, None, None), ('d', 'BIGINT', 'YES', None, None, None)]
+        assert(rel.query("df_view","DESCRIBE df_view;").fetchall() == [('a', 'BIGINT', 'YES', None, None, None), ('a_1', 'BIGINT', 'YES', None, None, None), ('d', 'BIGINT', 'YES', None, None, None)])
 
         assert rel.query("df_view","select a_1 from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
         assert rel.query("df_view","select a from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
