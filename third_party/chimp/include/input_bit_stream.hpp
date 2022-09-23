@@ -14,123 +14,127 @@
 
 namespace duckdb_chimp {
 
-static constexpr uint32_t BLOCK_SIZE = 262136;
+//! Every byte read touches at most 2 bytes (1 if it's perfectly aligned)
+//! Within a byte we need to mask off the bytes that we're interested in
+//! And then we need to shift these to the start of the byte
+//! I.E we want 4 bits, but our bit index is 3, our mask becomes:
+//! 0111 1000
+//! With a shift of 3
 
-class InputBitStream {
+//! Align the masks to the right
+uint8_t masks[] = {
+	0b00000000,
+	0b10000000,
+	0b11000000,
+	0b11100000,
+	0b11110000,
+	0b11111000,
+	0b11111100,
+	0b11111110,
+	0b11111111,
+	//! These later masks are for the cases where bit_index + SIZE exceeds 8
+	0b11111110,
+	0b11111100,
+	0b11111000,
+	0b11110000,
+	0b11100000,
+	0b11000000,
+	0b10000000,
+};
+
+//! Left shifts
+uint8_t shifts[] = {
+	0, //unused
+	7,
+	6,
+	5,
+	4,
+	3,
+	2,
+	1,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0
+};
+
+//! Right shifts
+//! Right shift the values to cut off the mask when SIZE + bit_index exceeds 8
+uint8_t right_shifts[] = {
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	1,
+	2,
+	3,
+	4,
+	5,
+	6,
+	7,
+	8,
+};
+
+struct InputBitStream {
 public:
-	using INTERNAL_TYPE = uint8_t;
+public:
+	InputBitStream() : input(nullptr), bit_index(0), byte_index(0) {}
+	uint8_t *input;
+	uint8_t bit_index; //Index in the current byte, starting from the right
+	uint64_t byte_index;
+public:
+	void SetStream(uint8_t* input) {
+		this->input = input;
+		bit_index = 0;
+		byte_index = 0;
+	}
 
-	InputBitStream() :
-		stream(nullptr),
-		current(0),
-		fill(0),
-		stream_index(0)
-		{
+	static inline uint8_t CreateMask(uint8_t size, uint8_t bit_index) {
+		return (masks[size] >> bit_index);
+	}
+
+	uint8_t InnerRead(uint8_t size) {
+		const uint8_t left_shift = 8 - size;
+		uint8_t result = ((input[byte_index] & CreateMask(size, bit_index)) << bit_index) >> left_shift;
+		if (size + bit_index <= 8) {
+			bit_index += size;
+			if (bit_index == 8) {
+				bit_index = 0;
+				byte_index++;
+			}
+			return result;
 		}
-public:
-	static constexpr uint8_t INTERNAL_TYPE_BITSIZE = sizeof(INTERNAL_TYPE) * 8;
-
-	void SetStream(uint8_t* input_stream) {
-		stream = input_stream;
-		stream_index = 0;
-		current = 0;
-		fill = 0;
-		bits_read = 0;
-		Refill();
-		Refill();
-	}
-
-	//! The amount of bytes we've read from the stream (ceiling)
-	size_t ByteSize() const {
-		return (stream_index * sizeof(INTERNAL_TYPE)) + 1;
-	}
-	//! The amount of bits we've read from the stream
-	size_t BitSize() const {
-		return (stream_index * INTERNAL_TYPE_BITSIZE) + fill;
+		byte_index++;
+		//! This next byte is guaranteed to be at bit_index 0 here
+		const uint8_t bit_remainder = (size + bit_index) - 8;
+		result |= ((input[byte_index] & masks[bit_remainder]) >> (8 - bit_remainder));
+		//! Set the bit_index in the new byte
+		bit_index = (size + bit_index) - 8;
+		return result;
 	}
 
 	template <class T>
-	inline T ReadValue(uint8_t value_size = (sizeof(T) * 8)) {
-		int32_t i;
-		T value = 0;
-
-		if (LoadedEnough(value_size)) {
-			// Can directly read from current
-			return (T)ReadFromCurrent(value_size);
+	T ReadValue(uint8_t size = sizeof(T) * __CHAR_BIT__) {
+		T result = 0;
+		uint8_t iterations = size >> 3; //divide by 8;
+		while (iterations-- != 0) {
+			result = result << 8 | InnerRead(8);
 		}
-
-		value_size -= fill;
-		// Empty the current bit buffer
-		value = (T)ReadFromCurrent(fill);
-
-		// Read multiples of 16
-		i = value_size >> 4;
-		while(i-- != 0) {
-			value = value << 16 | (T)ReadFromCurrent(16);
+		uint8_t remainder = size & 7;
+		if (remainder) {
+			result = result << remainder | InnerRead(remainder);
 		}
-
-		// Get the last (< 16) bits of the value
-		value_size &= 15;
-		if (value_size) {
-			value = value << value_size | (T)ReadFromCurrent(value_size);
-		}
-		return value;
-	}
-private:
-
-	bool LoadedEnough(uint8_t bits) {
-		return fill >= bits;
-	}
-	void Refill() {
-
-		uint8_t additional_load = 0;
-		// FIXME: Get rid of this by always leaving enough room
-		if (bits_read + 16 <= BLOCK_SIZE * 8) {
-			current = current << 16 | ReadFromStream() << 8 | ReadFromStream();
-			bits_read += 16;
-			additional_load = 16;
-		}
-		else if (bits_read + 8 <= BLOCK_SIZE * 8) {
-			current = current << 8 | ReadFromStream() << 8;
-			bits_read += 8;
-			additional_load = 8;
-		}
-		fill += additional_load;
-	}
-	void DecreaseLoadedBits(uint8_t value = 1) {
-		fill -= value;
-		if (fill < 16) {
-			Refill();
-		}
-	}
-
-	INTERNAL_TYPE ReadFromStream() {
-		return stream[stream_index++];
-	}
-
-	template <uint8_t VALUE_SIZE>
-	uint32_t ReadFromCurrent() {
-		assert(fill >= VALUE_SIZE);
-		const auto shift_amount = fill - VALUE_SIZE;
-		uint32_t result = current >> shift_amount & bitmask<uint64_t>(VALUE_SIZE);
-		DecreaseLoadedBits(VALUE_SIZE);
 		return result;
 	}
-	uint32_t ReadFromCurrent(uint8_t value_size) {
-		assert(fill >= value_size);
-		const auto shift_amount = fill - value_size;
-		const auto mask = bitmask<uint32_t>(value_size);
-		uint32_t result = (current >> shift_amount) & mask;
-		DecreaseLoadedBits(value_size);
-		return result;
-	}
-private:
-	INTERNAL_TYPE* stream;	//! The stream we're writing our output to
-
-	uint64_t bits_read = 0;
-	uint32_t current;		//! The current value we're reading from (bit buffer)
-	uint8_t	fill;			//! How many bits of 'current' are "full"
-	size_t stream_index;	//! Index used to keep track of which index we're at in the stream
 };
 
 } //namespace duckdb_chimp
