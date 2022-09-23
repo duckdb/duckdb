@@ -1,0 +1,12 @@
+# name: test/fuzzer/pedro/forced_parallelism_empty_select.test
+# description: Issue #4574: Forced parallelism with an empty select
+# group: [pedro]
+
+statement ok
+PRAGMA verify_parallelism;
+
+statement ok
+CREATE TABLE t0 (c0 INT, c1 INT);
+
+statement ok
+SELECT c1 FROM t0 WHERE (c0 + c1) = 2;

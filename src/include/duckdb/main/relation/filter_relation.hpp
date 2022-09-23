@@ -15,7 +15,7 @@ namespace duckdb {
 
 class FilterRelation : public Relation {
 public:
-	FilterRelation(shared_ptr<Relation> child, unique_ptr<ParsedExpression> condition);
+	DUCKDB_API FilterRelation(shared_ptr<Relation> child, unique_ptr<ParsedExpression> condition);
 
 	unique_ptr<ParsedExpression> condition;
 	shared_ptr<Relation> child;

@@ -38,6 +38,14 @@ struct GenericUnaryWrapper {
 	}
 };
 
+struct UnaryLambdaWrapperWithNulls {
+	template <class FUNC, class INPUT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		auto fun = (FUNC *)dataptr;
+		return (*fun)(input, mask, idx);
+	}
+};
+
 template <class OP>
 struct UnaryStringOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -53,7 +61,15 @@ private:
 	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               const SelectionVector *__restrict sel_vector, ValidityMask &mask,
 	                               ValidityMask &result_mask, void *dataptr, bool adds_nulls) {
-		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
+#ifdef DEBUG
+		// ldata may point to a compressed dictionary buffer which can be smaller than ldata + count
+		idx_t max_index = 0;
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel_vector->get_index(i);
+			max_index = MaxValue(max_index, idx);
+		}
+		ASSERT_RESTRICT(ldata, ldata + max_index, result_data, result_data + count);
+#endif
 
 		if (!mask.AllValid()) {
 			result_mask.EnsureWritable();
@@ -154,8 +170,8 @@ private:
 			break;
 		}
 		default: {
-			VectorData vdata;
-			input.Orrify(count, vdata);
+			UnifiedVectorFormat vdata;
+			input.ToUnifiedFormat(count, vdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
@@ -182,6 +198,13 @@ public:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void GenericExecute(Vector &input, Vector &result, idx_t count, void *dataptr, bool adds_nulls = false) {
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, GenericUnaryWrapper, OP>(input, result, count, dataptr, adds_nulls);
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE,
+	          class FUNC = std::function<RESULT_TYPE(INPUT_TYPE, ValidityMask &, idx_t)>>
+	static void ExecuteWithNulls(Vector &input, Vector &result, idx_t count, FUNC fun) {
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapperWithNulls, FUNC>(input, result, count, (void *)&fun,
+		                                                                            true);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>

@@ -2,7 +2,7 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
-#include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -51,11 +51,11 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			switch (group_type.InternalType()) {
 			case PhysicalType::INT8:
 				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type),
-				                                       Value::MaximumValue(group_type));
+				                                       Value::MaximumValue(group_type), StatisticsType::LOCAL_STATS);
 				break;
 			case PhysicalType::INT16:
 				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type),
-				                                       Value::MaximumValue(group_type));
+				                                       Value::MaximumValue(group_type), StatisticsType::LOCAL_STATS);
 				break;
 			default:
 				// type is too large and there are no stats: skip perfect hashing
@@ -121,16 +121,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 	unique_ptr<PhysicalOperator> groupby;
 	D_ASSERT(op.children.size() == 1);
 
-	bool all_combinable = true;
-	for (auto &expression : op.expressions) {
-		auto &aggregate = (BoundAggregateExpression &)*expression;
-		if (!aggregate.function.combine) {
-			// unsupported aggregate for simple aggregation: use hash aggregation
-			all_combinable = false;
-			break;
-		}
-	}
-
 	auto plan = CreatePlan(*op.children[0]);
 
 	plan = ExtractAggregateExpressions(move(plan), op.expressions, op.groups);
@@ -141,15 +131,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		bool use_simple_aggregation = true;
 		for (auto &expression : op.expressions) {
 			auto &aggregate = (BoundAggregateExpression &)*expression;
-			if (!aggregate.function.simple_update || aggregate.distinct) {
+			if (!aggregate.function.simple_update) {
 				// unsupported aggregate for simple aggregation: use hash aggregation
 				use_simple_aggregation = false;
 				break;
 			}
 		}
-		if (use_simple_aggregation && all_combinable) {
-			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(op.types, move(op.expressions),
-			                                                                      op.estimated_cardinality);
+		if (use_simple_aggregation) {
+			groupby = make_unique_base<PhysicalOperator, PhysicalUngroupedAggregate>(op.types, move(op.expressions),
+			                                                                         op.estimated_cardinality);
 		} else {
 			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),
 			                                                                    op.estimated_cardinality);

@@ -1,0 +1,179 @@
+# name: test/optimizer/deliminator.test
+# description: Test the Deliminator optimizer
+# group: [optimizer]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.0001);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# Q 02
+query II
+explain SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment FROM part, supplier, partsupp, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND p_size = 15 AND p_type LIKE '%BRASS' AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'EUROPE' AND ps_supplycost = ( SELECT min(ps_supplycost) FROM partsupp, supplier, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'EUROPE') ORDER BY s_acctbal DESC, n_name, s_name, p_partkey LIMIT 100;
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# Q 17
+query II
+explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# Q 20
+query II
+explain SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELECT ps_suppkey FROM partsupp WHERE ps_partkey IN ( SELECT p_partkey FROM part WHERE p_name LIKE 'forest%') AND ps_availqty > ( SELECT 0.5 * sum(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date))) AND s_nationkey = n_nationkey AND n_name = 'CANADA' ORDER BY s_name;
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+#query II
+#explain SELECT s_name, count(*) AS numwait FROM supplier, lineitem l1, orders, nation WHERE s_suppkey = l1.l_suppkey AND o_orderkey = l1.l_orderkey AND o_orderstatus = 'F' AND l1.l_receiptdate > l1.l_commitdate AND EXISTS ( SELECT * FROM lineitem l2 WHERE l2.l_orderkey = l1.l_orderkey AND l2.l_suppkey <> l1.l_suppkey) AND NOT EXISTS ( SELECT * FROM lineitem l3 WHERE l3.l_orderkey = l1.l_orderkey AND l3.l_suppkey <> l1.l_suppkey AND l3.l_receiptdate > l3.l_commitdate) AND s_nationkey = n_nationkey AND n_name = 'SAUDI ARABIA' GROUP BY s_name ORDER BY numwait DESC, s_name LIMIT 100;
+#----
+#logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+
+statement ok
+CREATE TABLE integers(i INTEGER, j integer)
+
+statement ok
+INSERT INTO integers VALUES  (NULL,1)
+
+query II
+SELECT i, (select SUM(i) is not null from integers where j = i1.j) FROM integers i1 ORDER BY 1;
+----
+NULL	False
+
+query II
+SELECT i, (select SUM(i) AND false from integers where j = i1.j) FROM integers i1 ORDER BY 1;
+----
+NULL	False
+
+query II
+SELECT i, (select SUM(i) OR true from integers where j = i1.j) FROM integers i1 ORDER BY 1;
+----
+NULL	True
+
+query II
+SELECT i, (select SUM(i) IS DISTINCT FROM NULL  from integers where j = i1.j) FROM integers i1 ORDER BY 1;
+----
+NULL	False
+
+query II
+SELECT i, (select SUM(i) IS NOT DISTINCT FROM NULL  from integers where j = i1.j) FROM integers i1 ORDER BY 1;
+----
+NULL	TRUE
+
+query II
+SELECT i, (select CONCAT(SUM(i), 'hello') from integers where j = i1.j) FROM integers i1 ORDER BY 1;
+----
+NULL	hello
+
+query II
+SELECT i, (select [SUM(i)] from integers where j = i1.j) FROM integers i1 ORDER BY 1;
+----
+NULL	[NULL]
+
+query II
+SELECT i, (select {'a': SUM(i)} from integers where j = i1.j) FROM integers i1 ORDER BY 1;
+----
+NULL	{'a': NULL}
+
+statement ok
+INSERT INTO integers VALUES  (1,2)
+
+query II
+SELECT i, (select sum(i) from integers where j is null and j = i1.j) FROM integers i1 ORDER BY 1;
+----
+NULL	NULL
+1	NULL
+
+statement ok
+DROP TABLE integers;
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+query II
+SELECT i, (SELECT SUM(i) IS NOT NULL FROM integers i2 WHERE i2.i>i1.i) FROM integers i1 ORDER BY i;
+----
+NULL	False
+1	True
+2	True
+3	False
+
+query II
+SELECT i, (SELECT sum IS NULL FROM (SELECT SUM(i) sum FROM integers i2 WHERE i2.i>i1.i)) t1 FROM integers i1 ORDER BY i;
+----
+NULL	True
+1	False
+2	False
+3	True
+
+query II
+SELECT i, (SELECT sum IS NOT NULL FROM (SELECT SUM(i) sum FROM integers i2 WHERE i2.i>i1.i)) t1 FROM integers i1 ORDER BY i;
+----
+NULL	False
+1	True
+2	True
+3	False
+
+query II
+SELECT i, (SELECT [sum] FROM (SELECT SUM(i) sum FROM integers i2 WHERE i2.i>i1.i)) t1 FROM integers i1 ORDER BY i;
+----
+NULL	[NULL]
+1	[5]
+2	[3]
+3	[NULL]
+
+query II
+SELECT i, (SELECT (SELECT SUM(i) IS NOT NULL) FROM integers i2 WHERE i2.i>i1.i) FROM integers i1 ORDER BY i;
+----
+NULL	False
+1	True
+2	True
+3	False
+
+query II
+SELECT i, (SELECT (SELECT [SUM(i)]) FROM integers i2 WHERE i2.i>i1.i) FROM integers i1 ORDER BY i;
+----
+NULL	[NULL]
+1	[5]
+2	[3]
+3	[NULL]
+
+query II
+SELECT i, (SELECT SUM(i) AND false FROM integers i2 WHERE i2.i>i1.i) FROM integers i1 ORDER BY i;
+----
+NULL	0
+1	0
+2	0
+3	0
+
+query II
+SELECT i, (SELECT SUM(i) OR true FROM integers i2 WHERE i2.i>i1.i) FROM integers i1 ORDER BY i;
+----
+NULL	1
+1	1
+2	1
+3	1
+
+query II
+SELECT i, (SELECT COUNT(*) FROM (SELECT SUM(i) FROM integers i2 WHERE i2.i>i1.i)) t1 FROM integers i1 ORDER BY i;
+----
+NULL	1
+1	1
+2	1
+3	1
+
+query II
+SELECT i, (SELECT COUNT(sum) FROM (SELECT SUM(i) sum FROM integers i2 WHERE i2.i>i1.i) t2) t1 FROM integers i1 ORDER BY i;
+----
+NULL	0
+1	1
+2	1
+3	0

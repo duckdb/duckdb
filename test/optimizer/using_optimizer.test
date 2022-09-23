@@ -127,5 +127,5 @@ explain select i from a full outer join b using (i);
 ----
 
 query II nosort fullouter
-explain select coalesce(a.i, b.i) from a full outer join b on (a.i=b.i);
+explain select coalesce(b.i, a.i) from a full outer join b on (a.i=b.i);
 ----

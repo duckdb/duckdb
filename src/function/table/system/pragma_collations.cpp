@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-struct PragmaCollateData : public FunctionOperatorData {
+struct PragmaCollateData : public GlobalTableFunctionState {
 	PragmaCollateData() : offset(0) {
 	}
 
@@ -15,19 +15,15 @@ struct PragmaCollateData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, vector<Value> &inputs,
-                                                  named_parameter_map_t &named_parameters,
-                                                  vector<LogicalType> &input_table_types,
-                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                  vector<string> &names) {
+static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("collname");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> PragmaCollateInit(ClientContext &context, const FunctionData *bind_data,
-                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaCollateInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<PragmaCollateData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
@@ -39,9 +35,8 @@ unique_ptr<FunctionOperatorData> PragmaCollateInit(ClientContext &context, const
 	return move(result);
 }
 
-static void PragmaCollateFunction(ClientContext &context, const FunctionData *bind_data,
-                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (PragmaCollateData &)*operator_state;
+static void PragmaCollateFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (PragmaCollateData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

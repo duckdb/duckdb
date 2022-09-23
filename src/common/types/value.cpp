@@ -27,6 +27,9 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hash.hpp"
 
+#include <utility>
+#include <cmath>
+
 namespace duckdb {
 
 Value::Value(LogicalType type) : type_(move(type)), is_null(true) {
@@ -41,16 +44,10 @@ Value::Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 }
 
 Value::Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
-	if (!Value::FloatIsValid(val)) {
-		throw OutOfRangeException("Invalid float value %f", val);
-	}
 	value_.float_ = val;
 }
 
 Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
-	if (!Value::DoubleIsValid(val)) {
-		throw OutOfRangeException("Invalid double value %f", val);
-	}
 	value_.double_ = val;
 }
 
@@ -202,17 +199,17 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum()));
+		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_MS:
 		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_MS);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum()));
+		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIME_TZ:
 		return Value::TIMETZ(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_t(NumericLimits<int64_t>::Maximum()));
+		return MaximumValue(LogicalType::TIMESTAMP);
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Maximum());
 	case LogicalTypeId::DOUBLE:
@@ -324,12 +321,42 @@ Value Value::UBIGINT(uint64_t value) {
 	return result;
 }
 
-bool Value::FloatIsValid(float value) {
+bool Value::FloatIsFinite(float value) {
 	return !(std::isnan(value) || std::isinf(value));
 }
 
-bool Value::DoubleIsValid(double value) {
+bool Value::DoubleIsFinite(double value) {
 	return !(std::isnan(value) || std::isinf(value));
+}
+
+template <>
+bool Value::IsNan(float input) {
+	return std::isnan(input);
+}
+
+template <>
+bool Value::IsNan(double input) {
+	return std::isnan(input);
+}
+
+template <>
+bool Value::IsFinite(float input) {
+	return Value::FloatIsFinite(input);
+}
+
+template <>
+bool Value::IsFinite(double input) {
+	return Value::DoubleIsFinite(input);
+}
+
+template <>
+bool Value::IsFinite(date_t input) {
+	return Date::IsFinite(input);
+}
+
+template <>
+bool Value::IsFinite(timestamp_t input) {
+	return Timestamp::IsFinite(input);
 }
 
 bool Value::StringIsValid(const char *str, idx_t length) {
@@ -384,9 +411,6 @@ Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::FLOAT(float value) {
-	if (!Value::FloatIsValid(value)) {
-		throw OutOfRangeException("Invalid float value %f", value);
-	}
 	Value result(LogicalType::FLOAT);
 	result.value_.float_ = value;
 	result.is_null = false;
@@ -394,9 +418,6 @@ Value Value::FLOAT(float value) {
 }
 
 Value Value::DOUBLE(double value) {
-	if (!Value::DoubleIsValid(value)) {
-		throw OutOfRangeException("Invalid double value %f", value);
-	}
 	Value result(LogicalType::DOUBLE);
 	result.value_.double_ = value;
 	result.is_null = false;
@@ -565,6 +586,25 @@ Value Value::BLOB(const string &data) {
 	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
+
+Value Value::JSON(const char *val) {
+	auto result = Value(val);
+	result.type_ = LogicalTypeId::JSON;
+	return result;
+}
+
+Value Value::JSON(string_t val) {
+	auto result = Value(val);
+	result.type_ = LogicalTypeId::JSON;
+	return result;
+}
+
+Value Value::JSON(string val) {
+	auto result = Value(move(val));
+	result.type_ = LogicalTypeId::JSON;
+	return result;
+}
+
 Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	D_ASSERT(original_type.id() == LogicalTypeId::ENUM);
 	Value result(original_type);
@@ -577,6 +617,9 @@ Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 		break;
 	case PhysicalType::UINT32:
 		result.value_.uinteger = value;
+		break;
+	case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
+		result.value_.ubigint = value;
 		break;
 	default:
 		throw InternalException("Incorrect Physical Type for ENUM");
@@ -662,8 +705,33 @@ Value Value::CreateValue(dtime_t value) {
 }
 
 template <>
+Value Value::CreateValue(dtime_tz_t value) {
+	return Value::TIMETZ(value);
+}
+
+template <>
 Value Value::CreateValue(timestamp_t value) {
 	return Value::TIMESTAMP(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_sec_t value) {
+	return Value::TIMESTAMPSEC(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_ms_t value) {
+	return Value::TIMESTAMPMS(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_ns_t value) {
+	return Value::TIMESTAMPNS(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_tz_t value) {
+	return Value::TIMESTAMPTZ(value);
 }
 
 template <>
@@ -707,7 +775,7 @@ Value Value::CreateValue(Value value) {
 template <class T>
 T Value::GetValueInternal() const {
 	if (IsNull()) {
-		return NullValue<T>();
+		throw InternalException("Calling GetValueInternal on a value that is NULL");
 	}
 	switch (type_.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -764,7 +832,6 @@ T Value::GetValueInternal() const {
 			throw InternalException("Invalid Internal Type for ENUMs");
 		}
 	}
-
 	default:
 		throw NotImplementedException("Unimplemented type \"%s\" for GetValue()", type_.ToString());
 	}
@@ -791,6 +858,9 @@ int32_t Value::GetValue() const {
 }
 template <>
 int64_t Value::GetValue() const {
+	if (IsNull()) {
+		throw InternalException("Calling GetValue on a value that is NULL");
+	}
 	switch (type_.id()) {
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -854,6 +924,11 @@ DUCKDB_API interval_t Value::GetValue() const {
 	return GetValueInternal<interval_t>();
 }
 
+template <>
+DUCKDB_API Value Value::GetValue() const {
+	return Value(*this);
+}
+
 uintptr_t Value::GetPointer() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
@@ -895,8 +970,6 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value((float)value);
 	case LogicalTypeId::DOUBLE:
 		return Value((double)value);
-	case LogicalTypeId::HASH:
-		return Value::HASH(value);
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(value);
 	case LogicalTypeId::DATE:
@@ -1239,21 +1312,22 @@ string Value::ToString() const {
 	case LogicalTypeId::UUID:
 		return UUID::ToString(value_.hugeint);
 	case LogicalTypeId::FLOAT:
-		return to_string(value_.float_);
+		return duckdb_fmt::format("{}", value_.float_);
 	case LogicalTypeId::DOUBLE:
-		return to_string(value_.double_);
+		return duckdb_fmt::format("{}", value_.double_);
 	case LogicalTypeId::DECIMAL: {
 		auto internal_type = type_.InternalType();
+		auto width = DecimalType::GetWidth(type_);
 		auto scale = DecimalType::GetScale(type_);
 		if (internal_type == PhysicalType::INT16) {
-			return Decimal::ToString(value_.smallint, scale);
+			return Decimal::ToString(value_.smallint, width, scale);
 		} else if (internal_type == PhysicalType::INT32) {
-			return Decimal::ToString(value_.integer, scale);
+			return Decimal::ToString(value_.integer, width, scale);
 		} else if (internal_type == PhysicalType::INT64) {
-			return Decimal::ToString(value_.bigint, scale);
+			return Decimal::ToString(value_.bigint, width, scale);
 		} else {
 			D_ASSERT(internal_type == PhysicalType::INT128);
-			return Decimal::ToString(value_.hugeint, scale);
+			return Decimal::ToString(value_.hugeint, width, scale);
 		}
 	}
 	case LogicalTypeId::DATE:
@@ -1264,8 +1338,14 @@ string Value::ToString() const {
 		return Timestamp::ToString(value_.timestamp);
 	case LogicalTypeId::TIME_TZ:
 		return Time::ToString(value_.time) + Time::ToUTCOffset(0, 0);
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return Timestamp::ToString(value_.timestamp) + Time::ToUTCOffset(0, 0);
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		// Infinite TSTZ values do not display offsets in PG.
+		auto ret = Timestamp::ToString(value_.timestamp);
+		if (Timestamp::IsFinite(value_.timestamp)) {
+			ret += Time::ToUTCOffset(0, 0);
+		}
+		return ret;
+	}
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Timestamp::ToString(Timestamp::FromEpochSeconds(value_.timestamp.value));
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -1274,14 +1354,13 @@ string Value::ToString() const {
 		return Timestamp::ToString(Timestamp::FromEpochNanoSeconds(value_.timestamp.value));
 	case LogicalTypeId::INTERVAL:
 		return Interval::ToString(value_.interval);
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return str_value;
 	case LogicalTypeId::BLOB:
 		return Blob::ToString(string_t(str_value));
 	case LogicalTypeId::POINTER:
 		return to_string(value_.pointer);
-	case LogicalTypeId::HASH:
-		return to_string(value_.hash);
 	case LogicalTypeId::STRUCT: {
 		string ret = "{";
 		auto &child_types = StructType::GetChildTypes(type_);
@@ -1334,13 +1413,81 @@ string Value::ToString() const {
 		case PhysicalType::UINT32:
 			enum_idx = value_.uinteger;
 			break;
+		case PhysicalType::UINT64:
+			return string((const char *)value_.bigint);
 		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 		return values_insert_order.GetValue(enum_idx).ToString();
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());
+	}
+}
+
+string Value::ToSQLString() const {
+	if (IsNull()) {
+		return ToString();
+	}
+	switch (type_.id()) {
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::BLOB:
+		return "'" + ToString() + "'::" + type_.ToString();
+	case LogicalTypeId::VARCHAR:
+		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
+	case LogicalTypeId::STRUCT: {
+		string ret = "{";
+		auto &child_types = StructType::GetChildTypes(type_);
+		for (size_t i = 0; i < struct_value.size(); i++) {
+			auto &name = child_types[i].first;
+			auto &child = struct_value[i];
+			ret += "'" + name + "': " + child.ToSQLString();
+			if (i < struct_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "}";
+		return ret;
+	}
+	case LogicalTypeId::FLOAT:
+		if (!FloatIsFinite(FloatValue::Get(*this))) {
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
+		return ToString();
+	case LogicalTypeId::DOUBLE: {
+		double val = DoubleValue::Get(*this);
+		if (!DoubleIsFinite(val)) {
+			if (!Value::IsNan(val)) {
+				// to infinity and beyond
+				return val < 0 ? "-1e1000" : "1e1000";
+			}
+			return "'" + ToString() + "'::" + type_.ToString();
+		}
+		return ToString();
+	}
+	case LogicalTypeId::LIST: {
+		string ret = "[";
+		for (size_t i = 0; i < list_value.size(); i++) {
+			auto &child = list_value[i];
+			ret += child.ToSQLString();
+			if (i < list_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
+		return ret;
+	}
+	default:
+		return ToString();
 	}
 }
 
@@ -1605,6 +1752,7 @@ Value Value::Deserialize(Deserializer &main_source) {
 	auto is_null = reader.ReadRequired<bool>();
 	Value new_value = Value(type);
 	if (is_null) {
+		reader.Finalize();
 		return new_value;
 	}
 	new_value.is_null = false;
@@ -1667,6 +1815,10 @@ void Value::Print() const {
 	Printer::Print(ToString());
 }
 
+bool Value::NotDistinctFrom(const Value &lvalue, const Value &rvalue) {
+	return ValueOperations::NotDistinctFrom(lvalue, rvalue);
+}
+
 bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 	if (result_value.IsNull() != value.IsNull()) {
 		return false;
@@ -1702,18 +1854,11 @@ bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 		return left == right;
 	}
 	default:
+		if (result_value.type_.id() == LogicalTypeId::FLOAT || result_value.type_.id() == LogicalTypeId::DOUBLE) {
+			return Value::ValuesAreEqual(value, result_value);
+		}
 		return value == result_value;
 	}
-}
-
-template <>
-bool Value::IsValid(float value) {
-	return Value::FloatIsValid(value);
-}
-
-template <>
-bool Value::IsValid(double value) {
-	return Value::DoubleIsValid(value);
 }
 
 } // namespace duckdb

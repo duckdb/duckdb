@@ -19,7 +19,7 @@ namespace duckdb {
 template <>
 float AddOperator::Operation(float left, float right) {
 	auto result = left + right;
-	if (!Value::FloatIsValid(result)) {
+	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in addition of float!");
 	}
 	return result;
@@ -28,7 +28,7 @@ float AddOperator::Operation(float left, float right) {
 template <>
 double AddOperator::Operation(double left, double right) {
 	auto result = left + right;
-	if (!Value::DoubleIsValid(result)) {
+	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in addition of double!");
 	}
 	return result;
@@ -44,16 +44,42 @@ interval_t AddOperator::Operation(interval_t left, interval_t right) {
 
 template <>
 date_t AddOperator::Operation(date_t left, int32_t right) {
-	int32_t result;
-	if (!TryAddOperator::Operation(left.days, right, result)) {
+	if (!Value::IsFinite(left)) {
+		return left;
+	}
+	int32_t days;
+	if (!TryAddOperator::Operation(left.days, right, days)) {
 		throw OutOfRangeException("Date out of range");
 	}
-	return date_t(result);
+	date_t result(days);
+	if (!Value::IsFinite(result)) {
+		throw OutOfRangeException("Date out of range");
+	}
+	return result;
 }
 
 template <>
 date_t AddOperator::Operation(int32_t left, date_t right) {
 	return AddOperator::Operation<date_t, int32_t, date_t>(right, left);
+}
+
+template <>
+timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
+	if (left == date_t::infinity()) {
+		return timestamp_t::infinity();
+	} else if (left == date_t::ninfinity()) {
+		return timestamp_t::ninfinity();
+	}
+	timestamp_t result;
+	if (!Timestamp::TryFromDatetime(left, right, result)) {
+		throw OutOfRangeException("Timestamp out of range");
+	}
+	return result;
+}
+
+template <>
+timestamp_t AddOperator::Operation(dtime_t left, date_t right) {
+	return AddOperator::Operation<date_t, dtime_t, timestamp_t>(right, left);
 }
 
 template <>

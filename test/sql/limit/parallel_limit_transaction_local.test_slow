@@ -1,0 +1,86 @@
+# name: test/sql/limit/parallel_limit_transaction_local.test_slow
+# description: Test correct behavior of parallel limit in the presence of transaction-local data
+# group: [limit]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=8
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(5000000) tbl(i);
+
+statement ok
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 1779793 UNION ALL SELECT 8779793;
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers SELECT * FROM range(5000000, 10000000) tbl(i);
+
+query I
+SELECT * FROM integers LIMIT 5
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT * FROM integers WHERE i>5978321 OR i=334 LIMIT 5
+----
+334
+5978322
+5978323
+5978324
+5978325
+
+query I
+SELECT * FROM integers WHERE i>5978321 LIMIT 5
+----
+5978322
+5978323
+5978324
+5978325
+5978326
+
+query I
+SELECT * FROM integers WHERE i>8978321 LIMIT 5
+----
+8978322
+8978323
+8978324
+8978325
+8978326
+
+# IN-clause (semi join)
+query I sort
+SELECT * FROM integers WHERE i IN (SELECT * FROM other_table)
+----
+1779793
+337
+8779793
+948247
+
+query I
+(SELECT * FROM integers WHERE i>1978321 LIMIT 5) UNION ALL (SELECT * FROM integers WHERE i>8978321 LIMIT 5)
+----
+1978322
+1978323
+1978324
+1978325
+1978326
+8978322
+8978323
+8978324
+8978325
+8978326
+
+statement ok
+DROP TABLE integers
+
+statement ok
+ROLLBACK

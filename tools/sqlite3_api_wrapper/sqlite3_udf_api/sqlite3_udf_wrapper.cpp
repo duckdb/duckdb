@@ -10,8 +10,8 @@ duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(d
 		DataChunk cast_chunk;
 		CastSQLite::InputVectorsToVarchar(args, cast_chunk);
 
-		// Orrify all input colunms
-		unique_ptr<VectorData[]> vec_data = cast_chunk.Orrify();
+		// ToUnifiedFormat all input colunms
+		unique_ptr<UnifiedVectorFormat[]> vec_data = cast_chunk.ToUnifiedFormat();
 
 		// Vector of sqlite3_value for all input columns
 		vector<unique_ptr<vector<sqlite3_value>>> vec_sqlite(cast_chunk.ColumnCount());
@@ -40,19 +40,18 @@ duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(d
 				db_sqlite3->errCode = SQLITE_OK;
 			}
 			// call the UDF on that tuple
+			context.isError = SQLITE_OK;
 			sqlite_udf(&context, argc, argv.get());
 
 			// check memory allocatated by the sqlite_values
-			for (idx_t col_idx = 0; col_idx < argc; ++col_idx) {
-				if (argv[col_idx]->szMalloc > 0) {
-					vec_values_to_free.push_back(*argv[col_idx]);
-				}
-			}
-
 			// error set by the UDF
-			if (context.isError == SQLITE_ERROR) {
-				char *error_msg = context.result.str_t.GetDataWriteable();
-				string str_msg(error_msg, context.result.n);
+			if (context.isError != SQLITE_OK) {
+				string str_msg;
+				if (context.result.type == SQLiteTypeValue::TEXT) {
+					str_msg = context.result.str;
+				} else {
+					str_msg = "Error in SQLite UDF, but no error message was provided";
+				}
 				throw std::runtime_error(str_msg.c_str());
 			}
 
@@ -72,11 +71,6 @@ duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(d
 		}
 
 		CastSQLite::ToVectorString(res_sqlite_value_type, res_sqlite_values, result);
-
-		// free memory allocated by sqlite_values
-		for (idx_t i = 0; i < vec_values_to_free.size(); ++i) {
-			free(vec_values_to_free[i].zMalloc);
-		}
 	};
 	return udf_function;
 }

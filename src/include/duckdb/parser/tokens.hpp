@@ -21,6 +21,7 @@ class CopyStatement;
 class CreateStatement;
 class DeleteStatement;
 class DropStatement;
+class ExtensionStatement;
 class InsertStatement;
 class SelectStatement;
 class TransactionStatement;
@@ -35,6 +36,7 @@ class VacuumStatement;
 class RelationStatement;
 class SetStatement;
 class LoadStatement;
+class LogicalPlanStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -75,6 +77,7 @@ class Constraint;
 class NotNullConstraint;
 class CheckConstraint;
 class UniqueConstraint;
+class ForeignKeyConstraint;
 
 //===--------------------------------------------------------------------===//
 // TableRefs

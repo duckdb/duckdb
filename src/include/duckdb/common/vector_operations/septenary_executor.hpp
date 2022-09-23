@@ -10,6 +10,8 @@
 
 #include "duckdb/common/types/data_chunk.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 struct SeptenaryExecutor {
@@ -55,9 +57,9 @@ struct SeptenaryExecutor {
 			auto &result_validity = FlatVector::Validity(result);
 
 			bool all_valid = true;
-			vector<VectorData> vdata(NCOLS);
+			vector<UnifiedVectorFormat> vdata(NCOLS);
 			for (size_t c = 0; c < NCOLS; ++c) {
-				input.data[c].Orrify(count, vdata[c]);
+				input.data[c].ToUnifiedFormat(count, vdata[c]);
 				all_valid = all_valid && vdata[c].validity.AllValid();
 			}
 

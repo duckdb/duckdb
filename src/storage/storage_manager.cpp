@@ -13,7 +13,6 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/storage/checkpoint_manager.hpp"
 
 namespace duckdb {
 
@@ -37,7 +36,7 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 }
 
 bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
-	return context.db->config.object_cache_enable;
+	return context.db->config.options.object_cache_enable;
 }
 
 bool StorageManager::InMemory() {
@@ -49,14 +48,14 @@ void StorageManager::Initialize() {
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
+	auto &config = DBConfig::GetConfig(db);
+	auto &catalog = Catalog::GetCatalog(db);
+	buffer_manager = make_unique<BufferManager>(db, config.options.temporary_directory, config.options.maximum_memory);
 
 	// first initialize the base system catalogs
 	// these are never written to the WAL
 	Connection con(db);
 	con.BeginTransaction();
-
-	auto &config = DBConfig::GetConfig(db);
-	auto &catalog = Catalog::GetCatalog(*con.context);
 
 	// create the default schema
 	CreateSchemaInfo info;
@@ -64,7 +63,7 @@ void StorageManager::Initialize() {
 	info.internal = true;
 	catalog.CreateSchema(*con.context, &info);
 
-	if (config.initialize_default_database) {
+	if (config.options.initialize_default_database) {
 		// initialize default functions
 		BuiltinFunctions builtin(*con.context, catalog);
 		builtin.Initialize();
@@ -78,7 +77,6 @@ void StorageManager::Initialize() {
 		LoadDatabase();
 	} else {
 		block_manager = make_unique<InMemoryBlockManager>();
-		buffer_manager = make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
 	}
 }
 
@@ -99,14 +97,12 @@ void StorageManager::LoadDatabase() {
 			fs.RemoveFile(wal_path);
 		}
 		// initialize the block manager while creating a new db file
-		block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, true, config.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
+		block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, true, config.options.use_direct_io);
 	} else {
 		// initialize the block manager while loading the current db file
-		auto sf_bm = make_unique<SingleFileBlockManager>(db, path, read_only, false, config.use_direct_io);
+		auto sf_bm = make_unique<SingleFileBlockManager>(db, path, read_only, false, config.options.use_direct_io);
 		auto sf = sf_bm.get();
 		block_manager = move(sf_bm);
-		buffer_manager = make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
 		sf->LoadFreeList();
 
 		//! Load from storage
@@ -131,7 +127,7 @@ void StorageManager::CreateCheckpoint(bool delete_wal, bool force_checkpoint) {
 	if (InMemory() || read_only || !wal.initialized) {
 		return;
 	}
-	if (wal.GetWALSize() > 0 || db.config.force_checkpoint || force_checkpoint) {
+	if (wal.GetWALSize() > 0 || db.config.options.force_checkpoint || force_checkpoint) {
 		// we only need to checkpoint if there is anything in the WAL
 		CheckpointManager checkpointer(db);
 		checkpointer.CreateCheckpoint();

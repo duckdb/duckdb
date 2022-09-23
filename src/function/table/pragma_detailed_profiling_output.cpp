@@ -4,27 +4,28 @@
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
+
 namespace duckdb {
 
-struct PragmaDetailedProfilingOutputOperatorData : public FunctionOperatorData {
-	explicit PragmaDetailedProfilingOutputOperatorData() : chunk_index(0), initialized(false) {
+struct PragmaDetailedProfilingOutputOperatorData : public GlobalTableFunctionState {
+	explicit PragmaDetailedProfilingOutputOperatorData() : initialized(false) {
 	}
-	idx_t chunk_index;
+
+	ColumnDataScanState scan_state;
 	bool initialized;
 };
 
 struct PragmaDetailedProfilingOutputData : public TableFunctionData {
 	explicit PragmaDetailedProfilingOutputData(vector<LogicalType> &types) : types(types) {
 	}
-	unique_ptr<ChunkCollection> collection;
+	unique_ptr<ColumnDataCollection> collection;
 	vector<LogicalType> types;
 };
 
-static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext &context, vector<Value> &inputs,
-                                                                  named_parameter_map_t &named_parameters,
-                                                                  vector<LogicalType> &input_table_types,
-                                                                  vector<string> &input_table_names,
+static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext &context, TableFunctionBindInput &input,
                                                                   vector<LogicalType> &return_types,
                                                                   vector<string> &names) {
 	names.emplace_back("OPERATOR_ID");
@@ -57,10 +58,8 @@ static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext 
 	return make_unique<PragmaDetailedProfilingOutputData>(return_types);
 }
 
-unique_ptr<FunctionOperatorData> PragmaDetailedProfilingOutputInit(ClientContext &context,
-                                                                   const FunctionData *bind_data,
-                                                                   const vector<column_t> &column_ids,
-                                                                   TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaDetailedProfilingOutputInit(ClientContext &context,
+                                                                       TableFunctionInitInput &input) {
 	return make_unique<PragmaDetailedProfilingOutputOperatorData>();
 }
 
@@ -84,7 +83,7 @@ static void SetValue(DataChunk &output, int index, int op_id, string annotation,
 	output.SetValue(8, index, move(extra_info));
 }
 
-static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, DataChunk &chunk, int op_id,
+static void ExtractFunctions(ColumnDataCollection &collection, ExpressionInfo &info, DataChunk &chunk, int op_id,
                              int &fun_id) {
 	if (info.hasfunction) {
 		D_ASSERT(info.sample_tuples_count != 0);
@@ -107,29 +106,29 @@ static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, 
 	}
 }
 
-static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                                  FunctionOperatorData *operator_state, DataChunk *input,
+static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableFunctionInput &data_p,
                                                   DataChunk &output) {
-	auto &state = (PragmaDetailedProfilingOutputOperatorData &)*operator_state;
-	auto &data = (PragmaDetailedProfilingOutputData &)*bind_data_p;
+	auto &state = (PragmaDetailedProfilingOutputOperatorData &)*data_p.global_state;
+	auto &data = (PragmaDetailedProfilingOutputData &)*data_p.bind_data;
 
 	if (!state.initialized) {
-		// create a ChunkCollection
-		auto collection = make_unique<ChunkCollection>();
+		// create a ColumnDataCollection
+		auto collection = make_unique<ColumnDataCollection>(context, data.types);
 
 		// create a chunk
 		DataChunk chunk;
-		chunk.Initialize(data.types);
+		chunk.Initialize(context, data.types);
 
 		// Initialize ids
 		int operator_counter = 1;
 		int function_counter = 1;
 		int expression_counter = 1;
-		if (context.query_profiler_history->GetPrevProfilers().empty()) {
+		if (ClientData::Get(context).query_profiler_history->GetPrevProfilers().empty()) {
 			return;
 		}
 		// For each Operator
-		for (auto op : context.query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
+		for (auto op :
+		     ClientData::Get(context).query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
 			// For each Expression Executor
 			for (auto &expr_executor : op.second->info.executors_info) {
 				// For each Expression tree
@@ -158,14 +157,11 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 		}
 		collection->Append(chunk);
 		data.collection = move(collection);
+		data.collection->InitializeScan(state.scan_state);
 		state.initialized = true;
 	}
 
-	if (state.chunk_index >= data.collection->ChunkCount()) {
-		output.SetCardinality(0);
-		return;
-	}
-	output.Reference(data.collection->GetChunk(state.chunk_index++));
+	data.collection->Scan(state.scan_state, output);
 }
 
 void PragmaDetailedProfilingOutput::RegisterFunction(BuiltinFunctions &set) {

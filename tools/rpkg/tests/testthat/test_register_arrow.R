@@ -1,11 +1,10 @@
-library("testthat")
-library("DBI")
-
 skip_on_cran()
 skip_on_os("windows")
 skip_if_not_installed("arrow", "5.0.0")
 # Skip if parquet is not a capability as an indicator that Arrow is fully installed.
 skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
+
+library("arrow")
 
 test_that("duckdb_register_arrow() works", {
   con <- dbConnect(duckdb::duckdb())
@@ -26,6 +25,43 @@ test_that("duckdb_register_arrow() works", {
   #   # cant register something non-arrow
   #   expect_error(duckdb_register_arrow(con, "asdf", data.frame()))
 })
+
+test_that("duckdb_register_arrow() works with record_batch_readers", {
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  res <- arrow::read_parquet("data/userdata1.parquet", as_data_frame = TRUE)
+  res <- arrow::record_batch(res)
+  duckdb::duckdb_register_arrow(con, "myreader", res)
+  res1 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
+  res2 <- dbGetQuery(con, "SELECT first_name, last_name FROM parquet_scan('data/userdata1.parquet') LIMIT 10")
+  expect_true(identical(res1, res2))
+  # we can re-read
+  res3 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
+  expect_true(identical(res2, res3))
+  duckdb::duckdb_unregister_arrow(con, "myreader")
+  # cant read after unregister
+  expect_error(dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 100"))
+})
+
+test_that("duckdb_register_arrow() works with scanner", {
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  res <- arrow::read_parquet("data/userdata1.parquet", as_data_frame = FALSE)
+  res <- arrow::Scanner$create(res)
+  duckdb::duckdb_register_arrow(con, "myreader", res)
+  res1 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
+  res2 <- dbGetQuery(con, "SELECT first_name, last_name FROM parquet_scan('data/userdata1.parquet') LIMIT 10")
+  expect_true(identical(res1, res2))
+  # we can re-read
+  res3 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
+  expect_true(identical(res2, res3))
+  duckdb::duckdb_unregister_arrow(con, "myreader")
+  # cant read after unregister
+  expect_error(dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 100"))
+})
+
 
 test_that("duckdb_register_arrow() works with datasets", {
   con <- dbConnect(duckdb::duckdb())
@@ -106,7 +142,7 @@ numeric_operators <- function(data_type) {
 
   dbExecute(con, paste0("CREATE TABLE test (a ", data_type, ", b ", data_type, ", c ", data_type, ")"))
   dbExecute(con, "INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
-  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), return_table = TRUE)
+  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE))
   duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
@@ -160,7 +196,7 @@ test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
 
   dbExecute(con, paste0("CREATE TABLE test (a  VARCHAR, b VARCHAR, c VARCHAR)"))
   dbExecute(con, "INSERT INTO  test VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)")
-  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), return_table = TRUE)
+  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE))
   duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
@@ -194,7 +230,7 @@ test_that("duckdb_register_arrow() performs selection pushdown bool type", {
 
   dbExecute(con, paste0("CREATE TABLE test (a  BOOL, b BOOL)"))
   dbExecute(con, "INSERT INTO  test VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)")
-  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), return_table = TRUE)
+  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE))
   duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
@@ -255,7 +291,41 @@ test_that("duckdb_register_arrow() performs selection pushdown timestamp type", 
 
   dbExecute(con, paste0("CREATE TABLE test (a  TIMESTAMP, b TIMESTAMP, c TIMESTAMP)"))
   dbExecute(con, "INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
-  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), return_table = TRUE)
+  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE))
+  duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
+
+  # Try ==
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='2008-01-01 00:00:01'")[[1]], 1)
+  # Try >
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a >'2008-01-01 00:00:01'")[[1]], 2)
+  # Try >=
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a >='2010-01-01 10:00:01'")[[1]], 2)
+  # Try <
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a <'2010-01-01 10:00:01'")[[1]], 1)
+  # Try <=
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a <='2010-01-01 10:00:01'")[[1]], 2)
+
+  # Try Is Null
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a IS NULL")[[1]], 1)
+  # Try Is Not Null
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a IS NOT NULL")[[1]], 3)
+
+  # Try And
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a='2010-01-01 10:00:01' and b ='2008-01-01 00:00:01'")[[1]], 0)
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'")[[1]], 1)
+  # Try Or
+  expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a = '2020-03-01 10:00:01' or b ='2008-01-01 00:00:01'")[[1]], 2)
+
+  duckdb::duckdb_unregister_arrow(con, "testarrow")
+})
+
+test_that("duckdb_register_arrow() performs selection pushdown timestamptz type", {
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  dbExecute(con, paste0("CREATE TABLE test (a  TIMESTAMPTZ, b TIMESTAMPTZ, c TIMESTAMPTZ)"))
+  dbExecute(con, "INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
+  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE))
   duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
@@ -289,7 +359,7 @@ test_that("duckdb_register_arrow() performs selection pushdown date type", {
 
   dbExecute(con, paste0("CREATE TABLE test (a  DATE, b DATE, c DATE)"))
   dbExecute(con, "INSERT INTO  test VALUES ('2000-01-01','2000-01-01','2000-01-01'),('2000-10-01','2000-10-01','2000-10-01'),('2010-01-01','2000-10-01','2010-01-01'),(NULL,NULL,NULL)")
-  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), return_table = TRUE)
+  arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE))
   duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
@@ -332,6 +402,7 @@ test_that("duckdb_register_arrow() under many threads", {
 
 test_that("we can unregister in finalizers yay", {
   con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   ds <- arrow::InMemoryDataset$create(mtcars)
 
   # Creates an environment that disconnects the database when it's GC'd
@@ -359,6 +430,7 @@ test_that("we can unregister in finalizers yay", {
 
 test_that("we can list registered arrow tables", {
   con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   ds <- arrow::InMemoryDataset$create(mtcars)
 
   expect_equal(length(duckdb::duckdb_list_arrow(con)), 0)
@@ -374,3 +446,69 @@ test_that("we can list registered arrow tables", {
 
   expect_equal(length(duckdb::duckdb_list_arrow(con)), 0)
 })
+
+
+test_that("duckdb can read arrow timestamps", {
+  con <- DBI::dbConnect(duckdb::duckdb(), timezone_out = "UTC")
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  timestamp <- as.POSIXct("2022-01-30 11:59:29", tz = "UTC")
+
+  for (unit in c("s", "ms", "us", "ns")) {
+    tbl <- arrow::arrow_table(t = arrow::Array$create(timestamp, type = arrow::timestamp(unit)))
+    duckdb::duckdb_register_arrow(con, "timestamps", tbl)
+
+    if (unit == "ns") {
+      # warning when precision loss
+      expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") })
+    } else {
+      expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") }, regexp = NA)
+    }
+    expect_equal(res[[1]], as.POSIXct(as.character(timestamp), tz = "UTC"))
+
+    res <- dbGetQuery(con, "SELECT year(t), month(t), day(t), hour(t), minute(t), second(t) FROM timestamps")
+
+    expect_equal(res[[1]], 2022)
+    expect_equal(res[[2]], 1)
+    expect_equal(res[[3]], 30)
+    expect_equal(res[[4]], 11)
+    expect_equal(res[[5]], 59)
+    expect_equal(res[[6]], 29)
+
+    duckdb::duckdb_unregister_arrow(con, "timestamps")
+  }
+})
+
+test_that("duckdb can read arrow timestamptz", {
+  skip("ICU not loaded")
+  con <- DBI::dbConnect(duckdb::duckdb(), timezone_out = "UTC")
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  timestamp <- as.POSIXct("2022-01-30 11:59:29")
+
+  for (unit in c("s", "ms", "us", "ns")) {
+    tbl <- arrow::arrow_table(t = arrow::Array$create(timestamp, type = arrow::timestamp(unit, "UTC")))
+    duckdb::duckdb_register_arrow(con, "timestamps", tbl)
+
+    if (unit == "ns") {
+      # warning when precision loss
+      expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") })
+    } else {
+      expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") }, regexp = NA)
+    }
+    expect_equal(res[[1]], as.POSIXct(as.character(timestamp), tz = "UTC"))
+
+    res <- dbGetQuery(con, "SELECT year(t), month(t), day(t), hour(t), minute(t), second(t) FROM timestamps")
+
+    expect_equal(res[[1]], 2022)
+    expect_equal(res[[2]], 1)
+    expect_equal(res[[3]], 30)
+    expect_equal(res[[4]], 11)
+    expect_equal(res[[5]], 59)
+    expect_equal(res[[6]], 29)
+
+    duckdb::duckdb_unregister_arrow(con, "timestamps")
+  }
+})
+
+

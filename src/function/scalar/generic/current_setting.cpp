@@ -14,8 +14,13 @@ struct CurrentSettingBindData : public FunctionData {
 	Value value;
 
 public:
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<CurrentSettingBindData>(value);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const CurrentSettingBindData &)other_p;
+		return Value::NotDistinctFrom(value, other.value);
 	}
 };
 
@@ -29,7 +34,9 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
                                             vector<unique_ptr<Expression>> &arguments) {
 
 	auto &key_child = arguments[0];
-
+	if (key_child->return_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
 	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw ParserException("Key name for current_setting needs to be a constant string");
@@ -52,8 +59,10 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 }
 
 void CurrentSettingFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("current_setting", {LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction,
-	                               false, CurrentSettingBind));
+	auto fun = ScalarFunction("current_setting", {LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction,
+	                          CurrentSettingBind);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb

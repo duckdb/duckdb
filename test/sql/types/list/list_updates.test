@@ -18,7 +18,7 @@ SELECT * FROM a ORDER BY id
 
 # deletions
 query I
-DELETE FROM a WHERE b[0]=1
+DELETE FROM a WHERE b[1]=1
 ----
 1
 

@@ -4,6 +4,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -48,7 +49,9 @@ static DefaultView internal_views[] = {
     {"information_schema", "tables", "SELECT NULL table_catalog, schema_name table_schema, table_name, CASE WHEN temporary THEN 'LOCAL TEMPORARY' ELSE 'BASE TABLE' END table_type, NULL self_referencing_column_name, NULL reference_generation, NULL user_defined_type_catalog, NULL user_defined_type_schema, NULL user_defined_type_name, 'YES' is_insertable_into, 'NO' is_typed, CASE WHEN temporary THEN 'PRESERVE' ELSE NULL END commit_action FROM duckdb_tables() UNION ALL SELECT NULL table_catalog, schema_name table_schema, view_name table_name, 'VIEW' table_type, NULL self_referencing_column_name, NULL reference_generation, NULL user_defined_type_catalog, NULL user_defined_type_schema, NULL user_defined_type_name, 'NO' is_insertable_into, 'NO' is_typed, NULL commit_action FROM duckdb_views;"},
     {nullptr, nullptr, nullptr}};
 
-static unique_ptr<CreateViewInfo> GetDefaultView(const string &schema, const string &name) {
+static unique_ptr<CreateViewInfo> GetDefaultView(const string &input_schema, const string &input_name) {
+	auto schema = StringUtil::Lower(input_schema);
+	auto name = StringUtil::Lower(input_name);
 	for (idx_t index = 0; internal_views[index].name != nullptr; index++) {
 		if (internal_views[index].schema == schema && internal_views[index].name == name) {
 			auto result = make_unique<CreateViewInfo>();
@@ -91,7 +94,6 @@ vector<string> DefaultViewGenerator::GetDefaultEntries() {
 		}
 	}
 	return result;
-
 }
 
 } // namespace duckdb

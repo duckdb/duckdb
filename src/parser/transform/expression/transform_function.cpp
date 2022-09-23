@@ -103,7 +103,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->next->data.ptr_value)->val.str;
 	} else {
 		// unqualified name
-		//		schema = DEFAULT_SCHEMA;
 		schema = INVALID_SCHEMA;
 		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->data.ptr_value)->val.str;
 	}
@@ -111,6 +110,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	auto lowercase_name = StringUtil::Lower(function_name);
 
 	if (root->over) {
+		const auto win_fun_type = WindowToExpressionType(lowercase_name);
+		if (win_fun_type == ExpressionType::INVALID) {
+			throw InternalException("Unknown/unsupported window function");
+		}
+
 		if (root->agg_distinct) {
 			throw ParserException("DISTINCT is not implemented for window functions!");
 		}
@@ -119,13 +123,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("ORDER BY is not implemented for window functions!");
 		}
 
-		if (root->agg_filter) {
-			throw ParserException("FILTER is not implemented for window functions!");
+		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && root->agg_filter) {
+			throw ParserException("FILTER is not implemented for non-aggregate window functions!");
 		}
-
-		const auto win_fun_type = WindowToExpressionType(lowercase_name);
-		if (win_fun_type == ExpressionType::INVALID) {
-			throw InternalException("Unknown/unsupported window function");
+		if (root->export_state) {
+			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
 
 		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && root->agg_ignore_nulls) {
@@ -134,6 +136,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 		auto expr = make_unique<WindowExpression>(win_fun_type, schema, lowercase_name);
 		expr->ignore_nulls = root->agg_ignore_nulls;
+
+		if (root->agg_filter) {
+			auto filter_expr = TransformExpression(root->agg_filter);
+			expr->filter_expr = move(filter_expr);
+		}
 
 		if (root->args) {
 			vector<unique_ptr<ParsedExpression>> function_list;
@@ -276,8 +283,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	}
 
 	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), move(children), move(filter_expr),
-	                                                move(order_bys), root->agg_distinct);
+	                                                move(order_bys), root->agg_distinct, false, root->export_state);
 	function->query_location = root->location;
+
 	return move(function);
 }
 
@@ -286,11 +294,11 @@ static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_DATE:
 		return "current_date";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME:
-		return "current_time";
+		return "get_current_time";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME_N:
 		return "current_time_n";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP:
-		return "current_timestamp";
+		return "get_current_timestamp";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP_N:
 		return "current_timestamp_n";
 	case duckdb_libpgquery::PG_SVFOP_LOCALTIME:

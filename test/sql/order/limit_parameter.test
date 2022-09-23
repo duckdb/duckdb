@@ -1,0 +1,77 @@
+# name: test/sql/order/limit_parameter.test
+# description: Test LIMIT with a parameter
+# group: [order]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT 5
+----
+10000
+9999
+9998
+9997
+9996
+
+statement ok
+CREATE TABLE integers AS SELECT 5 k
+
+query I
+SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT (SELECT k FROM integers)
+----
+10000
+9999
+9998
+9997
+9996
+
+statement ok
+CREATE TABLE strings AS SELECT '5'::VARCHAR k
+
+query I
+SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT (SELECT k FROM strings)
+----
+10000
+9999
+9998
+9997
+9996
+
+statement ok
+PREPARE v1 AS SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT ?::VARCHAR
+
+query I
+EXECUTE v1(5)
+----
+10000
+9999
+9998
+9997
+9996
+
+statement ok
+PREPARE v1 AS SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT ?::VARCHAR %
+
+query I
+EXECUTE v1('0.05')
+----
+10000
+9999
+9998
+9997
+9996
+
+statement ok
+CREATE TABLE doubles AS SELECT 0.05 d
+
+query I
+SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT (SELECT d FROM doubles) %
+----
+10000
+9999
+9998
+9997
+9996

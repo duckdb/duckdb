@@ -1,0 +1,100 @@
+# name: test/sql/limit/test_parallel_limit.test_slow
+# description: Test parallel limit execution
+# group: [limit]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=8
+
+statement ok
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 1779793 UNION ALL SELECT 4779793;
+
+foreach table_type TABLE VIEW
+
+statement ok
+CREATE ${table_type} integers AS SELECT * FROM range(10000000) tbl(i);
+
+query I
+SELECT * FROM integers LIMIT 5
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT * FROM integers WHERE i>1978321 OR i=334 LIMIT 5
+----
+334
+1978322
+1978323
+1978324
+1978325
+
+query I
+SELECT * FROM integers WHERE i>1978321 LIMIT 5
+----
+1978322
+1978323
+1978324
+1978325
+1978326
+
+query I
+SELECT * FROM integers WHERE i>4978321 LIMIT 5
+----
+4978322
+4978323
+4978324
+4978325
+4978326
+
+# large offset
+query I
+SELECT * FROM integers WHERE i>4978321 LIMIT 5 OFFSET 100000;
+----
+5078322
+5078323
+5078324
+5078325
+5078326
+
+query I
+SELECT * FROM integers WHERE i>4978321 LIMIT 5 OFFSET 1000000;
+----
+5978322
+5978323
+5978324
+5978325
+5978326
+
+# IN-clause (semi join)
+query I sort
+SELECT * FROM integers WHERE i IN (SELECT * FROM other_table)
+----
+1779793
+337
+4779793
+948247
+
+query I
+(SELECT * FROM integers WHERE i>1978321 LIMIT 5) UNION ALL (SELECT * FROM integers WHERE i>4978321 LIMIT 5)
+----
+1978322
+1978323
+1978324
+1978325
+1978326
+4978322
+4978323
+4978324
+4978325
+4978326
+
+statement ok
+DROP ${table_type} integers
+
+endloop

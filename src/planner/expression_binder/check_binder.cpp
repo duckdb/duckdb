@@ -46,9 +46,15 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 		return BindQualifiedColumnName(colref, table);
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
-		if (colref.column_names[0] == columns[i].name) {
+		auto &col = columns[i];
+		if (colref.column_names[0] == col.Name()) {
+			if (col.Generated()) {
+				auto bound_expression = col.GeneratedExpression().Copy();
+				return BindExpression(&bound_expression, 0, false);
+			}
 			bound_columns.insert(i);
-			return BindResult(make_unique<BoundReferenceExpression>(columns[i].type, i));
+			D_ASSERT(col.StorageOid() != DConstants::INVALID_INDEX);
+			return BindResult(make_unique<BoundReferenceExpression>(col.Type(), col.StorageOid()));
 		}
 	}
 	throw BinderException("Table does not contain column %s referenced in check constraint!", colref.column_names[0]);

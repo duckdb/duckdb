@@ -32,12 +32,12 @@ False
 query II
 EXPLAIN SELECT i::TINYINT IS NULL FROM integers
 ----
-logical_opt	<!REGEX>:.*IS_NULL.*
+logical_opt	<!REGEX>:.*IS.*NULL.*
 
 query II
 EXPLAIN SELECT (TRY_CAST(i AS TINYINT)) IS NULL FROM integers
 ----
-logical_opt	<REGEX>:.*IS_NULL.*
+logical_opt	<REGEX>:.*IS.*NULL.*
 
 statement ok
 INSERT INTO integers VALUES (255)

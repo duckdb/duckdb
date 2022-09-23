@@ -26,7 +26,6 @@ include_directories(inst/include)
 # this is used for clang-tidy checks and IDE support
 add_library(
   duckdb_r_shlib SHARED
-  src/rapi.cpp
   src/database.cpp
   src/connection.cpp
   src/statement.cpp
@@ -34,6 +33,7 @@ add_library(
   src/scan.cpp
   src/utils.cpp
   src/altrep.cpp
+  src/relational.cpp
   src/types.cpp)
 target_link_libraries(duckdb_r_shlib duckdb ${DUCKDB_EXTRA_LINK_FLAGS}
                       ${R_LIBRARY_BASE})

@@ -28,7 +28,14 @@ bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &res
 		return false;
 	}
 	if (pos == len) {
-		// no time: only a date
+		// no time: only a date or special
+		if (date == date_t::infinity()) {
+			result = timestamp_t::infinity();
+			return true;
+		} else if (date == date_t::ninfinity()) {
+			result = timestamp_t::ninfinity();
+			return true;
+		}
 		return Timestamp::TryFromDatetime(date, dtime_t(0), result);
 	}
 	// try to parse a time field
@@ -135,6 +142,11 @@ timestamp_t Timestamp::FromString(const string &str) {
 }
 
 string Timestamp::ToString(timestamp_t timestamp) {
+	if (timestamp == timestamp_t::infinity()) {
+		return Date::PINF;
+	} else if (timestamp == timestamp_t::ninfinity()) {
+		return Date::NINF;
+	}
 	date_t date;
 	dtime_t time;
 	Timestamp::Convert(timestamp, date, time);
@@ -142,10 +154,18 @@ string Timestamp::ToString(timestamp_t timestamp) {
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {
+	if (timestamp == timestamp_t::infinity()) {
+		return date_t::infinity();
+	} else if (timestamp == timestamp_t::ninfinity()) {
+		return date_t::ninfinity();
+	}
 	return date_t((timestamp.value + (timestamp.value < 0)) / Interval::MICROS_PER_DAY - (timestamp.value < 0));
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
+	if (!IsFinite(timestamp)) {
+		throw ConversionException("Can't get TIME of infinite TIMESTAMP");
+	}
 	date_t date = Timestamp::GetDate(timestamp);
 	return dtime_t(timestamp.value - (int64_t(date.days) * int64_t(Interval::MICROS_PER_DAY)));
 }
@@ -157,7 +177,7 @@ bool Timestamp::TryFromDatetime(date_t date, dtime_t time, timestamp_t &result) 
 	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time.micros, result.value)) {
 		return false;
 	}
-	return true;
+	return Timestamp::IsFinite(result);
 }
 
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {

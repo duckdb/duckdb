@@ -1,0 +1,37 @@
+# name: test/issues/fuzz/foreign_key_index_selection.test
+# description: Issue #3352: String null pointer in foreign key
+# group: [fuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE s1(t0 INTEGER, a TEXT, b TEXT);
+
+# key does not exist
+statement error
+CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s1(tz));
+
+# key does not have an index on it
+statement error
+CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s1(t0));
+
+statement ok
+CREATE TABLE s2(t0 INTEGER, a TEXT, b TEXT, UNIQUE (t0, a));
+
+# key does not have an index on it
+statement error
+CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s2(t0));
+
+# this works
+statement ok
+CREATE TABLE s3(t0 INTEGER UNIQUE, a TEXT, b TEXT, UNIQUE (t0, a));
+
+statement ok
+CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s3(t0));
+
+statement ok
+INSERT INTO s3 VALUES (1, 'a', 'b');
+
+statement ok
+INSERT INTO c2 VALUES (1, 2);

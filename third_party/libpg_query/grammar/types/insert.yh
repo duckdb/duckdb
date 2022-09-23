@@ -12,6 +12,6 @@
 %type <list> opt_collate
 %type <list> opt_class
 %type <list> insert_column_list
-%type <list> set_clause_list
+%type <list> set_clause_list set_clause_list_opt_comma
 %type <list> index_params
 %type <target> set_target

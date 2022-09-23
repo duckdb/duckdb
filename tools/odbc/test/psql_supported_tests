@@ -8,6 +8,8 @@ cte-test
 cursor-commit-test
 declare-fetch-block-test
 dataatexecution-test
+diagnostic-test
+multicolumn-param-bind-test
 numeric-test
 quotes-test
 result-conversions-test

@@ -18,7 +18,13 @@ public:
 	void ResetCurrentAPD();
 
 	SQLRETURN GetParamValues(std::vector<Value> &values);
-	void SetParamProcessedPtr(SQLPOINTER value_ptr);
+	void SetParamProcessedPtr(SQLULEN *value_ptr);
+	SQLULEN *GetParamProcessedPtr();
+	void SetArrayStatusPtr(SQLUSMALLINT *value_ptr);
+	SQLUSMALLINT *SetArrayStatusPtr();
+	void SetBindOffesetPtr(SQLLEN *value_ptr);
+	SQLLEN *GetBindOffesetPtr();
+
 	SQLRETURN GetNextParam(SQLPOINTER *param);
 	SQLRETURN PutData(SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr);
 	bool HasParamSetToProcess();
@@ -31,7 +37,7 @@ public:
 private:
 	SQLRETURN SetValue(idx_t rec_idx);
 	void SetValue(Value &value, idx_t val_idx);
-	Value GetNextValue();
+	Value GetNextValue(idx_t val_idx);
 	SQLRETURN SetParamIndex();
 	SQLRETURN PutCharData(DescRecord &apd_record, DescRecord &ipd_record, SQLPOINTER data_ptr,
 	                      SQLLEN str_len_or_ind_ptr);

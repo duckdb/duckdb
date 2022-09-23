@@ -1,0 +1,122 @@
+# name: test/sql/types/float/nan_test.test
+# description: Test usage of the NAN value
+# group: [float]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type FLOAT DOUBLE
+
+foreach key UNIQUE CHECK(1)
+
+# nan as a constant
+query I
+SELECT 'NAN'::${type}
+----
+nan
+
+# storing nan in a table
+statement ok
+CREATE TABLE floats(f ${type} ${key});
+
+statement ok
+INSERT INTO floats VALUES ('NAN'), (1)
+
+query I
+SELECT * FROM floats
+----
+nan
+1
+
+# nan comparison
+query I
+select 'nan'::${type} == 'nan'::${type}
+----
+true
+
+query I
+select 'nan'::${type} <> 'nan'::${type}
+----
+false
+
+query I
+select 'nan'::${type} <> 3.0::${type}
+----
+true
+
+# table filters on nan
+# note: for postgres compatibility, nan is equal to itself
+# =
+query I
+SELECT f FROM floats WHERE f=1
+----
+1
+
+query I
+SELECT f FROM floats WHERE f='nan'::${type}
+----
+nan
+
+# <>
+query I
+SELECT f FROM floats WHERE f<>1
+----
+nan
+
+query I
+SELECT f FROM floats WHERE f<>'nan'::${type}
+----
+1
+
+# >
+# for postgres compatibility, nan is bigger than everything
+query I
+SELECT f FROM floats WHERE f>0
+----
+nan
+1
+
+query I
+SELECT f FROM floats WHERE f>'nan'::${type}
+----
+
+# >=
+query I
+SELECT f FROM floats WHERE f>=1
+----
+nan
+1
+
+query I
+SELECT f FROM floats WHERE f>='nan'::${type}
+----
+nan
+
+# <
+query I
+SELECT f FROM floats WHERE f<1
+----
+
+query I
+SELECT f FROM floats WHERE f<'nan'::${type}
+----
+1
+
+# <=
+query I
+SELECT f FROM floats WHERE f<=1
+----
+1
+
+query I
+SELECT f FROM floats WHERE f<='nan'::${type}
+----
+nan
+1
+
+statement ok
+DROP TABLE floats
+
+endloop
+
+endloop

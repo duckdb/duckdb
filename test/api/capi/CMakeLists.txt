@@ -1,4 +1,17 @@
-add_library_unity(test_sql_capi OBJECT test_capi.cpp test_starting_database.cpp)
+add_library_unity(
+  test_sql_capi
+  OBJECT
+  capi_table_functions.cpp
+  test_capi.cpp
+  test_starting_database.cpp
+  test_capi_appender.cpp
+  test_capi_arrow.cpp
+  test_capi_data_chunk.cpp
+  test_capi_pending.cpp
+  test_capi_prepared.cpp
+  test_capi_website.cpp
+  test_capi_complex_types.cpp
+  test_capi_replacement_scan.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_capi>
     PARENT_SCOPE)

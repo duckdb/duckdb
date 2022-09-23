@@ -1,23 +1,22 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 
 namespace duckdb {
 
-PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manager,
+PerfectAggregateHashTable::PerfectAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager,
                                                      const vector<LogicalType> &group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      vector<Value> group_minima_p, vector<idx_t> required_bits_p)
-    : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), addresses(LogicalType::POINTER),
-      required_bits(move(required_bits_p)), total_required_bits(0), group_minima(move(group_minima_p)),
-      sel(STANDARD_VECTOR_SIZE) {
+    : BaseAggregateHashTable(allocator, aggregate_objects_p, buffer_manager, move(payload_types_p)),
+      addresses(LogicalType::POINTER), required_bits(move(required_bits_p)), total_required_bits(0),
+      group_minima(move(group_minima_p)), sel(STANDARD_VECTOR_SIZE) {
 	for (auto &group_bits : required_bits) {
 		total_required_bits += group_bits;
 	}
 	// the total amount of groups we allocate space for is 2^required_bits
-	total_groups = 1 << total_required_bits;
+	total_groups = (uint64_t)1 << total_required_bits;
 	// we don't need to store the groups in a perfect hash table, since the group keys can be deduced by their location
 	grouping_columns = group_types_p.size();
 	layout.Initialize(move(aggregate_objects_p));
@@ -37,7 +36,7 @@ PerfectAggregateHashTable::~PerfectAggregateHashTable() {
 }
 
 template <class T>
-static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, uintptr_t *address_data,
+static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value &min, uintptr_t *address_data,
                                           idx_t current_shift, idx_t count) {
 	auto data = (T *)group_data.data;
 	auto min_val = min.GetValueUnsafe<T>();
@@ -65,8 +64,8 @@ static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, ui
 }
 
 static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_data, idx_t current_shift, idx_t count) {
-	VectorData vdata;
-	group.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	group.ToUnifiedFormat(count, vdata);
 
 	switch (group.GetType().InternalType()) {
 	case PhysicalType::INT8:
@@ -120,10 +119,12 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
 	auto &aggregates = layout.GetAggregates();
-	for (auto &aggregate : aggregates) {
+	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		auto &aggregate = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggregate.child_count;
 		if (aggregate.filter) {
-			RowOperations::UpdateFilteredStates(aggregate, addresses, payload, payload_idx);
+			RowOperations::UpdateFilteredStates(filter_set.GetFilterData(aggr_idx), aggregate, addresses, payload,
+			                                    payload_idx);
 		} else {
 			RowOperations::UpdateStates(aggregate, addresses, payload, payload_idx, payload.size());
 		}
@@ -199,7 +200,7 @@ static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min,
 static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t required_bits, idx_t shift,
                                    idx_t entry_count, Vector &result) {
 	// construct the mask for this entry
-	idx_t mask = (1 << required_bits) - 1;
+	idx_t mask = ((uint64_t)1 << required_bits) - 1;
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::INT8:
 		ReconstructGroupVectorTemplated<int8_t>(group_values, min, mask, shift, entry_count, result);

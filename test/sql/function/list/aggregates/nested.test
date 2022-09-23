@@ -1,0 +1,49 @@
+# name: test/sql/function/list/aggregates/nested.test
+# description: Test nested list functions
+# group: [aggregates]
+
+query I
+SELECT list_min(list_concat([1, 2], [-1]))
+----
+-1
+
+query I
+SELECT list_min(list_aggr([1, 2], 'list'))
+----
+1
+
+statement ok
+CREATE TABLE lists (l1 INTEGER[], l2 INTEGER[])
+
+statement ok
+INSERT INTO lists VALUES ([1, 2, 3], [4]), ([NULL, 1, -4, NULL], [NULL]), (NULL, NULL), ([NULL], [-4]), ([], [])
+
+query I
+SELECT list_last(list_concat(l1, l2)) FROM lists
+----
+4
+NULL
+NULL
+-4
+NULL
+
+query I
+SELECT list_concat(list(list_last(l1)), list(list_first(l2))) FROM lists
+----
+[3, NULL, NULL, NULL, NULL, 4, NULL, NULL, -4, NULL]
+
+# aliases
+query I
+SELECT array_aggregate([1, 2], 'min')
+----
+1
+
+query I
+SELECT array_aggr([1, 2], 'min')
+----
+1
+
+query I
+SELECT list_aggregate([1, 2], 'min')
+----
+1

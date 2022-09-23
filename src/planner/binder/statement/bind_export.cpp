@@ -9,6 +9,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include <algorithm>
@@ -39,10 +40,55 @@ string SanitizeExportIdentifier(const string &str) {
 	return result;
 }
 
+bool IsExistMainKeyTable(string &table_name, vector<TableCatalogEntry *> &unordered) {
+	for (idx_t i = 0; i < unordered.size(); i++) {
+		if (unordered[i]->name == table_name) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatalogEntry *> &unordered,
+                         bool move_only_pk_table) {
+	for (auto i = unordered.begin(); i != unordered.end();) {
+		auto table_entry = *i;
+		bool move_to_ordered = true;
+		for (idx_t j = 0; j < table_entry->constraints.size(); j++) {
+			auto &cond = table_entry->constraints[j];
+			if (cond->type == ConstraintType::FOREIGN_KEY) {
+				auto &fk = (ForeignKeyConstraint &)*cond;
+				if ((move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) ||
+				    (!move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE &&
+				     IsExistMainKeyTable(fk.info.table, unordered))) {
+					move_to_ordered = false;
+					break;
+				}
+			}
+		}
+		if (move_to_ordered) {
+			ordered.push_back(table_entry);
+			i = unordered.erase(i);
+		} else {
+			i++;
+		}
+	}
+}
+
+void ReorderTableEntries(vector<TableCatalogEntry *> &tables) {
+	vector<TableCatalogEntry *> ordered;
+	vector<TableCatalogEntry *> unordered = tables;
+	ScanForeignKeyTable(ordered, unordered, true);
+	while (!unordered.empty()) {
+		ScanForeignKeyTable(ordered, unordered, false);
+	}
+	tables = ordered;
+}
+
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("COPY TO is disabled through configuration");
 	}
 	BoundStatement result;
@@ -67,13 +113,16 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		});
 	}
 
+	// reorder tables because of foreign key constraint
+	ReorderTableEntries(tables);
+
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
 	unique_ptr<LogicalOperator> child_operator;
 
 	BoundExportData exported_tables;
 
-	idx_t id = 0; // Id for table
+	unordered_set<string> table_name_index;
 	for (auto &table : tables) {
 		auto info = make_unique<CopyInfo>();
 		// we copy the options supplied to the EXPORT
@@ -82,26 +131,46 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		// set up the file name for the COPY TO
 
 		auto exported_data = ExportedTableData();
-		if (table->schema->name == DEFAULT_SCHEMA) {
-			info->file_path =
-			    fs.JoinPath(stmt.info->file_path,
-			                StringUtil::Format("%s_%s.%s", to_string(id), SanitizeExportIdentifier(table->name),
-			                                   copy_function->function.extension));
-		} else {
-			info->file_path = fs.JoinPath(
-			    stmt.info->file_path,
-			    StringUtil::Format("%s_%s_%s.%s", SanitizeExportIdentifier(table->schema->name), to_string(id),
-			                       SanitizeExportIdentifier(table->name), copy_function->function.extension));
+		idx_t id = 0;
+		while (true) {
+			string id_suffix = id == 0 ? string() : "_" + to_string(id);
+			if (table->schema->name == DEFAULT_SCHEMA) {
+				info->file_path = fs.JoinPath(stmt.info->file_path,
+				                              StringUtil::Format("%s%s.%s", SanitizeExportIdentifier(table->name),
+				                                                 id_suffix, copy_function->function.extension));
+			} else {
+				info->file_path =
+				    fs.JoinPath(stmt.info->file_path,
+				                StringUtil::Format("%s_%s%s.%s", SanitizeExportIdentifier(table->schema->name),
+				                                   SanitizeExportIdentifier(table->name), id_suffix,
+				                                   copy_function->function.extension));
+			}
+			if (table_name_index.find(info->file_path) == table_name_index.end()) {
+				// this name was not yet taken: take it
+				table_name_index.insert(info->file_path);
+				break;
+			}
+			id++;
 		}
 		info->is_from = false;
 		info->schema = table->schema->name;
 		info->table = table->name;
 
+		// We can not export generated columns
+		for (auto &col : table->columns) {
+			if (!col.Generated()) {
+				info->select_list.push_back(col.GetName());
+			}
+		}
+
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;
 		exported_data.file_path = info->file_path;
 
-		exported_tables.data[table] = exported_data;
+		ExportedTableInfo table_info;
+		table_info.entry = table;
+		table_info.table_data = exported_data;
+		exported_tables.data.push_back(table_info);
 		id++;
 
 		// generate the copy statement and bind it
@@ -135,7 +204,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	result.plan = move(export_node);
-	this->allow_stream_result = false;
+	properties.allow_stream_result = false;
+	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
 

@@ -1,0 +1,35 @@
+# name: test/sql/function/list/aggregates/count.test
+# description: Test the list_count aggregate function
+# group: [aggregates]
+
+query I
+SELECT list_count([1, 2, 3])
+----
+3
+
+query I
+SELECT list_count([1]) FROM range(3)
+----
+1
+1
+1
+
+statement ok
+CREATE TABLE lists (l INTEGER[]);
+
+statement ok
+INSERT INTO lists VALUES ([1, 2]), ([NULL]), (NULL), ([]), ([3, 4, 5, 6, 7]), ([1, 2, NULL, 1, NULL]);
+
+query I
+SELECT list_count(l) FROM lists
+----
+2
+0
+NULL
+0
+5
+3
+
+# incorrect usage
+statement error
+select list_count()

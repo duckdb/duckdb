@@ -4,17 +4,14 @@
 
 namespace duckdb {
 
-struct PragmaDatabaseListData : public FunctionOperatorData {
+struct PragmaDatabaseListData : public GlobalTableFunctionState {
 	PragmaDatabaseListData() : finished(false) {
 	}
 
 	bool finished;
 };
 
-static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, vector<Value> &inputs,
-                                                       named_parameter_map_t &named_parameters,
-                                                       vector<LogicalType> &input_table_types,
-                                                       vector<string> &input_table_names,
+static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, TableFunctionBindInput &input,
                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("seq");
 	return_types.emplace_back(LogicalType::INTEGER);
@@ -28,15 +25,12 @@ static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, v
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> PragmaDatabaseListInit(ClientContext &context, const FunctionData *bind_data,
-                                                        const vector<column_t> &column_ids,
-                                                        TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaDatabaseListInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<PragmaDatabaseListData>();
 }
 
-void PragmaDatabaseListFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (PragmaDatabaseListData &)*operator_state;
+void PragmaDatabaseListFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (PragmaDatabaseListData &)*data_p.global_state;
 	if (data.finished) {
 		return;
 	}

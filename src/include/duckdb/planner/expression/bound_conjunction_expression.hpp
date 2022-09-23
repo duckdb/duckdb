@@ -24,6 +24,11 @@ public:
 
 	bool Equals(const BaseExpression *other) const override;
 
+	bool PropagatesNullValues() const override;
+
 	unique_ptr<Expression> Copy() override;
+
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
 };
 } // namespace duckdb

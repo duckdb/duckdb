@@ -18,40 +18,40 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 query II
 EXPLAIN SELECT i IS NULL FROM integers;
 ----
-logical_opt	<!REGEX>:.*IS_NULL.*
+logical_opt	<!REGEX>:.*IS NULL.*
 
 query II
 EXPLAIN SELECT i IS NOT NULL FROM integers;
 ----
-logical_opt	<!REGEX>:.*IS_NOT_NULL.*
+logical_opt	<!REGEX>:.*IS NOT NULL.*
 
 # if there are null values, however, we have to execute the operator
 query II
 EXPLAIN SELECT i IS NULL FROM integers2;
 ----
-logical_opt	<REGEX>:.*IS_NULL.*
+logical_opt	<REGEX>:.*IS NULL.*
 
 query II
 EXPLAIN SELECT i IS NOT NULL FROM integers2;
 ----
-logical_opt	<REGEX>:.*IS_NOT_NULL.*
+logical_opt	<REGEX>:.*IS NOT NULL.*
 
 # filters remove null values, so even if the base column contains null values, we don't need to check IS NULL here
 query II
 EXPLAIN SELECT i IS NULL FROM integers2 WHERE i>0;
 ----
-logical_opt	<!REGEX>:.*IS_NULL.*
+logical_opt	<!REGEX>:.*IS NULL.*
 
 # left/right/full outer joins can introduce nulls, even if the base tables do not contain them
 query II
 EXPLAIN SELECT i2.i IS NULL FROM integers i1 LEFT JOIN integers i2 ON (false);
 ----
-logical_opt	<REGEX>:.*IS_NULL.*
+logical_opt	<REGEX>:.*IS NULL.*
 
 query II
 EXPLAIN SELECT i1.i IS NULL FROM integers i1 FULL OUTER JOIN integers i2 ON (false);
 ----
-logical_opt	<REGEX>:.*IS_NULL.*
+logical_opt	<REGEX>:.*IS NULL.*
 
 # verify that all these queries produce the correct results
 query I

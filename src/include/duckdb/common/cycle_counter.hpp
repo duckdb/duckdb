@@ -10,7 +10,6 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/chrono.hpp"
-#include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
 
@@ -21,10 +20,9 @@ class CycleCounter {
 	friend struct ExpressionInfo;
 	friend struct ExpressionRootInfo;
 	static constexpr int SAMPLING_RATE = 50;
-	static constexpr int SAMPLING_VARIANCE = 100;
 
 public:
-	CycleCounter() : random(-1) {
+	CycleCounter() {
 	}
 	// Next_sample determines if a sample needs to be taken, if so start the profiler
 	void BeginSample() {
@@ -39,7 +37,7 @@ public:
 			time += Tick() - tmp;
 		}
 		if (current_count >= next_sample) {
-			next_sample = SAMPLING_RATE + random.NextRandomInteger() % SAMPLING_VARIANCE;
+			next_sample = SAMPLING_RATE;
 			++sample_count;
 			sample_tuples_count += chunk_size;
 			current_count = 0;
@@ -65,8 +63,6 @@ private:
 	uint64_t sample_tuples_count = 0;
 	//! Count the number of ALL tuples
 	uint64_t tuples_count = 0;
-	//! the random number generator used for sampling
-	RandomEngine random;
 };
 
 } // namespace duckdb

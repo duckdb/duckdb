@@ -1,0 +1,20 @@
+# name: test/sql/aggregate/aggregates/test_minmax.test
+# description: Test MEDIAN aggregate
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+# List slicing
+statement ok
+create table lists as select array[i] l from generate_series(0,5,1) tbl(i);
+
+query I
+select min(l) from lists where l[1]>2;
+----
+[3]
+
+query I
+select min(l) from lists where l[0]>2;
+----
+NULL

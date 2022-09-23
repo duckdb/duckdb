@@ -12,7 +12,7 @@
 namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(DataTable &table) :
-    table(table), deleted_rows(0) {
+    table(table), allocator(Allocator::Get(table.db)), deleted_rows(0) {
 	auto types = table.GetTypes();
 	row_groups = make_shared<RowGroupCollection>(table.info, types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
@@ -20,13 +20,13 @@ LocalTableStorage::LocalTableStorage(DataTable &table) :
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
 		auto &art = (ART &)index;
-		if (art.is_unique) {
+		if (art.constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.AddIndex(make_unique<ART>(art.column_ids, move(unbound_expressions), true));
+			indexes.AddIndex(make_unique<ART>(art.column_ids, move(unbound_expressions), art.constraint_type, art.db));
 		}
 		return false;
 	});
@@ -34,7 +34,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table) :
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t changed_idx, const LogicalType &target_type,
 	const vector<column_t> &bound_columns, Expression &cast_expr) :
-	table(new_dt), deleted_rows(parent.deleted_rows) {
+	table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows) {
 	stats.InitializeAlterType(parent.stats, changed_idx, target_type);
 	row_groups = parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr, stats.GetStats(changed_idx));
 	parent.row_groups.reset();
@@ -42,7 +42,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 }
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx) :
-	table(new_dt), deleted_rows(parent.deleted_rows)  {
+	table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows)  {
 	stats.InitializeRemoveColumn(parent.stats, drop_idx);
 	row_groups = parent.row_groups->RemoveColumn(drop_idx);
 	parent.row_groups.reset();
@@ -50,9 +50,9 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 }
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column, Expression *default_value) :
-	table(new_dt), deleted_rows(parent.deleted_rows) {
+	table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows) {
 	idx_t new_column_idx = parent.table.column_definitions.size();
-	stats.InitializeAddColumn(parent.stats, new_column.type);
+	stats.InitializeAddColumn(parent.stats, new_column.GetType());
 	row_groups = parent.row_groups->AddColumn(new_column, default_value, stats.GetStats(new_column_idx));
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -119,7 +119,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	auto entry = table_storage.find(table);
 	LocalTableStorage *storage;
 	if (entry == table_storage.end()) {
-		auto new_storage = make_unique<LocalTableStorage>(*table);
+		auto new_storage = make_shared<LocalTableStorage>(*table);
 		storage = new_storage.get();
 		table_storage.insert(make_pair(table, move(new_storage)));
 	} else {
@@ -155,6 +155,47 @@ idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	auto storage = GetStorage(table);
 	D_ASSERT(storage);
 
+	// delete from unique indices (if any)
+	if (!storage->indexes.Empty()) {
+		throw InternalException("FIXME: delete from indexes");
+//	}
+//		// Index::Delete assumes that ALL rows are being deleted, so
+//		// Slice out the rows that are being deleted from the storage Chunk
+//		auto &chunk = storage->collection.GetChunk(chunk_idx);
+//
+//		UnifiedVectorFormat row_ids_data;
+//		row_ids.ToUnifiedFormat(count, row_ids_data);
+//		auto row_identifiers = (const row_t *)row_ids_data.data;
+//		SelectionVector sel(count);
+//		for (idx_t i = 0; i < count; ++i) {
+//			const auto idx = row_ids_data.sel->get_index(i);
+//			sel.set_index(i, row_identifiers[idx] - MAX_ROW_ID);
+//		}
+//
+//		DataChunk deleted;
+//		deleted.InitializeEmpty(chunk.GetTypes());
+//		deleted.Slice(chunk, sel, count);
+//		for (auto &index : storage->indexes) {
+//			index->Delete(deleted, row_ids);
+//		}
+	}
+//
+//	// get a pointer to the deleted entries for this chunk
+//	bool *deleted;
+//	auto entry = storage->deleted_entries.find(chunk_idx);
+//	if (entry == storage->deleted_entries.end()) {
+//		// nothing deleted yet, add the deleted entries
+//		auto del_entries = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
+//		memset(del_entries.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+//		deleted = del_entries.get();
+//		storage->deleted_entries.insert(make_pair(chunk_idx, move(del_entries)));
+//	} else {
+//		deleted = entry->second.get();
+//	}
+//
+//	// now actually mark the entries as deleted in the deleted vector
+//	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
+
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	idx_t delete_count = storage->row_groups->Delete(TransactionData(0, 0), table, ids, count);
 	storage->deleted_rows += delete_count;
@@ -172,12 +213,13 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column
 template <class T>
 bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
 	vector<column_t> column_ids;
+	column_ids.reserve(table.column_definitions.size());
 	for (idx_t i = 0; i < table.column_definitions.size(); i++) {
 		column_ids.push_back(i);
 	}
 
 	DataChunk chunk;
-	chunk.Initialize(table.GetTypes());
+	chunk.Initialize(storage.allocator, table.GetTypes());
 
 	// initialize the scan
 	TableScanState state;
@@ -250,7 +292,6 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 	table_storage.clear();
 }
 
-
 idx_t LocalStorage::AddedRows(DataTable *table) {
 	auto entry = table_storage.find(table);
 	if (entry == table_storage.end()) {
@@ -259,6 +300,17 @@ idx_t LocalStorage::AddedRows(DataTable *table) {
 	return entry->second->row_groups->GetTotalRows() - entry->second->deleted_rows;
 }
 
+void LocalStorage::MoveStorage(DataTable *old_dt, DataTable *new_dt) {
+	// check if there are any pending appends for the old version of the table
+	auto entry = table_storage.find(old_dt);
+	if (entry == table_storage.end()) {
+		return;
+	}
+	// take over the storage from the old entry
+	auto new_storage = move(entry->second);
+	table_storage.erase(entry);
+	table_storage[new_dt] = move(new_storage);
+}
 
 void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column,
                              Expression *default_value) {
@@ -299,6 +351,31 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 
 	table_storage[new_dt] = move(new_storage);
 	table_storage.erase(old_dt);
+}
+
+void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &dst_chunk) {
+	throw InternalException("FetchChunk");
+//	auto storage = GetStorage(table);
+//	idx_t chunk_idx = GetChunk(row_ids);
+//	auto &chunk = storage->collection.GetChunk(chunk_idx);
+//
+//	UnifiedVectorFormat row_ids_data;
+//	row_ids.ToUnifiedFormat(count, row_ids_data);
+//	auto row_identifiers = (const row_t *)row_ids_data.data;
+//	SelectionVector sel(count);
+//	for (idx_t i = 0; i < count; ++i) {
+//		const auto idx = row_ids_data.sel->get_index(i);
+//		sel.set_index(i, row_identifiers[idx] - MAX_ROW_ID);
+//	}
+//
+//	dst_chunk.InitializeEmpty(chunk.GetTypes());
+//	dst_chunk.Slice(chunk, sel, count);
+}
+
+TableIndexList &LocalStorage::GetIndexes(DataTable *table) {
+	auto storage = GetStorage(table);
+
+	return storage->indexes;
 }
 
 } // namespace duckdb

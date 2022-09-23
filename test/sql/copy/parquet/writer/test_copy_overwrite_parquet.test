@@ -1,0 +1,72 @@
+# name: test/sql/copy/parquet/writer/test_copy_overwrite_parquet.test
+# description: Test copy statement with file overwrite on parquet
+# group: [writer]
+
+require parquet
+
+# create a table and insert some values
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR(10));
+
+statement ok
+INSERT INTO test VALUES (1, 'hello'), (2, 'world '), (3, ' xx');
+
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+3	 xx
+
+# copy to the parquet file
+query I
+COPY test TO '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET)
+----
+3
+
+# now copy to the file again
+query I
+COPY (SELECT * FROM test LIMIT 2) TO '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET);
+----
+2
+
+# reload the data from the file: it should only have two rows
+statement ok
+DELETE FROM test;
+
+query I
+COPY test FROM '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET);
+----
+2
+
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+
+# test query returning error does not export to file
+statement error
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET);
+
+statement ok
+DELETE FROM test;
+
+query I
+COPY test FROM '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET);
+----
+2
+
+# this test should still pass as data was not overwritten
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+
+# Test USE_TMP_FILE flag with parquet
+statement error
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET, USE_TMP_FILE FALSE);
+
+statement error
+SELECT * FROM '__TEST_DIR__/overwrite.parquet';

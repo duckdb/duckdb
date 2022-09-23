@@ -9,6 +9,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/main/client_context.hpp"
 #endif
 
 #include "dbgen/dbgen.hpp"
@@ -26,12 +27,10 @@ struct DBGenFunctionData : public TableFunctionData {
 	bool overwrite = false;
 };
 
-static unique_ptr<FunctionData> DbgenBind(ClientContext &context, vector<Value> &inputs,
-                                          named_parameter_map_t &named_parameters,
-                                          vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionBindInput &input,
                                           vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<DBGenFunctionData>();
-	for (auto &kv : named_parameters) {
+	for (auto &kv : input.named_parameters) {
 		if (kv.first == "sf") {
 			result->sf = DoubleValue::Get(kv.second);
 		} else if (kv.first == "schema") {
@@ -47,9 +46,8 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, vector<Value> 
 	return move(result);
 }
 
-static void DbgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
-	auto &data = (DBGenFunctionData &)*bind_data;
+static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DBGenFunctionData &)*data_p.bind_data;
 	if (data.finished) {
 		return;
 	}
@@ -59,21 +57,18 @@ static void DbgenFunction(ClientContext &context, const FunctionData *bind_data,
 	data.finished = true;
 }
 
-struct TPCHData : public FunctionOperatorData {
+struct TPCHData : public GlobalTableFunctionState {
 	TPCHData() : offset(0) {
 	}
 	idx_t offset;
 };
 
-unique_ptr<FunctionOperatorData> TPCHInit(ClientContext &context, const FunctionData *bind_data,
-                                          const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> TPCHInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<TPCHData>();
 	return move(result);
 }
 
-static unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, vector<Value> &inputs,
-                                              named_parameter_map_t &named_parameters,
-                                              vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+static unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, TableFunctionBindInput &input,
                                               vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
@@ -84,9 +79,8 @@ static unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, vector<Val
 	return nullptr;
 }
 
-static void TPCHQueryFunction(ClientContext &context, const FunctionData *bind_data,
-                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (TPCHData &)*operator_state;
+static void TPCHQueryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (TPCHData &)*data_p.global_state;
 	idx_t tpch_queries = 22;
 	if (data.offset >= tpch_queries) {
 		// finished returning values
@@ -105,10 +99,7 @@ static void TPCHQueryFunction(ClientContext &context, const FunctionData *bind_d
 	output.SetCardinality(chunk_count);
 }
 
-static unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, vector<Value> &inputs,
-                                                    named_parameter_map_t &named_parameters,
-                                                    vector<LogicalType> &input_table_types,
-                                                    vector<string> &input_table_names,
+static unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
@@ -122,9 +113,8 @@ static unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, vect
 	return nullptr;
 }
 
-static void TPCHQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (TPCHData &)*operator_state;
+static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (TPCHData &)*data_p.global_state;
 	idx_t tpch_queries = 22;
 	vector<double> scale_factors {0.01, 0.1, 1};
 	idx_t total_answers = tpch_queries * scale_factors.size();
@@ -212,3 +202,7 @@ DUCKDB_EXTENSION_API const char *tpch_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 }
+
+#ifndef DUCKDB_EXTENSION_MAIN
+#error DUCKDB_EXTENSION_MAIN not defined
+#endif

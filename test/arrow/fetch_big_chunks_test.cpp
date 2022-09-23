@@ -23,7 +23,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb.h"
 #include <arrow/c/bridge.h>
-#include "duckdb/common/result_arrow_wrapper.hpp"
+#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 
 TEST_CASE("Test Fetch Bigger Than Vector Chunks", "[arrow]") {
 

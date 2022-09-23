@@ -1,0 +1,23 @@
+# name: test/sql/types/enum/test_enum_duckdb_types.test
+# description: ENUM types in duckdb_types() function
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT type_name, logical_type FROM duckdb_types() WHERE NOT internal
+----
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+query I
+select 'happy'::mood;
+----
+happy
+
+query II
+SELECT type_name, logical_type FROM duckdb_types() WHERE NOT internal
+----
+mood	ENUM

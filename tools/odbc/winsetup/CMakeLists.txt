@@ -11,7 +11,7 @@ target_link_libraries(
   $<$<PLATFORM_ID:Windows>:user32>
   $<$<PLATFORM_ID:Windows>:legacy_stdio_definitions>)
 
-add_library(duckdb_odbc_setup SHARED setup.c setup.def resource.h)
+add_library(duckdb_odbc_setup SHARED setup.c setup.rc setup.def resource.h)
 
 target_link_libraries(
   duckdb_odbc_setup $<$<PLATFORM_ID:Windows>:odbc32>

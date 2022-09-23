@@ -88,7 +88,7 @@ select try_cast('290309-12-21 (BC) 12:59:59.999999' as timestamp)
 NULL
 
 query I
-select try_cast('294247-01-10 04:00:54.775808' as timestamp)
+select try_cast('294247-01-10 04:00:54.775807' as timestamp)
 ----
 NULL
 
@@ -98,6 +98,16 @@ select try_cast('290309-12-22 (BC) 00:00:00' as timestamp)
 290309-12-22 (BC) 00:00:00
 
 query I
-select try_cast('294247-01-10 04:00:54.775807' as timestamp)
+select try_cast('294247-01-10 04:00:54.775806' as timestamp)
 ----
-294247-01-10 04:00:54.775807
+294247-01-10 04:00:54.775806
+
+query I
+select try_cast('infinity' as timestamp)
+----
+infinity
+
+query I
+select try_cast('-infinity' as timestamp)
+----
+-infinity

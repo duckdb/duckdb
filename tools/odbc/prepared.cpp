@@ -32,7 +32,11 @@ SQLRETURN SQL_API SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *colum
 		if (!column_count_ptr) {
 			return SQL_ERROR;
 		}
-		*column_count_ptr = (SQLSMALLINT)stmt->stmt->GetTypes().size();
+		*column_count_ptr = (SQLSMALLINT)stmt->stmt->ColumnCount();
+
+		if (stmt->stmt->data->statement_type != duckdb::StatementType::SELECT_STATEMENT) {
+			*column_count_ptr = 0;
+		}
 		return SQL_SUCCESS;
 	});
 }
@@ -129,16 +133,7 @@ SQLRETURN SQL_API SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_
 
 		duckdb::idx_t col_idx = column_number - 1;
 
-		if (column_name && buffer_length > 0) {
-			auto out_len = duckdb::MinValue(stmt->stmt->GetNames()[col_idx].size(), (size_t)buffer_length);
-			memcpy(column_name, stmt->stmt->GetNames()[col_idx].c_str(), out_len);
-			// terminating null character
-			column_name[out_len] = '\0';
-
-			if (name_length_ptr) {
-				*name_length_ptr = out_len;
-			}
-		}
+		duckdb::OdbcUtils::WriteString(stmt->stmt->GetNames()[col_idx], column_name, buffer_length, name_length_ptr);
 
 		LogicalType col_type = stmt->stmt->GetTypes()[col_idx];
 

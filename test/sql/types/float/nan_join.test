@@ -1,0 +1,48 @@
+# name: test/sql/types/float/nan_join.test
+# description: Test NaN and inf joins
+# group: [float]
+
+statement ok
+PRAGMA enable_verification
+
+# test various types of joins on nan and inf values
+foreach type FLOAT DOUBLE
+
+statement ok
+create table floats(f ${type});
+
+statement ok
+insert into floats values ('inf'), ('-inf'), ('nan');
+
+query I
+SELECT * FROM floats JOIN (SELECT 'inf'::${type}) tbl(f) USING (f)
+----
+inf
+
+query I
+SELECT * FROM floats JOIN (SELECT '-inf'::${type}) tbl(f) USING (f)
+----
+-inf
+
+query II
+SELECT * FROM floats JOIN (SELECT 'inf'::${type}) tbl(f) ON (floats.f >= tbl.f) ORDER BY 1
+----
+inf	inf
+nan	inf
+
+query II
+SELECT * FROM floats JOIN (SELECT 'inf'::${type}) tbl(f) ON (floats.f <= tbl.f) ORDER BY 1
+----
+-inf	inf
+inf	inf
+
+query III
+SELECT * FROM floats JOIN (SELECT '-inf'::${type}, 'inf'::${type}) tbl(f,g ) ON (floats.f >= tbl.f AND floats.f <= tbl.g) ORDER BY 1
+----
+-inf	-inf	inf
+inf	-inf	inf
+
+statement ok
+DROP TABLE floats
+
+endloop

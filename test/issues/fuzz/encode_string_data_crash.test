@@ -1,0 +1,38 @@
+# name: test/issues/fuzz/encode_string_data_crash.test
+# description: Issue #3350: SEGV in duckdb::EncodeStringDataPrefix
+# group: [fuzz]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(b REAL, a INTEGER);
+
+statement ok
+INSERT INTO strings VALUES
+  (5, 10), (10, 20), (13, 26), (13, 26),
+  (15, 30), (20, 40), (22,80), (30, 90);
+
+statement ok
+CREATE TABLE id(c TEXT, strings_with_null INTEGER);
+
+statement ok
+INSERT INTO id VALUES('c', NULL);
+
+query I
+SELECT sum(a) OVER (
+    PARTITION BY (
+SELECT c FROM id WHERE strings_with_null=a
+    ) ORDER BY a
+  ) FROM strings;
+----
+10
+30
+82
+82
+112
+152
+232
+322

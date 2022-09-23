@@ -3,6 +3,9 @@
 # group: [aggregates]
 
 statement ok
+PRAGMA enable_Verification
+
+statement ok
 PRAGMA verify_parallelism
 
 # generate a table

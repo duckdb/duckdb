@@ -1,4 +1,4 @@
-#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -10,8 +10,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -58,6 +56,9 @@ private:
 
 	void ReplayCreateMacro();
 	void ReplayDropMacro();
+
+	void ReplayCreateTableMacro();
+	void ReplayDropTableMacro();
 
 	void ReplayUseTable();
 	void ReplayInsert();
@@ -193,6 +194,12 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_MACRO:
 		ReplayDropMacro();
 		break;
+	case WALType::CREATE_TABLE_MACRO:
+		ReplayCreateTableMacro();
+		break;
+	case WALType::DROP_TABLE_MACRO:
+		ReplayDropTableMacro();
+		break;
 	case WALType::USE_TABLE:
 		ReplayUseTable();
 		break;
@@ -224,7 +231,7 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 // Replay Table
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateTable() {
-	auto info = TableCatalogEntry::Deserialize(source);
+	auto info = TableCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}
@@ -264,7 +271,7 @@ void ReplayState::ReplayAlter() {
 // Replay View
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateView() {
-	auto entry = ViewCatalogEntry::Deserialize(source);
+	auto entry = ViewCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}
@@ -387,7 +394,7 @@ void ReplayState::ReplaySequenceValue() {
 // Replay Macro
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateMacro() {
-	auto entry = MacroCatalogEntry::Deserialize(source);
+	auto entry = ScalarMacroCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}
@@ -399,6 +406,32 @@ void ReplayState::ReplayCreateMacro() {
 void ReplayState::ReplayDropMacro() {
 	DropInfo info;
 	info.type = CatalogType::MACRO_ENTRY;
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Table Macro
+//===--------------------------------------------------------------------===//
+void ReplayState::ReplayCreateTableMacro() {
+	auto entry = TableMacroCatalogEntry::Deserialize(source, context);
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateFunction(context, entry.get());
+}
+
+void ReplayState::ReplayDropTableMacro() {
+	DropInfo info;
+	info.type = CatalogType::TABLE_MACRO_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 	if (deserialize_only) {

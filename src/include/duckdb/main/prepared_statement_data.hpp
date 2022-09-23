@@ -13,9 +13,11 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
 class CatalogEntry;
+class ClientContext;
 class PhysicalOperator;
 class SQLStatement;
 
@@ -30,26 +32,24 @@ public:
 	//! The fully prepared physical plan of the prepared statement
 	unique_ptr<PhysicalOperator> plan;
 	//! The map of parameter index to the actual value entry
-	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;
+	bound_parameter_map_t value_map;
 
 	//! The result names of the transaction
 	vector<string> names;
 	//! The result types of the transaction
 	vector<LogicalType> types;
 
-	//! Whether or not the statement is a read-only statement, or whether it can result in changes to the database
-	bool read_only;
-	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
-	//! exception of
-	bool requires_valid_transaction;
-	//! Whether or not the result can be streamed to the client
-	bool allow_stream_result;
+	//! The statement properties
+	StatementProperties properties;
 
 	//! The catalog version of when the prepared statement was bound
 	//! If this version is lower than the current catalog version, we have to rebind the prepared statement
 	idx_t catalog_version;
 
 public:
+	void CheckParameterCount(idx_t parameter_count);
+	//! Whether or not the prepared statement data requires the query to rebound for the given parameters
+	bool RequireRebind(ClientContext &context, const vector<Value> &values);
 	//! Bind a set of values to the prepared statement data
 	DUCKDB_API void Bind(vector<Value> values);
 	//! Get the expected SQL Type of the bound parameter

@@ -41,7 +41,7 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT total_blocks<10 FROM pragma_database_size()
+SELECT total_blocks<15 FROM pragma_database_size()
 ----
 true
 

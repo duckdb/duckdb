@@ -1,0 +1,35 @@
+# name: test/sql/generated_columns/virtual/rename_dependency.test
+# description: Test renaming dependencies of generated columns
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold),
+	profit_total AS (total_profit),
+	sold_amount AS (5 + 3)
+);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+query I
+SELECT total_profit FROM unit
+----
+20
+
+statement ok
+ALTER TABLE unit RENAME COLUMN price TO value
+
+# No CASCADE provided
+statement error
+ALTER TABLE unit DROP COLUMN value;
+
+query IIIII
+SELECT * FROM unit
+----
+5	4	20	20	8

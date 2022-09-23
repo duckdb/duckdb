@@ -13,19 +13,13 @@ namespace duckdb {
 
 struct OdbcHandleStmt;
 
-enum class FetchBindingOrientation : uint8_t { COLUMN = 0, ROW = 1 };
-
 class OdbcFetch {
 public:
-	FetchBindingOrientation bind_orientation;
-	SQLULEN rowset_size;
-	SQLPOINTER row_length;
-	SQLUSMALLINT *row_status_buff;
-
 	const static SQLULEN SINGLE_VALUE_FETCH = 1;
 	const static SQLRETURN RETURN_FETCH_BEFORE_START = 999;
 
 	SQLULEN cursor_type;
+	SQLULEN cursor_scrollable;
 	SQLLEN row_count;
 
 	struct {
@@ -35,6 +29,7 @@ public:
 	} last_fetched_variable_val;
 
 private:
+	OdbcHandleStmt *stmt_ref;
 	// main structure to hold the fetched chunks
 	std::vector<unique_ptr<DataChunk>> chunks;
 	// used by fetch prior
@@ -48,10 +43,9 @@ private:
 	bool resultset_end;
 
 public:
-	OdbcFetch()
-	    : bind_orientation(FetchBindingOrientation::COLUMN), rowset_size(SINGLE_VALUE_FETCH), row_status_buff(nullptr),
-	      cursor_type(SQL_CURSOR_FORWARD_ONLY), row_count(0), resultset_end(false) {
-
+	explicit OdbcFetch(OdbcHandleStmt *stmt)
+	    : cursor_type(SQL_CURSOR_FORWARD_ONLY), cursor_scrollable(SQL_NONSCROLLABLE), row_count(0), stmt_ref(stmt),
+	      resultset_end(false) {
 		ResetLastFetchedVariableVal();
 	}
 	~OdbcFetch();
@@ -67,6 +61,8 @@ public:
 
 	SQLRETURN FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *stmt, SQLLEN fetch_offset);
 
+	SQLRETURN DummyFetch();
+
 	SQLRETURN GetValue(SQLUSMALLINT col_idx, Value &value);
 
 	void ClearChunks();
@@ -79,6 +75,8 @@ public:
 	size_t GetLastFetchedLength();
 
 	bool IsInExecutionState();
+
+	SQLLEN GetRowCount();
 
 private:
 	SQLRETURN ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt);
@@ -102,6 +100,8 @@ private:
 	SQLRETURN SetAbsoluteCurrentChunk(OdbcHandleStmt *stmt, SQLLEN fetch_offset);
 
 	SQLRETURN SetFirstCurrentChunk(OdbcHandleStmt *stmt);
+
+	void SetRowStatus(idx_t row_idx, SQLINTEGER status);
 };
 } // namespace duckdb
 

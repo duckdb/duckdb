@@ -1,22 +1,22 @@
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/vector_operations/binary_executor.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/pair.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/list_statistics.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
 template <class T, bool HEAP_REF = false, bool VALIDITY_ONLY = false>
-void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets_data, Vector &child_vector,
-                         idx_t list_size, Vector &result) {
-	VectorData child_data;
-	child_vector.Orrify(list_size, child_data);
+void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVectorFormat &offsets_data,
+                         Vector &child_vector, idx_t list_size, Vector &result) {
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(list_size, child_data);
 
 	T *result_data;
 
@@ -39,6 +39,14 @@ void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets
 		if (list_data.validity.RowIsValid(list_index) && offsets_data.validity.RowIsValid(offsets_index)) {
 			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
 			auto offsets_entry = ((int64_t *)offsets_data.data)[offsets_index];
+
+			// 1-based indexing
+			if (offsets_entry == 0) {
+				result_mask.SetInvalid(i);
+				continue;
+			}
+			offsets_entry = (offsets_entry > 0) ? offsets_entry - 1 : offsets_entry;
+
 			idx_t child_offset;
 			if (offsets_entry < 0) {
 				if ((idx_t)-offsets_entry > list_entry.length) {
@@ -68,62 +76,51 @@ void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
-static void ExecuteListExtractInternal(const idx_t count, VectorData &list, VectorData &offsets, Vector &child_vector,
-                                       idx_t list_size, Vector &result) {
+static void ExecuteListExtractInternal(const idx_t count, UnifiedVectorFormat &list, UnifiedVectorFormat &offsets,
+                                       Vector &child_vector, idx_t list_size, Vector &result) {
 	D_ASSERT(child_vector.GetType() == result.GetType());
-	switch (result.GetType().id()) {
-	case LogicalTypeId::UTINYINT:
-		ListExtractTemplate<uint8_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::TINYINT:
+	switch (result.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		ListExtractTemplate<int8_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::USMALLINT:
-		ListExtractTemplate<uint16_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::SMALLINT:
+	case PhysicalType::INT16:
 		ListExtractTemplate<int16_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::UINTEGER:
-		ListExtractTemplate<uint32_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::INTEGER:
+	case PhysicalType::INT32:
 		ListExtractTemplate<int32_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::UBIGINT:
-		ListExtractTemplate<uint64_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::BIGINT:
+	case PhysicalType::INT64:
 		ListExtractTemplate<int64_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::HUGEINT:
+	case PhysicalType::INT128:
 		ListExtractTemplate<hugeint_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::FLOAT:
+	case PhysicalType::UINT8:
+		ListExtractTemplate<uint8_t>(count, list, offsets, child_vector, list_size, result);
+		break;
+	case PhysicalType::UINT16:
+		ListExtractTemplate<uint16_t>(count, list, offsets, child_vector, list_size, result);
+		break;
+	case PhysicalType::UINT32:
+		ListExtractTemplate<uint32_t>(count, list, offsets, child_vector, list_size, result);
+		break;
+	case PhysicalType::UINT64:
+		ListExtractTemplate<uint64_t>(count, list, offsets, child_vector, list_size, result);
+		break;
+	case PhysicalType::FLOAT:
 		ListExtractTemplate<float>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		ListExtractTemplate<double>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::DATE:
-		ListExtractTemplate<date_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
-		ListExtractTemplate<dtime_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
-		ListExtractTemplate<timestamp_t>(count, list, offsets, child_vector, list_size, result);
-		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		ListExtractTemplate<string_t, true>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::SQLNULL:
-		result.Reference(Value());
+	case PhysicalType::INTERVAL:
+		ListExtractTemplate<interval_t>(count, list, offsets, child_vector, list_size, result);
 		break;
-	case LogicalTypeId::STRUCT: {
+	case PhysicalType::STRUCT: {
 		auto &entries = StructVector::GetEntries(child_vector);
 		auto &result_entries = StructVector::GetEntries(result);
 		D_ASSERT(entries.size() == result_entries.size());
@@ -135,7 +132,7 @@ static void ExecuteListExtractInternal(const idx_t count, VectorData &list, Vect
 		ListExtractTemplate<bool, false, true>(count, list, offsets, child_vector, list_size, result);
 		break;
 	}
-	case LogicalTypeId::LIST: {
+	case PhysicalType::LIST: {
 		// nested list: we have to reference the child
 		auto &child_child_list = ListVector::GetEntry(child_vector);
 
@@ -151,20 +148,20 @@ static void ExecuteListExtractInternal(const idx_t count, VectorData &list, Vect
 
 static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
 	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
-	VectorData list_data;
-	VectorData offsets_data;
+	UnifiedVectorFormat list_data;
+	UnifiedVectorFormat offsets_data;
 
-	list.Orrify(count, list_data);
-	offsets.Orrify(count, offsets_data);
+	list.ToUnifiedFormat(count, list_data);
+	offsets.ToUnifiedFormat(count, offsets_data);
 	ExecuteListExtractInternal(count, list_data, offsets_data, ListVector::GetEntry(list),
 	                           ListVector::GetListSize(list), result);
 	result.Verify(count);
 }
 
 static void ExecuteStringExtract(Vector &result, Vector &input_vector, Vector &subscript_vector, const idx_t count) {
-	BinaryExecutor::Execute<string_t, int32_t, string_t>(
-	    input_vector, subscript_vector, result, count, [&](string_t input_string, int32_t subscript) {
-		    return SubstringFun::SubstringScalarFunction(result, input_string, subscript + int32_t(subscript >= 0), 1);
+	BinaryExecutor::Execute<string_t, int64_t, string_t>(
+	    input_vector, subscript_vector, result, count, [&](string_t input_string, int64_t subscript) {
+		    return SubstringFun::SubstringScalarFunction(result, input_string, subscript, 1);
 	    });
 }
 
@@ -201,20 +198,14 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-	} else {
-		D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
-		// list extract returns the child type of the list as return type
-		bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
-	}
+	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
+	// list extract returns the child type of the list as return type
+	bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
-static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                   FunctionData *bind_data,
-                                                   vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
 	if (!child_stats[0]) {
 		return nullptr;
 	}
@@ -231,10 +222,9 @@ static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, Bound
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY,
-	                    ListExtractFunction, false, ListExtractBind, nullptr, ListExtractStats);
+	                    ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
 
-	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR, ListExtractFunction, false,
-	                    nullptr);
+	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 
 	ScalarFunctionSet list_extract("list_extract");
 	list_extract.AddFunction(lfun);

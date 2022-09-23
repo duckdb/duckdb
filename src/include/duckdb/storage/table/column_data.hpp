@@ -85,7 +85,7 @@ public:
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
 	virtual void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count);
-	virtual void AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count);
+	virtual void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t start_row);
 

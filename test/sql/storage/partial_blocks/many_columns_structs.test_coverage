@@ -14,7 +14,7 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT total_blocks<10 FROM pragma_database_size()
+SELECT total_blocks<15 FROM pragma_database_size()
 ----
 true
 
@@ -29,10 +29,10 @@ select count(*) from pragma_storage_info('structs') where block_id IS NULL;
 ----
 0
 
-query I
-SELECT total_blocks<10 FROM pragma_database_size()
+query I nosort q0
+SELECT total_blocks FROM pragma_database_size()
 ----
-true
+
 
 loop i 0 100
 
@@ -68,7 +68,7 @@ true	true
 
 endloop
 
-query I
-SELECT total_blocks<10 FROM pragma_database_size()
+query I nosort q0
+SELECT total_blocks FROM pragma_database_size()
 ----
-true
+

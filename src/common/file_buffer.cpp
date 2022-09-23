@@ -35,6 +35,9 @@ FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(so
 }
 
 FileBuffer::~FileBuffer() {
+	if (!malloced_buffer) {
+		return;
+	}
 	allocator.FreeData(malloced_buffer, malloced_size);
 }
 
@@ -43,51 +46,24 @@ void FileBuffer::SetMallocedSize(uint64_t &bufsiz) {
 	if (type == FileBufferType::MANAGED_BUFFER && bufsiz != Storage::FILE_HEADER_SIZE) {
 		bufsiz += Storage::BLOCK_HEADER_SIZE;
 	}
-	if (type == FileBufferType::BLOCK) {
-		const int sector_size = Storage::SECTOR_SIZE;
-		// round up to the nearest sector_size
-		if (bufsiz % sector_size != 0) {
-			bufsiz += sector_size - (bufsiz % sector_size);
-		}
-		D_ASSERT(bufsiz % sector_size == 0);
-		D_ASSERT(bufsiz >= sector_size);
-		// we add (sector_size - 1) to ensure that we can align the buffer to sector_size
-		malloced_size = bufsiz + (sector_size - 1);
-	} else {
-		malloced_size = bufsiz;
-	}
+	malloced_size = bufsiz;
 }
 
 void FileBuffer::Construct(uint64_t bufsiz) {
 	if (!malloced_buffer) {
 		throw std::bad_alloc();
 	}
-	if (type == FileBufferType::BLOCK) {
-		const int sector_size = Storage::SECTOR_SIZE;
-		// round to multiple of sector_size
-		uint64_t num = (uint64_t)malloced_buffer;
-		uint64_t remainder = num % sector_size;
-		if (remainder != 0) {
-			num = num + sector_size - remainder;
-		}
-		D_ASSERT(num % sector_size == 0);
-		D_ASSERT(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (sector_size - 1)));
-		D_ASSERT(num >= (uint64_t)malloced_buffer);
-		// construct the FileBuffer object
-		internal_buffer = (data_ptr_t)num;
-		internal_size = bufsiz;
-	} else {
-		internal_buffer = malloced_buffer;
-		internal_size = malloced_size;
-	}
+	internal_buffer = malloced_buffer;
+	internal_size = malloced_size;
 	buffer = internal_buffer + Storage::BLOCK_HEADER_SIZE;
 	size = internal_size - Storage::BLOCK_HEADER_SIZE;
 }
 
 void FileBuffer::Resize(uint64_t bufsiz) {
 	D_ASSERT(type == FileBufferType::MANAGED_BUFFER);
+	auto old_size = malloced_size;
 	SetMallocedSize(bufsiz);
-	malloced_buffer = allocator.ReallocateData(malloced_buffer, malloced_size);
+	malloced_buffer = allocator.ReallocateData(malloced_buffer, old_size, malloced_size);
 	Construct(bufsiz);
 }
 

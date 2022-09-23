@@ -1,0 +1,28 @@
+# name: test/sql/alter/drop_col/test_drop_col_operations.test
+# description: Test various operations on a table after dropping a column
+# group: [drop_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test SELECT i, i FROM range(100) tbl(i);
+
+statement ok
+ALTER TABLE test DROP COLUMN i
+
+statement ok
+DELETE FROM test WHERE j%2=0
+
+query II
+SELECT COUNT(j), SUM(j) FROM test
+----
+50	2500
+
+statement ok
+UPDATE test SET j=j+100
+
+query II
+SELECT COUNT(j), SUM(j) FROM test
+----
+50	7500

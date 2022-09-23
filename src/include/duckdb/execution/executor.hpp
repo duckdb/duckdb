@@ -27,12 +27,12 @@ class Task;
 
 struct PipelineEventStack;
 struct ProducerToken;
-
-using event_map_t = unordered_map<const Pipeline *, PipelineEventStack>;
+struct ScheduleEventData;
 
 class Executor {
 	friend class Pipeline;
 	friend class PipelineTask;
+	friend class PipelineBuildState;
 
 public:
 	explicit Executor(ClientContext &context);
@@ -44,7 +44,7 @@ public:
 	static Executor &Get(ClientContext &context);
 
 	void Initialize(PhysicalOperator *physical_plan);
-	void BuildPipelines(PhysicalOperator *op, Pipeline *current);
+	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask();
@@ -56,7 +56,8 @@ public:
 	unique_ptr<DataChunk> FetchChunk();
 
 	//! Push a new error
-	void PushError(ExceptionType type, const string &exception);
+	void PushError(PreservedError exception);
+
 	//! True if an error has been thrown
 	bool HasError();
 	//! Throw the exception that was pushed using PushError.
@@ -82,18 +83,21 @@ public:
 
 	void ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
-private:
-	void ScheduleEvents();
-	void ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipelines,
-	                            unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines,
-	                            vector<shared_ptr<Event>> &events, bool main_schedule = true);
+	//! Whether or not the root of the pipeline is a result collector object
+	bool HasResultCollector();
+	//! Returns the query result - can only be used if `HasResultCollector` returns true
+	unique_ptr<QueryResult> GetResult();
 
-	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, event_map_t &event_map,
-	                      vector<shared_ptr<Event>> &events, bool complete_pipeline);
-	Pipeline *ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, const Pipeline *parent,
-	                                event_map_t &event_map, vector<shared_ptr<Event>> &events);
-	void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, event_map_t &event_map,
-	                           vector<shared_ptr<Event>> &events);
+private:
+	void InitializeInternal(PhysicalOperator *physical_plan);
+
+	void ScheduleEvents();
+	static void ScheduleEventsInternal(ScheduleEventData &event_data);
+
+	static void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data,
+	                             vector<Pipeline *> &scheduled_pipelines);
+	static void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline,
+	                                  ScheduleEventData &event_data);
 	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);
 	bool NextExecutor();
 
@@ -101,12 +105,13 @@ private:
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
-	void ThrowExceptionInternal();
 
 private:
 	PhysicalOperator *physical_plan;
+	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
+	mutex error_lock;
 	//! The pipelines of the current query
 	vector<shared_ptr<Pipeline>> pipelines;
 	//! The root pipeline of the query
@@ -118,7 +123,7 @@ private:
 	//! The producer of this query
 	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
-	vector<pair<ExceptionType, string>> exceptions;
+	vector<PreservedError> exceptions;
 	//! List of events
 	vector<shared_ptr<Event>> events;
 	//! The query profiler
@@ -128,6 +133,8 @@ private:
 	atomic<idx_t> completed_pipelines;
 	//! The total amount of pipelines in the query
 	idx_t total_pipelines;
+	//! Whether or not execution is cancelled
+	bool cancelled;
 
 	//! The adjacent union pipelines of each pipeline
 	//! Union pipelines have the same sink, but can be run concurrently along with this pipeline
@@ -137,14 +144,6 @@ private:
 	//! Unlike union pipelines, child pipelines should be run AFTER their dependencies are completed
 	//! i.e. they should be run after the dependencies are completed, but before finalize is called on the sink
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> child_pipelines;
-	//! Dependencies of child pipelines
-	unordered_map<Pipeline *, vector<Pipeline *>> child_dependencies;
-
-	//! Duplicate eliminated join scan dependencies
-	unordered_map<PhysicalOperator *, Pipeline *> delim_join_dependencies;
-
-	//! Active recursive CTE node (if any)
-	PhysicalOperator *recursive_cte;
 
 	//! The last pending execution result (if any)
 	PendingExecutionResult execution_result;

@@ -1,0 +1,494 @@
+# name: test/sql/function/interval/test_interval_trunc.test
+# description: Extract function
+# group: [interval]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE intervals(i INTERVAL, s VARCHAR);
+
+statement ok
+INSERT INTO intervals VALUES
+	('1247 years 4 months', 'millennium'),
+	('-1448 years -5 months', 'millennium'),
+	('548 years 7 months', 'century'),
+	('-118 years -3 months', 'century'),
+	('45 years 1 months', 'decade'),
+	('-97 years -11 months', 'decade'),
+	('5 years 6 months', 'year'),
+	('-4 years -8 months', 'year'),
+	('2 years 2 months', 'quarter'),
+	('-3 years -10 months', 'quarter'),
+	('3 years 4 months 5 days', 'month'),
+	('-7 years -3 months 29 days', 'month'),
+	('4 months 22 days', 'week'),
+	('-3 months -3 days', 'week'),
+	('5 months 7 days 12:34:56.789012', 'day'),
+	('-3 months -3 days 12:34:56.789012', 'day'),
+	('1 month 11 days 12:34:56.789012', 'hour'),
+	('-1 month -2 days 12:34:56.789012', 'hour'),
+	('1 month 16 days 12:34:56.789012', 'minute'),
+	('-1 month -9 days 12:34:56.789012', 'minute'),
+	('1 month 24 days 12:34:56.789012', 'second'),
+	('-1 month -17 days 12:34:56.789012', 'second'),
+	('1 month 29 days 12:34:56.789012', 'milliseconds'),
+	('-1 month -26 days 12:34:56.789012', 'milliseconds'),
+	('1 month 7 days 12:34:56.789012', 'microseconds'),
+	('-1 month -29 days 12:34:56.789012', 'microseconds'),
+	(NULL, NULL),
+;
+
+query I
+SELECT i FROM intervals;
+----
+1247 years 4 months
+-1448 years -5 months
+548 years 7 months
+-118 years -3 months
+45 years 1 month
+-97 years -11 months
+5 years 6 months
+-4 years -8 months
+2 years 2 months
+-3 years -10 months
+3 years 4 months 5 days
+-7 years -3 months 29 days
+4 months 22 days
+-3 months -3 days
+5 months 7 days 12:34:56.789012
+-3 months -3 days 12:34:56.789012
+1 month 11 days 12:34:56.789012
+-1 months -2 days 12:34:56.789012
+1 month 16 days 12:34:56.789012
+-1 months -9 days 12:34:56.789012
+1 month 24 days 12:34:56.789012
+-1 months -17 days 12:34:56.789012
+1 month 29 days 12:34:56.789012
+-1 months -26 days 12:34:56.789012
+1 month 7 days 12:34:56.789012
+-1 months -29 days 12:34:56.789012
+NULL
+
+query I
+SELECT DATE_TRUNC('millennium', i) FROM intervals
+----
+1000 years
+-1000 years
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+NULL
+
+query I
+SELECT DATE_TRUNC('century', i) FROM intervals
+----
+1200 years
+-1400 years
+500 years
+-100 years
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+NULL
+
+query I
+SELECT DATE_TRUNC('decade', i) FROM intervals
+----
+1240 years
+-1440 years
+540 years
+-110 years
+40 years
+-90 years
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+NULL
+
+foreach datepart year isoyear
+
+query I
+SELECT DATE_TRUNC('${datepart}', i) FROM intervals
+----
+1247 years
+-1448 years
+548 years
+-118 years
+45 years
+-97 years
+5 years
+-4 years
+2 years
+-3 years
+3 years
+-7 years
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+NULL
+
+endloop
+
+foreach datepart week yearweek
+
+query I
+SELECT DATE_TRUNC('${datepart}', i) FROM intervals
+----
+1247 years 4 months
+-1448 years -5 months
+548 years 7 months
+-118 years -3 months
+45 years 1 month
+-97 years -11 months
+5 years 6 months
+-4 years -8 months
+2 years 2 months
+-3 years -10 months
+3 years 4 months
+-7 years -3 months 28 days
+4 months 21 days
+-3 months
+5 months 7 days
+-3 months
+1 month 7 days
+-1 months
+1 month 14 days
+-1 months -7 days
+1 month 21 days
+-1 months -14 days
+1 month 28 days
+-1 months -21 days
+1 month 7 days
+-1 months -28 days
+NULL
+
+endloop
+
+foreach datepart dayofmonth dayofweek isodow dayofyear
+
+query I
+SELECT DATE_TRUNC('${datepart}', i) FROM intervals
+----
+1247 years 4 months
+-1448 years -5 months
+548 years 7 months
+-118 years -3 months
+45 years 1 month
+-97 years -11 months
+5 years 6 months
+-4 years -8 months
+2 years 2 months
+-3 years -10 months
+3 years 4 months 5 days
+-7 years -3 months 29 days
+4 months 22 days
+-3 months -3 days
+5 months 7 days
+-3 months -3 days
+1 month 11 days
+-1 months -2 days
+1 month 16 days
+-1 months -9 days
+1 month 24 days
+-1 months -17 days
+1 month 29 days
+-1 months -26 days
+1 month 7 days
+-1 months -29 days
+NULL
+
+endloop
+
+query I
+SELECT DATE_TRUNC('hour', i) FROM intervals
+----
+1247 years 4 months
+-1448 years -5 months
+548 years 7 months
+-118 years -3 months
+45 years 1 month
+-97 years -11 months
+5 years 6 months
+-4 years -8 months
+2 years 2 months
+-3 years -10 months
+3 years 4 months 5 days
+-7 years -3 months 29 days
+4 months 22 days
+-3 months -3 days
+5 months 7 days 12:00:00
+-3 months -3 days 12:00:00
+1 month 11 days 12:00:00
+-1 months -2 days 12:00:00
+1 month 16 days 12:00:00
+-1 months -9 days 12:00:00
+1 month 24 days 12:00:00
+-1 months -17 days 12:00:00
+1 month 29 days 12:00:00
+-1 months -26 days 12:00:00
+1 month 7 days 12:00:00
+-1 months -29 days 12:00:00
+NULL
+
+query I
+SELECT DATE_TRUNC('minute', i) FROM intervals
+----
+1247 years 4 months
+-1448 years -5 months
+548 years 7 months
+-118 years -3 months
+45 years 1 month
+-97 years -11 months
+5 years 6 months
+-4 years -8 months
+2 years 2 months
+-3 years -10 months
+3 years 4 months 5 days
+-7 years -3 months 29 days
+4 months 22 days
+-3 months -3 days
+5 months 7 days 12:34:00
+-3 months -3 days 12:34:00
+1 month 11 days 12:34:00
+-1 months -2 days 12:34:00
+1 month 16 days 12:34:00
+-1 months -9 days 12:34:00
+1 month 24 days 12:34:00
+-1 months -17 days 12:34:00
+1 month 29 days 12:34:00
+-1 months -26 days 12:34:00
+1 month 7 days 12:34:00
+-1 months -29 days 12:34:00
+NULL
+
+foreach datepart second epoch
+
+query I
+SELECT DATE_TRUNC('${datepart}', i) FROM intervals
+----
+1247 years 4 months
+-1448 years -5 months
+548 years 7 months
+-118 years -3 months
+45 years 1 month
+-97 years -11 months
+5 years 6 months
+-4 years -8 months
+2 years 2 months
+-3 years -10 months
+3 years 4 months 5 days
+-7 years -3 months 29 days
+4 months 22 days
+-3 months -3 days
+5 months 7 days 12:34:56
+-3 months -3 days 12:34:56
+1 month 11 days 12:34:56
+-1 months -2 days 12:34:56
+1 month 16 days 12:34:56
+-1 months -9 days 12:34:56
+1 month 24 days 12:34:56
+-1 months -17 days 12:34:56
+1 month 29 days 12:34:56
+-1 months -26 days 12:34:56
+1 month 7 days 12:34:56
+-1 months -29 days 12:34:56
+NULL
+
+endloop
+
+query I
+SELECT DATE_TRUNC('millisecond', i) FROM intervals
+----
+1247 years 4 months
+-1448 years -5 months
+548 years 7 months
+-118 years -3 months
+45 years 1 month
+-97 years -11 months
+5 years 6 months
+-4 years -8 months
+2 years 2 months
+-3 years -10 months
+3 years 4 months 5 days
+-7 years -3 months 29 days
+4 months 22 days
+-3 months -3 days
+5 months 7 days 12:34:56.789
+-3 months -3 days 12:34:56.789
+1 month 11 days 12:34:56.789
+-1 months -2 days 12:34:56.789
+1 month 16 days 12:34:56.789
+-1 months -9 days 12:34:56.789
+1 month 24 days 12:34:56.789
+-1 months -17 days 12:34:56.789
+1 month 29 days 12:34:56.789
+-1 months -26 days 12:34:56.789
+1 month 7 days 12:34:56.789
+-1 months -29 days 12:34:56.789
+NULL
+
+query I
+SELECT DATE_TRUNC('microsecond', i) FROM intervals
+----
+1247 years 4 months
+-1448 years -5 months
+548 years 7 months
+-118 years -3 months
+45 years 1 month
+-97 years -11 months
+5 years 6 months
+-4 years -8 months
+2 years 2 months
+-3 years -10 months
+3 years 4 months 5 days
+-7 years -3 months 29 days
+4 months 22 days
+-3 months -3 days
+5 months 7 days 12:34:56.789012
+-3 months -3 days 12:34:56.789012
+1 month 11 days 12:34:56.789012
+-1 months -2 days 12:34:56.789012
+1 month 16 days 12:34:56.789012
+-1 months -9 days 12:34:56.789012
+1 month 24 days 12:34:56.789012
+-1 months -17 days 12:34:56.789012
+1 month 29 days 12:34:56.789012
+-1 months -26 days 12:34:56.789012
+1 month 7 days 12:34:56.789012
+-1 months -29 days 12:34:56.789012
+NULL
+
+# Variable part name
+query I
+SELECT DATE_TRUNC(s, i) FROM intervals
+----
+1000 years
+-1000 years
+500 years
+-100 years
+40 years
+-90 years
+5 years
+-4 years
+2 years
+-3 years -9 months
+3 years 4 months
+-7 years -3 months
+4 months 21 days
+-3 months
+5 months 7 days
+-3 months -3 days
+1 month 11 days 12:00:00
+-1 months -2 days 12:00:00
+1 month 16 days 12:34:00
+-1 months -9 days 12:34:00
+1 month 24 days 12:34:56
+-1 months -17 days 12:34:56
+1 month 29 days 12:34:56.789
+-1 months -26 days 12:34:56.789
+1 month 7 days 12:34:56.789012
+-1 months -29 days 12:34:56.789012
+NULL
+
+# NULL part name
+query I
+SELECT DATE_TRUNC(NULL, i) FROM intervals
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+

@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-TableRelation::TableRelation(ClientContext &context, unique_ptr<TableDescription> description)
+TableRelation::TableRelation(const std::shared_ptr<ClientContext> &context, unique_ptr<TableDescription> description)
     : Relation(context, RelationType::TABLE_RELATION), description(move(description)) {
 }
 
@@ -54,15 +54,15 @@ static unique_ptr<ParsedExpression> ParseCondition(ClientContext &context, const
 void TableRelation::Update(const string &update_list, const string &condition) {
 	vector<string> update_columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
-	auto cond = ParseCondition(context, condition);
-	Parser::ParseUpdateList(update_list, update_columns, expressions, context.GetParserOptions());
+	auto cond = ParseCondition(*context.GetContext(), condition);
+	Parser::ParseUpdateList(update_list, update_columns, expressions, context.GetContext()->GetParserOptions());
 	auto update = make_shared<UpdateRelation>(context, move(cond), description->schema, description->table,
 	                                          move(update_columns), move(expressions));
 	update->Execute();
 }
 
 void TableRelation::Delete(const string &condition) {
-	auto cond = ParseCondition(context, condition);
+	auto cond = ParseCondition(*context.GetContext(), condition);
 	auto del = make_shared<DeleteRelation>(context, move(cond), description->schema, description->table);
 	del->Execute();
 }

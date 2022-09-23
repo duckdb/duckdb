@@ -12,6 +12,7 @@ CREATE TABLE timestamps(d TIMESTAMPTZ, s VARCHAR);
 
 statement ok
 INSERT INTO timestamps VALUES
+	('-infinity', 'year'),
 	('1992-02-02 02:02:03.123456-08', 'millennium'),
 	('1992-02-02 02:02:03.123456-08', 'century'),
 	('1992-02-02 02:02:03.123456-08', 'decade'),
@@ -24,7 +25,9 @@ INSERT INTO timestamps VALUES
 	('1992-02-02 02:02:03.123456-08', 'minute'),
 	('1992-02-02 02:02:03.123456-08', 'second'),
 	('1992-02-02 02:02:03.123456-08', 'milliseconds'),
-	('1992-02-02 02:02:03.123456-08', 'microseconds');
+	('1992-02-02 02:02:03.123456-08', 'microseconds'),
+	('infinity', 'month'),
+;
 
 # test date_trunc with different combinations of constant/non-constant columns on timestamps
 query T
@@ -64,6 +67,7 @@ SELECT date_trunc('minute', TIMESTAMPTZ '1992-02-02 04:03:02') FROM timestamps L
 query II
 SELECT date_trunc(s, d), s FROM timestamps;
 ----
+-infinity	year
 1000-01-06 07:52:58+00	millennium
 1900-01-01 08:00:00+00	century
 1990-01-01 08:00:00+00	decade
@@ -77,11 +81,13 @@ SELECT date_trunc(s, d), s FROM timestamps;
 1992-02-02 10:02:03+00	second
 1992-02-02 10:02:03.123+00	milliseconds
 1992-02-02 10:02:03.123456+00	microseconds
+infinity	month
 
 # Test alias
 query II
 SELECT datetrunc(s, d), s FROM timestamps;
 ----
+-infinity	year
 1000-01-06 07:52:58+00	millennium
 1900-01-01 08:00:00+00	century
 1990-01-01 08:00:00+00	decade
@@ -95,6 +101,7 @@ SELECT datetrunc(s, d), s FROM timestamps;
 1992-02-02 10:02:03+00	second
 1992-02-02 10:02:03.123+00	milliseconds
 1992-02-02 10:02:03.123456+00	microseconds
+infinity	month
 
 # Test week operator special cases
 query T

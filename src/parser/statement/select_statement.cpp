@@ -4,10 +4,11 @@
 
 namespace duckdb {
 
+SelectStatement::SelectStatement(const SelectStatement &other) : SQLStatement(other), node(other.node->Copy()) {
+}
+
 unique_ptr<SQLStatement> SelectStatement::Copy() const {
-	auto result = make_unique<SelectStatement>();
-	result->node = node->Copy();
-	return move(result);
+	return unique_ptr<SelectStatement>(new SelectStatement(*this));
 }
 
 void SelectStatement::Serialize(Serializer &serializer) const {
@@ -26,6 +27,10 @@ bool SelectStatement::Equals(const SQLStatement *other_p) const {
 	}
 	auto other = (SelectStatement *)other_p;
 	return node->Equals(other->node.get());
+}
+
+string SelectStatement::ToString() const {
+	return node->ToString();
 }
 
 } // namespace duckdb

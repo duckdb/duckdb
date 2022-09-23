@@ -43,10 +43,15 @@ SELECT '🦆ab'[0:0], 'abc'[0:0]
 query I
 SELECT '🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️'[2:5]
 ----
-L🤦🏼‍♂️R
+ L🤦🏼‍♂️R
 
 query I
 SELECT 'S̈a'[1:2]
+----
+S̈a
+
+query I
+SELECT 'S̈a'[2:2]
 ----
 a
 
@@ -56,7 +61,7 @@ SELECT 'MotörHead'[:5]
 Motör
 
 query I
-SELECT 'Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢'[1:]
+SELECT 'Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢'[2:]
 ----
 A̴̵̜̰͔ͫ͗͢
 
@@ -74,6 +79,14 @@ NULL
 query T
 SELECT s[1:3] FROM strings
 ----
+hel
+wor
+b
+NULL
+
+query T
+SELECT s[2:3] FROM strings
+----
 el
 or
 (empty)
@@ -84,7 +97,7 @@ query T
 SELECT s[off:length+off] FROM strings
 ----
 he
-orl
+worl
 b
 NULL
 
@@ -92,7 +105,7 @@ query T
 SELECT s[off:2+off] FROM strings
 ----
 he
-or
+wor
 b
 NULL
 
@@ -108,9 +121,9 @@ query T
 SELECT 'hello'[off:length+off] FROM strings
 ----
 he
-ell
+hell
 h
-el
+hel
 
 # test substrings with constant nulls in different places
 query T
@@ -131,6 +144,14 @@ hello
 
 query T
 SELECT 'hello'[off:NULL+off] FROM strings
+----
+hello
+hello
+hello
+hello
+
+query T
+SELECT 'hello'[off+1:NULL+off] FROM strings
 ----
 hello
 ello
@@ -178,7 +199,7 @@ ld
 NULL
 NULL
 
-# negative length
+# length 1
 query T
 SELECT s[0:1] FROM strings
 ----
@@ -198,7 +219,7 @@ NULL
 
 # length 0
 query T
-SELECT s[1:1] FROM strings
+SELECT s[1:0] FROM strings
 ----
 (empty)
 (empty)
@@ -207,7 +228,7 @@ NULL
 
 # no end
 query T
-SELECT s[1:] FROM strings
+SELECT s[2:] FROM strings
 ----
 ello
 orld

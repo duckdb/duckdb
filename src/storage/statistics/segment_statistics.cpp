@@ -1,8 +1,6 @@
 #include "duckdb/storage/statistics/segment_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
+
 #include "duckdb/common/exception.hpp"
-#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
@@ -18,8 +16,7 @@ SegmentStatistics::SegmentStatistics(LogicalType type, unique_ptr<BaseStatistics
 }
 
 void SegmentStatistics::Reset() {
-	statistics = BaseStatistics::CreateEmpty(type);
-	statistics->validity_stats = make_unique<ValidityStatistics>(false);
+	statistics = BaseStatistics::CreateEmpty(type, StatisticsType::LOCAL_STATS);
 }
 
 } // namespace duckdb

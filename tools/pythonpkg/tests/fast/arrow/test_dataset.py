@@ -28,7 +28,7 @@ class TestArrowDataset(object):
         ]
         , format="parquet")
 
-        rel = duckdb_conn.from_arrow_table(userdata_parquet_dataset)
+        rel = duckdb_conn.from_arrow(userdata_parquet_dataset)
 
         assert rel.filter("first_name=\'Jose\' and salary > 134708.82").aggregate('count(*)').execute().fetchone()[0] == 12
 

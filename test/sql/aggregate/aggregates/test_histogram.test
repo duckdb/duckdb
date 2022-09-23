@@ -21,6 +21,12 @@ select histogram(1)
 ----
 {1=1}
 
+# Allow ascii characters in strings
+query I
+SELECT histogram('、')
+----
+{、=1}
+
 query I
 SELECT histogram(2) FROM range(100);
 ----
@@ -69,6 +75,37 @@ select histogram(name) from names;
 ----
 {Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.=1, hannes=2, mark=1, pedro=3}
 
+# Variant time type binding (Issue #3290)
+query I
+SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_S));
+----
+{2021-08-20 00:00:00=1}
+
+query I
+SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_MS));
+----
+{2021-08-20 00:00:00=1}
+
+query I
+SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_NS));
+----
+{2021-08-20 00:00:00=1}
+
+query I
+SELECT histogram(CAST('15:05:42' AS TIME));
+----
+{15:05:42=1}
+
+query I
+SELECT histogram(CAST('15:05:42+00' AS TIME WITH TIME ZONE));
+----
+{15:05:42+00=1}
+
+query I
+SELECT histogram(CAST('2022-01-02' AS DATE));
+----
+{2022-01-02=1}
+
 require vector_size 512
 
 query II rowsort
@@ -89,3 +126,18 @@ select histogram()
 
 statement error
 select histogram(*)
+
+# enums
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+statement ok
+CREATE TABLE enums (e mood)
+
+statement ok
+INSERT INTO enums VALUES ('happy'), ('ok')
+
+query I
+SELECT histogram(e) FROM enums
+----
+{happy=1, ok=1}

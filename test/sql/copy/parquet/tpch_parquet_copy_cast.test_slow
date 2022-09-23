@@ -1,0 +1,50 @@
+# name: test/sql/copy/parquet/tpch_parquet_copy_cast.test_slow
+# description: Test auto-casting to table types in COPY from parquet file
+# group: [parquet]
+
+require parquet
+
+require tpch
+
+statement ok
+CREATE SCHEMA tpch
+
+statement ok
+CALL dbgen(sf=0.01, schema='tpch');
+
+statement ok
+COPY (
+	SELECT
+		l_orderkey::UBIGINT l_orderkey,
+		l_partkey::BIGINT l_partkey,
+		l_suppkey::SMALLINT l_suppkey,
+		l_linenumber::UINTEGER,
+		l_quantity::SMALLINT l_quantity,
+		l_extendedprice::DECIMAL(18,4) l_extendedprice,
+		l_discount::DECIMAL(8,3) l_discount,
+		l_tax::DECIMAL(38,4) l_tax,
+		l_returnflag,
+		l_linestatus,
+		l_shipdate::TIMESTAMP l_shipdate,
+		l_commitdate::TIMESTAMP l_commitdate,
+		l_receiptdate::VARCHAR l_receiptdate,
+		l_shipinstruct,
+		l_shipmode,
+		l_comment FROM tpch.lineitem
+) TO '__TEST_DIR__/lineitem_different_types.parquet' (FORMAT PARQUET);
+
+statement ok
+CREATE TABLE lineitem AS SELECT * FROM tpch.lineitem LIMIT 0;
+
+statement ok
+COPY lineitem FROM '__TEST_DIR__/lineitem_different_types.parquet'
+
+query I
+PRAGMA tpch(1)
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q01.csv
+
+query I
+PRAGMA tpch(6)
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q06.csv

@@ -53,3 +53,19 @@ WHERE east.dur < west.time AND east.rev > west.cost
 ORDER BY 1, 2
 ----
 r2	s2
+
+# Test string comparisons
+query II
+WITH weststr AS (
+	SELECT rid, time::VARCHAR AS time, cost::VARCHAR as cost
+	FROM west
+)
+SELECT s1.rid, s2.rid
+FROM weststr s1, weststr s2
+WHERE s1.time > s2.time AND s1.cost < s2.cost
+ORDER BY 1, 2
+----
+s2	s1
+s3	s1
+s3	s2
+s4	s1

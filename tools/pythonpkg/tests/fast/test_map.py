@@ -2,6 +2,7 @@ import duckdb
 import pandas as pd
 import numpy
 import pytest
+from datetime import date, timedelta
 
 class TestMap(object):
     def test_map(self, duckdb_cursor):
@@ -53,19 +54,19 @@ class TestMap(object):
         def return_empty_df(df):
             return pd.DataFrame()
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.InvalidInputException, match='Expected 1 columns from UDF, got 2'):
             print(testrel.map(evil1).df())
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.InvalidInputException, match='UDF column type mismatch'):
             print(testrel.map(evil2).df())
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.InvalidInputException, match='UDF column name mismatch'):
             print(testrel.map(evil3).df())
 
         with pytest.raises(AttributeError):
             print(testrel.map(evil4).df())
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             print(testrel.map(evil5).df())
 
         # not a function
@@ -78,13 +79,34 @@ class TestMap(object):
 
         testrel.map(return_dataframe).df().equals(pd.DataFrame({'A' : [1]}))
         
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='UDF returned more than 1024 rows, which is not allowed.'):
             testrel.map(return_big_dataframe).df()
 
         empty_rel.map(return_dataframe).df().equals(pd.DataFrame({'A' : []}))
 
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='No return value from Python function'):
             testrel.map(return_none).df()
 
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='Need a DataFrame with at least one column'):
             testrel.map(return_empty_df).df()
+
+    def test_isse_3237(self, duckdb_cursor):
+        def process(rel):
+            def mapper(x):
+                dates = x['date'].to_numpy("datetime64[us]")
+                days = x['days_to_add'].to_numpy("int")
+                x["result1"] = pd.Series([pd.to_datetime(y[0]).date() + timedelta(days=y[1].item()) for y in zip(dates,days)], dtype='datetime64[us]')
+                x["result2"] = pd.Series([pd.to_datetime(y[0]).date() + timedelta(days=-y[1].item()) for y in zip(dates,days)], dtype='datetime64[us]')
+                return x
+
+            rel = rel.map(mapper)
+            rel = rel.project("*, datediff('day', date, result1) as one")
+            rel = rel.project("*, datediff('day', date, result2) as two")
+            rel = rel.project("*, IF(ABS(one) > ABS(two), one, two) as three")            
+            return rel
+
+        df = pd.DataFrame({'date': pd.Series([date(2000,1,1), date(2000,1,2)], dtype="datetime64[us]"), 'days_to_add': [1,2]})
+        rel = duckdb.from_df(df)
+        rel = process(rel)
+        x = rel.execute().fetchdf()
+        assert x['days_to_add'].to_numpy()[0] == 1

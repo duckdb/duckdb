@@ -13,11 +13,12 @@
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 
 namespace duckdb {
 
-CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
-    : log(log), commit_id(commit_id), current_table_info(nullptr) {
+CommitState::CommitState(ClientContext &context, transaction_t commit_id, WriteAheadLog *log)
+    : log(log), commit_id(commit_id), current_table_info(nullptr), context(context) {
 }
 
 void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
@@ -78,8 +79,12 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		log->WriteCreateSequence((SequenceCatalogEntry *)parent);
 		break;
 	case CatalogType::MACRO_ENTRY:
-		log->WriteCreateMacro((MacroCatalogEntry *)parent);
+		log->WriteCreateMacro((ScalarMacroCatalogEntry *)parent);
 		break;
+	case CatalogType::TABLE_MACRO_ENTRY:
+		log->WriteCreateTableMacro((TableMacroCatalogEntry *)parent);
+		break;
+
 	case CatalogType::TYPE_ENTRY:
 		log->WriteCreateType((TypeCatalogEntry *)parent);
 		break;
@@ -101,7 +106,10 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteDropSequence((SequenceCatalogEntry *)entry);
 			break;
 		case CatalogType::MACRO_ENTRY:
-			log->WriteDropMacro((MacroCatalogEntry *)entry);
+			log->WriteDropMacro((ScalarMacroCatalogEntry *)entry);
+			break;
+		case CatalogType::TABLE_MACRO_ENTRY:
+			log->WriteDropTableMacro((TableMacroCatalogEntry *)entry);
 			break;
 		case CatalogType::TYPE_ENTRY:
 			log->WriteDropType((TypeCatalogEntry *)entry);
@@ -138,7 +146,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 	if (!delete_chunk) {
 		delete_chunk = make_unique<DataChunk>();
 		vector<LogicalType> delete_types = {LogicalType::ROW_TYPE};
-		delete_chunk->Initialize(delete_types);
+		delete_chunk->Initialize(Allocator::DefaultAllocator(), delete_types);
 	}
 	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
 	for (idx_t i = 0; i < info->count; i++) {
@@ -166,7 +174,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	update_types.emplace_back(LogicalType::ROW_TYPE);
 
 	update_chunk = make_unique<DataChunk>();
-	update_chunk->Initialize(update_types);
+	update_chunk->Initialize(Allocator::DefaultAllocator(), update_types);
 
 	// fetch the updated values from the base segment
 	info->segment->FetchCommitted(info->vector_index, update_chunk->data[0]);

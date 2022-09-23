@@ -10,6 +10,7 @@ CREATE TABLE timestamps(ts TIMESTAMP)
 
 statement ok
 INSERT INTO timestamps VALUES
+	('-infinity'),
 	('1962-07-31 12:20:48.123456'),
 	('1969-01-01 01:03:20.45432'),
 	('1992-01-01 01:01:01.400'),
@@ -41,6 +42,7 @@ INSERT INTO timestamps VALUES
 	('2021-05-02 12:11:49.5'),
 	('2021-12-01 13:54:48.123456'),
 	('2022-01-01 00:00:41'),
+	('infinity'),
 	(NULL)
 
 # Century and millennia rules
@@ -79,6 +81,7 @@ FROM timestamps
 ORDER BY 2;
 ----
 NULL	NULL
+NULL	-infinity
 1962	1962-07-31 12:20:48.123456
 1969	1969-01-01 01:03:20.45432
 1992	1992-01-01 01:01:01.4
@@ -110,6 +113,7 @@ NULL	NULL
 2021	2021-05-02 12:11:49.5
 2021	2021-12-01 13:54:48.123456
 2021	2022-01-01 00:00:41
+NULL	infinity
 
 # 2022-01-03 is the first day of ISO-2022
 query II
@@ -168,6 +172,7 @@ FROM timestamps
 ORDER BY 1;
 ----
 NULL	NULL
+-infinity	{'year': NULL, 'month': NULL, 'day': NULL}
 1962-07-31	{'year': 1962, 'month': 7, 'day': 31}
 1969-01-01	{'year': 1969, 'month': 1, 'day': 1}
 1992-01-01	{'year': 1992, 'month': 1, 'day': 1}
@@ -199,6 +204,7 @@ NULL	NULL
 2021-05-02	{'year': 2021, 'month': 5, 'day': 2}
 2021-12-01	{'year': 2021, 'month': 12, 'day': 1}
 2022-01-01	{'year': 2022, 'month': 1, 'day': 1}
+infinity	{'year': NULL, 'month': NULL, 'day': NULL}
 
 query II
 SELECT ts::DATE AS d, DATE_PART(['year', 'month', 'day'], ts) AS parts
@@ -218,6 +224,7 @@ FROM timestamps
 ORDER BY 1;
 ----
 NULL	NULL
+-infinity	{'era': NULL, 'millennium': NULL, 'century': NULL, 'decade': NULL, 'quarter': NULL}
 1962-07-31	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 196, 'quarter': 3}
 1969-01-01	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 196, 'quarter': 1}
 1992-01-01	{'era': 1, 'millennium': 2, 'century': 20, 'decade': 199, 'quarter': 1}
@@ -249,6 +256,7 @@ NULL	NULL
 2021-05-02	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 2}
 2021-12-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}
 2022-01-01	{'era': 1, 'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 1}
+infinity	{'era': NULL, 'millennium': NULL, 'century': NULL, 'decade': NULL, 'quarter': NULL}
 
 query II
 SELECT ts::DATE AS d, DATE_PART(['era', 'millennium', 'century', 'decade', 'quarter'], ts) AS parts
@@ -268,6 +276,7 @@ FROM timestamps
 ORDER BY 1;
 ----
 NULL	NULL
+-infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL}
 1962-07-31	{'weekday': 2, 'isodow': 2, 'doy': 212}
 1969-01-01	{'weekday': 3, 'isodow': 3, 'doy': 1}
 1992-01-01	{'weekday': 3, 'isodow': 3, 'doy': 1}
@@ -299,6 +308,7 @@ NULL	NULL
 2021-05-02	{'weekday': 0, 'isodow': 7, 'doy': 122}
 2021-12-01	{'weekday': 3, 'isodow': 3, 'doy': 335}
 2022-01-01	{'weekday': 6, 'isodow': 6, 'doy': 1}
+infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL}
 
 query II
 SELECT ts::DATE AS d, DATE_PART(['weekday', 'isodow','doy'], ts) AS parts
@@ -318,6 +328,7 @@ FROM timestamps
 ORDER BY 1;
 ----
 NULL	NULL
+-infinity	{'isoyear': NULL, 'week': NULL, 'yearweek': NULL}
 1962-07-31	{'isoyear': 1962, 'week': 31, 'yearweek': 196231}
 1969-01-01	{'isoyear': 1969, 'week': 1, 'yearweek': 196901}
 1992-01-01	{'isoyear': 1992, 'week': 1, 'yearweek': 199201}
@@ -349,6 +360,7 @@ NULL	NULL
 2021-05-02	{'isoyear': 2021, 'week': 17, 'yearweek': 202117}
 2021-12-01	{'isoyear': 2021, 'week': 48, 'yearweek': 202148}
 2022-01-01	{'isoyear': 2021, 'week': 52, 'yearweek': 202152}
+infinity	{'isoyear': NULL, 'week': NULL, 'yearweek': NULL}
 
 query II
 SELECT ts::DATE AS d, DATE_PART(['isoyear', 'week', 'yearweek'], ts) AS parts
@@ -368,6 +380,7 @@ FROM timestamps
 ORDER BY 1;
 ----
 NULL	NULL
+-infinity	{'hour': NULL, 'minute': NULL, 'microsecond': NULL}
 1962-07-31 12:20:48.123456	{'hour': 12, 'minute': 20, 'microsecond': 48123456}
 1969-01-01 01:03:20.45432	{'hour': 1, 'minute': 3, 'microsecond': 20454320}
 1992-01-01 01:01:01.4	{'hour': 1, 'minute': 1, 'microsecond': 1400000}
@@ -399,6 +412,7 @@ NULL	NULL
 2021-05-02 12:11:49.5	{'hour': 12, 'minute': 11, 'microsecond': 49500000}
 2021-12-01 13:54:48.123456	{'hour': 13, 'minute': 54, 'microsecond': 48123456}
 2022-01-01 00:00:41	{'hour': 0, 'minute': 0, 'microsecond': 41000000}
+infinity	{'hour': NULL, 'minute': NULL, 'microsecond': NULL}
 
 query II
 SELECT ts, DATE_PART(['hour', 'minute', 'microsecond'], ts) AS parts
@@ -418,6 +432,7 @@ FROM timestamps
 ORDER BY 1;
 ----
 NULL	NULL
+-infinity	{'epoch': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}
 1962-07-31 12:20:48.123456	{'epoch': -234185951, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 1969-01-01 01:03:20.45432	{'epoch': -31532199, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 1992-01-01 01:01:01.4	{'epoch': 694227661, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
@@ -449,6 +464,7 @@ NULL	NULL
 2021-05-02 12:11:49.5	{'epoch': 1619957509, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 2021-12-01 13:54:48.123456	{'epoch': 1638366888, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 2022-01-01 00:00:41	{'epoch': 1640995241, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+infinity	{'epoch': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}
 
 query II
 SELECT ts, DATE_PART(['epoch', 'timezone', 'timezone_hour', 'timezone_minute'], ts) AS parts
@@ -483,6 +499,7 @@ FROM timestamps
 ORDER BY 1;
 ----
 NULL	NULL
+-infinity	{'year': NULL, 'month': NULL, 'months': NULL}
 1962-07-31	{'year': 1962, 'month': 7, 'months': 7}
 1969-01-01	{'year': 1969, 'month': 1, 'months': 1}
 1992-01-01	{'year': 1992, 'month': 1, 'months': 1}
@@ -514,6 +531,7 @@ NULL	NULL
 2021-05-02	{'year': 2021, 'month': 5, 'months': 5}
 2021-12-01	{'year': 2021, 'month': 12, 'months': 12}
 2022-01-01	{'year': 2022, 'month': 1, 'months': 1}
+infinity	{'year': NULL, 'month': NULL, 'months': NULL}
 
 # Invalid parts
 statement error

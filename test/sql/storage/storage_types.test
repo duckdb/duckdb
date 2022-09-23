@@ -67,6 +67,7 @@ SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type} WHERE i=1
 1	1	1	1
 
 endloop
+
 query IIII
 SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval
 ----

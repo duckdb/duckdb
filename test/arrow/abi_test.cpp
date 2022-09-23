@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/function/table/arrow.hpp"
 #include <parquet/arrow/reader.h>
 #include "arrow/io/file.h"
 #include <arrow/type_traits.h>
@@ -88,7 +89,7 @@ TEST_CASE("Test random integers", "[arrow]") {
 				duckdb::vector<duckdb::Value> params;
 				params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 				params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
-				params.push_back(duckdb::Value::UBIGINT(1000000));
+				params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::GetSchema));
 				auto result = conn.TableFunction("arrow_scan", params)->Execute();
 				REQUIRE(result->ColumnCount() == 3);
 				int32_t expected_a = start_a, expected_b = start_b, expected_c = start_c;

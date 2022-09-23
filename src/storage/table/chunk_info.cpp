@@ -185,6 +185,7 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 		}
 		// after verifying that there are no conflicts we mark the tuple as deleted
 		deleted[rows[i]] = transaction_id;
+		rows[deleted_tuples] = rows[i];
 		deleted_tuples++;
 	}
 	return deleted_tuples;

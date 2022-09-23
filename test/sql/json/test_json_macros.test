@@ -1,0 +1,52 @@
+# name: test/sql/json/test_json_macros.test
+# description: Test JSON default macro's
+# group: [json]
+
+require json
+
+statement ok
+pragma enable_verification
+
+statement ok
+create table t1 as select range + 10 n, range v from range(10)
+
+query T
+select json_group_array(v) from t1
+----
+[0,1,2,3,4,5,6,7,8,9]
+
+query T
+select json_group_object(n, v) from t1
+----
+{"10":0,"11":1,"12":2,"13":3,"14":4,"15":5,"16":6,"17":7,"18":8,"19":9}
+
+query T
+select json_group_object(n, v) from t1 group by n % 2
+----
+{"10":0,"12":2,"14":4,"16":6,"18":8}
+{"11":1,"13":3,"15":5,"17":7,"19":9}
+
+statement ok
+insert into t1 values (0, NULL), (20, NULL), (21, NULL), (1, 10), (2, 11)
+
+query T
+select json_group_object(n, v) from t1 group by n % 2
+----
+{"10":0,"12":2,"14":4,"16":6,"18":8,"0":null,"20":null,"2":11}
+{"11":1,"13":3,"15":5,"17":7,"19":9,"21":null,"1":10}
+
+statement ok
+create table t2 (j json)
+
+statement ok
+insert into t2 values ('{"a": 42}'), ('{"a": 42.42, "b": "duck"}')
+
+query T
+select json_group_structure(j) from t2
+----
+{"a":"DOUBLE","b":"VARCHAR"}
+
+query T
+select json(' { "this" : "is", "a": [ "test" ] }')
+----
+{"this":"is","a":["test"]}

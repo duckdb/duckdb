@@ -1,0 +1,102 @@
+# name: test/optimizer/statistics/statistics_numeric.test
+# description: Statistics propagation of numeric functions
+# group: [statistics]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (10);
+
+# abs with only positive values
+query I
+SELECT ABS(i) FROM integers ORDER BY i
+----
+1
+10
+
+query I
+SELECT STATS(ABS(i)) FROM integers LIMIT 1
+----
+<REGEX>:.*1.*10.*
+
+# verify that the call to abs gets removed by the optimizer out
+query II
+EXPLAIN SELECT ABS(i) FROM integers ORDER BY i;
+----
+logical_opt	<!REGEX>:.*abs.*
+
+
+# mix of positive and negative values
+statement ok
+INSERT INTO integers VALUES (-5)
+
+query I
+SELECT STATS(ABS(i)) FROM integers LIMIT 1
+----
+<REGEX>:.*0.*10.*
+
+query I
+SELECT ABS(i) FROM integers ORDER BY i
+----
+5
+1
+10
+
+# the call to abs can no longer be removed
+query II
+EXPLAIN SELECT ABS(i) FROM integers ORDER BY i;
+----
+logical_opt	<REGEX>:.*abs.*
+
+
+statement ok
+INSERT INTO integers VALUES (-15)
+
+query I
+SELECT STATS(ABS(i)) FROM integers LIMIT 1
+----
+<REGEX>:.*0.*15.*
+
+query I
+SELECT ABS(i) FROM integers ORDER BY i
+----
+15
+5
+1
+10
+
+statement ok
+INSERT INTO integers VALUES (0)
+
+query I
+SELECT STATS(ABS(i)) FROM integers LIMIT 1
+----
+<REGEX>:.*0.*15.*
+
+query I
+SELECT ABS(i) FROM integers ORDER BY i
+----
+15
+5
+0
+1
+10
+
+# only negative values
+statement ok
+DROP TABLE integers
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (-1), (-10);
+
+query I
+SELECT STATS(ABS(i)) FROM integers LIMIT 1
+----
+<REGEX>:.*1.*10.*

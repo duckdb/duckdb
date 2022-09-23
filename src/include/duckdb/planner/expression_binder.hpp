@@ -23,11 +23,11 @@ class QueryNode;
 
 class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
-class MacroCatalogEntry;
+class ScalarMacroCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
 
-struct MacroBinding;
+struct DummyBinding;
 
 struct BoundColumnReferenceInfo {
 	string name;
@@ -59,6 +59,9 @@ public:
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
 
+	DummyBinding *macro_binding;
+	vector<DummyBinding> *lambda_bindings = nullptr;
+
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
 	                            bool root_expression = true);
@@ -74,6 +77,7 @@ public:
 	string Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
 
 	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, string field_name);
+	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &colref);
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
 	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, string &error_message);
@@ -97,13 +101,12 @@ public:
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
 
-	static void ResolveParameterType(LogicalType &type);
-	static void ResolveParameterType(unique_ptr<Expression> &expr);
-
 	//! Bind the given expresion. Unlike Bind(), this does *not* mute the given ParsedExpression.
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
+
+	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 
 protected:
 	BindResult BindExpression(BetweenExpression &expr, idx_t depth);
@@ -115,22 +118,27 @@ protected:
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
 	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
-	BindResult BindExpression(LambdaExpression &expr, idx_t depth);
+	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const bool is_lambda,
+	                          const LogicalType &list_child_type);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(PositionalReferenceExpression &ref, idx_t depth);
-	BindResult BindExpression(StarExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
+
+	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
+	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
+	                                   string &alias);
+	void CaptureLambdaColumns(vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
+	                          unique_ptr<Expression> &expr, string &alias);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
+	virtual BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
-	virtual BindResult BindMacro(FunctionExpression &expr, MacroCatalogEntry *macro, idx_t depth,
+	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry *macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> *expr_ptr);
-
-	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();
@@ -138,7 +146,6 @@ protected:
 	Binder &binder;
 	ClientContext &context;
 	ExpressionBinder *stored_binder;
-	MacroBinding *macro_binding;
 	vector<BoundColumnReferenceInfo> bound_columns;
 };
 

@@ -10,7 +10,7 @@ namespace duckdb {
 InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string schema_name, string table_name)
     : Relation(child_p->context, RelationType::INSERT_RELATION), child(move(child_p)), schema_name(move(schema_name)),
       table_name(move(table_name)) {
-	context.TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 BoundStatement InsertRelation::Bind(Binder &binder) {

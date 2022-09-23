@@ -21,6 +21,9 @@ public:
 	string name;
 	vector<unique_ptr<ParsedExpression>> values;
 
+protected:
+	ExecuteStatement(const ExecuteStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };

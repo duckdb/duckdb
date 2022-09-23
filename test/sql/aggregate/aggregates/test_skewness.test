@@ -31,10 +31,9 @@ select skewness (10) from range (5) where 1 == 0
 ----
 NULL
 
-query I
+# out of range
+statement error
 select skewness(i) from (values (-2e307), (0), (2e307)) tbl(i)
-----
-NULL
 
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));

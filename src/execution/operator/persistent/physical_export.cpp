@@ -1,10 +1,12 @@
 #include "duckdb/execution/operator/persistent/physical_export.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/transaction/transaction.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -15,6 +17,9 @@ using std::stringstream;
 
 static void WriteCatalogEntries(stringstream &ss, vector<CatalogEntry *> &entries) {
 	for (auto &entry : entries) {
+		if (entry->internal) {
+			continue;
+		}
 		ss << entry->ToSQL() << std::endl;
 	}
 	ss << std::endl;
@@ -107,20 +112,18 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	vector<CatalogEntry *> tables;
 	vector<CatalogEntry *> views;
 	vector<CatalogEntry *> indexes;
+	vector<CatalogEntry *> macros;
 
-	Catalog::GetCatalog(ccontext).schemas->Scan(context.client, [&](CatalogEntry *entry) {
-		auto schema = (SchemaCatalogEntry *)entry;
+	auto schema_list = Catalog::GetCatalog(ccontext).schemas->GetEntries<SchemaCatalogEntry>(context.client);
+	for (auto &schema : schema_list) {
 		if (!schema->internal) {
-			// export schema
 			schemas.push_back(schema);
 		}
 		schema->Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->internal) {
 				return;
 			}
-			if (entry->type == CatalogType::TABLE_ENTRY) {
-				tables.push_back(entry);
-			} else {
+			if (entry->type != CatalogType::TABLE_ENTRY) {
 				views.push_back(entry);
 			}
 		});
@@ -129,7 +132,26 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		schema->Scan(context.client, CatalogType::TYPE_ENTRY,
 		             [&](CatalogEntry *entry) { custom_types.push_back(entry); });
 		schema->Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { indexes.push_back(entry); });
-	});
+		schema->Scan(context.client, CatalogType::MACRO_ENTRY, [&](CatalogEntry *entry) {
+			if (!entry->internal && entry->type == CatalogType::MACRO_ENTRY) {
+				macros.push_back(entry);
+			}
+		});
+		schema->Scan(context.client, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry *entry) {
+			if (!entry->internal && entry->type == CatalogType::TABLE_MACRO_ENTRY) {
+				macros.push_back(entry);
+			}
+		});
+	}
+
+	// consider the order of tables because of foreign key constraint
+	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
+		tables.push_back((CatalogEntry *)exported_tables.data[i].entry);
+	}
+
+	// order macro's by timestamp so nested macro's are imported nicely
+	sort(macros.begin(), macros.end(),
+	     [](const CatalogEntry *lhs, const CatalogEntry *rhs) { return lhs->oid < rhs->oid; });
 
 	// write the schema.sql file
 	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX
@@ -141,15 +163,16 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	WriteCatalogEntries(ss, tables);
 	WriteCatalogEntries(ss, views);
 	WriteCatalogEntries(ss, indexes);
+	WriteCatalogEntries(ss, macros);
 
 	WriteStringStreamToFile(fs, opener, ss, fs.JoinPath(info->file_path, "schema.sql"));
 
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
-	for (auto const &kv : exported_tables.data) {
-		auto table = kv.first;
-		auto exported_table_info = kv.second;
+	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
+		auto &table = exported_tables.data[i].entry;
+		auto exported_table_info = exported_tables.data[i].table_data;
 		WriteCopyStatement(fs, load_ss, table, *info, exported_table_info, function);
 	}
 	WriteStringStreamToFile(fs, opener, load_ss, fs.JoinPath(info->file_path, "load.sql"));
@@ -163,6 +186,23 @@ SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &
                                     DataChunk &input) const {
 	// nop
 	return SinkResultType::NEED_MORE_INPUT;
+}
+
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
+void PhysicalExport::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+	// EXPORT has an optional child
+	// we only need to schedule child pipelines if there is a child
+	state.SetPipelineSource(current, this);
+	if (children.empty()) {
+		return;
+	}
+	PhysicalOperator::BuildPipelines(executor, current, state);
+}
+
+vector<const PhysicalOperator *> PhysicalExport::GetSources() const {
+	return {this};
 }
 
 } // namespace duckdb

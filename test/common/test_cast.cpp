@@ -6,8 +6,29 @@
 #include "duckdb/common/types/vector.hpp"
 #include <vector>
 
-using namespace duckdb;
-using namespace std;
+using namespace duckdb; // NOLINT
+using namespace std;    // NOLINT
+
+template <class SRC, class DST>
+struct ExpectedNumericCast {
+	static inline DST Operation(SRC value) {
+		return (DST)value;
+	}
+};
+
+template <class DST>
+struct ExpectedNumericCast<double, DST> {
+	static inline DST Operation(double value) {
+		return (DST)nearbyint(value);
+	}
+};
+
+template <class DST>
+struct ExpectedNumericCast<float, DST> {
+	static inline DST Operation(float value) {
+		return (DST)nearbyintf(value);
+	}
+};
 
 template <class SRC, class DST>
 static void TestNumericCast(vector<SRC> &working_values, vector<SRC> &broken_values) {
@@ -15,7 +36,7 @@ static void TestNumericCast(vector<SRC> &working_values, vector<SRC> &broken_val
 	for (auto value : working_values) {
 		REQUIRE_NOTHROW(Cast::Operation<SRC, DST>(value) == (DST)value);
 		REQUIRE(TryCast::Operation<SRC, DST>(value, result));
-		REQUIRE(result == (DST)value);
+		REQUIRE(result == ExpectedNumericCast<SRC, DST>::Operation(value));
 	}
 	for (auto value : broken_values) {
 		REQUIRE_THROWS(Cast::Operation<SRC, DST>(value));
@@ -265,18 +286,12 @@ static void TestStringCastDouble(vector<string> &working_values, vector<DST> &ex
 
 TEST_CASE("Test casting to float", "[cast]") {
 	// string -> float
-	vector<string> working_values = {"1.3",
-	                                 "1.34514",
-	                                 "1e10",
-	                                 "1e-2",
-	                                 "-1e-1",
-	                                 "1.2e12.3",
-	                                 "1.1781237378938173987123987123981723981723981723987123",
-	                                 "1.123456789",
-	                                 "1."};
-	vector<float> expected_values = {
-	    1.3f,         1.34514f, 1e10f, 1e-2f, -1e-1f, 1.2e12f, 1.1781237378938173987123987123981723981723981723987123f,
-	    1.123456789f, 1.0f};
+	vector<string> working_values = {"1.3",         "1.34514", "1e10",
+	                                 "1e-2",        "-1e-1",   "1.1781237378938173987123987123981723981723981723987123",
+	                                 "1.123456789", "1."};
+	vector<float> expected_values = {1.3f,         1.34514f, 1e10f,
+	                                 1e-2f,        -1e-1f,   1.1781237378938173987123987123981723981723981723987123f,
+	                                 1.123456789f, 1.0f};
 	vector<string> broken_values = {
 	    "-",     "",        "aaa",
 	    "12aaa", "1e10e10", "1e",
@@ -287,14 +302,23 @@ TEST_CASE("Test casting to float", "[cast]") {
 
 TEST_CASE("Test casting to double", "[cast]") {
 	// string -> double
-	vector<string> working_values = {
-	    "1.3",         "+1.3",      "1.34514",      "1e10",
-	    "1e-2",        "-1e-1",     "1.2e12.3",     "1.1781237378938173987123987123981723981723981723987123",
-	    "1.123456789", "1.",        "-1.2",         "-1.2e1",
-	    " 1.2 ",       "  1.2e2  ", " \t 1.2e2 \t", "1.2e 2"};
+	vector<string> working_values = {"1.3",
+	                                 "+1.3",
+	                                 "1.34514",
+	                                 "1e10",
+	                                 "1e-2",
+	                                 "-1e-1",
+	                                 "1.1781237378938173987123987123981723981723981723987123",
+	                                 "1.123456789",
+	                                 "1.",
+	                                 "-1.2",
+	                                 "-1.2e1",
+	                                 " 1.2 ",
+	                                 "  1.2e2  ",
+	                                 " \t 1.2e2 \t"};
 	vector<double> expected_values = {
-	    1.3,         1.3, 1.34514, 1e10, 1e-2, -1e-1, 1.2e12, 1.1781237378938173987123987123981723981723981723987123,
-	    1.123456789, 1.0, -1.2,    -12,  1.2,  120,   120,    120};
+	    1.3,         1.3, 1.34514, 1e10, 1e-2, -1e-1, 1.1781237378938173987123987123981723981723981723987123,
+	    1.123456789, 1.0, -1.2,    -12,  1.2,  120,   120};
 	vector<string> broken_values = {
 	    "-",     "",        "aaa",
 	    "12aaa", "1e10e10", "1e",

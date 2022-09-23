@@ -10,6 +10,10 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -32,9 +36,13 @@ class FileMetaData;
 namespace duckdb {
 class Allocator;
 class ClientContext;
-class ChunkCollection;
 class BaseStatistics;
 class TableFilterSet;
+
+struct ParquetReaderPrefetchConfig {
+	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
+	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
+};
 
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
@@ -51,6 +59,9 @@ struct ParquetReaderScanState {
 
 	ResizeableBuffer define_buf;
 	ResizeableBuffer repeat_buf;
+
+	bool prefetch_mode = false;
+	bool current_group_prefetched = false;
 };
 
 struct ParquetOptions {
@@ -59,6 +70,12 @@ struct ParquetOptions {
 	explicit ParquetOptions(ClientContext &context);
 
 	bool binary_as_string = false;
+	bool filename = false;
+	bool hive_partitioning = false;
+
+public:
+	void Serialize(FieldWriter &writer) const;
+	void Deserialize(FieldReader &reader);
 };
 
 class ParquetReader {
@@ -69,10 +86,17 @@ public:
 	    : ParquetReader(allocator, move(file_handle_p), vector<LogicalType>(), string()) {
 	}
 
-	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
+	ParquetReader(ClientContext &context, string file_name, const vector<string> &names,
+	              const vector<LogicalType> &expected_types_p, const vector<column_t> &column_ids,
 	              ParquetOptions parquet_options, const string &initial_filename = string());
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options)
-	    : ParquetReader(context, move(file_name), vector<LogicalType>(), parquet_options, string()) {
+	    : ParquetReader(context, move(file_name), vector<string>(), vector<LogicalType>(), vector<column_t>(),
+	                    parquet_options, string()) {
+	}
+	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
+	              ParquetOptions parquet_options)
+	    : ParquetReader(context, move(file_name), vector<string>(), expected_types_p, vector<column_t>(),
+	                    parquet_options, string()) {
 	}
 	~ParquetReader();
 
@@ -99,7 +123,8 @@ public:
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string);
 
 private:
-	void InitializeSchema(const vector<LogicalType> &expected_types_p, const string &initial_filename_p);
+	void InitializeSchema(const vector<string> &names, const vector<LogicalType> &expected_types_p,
+	                      const vector<column_t> &column_ids, const string &initial_filename_p);
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
 	unique_ptr<ColumnReader> CreateReader(const duckdb_parquet::format::FileMetaData *file_meta_data);
 
@@ -107,6 +132,10 @@ private:
 	                                               idx_t depth, idx_t max_define, idx_t max_repeat,
 	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
+	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
+	idx_t GetGroupOffset(ParquetReaderScanState &state);
+	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size
+	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
 
@@ -118,6 +147,12 @@ private:
 
 private:
 	unique_ptr<FileHandle> file_handle;
+	//! column-id map, used when reading multiple parquet files since separate parquet files might have columns at
+	//! different positions e.g. the first file might have column "a" at position 0, the second at position 1, etc
+	vector<column_t> column_id_map;
+	//! Map of column_id -> cast, used when reading multiple parquet files when parquet files have diverging types
+	//! for the same column
+	unordered_map<column_t, LogicalType> cast_map;
 };
 
 } // namespace duckdb

@@ -2,6 +2,9 @@
 # description: Test case insensitive CTE
 # group: [catalog]
 
+statement ok
+PRAGMA enable_verification
+
 query I
 with cte AS (SELECT 42 "A")
 select a from cte

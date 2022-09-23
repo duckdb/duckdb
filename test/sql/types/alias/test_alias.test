@@ -1,0 +1,40 @@
+# name: test/sql/types/alias/test_alias.test
+# description: ALIAS tests
+# group: [alias]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+#Enums with the same name shouldn't work
+statement error
+CREATE TYPE alias AS INTEGER;
+
+# Delete ALIASs
+statement ok
+DROP TYPE alias;
+
+#This won't work because alias was already deleted
+statement error
+DROP TYPE alias;
+
+# We can create alias again
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+#This will drop alias
+statement ok
+DROP TYPE IF EXISTS alias;
+
+#Nothing to drop but won't break
+statement ok
+DROP TYPE IF EXISTS alias;
+
+# We can create alias again
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+DROP TYPE IF EXISTS alias;

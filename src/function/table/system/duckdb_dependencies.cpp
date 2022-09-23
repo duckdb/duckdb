@@ -13,7 +13,7 @@ struct DependencyInformation {
 	DependencyType type;
 };
 
-struct DuckDBDependenciesData : public FunctionOperatorData {
+struct DuckDBDependenciesData : public GlobalTableFunctionState {
 	DuckDBDependenciesData() : offset(0) {
 	}
 
@@ -21,10 +21,7 @@ struct DuckDBDependenciesData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> DuckDBDependenciesBind(ClientContext &context, vector<Value> &inputs,
-                                                       named_parameter_map_t &named_parameters,
-                                                       vector<LogicalType> &input_table_types,
-                                                       vector<string> &input_table_names,
+static unique_ptr<FunctionData> DuckDBDependenciesBind(ClientContext &context, TableFunctionBindInput &input,
                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("classid");
 	return_types.emplace_back(LogicalType::BIGINT);
@@ -50,9 +47,7 @@ static unique_ptr<FunctionData> DuckDBDependenciesBind(ClientContext &context, v
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBDependenciesInit(ClientContext &context, const FunctionData *bind_data,
-                                                        const vector<column_t> &column_ids,
-                                                        TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBDependenciesData>();
 
 	// scan all the schemas and collect them
@@ -69,9 +64,8 @@ unique_ptr<FunctionOperatorData> DuckDBDependenciesInit(ClientContext &context, 
 	return move(result);
 }
 
-void DuckDBDependenciesFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (DuckDBDependenciesData &)*operator_state;
+void DuckDBDependenciesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBDependenciesData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

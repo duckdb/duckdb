@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -14,28 +15,30 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class UpdateGlobalState : public GlobalSinkState {
 public:
-	UpdateGlobalState() : updated_count(0) {
+	explicit UpdateGlobalState(ClientContext &context, const vector<LogicalType> &return_types)
+	    : updated_count(0), return_collection(context, return_types) {
 	}
 
 	mutex lock;
 	idx_t updated_count;
 	unordered_set<row_t> updated_columns;
+	ColumnDataCollection return_collection;
 };
 
 class UpdateLocalState : public LocalSinkState {
 public:
-	UpdateLocalState(const vector<unique_ptr<Expression>> &expressions, const vector<LogicalType> &table_types,
-	                 const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(bound_defaults) {
+	UpdateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &expressions,
+	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults)
+	    : default_executor(allocator, bound_defaults) {
 		// initialize the update chunk
 		vector<LogicalType> update_types;
 		update_types.reserve(expressions.size());
 		for (auto &expr : expressions) {
 			update_types.push_back(expr->return_type);
 		}
-		update_chunk.Initialize(update_types);
+		update_chunk.Initialize(allocator, update_types);
 		// initialize the mock chunk
-		mock_chunk.Initialize(table_types);
+		mock_chunk.Initialize(allocator, table_types);
 	}
 
 	DataChunk update_chunk;
@@ -51,7 +54,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 	DataChunk &update_chunk = ustate.update_chunk;
 	DataChunk &mock_chunk = ustate.mock_chunk;
 
-	chunk.Normalify();
+	chunk.Flatten();
 	ustate.default_executor.SetChunk(chunk);
 
 	// update data in the base table
@@ -99,18 +102,30 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 		}
 		table.Append(tableref, context.client, mock_chunk);
 	} else {
+		if (return_chunk) {
+			mock_chunk.SetCardinality(update_chunk);
+			for (idx_t i = 0; i < columns.size(); i++) {
+				mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
+			}
+		}
 		table.Update(tableref, context.client, row_ids, columns, update_chunk);
 	}
+
+	if (return_chunk) {
+		gstate.return_collection.Append(mock_chunk);
+	}
+
 	gstate.updated_count += chunk.size();
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<UpdateGlobalState>();
+	return make_unique<UpdateGlobalState>(context, GetTypes());
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<UpdateLocalState>(expressions, table.GetTypes(), bound_defaults);
+	return make_unique<UpdateLocalState>(Allocator::Get(context.client), expressions, table.GetTypes(), bound_defaults);
 }
 
 void PhysicalUpdate::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
@@ -125,14 +140,20 @@ void PhysicalUpdate::Combine(ExecutionContext &context, GlobalSinkState &gstate,
 //===--------------------------------------------------------------------===//
 class UpdateSourceState : public GlobalSourceState {
 public:
-	UpdateSourceState() : finished(false) {
+	explicit UpdateSourceState(const PhysicalUpdate &op) : finished(false) {
+		if (op.return_chunk) {
+			D_ASSERT(op.sink_state);
+			auto &g = (UpdateGlobalState &)*op.sink_state;
+			g.return_collection.InitializeScan(scan_state);
+		}
 	}
 
+	ColumnDataScanState scan_state;
 	bool finished;
 };
 
 unique_ptr<GlobalSourceState> PhysicalUpdate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<UpdateSourceState>();
+	return make_unique<UpdateSourceState>(*this);
 }
 
 void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
@@ -142,10 +163,14 @@ void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	if (state.finished) {
 		return;
 	}
+	if (!return_chunk) {
+		chunk.SetCardinality(1);
+		chunk.SetValue(0, 0, Value::BIGINT(g.updated_count));
+		state.finished = true;
+		return;
+	}
 
-	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(g.updated_count));
-	state.finished = true;
+	g.return_collection.Scan(state.scan_state, chunk);
 }
 
 } // namespace duckdb

@@ -7,6 +7,10 @@
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_binder/returning_binder.hpp"
 
 namespace duckdb {
 
@@ -30,11 +34,15 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	D_ASSERT(table);
 	if (!table->temporary) {
 		// inserting into a non-temporary table: alters underlying database
-		this->read_only = false;
+		properties.read_only = false;
 	}
 
 	auto insert = make_unique<LogicalInsert>(table);
 
+	// Add CTEs as bindable
+	AddCTEMap(stmt.cte_map);
+
+	idx_t generated_column_count = 0;
 	vector<idx_t> named_column_map;
 	if (!stmt.columns.empty()) {
 		// insertion statement specifies column list
@@ -47,15 +55,22 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			if (entry == table->name_map.end()) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i], table->name);
 			}
-			if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
+			auto column_index = entry->second;
+			if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}
-			insert->expected_types.push_back(table->columns[entry->second].type);
-			named_column_map.push_back(entry->second);
+			if (table->columns[column_index].Generated()) {
+				throw BinderException("Cannot insert into a generated column");
+			}
+			insert->expected_types.push_back(table->columns[column_index].Type());
+			named_column_map.push_back(column_index);
 		}
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			auto &col = table->columns[i];
-			auto entry = column_name_map.find(col.name);
+			if (col.Generated()) {
+				generated_column_count++;
+			}
+			auto entry = column_name_map.find(col.Name());
 			if (entry == column_name_map.end()) {
 				// column not specified, set index to DConstants::INVALID_INDEX
 				insert->column_index_map.push_back(DConstants::INVALID_INDEX);
@@ -66,7 +81,13 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		}
 	} else {
 		for (idx_t i = 0; i < table->columns.size(); i++) {
-			insert->expected_types.push_back(table->columns[i].type);
+			auto &col = table->columns[i];
+			if (col.Generated()) {
+				generated_column_count++;
+				continue;
+			}
+			named_column_map.push_back(i);
+			insert->expected_types.push_back(table->columns[i].Type());
 		}
 	}
 
@@ -77,56 +98,74 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		return result;
 	}
 
-	idx_t expected_columns = stmt.columns.empty() ? table->columns.size() : stmt.columns.size();
+	// Exclude the generated columns from this amount
+	idx_t expected_columns =
+	    stmt.columns.empty() ? (table->columns.size() - generated_column_count) : stmt.columns.size();
+
 	// special case: check if we are inserting from a VALUES statement
-	if (stmt.select_statement->node->type == QueryNodeType::SELECT_NODE) {
-		auto &node = (SelectNode &)*stmt.select_statement->node;
-		if (node.from_table->type == TableReferenceType::EXPRESSION_LIST) {
-			auto &expr_list = (ExpressionListRef &)*node.from_table;
-			expr_list.expected_types.resize(expected_columns);
-			expr_list.expected_names.resize(expected_columns);
+	auto values_list = stmt.GetValuesList();
+	if (values_list) {
+		auto &expr_list = (ExpressionListRef &)*values_list;
+		expr_list.expected_types.resize(expected_columns);
+		expr_list.expected_names.resize(expected_columns);
 
-			D_ASSERT(expr_list.values.size() > 0);
-			CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
-			                               table->name.c_str());
+		D_ASSERT(expr_list.values.size() > 0);
+		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
+		                               table->name.c_str());
 
-			// VALUES list!
-			for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
-				idx_t table_col_idx = stmt.columns.empty() ? col_idx : named_column_map[col_idx];
-				D_ASSERT(table_col_idx < table->columns.size());
+		// VALUES list!
+		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
+			idx_t table_col_idx = named_column_map[col_idx];
+			D_ASSERT(table_col_idx < table->columns.size());
 
-				// set the expected types as the types for the INSERT statement
-				auto &column = table->columns[table_col_idx];
-				expr_list.expected_types[col_idx] = column.type;
-				expr_list.expected_names[col_idx] = column.name;
+			// set the expected types as the types for the INSERT statement
+			auto &column = table->columns[table_col_idx];
+			expr_list.expected_types[col_idx] = column.Type();
+			expr_list.expected_names[col_idx] = column.Name();
 
-				// now replace any DEFAULT values with the corresponding default expression
-				for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
-					if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
-						// DEFAULT value! replace the entry
-						if (column.default_value) {
-							expr_list.values[list_idx][col_idx] = column.default_value->Copy();
-						} else {
-							expr_list.values[list_idx][col_idx] = make_unique<ConstantExpression>(Value(column.type));
-						}
+			// now replace any DEFAULT values with the corresponding default expression
+			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
+				if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
+					// DEFAULT value! replace the entry
+					if (column.DefaultValue()) {
+						expr_list.values[list_idx][col_idx] = column.DefaultValue()->Copy();
+					} else {
+						expr_list.values[list_idx][col_idx] = make_unique<ConstantExpression>(Value(column.Type()));
 					}
 				}
 			}
 		}
 	}
 
-	// insert from select statement
 	// parse select statement and add to logical plan
-	auto root_select = Bind(*stmt.select_statement);
+	auto select_binder = Binder::CreateBinder(context, this);
+	auto root_select = select_binder->Bind(*stmt.select_statement);
+	MoveCorrelatedExpressions(*select_binder);
+
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
+
 	insert->AddChild(move(root));
 
-	result.plan = move(insert);
-	this->allow_stream_result = false;
-	return result;
+	if (!stmt.returning_list.empty()) {
+		insert->return_chunk = true;
+		result.types.clear();
+		result.names.clear();
+		auto insert_table_index = GenerateTableIndex();
+		insert->table_index = insert_table_index;
+		unique_ptr<LogicalOperator> index_as_logicaloperator = move(insert);
+
+		return BindReturning(move(stmt.returning_list), table, insert_table_index, move(index_as_logicaloperator),
+		                     move(result));
+	} else {
+		D_ASSERT(result.types.size() == result.names.size());
+		result.plan = move(insert);
+		properties.allow_stream_result = false;
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
+		return result;
+	}
 }
 
 } // namespace duckdb

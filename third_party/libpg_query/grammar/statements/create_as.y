@@ -34,6 +34,19 @@ CreateAsStmt:
 					$7->skipData = !($10);
 					$$ = (PGNode *) ctas;
 				}
+		| CREATE_P OR REPLACE OptTemp TABLE create_as_target AS SelectStmt opt_with_data
+				{
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
+					ctas->query = $8;
+					ctas->into = $6;
+					ctas->relkind = PG_OBJECT_TABLE;
+					ctas->is_select_into = false;
+					ctas->onconflict = PG_REPLACE_ON_CONFLICT;
+					/* cram additional flags into the PGIntoClause */
+					$6->rel->relpersistence = $4;
+					$6->skipData = !($9);
+					$$ = (PGNode *) ctas;
+				}
 		;
 
 

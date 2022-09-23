@@ -1,0 +1,49 @@
+# name: test/sql/function/list/aggregates/bit_and.test
+# description: Test the list_bit_and aggregate function
+# group: [aggregates]
+
+require skip_reload
+
+
+# bit_and on a sequence
+statement ok
+CREATE SEQUENCE seq;
+
+query I
+SELECT list_bit_and([nextval('seq')])
+----
+1
+
+query I
+SELECT list_bit_and([nextval('seq')])
+----
+2
+
+# list of integers
+statement ok
+CREATE TABLE integers(i INTEGER[]);
+
+statement ok
+INSERT INTO integers VALUES ([3, 7, 15, 31, 3, 15]);
+
+# empty list
+query I
+SELECT list_bit_and([]) FROM integers
+----
+NULL
+
+statement ok
+INSERT INTO integers VALUES ([]), (NULL), ([NULL]), ([3, 7, NULL, 15, 31, 3, 15, NULL]);
+
+query III
+SELECT list_bit_and(i), list_bit_and([1, 1, 1, 1, 1, 1]), list_bit_and(NULL) FROM integers
+----
+3	1	NULL
+NULL	1	NULL
+NULL	1	NULL
+NULL	1	NULL
+3	1	NULL
+
+# incorrect usage
+statement error
+SELECT list_bit_and()

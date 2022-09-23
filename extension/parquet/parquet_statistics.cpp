@@ -18,7 +18,7 @@ using duckdb_parquet::format::Type;
 static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
                                                      const duckdb_parquet::format::SchemaElement &schema_ele,
                                                      const duckdb_parquet::format::Statistics &parquet_stats) {
-	auto stats = make_unique<NumericStatistics>(type);
+	auto stats = make_unique<NumericStatistics>(type, StatisticsType::LOCAL_STATS);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
 	// `max_value`. All are optional. such elegance.
@@ -81,7 +81,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			throw InternalException("Incorrect stats size for type FLOAT");
 		}
 		auto val = Load<float>((data_ptr_t)stats.c_str());
-		if (!Value::FloatIsValid(val)) {
+		if (!Value::FloatIsFinite(val)) {
 			return Value();
 		}
 		return Value::FLOAT(val);
@@ -91,7 +91,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			throw InternalException("Incorrect stats size for type DOUBLE");
 		}
 		auto val = Load<double>((data_ptr_t)stats.c_str());
-		if (!Value::DoubleIsValid(val)) {
+		if (!Value::DoubleIsFinite(val)) {
 			return Value();
 		}
 		return Value::DOUBLE(val);
@@ -210,7 +210,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		row_group_stats = CreateNumericStats(type, s_ele, parquet_stats);
 		break;
 	case LogicalTypeId::VARCHAR: {
-		auto string_stats = make_unique<StringStatistics>(type);
+		auto string_stats = make_unique<StringStatistics>(type, StatisticsType::LOCAL_STATS);
 		if (parquet_stats.__isset.min) {
 			string_stats->Update(parquet_stats.min);
 		} else if (parquet_stats.__isset.min_value) {

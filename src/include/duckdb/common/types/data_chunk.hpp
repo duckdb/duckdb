@@ -11,12 +11,15 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"
-
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 
 struct ArrowArray;
 
 namespace duckdb {
+class Allocator;
+class ClientContext;
+class ExecutionContext;
 class VectorCache;
 
 //!  A Data Chunk represents a set of vectors.
@@ -67,6 +70,9 @@ public:
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	DUCKDB_API void SetValue(idx_t col_idx, idx_t index, const Value &val);
 
+	//! Returns true if all vectors in the DataChunk are constant
+	DUCKDB_API bool AllConstant() const;
+
 	//! Set the DataChunk to reference another data chunk
 	DUCKDB_API void Reference(DataChunk &chunk);
 	//! Set the DataChunk to own the data of data chunk, destroying the other chunk in the process
@@ -76,7 +82,8 @@ public:
 	//! This will create one vector of the specified type for each LogicalType in the
 	//! types list. The vector will be referencing vector to the data owned by
 	//! the DataChunk.
-	DUCKDB_API void Initialize(const vector<LogicalType> &types);
+	DUCKDB_API void Initialize(Allocator &allocator, const vector<LogicalType> &types);
+	DUCKDB_API void Initialize(ClientContext &context, const vector<LogicalType> &types);
 	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
 	DUCKDB_API void InitializeEmpty(const vector<LogicalType> &types);
 	//! Append the other DataChunk to this one. The column count and types of
@@ -96,12 +103,21 @@ public:
 	//! Splits the DataChunk in two
 	DUCKDB_API void Split(DataChunk &other, idx_t split_idx);
 
-	//! Turn all the vectors from the chunk into flat vectors
-	DUCKDB_API void Normalify();
+	//! Fuses a DataChunk onto the right of this one, and destroys the other. Inverse of Split.
+	DUCKDB_API void Fuse(DataChunk &other);
 
-	DUCKDB_API unique_ptr<VectorData[]> Orrify();
+	//! Makes this DataChunk reference the specified columns in the other DataChunk
+	DUCKDB_API void ReferenceColumns(DataChunk &other, vector<column_t> column_ids);
+
+	//! Turn all the vectors from the chunk into flat vectors
+	DUCKDB_API void Flatten();
+
+	DUCKDB_API unique_ptr<UnifiedVectorFormat[]> ToUnifiedFormat();
 
 	DUCKDB_API void Slice(const SelectionVector &sel_vector, idx_t count);
+
+	//! Slice all Vectors from other.data[i] to data[i + 'col_offset']
+	//! Turning all Vectors into Dictionary Vectors, using 'sel'
 	DUCKDB_API void Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
 
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
@@ -129,9 +145,6 @@ public:
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	DUCKDB_API void Verify();
-
-	//! export data chunk as a arrow struct array that can be imported as arrow record batch
-	DUCKDB_API void ToArrowArray(ArrowArray *out_array);
 
 private:
 	//! The amount of tuples stored in the data chunk

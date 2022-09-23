@@ -145,8 +145,6 @@ scripts/PelotonTest/lib
 #==============================================================================#
 *.pb-c.c
 *.pb-c.h
-*.pb.cc
-*.pb.h
 *.pb.go
 
 #==============================================================================#
@@ -239,8 +237,6 @@ io_file
 *.lib
 
 # Compiled protocol buffers
-*.pb.h
-*.pb.cc
 *_pb2.py
 
 # Compiled python
@@ -343,3 +339,6 @@ __nvm
 zig-out/*
 zig-cache/*
 *.zig
+
+# .db files
+*.db

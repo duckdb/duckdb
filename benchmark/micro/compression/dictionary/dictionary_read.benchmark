@@ -1,0 +1,19 @@
+# name: benchmark/micro/compression/dictionary/dictionary_read.benchmark
+# description: Scanning strings at ~4.3x compression
+# group: [dictionary]
+
+name Dictionary Compression Scan
+group dictionary
+storage persistent
+
+load
+DROP TABLE IF EXISTS test;
+PRAGMA force_compression='dictionary';
+CREATE TABLE test AS SELECT (100 + (i%1000))::VARCHAR AS i FROM range(0, 200000000) tbl(i);
+checkpoint;
+
+run
+select avg(i::INT) from test;
+
+result I
+599.500000

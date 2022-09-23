@@ -1,90 +1,90 @@
 d_year|brand_id|brand|sum_agg
-1998|2001001|amalgimporto #1|608.15
-1998|5003001|exportischolar #1|501.72
-1998|3004001|edu packexporti #1|311.49
-1998|3001001|amalgexporti #1|285.91
-1998|1003001|exportiamalg #1|281.00
-1998|10010002|univamalgamalg #2|255.02
-1998|10001002|amalgunivamalg #2|237.25
-1998|5003002|exportischolar #2|229.36
-1998|3001002|amalgexporti #2|223.32
-1998|7007010|brandbrand #10|220.05
-1998|1004001|edu packamalg #1|181.61
-1998|1001002|amalgamalg #2|173.37
-1998|5004001|edu packscholar #1|168.17
-1998|5001001|amalgscholar #1|158.67
-1998|8001009|amalgnameless #9|127.80
-1998|7003009|exportibrand #9|121.94
-1998|7009008|maxibrand #8|87.66
-1998|6004008|edu packcorp #8|87.05
-1999|2001001|amalgimporto #1|505.45
-1999|10001002|amalgunivamalg #2|442.92
-1999|3004001|edu packexporti #1|388.63
-1999|7003009|exportibrand #9|373.11
-1999|10010002|univamalgamalg #2|369.99
-1999|5003001|exportischolar #1|353.86
-1999|3001001|amalgexporti #1|345.74
-1999|1003001|exportiamalg #1|340.12
-1999|1004001|edu packamalg #1|331.14
-1999|6004008|edu packcorp #8|257.04
-1999|7009008|maxibrand #8|239.50
-1999|1001002|amalgamalg #2|172.79
-1999|5004001|edu packscholar #1|137.79
-1999|5001001|amalgscholar #1|111.05
-1999|8001009|amalgnameless #9|110.55
-1999|3001002|amalgexporti #2|104.28
-1999|5003002|exportischolar #2|101.96
+1998|2001001|amalgimporto #1|608.28
+1998|5003001|exportischolar #1|501.83
+1998|3004001|edu packexporti #1|311.60
+1998|3001001|amalgexporti #1|285.97
+1998|1003001|exportiamalg #1|281.10
+1998|10010002|univamalgamalg #2|255.07
+1998|10001002|amalgunivamalg #2|237.29
+1998|5003002|exportischolar #2|229.43
+1998|3001002|amalgexporti #2|223.34
+1998|7007010|brandbrand #10|220.10
+1998|1004001|edu packamalg #1|181.65
+1998|1001002|amalgamalg #2|173.43
+1998|5004001|edu packscholar #1|168.21
+1998|5001001|amalgscholar #1|158.76
+1998|8001009|amalgnameless #9|127.85
+1998|7003009|exportibrand #9|121.95
+1998|7009008|maxibrand #8|87.68
+1998|6004008|edu packcorp #8|87.08
+1999|2001001|amalgimporto #1|505.58
+1999|10001002|amalgunivamalg #2|443.01
+1999|3004001|edu packexporti #1|388.74
+1999|7003009|exportibrand #9|373.21
+1999|10010002|univamalgamalg #2|370.05
+1999|5003001|exportischolar #1|353.96
+1999|3001001|amalgexporti #1|345.77
+1999|1003001|exportiamalg #1|340.22
+1999|1004001|edu packamalg #1|331.20
+1999|6004008|edu packcorp #8|257.13
+1999|7009008|maxibrand #8|239.56
+1999|1001002|amalgamalg #2|172.87
+1999|5004001|edu packscholar #1|137.85
+1999|5001001|amalgscholar #1|111.10
+1999|8001009|amalgnameless #9|110.56
+1999|3001002|amalgexporti #2|104.30
+1999|5003002|exportischolar #2|102.00
 1999|7007010|brandbrand #10|59.06
-2000|10008017|namelessunivamalg #17|358.30
-2000|5004001|edu packscholar #1|355.91
-2000|2001001|amalgimporto #1|336.50
-2000|3004001|edu packexporti #1|309.72
-2000|1003001|exportiamalg #1|274.78
-2000|3001002|amalgexporti #2|238.72
-2000|8001009|importoexporti #2|231.05
-2000|1001002|amalgamalg #2|230.15
-2000|5003001|amalgunivamalg #2|219.90
-2000|7009008|maxibrand #8|212.17
-2000|10001002|amalgunivamalg #2|199.90
-2000|7007010|brandbrand #10|176.29
-2000|7003009|exportibrand #9|138.28
-2000|6004008|edu packcorp #8|126.28
-2000|5003002|exportischolar #2|121.74
-2000|3001001|amalgexporti #1|83.52
-2000|1004001|edu packamalg #1|46.87
-2001|8001009|importoexporti #2|398.03
-2001|1001002|amalgamalg #2|381.23
-2001|3001002|amalgexporti #2|303.85
-2001|1003001|exportiamalg #2|275.46
-2001|7007010|brandbrand #10|270.47
-2001|5003001|amalgunivamalg #2|264.60
-2001|10008017|namelessunivamalg #17|245.21
-2001|5003002|exportischolar #2|216.28
-2001|7011010|amalgnameless #10|203.02
-2001|8004010|edu packnameless #10|181.88
-2001|5004001|edu packunivamalg #8|179.70
-2001|6005001|edu packimporto #2|160.04
-2001|1004001|exportiexporti #2|153.56
-2001|7009008|maxibrand #8|125.23
-2001|6004008|edu packcorp #8|95.14
-2001|2001001|exportischolar #2|70.97
-2001|4001001|scholaramalgamalg #15|66.32
+2000|10008017|namelessunivamalg #17|358.38
+2000|5004001|edu packscholar #1|355.99
+2000|2001001|amalgimporto #1|336.57
+2000|3004001|edu packexporti #1|309.77
+2000|1003001|exportiamalg #1|274.87
+2000|3001002|amalgexporti #2|238.77
+2000|8001009|importoexporti #2|231.10
+2000|1001002|amalgamalg #2|230.19
+2000|5003001|amalgunivamalg #2|219.94
+2000|7009008|maxibrand #8|212.23
+2000|10001002|amalgunivamalg #2|199.97
+2000|7007010|brandbrand #10|176.31
+2000|7003009|exportibrand #9|138.35
+2000|6004008|edu packcorp #8|126.29
+2000|5003002|exportischolar #2|121.79
+2000|3001001|amalgexporti #1|83.58
+2000|1004001|edu packamalg #1|46.90
+2001|8001009|importoexporti #2|398.10
+2001|1001002|amalgamalg #2|381.32
+2001|3001002|amalgexporti #2|303.90
+2001|1003001|exportiamalg #2|275.50
+2001|7007010|brandbrand #10|270.51
+2001|5003001|amalgunivamalg #2|264.64
+2001|10008017|namelessunivamalg #17|245.26
+2001|5003002|exportischolar #2|216.34
+2001|7011010|amalgnameless #10|203.08
+2001|8004010|edu packnameless #10|181.92
+2001|5004001|edu packunivamalg #8|179.75
+2001|6005001|edu packimporto #2|160.10
+2001|1004001|exportiexporti #2|153.61
+2001|7009008|maxibrand #8|125.25
+2001|6004008|edu packcorp #8|95.18
+2001|2001001|exportischolar #2|71.00
+2001|4001001|scholaramalgamalg #15|66.35
 2001|3001001|importoscholar #2|49.71
-2002|3001002|amalgexporti #2|525.74
-2002|1001002|amalgamalg #2|430.79
-2002|4001001|scholaramalgamalg #15|319.68
-2002|7007010|brandbrand #10|309.20
-2002|2001001|exportischolar #2|284.44
-2002|10013016|exportiamalgamalg #16|269.38
-2002|7011010|amalgnameless #10|247.91
-2002|10008017|amalgedu pack #1|241.63
-2002|1004001|exportiexporti #2|241.12
-2002|8004010|edu packnameless #10|240.43
-2002|6005001|edu packimporto #2|237.05
-2002|5004001|edu packunivamalg #8|204.13
-2002|7009008|maxibrand #8|157.86
-2002|5003002|exportischolar #2|156.95
-2002|1003001|exportiamalg #2|153.79
-2002|5001001|amalgscholar #1|145.48
-2002|3001001|importoscholar #2|143.66
-2002|6004008|edu packcorp #8|130.42
+2002|3001002|amalgexporti #2|525.81
+2002|1001002|amalgamalg #2|430.92
+2002|4001001|scholaramalgamalg #15|319.78
+2002|7007010|brandbrand #10|309.25
+2002|2001001|exportischolar #2|284.48
+2002|10013016|exportiamalgamalg #16|269.43
+2002|7011010|amalgnameless #10|247.94
+2002|10008017|amalgedu pack #1|241.69
+2002|1004001|exportiexporti #2|241.14
+2002|8004010|edu packnameless #10|240.51
+2002|6005001|edu packimporto #2|237.09
+2002|5004001|edu packunivamalg #8|204.17
+2002|7009008|maxibrand #8|157.95
+2002|5003002|exportischolar #2|156.98
+2002|1003001|exportiamalg #2|153.82
+2002|5001001|amalgscholar #1|145.52
+2002|3001001|importoscholar #2|143.70
+2002|6004008|edu packcorp #8|130.49

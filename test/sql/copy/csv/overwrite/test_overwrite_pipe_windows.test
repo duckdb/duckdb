@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/overwrite/test_overwrite_pipe_windows.test
+# description: Test overwrite to pipe on windows systems
+# group: [overwrite]
+
+require windows
+
+require notmingw
+
+# Write to pipe - should pass since .tmp is not added when writing to a pipe
+statement ok
+copy (select 42) to 'con:'

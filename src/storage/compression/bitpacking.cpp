@@ -1,4 +1,5 @@
-#include "bitpackinghelpers.h"
+#include "duckdb/common/bitpacking.hpp"
+
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
@@ -8,180 +9,20 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 #include <functional>
 
 namespace duckdb {
 
-using bitpacking_width_t = uint8_t;
-
 // Note that optimizations in scanning only work if this value is equal to STANDARD_VECTOR_SIZE, however we keep them
 // separated to prevent the code from break on lower vector sizes
-static constexpr const idx_t BITPACKING_WIDTH_GROUP_SIZE = 1024;
-
-class BitpackingPrimitives {
-public:
-	static constexpr const idx_t BITPACKING_ALGORITHM_GROUP_SIZE = 32;
-	static constexpr const idx_t BITPACKING_HEADER_SIZE = sizeof(uint64_t);
-	static constexpr const bool BYTE_ALIGNED = false;
-
-	// Packs a block of BITPACKING_ALGORITHM_GROUP_SIZE values
-	template <class T>
-	inline static void PackBlock(data_ptr_t dst, T *src, bitpacking_width_t width) {
-		return PackGroup<T>(dst, src, width);
-	}
-
-	// Unpacks a block of BITPACKING_ALGORITHM_GROUP_SIZE values
-	template <class T>
-	inline static void UnPackBlock(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
-	                               bool skip_sign_extension = false) {
-		return UnPackGroup<T>(dst, src, width, skip_sign_extension);
-	}
-
-	// Calculates the minimum required number of bits per value that can store all values
-	template <class T>
-	inline static bitpacking_width_t MinimumBitWidth(T *values, idx_t count) {
-		return FindMinimumBitWidth<T, BYTE_ALIGNED>(values, count);
-	}
-
-private:
-	template <class T>
-	static bitpacking_width_t MinimumBitWidth(T min_value, T max_value) {
-		bitpacking_width_t required_bits;
-
-		if (std::is_signed<T>::value) {
-			if (min_value == NumericLimits<T>::Minimum()) {
-				// handle special case of the minimal value, as it cannot be negated like all other values.
-				return sizeof(T) * 8;
-			} else {
-				max_value = MaxValue((T)-min_value, max_value);
-			}
-		}
-
-		if (max_value == 0) {
-			return 0;
-		}
-
-		if (std::is_signed<T>::value) {
-			required_bits = 1;
-		} else {
-			required_bits = 0;
-		}
-
-		while (max_value) {
-			required_bits++;
-			max_value >>= 1;
-		}
-
-		return GetEffectiveWidth<T>(required_bits);
-	}
-
-	template <class T, bool round_to_next_byte = false>
-	static bitpacking_width_t FindMinimumBitWidth(T *values, idx_t count) {
-		T min_value = values[0];
-		T max_value = values[0];
-
-		for (idx_t i = 1; i < count; i++) {
-			if (values[i] > max_value) {
-				max_value = values[i];
-			}
-
-			if (std::is_signed<T>::value) {
-				if (values[i] < min_value) {
-					min_value = values[i];
-				}
-			}
-		}
-
-		bitpacking_width_t calc_width = MinimumBitWidth<T>(std::is_signed<T>::value ? min_value : 0, max_value);
-
-		// Assert results are correct
-#ifdef DEBUG
-		if (calc_width < sizeof(T) * 8 && calc_width != 0) {
-			if (std::is_signed<T>::value) {
-				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (calc_width - 1)) - 1);
-				D_ASSERT((int64_t)min_value >= (int64_t)(-1 * ((1L << (calc_width - 1)) - 1) - 1));
-			} else {
-				D_ASSERT((uint64_t)max_value <= (uint64_t)(1L << (calc_width)) - 1);
-			}
-		}
-#endif
-		if (round_to_next_byte) {
-			return (calc_width / 8 + (calc_width % 8 != 0)) * 8;
-		} else {
-			return calc_width;
-		}
-	}
-
-	template <class T>
-	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
-	                        bool skip_sign_extension = false) {
-		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
-			duckdb_fastpforlib::fastunpack((const uint8_t *)src, (uint8_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
-			duckdb_fastpforlib::fastunpack((const uint16_t *)src, (uint16_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
-			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint32_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
-			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint64_t *)dst, (uint32_t)width);
-		} else {
-			throw InternalException("Unsupported type found in bitpacking.");
-		}
-
-		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
-			SignExtend<T>(dst, width);
-		}
-	}
-
-	// Prevent compression at widths that are ineffective
-	template <class T>
-	static bitpacking_width_t GetEffectiveWidth(bitpacking_width_t width) {
-		if (width > 56) {
-			return 64;
-		}
-
-		if (width > 28 && (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value)) {
-			return 32;
-		}
-
-		else if (width > 14 && (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value)) {
-			return 16;
-		}
-
-		return width;
-	}
-
-	// Sign bit extension
-	template <class T, class T_U = typename std::make_unsigned<T>::type>
-	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
-		T const mask = ((T_U)1) << (width - 1);
-		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
-			T value = Load<T>(dst + i * sizeof(T));
-			value = value & ((((T_U)1) << width) - ((T_U)1));
-			T result = (value ^ mask) - mask;
-			Store(result, dst + i * sizeof(T));
-		}
-	}
-
-	template <class T>
-	static void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
-		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint8_t *)values, (uint8_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint16_t *)values, (uint16_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint32_t *)values, (uint32_t *)dst, (uint32_t)width);
-		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
-		} else {
-			throw InternalException("Unsupported type found in bitpacking.");
-		}
-	}
-};
+static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = 1024;
 
 struct EmptyBitpackingWriter {
 	template <class T>
-	static void Operation(T *values, bool *validity, bitpacking_width_t width, idx_t count, void *data_ptr) {
+	static void Operation(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count,
+	                      void *data_ptr) {
 	}
 };
 
@@ -189,39 +30,95 @@ template <class T>
 struct BitpackingState {
 public:
 	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
+		ResetMinMax();
 	}
 
-	T compression_buffer[BITPACKING_WIDTH_GROUP_SIZE];
-	bool compression_buffer_validity[BITPACKING_WIDTH_GROUP_SIZE];
+	T compression_buffer[BITPACKING_METADATA_GROUP_SIZE];
+	bool compression_buffer_validity[BITPACKING_METADATA_GROUP_SIZE];
 	idx_t compression_buffer_idx;
 	idx_t total_size;
 	void *data_ptr;
 
+	bool min_max_set;
+	T minimum;
+	T maximum;
+
 public:
-	template <class OP>
+	void SubtractFrameOfReference(const T &frame_of_reference) {
+		for (idx_t i = 0; i < compression_buffer_idx; i++) {
+			compression_buffer[i] -= frame_of_reference;
+		}
+	}
+
+	void ResetMinMax() {
+		min_max_set = false;
+		//! We set these to 0, in case all values are NULL, in which case the min and max will never be set.
+		minimum = 0;
+		maximum = 0;
+	}
+
+	bool TryUpdateMinMax(T value) {
+		bool updated = false;
+		if (!min_max_set || value < minimum) {
+			minimum = value;
+			updated = true;
+		}
+		if (!min_max_set || value > maximum) {
+			maximum = value;
+			updated = true;
+		}
+		min_max_set = min_max_set || updated;
+		//! Only when either of the values are updated, do we need to test the overflow
+		if (updated) {
+			T ignore;
+			return TrySubtractOperator::Operation(maximum, minimum, ignore);
+		}
+		return true;
+	}
+
+	T GetFrameOfReference() {
+		return minimum;
+	}
+	T Maximum() {
+		return maximum;
+	}
+
+	template <class OP, class T_U = typename std::make_unsigned<T>::type>
 	void Flush() {
-		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth<T>(compression_buffer, compression_buffer_idx);
-		OP::Operation(compression_buffer, compression_buffer_validity, width, compression_buffer_idx, data_ptr);
-		total_size += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t);
+		T frame_of_reference = GetFrameOfReference();
+		SubtractFrameOfReference(frame_of_reference);
+
+		//! Because of FOR, we can guarantee that all values are positive
+		T_U adjusted_maximum = T_U(Maximum() - frame_of_reference);
+
+		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth<T_U>((T_U)0, adjusted_maximum);
+		OP::template Operation<T>(compression_buffer, compression_buffer_validity, width, frame_of_reference,
+		                          compression_buffer_idx, data_ptr);
+		total_size += (BITPACKING_METADATA_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t) + sizeof(T);
 		compression_buffer_idx = 0;
+		ResetMinMax();
 	}
 
 	template <class OP = EmptyBitpackingWriter>
-	void Update(T *data, ValidityMask &validity, idx_t idx) {
+	bool Update(T *data, ValidityMask &validity, idx_t idx) {
 
 		if (validity.RowIsValid(idx)) {
 			compression_buffer_validity[compression_buffer_idx] = true;
 			compression_buffer[compression_buffer_idx++] = data[idx];
+			if (!TryUpdateMinMax(data[idx])) {
+				return false;
+			}
 		} else {
 			// We write zero for easy bitwidth analysis of the compression buffer later
 			compression_buffer_validity[compression_buffer_idx] = false;
 			compression_buffer[compression_buffer_idx++] = 0;
 		}
 
-		if (compression_buffer_idx == BITPACKING_WIDTH_GROUP_SIZE) {
+		if (compression_buffer_idx == BITPACKING_METADATA_GROUP_SIZE) {
 			// Calculate bitpacking width;
 			Flush<OP>();
 		}
+		return true;
 	}
 };
 
@@ -241,15 +138,16 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &analyze_state = (BitpackingAnalyzeState<T> &)state;
-	VectorData vdata;
-	input.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
 
 	auto data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		analyze_state.state.template Update<EmptyBitpackingWriter>(data, vdata.validity, idx);
+		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data, vdata.validity, idx)) {
+			return false;
+		}
 	}
-
 	return true;
 }
 
@@ -279,23 +177,29 @@ public:
 	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction *function;
 	unique_ptr<ColumnSegment> current_segment;
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 
 	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;
-	// Ptr to next free spot for storing bitwidths (growing downwards).
-	data_ptr_t width_ptr;
+	// Ptr to next free spot for storing bitwidths and frame-of-references (growing downwards).
+	data_ptr_t metadata_ptr;
 
 	BitpackingState<T> state;
 
 public:
 	struct BitpackingWriter {
-		template <class VALUE_TYPE>
-		static void Operation(VALUE_TYPE *values, bool *validity, bitpacking_width_t width, idx_t count,
-		                      void *data_ptr) {
-			auto state = (BitpackingCompressState<T> *)data_ptr;
 
-			if (state->RemainingSize() < (width * BITPACKING_WIDTH_GROUP_SIZE) / 8 + sizeof(bitpacking_width_t)) {
+		template <class VALUE_TYPE>
+		static void Operation(VALUE_TYPE *values, bool *validity, bitpacking_width_t width,
+		                      VALUE_TYPE frame_of_reference, idx_t count, void *data_ptr) {
+			auto state = (BitpackingCompressState<T> *)data_ptr;
+			auto total_bits_needed = (width * BITPACKING_METADATA_GROUP_SIZE);
+			D_ASSERT(total_bits_needed % 8 == 0);
+			auto total_bytes_needed = total_bits_needed / 8;
+			total_bytes_needed += sizeof(bitpacking_width_t);
+			total_bytes_needed += sizeof(VALUE_TYPE);
+
+			if (state->RemainingSize() < total_bytes_needed) {
 				// Segment is full
 				auto row_start = state->current_segment->start + state->current_segment->count;
 				state->FlushSegment();
@@ -304,17 +208,17 @@ public:
 
 			for (idx_t i = 0; i < count; i++) {
 				if (validity[i]) {
-					NumericStatistics::Update<T>(state->current_segment->stats, values[i]);
+					NumericStatistics::Update<T>(state->current_segment->stats, values[i] + frame_of_reference);
 				}
 			}
 
-			state->WriteValues(values, width, count);
+			state->WriteValues(values, width, frame_of_reference, count);
 		}
 	};
 
-	// Space remaining between the width_ptr growing down and data ptr growing up
+	// Space remaining between the metadata_ptr growing down and data ptr growing up
 	idx_t RemainingSize() {
-		return width_ptr - data_ptr;
+		return metadata_ptr - data_ptr;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -326,12 +230,12 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
-		data_ptr = handle->Ptr() + current_segment->GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
-		width_ptr =
-		    handle->Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
+		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
+		metadata_ptr =
+		    handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
 	}
 
-	void Append(VectorData &vdata, idx_t count) {
+	void Append(UnifiedVectorFormat &vdata, idx_t count) {
 		// TODO Optimization: avoid use of compression buffer if we can compress straight to result vector
 		auto data = (T *)vdata.data;
 
@@ -341,33 +245,32 @@ public:
 		}
 	}
 
-	void WriteValues(T *values, bitpacking_width_t width, idx_t count) {
-		// TODO we can optimize this by stopping early if count < BITPACKING_WIDTH_GROUP_SIZE
-		idx_t compress_loops = BITPACKING_WIDTH_GROUP_SIZE / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-		for (idx_t i = 0; i < compress_loops; i++) {
-			BitpackingPrimitives::PackBlock<T>(
-			    data_ptr, &values[i * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE], width);
-			data_ptr += (BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * width) / 8;
-		}
+	void WriteValues(T *values, bitpacking_width_t width, T frame_of_reference, idx_t count) {
+		// TODO we can optimize this by stopping early if count < BITPACKING_METADATA_GROUP_SIZE
+		BitpackingPrimitives::PackBuffer<T, false>(data_ptr, values, count, width);
+		data_ptr += (BITPACKING_METADATA_GROUP_SIZE * width) / 8;
 
-		Store<bitpacking_width_t>(width, width_ptr);
-		width_ptr -= sizeof(bitpacking_width_t);
+		Store<bitpacking_width_t>(width, metadata_ptr);
+		metadata_ptr -= sizeof(T);
+		Store<T>(frame_of_reference, metadata_ptr);
+		metadata_ptr -= sizeof(bitpacking_width_t);
 
 		current_segment->count += count;
 	}
 
 	void FlushSegment() {
 		auto &state = checkpointer.GetCheckpointState();
+		auto dataptr = handle.Ptr();
 
-		// Compact the segment by moving the widths next to the data.
-		idx_t minimal_widths_offset = AlignValue(data_ptr - handle->node->buffer);
-		idx_t widths_size = handle->node->buffer + Storage::BLOCK_SIZE - width_ptr - 1;
-		idx_t total_segment_size = minimal_widths_offset + widths_size;
-		memmove(handle->node->buffer + minimal_widths_offset, width_ptr + 1, widths_size);
+		// Compact the segment by moving the metadata next to the data.
+		idx_t metadata_offset = AlignValue(data_ptr - dataptr);
+		idx_t metadata_size = dataptr + Storage::BLOCK_SIZE - metadata_ptr - 1;
+		idx_t total_segment_size = metadata_offset + metadata_size;
+		memmove(dataptr + metadata_offset, metadata_ptr + 1, metadata_size);
 
-		// Store the offset of the first width (which is at the highest address).
-		Store<idx_t>(minimal_widths_offset + widths_size - 1, handle->node->buffer);
-		handle.reset();
+		// Store the offset of the metadata of the first group (which is at the highest address).
+		Store<idx_t>(metadata_offset + metadata_size - 1, dataptr);
+		handle.Destroy();
 
 		state.FlushSegment(move(current_segment), total_segment_size);
 	}
@@ -388,8 +291,8 @@ unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &c
 template <class T>
 void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = (BitpackingCompressState<T> &)state_p;
-	VectorData vdata;
-	scan_vector.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
 }
 
@@ -408,51 +311,54 @@ public:
 	explicit BitpackingScanState(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
-
-		current_width_group_ptr =
-		    handle->node->buffer + segment.GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
+		auto dataptr = handle.Ptr();
+		current_metadata_group_ptr = dataptr + segment.GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
 
 		// load offset to bitpacking widths pointer
-		auto bitpacking_widths_offset = Load<idx_t>(handle->node->buffer + segment.GetBlockOffset());
-		bitpacking_width_ptr = handle->node->buffer + segment.GetBlockOffset() + bitpacking_widths_offset;
+		auto bitpacking_metadata_offset = Load<idx_t>(dataptr + segment.GetBlockOffset());
+		bitpacking_metadata_ptr = dataptr + segment.GetBlockOffset() + bitpacking_metadata_offset;
 
-		// load the bitwidth of the first vector
-		LoadCurrentBitWidth();
+		// load the metadata of the first vector
+		LoadCurrentMetaData();
 	}
 
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 
 	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t, bool skip_sign_extension);
 	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 
 	idx_t position_in_group = 0;
-	data_ptr_t current_width_group_ptr;
-	data_ptr_t bitpacking_width_ptr;
+	data_ptr_t current_metadata_group_ptr;
+	data_ptr_t bitpacking_metadata_ptr;
 	bitpacking_width_t current_width;
+	T current_frame_of_reference;
 
 public:
-	void LoadCurrentBitWidth() {
-		D_ASSERT(bitpacking_width_ptr > handle->node->buffer &&
-		         bitpacking_width_ptr < handle->node->buffer + Storage::BLOCK_SIZE);
-		current_width = Load<bitpacking_width_t>(bitpacking_width_ptr);
+	//! Loads the current group header, and sets pointer to next header
+	void LoadCurrentMetaData() {
+		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
+		         bitpacking_metadata_ptr < handle.Ptr() + Storage::BLOCK_SIZE);
+		current_width = Load<bitpacking_width_t>(bitpacking_metadata_ptr);
+		bitpacking_metadata_ptr -= sizeof(T);
+		current_frame_of_reference = Load<T>(bitpacking_metadata_ptr);
+		bitpacking_metadata_ptr -= sizeof(bitpacking_width_t);
 		LoadDecompressFunction();
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
 		while (skip_count > 0) {
-			if (position_in_group + skip_count < BITPACKING_WIDTH_GROUP_SIZE) {
+			if (position_in_group + skip_count < BITPACKING_METADATA_GROUP_SIZE) {
 				// We're not leaving this bitpacking group, we can perform all skips.
 				position_in_group += skip_count;
 				break;
 			} else {
 				// The skip crosses the current bitpacking group, we skip the remainder of this group.
-				auto skipping = BITPACKING_WIDTH_GROUP_SIZE - position_in_group;
+				auto skipping = BITPACKING_METADATA_GROUP_SIZE - position_in_group;
 				position_in_group = 0;
-				current_width_group_ptr += (current_width * BITPACKING_WIDTH_GROUP_SIZE) / 8;
+				current_metadata_group_ptr += (current_width * BITPACKING_METADATA_GROUP_SIZE) / 8;
 
-				// Update width pointer and load new width
-				bitpacking_width_ptr -= sizeof(bitpacking_width_t);
-				LoadCurrentBitWidth();
+				// Load new width
+				LoadCurrentMetaData();
 
 				skip_count -= skipping;
 			}
@@ -470,6 +376,16 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 	return move(result);
 }
 
+template <class T>
+static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
+	if (!frame_of_reference) {
+		return;
+	}
+	for (idx_t i = 0; i < size; i++) {
+		dst[i] += frame_of_reference;
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
@@ -482,31 +398,28 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	// Fast path for when no compression was used, we can do a single memcopy
-	if (STANDARD_VECTOR_SIZE == BITPACKING_WIDTH_GROUP_SIZE) {
-		if (scan_state.current_width == sizeof(T) * 8 && scan_count <= BITPACKING_WIDTH_GROUP_SIZE &&
-		    scan_state.position_in_group == 0) {
+	if (STANDARD_VECTOR_SIZE == BITPACKING_METADATA_GROUP_SIZE) {
+		if (scan_state.current_frame_of_reference == 0 && scan_state.current_width == sizeof(T) * 8 &&
+		    scan_count <= BITPACKING_METADATA_GROUP_SIZE && scan_state.position_in_group == 0) {
 
-			memcpy(result_data + result_offset, scan_state.current_width_group_ptr, scan_count * sizeof(T));
-			scan_state.current_width_group_ptr += scan_count * sizeof(T);
-			scan_state.bitpacking_width_ptr -= sizeof(bitpacking_width_t);
-			scan_state.LoadCurrentBitWidth();
+			memcpy(result_data + result_offset, scan_state.current_metadata_group_ptr, scan_count * sizeof(T));
+			scan_state.current_metadata_group_ptr += scan_count * sizeof(T);
+			scan_state.LoadCurrentMetaData();
 			return;
 		}
 	}
 
-	// Determine if we can skip sign extension during compression
-	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
-	bool skip_sign_extend = std::is_signed<T>::value && nstats.min >= 0;
+	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
+	bool skip_sign_extend = true;
 
 	idx_t scanned = 0;
 
 	while (scanned < scan_count) {
-		// Exhausted this width group, move pointers to next group and load bitwidth for next group.
-		if (scan_state.position_in_group >= BITPACKING_WIDTH_GROUP_SIZE) {
+		// Exhausted this metadata group, move pointers to next group and load metadata for next group.
+		if (scan_state.position_in_group >= BITPACKING_METADATA_GROUP_SIZE) {
 			scan_state.position_in_group = 0;
-			scan_state.bitpacking_width_ptr -= sizeof(bitpacking_width_t);
-			scan_state.current_width_group_ptr += (scan_state.current_width * BITPACKING_WIDTH_GROUP_SIZE) / 8;
-			scan_state.LoadCurrentBitWidth();
+			scan_state.current_metadata_group_ptr += (scan_state.current_width * BITPACKING_METADATA_GROUP_SIZE) / 8;
+			scan_state.LoadCurrentMetaData();
 		}
 
 		idx_t offset_in_compression_group =
@@ -517,7 +430,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 		// Calculate start of compression algorithm group
 		data_ptr_t current_position_ptr =
-		    scan_state.current_width_group_ptr + scan_state.position_in_group * scan_state.current_width / 8;
+		    scan_state.current_metadata_group_ptr + scan_state.position_in_group * scan_state.current_width / 8;
 		data_ptr_t decompression_group_start_pointer =
 		    current_position_ptr - offset_in_compression_group * scan_state.current_width / 8;
 
@@ -536,7 +449,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
 			       to_scan * sizeof(T));
 		}
-
+		ApplyFrameOfReference((T *)current_result_ptr, scan_state.current_frame_of_reference, to_scan);
 		scanned += to_scan;
 		scan_state.position_in_group += to_scan;
 	}
@@ -563,16 +476,18 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	    scan_state.position_in_group % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
 	data_ptr_t decompression_group_start_pointer =
-	    scan_state.current_width_group_ptr +
+	    scan_state.current_metadata_group_ptr +
 	    (scan_state.position_in_group - offset_in_compression_group) * scan_state.current_width / 8;
 
-	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
-	bool skip_sign_extend = std::is_signed<T>::value && nstats.min >= 0;
+	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
+	bool skip_sign_extend = true;
 
 	scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
 	                               scan_state.current_width, skip_sign_extend);
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
+	//! Apply FOR to result
+	*current_result_ptr += scan_state.current_frame_of_reference;
 }
 template <class T>
 void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {

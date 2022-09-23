@@ -6,12 +6,12 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT a[0] FROM (VALUES (LIST_VALUE())) tbl(a)
+SELECT a[1] FROM (VALUES (LIST_VALUE())) tbl(a)
 ----
 NULL
 
 query I
-SELECT a[0] FROM (VALUES (LIST_VALUE(NULL))) tbl(a)
+SELECT a[1] FROM (VALUES (LIST_VALUE(NULL))) tbl(a)
 ----
 NULL
 
@@ -26,36 +26,41 @@ SELECT a[NULL] FROM (VALUES (LIST_VALUE(42))) tbl(a)
 NULL
 
 query I
-SELECT a[0] FROM (VALUES (LIST_VALUE(42))) tbl(a)
+SELECT a[1] FROM (VALUES (LIST_VALUE(42))) tbl(a)
 ----
 42
 
 query I
-SELECT a[0+1-1] FROM (VALUES (LIST_VALUE(42))) tbl(a)
+SELECT a[1+1-1] FROM (VALUES (LIST_VALUE(42))) tbl(a)
 ----
 42
 
 query I
-SELECT a[b] FROM (VALUES (LIST_VALUE(42), 0)) tbl(a, b)
+SELECT a[b] FROM (VALUES (LIST_VALUE(42), 1)) tbl(a, b)
 ----
 42
 
 # doing it directly on the function does not require brackets
 query I
-SELECT (LIST_VALUE(42))[0]
+SELECT (LIST_VALUE(42))[1]
 ----
 42
 
 query I
-SELECT LIST_VALUE(42)[0]
+SELECT LIST_VALUE(42)[1]
 ----
 42
 
 # slicing
 query T
-SELECT a[1:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+SELECT a[2:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
 [43, 44]
+
+query T
+SELECT a[1:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+----
+[42, 43, 44]
 
 query T
 SELECT a[:1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)

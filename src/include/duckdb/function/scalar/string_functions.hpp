@@ -76,7 +76,7 @@ struct LengthFun {
 
 struct LikeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static bool Glob(const char *s, idx_t slen, const char *pattern, idx_t plen);
+	DUCKDB_API static bool Glob(const char *s, idx_t slen, const char *pattern, idx_t plen);
 };
 
 struct LikeEscapeFun {
@@ -180,6 +180,10 @@ struct LevenshteinFun {
 };
 
 struct JaccardFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct JaroWinklerFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

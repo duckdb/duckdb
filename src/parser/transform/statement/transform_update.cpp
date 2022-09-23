@@ -8,6 +8,9 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGNo
 	D_ASSERT(stmt);
 
 	auto result = make_unique<UpdateStatement>();
+	if (stmt->withClause) {
+		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
+	}
 
 	result->table = TransformRangeVar(stmt->relation);
 	if (stmt->fromClause) {
@@ -19,6 +22,11 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGNo
 		auto target = (duckdb_libpgquery::PGResTarget *)(cell->data.ptr_value);
 		result->columns.emplace_back(target->name);
 		result->expressions.push_back(TransformExpression(target->val));
+	}
+
+	// Grab and transform the returning columns from the parser.
+	if (stmt->returningList) {
+		Transformer::TransformExpressionList(*(stmt->returningList), result->returning_list);
 	}
 
 	result->condition = TransformExpression(stmt->whereClause);

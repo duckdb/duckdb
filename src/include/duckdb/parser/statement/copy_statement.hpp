@@ -22,6 +22,9 @@ public:
 	// The SQL statement used instead of a table when copying data out to a file
 	unique_ptr<QueryNode> select_statement;
 
+protected:
+	CopyStatement(const CopyStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };

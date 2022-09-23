@@ -2,11 +2,28 @@
 # description: Test approx quantile operator
 # group: [aggregates]
 
+require skip_reload
+
+require vector_size 512
+
 statement ok
 PRAGMA enable_verification
 
 statement ok
+SELECT SETSEED(0.8675309);
+
+statement ok
 create table quantile as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+# Verify that there are two versions of each return type (with and without the count)
+query II
+SELECT return_type, count(*) AS defined
+FROM duckdb_functions()
+WHERE function_name = 'reservoir_quantile'
+GROUP BY ALL
+HAVING defined <> 2
+ORDER BY ALL;
+----
 
 query I
 SELECT CASE
@@ -94,8 +111,36 @@ SELECT CASE
 ----
 1
 
+# List versions
+query I
+SELECT [
+	(a[1] BETWEEN (q[1] - 100) AND (q[1] + 100)),
+	(a[2] BETWEEN (q[2] - 100) AND (q[2] + 100)),
+	(a[3] BETWEEN (q[3] - 100) AND (q[3] + 100)),
+	]
+FROM (
+	SELECT approx_quantile(r, [0.25, 0.5, 0.75]) AS a,
+		   quantile(r, [0.25, 0.5, 0.75]) AS q,
+	FROM quantile
+) tbl;
+----
+[True, True, True]
 
+query I
+SELECT [
+	(a[1] BETWEEN (q[1] - 100) AND (q[1] + 100)),
+	(a[2] BETWEEN (q[2] - 100) AND (q[2] + 100)),
+	(a[3] BETWEEN (q[3] - 100) AND (q[3] + 100)),
+	]
+FROM (
+	SELECT reservoir_quantile(r, [0.25, 0.5, 0.75], 4096) AS a,
+		   quantile(r, [0.25, 0.5, 0.75]) AS q,
+	FROM quantile
+) tbl;
+----
+[True, True, True]
 
+# Errors
 statement error
 SELECT approx_quantile(r, -0.1) FROM quantile
 
@@ -152,7 +197,6 @@ SELECT CASE
 	  FROM (SELECT approx_quantile(r, 0.5) as approx_quantile, quantile(r, 0.5) as true_quantile, SUM(r) as sumr from quantile) AS T
 ----
 1
-
 
 # Test reservoir quantile
 statement ok

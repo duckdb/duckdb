@@ -24,10 +24,9 @@ select kurtosis(i) from (values (0), (0), (0), (0), (0), (0)) tbl(i)
 ----
 NULL
 
-query I
+# out of range
+statement error
 select kurtosis(i) from (values (2e304), (2e305), (2e306), (2e307)) tbl(i)
-----
-NULL
 
 # Constant Value (This should be an error)
 query I

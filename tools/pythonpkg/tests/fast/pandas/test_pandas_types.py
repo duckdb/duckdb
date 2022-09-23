@@ -22,7 +22,20 @@ class TestPandasTypes(object):
     def test_pandas_bool(self, duckdb_cursor):
         data = numpy.array([True,False,False,True])
         round_trip(data,'bool')
-        
+    
+    def test_pandas_boolean(self, duckdb_cursor):
+        data = numpy.array([True,None,pd.NA,numpy.nan,True])
+        df_in = pd.DataFrame({
+            'object': pd.Series(data, dtype='boolean'),
+        })
+
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
+        assert df_out['object'][0] == df_in['object'][0]
+        assert numpy.isnan(df_out['object'][1])
+        assert numpy.isnan(df_out['object'][2])
+        assert numpy.isnan(df_out['object'][3])
+        assert df_out['object'][4] == df_in['object'][4]
+
     def test_pandas_float32(self, duckdb_cursor):
         data = numpy.array([0.1,0.32,0.78, numpy.nan])
         df_in = pd.DataFrame({
@@ -35,6 +48,19 @@ class TestPandasTypes(object):
         assert df_out['object'][1] == df_in['object'][1]
         assert df_out['object'][2] == df_in['object'][2]
         assert numpy.isnan(df_out['object'][3])
+
+    def test_pandas_float64(self):
+        data = numpy.array([0.233, numpy.nan, 3456.2341231, float('-inf'), -23424.45345, float('+inf'), 0.0000000001])
+        df_in = pd.DataFrame({
+            'object': pd.Series(data, dtype='float64'),
+        })
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
+        
+        for i in range(len(data)):
+            if (numpy.isnan(df_out['object'][i])):
+                assert(i == 1)
+                continue
+            assert df_out['object'][i] == df_in['object'][i]
 
     def test_pandas_interval(self, duckdb_cursor):
         if pd. __version__ != '1.2.4':
@@ -56,6 +82,6 @@ class TestPandasTypes(object):
         expected_result = data[0]
         df_in = pd.DataFrame({'object': pd.Series(data, dtype='object')})
         result = duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchone()[0]
-        assert result == str(expected_result)
+        assert result == expected_result
 
 

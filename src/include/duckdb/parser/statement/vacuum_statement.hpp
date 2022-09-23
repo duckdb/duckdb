@@ -16,9 +16,12 @@ namespace duckdb {
 
 class VacuumStatement : public SQLStatement {
 public:
-	VacuumStatement();
+	explicit VacuumStatement(const VacuumOptions &options);
 
 	unique_ptr<VacuumInfo> info;
+
+protected:
+	VacuumStatement(const VacuumStatement &other);
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;

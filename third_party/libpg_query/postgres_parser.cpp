@@ -13,7 +13,7 @@ PostgresParser::PostgresParser() : success(false), parse_tree(nullptr), error_me
 
 void PostgresParser::Parse(const string &query) {
 	duckdb_libpgquery::pg_parser_init();
-    duckdb_libpgquery::parse_result res;
+	duckdb_libpgquery::parse_result res;
 	pg_parser_parse(query.c_str(), &res);
 	success = res.success;
 

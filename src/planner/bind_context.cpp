@@ -1,15 +1,18 @@
 #include "duckdb/planner/bind_context.hpp"
 
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/parser/expression/operator_expression.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 #include <algorithm>
 
@@ -139,7 +142,7 @@ string BindContext::GetActualColumnName(const string &binding_name, const string
 	if (!binding) {
 		throw InternalException("No binding with name \"%s\"", binding_name);
 	}
-	idx_t binding_index;
+	column_t binding_index;
 	if (!binding->TryGetBindingIndex(column_name, binding_index)) { // LCOV_EXCL_START
 		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding_name,
 		                        column_name);
@@ -158,9 +161,38 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 	return result;
 }
 
+unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
+	string error_message;
+
+	auto binding = GetBinding(table_name, error_message);
+	D_ASSERT(binding);
+	auto &table_binding = *(TableBinding *)binding;
+	auto result = table_binding.ExpandGeneratedColumn(column_name);
+	result->alias = column_name;
+	return result;
+}
+
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &table_name, const string &column_name) {
 	string schema_name;
 	return CreateColumnReference(schema_name, table_name, column_name);
+}
+
+static bool ColumnIsGenerated(Binding *binding, column_t index) {
+	if (binding->binding_type != BindingType::TABLE) {
+		return false;
+	}
+	auto table_binding = (TableBinding *)binding;
+	auto catalog_entry = table_binding->GetStandardEntry();
+	if (!catalog_entry) {
+		return false;
+	}
+	if (index == COLUMN_IDENTIFIER_ROW_ID) {
+		return false;
+	}
+	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
+	auto table_entry = (TableCatalogEntry *)catalog_entry;
+	D_ASSERT(table_entry->columns.size() >= index);
+	return table_entry->columns[index].Generated();
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &schema_name, const string &table_name,
@@ -174,14 +206,17 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 	names.push_back(column_name);
 
 	auto result = make_unique<ColumnRefExpression>(move(names));
-	// because of case insensitivity in the binder we rename the column to the original name
-	// as it appears in the binding itself
 	auto binding = GetBinding(table_name, error_message);
-	if (binding) {
-		auto column_index = binding->GetBindingIndex(column_name);
-		if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
-			result->alias = binding->names[column_index];
-		}
+	if (!binding) {
+		return move(result);
+	}
+	auto column_index = binding->GetBindingIndex(column_name);
+	if (ColumnIsGenerated(binding, column_index)) {
+		return ExpandGeneratedColumn(table_name, column_name);
+	} else if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
+		// because of case insensitivity in the binder we rename the column to the original name
+		// as it appears in the binding itself
+		result->alias = binding->names[column_index];
 	}
 	return move(result);
 }
@@ -224,10 +259,16 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 }
 
 string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name) {
-	idx_t current_position = ref.index - 1;
 	idx_t total_columns = 0;
+	idx_t current_position = ref.index - 1;
 	for (auto &entry : bindings_list) {
 		idx_t entry_column_count = entry.second->names.size();
+		if (ref.index == 0) {
+			// this is a row id
+			table_name = entry.first;
+			column_name = "rowid";
+			return string();
+		}
 		if (current_position < entry_column_count) {
 			table_name = entry.first;
 			column_name = entry.second->names[current_position];
@@ -316,16 +357,45 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		}
 	} else {
 		// SELECT tbl.* case
+		// SELECT struct.* case
 		string error;
 		auto binding = GetBinding(expr.relation_name, error);
+		bool is_struct_ref = false;
 		if (!binding) {
-			throw BinderException(error);
-		}
-		for (auto &column_name : binding->names) {
-			if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
-				continue;
+			auto binding_name = GetMatchingBinding(expr.relation_name);
+			if (binding_name.empty()) {
+				throw BinderException(error);
 			}
-			new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+			binding = bindings[binding_name].get();
+			is_struct_ref = true;
+		}
+
+		if (is_struct_ref) {
+			auto col_idx = binding->GetBindingIndex(expr.relation_name);
+			auto col_type = binding->types[col_idx];
+			if (col_type.id() != LogicalTypeId::STRUCT) {
+				throw BinderException(StringUtil::Format(
+				    "Cannot extract field from expression \"%s\" because it is not a struct", expr.ToString()));
+			}
+			auto &struct_children = StructType::GetChildTypes(col_type);
+			vector<string> column_names(3);
+			column_names[0] = binding->alias;
+			column_names[1] = expr.relation_name;
+			for (auto &child : struct_children) {
+				if (CheckExclusionList(expr, binding, child.first, new_select_list, excluded_columns)) {
+					continue;
+				}
+				column_names[2] = child.first;
+				new_select_list.push_back(make_unique<ColumnRefExpression>(column_names));
+			}
+		} else {
+			for (auto &column_name : binding->names) {
+				if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
+					continue;
+				}
+
+				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+			}
 		}
 	}
 	for (auto &excluded : expr.exclude_list) {
@@ -351,13 +421,15 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
-                               const vector<LogicalType> &types, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index, true));
+                               const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
+                               StandardEntry *entry) {
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, bound_column_ids, entry, index, true));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
-                                   const vector<LogicalType> &types, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index));
+                                   const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
+                                   StandardEntry *entry) {
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, bound_column_ids, entry, index));
 }
 
 static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {
@@ -394,14 +466,31 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
+void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
+                                  const vector<LogicalType> &types, StandardEntry *entry) {
+	D_ASSERT(entry);
+	AddBinding(alias, make_unique<EntryBinding>(alias, types, names, index, *entry));
+}
+
+void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
+                          ViewCatalogEntry *view) {
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+	AddEntryBinding(index, alias, names, subquery.types, (StandardEntry *)view);
+}
+
+void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery) {
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+	AddGenericBinding(index, alias, names, subquery.types);
+}
+
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {
-	AddBinding(alias, make_unique<Binding>(alias, types, names, index));
+	AddBinding(alias, make_unique<Binding>(BindingType::BASE, alias, types, names, index));
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types) {
-	auto binding = make_shared<Binding>(alias, types, names, index);
+	auto binding = make_shared<Binding>(BindingType::BASE, alias, types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);

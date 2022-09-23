@@ -17,7 +17,7 @@ unique_ptr<TableRef> Transformer::TransformTableRefNode(duckdb_libpgquery::PGNod
 	case duckdb_libpgquery::T_PGRangeFunction:
 		return TransformRangeFunction(reinterpret_cast<duckdb_libpgquery::PGRangeFunction *>(n));
 	default:
-		throw NotImplementedException("From Type %d not supported yet...", n->type);
+		throw NotImplementedException("From Type %d not supported", n->type);
 	}
 }
 

@@ -3,8 +3,44 @@ import sys
 import shutil
 import subprocess
 from python_helpers import open_utf8
+import re
 
 excluded_objects = ['utf8proc_data.cpp']
+
+def third_party_includes():
+    includes = []
+    includes += [os.path.join('third_party', 'fmt', 'include')]
+    includes += [os.path.join('third_party', 're2')]
+    includes += [os.path.join('third_party', 'miniz')]
+    includes += [os.path.join('third_party', 'utf8proc', 'include')]
+    includes += [os.path.join('third_party', 'utf8proc')]
+    includes += [os.path.join('third_party', 'hyperloglog')]
+    includes += [os.path.join('third_party', 'fastpforlib')]
+    includes += [os.path.join('third_party', 'tdigest')]
+    includes += [os.path.join('third_party', 'libpg_query', 'include')]
+    includes += [os.path.join('third_party', 'libpg_query')]
+    includes += [os.path.join('third_party', 'concurrentqueue')]
+    includes += [os.path.join('third_party', 'pcg')]
+    includes += [os.path.join('third_party', 'httplib')]
+    includes += [os.path.join('third_party', 'fast_float')]
+    includes += [os.path.join('third_party', 'mbedtls')]
+    includes += [os.path.join('third_party', 'mbedtls', 'include')]
+    includes += [os.path.join('third_party', 'mbedtls', 'library')]
+    includes += [os.path.join('third_party', 'jaro_winkler')]
+    includes += [os.path.join('third_party', 'jaro_winkler', 'details')]
+    return includes
+
+def third_party_sources():
+    sources = []
+    sources += [os.path.join('third_party', 'fmt')]
+    sources += [os.path.join('third_party', 'miniz')]
+    sources += [os.path.join('third_party', 're2')]
+    sources += [os.path.join('third_party', 'hyperloglog')]
+    sources += [os.path.join('third_party', 'fastpforlib')]
+    sources += [os.path.join('third_party', 'utf8proc')]
+    sources += [os.path.join('third_party', 'libpg_query')]
+    sources += [os.path.join('third_party', 'mbedtls')]
+    return sources
 
 def get_libraries(binary_dir, libraries, extensions):
     result_libs = []
@@ -70,15 +106,16 @@ def get_relative_path(source_dir, target_file):
     return target_file
 
 def git_commit_hash():
+    if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
+        return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
     try:
         return subprocess.check_output(['git','log','-1','--format=%h']).strip().decode('utf8')
     except:
-        if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
-            return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
-        else:
-            return "deadbeeff"
+        return "deadbeeff"
 
 def git_dev_version():
+    if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
+        return os.environ['SETUPTOOLS_SCM_PRETEND_VERSION']
     try:
         version = subprocess.check_output(['git','describe','--tags','--abbrev=0']).strip().decode('utf8')
         long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
@@ -92,10 +129,7 @@ def git_dev_version():
             version_splits[2] = str(int(version_splits[2]) + 1)
             return '.'.join(version_splits) + "-dev" + dev_version
     except:
-        if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
-            return os.environ['SETUPTOOLS_SCM_PRETEND_VERSION']
-        else:
-            return "0.0.0"
+        return "0.0.0"
 
 def include_package(pkg_name, pkg_dir, include_files, include_list, source_list):
     import amalgamation
@@ -113,7 +147,7 @@ def include_package(pkg_name, pkg_dir, include_files, include_list, source_list)
 
     sys.path = original_path
 
-def build_package(target_dir, extensions, linenumbers = False, unity_count = 32):
+def build_package(target_dir, extensions, linenumbers = False, unity_count = 32, folder_name = 'duckdb'):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
 
@@ -191,8 +225,8 @@ def build_package(target_dir, extensions, linenumbers = False, unity_count = 32)
                 return True
         return False
 
-    def generate_unity_build(entries, idx, linenumbers):
-        ub_file = os.path.join(target_dir, 'amalgamation-{}.cpp'.format(str(idx)))
+    def generate_unity_build(entries, unity_name, linenumbers):
+        ub_file = os.path.join(target_dir, f'ub_{unity_name}.cpp')
         with open_utf8(ub_file, 'w+') as f:
             for entry in entries:
                 if linenumbers:
@@ -201,34 +235,39 @@ def build_package(target_dir, extensions, linenumbers = False, unity_count = 32)
         return ub_file
 
     def generate_unity_builds(source_list, nsplits, linenumbers):
-        source_list.sort()
+        files_per_directory = {}
+        for source in source_list:
+            dirname = os.path.dirname(source)
+            if dirname not in files_per_directory:
+                files_per_directory[dirname] = []
+            files_per_directory[dirname].append(source)
 
-        files_per_split = len(source_list) / nsplits
         new_source_files = []
-        current_files = []
-        idx = 1
-        for entry in source_list:
-            if not entry.startswith('src'):
-                new_source_files.append(os.path.join('duckdb', entry))
-                continue
-
-            current_files.append(entry)
-            if len(current_files) > files_per_split:
-                new_source_files.append(generate_unity_build(current_files, idx, linenumbers))
-                current_files = []
-                idx += 1
-        if len(current_files) > 0:
-            new_source_files.append(generate_unity_build(current_files, idx, linenumbers))
-            current_files = []
-            idx += 1
-
+        for dirname in files_per_directory.keys():
+            current_files = files_per_directory[dirname]
+            cmake_file = os.path.join(dirname, 'CMakeLists.txt')
+            unity_build = False
+            if os.path.isfile(cmake_file):
+                with open(cmake_file, 'r') as f:
+                    text = f.read()
+                    if 'add_library_unity' in text:
+                        unity_build = True
+                        # re-order the files in the unity build so that they follow the same order as the CMake
+                        scores = {}
+                        filenames = [x[0] for x in re.findall('([a-zA-Z0-9_]+[.](cpp|cc|c|cxx))', text)]
+                        score = 0
+                        for filename in filenames:
+                            scores[filename] = score
+                            score += 1
+                        current_files.sort(key = lambda x: scores[os.path.basename(x)] if os.path.basename(x) in scores else 99999)
+            if not unity_build:
+                new_source_files += [os.path.join(folder_name, file) for file in current_files]
+            else:
+                new_source_files.append(generate_unity_build(current_files, dirname.replace(os.path.sep, '_'), linenumbers))
         return new_source_files
 
     original_sources = source_list
-    if unity_count > 0:
-        source_list = generate_unity_builds(source_list, unity_count, linenumbers)
-    else:
-        source_list = [os.path.join('duckdb', source) for source in source_list]
+    source_list = generate_unity_builds(source_list, unity_count, linenumbers)
 
     os.chdir(prev_wd)
     return ([convert_backslashes(x) for x in source_list if not file_is_excluded(x)],

@@ -34,6 +34,9 @@ unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
 	case ConstraintType::UNIQUE:
 		result = UniqueConstraint::Deserialize(reader);
 		break;
+	case ConstraintType::FOREIGN_KEY:
+		result = ForeignKeyConstraint::Deserialize(reader);
+		break;
 	default:
 		throw InternalException("Unrecognized constraint type for serialization");
 	}

@@ -1,0 +1,30 @@
+# name: test/sql/generated_columns/virtual/drop_dependency.test
+# description: Remove dependency of a generated column
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement error
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+statement ok
+ALTER TABLE unit DROP COLUMN price;
+
+# CREATE
+
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	total_profit AS (price)
+);
+
+# total_profit depends on this
+statement error
+ALTER TABLE tbl DROP COLUMN price;

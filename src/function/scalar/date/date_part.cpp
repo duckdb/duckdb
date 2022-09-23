@@ -1,15 +1,16 @@
-#include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -154,43 +155,12 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType 
 	throw NotImplementedException("\"%s\" units \"%s\" not recognized", LogicalTypeIdToString(type.id()), specifier);
 }
 
-template <class T>
-static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	int32_t last_year = 0;
-	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
-	                                   [&](T input) { return Date::ExtractYear(input, &last_year); });
-}
-
-template <class T, class OP>
-static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
-	// we can only propagate complex date part stats if the child has stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &nstats = (NumericStatistics &)*child_stats[0];
-	if (nstats.min.IsNull() || nstats.max.IsNull()) {
-		return nullptr;
-	}
-	// run the operator on both the min and the max, this gives us the [min, max] bound
-	auto min = nstats.min.GetValueUnsafe<T>();
-	auto max = nstats.max.GetValueUnsafe<T>();
-	if (min > max) {
-		return nullptr;
-	}
-	auto min_part = OP::template Operation<T, int64_t>(min);
-	auto max_part = OP::template Operation<T, int64_t>(max);
-	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part), Value::BIGINT(max_part));
-	if (child_stats[0]->validity_stats) {
-		result->validity_stats = child_stats[0]->validity_stats->Copy();
-	}
-	return move(result);
-}
-
 template <int64_t MIN, int64_t MAX>
 static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
 	// we can always propagate simple date part statistics
 	// since the min and max can never exceed these bounds
-	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX));
+	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX),
+	                                             StatisticsType::LOCAL_STATS);
 	if (!child_stats[0]) {
 		// if there are no child stats, we don't know
 		result->validity_stats = make_unique<ValidityStatistics>(true);
@@ -201,6 +171,56 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 }
 
 struct DatePart {
+	template <class T, class OP>
+	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+		// we can only propagate complex date part stats if the child has stats
+		if (!child_stats[0]) {
+			return nullptr;
+		}
+		auto &nstats = (NumericStatistics &)*child_stats[0];
+		if (nstats.min.IsNull() || nstats.max.IsNull()) {
+			return nullptr;
+		}
+		// run the operator on both the min and the max, this gives us the [min, max] bound
+		auto min = nstats.min.GetValueUnsafe<T>();
+		auto max = nstats.max.GetValueUnsafe<T>();
+		if (min > max) {
+			return nullptr;
+		}
+		// Infinities prevent us from computing generic ranges
+		if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
+			return nullptr;
+		}
+		auto min_part = OP::template Operation<T, int64_t>(min);
+		auto max_part = OP::template Operation<T, int64_t>(max);
+		auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part),
+		                                             Value::BIGINT(max_part), StatisticsType::LOCAL_STATS);
+		if (child_stats[0]->validity_stats) {
+			result->validity_stats = child_stats[0]->validity_stats->Copy();
+		}
+		return move(result);
+	}
+
+	template <typename OP>
+	struct PartOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input, ValidityMask &mask, idx_t idx, void *dataptr) {
+			if (Value::IsFinite(input)) {
+				return OP::template Operation<TA, TR>(input);
+			} else {
+				mask.SetInvalid(idx);
+				return TR();
+			}
+		}
+	};
+
+	template <class TA, class TR, class OP>
+	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+		D_ASSERT(input.ColumnCount() >= 1);
+		using IOP = PartOperator<OP>;
+		UnaryExecutor::GenericExecute<TA, TR, IOP>(input.data[0], result, input.size(), nullptr, true);
+	}
+
 	struct YearOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -208,10 +228,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, YearOperator>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, YearOperator>(input.child_stats);
 		}
 	};
 
@@ -222,11 +240,9 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			// min/max of month operator is [1, 12]
-			return PropagateSimpleDatePartStatistics<1, 12>(child_stats);
+			return PropagateSimpleDatePartStatistics<1, 12>(input.child_stats);
 		}
 	};
 
@@ -237,11 +253,9 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			// min/max of day operator is [1, 31]
-			return PropagateSimpleDatePartStatistics<1, 31>(child_stats);
+			return PropagateSimpleDatePartStatistics<1, 31>(input.child_stats);
 		}
 	};
 
@@ -258,10 +272,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, DecadeOperator>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, DecadeOperator>(input.child_stats);
 		}
 	};
 
@@ -288,10 +300,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, CenturyOperator>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, CenturyOperator>(input.child_stats);
 		}
 	};
 
@@ -312,10 +322,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, MillenniumOperator>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, MillenniumOperator>(input.child_stats);
 		}
 	};
 
@@ -331,11 +339,9 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			// min/max of quarter operator is [1, 4]
-			return PropagateSimpleDatePartStatistics<1, 4>(child_stats);
+			return PropagateSimpleDatePartStatistics<1, 4>(input.child_stats);
 		}
 	};
 
@@ -353,10 +359,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 6>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<0, 6>(input.child_stats);
 		}
 	};
 
@@ -368,10 +372,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<1, 7>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<1, 7>(input.child_stats);
 		}
 	};
 
@@ -382,10 +384,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<1, 366>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<1, 366>(input.child_stats);
 		}
 	};
 
@@ -396,10 +396,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<1, 54>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<1, 54>(input.child_stats);
 		}
 	};
 
@@ -410,10 +408,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, ISOYearOperator>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, ISOYearOperator>(input.child_stats);
 		}
 	};
 
@@ -431,10 +427,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, YearWeekOperator>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, YearWeekOperator>(input.child_stats);
 		}
 	};
 
@@ -445,10 +439,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 60000000>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<0, 60000000>(input.child_stats);
 		}
 	};
 
@@ -459,10 +451,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 60000>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<0, 60000>(input.child_stats);
 		}
 	};
 
@@ -473,10 +463,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 60>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<0, 60>(input.child_stats);
 		}
 	};
 
@@ -487,10 +475,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 60>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<0, 60>(input.child_stats);
 		}
 	};
 
@@ -501,10 +487,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 24>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<0, 24>(input.child_stats);
 		}
 	};
 
@@ -515,10 +499,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, EpochOperator>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, EpochOperator>(input.child_stats);
 		}
 	};
 
@@ -534,10 +516,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 1>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<0, 1>(input.child_stats);
 		}
 	};
 
@@ -549,10 +529,8 @@ struct DatePart {
 		}
 
 		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 0>(child_stats);
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<0, 0>(input.child_stats);
 		}
 	};
 
@@ -700,6 +678,20 @@ struct DatePart {
 		}
 	};
 };
+
+template <class T>
+static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	int32_t last_year = 0;
+	UnaryExecutor::ExecuteWithNulls<T, int64_t>(args.data[0], result, args.size(),
+	                                            [&](T input, ValidityMask &mask, idx_t idx) {
+		                                            if (Value::IsFinite(input)) {
+			                                            return Date::ExtractYear(input, &last_year);
+		                                            } else {
+			                                            mask.SetInvalid(idx);
+			                                            return 0;
+		                                            }
+	                                            });
+}
 
 template <>
 int64_t DatePart::YearOperator::Operation(timestamp_t input) {
@@ -992,12 +984,10 @@ int64_t DatePart::EpochOperator::Operation(dtime_t input) {
 }
 
 template <>
-unique_ptr<BaseStatistics>
-DatePart::EpochOperator::PropagateStatistics<dtime_t>(ClientContext &context, BoundFunctionExpression &expr,
-                                                      FunctionData *bind_data,
-                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+unique_ptr<BaseStatistics> DatePart::EpochOperator::PropagateStatistics<dtime_t>(ClientContext &context,
+                                                                                 FunctionStatisticsInput &input) {
 	// time seconds range over a single day
-	return PropagateSimpleDatePartStatistics<0, 86400>(child_stats);
+	return PropagateSimpleDatePartStatistics<0, 86400>(input.child_stats);
 }
 
 template <>
@@ -1200,21 +1190,21 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	}
 }
 
-struct DatePartBinaryOperator {
-	template <class TA, class TB, class TR>
-	static inline TR Operation(TA specifier, TB date) {
-		return ExtractElement<TB>(GetDatePartSpecifier(specifier.GetString()), date);
-	}
-};
-
 template <typename T>
 static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
-	auto &part_arg = args.data[0];
+	auto &spec_arg = args.data[0];
 	auto &date_arg = args.data[1];
 
-	BinaryExecutor::ExecuteStandard<string_t, T, int64_t, DatePartBinaryOperator>(part_arg, date_arg, result,
-	                                                                              args.size());
+	BinaryExecutor::ExecuteWithNulls<string_t, T, int64_t>(
+	    spec_arg, date_arg, result, args.size(), [&](string_t specifier, T date, ValidityMask &mask, idx_t idx) {
+		    if (Value::IsFinite(date)) {
+			    return ExtractElement<T>(GetDatePartSpecifier(specifier.GetString()), date);
+		    } else {
+			    mask.SetInvalid(idx);
+			    return int64_t(0);
+		    }
+	    });
 }
 
 void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scalar_function_t date_func,
@@ -1222,17 +1212,17 @@ void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scala
                                 function_statistics_t date_stats, function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), false, nullptr, nullptr, date_stats));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), false,
-	                                        nullptr, nullptr, ts_stats));
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), nullptr, nullptr, date_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), nullptr, nullptr, ts_stats));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, move(interval_func)));
 	set.AddFunction(operator_set);
 }
 
 template <class OP>
 static void AddDatePartOperator(BuiltinFunctions &set, string name) {
-	AddGenericDatePartOperator(set, name, ScalarFunction::UnaryFunction<date_t, int64_t, OP>,
-	                           ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>,
+	AddGenericDatePartOperator(set, name, DatePart::UnaryFunction<date_t, int64_t, OP>,
+	                           DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
 	                           ScalarFunction::UnaryFunction<interval_t, int64_t, OP>,
 	                           OP::template PropagateStatistics<date_t>, OP::template PropagateStatistics<timestamp_t>);
 }
@@ -1243,22 +1233,22 @@ void AddGenericTimePartOperator(BuiltinFunctions &set, const string &name, scala
                                 function_statistics_t time_stats) {
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), false, nullptr, nullptr, date_stats));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), false,
-	                                        nullptr, nullptr, ts_stats));
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), nullptr, nullptr, date_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), nullptr, nullptr, ts_stats));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, move(interval_func)));
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIME}, LogicalType::BIGINT, move(time_func), false, nullptr, nullptr, time_stats));
+	    ScalarFunction({LogicalType::TIME}, LogicalType::BIGINT, move(time_func), nullptr, nullptr, time_stats));
 	set.AddFunction(operator_set);
 }
 
 template <class OP>
 static void AddTimePartOperator(BuiltinFunctions &set, string name) {
 	AddGenericTimePartOperator(
-	    set, name, ScalarFunction::UnaryFunction<date_t, int64_t, OP>,
-	    ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>, ScalarFunction::UnaryFunction<interval_t, int64_t, OP>,
-	    ScalarFunction::UnaryFunction<dtime_t, int64_t, OP>, OP::template PropagateStatistics<date_t>,
-	    OP::template PropagateStatistics<timestamp_t>, OP::template PropagateStatistics<dtime_t>);
+	    set, name, DatePart::UnaryFunction<date_t, int64_t, OP>, DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
+	    ScalarFunction::UnaryFunction<interval_t, int64_t, OP>, ScalarFunction::UnaryFunction<dtime_t, int64_t, OP>,
+	    OP::template PropagateStatistics<date_t>, OP::template PropagateStatistics<timestamp_t>,
+	    OP::template PropagateStatistics<dtime_t>);
 }
 
 struct LastDayOperator {
@@ -1302,7 +1292,7 @@ struct StructDatePart {
 		    : VariableReturnBindData(stype), part_codes(part_codes_p) {
 		}
 
-		unique_ptr<FunctionData> Copy() override {
+		unique_ptr<FunctionData> Copy() const override {
 			return make_unique<BindData>(stype, part_codes);
 		}
 	};
@@ -1310,6 +1300,9 @@ struct StructDatePart {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
 		// collect names and deconflict, construct return type
+		if (arguments[0]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[0]->IsFoldable()) {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);
 		}
@@ -1341,8 +1334,7 @@ struct StructDatePart {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);
 		}
 
-		arguments.erase(arguments.begin());
-		bound_function.arguments.erase(bound_function.arguments.begin());
+		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.return_type = LogicalType::STRUCT(move(struct_children));
 		return make_unique<BindData>(bound_function.return_type, part_codes);
 	}
@@ -1386,11 +1378,17 @@ struct StructDatePart {
 					}
 				}
 				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
-				DatePart::StructOperator::Operation(part_values.data(), tdata[0], 0, part_mask);
+				if (Value::IsFinite(tdata[0])) {
+					DatePart::StructOperator::Operation(part_values.data(), tdata[0], 0, part_mask);
+				} else {
+					for (auto &child_entry : child_entries) {
+						ConstantVector::SetNull(*child_entry, true);
+					}
+				}
 			}
 		} else {
-			VectorData rdata;
-			input.Orrify(count, rdata);
+			UnifiedVectorFormat rdata;
+			input.ToUnifiedFormat(count, rdata);
 
 			const auto &arg_valid = rdata.validity;
 			auto tdata = (const INPUT_TYPE *)rdata.data;
@@ -1421,7 +1419,13 @@ struct StructDatePart {
 			for (idx_t i = 0; i < count; ++i) {
 				const auto idx = rdata.sel->get_index(i);
 				if (arg_valid.RowIsValid(idx)) {
-					DatePart::StructOperator::Operation(part_values.data(), tdata[idx], idx, part_mask);
+					if (Value::IsFinite(tdata[idx])) {
+						DatePart::StructOperator::Operation(part_values.data(), tdata[idx], idx, part_mask);
+					} else {
+						for (auto &child_entry : child_entries) {
+							FlatVector::Validity(*child_entry).SetInvalid(idx);
+						}
+					}
 				} else {
 					res_valid.SetInvalid(idx);
 					for (auto &child_entry : child_entries) {
@@ -1443,11 +1447,29 @@ struct StructDatePart {
 		result.Verify(count);
 	}
 
+	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p,
+	                              const ScalarFunction &function) {
+		D_ASSERT(bind_data_p);
+		auto &info = (BindData &)*bind_data_p;
+		writer.WriteSerializable(info.stype);
+		writer.WriteList<DatePartSpecifier>(info.part_codes);
+	}
+
+	static unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
+	                                                    ScalarFunction &bound_function) {
+		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+		auto part_codes = reader.ReadRequiredList<DatePartSpecifier>();
+		return make_unique<BindData>(move(stype), move(part_codes));
+	}
+
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetFunction(const LogicalType &temporal_type) {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
-		return ScalarFunction({part_type, temporal_type}, result_type, Function<INPUT_TYPE>, false, Bind);
+		ScalarFunction result({part_type, temporal_type}, result_type, Function<INPUT_TYPE>, Bind);
+		result.serialize = SerializeFunction;
+		result.deserialize = DeserializeFunction;
+		return result;
 	}
 };
 
@@ -1490,25 +1512,25 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	//  register the last_day function
 	ScalarFunctionSet last_day("last_day");
 	last_day.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE,
-	                                    ScalarFunction::UnaryFunction<date_t, date_t, LastDayOperator>));
+	                                    DatePart::UnaryFunction<date_t, date_t, LastDayOperator>));
 	last_day.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DATE,
-	                                    ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator>));
+	                                    DatePart::UnaryFunction<timestamp_t, date_t, LastDayOperator>));
 	set.AddFunction(last_day);
 
 	//  register the monthname function
 	ScalarFunctionSet monthname("monthname");
 	monthname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
-	                                     ScalarFunction::UnaryFunction<date_t, string_t, MonthNameOperator>));
+	                                     DatePart::UnaryFunction<date_t, string_t, MonthNameOperator>));
 	monthname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                                     ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator>));
+	                                     DatePart::UnaryFunction<timestamp_t, string_t, MonthNameOperator>));
 	set.AddFunction(monthname);
 
 	//  register the dayname function
 	ScalarFunctionSet dayname("dayname");
 	dayname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
-	                                   ScalarFunction::UnaryFunction<date_t, string_t, DayNameOperator>));
+	                                   DatePart::UnaryFunction<date_t, string_t, DayNameOperator>));
 	dayname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                                   ScalarFunction::UnaryFunction<timestamp_t, string_t, DayNameOperator>));
+	                                   DatePart::UnaryFunction<timestamp_t, string_t, DayNameOperator>));
 	set.AddFunction(dayname);
 
 	// finally the actual date_part function

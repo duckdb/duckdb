@@ -9,7 +9,9 @@ if(NOT MSVC)
       "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move"
   )
 endif()
+set(EXIT_TIME_DESTRUCTORS_WARNING FALSE)
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  set(EXIT_TIME_DESTRUCTORS_WARNING TRUE)
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors")
 endif()
 
@@ -56,6 +58,7 @@ else()
   add_subdirectory(parallel)
   add_subdirectory(storage)
   add_subdirectory(transaction)
+  add_subdirectory(verification)
 
   set(DUCKDB_LINK_LIBS
       ${DUCKDB_SYSTEM_LIBS}
@@ -65,7 +68,8 @@ else()
       duckdb_miniz
       duckdb_utf8proc
       duckdb_hyperloglog
-      duckdb_fastpforlib)
+      duckdb_fastpforlib
+      duckdb_mbedtls)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
@@ -140,7 +144,7 @@ if(BUILD_PYTHON
       COMMAND
         DUCKDB_R_BINDIR=${CMAKE_BINARY_DIR}
         DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
-        DUCKDB_R_LIBS=\"${duckdb_libs}\" python rconfigure.py
+        DUCKDB_R_LIBS=\"${duckdb_libs}\" python3 rconfigure.py
       DEPENDS duckdb
       WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
       COMMENT Configure
@@ -166,4 +170,5 @@ install(
   TARGETS duckdb duckdb_static
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
-  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
+  RUNTIME DESTINATION "${INSTALL_BIN_DIR}")

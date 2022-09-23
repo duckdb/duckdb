@@ -2,7 +2,9 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
@@ -14,8 +16,11 @@ struct SystemBindData : public FunctionData {
 	explicit SystemBindData(ClientContext &context) : context(context) {
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<SystemBindData>(context);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		return true;
 	}
 
 	static SystemBindData &GetFrom(ExpressionState &state) {
@@ -37,26 +42,34 @@ static void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vecto
 
 // current_schema
 static void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(SystemBindData::GetFrom(state).context.catalog_search_path->GetDefault());
+	Value val(ClientData::Get(SystemBindData::GetFrom(state).context).catalog_search_path->GetDefault());
 	result.Reference(val);
 }
 
 // current_schemas
 static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	if (!input.AllConstant()) {
+		throw NotImplementedException("current_schemas requires a constant input");
+	}
+	if (ConstantVector::IsNull(input.data[0])) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
+	auto implicit_schemas = *ConstantVector::GetData<bool>(input.data[0]);
 	vector<Value> schema_list;
-	vector<string> search_path = SystemBindData::GetFrom(state).context.catalog_search_path->Get();
+	auto &catalog_search_path = ClientData::Get(SystemBindData::GetFrom(state).context).catalog_search_path;
+	vector<string> search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
 	std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
 	               [](const string &s) -> Value { return Value(s); });
-	auto val = Value::LIST(schema_list);
+
+	auto val = Value::LIST(LogicalType::VARCHAR, schema_list);
 	result.Reference(val);
 }
 
 // txid_current
 static void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (SystemBindData &)*func_expr.bind_info;
-
-	auto &transaction = Transaction::GetTransaction(info.context);
+	auto &transaction = Transaction::GetTransaction(SystemBindData::GetFrom(state).context);
 	auto val = Value::BIGINT(transaction.start_time);
 	result.Reference(val);
 }
@@ -70,15 +83,17 @@ static void VersionFunction(DataChunk &input, ExpressionState &state, Vector &re
 void SystemFun::RegisterFunction(BuiltinFunctions &set) {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
+	ScalarFunction current_query("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, BindSystemFunction);
+	current_query.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction(current_query);
 	set.AddFunction(
-	    ScalarFunction("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, false, BindSystemFunction));
-	set.AddFunction(
-	    ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction, false, BindSystemFunction));
+	    ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction, BindSystemFunction));
 	set.AddFunction(ScalarFunction("current_schemas", {LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction,
-	                               false, BindSystemFunction));
-	set.AddFunction(
-	    ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent, false, BindSystemFunction));
+	                               BindSystemFunction));
+	set.AddFunction(ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent, BindSystemFunction));
 	set.AddFunction(ScalarFunction("version", {}, LogicalType::VARCHAR, VersionFunction));
+	set.AddFunction(ExportAggregateFunction::GetCombine());
+	set.AddFunction(ExportAggregateFunction::GetFinalize());
 }
 
 } // namespace duckdb

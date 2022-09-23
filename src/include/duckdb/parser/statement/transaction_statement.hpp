@@ -19,6 +19,9 @@ public:
 
 	unique_ptr<TransactionInfo> info;
 
+protected:
+	TransactionStatement(const TransactionStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };

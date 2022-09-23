@@ -26,6 +26,7 @@ void RowDescriptor::Clear() {
 
 void RowDescriptor::SetCurrentARD(OdbcHandleDesc *new_ard) {
 	cur_ard = new_ard;
+	cur_ard->header.sql_desc_alloc_type = SQL_DESC_ALLOC_USER;
 }
 
 void RowDescriptor::Reset() {

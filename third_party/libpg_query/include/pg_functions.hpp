@@ -1,6 +1,9 @@
 #pragma once
 
 #include <stdlib.h>
+#include <string>
+
+#define fprintf(...)
 
 #include "pg_definitions.hpp"
 
@@ -13,7 +16,7 @@ typedef struct parse_result_str parse_result;
 struct parse_result_str {
 	bool success;
 	PGList *parse_tree;
-	char *error_message;
+	std::string error_message;
 	int error_location;
 };
 

@@ -1,0 +1,118 @@
+# name: test/sql/optimizer/expression/test_equal_or_null_optimization.test
+# description: Test a=b OR (a IS NULL AND b IS NULL) to a IS NOT DISTINCT FROM b
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = 'PHYSICAL_ONLY'
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER, k integer);
+
+statement ok
+INSERT INTO test VALUES (1,1,3), (2,2,4), (NULL,NULL,NULL);
+
+query I rowsort
+SELECT i FROM test WHERE (i=j) OR (i IS NULL AND j IS NULL);
+----
+1
+2
+NULL
+
+query II nosort distinctrewrite1
+EXPLAIN SELECT (i=j) OR (i IS NULL AND j IS NULL) FROM test;
+----
+physical_plan	<REGEX>:.*DISTINCT.*
+
+query I rowsort
+SELECT i FROM test WHERE i IS NOT DISTINCT FROM j;
+----
+1
+2
+NULL
+
+query II nosort distinctrewrite1
+EXPLAIN SELECT i IS NOT DISTINCT FROM j FROM test;
+----
+physical_plan	<REGEX>:.*DISTINCT.*
+
+query I rowsort
+SELECT i FROM test WHERE (i IS NULL AND j IS NULL) OR (i=j);
+----
+1
+2
+NULL
+
+query II nosort distinctrewrite1
+EXPLAIN SELECT (i IS NULL AND j IS NULL) OR (i=j) FROM test;
+----
+physical_plan	<REGEX>:.*DISTINCT.*
+
+# do a hash join
+query I rowsort
+SELECT test1.i FROM test AS test1, test AS test2 WHERE (test1.i=test2.j) OR (test1.i IS NULL AND test2.j IS NULL) ORDER BY 1;
+----
+1
+2
+NULL
+
+query II nosort distinctrewrite2
+EXPLAIN SELECT test1.i FROM test AS test1, test AS test2 WHERE (test1.i=test2.j) OR (test1.i IS NULL AND test2.j IS NULL);
+----
+physical_plan	<REGEX>:.*DISTINCT.*
+
+query II nosort distinctrewrite2
+EXPLAIN SELECT test1.i FROM test AS test1, test AS test2 WHERE (test1.i IS NULL AND test2.j IS NULL) OR (test1.i=test2.j);
+----
+physical_plan	<REGEX>:.*DISTINCT.*
+
+# this one cannot be rewritten
+query I nosort
+SELECT i FROM test WHERE (i=k) OR (i IS NULL AND j IS NULL);
+----
+NULL
+
+query II nosort nodistinctrewrite1
+EXPLAIN SELECT i FROM test WHERE (i=k) OR (i IS NULL AND j IS NULL);
+----
+physical_plan	<REGEX>:.*OR.*
+
+# neither this one
+query I nosort
+SELECT i FROM test WHERE (i=j) OR (i IS NULL AND j = 1);
+----
+1
+2
+
+query II nosort nodistinctrewrite2
+EXPLAIN SELECT i FROM test WHERE (i=j) OR (i IS NULL AND j = 1);
+----
+physical_plan	<REGEX>:.*OR.*
+
+# do a nested loop join because the OR cannot be rewritten here
+query I rowsort
+SELECT test1.i FROM test AS test1, test AS test2 WHERE (test1.i=test2.j) OR (test2.i IS NULL AND test1.j IS NULL);
+----
+1
+2
+NULL
+
+query II nosort distinctrewrite3
+EXPLAIN SELECT test1.i FROM test AS test1, test AS test2 WHERE (test1.i=test2.j) OR (test2.i IS NULL AND test1.j IS NULL);
+----
+physical_plan	<REGEX>:.*OR.*
+
+# same issue as the previous one
+query I rowsort
+SELECT test1.i FROM test AS test1, test AS test2 WHERE (test1.i=test2.k) OR (test2.i IS NULL AND test2.j IS NULL);
+----
+1
+2
+NULL
+
+query II nosort distinctrewrite4
+EXPLAIN SELECT test1.i FROM test AS test1, test AS test2 WHERE (test1.i=test2.k) OR (test2.i IS NULL AND test2.j IS NULL);
+----
+physical_plan	<REGEX>:.*OR.*

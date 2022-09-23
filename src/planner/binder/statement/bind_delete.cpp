@@ -1,6 +1,7 @@
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/expression_binder/returning_binder.hpp"
 #include "duckdb/planner/operator/logical_delete.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -27,8 +28,11 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	if (!table->temporary) {
 		// delete from persistent table: not read only!
-		this->read_only = false;
+		properties.read_only = false;
 	}
+
+	// Add CTEs as bindable
+	AddCTEMap(stmt.cte_map);
 
 	// plan any tables from the various using clauses
 	if (!stmt.using_clauses.empty()) {
@@ -39,19 +43,13 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 			auto op = CreatePlan(*bound_node);
 			if (child_operator) {
 				// already bound a child: create a cross product to unify the two
-				auto cross_product = make_unique<LogicalCrossProduct>();
-				cross_product->children.push_back(move(child_operator));
-				cross_product->children.push_back(move(op));
-				child_operator = move(cross_product);
+				child_operator = LogicalCrossProduct::Create(move(child_operator), move(op));
 			} else {
 				child_operator = move(op);
 			}
 		}
 		if (child_operator) {
-			auto cross_product = make_unique<LogicalCrossProduct>();
-			cross_product->children.push_back(move(root));
-			cross_product->children.push_back(move(child_operator));
-			root = move(cross_product);
+			root = LogicalCrossProduct::Create(move(root), move(child_operator));
 		}
 	}
 
@@ -75,10 +73,22 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	    LogicalType::ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
 	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
-	result.plan = move(del);
-	result.names = {"Count"};
-	result.types = {LogicalType::BIGINT};
-	this->allow_stream_result = false;
+	if (!stmt.returning_list.empty()) {
+		del->return_chunk = true;
+
+		auto update_table_index = GenerateTableIndex();
+		del->table_index = update_table_index;
+
+		unique_ptr<LogicalOperator> del_as_logicaloperator = move(del);
+		return BindReturning(move(stmt.returning_list), table, update_table_index, move(del_as_logicaloperator),
+		                     move(result));
+	} else {
+		result.plan = move(del);
+		result.names = {"Count"};
+		result.types = {LogicalType::BIGINT};
+		properties.allow_stream_result = false;
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
+	}
 	return result;
 }
 

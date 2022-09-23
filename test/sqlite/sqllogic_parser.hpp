@@ -23,10 +23,12 @@ enum class SQLLogicTokenType {
 	SQLLOGIC_HASH_THRESHOLD,
 	SQLLOGIC_HALT,
 	SQLLOGIC_MODE,
+	SQLLOGIC_SET,
 	SQLLOGIC_LOOP,
 	SQLLOGIC_FOREACH,
 	SQLLOGIC_ENDLOOP,
 	SQLLOGIC_REQUIRE,
+	SQLLOGIC_REQUIRE_ENV,
 	SQLLOGIC_LOAD,
 	SQLLOGIC_RESTART
 };
@@ -51,6 +53,10 @@ public:
 
 public:
 	static bool EmptyOrComment(const string &line);
+	static bool IsSingleLineStatement(SQLLogicToken &token);
+
+	//! Does the next line contain a comment, empty line, or is the end of the file
+	bool NextLineEmptyOrComment();
 
 	//! Opens the file, returns whether or not reading was successful
 	bool OpenFile(const string &path);

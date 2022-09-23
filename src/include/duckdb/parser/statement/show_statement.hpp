@@ -19,6 +19,9 @@ public:
 
 	unique_ptr<ShowSelectInfo> info;
 
+protected:
+	ShowStatement(const ShowStatement &other);
+
 public:
 	unique_ptr<SQLStatement> Copy() const override;
 };

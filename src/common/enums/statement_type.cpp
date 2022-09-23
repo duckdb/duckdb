@@ -51,22 +51,27 @@ string StatementTypeToString(StatementType type) {
 		return "SET";
 	case StatementType::LOAD_STATEMENT:
 		return "LOAD";
+	case StatementType::EXTENSION_STATEMENT:
+		return "EXTENSION";
+	case StatementType::LOGICAL_PLAN_STATEMENT:
+		return "LOGICAL_PLAN";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}
 	return "INVALID";
 }
-// LCOV_EXCL_STOP
 
-bool StatementTypeReturnChanges(StatementType type) {
+string StatementReturnTypeToString(StatementReturnType type) {
 	switch (type) {
-	case StatementType::INSERT_STATEMENT:
-	case StatementType::UPDATE_STATEMENT:
-	case StatementType::DELETE_STATEMENT:
-		return true;
-	default:
-		return false;
+	case StatementReturnType::QUERY_RESULT:
+		return "QUERY_RESULT";
+	case StatementReturnType::CHANGED_ROWS:
+		return "CHANGED_ROWS";
+	case StatementReturnType::NOTHING:
+		return "NOTHING";
 	}
+	return "INVALID";
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb

@@ -25,10 +25,16 @@ public:
 	// Holds the categorical type of Categorical/ENUM types
 	unordered_map<idx_t, py::object> categories_type;
 
+	string timezone_config;
+
+	explicit DuckDBPyResult() {};
+
 public:
 	static void Initialize(py::handle &m);
 
 	py::object Fetchone();
+
+	py::list Fetchmany(idx_t size);
 
 	py::list Fetchall();
 
@@ -36,15 +42,13 @@ public:
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
-	py::object FetchDF();
+	DataFrame FetchDF();
 
-	py::object FetchDFChunk(idx_t vectors_per_chunk);
+	duckdb::pyarrow::Table FetchArrowTable(idx_t chunk_size);
 
-	py::object FetchArrowTableChunk(idx_t num_of_vectors = 1, bool return_table = false);
+	DataFrame FetchDFChunk(idx_t vectors_per_chunk);
 
-	py::object FetchArrowTable(bool stream = false, idx_t num_of_vectors = 1, bool return_table = true);
-
-	py::object FetchRecordBatchReader(idx_t vectors_per_chunk);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
 	py::list Description();
 
@@ -54,6 +58,20 @@ public:
 
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
+
+	py::object FetchAllArrowChunks(idx_t chunk_size);
+
+	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size);
+
+	DataFrame FrameFromNumpy(const py::handle &o);
+
+	void ChangeToTZType(DataFrame &df);
+
+	unique_ptr<DataChunk> FetchNext(QueryResult &result);
+	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
+
+private:
+	bool result_closed = false;
 };
 
 } // namespace duckdb

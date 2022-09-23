@@ -40,6 +40,17 @@ struct CompressedSegmentState {
 	}
 };
 
+struct UncompressedCompressState : public CompressionState {
+	explicit UncompressedCompressState(ColumnDataCheckpointer &checkpointer);
+
+	ColumnDataCheckpointer &checkpointer;
+	unique_ptr<ColumnSegment> current_segment;
+
+	virtual void CreateEmptySegment(idx_t row_start);
+	void FlushSegment(idx_t segment_size);
+	void Finalize(idx_t segment_size);
+};
+
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
@@ -80,8 +91,8 @@ typedef void (*compression_skip_t)(ColumnSegment &segment, ColumnScanState &stat
 // Append (optional)
 //===--------------------------------------------------------------------===//
 typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(ColumnSegment &segment, block_id_t block_id);
-typedef idx_t (*compression_append_t)(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset,
-                                      idx_t count);
+typedef idx_t (*compression_append_t)(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data,
+                                      idx_t offset, idx_t count);
 typedef idx_t (*compression_finalize_append_t)(ColumnSegment &segment, SegmentStatistics &stats);
 typedef void (*compression_revert_append_t)(ColumnSegment &segment, idx_t start_row);
 

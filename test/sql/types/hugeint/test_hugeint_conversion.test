@@ -2,9 +2,6 @@
 # description: Test hugeint conversion
 # group: [hugeint]
 
-statement ok
-PRAGMA enable_verification
-
 # small numbers in hugeint
 query III
 SELECT '7'::HUGEINT, '130'::HUGEINT, '924829852'::HUGEINT

@@ -12,13 +12,13 @@
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 
 class BufferHandle;
 class VectorBuffer;
 class Vector;
-class ChunkCollection;
 
 enum class VectorBufferType : uint8_t {
 	STANDARD_BUFFER,     // standard buffer, holds a single array of data
@@ -77,7 +77,7 @@ public:
 		return aux_data.get();
 	}
 
-	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p, VectorAuxiliaryDataType aux_type_p) {
+	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p) {
 		aux_data = move(aux_data_p);
 	}
 
@@ -162,6 +162,7 @@ class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
 	VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count);
 	~VectorStructBuffer() override;
 
 public:
@@ -205,11 +206,11 @@ private:
 //! The ManagedVectorBuffer holds a buffer handle
 class ManagedVectorBuffer : public VectorBuffer {
 public:
-	explicit ManagedVectorBuffer(unique_ptr<BufferHandle> handle);
+	explicit ManagedVectorBuffer(BufferHandle handle);
 	~ManagedVectorBuffer() override;
 
 private:
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 };
 
 } // namespace duckdb

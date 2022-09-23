@@ -72,12 +72,12 @@ endloop
 query T
 SELECT list_concat([1.000000, 2.000000]::float[], [3.000000, 4.000000]::double[])
 ----
-[1.000000, 2.000000, 3.000000, 4.000000]
+[1.0, 2.0, 3.0, 4.0]
 
 query T
 SELECT list_concat([1.000000, 2.000000]::double[], [3.000000, 4.000000]::float[])
 ----
-[1.000000, 2.000000, 3.000000, 4.000000]
+[1.0, 2.0, 3.0, 4.0]
 
 # nulls
 query T
@@ -162,3 +162,25 @@ query T
 SELECT array_prepend(1, [2, 3])
 ----
 [1, 2, 3]
+
+# push back
+query T
+SELECT array_push_back([1, 2], 3);
+----
+[1, 2, 3]
+
+query T
+SELECT array_push_back(NULL, 3);
+----
+[3]
+
+# push front
+query T
+SELECT array_push_front([2, 3], 1);
+----
+[1, 2, 3]
+
+query T
+SELECT array_push_front(NULL, 1);
+----
+[1]

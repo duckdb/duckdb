@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -13,8 +14,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
-
-#include <map>
+#include "duckdb/planner/operator/logical_simple.hpp"
 
 namespace duckdb {
 
@@ -174,6 +174,19 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		}
 		// then recurse into the children of this projection
 		RemoveUnusedColumns remove(binder, context);
+		remove.VisitOperatorExpressions(op);
+		remove.VisitOperator(*op.children[0]);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE: {
+		//! When RETURNING is used, a PROJECTION is the top level operator for INSERTS, UPDATES, and DELETES
+		//! We still need to project all values from these operators so the projection
+		//! on top of them can select from only the table values being inserted.
+		//! TODO: Push down the projections from the returning statement
+		//! TODO: Be careful because you might be adding expressions when a user returns *
+		RemoveUnusedColumns remove(binder, context, true);
 		remove.VisitOperatorExpressions(op);
 		remove.VisitOperator(*op.children[0]);
 		return;

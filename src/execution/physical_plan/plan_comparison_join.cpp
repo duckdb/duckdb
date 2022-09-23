@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/execution/operator/join/physical_iejoin.hpp"
 #include "duckdb/execution/operator/join/physical_index_join.hpp"
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
@@ -11,8 +12,9 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -70,9 +72,19 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	if (op.join_stats.empty()) {
 		return;
 	}
+	for (auto &type : op.children[1]->types) {
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::MAP:
+			return;
+		default:
+			break;
+		}
+	}
 	// with equality condition and null values not equal
 	for (auto &&condition : op.conditions) {
-		if (condition.comparison != ExpressionType::COMPARE_EQUAL || condition.null_values_are_equal) {
+		if (condition.comparison != ExpressionType::COMPARE_EQUAL) {
 			return;
 		}
 	}
@@ -156,6 +168,14 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 	}
 }
 
+static void RewriteJoinCondition(Expression &expr, idx_t offset) {
+	if (expr.type == ExpressionType::BOUND_REF) {
+		auto &ref = (BoundReferenceExpression &)expr;
+		ref.index += offset;
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
+}
+
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
@@ -171,24 +191,29 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	}
 
 	bool has_equality = false;
-	bool has_inequality = false;
-	bool has_null_equal_conditions = false;
-	for (auto &cond : op.conditions) {
-		if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
-		    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+	// bool has_inequality = false;
+	size_t has_range = 0;
+	for (size_t c = 0; c < op.conditions.size(); ++c) {
+		auto &cond = op.conditions[c];
+		switch (cond.comparison) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			has_equality = true;
-		}
-		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL ||
-		    cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
-			has_inequality = true;
-		}
-		if (cond.null_values_are_equal) {
-			has_null_equal_conditions = true;
-			D_ASSERT(cond.comparison == ExpressionType::COMPARE_EQUAL ||
-			         cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM);
+			break;
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			++has_range;
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			// has_inequality = true;
+			break;
+		default:
+			throw NotImplementedException("Unimplemented comparison join");
 		}
 	}
-	(void)has_null_equal_conditions;
 
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
@@ -217,15 +242,36 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		                                     op.estimated_cardinality, perfect_join_stats);
 
 	} else {
-		if (op.conditions.size() == 1 && !has_inequality) {
-			D_ASSERT(!has_null_equal_conditions); // we support this for this join for now
+		bool can_merge = has_range > 0;
+		bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
+		switch (op.join_type) {
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+		case JoinType::MARK:
+			can_merge = can_merge && op.conditions.size() == 1;
+			can_iejoin = false;
+			break;
+		default:
+			break;
+		}
+		if (can_iejoin) {
+			plan = make_unique<PhysicalIEJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
+			                                   op.estimated_cardinality);
+		} else if (can_merge) {
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions),
 			                                               op.join_type, op.estimated_cardinality);
-		} else {
+		} else if (PhysicalNestedLoopJoin::IsSupported(op.conditions)) {
 			// inequality join: use nested loop
 			plan = make_unique<PhysicalNestedLoopJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                           op.estimated_cardinality);
+		} else {
+			for (auto &cond : op.conditions) {
+				RewriteJoinCondition(*cond.right, left->types.size());
+			}
+			auto condition = JoinCondition::CreateExpression(move(op.conditions));
+			plan = make_unique<PhysicalBlockwiseNLJoin>(op, move(left), move(right), move(condition), op.join_type,
+			                                            op.estimated_cardinality);
 		}
 	}
 	return plan;

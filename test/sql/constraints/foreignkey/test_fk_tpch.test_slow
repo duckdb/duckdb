@@ -1,0 +1,137 @@
+# name: test/sql/constraints/foreignkey/test_fk_tpch.test_slow
+# description: enable foreign keys in the TPC-H schema
+# group: [foreignkey]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.1, suffix='_original');
+
+statement ok
+CREATE TABLE region  ( R_REGIONKEY  INTEGER NOT NULL PRIMARY KEY,
+                            R_NAME       CHAR(25) NOT NULL,
+                            R_COMMENT    VARCHAR(152));
+
+statement ok
+CREATE TABLE part  ( P_PARTKEY     INTEGER NOT NULL PRIMARY KEY,
+                          P_NAME        VARCHAR(55) NOT NULL,
+                          P_MFGR        CHAR(25) NOT NULL,
+                          P_BRAND       CHAR(10) NOT NULL,
+                          P_TYPE        VARCHAR(25) NOT NULL,
+                          P_SIZE        INTEGER NOT NULL,
+                          P_CONTAINER   CHAR(10) NOT NULL,
+                          P_RETAILPRICE DECIMAL(15,2) NOT NULL,
+                          P_COMMENT     VARCHAR(23) NOT NULL );
+
+statement ok
+CREATE TABLE nation  ( N_NATIONKEY  INTEGER NOT NULL PRIMARY KEY,
+                            N_NAME       CHAR(25) NOT NULL,
+                            N_REGIONKEY  INTEGER NOT NULL,
+                            N_COMMENT    VARCHAR(152), 
+                            FOREIGN KEY (N_REGIONKEY) REFERENCES region(R_REGIONKEY));
+
+statement ok
+CREATE TABLE supplier ( S_SUPPKEY     INTEGER NOT NULL PRIMARY KEY,
+                             S_NAME        CHAR(25) NOT NULL,
+                             S_ADDRESS     VARCHAR(40) NOT NULL,
+                             S_NATIONKEY   INTEGER NOT NULL,
+                             S_PHONE       CHAR(15) NOT NULL,
+                             S_ACCTBAL     DECIMAL(15,2) NOT NULL,
+                             S_COMMENT     VARCHAR(101) NOT NULL, 
+                             FOREIGN KEY (S_NATIONKEY) REFERENCES nation(N_NATIONKEY));
+
+statement ok
+CREATE TABLE partsupp ( PS_PARTKEY     INTEGER NOT NULL,
+                             PS_SUPPKEY     INTEGER NOT NULL,
+                             PS_AVAILQTY    INTEGER NOT NULL,
+                             PS_SUPPLYCOST  DECIMAL(15,2)  NOT NULL,
+                             PS_COMMENT     VARCHAR(199) NOT NULL, 
+                             PRIMARY KEY(PS_PARTKEY, PS_SUPPKEY), 
+                             FOREIGN KEY (PS_SUPPKEY) REFERENCES supplier(S_SUPPKEY), 
+                             FOREIGN KEY (PS_PARTKEY) REFERENCES part(P_PARTKEY));
+
+statement ok
+CREATE TABLE customer ( C_CUSTKEY     INTEGER NOT NULL PRIMARY KEY,
+                             C_NAME        VARCHAR(25) NOT NULL,
+                             C_ADDRESS     VARCHAR(40) NOT NULL,
+                             C_NATIONKEY   INTEGER NOT NULL,
+                             C_PHONE       CHAR(15) NOT NULL,
+                             C_ACCTBAL     DECIMAL(15,2)   NOT NULL,
+                             C_MKTSEGMENT  CHAR(10) NOT NULL,
+                             C_COMMENT     VARCHAR(117) NOT NULL, 
+                             FOREIGN KEY (C_NATIONKEY) REFERENCES nation(N_NATIONKEY));
+
+statement ok
+CREATE TABLE orders  ( O_ORDERKEY       INTEGER NOT NULL PRIMARY KEY,
+                           O_CUSTKEY        INTEGER NOT NULL,
+                           O_ORDERSTATUS    CHAR(1) NOT NULL,
+                           O_TOTALPRICE     DECIMAL(15,2) NOT NULL,
+                           O_ORDERDATE      DATE NOT NULL,
+                           O_ORDERPRIORITY  CHAR(15) NOT NULL,  
+                           O_CLERK          CHAR(15) NOT NULL, 
+                           O_SHIPPRIORITY   INTEGER NOT NULL,
+                           O_COMMENT        VARCHAR(79) NOT NULL, 
+                           FOREIGN KEY (O_CUSTKEY) REFERENCES customer(C_CUSTKEY));
+
+statement ok
+CREATE TABLE lineitem ( L_ORDERKEY    INTEGER NOT NULL,
+                             L_PARTKEY     INTEGER NOT NULL,
+                             L_SUPPKEY     INTEGER NOT NULL,
+                             L_LINENUMBER  INTEGER NOT NULL,
+                             L_QUANTITY    DECIMAL(15,2) NOT NULL,
+                             L_EXTENDEDPRICE  DECIMAL(15,2) NOT NULL,
+                             L_DISCOUNT    DECIMAL(15,2) NOT NULL,
+                             L_TAX         DECIMAL(15,2) NOT NULL,
+                             L_RETURNFLAG  CHAR(1) NOT NULL,
+                             L_LINESTATUS  CHAR(1) NOT NULL,
+                             L_SHIPDATE    DATE NOT NULL,
+                             L_COMMITDATE  DATE NOT NULL,
+                             L_RECEIPTDATE DATE NOT NULL,
+                             L_SHIPINSTRUCT CHAR(25) NOT NULL,
+                             L_SHIPMODE     CHAR(10) NOT NULL,
+                             L_COMMENT      VARCHAR(44) NOT NULL, 
+                             PRIMARY KEY(L_ORDERKEY, L_LINENUMBER), 
+                             FOREIGN KEY (L_ORDERKEY) REFERENCES orders(O_ORDERKEY), 
+                             FOREIGN KEY (L_PARTKEY, L_SUPPKEY) REFERENCES partsupp(PS_PARTKEY, PS_SUPPKEY));
+
+statement ok
+INSERT INTO region SELECT * FROM region_original
+
+statement ok
+INSERT INTO part SELECT * FROM part_original
+
+statement ok
+INSERT INTO nation SELECT * FROM nation_original
+
+statement ok
+INSERT INTO supplier SELECT * FROM supplier_original
+
+statement ok
+INSERT INTO partsupp SELECT * FROM partsupp_original
+
+statement ok
+INSERT INTO customer SELECT * FROM customer_original
+
+statement ok
+INSERT INTO orders SELECT * FROM orders_original
+
+statement ok
+INSERT INTO lineitem SELECT * FROM lineitem_original
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q${i}.csv
+
+endloop

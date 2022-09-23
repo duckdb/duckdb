@@ -8,15 +8,22 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/index.hpp"
+#include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table_index.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 
@@ -49,7 +56,7 @@ struct DataTableInfo {
 	// name of the table
 	string table;
 
-	TableIndexList indexes;
+	TableIndex indexes;
 
 	bool IsTemporary() {
 		return schema == TEMP_SCHEMA;
@@ -69,6 +76,8 @@ public:
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
 	          vector<column_t> bound_columns, Expression &cast_expr);
+	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
+	DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint);
 
 	shared_ptr<DataTableInfo> info;
 
@@ -153,22 +162,30 @@ public:
 		this->is_root = true;
 	}
 
+	//! Get statistics of a physical column within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	//! Sets statistics of a physical column within the table
+	void SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun);
 
 	//! Checkpoint the table to the specified table data writer
-	BlockPointer Checkpoint(TableDataWriter &writer);
+	void Checkpoint(TableDataWriter &writer);
 	void CommitDropTable();
 	void CommitDropColumn(idx_t index);
 
 	idx_t GetTotalRows();
 
 	vector<vector<Value>> GetStorageInfo();
+	static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type);
 
 private:
+	//! Verify the new added constraints against current persistent&local data
+	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint);
 	//! Verify constraints with a chunk from the Append containing all columns of the table
-	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
+	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, const vector<column_t> &column_ids);
+	//! Verify constraints with a chunk from the Delete containing all columns of the table
+	void VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);

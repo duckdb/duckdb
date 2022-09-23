@@ -2,12 +2,22 @@
 #include "test_helpers.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/main/connection_manager.hpp"
 
 #include <chrono>
 #include <thread>
 
 using namespace duckdb;
 using namespace std;
+
+TEST_CASE("Test comment in CPP API", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	con.SendQuery("--ups");
+	//! Should not crash
+	REQUIRE(1);
+}
 
 TEST_CASE("Test using connection after database is gone", "[api]") {
 	auto db = make_unique<DuckDB>(nullptr);
@@ -52,7 +62,7 @@ static void long_running_query(Connection *conn, bool *correct) {
 	                          "integers i6, integers i7, integers i8, integers i9, integers i10,"
 	                          "integers i11, integers i12, integers i13");
 	// the query should fail
-	*correct = !result->success;
+	*correct = result->HasError();
 }
 
 TEST_CASE("Test closing database during long running query", "[api]") {
@@ -210,7 +220,6 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	unique_ptr<QueryResult> result, result2;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	// multiple streaming result
 	result = con.SendQuery("SELECT 42;");
@@ -237,7 +246,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// error in stream that only happens after fetching
 	result = con.SendQuery(
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
-	while (result->success) {
+	while (!result->HasError()) {
 		auto chunk = result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
@@ -250,19 +259,21 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	result = con.SendQuery(
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
 	REQUIRE(!result->ToString().empty());
+	REQUIRE(result->type == QueryResultType::STREAM_RESULT);
 	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 
 	// same query but call materialize after fetching
 	result = con.SendQuery(
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
-	while (result->success) {
+	while (!result->HasError()) {
 		auto chunk = result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
 	}
 	REQUIRE(!result->ToString().empty());
+	REQUIRE(result->type == QueryResultType::STREAM_RESULT);
 	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 }
@@ -499,4 +510,47 @@ TEST_CASE("Test opening an invalid database file", "[api]") {
 		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));
 	}
 	REQUIRE(!success);
+}
+
+TEST_CASE("Test large number of connections to a single database", "[api]") {
+	auto db = make_unique<DuckDB>(nullptr);
+	auto context = make_unique<ClientContext>((*db).instance);
+	auto &connection_manager = ConnectionManager::Get(*context);
+
+	vector<unique_ptr<Connection>> connections;
+	size_t createdConnections = 5000;
+	size_t remainingConnections = 500;
+	size_t toRemove = createdConnections - remainingConnections;
+
+	for (size_t i = 0; i < createdConnections; i++) {
+		auto conn = make_unique<Connection>(*db);
+		connections.push_back(move(conn));
+	}
+
+	REQUIRE(connection_manager.connections.size() == createdConnections);
+
+	for (size_t i = 0; i < toRemove; i++) {
+		auto conn = *connections[0];
+		connections.erase(connections.begin());
+	}
+
+	REQUIRE(connection_manager.connections.size() == remainingConnections);
+}
+
+TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	con.EnableQueryVerification();
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0 (c0 int);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (1);"));
+
+	result = con.SendQuery(
+	    "INSERT INTO t0(VALUES('\\x15\\x00\\x00\\x00\\x00@\\x01\\x0A\\x27:!\\x0A\\x00\\x00x12e\"\\x00'::BLOB));");
+	//! Should not terminate the process
+	REQUIRE_FAIL(result);
+
+	result = con.SendQuery("SELECT MIN(c0) FROM t0;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }

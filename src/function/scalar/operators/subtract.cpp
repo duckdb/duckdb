@@ -3,10 +3,9 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/value.hpp"
-
-#include <limits>
 
 namespace duckdb {
 
@@ -16,7 +15,7 @@ namespace duckdb {
 template <>
 float SubtractOperator::Operation(float left, float right) {
 	auto result = left - right;
-	if (!Value::FloatIsValid(result)) {
+	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in subtraction of float!");
 	}
 	return result;
@@ -25,7 +24,7 @@ float SubtractOperator::Operation(float left, float right) {
 template <>
 double SubtractOperator::Operation(double left, double right) {
 	auto result = left - right;
-	if (!Value::DoubleIsValid(result)) {
+	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in subtraction of double!");
 	}
 	return result;
@@ -38,11 +37,19 @@ int64_t SubtractOperator::Operation(date_t left, date_t right) {
 
 template <>
 date_t SubtractOperator::Operation(date_t left, int32_t right) {
-	int32_t result;
-	if (!TrySubtractOperator::Operation(left.days, right, result)) {
+	if (!Date::IsFinite(left)) {
+		return left;
+	}
+	int32_t days;
+	if (!TrySubtractOperator::Operation(left.days, right, days)) {
 		throw OutOfRangeException("Date out of range");
 	}
-	return date_t(result);
+
+	date_t result(days);
+	if (!Date::IsFinite(result)) {
+		throw OutOfRangeException("Date out of range");
+	}
+	return result;
 }
 
 template <>
@@ -56,18 +63,12 @@ interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
 
 template <>
 date_t SubtractOperator::Operation(date_t left, interval_t right) {
-	right.months = -right.months;
-	right.days = -right.days;
-	right.micros = -right.micros;
-	return AddOperator::Operation<date_t, interval_t, date_t>(left, right);
+	return AddOperator::Operation<date_t, interval_t, date_t>(left, Interval::Invert(right));
 }
 
 template <>
 timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right) {
-	right.months = -right.months;
-	right.days = -right.days;
-	right.micros = -right.micros;
-	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(left, right);
+	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(left, Interval::Invert(right));
 }
 
 template <>
@@ -156,6 +157,12 @@ bool TrySubtractOperator::Operation(int64_t left, int64_t right, int64_t &result
 	result = left - right;
 #endif
 	return true;
+}
+
+template <>
+bool TrySubtractOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
+	result = left;
+	return Hugeint::SubtractInPlace(result, right);
 }
 
 //===--------------------------------------------------------------------===//

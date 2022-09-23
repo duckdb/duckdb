@@ -5,6 +5,7 @@ SQLBindCol
 SQLBindParameter
 SQLCancel
 SQLColAttribute
+SQLColAttributes
 SQLColumns
 SQLConnect
 SQLDescribeCol

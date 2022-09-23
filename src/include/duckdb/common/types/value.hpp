@@ -56,6 +56,9 @@ public:
 	// move assignment
 	DUCKDB_API Value &operator=(Value &&other) noexcept;
 
+	inline LogicalType &type() {
+		return type_;
+	}
 	inline const LogicalType &type() const {
 		return type_;
 	}
@@ -121,6 +124,10 @@ public:
 	                                  int32_t micros);
 	DUCKDB_API static Value INTERVAL(int32_t months, int32_t days, int64_t micros);
 	DUCKDB_API static Value INTERVAL(interval_t interval);
+	//! Creates a JSON Value
+	DUCKDB_API static Value JSON(const char *val);
+	DUCKDB_API static Value JSON(string_t val);
+	DUCKDB_API static Value JSON(string val);
 
 	// Create a enum Value from a specified uint value
 	DUCKDB_API static Value ENUM(uint64_t value, const LogicalType &original_type);
@@ -143,7 +150,7 @@ public:
 	DUCKDB_API static Value LIST(LogicalType child_type, vector<Value> values);
 	//! Create an empty list with the specified child-type
 	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
-	//! Creat a map value from a (key, value) pair
+	//! Create a map value from a (key, value) pair
 	DUCKDB_API static Value MAP(Value key, Value value);
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
@@ -183,6 +190,8 @@ public:
 	DUCKDB_API hash_t Hash() const;
 	//! Convert this value to a string
 	DUCKDB_API string ToString() const;
+	//! Convert this value to a SQL-parseable string
+	DUCKDB_API string ToSQLString() const;
 
 	DUCKDB_API uintptr_t GetPointer() const;
 
@@ -216,21 +225,26 @@ public:
 	DUCKDB_API bool operator<=(const int64_t &rhs) const;
 	DUCKDB_API bool operator>=(const int64_t &rhs) const;
 
-	DUCKDB_API static bool FloatIsValid(float value);
-	DUCKDB_API static bool DoubleIsValid(double value);
+	DUCKDB_API static bool FloatIsFinite(float value);
+	DUCKDB_API static bool DoubleIsFinite(double value);
+	template <class T>
+	static bool IsNan(T value) {
+		throw InternalException("Unimplemented template type for Value::IsNan");
+	}
+	template <class T>
+	static bool IsFinite(T value) {
+		return true;
+	}
 	DUCKDB_API static bool StringIsValid(const char *str, idx_t length);
 	static bool StringIsValid(const string &str) {
 		return StringIsValid(str.c_str(), str.size());
 	}
 
-	template <class T>
-	static bool IsValid(T value) {
-		return true;
-	}
-
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
 	DUCKDB_API static bool ValuesAreEqual(const Value &result_value, const Value &value);
+	//! Returns true if the values are not distinct from each other, following SQL semantics for NOT DISTINCT FROM.
+	DUCKDB_API static bool NotDistinctFrom(const Value &lvalue, const Value &rvalue);
 
 	friend std::ostream &operator<<(std::ostream &out, const Value &val) {
 		out << val.ToString();
@@ -393,7 +407,17 @@ Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(dtime_t value);
 template <>
+Value DUCKDB_API Value::CreateValue(dtime_tz_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(timestamp_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_sec_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_ms_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_ns_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_tz_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(const char *value);
 template <>
@@ -443,6 +467,8 @@ template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
 template <>
 DUCKDB_API interval_t Value::GetValue() const;
+template <>
+DUCKDB_API Value Value::GetValue() const;
 
 template <>
 DUCKDB_API bool Value::GetValueUnsafe() const;
@@ -513,8 +539,17 @@ template <>
 DUCKDB_API interval_t &Value::GetReferenceUnsafe();
 
 template <>
-DUCKDB_API bool Value::IsValid(float value);
+DUCKDB_API bool Value::IsNan(float input);
 template <>
-DUCKDB_API bool Value::IsValid(double value);
+DUCKDB_API bool Value::IsNan(double input);
+
+template <>
+DUCKDB_API bool Value::IsFinite(float input);
+template <>
+DUCKDB_API bool Value::IsFinite(double input);
+template <>
+DUCKDB_API bool Value::IsFinite(date_t input);
+template <>
+DUCKDB_API bool Value::IsFinite(timestamp_t input);
 
 } // namespace duckdb

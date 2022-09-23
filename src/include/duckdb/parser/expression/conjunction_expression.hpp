@@ -16,9 +16,10 @@ namespace duckdb {
 //! Represents a conjunction (AND/OR)
 class ConjunctionExpression : public ParsedExpression {
 public:
-	explicit ConjunctionExpression(ExpressionType type);
-	ConjunctionExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children);
-	ConjunctionExpression(ExpressionType type, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right);
+	DUCKDB_API explicit ConjunctionExpression(ExpressionType type);
+	DUCKDB_API ConjunctionExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children);
+	DUCKDB_API ConjunctionExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
+	                                 unique_ptr<ParsedExpression> right);
 
 	vector<unique_ptr<ParsedExpression>> children;
 
@@ -33,5 +34,15 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+
+public:
+	template <class T, class BASE>
+	static string ToString(const T &entry) {
+		string result = "(" + entry.children[0]->ToString();
+		for (idx_t i = 1; i < entry.children.size(); i++) {
+			result += " " + ExpressionTypeToOperator(entry.type) + " " + entry.children[i]->ToString();
+		}
+		return result + ")";
+	}
 };
 } // namespace duckdb

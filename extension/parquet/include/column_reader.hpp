@@ -56,12 +56,21 @@ public:
 
 	virtual void Skip(idx_t num_values);
 
-	const LogicalType &Type();
-	const SchemaElement &Schema();
+	ParquetReader &Reader();
+	const LogicalType &Type() const;
+	const SchemaElement &Schema() const;
+	idx_t FileIdx() const;
+	idx_t MaxDefine() const;
+	idx_t MaxRepeat() const;
 
+	virtual idx_t FileOffset() const;
+	virtual uint64_t TotalCompressedSize();
 	virtual idx_t GroupRowsAvailable();
 
-	unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns);
+	// register the range this reader will touch for prefetching
+	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
+
+	virtual unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns);
 
 protected:
 	// readers that use the default Read() need to implement those
@@ -74,6 +83,9 @@ protected:
 	// these are nops for most types, but not for strings
 	virtual void DictReference(Vector &result);
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result);
+
+	// applies any skips that were registered using Skip()
+	virtual void ApplyPendingSkips(idx_t num_values);
 
 	bool HasDefines() {
 		return max_define > 0;
@@ -93,13 +105,15 @@ protected:
 	ParquetReader &reader;
 	LogicalType type;
 
+	idx_t pending_skips = 0;
+
 private:
 	void PrepareRead(parquet_filter_t &filter);
 	void PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
 
-	const duckdb_parquet::format::ColumnChunk *chunk;
+	const duckdb_parquet::format::ColumnChunk *chunk = nullptr;
 
 	duckdb_apache::thrift::protocol::TProtocol *protocol;
 	idx_t page_rows_available;

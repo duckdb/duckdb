@@ -1,0 +1,23 @@
+# name: test/sql/types/decimal/test_empty_decimal.test
+# description: Test empty decimals
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE decimals(i DECIMAL(), j DECIMAL)
+
+statement ok
+INSERT INTO decimals VALUES (0176030871715840, 2.2)
+
+query II
+SELECT * FROM decimals
+----
+176030871715840.000	2.200
+
+# Test cast
+query II
+SELECT 1.25::FLOAT::DECIMAL, 1.25::FLOAT::DECIMAL()
+----
+1.250	1.250

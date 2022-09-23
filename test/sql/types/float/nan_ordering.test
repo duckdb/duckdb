@@ -1,0 +1,91 @@
+# name: test/sql/types/float/nan_ordering.test
+# description: Test ordering of NaN and infinity values
+# group: [float]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type FLOAT DOUBLE
+
+# storing nan in a table
+statement ok
+CREATE TABLE floats(f ${type});
+
+statement ok
+INSERT INTO floats VALUES ('NAN'), (1), ('infinity'), ('-infinity'), (-1), (NULL)
+
+# standard ordering
+query I
+SELECT f FROM floats ORDER BY f
+----
+NULL
+-inf
+-1.000000
+1.000000
+inf
+nan
+
+query I
+SELECT f FROM floats ORDER BY f DESC
+----
+NULL
+nan
+inf
+1.000000
+-1.000000
+-inf
+
+# top-n
+query I
+SELECT f FROM floats ORDER BY f DESC NULLS LAST LIMIT 2
+----
+nan
+inf
+
+query I
+SELECT f FROM floats ORDER BY f NULLS LAST LIMIT 2
+----
+-inf
+-1.0
+
+# top-n with many rows
+statement ok
+INSERT INTO floats SELECT '0'::${type} FROM range(10000)
+
+statement ok
+INSERT INTO floats VALUES ('nan'::${type})
+
+statement ok
+INSERT INTO floats VALUES ('-inf'::${type})
+
+query I
+SELECT f FROM floats ORDER BY f DESC NULLS LAST LIMIT 4
+----
+nan
+nan
+inf
+1.0
+
+query I
+SELECT f FROM floats ORDER BY f NULLS LAST LIMIT 4
+----
+-inf
+-inf
+-1.0
+0.0
+
+# count with filters
+query I
+SELECT COUNT(*) FROM floats WHERE f > 0
+----
+4
+
+query I
+SELECT COUNT(*) FROM floats WHERE f < 0
+----
+3
+
+statement ok
+DROP TABLE floats
+
+endloop

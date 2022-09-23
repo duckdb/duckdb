@@ -1,0 +1,14 @@
+# name: test/issues/general/test_3822.test
+# description: Issue 3822: Array_slice in macro type error
+# group: [general]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE MACRO pyfloats_to_floats(x) AS (CAST(string_split(x[2:-1], ',') AS FLOAT4[]))
+
+query T
+select pyfloats_to_floats('[1.000000, 2.000000, 3.000000]')
+----
+[1.0, 2.0, 3.0]

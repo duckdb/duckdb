@@ -63,9 +63,6 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 		}
 		// if there is a decimal or the value is too big to cast as either hugeint or bigint
 		double dbl_value = Cast::Operation<string_t, double>(str_val);
-		if (!Value::DoubleIsValid(dbl_value)) {
-			throw ParserException("Double value \"%s\" is out of range!", val.val.str);
-		}
 		return make_unique<ConstantExpression>(Value::DOUBLE(dbl_value));
 	}
 	case duckdb_libpgquery::T_PGNull:

@@ -1,0 +1,33 @@
+# name: test/sql/types/float/nan_arithmetic.test
+# description: Test arithmetic on NaN values
+# group: [float]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type FLOAT DOUBLE
+
+foreach val nan inf -inf
+
+# any arithmetic on a nan or inf value will result in an overflow
+statement error
+SELECT '${val}'::${type} + 1
+
+statement error
+SELECT '${val}'::${type} - 1
+
+statement error
+SELECT '${val}'::${type} * 1
+
+statement error
+SELECT '${val}'::${type} / 1
+
+statement error
+SELECT '${val}'::${type} % 1
+
+statement error
+SELECT -('${val}'::${type})
+
+endloop
+
+endloop

@@ -1,0 +1,147 @@
+# name: test/sql/function/list/aggregates/var_stddev.test
+# description: Test the list_var_samp, list_var_pop, list_stddev_pop, list_stddev_samp aggregate functions
+# group: [aggregates]
+
+statement ok
+create table stddev_test(val integer[])
+
+statement ok
+insert into stddev_test values ([42, 43, 42, 1000, NULL, NULL]), ([1, 1, 2, 2, 1, 3]), ([]), ([NULL]), (NULL)
+
+query I
+SELECT list_stddev_samp([1])
+----
+NULL
+
+query I
+SELECT list_var_samp([1])
+----
+NULL
+
+# stddev_samp
+query I
+select round(list_stddev_samp(val), 1) from stddev_test
+----
+478.8
+0.8
+NULL
+NULL
+NULL
+
+query III
+select list_sum(val), round(list_stddev_samp(val), 1), list_min(val) from stddev_test
+----
+1127	478.8	42	
+10	0.8	1
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	NULL
+
+# stddev_pop
+query I
+select round(list_stddev_pop(val), 1) from stddev_test
+----
+414.7
+0.7
+NULL
+NULL
+NULL
+
+query III
+select list_sum(val), round(list_stddev_pop(val), 1), list_min(val) from stddev_test
+----
+1127	414.7	42
+10	0.7	1
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	NULL
+
+# var_samp
+query I
+select round(list_var_samp(val), 1) from stddev_test
+----
+229281.6
+0.7
+NULL
+NULL
+NULL
+
+query I
+select round(list_aggr(val, 'variance'), 1) from stddev_test
+----
+229281.6
+0.7
+NULL
+NULL
+NULL
+
+query III
+select list_sum(val), round(list_var_samp(val), 1), list_min(val) from stddev_test
+----
+1127	229281.6	42	
+10	0.7	1
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	NULL
+
+# var_pop
+query I
+select round(list_var_pop(val), 1) from stddev_test
+----
+171961.2
+0.6
+NULL
+NULL
+NULL
+
+query III
+select list_sum(val), round(list_var_pop(val), 1), list_min(val) from stddev_test
+----
+1127	171961.2	42	
+10	0.6	1
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	NULL
+
+# stddev_samp
+query I
+select round(list_aggr(val, 'stddev'), 1) from stddev_test
+----
+478.8
+0.8
+NULL
+NULL
+NULL
+
+query I
+select list_aggr([0], 'stddev')
+----
+NULL
+
+query I
+select list_aggr([0, 0], 'stddev')
+----
+0
+
+statement error
+select list_aggr([1e301, -1e301], 'stddev')
+
+statement error
+select list_var_samp([1e301, -1e301])
+
+statement error
+select list_var_pop([1e301, -1e301])
+
+# incorrect usage
+statement error
+SELECT list_stddev_samp()
+
+# stddev_pop unexpectedly does not fetch any rows, test for list_stddev_pop
+statement ok
+CREATE TABLE t0 (c0 DOUBLE[]);
+
+statement ok
+INSERT INTO t0 VALUES([1E200, 0]);
+
+statement error
+SELECT list_stddev_pop(c0) FROM t0;

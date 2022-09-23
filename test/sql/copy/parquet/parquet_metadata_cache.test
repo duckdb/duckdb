@@ -52,12 +52,12 @@ select * from parquet_scan('__TEST_DIR__/cached.parquet')
 query II
 select * from parquet_scan('data/parquet-testing/glob/t1.parquet')
 ----
-1	hello
+1	a
 
 query II
 select * from parquet_scan('data/parquet-testing/glob2/t1.parquet')
 ----
-1	hello
+3	c
 
 # test using *
 query I

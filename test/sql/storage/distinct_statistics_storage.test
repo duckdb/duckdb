@@ -1,0 +1,18 @@
+# name: test/sql/storage/distinct_statistics_storage.test
+# description: Test storage of approx unique statistic
+# group: [storage]
+
+load __TEST_DIR__/distinct_statistics.db
+
+statement ok
+create table test as select range % 10 i, range % 30 j from range(100)
+
+query II nosort q0
+select stats(i), stats(j) from test limit 1
+----
+
+restart
+
+query II nosort q0
+select stats(i), stats(j) from test limit 1
+----

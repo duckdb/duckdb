@@ -5,6 +5,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
@@ -15,7 +16,9 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		auto stats_left = PropagateExpression(condition.left);
 		auto stats_right = PropagateExpression(condition.right);
 		if (stats_left && stats_right) {
-			if (condition.null_values_are_equal && stats_left->CanHaveNull() && stats_right->CanHaveNull()) {
+			if ((condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+			     condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) &&
+			    stats_left->CanHaveNull() && stats_right->CanHaveNull()) {
 				// null values are equal in this join, and both sides can have null values
 				// nothing to do here
 				continue;
@@ -34,10 +37,15 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					// semi or inner join on false; entire node can be pruned
 					ReplaceWithEmptyResult(*node_ptr);
 					return;
-				case JoinType::ANTI:
-					// anti join: replace entire join with LHS
-					*node_ptr = move(join.children[0]);
+				case JoinType::ANTI: {
+					// when the right child has data, return the left child
+					// when the right child has no data, return an empty set
+					auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
+					limit->AddChild(move(join.children[1]));
+					auto cross_product = LogicalCrossProduct::Create(move(join.children[0]), move(limit));
+					*node_ptr = move(cross_product);
 					return;
+				}
 				case JoinType::LEFT:
 					// anti/left outer join: replace right side with empty node
 					ReplaceWithEmptyResult(join.children[1]);
@@ -58,23 +66,30 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				if (join.conditions.size() > 1) {
 					// there are multiple conditions: erase this condition
 					join.conditions.erase(join.conditions.begin() + i);
+					// remove the corresponding statistics
+					join.join_stats.clear();
 					i--;
 					continue;
 				} else {
 					// this is the only condition and it is always true: all conditions are true
 					switch (join.join_type) {
-					case JoinType::SEMI:
-						// semi join on true: replace entire join with LHS
-						*node_ptr = move(join.children[0]);
+					case JoinType::SEMI: {
+						// when the right child has data, return the left child
+						// when the right child has no data, return an empty set
+						auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
+						limit->AddChild(move(join.children[1]));
+						auto cross_product = LogicalCrossProduct::Create(move(join.children[0]), move(limit));
+						*node_ptr = move(cross_product);
 						return;
+					}
 					case JoinType::INNER:
 					case JoinType::LEFT:
 					case JoinType::RIGHT:
 					case JoinType::OUTER: {
 						// inner/left/right/full outer join, replace with cross product
 						// since the condition is always true, left/right/outer join are equivalent to inner join here
-						auto cross_product = make_unique<LogicalCrossProduct>();
-						cross_product->children = move(join.children);
+						auto cross_product =
+						    LogicalCrossProduct::Create(move(join.children[0]), move(join.children[1]));
 						*node_ptr = move(cross_product);
 						return;
 					}
@@ -103,7 +118,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		// anti joins have inverse statistics propagation
 		// (i.e. if we have an anti join on i: [0, 100] and j: [0, 25], the resulting stats are i:[25,100])
 		// for now we don't handle anti joins
-		if (condition.null_values_are_equal) {
+		if (condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// skip update when null values are equal (for now?)
 			continue;
 		}
@@ -165,17 +181,24 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	}
 
 	auto join_type = join.join_type;
+	// depending on the join type, we might need to alter the statistics
+	// LEFT, FULL, RIGHT OUTER and SINGLE joins can introduce null values
+	// this requires us to alter the statistics after this point in the query plan
+	bool adds_null_on_left = IsRightOuterJoin(join_type);
+	bool adds_null_on_right = IsLeftOuterJoin(join_type) || join_type == JoinType::SINGLE;
+
 	vector<ColumnBinding> left_bindings, right_bindings;
-	if (IsRightOuterJoin(join_type)) {
+	if (adds_null_on_left) {
 		left_bindings = join.children[0]->GetColumnBindings();
 	}
-	if (IsLeftOuterJoin(join_type)) {
+	if (adds_null_on_right) {
 		right_bindings = join.children[1]->GetColumnBindings();
 	}
 
 	// then propagate into the join conditions
 	switch (join.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		PropagateStatistics((LogicalComparisonJoin &)join, node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
@@ -185,10 +208,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		break;
 	}
 
-	// now depending on the join type, we might need to alter the statistics
-	// LEFT, FULL and RIGHT OUTER joins can introduce null values
-	// this requires us to alter the statistics after this point in the query plan
-	if (IsLeftOuterJoin(join_type)) {
+	if (adds_null_on_right) {
 		// left or full outer join: set IsNull() to true for all rhs statistics
 		for (auto &binding : right_bindings) {
 			auto stats = statistics_map.find(binding);
@@ -197,7 +217,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 			}
 		}
 	}
-	if (IsRightOuterJoin(join_type)) {
+	if (adds_null_on_left) {
 		// right or full outer join: set IsNull() to true for all lhs statistics
 		for (auto &binding : left_bindings) {
 			auto stats = statistics_map.find(binding);

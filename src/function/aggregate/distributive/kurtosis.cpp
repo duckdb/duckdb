@@ -21,15 +21,15 @@ struct KurtosisOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		state->n++;
 		state->sum += data[idx];
 		state->sum_sqr += pow(data[idx], 2);
@@ -38,7 +38,7 @@ struct KurtosisOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (source.n == 0) {
 			return;
 		}
@@ -50,7 +50,7 @@ struct KurtosisOperation {
 	}
 
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target, ValidityMask &mask,
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, TARGET_TYPE *target, ValidityMask &mask,
 	                     idx_t idx) {
 		auto n = (double)state->n;
 		if (n <= 3) {
@@ -74,8 +74,8 @@ struct KurtosisOperation {
 			mask.SetInvalid(idx);
 		} // LCOV_EXCL_STOP
 		target[idx] = (n - 1) * ((n + 1) * m4 / (m2 * m2) - 3 * (n - 1)) / ((n - 2) * (n - 3));
-		if (!Value::DoubleIsValid(target[idx])) {
-			mask.SetInvalid(idx);
+		if (!Value::DoubleIsFinite(target[idx])) {
+			throw OutOfRangeException("Kurtosis is out of range!");
 		}
 	}
 

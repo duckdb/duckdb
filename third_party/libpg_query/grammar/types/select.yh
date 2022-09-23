@@ -1,5 +1,5 @@
 %type <node>	select_no_parens select_with_parens select_clause
-				simple_select values_clause
+				simple_select values_clause values_clause_opt_comma
 
 
 %type <sortorder> opt_asc_desc
@@ -21,13 +21,13 @@
 %type <conststr> MathOp
 
 
-%type <list>	distinct_clause opt_all_clause 			 			 			 			 			 			 opt_name_list
-				sort_clause opt_sort_clause sortby_list 				name_list from_clause from_list opt_array_bounds
-				qualified_name_list any_name 				any_operator expr_list	opt_expr_list attrs
-				target_list opt_target_list 			 			 indirection opt_indirection
+%type <list>	distinct_clause opt_all_clause name_list_opt_comma opt_name_list
+				sort_clause opt_sort_clause sortby_list name_list from_clause from_list from_list_opt_comma opt_array_bounds
+				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma
+				target_list			 			 indirection opt_indirection target_list_opt_comma opt_target_list_opt_comma
 			 group_clause select_limit
 				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers
-%type <list>	group_by_list
+%type <list>	group_by_list group_by_list_opt_comma
 %type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id
 %type <range>	OptTempTableName
 %type <into>	into_clause
@@ -46,7 +46,7 @@
 %type <list>	opt_interval
 %type <node>	overlay_placing substr_from substr_for
 
-%type <list>	except_list opt_except_list replace_list_el replace_list opt_replace_list
+%type <list>	except_list opt_except_list replace_list_el replace_list opt_replace_list replace_list_opt_comma
 
 %type <node> limit_clause select_limit_value
 				offset_clause select_offset_value
@@ -71,7 +71,7 @@
 %type <subquerytype>	sub_type
 
 %type <node>	dict_arg
-%type <list>	dict_arguments
+%type <list>	dict_arguments dict_arguments_opt_comma
 
 %type <alias>	alias_clause opt_alias_clause
 %type <list>	func_alias_clause
@@ -90,7 +90,7 @@
 
 
 
-%type <typnam>	Typename SimpleTypename ConstTypename
+%type <typnam>	Typename SimpleTypename ConstTypename opt_Typename
 				GenericType Numeric opt_float
 				Character ConstCharacter
 				CharacterWithLength CharacterWithoutLength
@@ -118,6 +118,8 @@
 
 %type <list>	within_group_clause
 %type <node>	filter_clause
+%type <boolean>	export_clause
+
 %type <list>	window_clause window_definition_list opt_partition_clause
 %type <windef>	window_definition over_clause window_specification
 				opt_frame_clause frame_extent frame_bound

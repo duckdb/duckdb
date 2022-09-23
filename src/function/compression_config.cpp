@@ -19,6 +19,8 @@ static DefaultCompressionMethod internal_compression_methods[] = {
     {CompressionType::COMPRESSION_UNCOMPRESSED, UncompressedFun::GetFunction, UncompressedFun::TypeIsSupported},
     {CompressionType::COMPRESSION_RLE, RLEFun::GetFunction, RLEFun::TypeIsSupported},
     {CompressionType::COMPRESSION_BITPACKING, BitpackingFun::GetFunction, BitpackingFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_DICTIONARY, DictionaryCompressionFun::GetFunction,
+     DictionaryCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_AUTO, nullptr, nullptr}};
 
 static CompressionFunction *FindCompressionFunction(CompressionFunctionSet &set, CompressionType type,
@@ -68,6 +70,7 @@ vector<CompressionFunction *> DBConfig::GetCompressionFunctions(PhysicalType dat
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_UNCOMPRESSED, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_RLE, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_BITPACKING, data_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_DICTIONARY, data_type);
 	return result;
 }
 

@@ -3,6 +3,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/windows_undefs.hpp"
+#include "duckdb/common/types/value.hpp"
 
 #include <cmath>
 #include <limits>
@@ -543,6 +544,9 @@ bool Hugeint::TryConvert(float value, hugeint_t &result) {
 
 template <class REAL_T>
 bool ConvertFloatingToBigint(REAL_T value, hugeint_t &result) {
+	if (!Value::IsFinite<REAL_T>(value)) {
+		return false;
+	}
 	if (value <= -170141183460469231731687303715884105728.0 || value >= 170141183460469231731687303715884105727.0) {
 		return false;
 	}
@@ -626,26 +630,23 @@ hugeint_t hugeint_t::operator-() const {
 }
 
 hugeint_t hugeint_t::operator>>(const hugeint_t &rhs) const {
-	if (upper < 0) {
-		return hugeint_t(0);
-	}
 	hugeint_t result;
 	uint64_t shift = rhs.lower;
 	if (rhs.upper != 0 || shift >= 128) {
 		return hugeint_t(0);
-	} else if (shift == 64) {
-		result.upper = 0;
-		result.lower = upper;
 	} else if (shift == 0) {
 		return *this;
+	} else if (shift == 64) {
+		result.upper = (upper < 0) ? -1 : 0;
+		result.lower = upper;
 	} else if (shift < 64) {
-		// perform upper shift in unsigned integer, and mask away the most significant bit
-		result.lower = (uint64_t(upper) << (64 - shift)) + (lower >> shift);
-		result.upper = uint64_t(upper) >> shift;
+		// perform lower shift in unsigned integer, and mask away the most significant bit
+		result.lower = (uint64_t(upper) << (64 - shift)) | (lower >> shift);
+		result.upper = upper >> shift;
 	} else {
 		D_ASSERT(shift < 128);
-		result.lower = uint64_t(upper) >> (shift - 64);
-		result.upper = 0;
+		result.lower = upper >> (shift - 64);
+		result.upper = (upper < 0) ? -1 : 0;
 	}
 	return result;
 }

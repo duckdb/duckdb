@@ -1,0 +1,30 @@
+# name: test/issues/general/test_3611.test
+# description: Issue 3611: Address Sanitiser Failure in Storage Compression
+# group: [general]
+
+# load the DB from disk
+load __TEST_DIR__/issue_3611.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA force_compression='dictionary'
+
+statement ok
+CREATE TABLE all_types AS SELECT varchar FROM test_all_types();
+
+loop i 0 12
+
+statement ok
+INSERT INTO all_types SELECT varchar FROM all_types;
+
+endloop
+
+query I nosort r1
+SELECT varchar FROM all_types;
+
+restart
+
+query I nosort r1
+SELECT varchar FROM all_types;

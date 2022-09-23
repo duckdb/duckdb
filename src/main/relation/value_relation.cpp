@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-ValueRelation::ValueRelation(ClientContext &context, const vector<vector<Value>> &values, vector<string> names_p,
-                             string alias_p)
+ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, const vector<vector<Value>> &values,
+                             vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
 	// create constant expressions for the values
 	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
@@ -20,13 +20,14 @@ ValueRelation::ValueRelation(ClientContext &context, const vector<vector<Value>>
 		}
 		this->expressions.push_back(move(expressions));
 	}
-	context.TryBindRelation(*this, this->columns);
+	context->TryBindRelation(*this, this->columns);
 }
 
-ValueRelation::ValueRelation(ClientContext &context, const string &values_list, vector<string> names_p, string alias_p)
+ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, const string &values_list,
+                             vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
-	this->expressions = Parser::ParseValuesList(values_list, context.GetParserOptions());
-	context.TryBindRelation(*this, this->columns);
+	this->expressions = Parser::ParseValuesList(values_list, context->GetParserOptions());
+	context->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> ValueRelation::GetQueryNode() {
@@ -46,9 +47,9 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 		}
 	} else {
 		for (idx_t i = 0; i < columns.size(); i++) {
-			table_ref->expected_names.push_back(columns[i].name);
-			table_ref->expected_types.push_back(columns[i].type);
-			D_ASSERT(names.size() == 0 || columns[i].name == names[i]);
+			table_ref->expected_names.push_back(columns[i].Name());
+			table_ref->expected_types.push_back(columns[i].Type());
+			D_ASSERT(names.size() == 0 || columns[i].Name() == names[i]);
 		}
 	}
 	// copy the expressions

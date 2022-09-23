@@ -5,6 +5,7 @@
 #include "catch.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "duckdb/common/crypto/md5.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "test_helpers.hpp"
 
 #include <thread>
@@ -34,7 +35,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 	auto &query_has_label = query_ptr->query_has_label;
 	auto &query_label = query_ptr->query_label;
 
-	if (!result.success) {
+	if (result.HasError()) {
 		PrintLineSep();
 		std::cerr << "Query unexpectedly failed (" << file_name.c_str() << ":" << query_line << ")\n";
 		PrintLineSep();
@@ -42,13 +43,13 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		PrintLineSep();
 		PrintHeader("Actual result:");
 		result.Print();
-		if (SkipErrorMessage(result.error)) {
+		if (SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return;
 		}
 		FAIL_LINE(file_name, query_line, 0);
 	}
-	idx_t row_count = result.collection.Count();
+	idx_t row_count = result.RowCount();
 	idx_t column_count = result.ColumnCount();
 	idx_t total_value_count = row_count * column_count;
 	bool compare_hash =
@@ -80,7 +81,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		}
 		std::cerr << std::endl;
 		PrintLineSep();
-		for (idx_t r = 0; r < result.collection.Count(); r++) {
+		for (idx_t r = 0; r < result.RowCount(); r++) {
 			for (idx_t c = 0; c < result.ColumnCount(); c++) {
 				if (c != 0) {
 					std::cerr << "\t";
@@ -167,7 +168,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		}
 		idx_t expected_rows = comparison_values.size() / expected_column_count;
 		// we first check the counts: if the values are equal to the amount of rows we expect the results to be row-wise
-		bool row_wise = expected_column_count > 1 && comparison_values.size() == result.collection.Count();
+		bool row_wise = expected_column_count > 1 && comparison_values.size() == result.RowCount();
 		if (!row_wise) {
 			// the counts do not match up for it to be row-wise
 			// however, this can also be because the query returned an incorrect # of rows
@@ -196,13 +197,13 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
 			FAIL_LINE(file_name, query_line, 0);
 		}
-		if (expected_rows != result.collection.Count()) {
+		if (expected_rows != result.RowCount()) {
 			if (column_count_mismatch) {
 				ColumnCountMismatch(original_expected_columns, row_wise);
 			}
 			PrintErrorHeader("Wrong row count in query!");
 			std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got "
-			          << termcolor::bold << result.collection.Count() << termcolor::reset << " rows" << std::endl;
+			          << termcolor::bold << result.RowCount() << termcolor::reset << " rows" << std::endl;
 			PrintLineSep();
 			PrintSQL(sql_query);
 			PrintLineSep();
@@ -319,7 +320,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 }
 
 void TestResultHelper::CheckStatementResult() {
-	bool error = !result.success;
+	bool error = result.HasError();
 
 	if (runner.output_result_mode || runner.debug_mode) {
 		result.Print();
@@ -330,7 +331,9 @@ void TestResultHelper::CheckStatementResult() {
 		// even in the case of "statement error", we do not accept ALL errors
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
-		bool internal_error = TestIsInternalError(result.error);
+
+		bool internal_error =
+		    result.HasError() ? TestIsInternalError(runner.always_fail_error_messages, result.GetError()) : false;
 		if (!internal_error) {
 			error = !error;
 		} else {
@@ -345,7 +348,7 @@ void TestResultHelper::CheckStatementResult() {
 		PrintSQL(sql_query);
 		PrintLineSep();
 		result.Print();
-		if (expect_ok && SkipErrorMessage(result.error)) {
+		if (expect_ok && SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return;
 		}
@@ -365,14 +368,14 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 		if (i > 0) {
 			struct_definition += ", ";
 		}
-		struct_definition += "\"" + names[i] + "\" := 'VARCHAR'";
+		struct_definition += KeywordHelper::WriteOptionallyQuoted(names[i]) + " := 'VARCHAR'";
 	}
 	struct_definition += ")";
 
 	auto csv_result =
 	    con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', columns=" + struct_definition + ")");
-	if (!csv_result->success) {
-		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error);
+	if (csv_result->HasError()) {
+		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->GetError());
 		PrintErrorHeader(error.c_str());
 		FAIL_LINE(file_name, query_line, 0);
 	}
@@ -415,11 +418,10 @@ void TestResultHelper::PrintExpectedResult(vector<string> &values, idx_t columns
 }
 
 bool TestResultHelper::SkipErrorMessage(const string &message) {
-	if (StringUtil::Contains(message, "HTTP")) {
-		return true;
-	}
-	if (StringUtil::Contains(message, "Unable to connect")) {
-		return true;
+	for (auto &error_message : runner.ignore_error_messages) {
+		if (StringUtil::Contains(message, error_message)) {
+			return true;
+		}
 	}
 	return false;
 }
@@ -458,7 +460,7 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 void TestResultHelper::DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test,
                                            vector<string> &out_result) {
 	size_t r, c;
-	idx_t row_count = result.collection.Count();
+	idx_t row_count = result.RowCount();
 	idx_t column_count = result.ColumnCount();
 
 	out_result.resize(row_count * column_count);

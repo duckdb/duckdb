@@ -6,6 +6,11 @@ require tpcds
 
 load __TEST_DIR__/tpcds_storage.db
 
+foreach compression <compression>
+
+statement ok
+PRAGMA force_compression='${compression}'
+
 statement ok
 call dsdgen(sf=1);
 
@@ -38,7 +43,16 @@ PRAGMA tpcds(${i})
 
 endloop
 
-loop i 65 85
+loop i 65 71
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
+
+loop i 72 85
 
 query I
 PRAGMA tpcds(${i})
@@ -53,5 +67,48 @@ query I
 PRAGMA tpcds(${i})
 ----
 <FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
+
+# unstable multithreaded rounding
+# 71
+
+foreach i 71
+
+statement ok
+pragma threads=1
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
+
+statement ok
+DROP TABLE call_center;
+DROP TABLE catalog_page;
+DROP TABLE catalog_returns;
+DROP TABLE catalog_sales;
+DROP TABLE customer;
+DROP TABLE customer_address;
+DROP TABLE customer_demographics;
+DROP TABLE date_dim;
+DROP TABLE household_demographics;
+DROP TABLE income_band;
+DROP TABLE inventory;
+DROP TABLE item;
+DROP TABLE promotion;
+DROP TABLE reason;
+DROP TABLE ship_mode;
+DROP TABLE store;
+DROP TABLE store_returns;
+DROP TABLE store_sales;
+DROP TABLE time_dim;
+DROP TABLE warehouse;
+DROP TABLE web_page;
+DROP TABLE web_returns;
+DROP TABLE web_sales;
+DROP TABLE web_site;
 
 endloop

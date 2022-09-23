@@ -1,0 +1,54 @@
+# name: test/sql/function/list/aggregates/skewness.test
+# description: Test the list_skewness aggregate function
+# group: [aggregates]
+
+# incorrect usage
+statement error
+select list_skewness()
+
+query I
+select list_skewness([1])
+----
+NULL
+
+statement ok
+CREATE TABLE skew AS SELECT LIST(10) AS i FROM range(5) t1(i)
+
+# constant value
+query I
+select list_skewness (i) from skew
+----
+NULL
+
+# out of range
+statement error
+select list_skewness([-2e307, 0, 2e307])
+
+statement ok
+create table aggr(k int[], v decimal(10,2)[], v2 decimal(10, 2)[]);
+
+statement ok
+insert into aggr values ([1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+	[10, 10, 10, 10, 20, 20, 25, 30, 30, 30, 30],
+	[NULL, 11, 15, 18, 22, 25, NULL, 35, 40, 50, 51]),
+	([], NULL, [NULL]);
+
+query III
+select list_skewness(k), list_skewness(v), list_skewness(v2) from aggr
+----
+-3.316625	-0.163444	0.365401
+NULL	NULL	NULL
+
+statement ok
+create table aggr2(v2 decimal(10, 2)[]);
+
+statement ok
+insert into aggr2 values ([NULL, 11, 15, 18]), ([22, 25]), ([NULL]), ([35, 40, 50, 51]);
+
+query I
+select list_skewness(v2) from aggr2
+----
+-0.423273
+NULL
+NULL
+-0.330141

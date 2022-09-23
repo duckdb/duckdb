@@ -1,10 +1,13 @@
 #include "duckdb_odbc.hpp"
+#include "api_info.hpp"
+#include "descriptor.hpp"
 #include "odbc_fetch.hpp"
 #include "odbc_interval.hpp"
-#include "descriptor.hpp"
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
 
+using duckdb::OdbcDiagnostic;
+using duckdb::OdbcHandle;
 using duckdb::OdbcHandleDbc;
 using duckdb::OdbcHandleDesc;
 using duckdb::OdbcHandleStmt;
@@ -22,6 +25,22 @@ std::string duckdb::OdbcHandleTypeToString(OdbcHandleType type) {
 		return "DESC";
 	}
 	return "INVALID";
+}
+
+//! OdbcHandle functions ***************************************************
+OdbcHandle::OdbcHandle(OdbcHandleType type_p) : type(type_p) {
+	odbc_diagnostic = make_unique<OdbcDiagnostic>();
+}
+
+OdbcHandle::OdbcHandle(const OdbcHandle &other) {
+	// calling copy assigment opetator;
+	*this = other;
+}
+
+OdbcHandle &OdbcHandle::operator=(const OdbcHandle &other) {
+	type = other.type;
+	std::copy(other.error_messages.begin(), other.error_messages.end(), std::back_inserter(error_messages));
+	return *this;
 }
 
 //! OdbcHandleDbc functions ***************************************************
@@ -61,13 +80,27 @@ void OdbcHandleDbc::ResetStmtDescriptors(OdbcHandleDesc *old_desc) {
 	}
 }
 
+void OdbcHandleDbc::SetDatabaseName(const string &db_name) {
+	if (!db_name.empty()) {
+		sql_attr_current_catalog = db_name;
+	}
+}
+
+std::string OdbcHandleDbc::GetDatabaseName() {
+	return sql_attr_current_catalog;
+}
+
+std::string OdbcHandleDbc::GetDataSourceName() {
+	return dsn;
+}
+
 //! OdbcHandleStmt functions **************************************************
 OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
     : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
 	D_ASSERT(dbc_p);
 	D_ASSERT(dbc_p->conn);
 
-	odbc_fetcher = make_unique<OdbcFetch>();
+	odbc_fetcher = make_unique<OdbcFetch>(this);
 	dbc->vec_stmt_ref.emplace_back(this);
 
 	// Implicit parameter and row descriptor associated with this ODBC handle statement
@@ -85,15 +118,14 @@ void OdbcHandleStmt::Close() {
 	// the parameter values can be reused after
 	param_desc->Reset();
 	// stmt->stmt.reset(); // the statment can be reuse in prepared statement
-	bound_cols.clear();
 	error_messages.clear();
 }
 
 SQLRETURN OdbcHandleStmt::MaterializeResult() {
-	if (!stmt || !stmt->success) {
+	if (!stmt || stmt->HasError()) {
 		return SQL_SUCCESS;
 	}
-	if (!res || !res->success) {
+	if (!res || res->HasError()) {
 		return SQL_SUCCESS;
 	}
 	return odbc_fetcher->Materialize(this);
@@ -105,4 +137,38 @@ void OdbcHandleStmt::SetARD(OdbcHandleDesc *new_ard) {
 
 void OdbcHandleStmt::SetAPD(OdbcHandleDesc *new_apd) {
 	param_desc->SetCurrentAPD(new_apd);
+}
+
+void OdbcHandleStmt::FillIRD() {
+	D_ASSERT(stmt);
+	auto ird = row_desc->GetIRD();
+	ird->Reset();
+	ird->header.sql_desc_count = 0;
+	auto num_cols = stmt->ColumnCount();
+	for (duckdb::idx_t col_idx = 0; col_idx < num_cols; ++col_idx) {
+		duckdb::DescRecord new_record;
+		auto col_type = stmt->GetTypes()[col_idx];
+
+		new_record.sql_desc_base_column_name = stmt->GetNames()[col_idx];
+		new_record.sql_desc_name = new_record.sql_desc_base_column_name;
+		new_record.sql_desc_label = stmt->GetNames()[col_idx];
+		new_record.sql_desc_length = new_record.sql_desc_label.size();
+		new_record.sql_desc_octet_length = 0;
+
+		auto sql_type = duckdb::ApiInfo::FindRelatedSQLType(col_type.id());
+		if (sql_type == SQL_INTERVAL) {
+			// default mapping from Logical::Interval -> SQL_INTERVAL_DAY_TO_SECOND
+			new_record.SetSqlDescType(SQL_INTERVAL_DAY_TO_SECOND);
+		} else {
+			new_record.SetSqlDescType(sql_type);
+		}
+
+		new_record.sql_desc_type_name = col_type.ToString();
+		duckdb::ApiInfo::GetColumnSize<SQLINTEGER>(col_type, &new_record.sql_desc_display_size);
+		new_record.SetDescUnsignedField(col_type);
+
+		new_record.sql_desc_nullable = SQL_NULLABLE;
+
+		ird->records.emplace_back(new_record);
+	}
 }

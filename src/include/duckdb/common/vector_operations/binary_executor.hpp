@@ -56,6 +56,17 @@ struct BinaryLambdaWrapper {
 	}
 };
 
+struct BinaryLambdaWrapperWithNulls {
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
+		return fun(left, right, mask, idx);
+	}
+
+	static bool AddsNulls() {
+		return true;
+	}
+};
+
 struct BinaryExecutor {
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
@@ -202,10 +213,10 @@ struct BinaryExecutor {
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
 	static void ExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-		VectorData ldata, rdata;
+		UnifiedVectorFormat ldata, rdata;
 
-		left.Orrify(count, ldata);
-		right.Orrify(count, rdata);
+		left.ToUnifiedFormat(count, ldata);
+		right.ToUnifiedFormat(count, rdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
@@ -252,6 +263,13 @@ public:
 	static void ExecuteStandard(Vector &left, Vector &right, Vector &result, idx_t count) {
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool>(left, right, result,
 		                                                                                           count, false);
+	}
+
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE,
+	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE, ValidityMask &, idx_t)>>
+	static void ExecuteWithNulls(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapperWithNulls, bool, FUNC>(left, right, result,
+		                                                                                            count, fun);
 	}
 
 public:
@@ -369,9 +387,19 @@ public:
 		auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
 
 		if (LEFT_CONSTANT && ConstantVector::IsNull(left)) {
+			if (false_sel) {
+				for (idx_t i = 0; i < count; i++) {
+					false_sel->set_index(i, sel->get_index(i));
+				}
+			}
 			return 0;
 		}
 		if (RIGHT_CONSTANT && ConstantVector::IsNull(right)) {
+			if (false_sel) {
+				for (idx_t i = 0; i < count; i++) {
+					false_sel->set_index(i, sel->get_index(i));
+				}
+			}
 			return 0;
 		}
 
@@ -454,10 +482,10 @@ public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 	static idx_t SelectGeneric(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
 	                           SelectionVector *true_sel, SelectionVector *false_sel) {
-		VectorData ldata, rdata;
+		UnifiedVectorFormat ldata, rdata;
 
-		left.Orrify(count, ldata);
-		right.Orrify(count, rdata);
+		left.ToUnifiedFormat(count, ldata);
+		right.ToUnifiedFormat(count, rdata);
 
 		return SelectGenericLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP>((LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data,
 		                                                          ldata.sel, rdata.sel, sel, count, ldata.validity,
@@ -467,9 +495,8 @@ public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 	static idx_t Select(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
 	                    SelectionVector *false_sel) {
-		SelectionVector owned_sel;
 		if (!sel) {
-			sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+			sel = FlatVector::IncrementalSelectionVector();
 		}
 		if (left.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		    right.GetVectorType() == VectorType::CONSTANT_VECTOR) {

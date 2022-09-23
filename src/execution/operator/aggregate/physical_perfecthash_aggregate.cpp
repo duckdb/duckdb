@@ -70,9 +70,10 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	}
 }
 
-unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(ClientContext &context) const {
-	return make_unique<PerfectAggregateHashTable>(BufferManager::GetBufferManager(context), group_types, payload_types,
-	                                              aggregate_objects, group_minima, required_bits);
+unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Allocator &allocator,
+                                                                             ClientContext &context) const {
+	return make_unique<PerfectAggregateHashTable>(allocator, BufferManager::GetBufferManager(context), group_types,
+	                                              payload_types, aggregate_objects, group_minima, required_bits);
 }
 
 //===--------------------------------------------------------------------===//
@@ -81,7 +82,7 @@ unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Cli
 class PerfectHashAggregateGlobalState : public GlobalSinkState {
 public:
 	PerfectHashAggregateGlobalState(const PhysicalPerfectHashAggregate &op, ClientContext &context)
-	    : ht(op.CreateHT(context)) {
+	    : ht(op.CreateHT(Allocator::Get(context), context)) {
 	}
 
 	//! The lock for updating the global aggregate state
@@ -92,8 +93,8 @@ public:
 
 class PerfectHashAggregateLocalState : public LocalSinkState {
 public:
-	PerfectHashAggregateLocalState(const PhysicalPerfectHashAggregate &op, ClientContext &context)
-	    : ht(op.CreateHT(context)) {
+	PerfectHashAggregateLocalState(const PhysicalPerfectHashAggregate &op, ExecutionContext &context)
+	    : ht(op.CreateHT(Allocator::Get(context.client), context.client)) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
@@ -111,7 +112,7 @@ unique_ptr<GlobalSinkState> PhysicalPerfectHashAggregate::GetGlobalSinkState(Cli
 }
 
 unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<PerfectHashAggregateLocalState>(*this, context.client);
+	return make_unique<PerfectHashAggregateLocalState>(*this, context);
 }
 
 SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,

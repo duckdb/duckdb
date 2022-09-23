@@ -28,8 +28,14 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	if (stmt->onConflictClause && stmt->onConflictClause->action != duckdb_libpgquery::PG_ONCONFLICT_NONE) {
 		throw ParserException("ON CONFLICT IGNORE/UPDATE clauses are not supported");
 	}
+	if (!stmt->selectStmt) {
+		throw ParserException("DEFAULT VALUES clause is not supported!");
+	}
 
 	auto result = make_unique<InsertStatement>();
+	if (stmt->withClause) {
+		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
+	}
 
 	// first check if there are any columns specified
 	if (stmt->cols) {
@@ -37,6 +43,11 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 			auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
 			result->columns.emplace_back(target->name);
 		}
+	}
+
+	// Grab and transform the returning columns from the parser.
+	if (stmt->returningList) {
+		Transformer::TransformExpressionList(*(stmt->returningList), result->returning_list);
 	}
 	result->select_statement = TransformSelect(stmt->selectStmt, false);
 

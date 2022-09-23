@@ -1,0 +1,83 @@
+# name: test/sql/function/list/aggregates/avg.test
+# description: Test the list_avg aggregate function
+# group: [aggregates]
+
+require skip_reload
+
+
+# list_avg on a sequence
+statement ok
+CREATE SEQUENCE seq;
+
+query I
+SELECT list_avg([nextval('seq')]);
+----
+1
+
+query I
+SELECT list_avg([nextval('seq')]);
+----
+2
+
+# multiple list entries
+statement ok
+CREATE TABLE integers(i INTEGER[]);
+
+statement ok
+INSERT INTO integers VALUES ([1, 2, 3]), ([6, 3, 2, 5]), ([]), ([NULL]), (NULL), ([1, NULL, 2, 3]);
+
+query I
+SELECT list_avg(i) FROM integers;
+----
+2
+4
+NULL
+NULL
+NULL
+2
+
+# incorrect use
+statement error
+SELECT list_avg()
+
+# NULL average
+statement ok
+CREATE TABLE vals(i INTEGER[], j HUGEINT[]);
+
+statement ok
+INSERT INTO vals VALUES ([NULL, NULL], [NULL, NULL, NULL])
+
+query II
+SELECT list_avg(i), list_avg(j) FROM vals;
+----
+NULL	NULL
+
+# test list_avg on integers with no exact float64 representation
+
+statement ok
+CREATE TABLE bigints(n HUGEINT[]);
+
+statement ok
+INSERT INTO bigints (n) VALUES (['9007199254740992'::HUGEINT, 1::HUGEINT, 0::HUGEINT]);
+
+# this would give the wrong result with 'double' precision
+require longdouble
+
+query R
+SELECT list_avg(n)::DOUBLE - '3002399751580331'::DOUBLE FROM bigints;
+----
+0
+
+# test list_avg in which the intermediate sums are not exact (favg)
+
+statement ok
+CREATE TABLE doubles(n DOUBLE[]);
+
+statement ok
+INSERT INTO doubles (n) VALUES (['9007199254740992'::DOUBLE, 1::DOUBLE, 1::DOUBLE, 0::DOUBLE]);
+
+# this would give the wrong result with a simple sum-and-divide
+query R
+SELECT list_aggr(n, 'favg') - '2251799813685248.5'::DOUBLE FROM doubles;
+----
+0

@@ -6,13 +6,13 @@
 
 namespace duckdb {
 
-UpdateRelation::UpdateRelation(ClientContext &context, unique_ptr<ParsedExpression> condition_p, string schema_name_p,
-                               string table_name_p, vector<string> update_columns_p,
+UpdateRelation::UpdateRelation(ClientContextWrapper &context, unique_ptr<ParsedExpression> condition_p,
+                               string schema_name_p, string table_name_p, vector<string> update_columns_p,
                                vector<unique_ptr<ParsedExpression>> expressions_p)
     : Relation(context, RelationType::UPDATE_RELATION), condition(move(condition_p)), schema_name(move(schema_name_p)),
       table_name(move(table_name_p)), update_columns(move(update_columns_p)), expressions(move(expressions_p)) {
 	D_ASSERT(update_columns.size() == expressions.size());
-	context.TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 BoundStatement UpdateRelation::Bind(Binder &binder) {

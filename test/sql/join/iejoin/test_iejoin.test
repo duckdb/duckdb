@@ -1,0 +1,181 @@
+# name: test/sql/join/iejoin/test_iejoin.test
+# description: Test IEJoin
+# group: [iejoin]
+
+statement ok
+PRAGMA enable_verification
+
+# Restrictive tail predicates
+# Use inequalities to prevent future range choice optimisation
+query II
+WITH test AS (
+	SELECT
+		i AS id,
+		i AS begin,
+		i + 10 AS end,
+		i % 2 AS p1,
+		i % 3 AS p2
+	FROM range(0, 10) tbl(i)
+)
+SELECT lhs.id, rhs.id
+FROM test lhs, test rhs
+WHERE lhs.begin < rhs.end
+  AND rhs.begin < lhs.end
+  AND lhs.p1 <> rhs.p1
+  AND lhs.p2 <> rhs.p2
+ORDER BY ALL
+----
+0	1
+0	5
+0	7
+1	0
+1	2
+1	6
+1	8
+2	1
+2	3
+2	7
+2	9
+3	2
+3	4
+3	8
+4	3
+4	5
+4	9
+5	0
+5	4
+5	6
+6	1
+6	5
+6	7
+7	0
+7	2
+7	6
+7	8
+8	1
+8	3
+8	7
+8	9
+9	2
+9	4
+9	8
+
+# Subquery/CTE
+query II
+WITH test AS (
+	SELECT
+		i AS id,
+		i AS begin,
+		i + 10 AS end,
+		i % 2 AS p1,
+		i % 3 AS p2
+	FROM range(0, 10) tbl(i)
+),
+sub AS (
+	SELECT lhs.id AS lid, rhs.id AS rid
+	FROM test lhs, test rhs
+	WHERE lhs.begin < rhs.end
+	  AND rhs.begin < lhs.end
+	  AND lhs.p1 <> rhs.p1
+	  AND lhs.p2 <> rhs.p2
+	ORDER BY ALL
+)
+SELECT MIN(lid), MAX(rid)
+FROM sub
+----
+0	9
+
+# RTEs are not (yet) supported
+# so this should work, but not trigger IEJoin in the physical plan.
+query I
+WITH RECURSIVE t AS
+(
+	SELECT 1 AS x, 0 AS begin, 4 AS end
+UNION ALL
+	SELECT lhs.x + 1 AS x,
+		GREATEST(lhs.begin, rhs.begin) as begin,
+		LEAST(lhs.end, rhs.end) AS end
+	FROM t lhs, t rhs
+	WHERE lhs.begin + 1 < rhs.end - 1
+	  AND rhs.begin + 1 < lhs.end - 1
+	  AND lhs.x < 3
+)
+SELECT COUNT(*) FROM t
+----
+3
+
+# Fix missing continue statement in right join handler
+statement ok
+CREATE TABLE issue3486 AS
+SELECT generate_series as ts from generate_series(timestamp '2020-01-01', timestamp '2021-01-01', interval 1 day);
+
+query IIII
+WITH data_table AS (
+    SELECT epoch(ts) as ts
+    FROM issue3486
+    WHERE ts IS NOT NULL
+  ),
+  S AS (
+    SELECT
+      min(ts) as minVal,
+      max(ts) as maxVal,
+      (max(ts) - min(ts)) as range
+      FROM data_table
+  ),
+  buckets AS (
+    SELECT
+      range as bucket,
+      (range) * (select range FROM S) / 40 + (select minVal from S) as low,
+      (range + 1) * (select range FROM S) / 40 + (select minVal from S) as high
+    FROM range(0, 40, 1)
+  )
+  SELECT
+      bucket,
+      low,
+      high,
+      count(data_table.ts) as count
+    FROM buckets
+    LEFT JOIN data_table ON (data_table.ts >= low AND data_table.ts < high)
+    GROUP BY bucket, low, high
+    ORDER BY bucket;
+----
+0	1577836800	1578627360	10
+1	1578627360	1579417920	9
+2	1579417920	1580208480	9
+3	1580208480	1580999040	9
+4	1580999040	1581789600	9
+5	1581789600	1582580160	9
+6	1582580160	1583370720	10
+7	1583370720	1584161280	9
+8	1584161280	1584951840	9
+9	1584951840	1585742400	9
+10	1585742400	1586532960	9
+11	1586532960	1587323520	9
+12	1587323520	1588114080	9
+13	1588114080	1588904640	10
+14	1588904640	1589695200	9
+15	1589695200	1590485760	9
+16	1590485760	1591276320	9
+17	1591276320	1592066880	9
+18	1592066880	1592857440	9
+19	1592857440	1593648000	9
+20	1593648000	1594438560	10
+21	1594438560	1595229120	9
+22	1595229120	1596019680	9
+23	1596019680	1596810240	9
+24	1596810240	1597600800	9
+25	1597600800	1598391360	9
+26	1598391360	1599181920	10
+27	1599181920	1599972480	9
+28	1599972480	1600763040	9
+29	1600763040	1601553600	9
+30	1601553600	1602344160	9
+31	1602344160	1603134720	9
+32	1603134720	1603925280	9
+33	1603925280	1604715840	10
+34	1604715840	1605506400	9
+35	1605506400	1606296960	9
+36	1606296960	1607087520	9
+37	1607087520	1607878080	9
+38	1607878080	1608668640	9
+39	1608668640	1609459200	9

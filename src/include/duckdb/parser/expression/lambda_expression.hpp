@@ -13,14 +13,19 @@
 
 namespace duckdb {
 
-//! LambdaExpression represents a lambda operator that can be used for e.g. mapping an expression to a list
-//! Lambda expressions are written in the form of "capture -> expr", e.g. "x -> x + 1"
+//! LambdaExpression represents either:
+//!  1. A lambda operator that can be used for e.g. mapping an expression to a list
+//!  2. An OperatorExpression with the "->" operator
+//! Lambda expressions are written in the form of "params -> expr", e.g. "x -> x + 1"
 class LambdaExpression : public ParsedExpression {
 public:
-	LambdaExpression(vector<string> parameters, unique_ptr<ParsedExpression> expression);
+	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr);
 
-	vector<string> parameters;
-	unique_ptr<ParsedExpression> expression;
+	// we need the context to determine if this is a list of column references or an expression (for JSON)
+	unique_ptr<ParsedExpression> lhs;
+
+	vector<unique_ptr<ParsedExpression>> params;
+	unique_ptr<ParsedExpression> expr;
 
 public:
 	string ToString() const override;

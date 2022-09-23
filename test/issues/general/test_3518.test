@@ -1,0 +1,23 @@
+# name: test/issues/general/test_3518.test
+# description: Issue 3518: Exception thrown when inserting and updating an unsigned integer column in the same row in a transaction
+# group: [general]
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE test (c1 UTINYINT, c2 USMALLINT, c3 UINTEGER, c4 UBIGINT);
+
+statement ok
+INSERT INTO test VALUES (1, 1, 1, 1);
+
+statement ok
+UPDATE test SET c1 = 2, c2 = 2, c3 = 2, c4 = 2;
+
+statement ok
+COMMIT;
+
+query IIII
+SELECT c1, c2, c3, c4 FROM test;
+----
+2	2	2	2

@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _THRIFT_TAPPLICATIONEXCEPTION_H_
-#define _THRIFT_TAPPLICATIONEXCEPTION_H_ 1
+#ifndef _DUCKDB_THRIFT_TAPPLICATIONEXCEPTION_H_
+#define _DUCKDB_THRIFT_TAPPLICATIONEXCEPTION_H_ 1
 
 #include "thrift/Thrift.h"
 
@@ -112,4 +112,4 @@ protected:
 }
 } // duckdb_apache::thrift
 
-#endif // #ifndef _THRIFT_TAPPLICATIONEXCEPTION_H_
+#endif // #ifndef _DUCKDB_THRIFT_TAPPLICATIONEXCEPTION_H_

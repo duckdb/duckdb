@@ -8,6 +8,9 @@ unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGNo
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGDeleteStmt *>(node);
 	D_ASSERT(stmt);
 	auto result = make_unique<DeleteStatement>();
+	if (stmt->withClause) {
+		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
+	}
 
 	result->condition = TransformExpression(stmt->whereClause);
 	result->table = TransformRangeVar(stmt->relation);
@@ -20,6 +23,10 @@ unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGNo
 			auto using_entry = TransformTableRefNode(target);
 			result->using_clauses.push_back(move(using_entry));
 		}
+	}
+
+	if (stmt->returningList) {
+		Transformer::TransformExpressionList(*(stmt->returningList), result->returning_list);
 	}
 	return result;
 }

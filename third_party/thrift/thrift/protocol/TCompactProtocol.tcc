@@ -16,8 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-#ifndef _THRIFT_PROTOCOL_TCOMPACTPROTOCOL_TCC_
-#define _THRIFT_PROTOCOL_TCOMPACTPROTOCOL_TCC_ 1
+#ifndef _DUCKDB_THRIFT_PROTOCOL_TCOMPACTPROTOCOL_TCC_
+#define _DUCKDB_THRIFT_PROTOCOL_TCOMPACTPROTOCOL_TCC_ 1
 
 #include <limits>
 
@@ -823,4 +823,4 @@ TType TCompactProtocolT<Transport_>::getTType(int8_t type) {
 
 }}} // duckdb_apache::thrift::protocol
 
-#endif // _THRIFT_PROTOCOL_TCOMPACTPROTOCOL_TCC_
+#endif // _DUCKDB_THRIFT_PROTOCOL_TCOMPACTPROTOCOL_TCC_

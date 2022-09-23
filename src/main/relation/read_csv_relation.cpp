@@ -11,8 +11,8 @@
 
 namespace duckdb {
 
-ReadCSVRelation::ReadCSVRelation(ClientContext &context, string csv_file_p, vector<ColumnDefinition> columns_p,
-                                 bool auto_detect, string alias_p)
+ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, string csv_file_p,
+                                 vector<ColumnDefinition> columns_p, bool auto_detect, string alias_p)
     : Relation(context, RelationType::READ_CSV_RELATION), csv_file(move(csv_file_p)), auto_detect(auto_detect),
       alias(move(alias_p)), columns(move(columns_p)) {
 	if (alias.empty()) {
@@ -37,7 +37,7 @@ unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
 		// parameters
 		child_list_t<Value> column_names;
 		for (idx_t i = 0; i < columns.size(); i++) {
-			column_names.push_back(make_pair(columns[i].name, Value(columns[i].type.ToString())));
+			column_names.push_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
 		}
 		auto colnames = make_unique<ConstantExpression>(Value::STRUCT(move(column_names)));
 		children.push_back(make_unique<ComparisonExpression>(

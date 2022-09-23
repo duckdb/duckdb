@@ -1,0 +1,26 @@
+# name: test/sql/types/float/nested_nan.test
+# description: Test nested nans
+# group: [float]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT ['nan'::double]
+----
+[nan]
+
+query I
+SELECT UNNEST(['nan'::double])
+----
+nan
+
+query I
+SELECT {'a': 'nan'::double}
+----
+{'a': nan}
+
+query I
+SELECT ({'a': 'nan'::double}).a
+----
+nan

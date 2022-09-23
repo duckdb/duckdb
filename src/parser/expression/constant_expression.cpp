@@ -12,11 +12,11 @@ ConstantExpression::ConstantExpression(Value val)
 }
 
 string ConstantExpression::ToString() const {
-	return value.ToString();
+	return value.ToSQLString();
 }
 
 bool ConstantExpression::Equals(const ConstantExpression *a, const ConstantExpression *b) {
-	return !ValueOperations::DistinctFrom(a->value, b->value);
+	return a->value.type() == b->value.type() && !ValueOperations::DistinctFrom(a->value, b->value);
 }
 
 hash_t ConstantExpression::Hash() const {

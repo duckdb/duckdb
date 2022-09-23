@@ -42,7 +42,7 @@ class TestTPCHArrow(object):
         for tpch_table in tpch_tables:
             duck_tbl = duckdb_conn.table(tpch_table)
             arrow_tables.append(duck_tbl.arrow())
-            duck_arrow_table = duckdb_conn.from_arrow_table(arrow_tables[-1])
+            duck_arrow_table = duckdb_conn.from_arrow(arrow_tables[-1])
             duckdb_conn.execute("DROP TABLE "+tpch_table)
             duck_arrow_table.create(tpch_table)
 
@@ -66,7 +66,7 @@ class TestTPCHArrow(object):
         for tpch_table in tpch_tables:
             duck_tbl = duckdb_conn.table(tpch_table)
             arrow_tables.append(duck_tbl.arrow())
-            duck_arrow_table = duckdb_conn.from_arrow_table(arrow_tables[-1])
+            duck_arrow_table = duckdb_conn.from_arrow(arrow_tables[-1])
             duckdb_conn.execute("DROP TABLE "+tpch_table)
             duck_arrow_table.create(tpch_table)
 
@@ -90,7 +90,7 @@ class TestTPCHArrow(object):
         for tpch_table in tpch_tables:
             duck_tbl = duckdb_conn.table(tpch_table)
             arrow_tables.append(pyarrow.Table.from_batches(duck_tbl.arrow().to_batches(10)))
-            duck_arrow_table = duckdb_conn.from_arrow_table(arrow_tables[-1])
+            duck_arrow_table = duckdb_conn.from_arrow(arrow_tables[-1])
             duckdb_conn.execute("DROP TABLE "+tpch_table)
             duck_arrow_table.create(tpch_table)
 

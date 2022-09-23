@@ -2,6 +2,9 @@
 # description: Test storage of columns with various types
 # group: [wal]
 
+require skip_reload
+
+
 # load the DB from disk
 load __TEST_DIR__/storage_types.db
 
@@ -98,6 +101,7 @@ SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type} WHERE i=1
 1	1	1	1
 
 endloop
+
 query IIII
 SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval
 ----

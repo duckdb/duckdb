@@ -2,7 +2,6 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -10,7 +9,7 @@ CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view
                                        bool temporary_p)
     : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(move(child_p)),
       view_name(move(view_name_p)), replace(replace_p), temporary(temporary_p) {
-	context.TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 BoundStatement CreateViewRelation::Bind(Binder &binder) {

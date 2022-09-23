@@ -1,0 +1,43 @@
+# name: test/sql/join/iejoin/test_iejoin_events.test
+# description: Test IEJoin
+# group: [iejoin]
+
+require skip_reload
+
+# RNG order depends on vector size
+require vector_size 1024
+
+statement ok
+PRAGMA enable_verification
+
+# Use small 1K table to test Q2 because it melts down the other operators at larger scales
+statement ok
+SELECT SETSEED(0.8675309);
+
+statement ok
+CREATE TABLE events AS (
+	SELECT *,
+		 "start" + INTERVAL (CASE WHEN random() < 0.1 THEN 120 ELSE (5 + round(random() * 50, 0)::BIGINT) END) MINUTE
+		 	AS "end"
+	FROM (
+		SELECT id,
+			'Event ' || id::VARCHAR as "name",
+			(5 + round(random() * 5000, 0)::BIGINT) AS audience,
+			'1992-01-01'::TIMESTAMP
+				+ INTERVAL (round(random() * 40 * 365, 0)::BIGINT) DAY
+				+ INTERVAL (round(random() * 23, 0)::BIGINT) HOUR
+				AS "start",
+			'Sponsor ' || (1 + round(random() * 10, 0)::BIGINT) AS sponsor
+		FROM range(1, 1000) tbl(id)
+	) q
+);
+
+query I
+SELECT COUNT(*) FROM (
+	SELECT r.id, s.id
+	FROM events r, events s
+	WHERE r.start <= s.end AND r.end >= s.start
+	  AND r.id <> s.id
+) q2;
+----
+6

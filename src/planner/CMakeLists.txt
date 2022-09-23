@@ -2,12 +2,14 @@ add_subdirectory(expression)
 add_subdirectory(binder)
 add_subdirectory(expression_binder)
 add_subdirectory(filter)
+add_subdirectory(parsed_data)
 add_subdirectory(operator)
 add_subdirectory(subquery)
 
 add_library_unity(
   duckdb_planner
   OBJECT
+  bound_result_modifier.cpp
   expression_iterator.cpp
   expression.cpp
   table_binding.cpp
@@ -17,6 +19,7 @@ add_library_unity(
   binder.cpp
   bind_context.cpp
   planner.cpp
+  plan_serialization.cpp
   pragma_handler.cpp
   logical_operator_visitor.cpp
   table_filter.cpp)

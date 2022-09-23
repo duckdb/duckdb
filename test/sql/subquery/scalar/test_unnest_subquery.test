@@ -109,6 +109,6 @@ NULL
 
 # double correlated subqueries
 query I
-SELECT (SELECT 1+i[0]=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+SELECT (SELECT 1+i[1]=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
 ----
 true

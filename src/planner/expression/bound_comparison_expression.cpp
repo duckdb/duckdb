@@ -1,4 +1,6 @@
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 
 namespace duckdb {
 
@@ -8,7 +10,7 @@ BoundComparisonExpression::BoundComparisonExpression(ExpressionType type, unique
 }
 
 string BoundComparisonExpression::ToString() const {
-	return left->GetName() + ExpressionTypeToOperator(type) + right->GetName();
+	return ComparisonExpression::ToString<BoundComparisonExpression, Expression>(*this);
 }
 
 bool BoundComparisonExpression::Equals(const BaseExpression *other_p) const {
@@ -22,6 +24,7 @@ bool BoundComparisonExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(right.get(), other->right.get())) {
 		return false;
 	}
+
 	return true;
 }
 
@@ -29,6 +32,18 @@ unique_ptr<Expression> BoundComparisonExpression::Copy() {
 	auto copy = make_unique<BoundComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return move(copy);
+}
+
+void BoundComparisonExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteOptional(left);
+	writer.WriteOptional(right);
+}
+
+unique_ptr<Expression> BoundComparisonExpression::Deserialize(ExpressionDeserializationState &state,
+                                                              FieldReader &reader) {
+	auto left = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	auto right = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	return make_unique<BoundComparisonExpression>(state.type, move(left), move(right));
 }
 
 } // namespace duckdb

@@ -1,0 +1,28 @@
+# name: test/sql/delete/list_delete.test
+# description: Test list deletions
+# group: [delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE aggr (k int[]);
+
+statement ok
+INSERT INTO aggr VALUES ([0, 1, 1, 1, 4, 0, 3, 3, 2, 2, 4, 4, 2, 4, 0, 0, 0, 1, 2, 3, 4, 2, 3, 3, 1]);
+
+statement ok
+INSERT INTO aggr VALUES ([]), ([NULL]), (NULL), ([0, 1, 1, 1, 4, NULL, 0, 3, 3, 2, NULL, 2, 4, 4, 2, 4, 0, 0, 0, 1, NULL, 2, 3, 4, 2, 3, 3, 1]);
+
+query I
+SELECT COUNT(k) FROM aggr
+----
+4
+
+statement ok
+DELETE FROM aggr;
+
+query I
+SELECT COUNT(k) FROM aggr
+----
+0

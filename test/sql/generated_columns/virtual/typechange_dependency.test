@@ -1,0 +1,34 @@
+# name: test/sql/generated_columns/virtual/typechange_dependency.test
+# description: Test changing types of dependencies of generated columns
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold)
+);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+query I
+SELECT total_profit FROM unit
+----
+20
+
+# Dependency of 'total_price' - the change is prohibited
+statement error
+ALTER TABLE unit ALTER COLUMN price TYPE BOOLEAN;
+
+# Generated column isn't deleted
+statement ok
+SELECT total_profit FROM unit;
+
+query III
+SELECT * FROM unit
+----
+5	4	20

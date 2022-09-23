@@ -1,0 +1,62 @@
+# name: test/sql/constraints/foreignkey/test_fk_export.test
+# description: Test export database with foreign key constraint
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
+
+statement ok
+INSERT INTO pk_integers VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO fk_integers VALUES (1), (2)
+
+# now export the db
+statement ok
+EXPORT DATABASE '__TEST_DIR__/fk_constraint'
+
+statement ok
+DROP TABLE fk_integers;
+
+statement ok
+DROP TABLE pk_integers;
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/fk_constraint'
+
+# check foreign key constraint
+statement error
+INSERT INTO fk_integers VALUES (4)
+
+statement ok
+INSERT INTO fk_integers VALUES (3)
+
+statement error
+DELETE FROM pk_integers WHERE i=3
+
+statement ok
+DELETE FROM fk_integers WHERE j=3
+
+statement ok
+DELETE FROM pk_integers WHERE i=3
+
+statement error
+UPDATE pk_integers SET i=5 WHERE i=2
+
+statement error
+UPDATE fk_integers SET i=4 WHERE j=2
+
+statement error
+UPDATE fk_integers SET i=4 WHERE j=2
+
+statement error
+DROP TABLE pk_integers;
+
+statement ok
+DROP TABLE fk_integers;
+
+statement ok
+DROP TABLE pk_integers;

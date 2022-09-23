@@ -8,10 +8,21 @@
 
 namespace duckdb {
 
-//! The operator state of the window
 class UnnestOperatorState : public OperatorState {
 public:
-	UnnestOperatorState() : parent_position(0), list_position(0), list_length(-1), first_fetch(true) {
+	UnnestOperatorState(Allocator &allocator, const vector<unique_ptr<Expression>> &select_list)
+	    : parent_position(0), list_position(0), list_length(-1), first_fetch(true), executor(allocator) {
+		vector<LogicalType> list_data_types;
+		for (auto &exp : select_list) {
+			D_ASSERT(exp->type == ExpressionType::BOUND_UNNEST);
+			auto bue = (BoundUnnestExpression *)exp.get();
+			list_data_types.push_back(bue->child->return_type);
+			executor.AddExpression(*bue->child.get());
+		}
+		list_data.Initialize(allocator, list_data_types);
+
+		list_vector_data.resize(list_data.ColumnCount());
+		list_child_data.resize(list_data.ColumnCount());
 	}
 
 	idx_t parent_position;
@@ -19,9 +30,10 @@ public:
 	int64_t list_length;
 	bool first_fetch;
 
+	ExpressionExecutor executor;
 	DataChunk list_data;
-	vector<VectorData> list_vector_data;
-	vector<VectorData> list_child_data;
+	vector<UnifiedVectorFormat> list_vector_data;
+	vector<UnifiedVectorFormat> list_child_data;
 };
 
 // this implements a sorted window functions variant
@@ -51,7 +63,7 @@ static void UnnestNull(idx_t start, idx_t end, Vector &result) {
 }
 
 template <class T>
-static void TemplatedUnnest(VectorData &vdata, idx_t start, idx_t end, Vector &result) {
+static void TemplatedUnnest(UnifiedVectorFormat &vdata, idx_t start, idx_t end, Vector &result) {
 	auto source_data = (T *)vdata.data;
 	auto &source_mask = vdata.validity;
 	auto result_data = FlatVector::GetData<T>(result);
@@ -69,7 +81,7 @@ static void TemplatedUnnest(VectorData &vdata, idx_t start, idx_t end, Vector &r
 	}
 }
 
-static void UnnestValidity(VectorData &vdata, idx_t start, idx_t end, Vector &result) {
+static void UnnestValidity(UnifiedVectorFormat &vdata, idx_t start, idx_t end, Vector &result) {
 	auto &source_mask = vdata.validity;
 	auto &result_mask = FlatVector::Validity(result);
 
@@ -80,7 +92,8 @@ static void UnnestValidity(VectorData &vdata, idx_t start, idx_t end, Vector &re
 	}
 }
 
-static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx_t start, idx_t end, Vector &result) {
+static void UnnestVector(UnifiedVectorFormat &vdata, Vector &source, idx_t list_size, idx_t start, idx_t end,
+                         Vector &result) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -134,8 +147,8 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 		auto &target_entries = StructVector::GetEntries(result);
 		UnnestValidity(vdata, start, end, result);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
-			VectorData sdata;
-			source_entries[i]->Orrify(list_size, sdata);
+			UnifiedVectorFormat sdata;
+			source_entries[i]->ToUnifiedFormat(list_size, sdata);
 			UnnestVector(sdata, *source_entries[i], list_size, start, end, *target_entries[i]);
 		}
 		break;
@@ -145,43 +158,47 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 	}
 }
 
-unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ClientContext &context) const {
-	return make_unique<UnnestOperatorState>();
+unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ExecutionContext &context) const {
+	return PhysicalUnnest::GetState(context, select_list);
 }
 
-OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                           OperatorState &state_p) const {
+unique_ptr<OperatorState> PhysicalUnnest::GetState(ExecutionContext &context,
+                                                   const vector<unique_ptr<Expression>> &select_list) {
+	return make_unique<UnnestOperatorState>(Allocator::Get(context.client), select_list);
+}
+
+OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                   OperatorState &state_p,
+                                                   const vector<unique_ptr<Expression>> &select_list,
+                                                   bool include_input) {
 	auto &state = (UnnestOperatorState &)state_p;
 	do {
 		if (state.first_fetch) {
 			// get the list data to unnest
-			ExpressionExecutor executor;
-			vector<LogicalType> list_data_types;
-			for (auto &exp : select_list) {
-				D_ASSERT(exp->type == ExpressionType::BOUND_UNNEST);
-				auto bue = (BoundUnnestExpression *)exp.get();
-				list_data_types.push_back(bue->child->return_type);
-				executor.AddExpression(*bue->child.get());
-			}
-			state.list_data.Destroy();
-			state.list_data.Initialize(list_data_types);
-			executor.Execute(input, state.list_data);
+			state.list_data.Reset();
+			state.executor.Execute(input, state.list_data);
 
 			// paranoia aplenty
 			state.list_data.Verify();
 			D_ASSERT(input.size() == state.list_data.size());
 			D_ASSERT(state.list_data.ColumnCount() == select_list.size());
+			D_ASSERT(state.list_vector_data.size() == state.list_data.ColumnCount());
+			D_ASSERT(state.list_child_data.size() == state.list_data.ColumnCount());
 
-			// initialize VectorData object so the nullmask can accessed
-			state.list_vector_data.resize(state.list_data.ColumnCount());
-			state.list_child_data.resize(state.list_data.ColumnCount());
+			// initialize UnifiedVectorFormat object so the nullmask can accessed
 			for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
 				auto &list_vector = state.list_data.data[col_idx];
-				list_vector.Orrify(state.list_data.size(), state.list_vector_data[col_idx]);
+				list_vector.ToUnifiedFormat(state.list_data.size(), state.list_vector_data[col_idx]);
 
-				auto &child_vector = ListVector::GetEntry(list_vector);
-				auto list_size = ListVector::GetListSize(list_vector);
-				child_vector.Orrify(list_size, state.list_child_data[col_idx]);
+				if (list_vector.GetType() == LogicalType::SQLNULL) {
+					// UNNEST(NULL)
+					auto &child_vector = list_vector;
+					child_vector.ToUnifiedFormat(0, state.list_child_data[col_idx]);
+				} else {
+					auto list_size = ListVector::GetListSize(list_vector);
+					auto &child_vector = ListVector::GetEntry(list_vector);
+					child_vector.ToUnifiedFormat(list_size, state.list_child_data[col_idx]);
+				}
 			}
 			state.first_fetch = false;
 		}
@@ -223,41 +240,52 @@ OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk 
 		// first cols are from child, last n cols from unnest
 		chunk.SetCardinality(this_chunk_len);
 
-		for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-			ConstantVector::Reference(chunk.data[col_idx], input.data[col_idx], state.parent_position, input.size());
+		idx_t output_offset = 0;
+		if (include_input) {
+			for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+				ConstantVector::Reference(chunk.data[col_idx], input.data[col_idx], state.parent_position,
+				                          input.size());
+			}
+			output_offset = input.ColumnCount();
 		}
 
 		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
-			auto &result_vector = chunk.data[col_idx + input.ColumnCount()];
+			auto &result_vector = chunk.data[col_idx + output_offset];
 
-			auto &vdata = state.list_vector_data[col_idx];
-			auto &child_data = state.list_child_data[col_idx];
-			auto current_idx = vdata.sel->get_index(state.parent_position);
-
-			auto list_data = (list_entry_t *)vdata.data;
-			auto list_entry = list_data[current_idx];
-
-			idx_t list_count;
-			if (state.list_position >= list_entry.length) {
-				list_count = 0;
+			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL) {
+				// UNNEST(NULL)
+				chunk.SetCardinality(0);
 			} else {
-				list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
-			}
+				auto &vdata = state.list_vector_data[col_idx];
+				auto &child_data = state.list_child_data[col_idx];
+				auto current_idx = vdata.sel->get_index(state.parent_position);
 
-			if (list_entry.length > state.list_position) {
-				if (!vdata.validity.RowIsValid(current_idx)) {
-					UnnestNull(0, list_count, result_vector);
+				auto list_data = (list_entry_t *)vdata.data;
+				auto list_entry = list_data[current_idx];
+
+				idx_t list_count;
+				if (state.list_position >= list_entry.length) {
+					list_count = 0;
 				} else {
-					auto &list_vector = state.list_data.data[col_idx];
-					auto &child_vector = ListVector::GetEntry(list_vector);
-					auto list_size = ListVector::GetListSize(list_vector);
-
-					auto base_offset = list_entry.offset + state.list_position;
-					UnnestVector(child_data, child_vector, list_size, base_offset, base_offset + list_count,
-					             result_vector);
+					list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
 				}
+
+				if (list_entry.length > state.list_position) {
+					if (!vdata.validity.RowIsValid(current_idx)) {
+						UnnestNull(0, list_count, result_vector);
+					} else {
+						auto &list_vector = state.list_data.data[col_idx];
+						auto &child_vector = ListVector::GetEntry(list_vector);
+						auto list_size = ListVector::GetListSize(list_vector);
+
+						auto base_offset = list_entry.offset + state.list_position;
+						UnnestVector(child_data, child_vector, list_size, base_offset, base_offset + list_count,
+						             result_vector);
+					}
+				}
+
+				UnnestNull(list_count, this_chunk_len, result_vector);
 			}
-			UnnestNull(list_count, this_chunk_len, result_vector);
 		}
 
 		state.list_position += this_chunk_len;
@@ -270,6 +298,11 @@ OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk 
 		chunk.Verify();
 	} while (chunk.size() == 0);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
+}
+
+OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                           GlobalOperatorState &gstate, OperatorState &state) const {
+	return ExecuteInternal(context, input, chunk, state, select_list);
 }
 
 } // namespace duckdb

@@ -1,0 +1,65 @@
+# name: test/sql/storage/test_big_strings.test_slow
+# description: Test the overflow string mechanism for uncompressed storage, notably the GZIP-ing
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/test_dictionary.db
+
+statement ok
+CREATE TABLE big_string (a VARCHAR, id INT);
+
+statement ok
+pragma force_compression='uncompressed'
+
+statement ok
+INSERT INTO big_string values (repeat('a', 8000), 1);
+INSERT INTO big_string values (repeat('b', 10), 2);
+INSERT INTO big_string values (repeat('c', 8000), 3);
+INSERT INTO big_string values (repeat('d', 10), 4);
+
+# Test with a string that is larger than a block size after compression
+# uncompressed size: 3888890 compressed size: 1068813
+statement ok
+INSERT INTO big_string values (concat(range(0,500000)::VARCHAR), 5);
+
+statement ok
+INSERT INTO big_string values (repeat('f', 1), 6);
+INSERT INTO big_string values (repeat('g', 8000), 7);
+INSERT INTO big_string values (repeat('h', 10000), 8);
+
+statement ok
+checkpoint
+
+restart
+
+query I
+SELECT compression FROM pragma_storage_info('big_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+Uncompressed
+
+query II
+SELECT a[1], strlen(a) from big_string
+----
+a	8000
+b	10
+c	8000
+d	10
+[	3888890
+f	1
+g	8000
+h	10000
+
+query III
+SELECT a[1], strlen(a), id FROM big_string WHERE id=5
+----
+[	3888890	5
+
+query III
+SELECT a[1], strlen(a), id FROM big_string WHERE id=6
+----
+f	1	6
+
+query III
+SELECT a[1], strlen(a), id FROM big_string WHERE a=concat(range(0,500000)::VARCHAR)
+----
+[	3888890	5

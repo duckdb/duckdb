@@ -4,6 +4,9 @@
 
 require tpcds
 
+statement ok
+PRAGMA verify_serializer
+
 # answers are generated from postgres
 # hence check with NULLS LAST flag
 statement ok

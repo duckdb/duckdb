@@ -1,0 +1,28 @@
+# name: test/sql/generated_columns/virtual/not_referencing_columns.test
+# description: Usage of valid generated columns that do not reference any columns
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+# Aggregate functions are not supported here
+statement error
+CREATE TABLE tbl (
+	price INTEGER,
+	amount_sold INTEGER,
+	gcol AS (list(5,4,3))
+);
+
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	gcol AS (map())
+);
+
+statement ok
+INSERT INTO tbl VALUES (5);
+
+query II
+SELECT * FROM tbl;
+----
+5	{}

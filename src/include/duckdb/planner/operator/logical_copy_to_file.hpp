@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb {
 
@@ -20,6 +21,13 @@ public:
 	}
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
+	std::string file_path;
+	bool use_tmp_file;
+	bool is_file_and_exists;
+
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	void ResolveTypes() override {

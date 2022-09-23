@@ -1,0 +1,42 @@
+# name: test/sql/constraints/foreignkey/test_fk_concurrency_conflicts.test
+# description: FOREIGN KEY and concurency
+# group: [foreignkey]
+
+statement ok con1
+CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO pk_integers VALUES (1), (2), (3)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
+
+statement ok con1
+INSERT INTO fk_integers VALUES (1)
+
+statement error con2
+DROP TABLE fk_integers
+
+statement ok con1
+DROP TABLE fk_integers
+
+statement error con2
+CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
+
+statement ok con1
+ROLLBACK
+
+statement ok con1
+CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
+
+statement ok con1
+INSERT INTO fk_integers VALUES (1), (2)
+
+statement error con1
+INSERT INTO fk_integers VALUES (4), (5)
+
+statement ok con2
+CREATE TABLE fk_integers_another(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))

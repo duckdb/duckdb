@@ -76,12 +76,12 @@ CREATE TABLE lists AS SELECT [3, 4] l
 
 # list_extract always propagates a null
 query I
-SELECT STATS(l[0]) FROM lists LIMIT 1
+SELECT STATS(l[1]) FROM lists LIMIT 1
 ----
 <REGEX>:.*3.*4.*Has Null: true.*
 
 query I
-SELECT l[0] FROM lists
+SELECT l[1] FROM lists
 ----
 3
 
@@ -90,12 +90,12 @@ statement ok
 INSERT INTO lists VALUES ([])
 
 query I
-SELECT STATS(l[0]) FROM lists LIMIT 1
+SELECT STATS(l[1]) FROM lists LIMIT 1
 ----
 <REGEX>:.*3.*4.*Has Null: true.*
 
 query I
-SELECT l[0] FROM lists
+SELECT l[1] FROM lists
 ----
 3
 NULL
@@ -105,12 +105,12 @@ statement ok
 INSERT INTO lists VALUES (NULL)
 
 query I
-SELECT STATS(l[0]) FROM lists LIMIT 1
+SELECT STATS(l[1]) FROM lists LIMIT 1
 ----
 <REGEX>:.*3.*4.*Has Null: true.*
 
 query I
-SELECT l[0] FROM lists
+SELECT l[1] FROM lists
 ----
 3
 NULL
@@ -122,12 +122,12 @@ statement ok
 INSERT INTO lists VALUES ([NULL])
 
 query I
-SELECT STATS(l[0]) FROM lists LIMIT 1
+SELECT STATS(l[1]) FROM lists LIMIT 1
 ----
 <REGEX>:.*3.*4.*Has Null: true.*
 
 query I
-SELECT l[0] FROM lists
+SELECT l[1] FROM lists
 ----
 3
 NULL

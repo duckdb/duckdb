@@ -35,14 +35,9 @@
 \alias{show,duckdb_result-method}
 \title{DuckDB Result Set}
 \usage{
-duckdb_fetch_arrow(
-  res,
-  stream = FALSE,
-  vector_per_chunk = 1,
-  return_table = FALSE
-)
+duckdb_fetch_arrow(res, chunk_size = 1e+06)
 
-duckdb_fetch_record_batch(res, approx_batch_size = 1)
+duckdb_fetch_record_batch(res, chunk_size = 1e+06)
 
 \S4method{dbBind}{duckdb_result}(res, params, ...)
 
@@ -67,15 +62,9 @@ duckdb_fetch_record_batch(res, approx_batch_size = 1)
 \S4method{show}{duckdb_result}(object)
 }
 \arguments{
-\item{res}{Query result to be converted to an Arrow Table}
+\item{res}{Query result to be converted to a Record Batch Reader}
 
-\item{stream}{If we are streaming the query result or returning it all at once}
-
-\item{vector_per_chunk}{If streaming, how many vectors per chunk we should emit}
-
-\item{return_table}{If we return results as a list of RecordBatches or an Arrow Table}
-
-\item{approx_batch_size}{If streaming, how many vectors per chunk we should emit}
+\item{chunk_size}{The chunk size}
 
 \item{params}{A list of bindings, named or unnamed.}
 

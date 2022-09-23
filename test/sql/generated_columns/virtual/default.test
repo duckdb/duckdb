@@ -1,0 +1,45 @@
+# name: test/sql/generated_columns/virtual/default.test
+# description: Usage of DEFAULT constraint in conjunction with GENERATED ALWAYS AS <expression> VIRTUAL
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+INSERT INTO unit VALUES (4,5)
+
+# (ALTER) Generated columns can not be created with a DEFAULT constraint
+statement error
+ALTER TABLE unit ADD COLUMN total_profit INTEGER DEFAULT 1 GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+# Generated column failed to create
+statement error
+SELECT total_profit FROM unit;
+
+# (CREATE) Generated columns can not be created with a DEFAULT constraint
+statement error
+CREATE TABLE unit2 (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL DEFAULT 1
+);
+
+# Table doesnt exist
+statement error
+select * from unit2
+
+statement ok
+CREATE TABLE tbl (
+	g1 AS (x),
+	g2 AS (x),
+	x INTEGER DEFAULT (5),
+);
+
+statement ok
+INSERT INTO tbl VALUES (DEFAULT);

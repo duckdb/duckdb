@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,7 @@ struct IndexLock;
 class Index {
 public:
 	Index(IndexType type, const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-	      bool is_unique, bool is_primary);
+	      IndexConstraintType constraint_type);
 	virtual ~Index() = default;
 
 	//! The type of the index
@@ -42,10 +43,8 @@ public:
 	vector<PhysicalType> types;
 	//! The logical types of the expressions
 	vector<LogicalType> logical_types;
-	//! Whether or not the index is an index built to enforce a UNIQUE or PRIMARY KEY constraint
-	bool is_unique;
-	//! Whether or not the index is an index built to enforce a PRIMARY KEY constraint
-	bool is_primary;
+	//! constraint type
+	IndexConstraintType constraint_type;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids
@@ -69,6 +68,10 @@ public:
 	bool Append(DataChunk &entries, Vector &row_identifiers);
 	//! Verify that data can be appended to the index
 	virtual void VerifyAppend(DataChunk &chunk) = 0;
+	//! Verify that data can be appended to the index for foreign key constraint
+	virtual void VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) = 0;
+	//! Verify that data can be delete from the index for foreign key constraint
+	virtual void VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) = 0;
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
@@ -79,6 +82,21 @@ public:
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(const vector<column_t> &column_ids) const;
+
+	//! Returns unique flag
+	bool IsUnique() {
+		return (constraint_type == IndexConstraintType::UNIQUE || constraint_type == IndexConstraintType::PRIMARY);
+	}
+	//! Returns primary flag
+	bool IsPrimary() {
+		return (constraint_type == IndexConstraintType::PRIMARY);
+	}
+	//! Returns foreign flag
+	bool IsForeign() {
+		return (constraint_type == IndexConstraintType::FOREIGN);
+	}
+	//! Serializes the index and returns the pair of block_id offset positions
+	virtual BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
 
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);

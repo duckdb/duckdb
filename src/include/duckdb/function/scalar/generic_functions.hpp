@@ -18,6 +18,10 @@ struct AliasFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct HashFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct LeastFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -35,9 +39,10 @@ struct TypeOfFun {
 };
 
 struct ConstantOrNull {
-	static ScalarFunction GetFunction(LogicalType return_type);
+	static ScalarFunction GetFunction(const LogicalType &return_type);
 	static unique_ptr<FunctionData> Bind(Value value);
 	static bool IsConstantOrNull(BoundFunctionExpression &expr, const Value &val);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct CurrentSettingFun {
@@ -46,6 +51,19 @@ struct CurrentSettingFun {
 
 struct SystemFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ExportAggregateFunctionBindData : public FunctionData {
+	unique_ptr<BoundAggregateExpression> aggregate;
+	explicit ExportAggregateFunctionBindData(unique_ptr<Expression> aggregate_p);
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
+};
+
+struct ExportAggregateFunction {
+	static unique_ptr<BoundAggregateExpression> Bind(unique_ptr<BoundAggregateExpression> child_aggregate);
+	static ScalarFunction GetCombine();
+	static ScalarFunction GetFinalize();
 };
 
 } // namespace duckdb

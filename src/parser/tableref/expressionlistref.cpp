@@ -4,6 +4,27 @@
 
 namespace duckdb {
 
+string ExpressionListRef::ToString() const {
+	D_ASSERT(!values.empty());
+	string result = "(VALUES ";
+	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
+		if (row_idx > 0) {
+			result += ", ";
+		}
+		auto &row = values[row_idx];
+		result += "(";
+		for (idx_t col_idx = 0; col_idx < row.size(); col_idx++) {
+			if (col_idx > 0) {
+				result += ", ";
+			}
+			result += row[col_idx]->ToString();
+		}
+		result += ")";
+	}
+	result += ")";
+	return BaseToString(result, expected_names);
+}
+
 bool ExpressionListRef::Equals(const TableRef *other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;

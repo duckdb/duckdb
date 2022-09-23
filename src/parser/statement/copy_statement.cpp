@@ -5,13 +5,14 @@ namespace duckdb {
 CopyStatement::CopyStatement() : SQLStatement(StatementType::COPY_STATEMENT), info(make_unique<CopyInfo>()) {
 }
 
-unique_ptr<SQLStatement> CopyStatement::Copy() const {
-	auto result = make_unique<CopyStatement>();
-	result->info = info->Copy();
-	if (select_statement) {
-		result->select_statement = select_statement->Copy();
+CopyStatement::CopyStatement(const CopyStatement &other) : SQLStatement(other), info(other.info->Copy()) {
+	if (other.select_statement) {
+		select_statement = other.select_statement->Copy();
 	}
-	return move(result);
+}
+
+unique_ptr<SQLStatement> CopyStatement::Copy() const {
+	return unique_ptr<CopyStatement>(new CopyStatement(*this));
 }
 
 } // namespace duckdb

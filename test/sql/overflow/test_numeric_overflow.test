@@ -5,20 +5,31 @@
 statement ok
 PRAGMA enable_verification
 
-# out of range constants are not accepted
-statement error
+query I
 SELECT 1e1000
+----
+inf
 
 # overflow on cast from double to real results in an error
 statement error
 SELECT 1e308::REAL
 
-# test string casts
-statement error
-SELECT '1e1000'::DOUBLE
+# except we can cast inf -> inf
+query I
+SELECT 1e1000::REAL
+----
+inf
 
-statement error
+# test string casts
+query I
+SELECT '1e1000'::DOUBLE
+----
+inf
+
+query I
 SELECT '1e100'::REAL
+----
+inf
 
 # overflow in SUM/AVG results in an error
 statement error

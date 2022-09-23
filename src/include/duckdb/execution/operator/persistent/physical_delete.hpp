@@ -17,14 +17,15 @@ class DataTable;
 class PhysicalDelete : public PhysicalOperator {
 public:
 	PhysicalDelete(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table, idx_t row_id_index,
-	               idx_t estimated_cardinality)
+	               idx_t estimated_cardinality, bool return_chunk)
 	    : PhysicalOperator(PhysicalOperatorType::DELETE_OPERATOR, move(types), estimated_cardinality),
-	      tableref(tableref), table(table), row_id_index(row_id_index) {
+	      tableref(tableref), table(table), row_id_index(row_id_index), return_chunk(return_chunk) {
 	}
 
 	TableCatalogEntry &tableref;
 	DataTable &table;
 	idx_t row_id_index;
+	bool return_chunk;
 
 public:
 	// Source interface
@@ -35,6 +36,7 @@ public:
 public:
 	// Sink interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	                    DataChunk &input) const override;
 

@@ -40,7 +40,7 @@ BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
 		                      colref.column_names[0]);
 	}
 	bound_columns.push_back(idx);
-	return BindResult(make_unique<BoundReferenceExpression>(table.columns[idx].type, bound_columns.size() - 1));
+	return BindResult(make_unique<BoundReferenceExpression>(table.columns[idx].Type(), bound_columns.size() - 1));
 }
 
 } // namespace duckdb

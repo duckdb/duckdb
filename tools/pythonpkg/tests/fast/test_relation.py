@@ -1,5 +1,5 @@
 import duckdb
-import numpy
+import numpy as np
 import tempfile
 import os
 import pandas as pd
@@ -41,6 +41,7 @@ class TestRelation(object):
         conn = duckdb.connect()
         rel = get_relation(conn)
         assert rel.limit(2).execute().fetchall() == [(1, 'one'), (2, 'two')]
+        assert rel.limit(2, offset=1).execute().fetchall() == [(2, 'two'), (3, 'three')]
 
     def test_intersect_operator(self,duckdb_cursor):
         conn = duckdb.connect()
@@ -137,14 +138,14 @@ class TestRelation(object):
         conn = duckdb.connect()
         conn.execute("CREATE TABLE test (i INTEGER)")
         rel = conn.table("test")
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError, match='incompatible function arguments'):
             rel.query("select j from test")
 
     def test_execute_fail(self,duckdb_cursor):
         conn = duckdb.connect()
         conn.execute("CREATE TABLE test (i INTEGER)")
         rel = conn.table("test")
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError, match='incompatible function arguments'):
             rel.execute("select j from test")
 
     def test_df_proj(self,duckdb_cursor):
@@ -189,3 +190,43 @@ class TestRelation(object):
         assert rel1.join(rel2, 'i=j', 'inner').aggregate('count()').fetchone()[0] == 2
 
         assert rel1.join(rel2, 'i=j', 'left').aggregate('count()').fetchone()[0] == 4
+
+    def test_explain(self, duckdb_cursor):
+        con = duckdb.connect()
+        con.execute("Create table t1 (i integer)")
+        con.execute("Create table t2 (j integer)")
+        rel1 = con.table('t1')
+        rel2 = con.table('t2')
+        join = rel1.join(rel2, 'i=j', 'inner').aggregate('count()')
+        assert join.explain() == 'Aggregate [count_star()]\n  Join INNER (i) = (j)\n    Scan Table [t1]\n    Scan Table [t2]'
+
+    def test_fetchnumpy(self, duckdb_cursor):
+        start, stop = -1000, 2000
+        count = stop - start
+
+        con = duckdb.connect()
+        con.execute(f"CREATE table t AS SELECT range AS a FROM range({start}, {stop});")
+        rel = con.table("t")
+
+        # empty
+        res = rel.limit(0, offset=count + 1).fetchnumpy()
+        assert set(res.keys()) == {"a"}
+        assert len(res["a"]) == 0
+
+        # < vector_size, == vector_size, > vector_size
+        for size in [1000, 1024, 1100]:
+            res = rel.project("a").limit(size).fetchnumpy()
+            assert set(res.keys()) == {"a"}
+            # For some reason, this return a masked array. Shouldn't it be
+            # known that there can't be NULLs?
+            if isinstance(res, np.ma.MaskedArray):
+                assert res.count() == size
+                res = res.compressed()
+            else:
+                assert len(res["a"]) == size
+            assert np.all(res["a"] == np.arange(start, start + size))
+
+        with pytest.raises(duckdb.ConversionException, match="Conversion Error.*out of range.*"):
+            # invalid conversion of negative integer to UINTEGER
+            rel.project("CAST(a as UINTEGER)").fetchnumpy()
+

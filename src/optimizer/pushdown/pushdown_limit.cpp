@@ -1,0 +1,19 @@
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
+
+namespace duckdb {
+
+unique_ptr<LogicalOperator> FilterPushdown::PushdownLimit(unique_ptr<LogicalOperator> op) {
+	auto &limit = (LogicalLimit &)*op;
+
+	if (!limit.limit && limit.limit_val == 0) {
+		return make_unique<LogicalEmptyResult>(move(op));
+	}
+
+	return FinishPushdown(move(op));
+}
+
+} // namespace duckdb

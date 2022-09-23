@@ -44,4 +44,11 @@ void VarianceFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(var_samp);
 }
 
+void StandardErrorOfTheMeanFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet sem("sem");
+	sem.AddFunction(AggregateFunction::UnaryAggregate<StddevState, double, double, StandardErrorOfTheMeanOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	set.AddFunction(sem);
+}
+
 } // namespace duckdb

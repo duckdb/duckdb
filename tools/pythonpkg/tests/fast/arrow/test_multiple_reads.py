@@ -16,6 +16,6 @@ class TestArrowReads(object):
 
         userdata_parquet_table = pyarrow.parquet.read_table(parquet_filename)
         userdata_parquet_table.validate(full=True)
-        rel = duckdb.from_arrow_table(userdata_parquet_table)
+        rel = duckdb.from_arrow(userdata_parquet_table)
         assert(rel.aggregate("(avg(salary))::INT").execute().fetchone()[0] == 149005)
         assert(rel.aggregate("(avg(salary))::INT").execute().fetchone()[0] == 149005)

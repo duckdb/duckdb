@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-struct DuckDBKeywordsData : public FunctionOperatorData {
+struct DuckDBKeywordsData : public GlobalTableFunctionState {
 	DuckDBKeywordsData() : offset(0) {
 	}
 
@@ -14,11 +14,8 @@ struct DuckDBKeywordsData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, vector<Value> &inputs,
-                                                   named_parameter_map_t &named_parameters,
-                                                   vector<LogicalType> &input_table_types,
-                                                   vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                   vector<string> &names) {
+static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, TableFunctionBindInput &input,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("keyword_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -28,17 +25,14 @@ static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, vecto
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBKeywordsInit(ClientContext &context, const FunctionData *bind_data,
-                                                    const vector<column_t> &column_ids,
-                                                    TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBKeywordsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBKeywordsData>();
 	result->entries = Parser::KeywordList();
 	return move(result);
 }
 
-void DuckDBKeywordsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                            DataChunk *input, DataChunk &output) {
-	auto &data = (DuckDBKeywordsData &)*operator_state;
+void DuckDBKeywordsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBKeywordsData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

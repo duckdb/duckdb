@@ -15,6 +15,8 @@ add_library_unity(
   appender.cpp
   client_context_file_opener.cpp
   client_context.cpp
+  client_data.cpp
+  client_verify.cpp
   config.cpp
   connection.cpp
   database.cpp

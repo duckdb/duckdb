@@ -5,8 +5,10 @@
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -24,7 +26,9 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
-
+#include "duckdb/catalog/default/default_types.hpp"
+#include "extension_functions.hpp"
+#include <algorithm>
 namespace duckdb {
 
 string SimilarCatalogEntry::GetQualifiedName() const {
@@ -194,7 +198,7 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
                                        QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
 	if (schema_name == TEMP_SCHEMA) {
-		return context.temporary_objects.get();
+		return ClientData::Get(context).temporary_objects.get();
 	}
 	auto entry = schemas->GetEntry(context, schema_name);
 	if (!entry && !if_exists) {
@@ -227,6 +231,16 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 	return {most_similar.first, most_similar.second, schema_of_most_similar};
 }
 
+string FindExtension(const string &function_name) {
+	auto size = sizeof(EXTENSION_FUNCTIONS) / sizeof(ExtensionFunction);
+	auto it = std::lower_bound(
+	    EXTENSION_FUNCTIONS, EXTENSION_FUNCTIONS + size, function_name,
+	    [](const ExtensionFunction &element, const string &value) { return element.function < value; });
+	if (it != EXTENSION_FUNCTIONS + size && it->function == function_name) {
+		return it->extension;
+	}
+	return "";
+}
 CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
                                                       CatalogType type, const vector<SchemaCatalogEntry *> &schemas,
                                                       QueryErrorContext error_context) {
@@ -240,7 +254,12 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		}
 	});
 	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
-
+	auto extension_name = FindExtension(entry_name);
+	if (!extension_name.empty()) {
+		return CatalogException("Function with name %s is not on the catalog, but it exists in the %s extension. To "
+		                        "Install and Load the extension, run: INSTALL %s; LOAD %s;",
+		                        entry_name, extension_name, extension_name, extension_name);
+	}
 	string did_you_mean;
 	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
 		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName() + "\"?";
@@ -269,7 +288,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 		return {schema, entry};
 	}
 
-	const auto &paths = context.catalog_search_path->Get();
+	const auto &paths = ClientData::Get(context).catalog_search_path->Get();
 	for (const auto &path : paths) {
 		auto lookup = LookupEntry(context, type, path, name, true, error_context);
 		if (lookup.Found()) {
@@ -368,10 +387,25 @@ CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &sch
 	                                       error_context);
 }
 
+template <>
+TypeCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
+                                    bool if_exists, QueryErrorContext error_context) {
+	return (TypeCatalogEntry *)GetEntry(context, CatalogType::TYPE_ENTRY, schema_name, name, if_exists, error_context);
+}
+
+LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name) {
+	auto user_type_catalog = GetEntry<TypeCatalogEntry>(context, schema, name);
+	auto result_type = user_type_catalog->user_type;
+	LogicalType::SetCatalog(result_type, user_type_catalog);
+	return result_type;
+}
+
 void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 	ModifyCatalog();
-	auto lookup = LookupEntry(context, info->GetCatalogType(), info->schema, info->name);
-	D_ASSERT(lookup.Found()); // It must have thrown otherwise.
+	auto lookup = LookupEntry(context, info->GetCatalogType(), info->schema, info->name, info->if_exists);
+	if (!lookup.Found()) {
+		return;
+	}
 	return lookup.schema->Alter(context, info);
 }
 

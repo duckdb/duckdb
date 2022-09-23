@@ -40,13 +40,6 @@ class TestArrowIntegration(object):
         if not can_run:
             return
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','unsigned.parquet')
-        data = (pyarrow.array([1,2,3,4,5,255], type=pyarrow.uint8()),pyarrow.array([1,2,3,4,5,65535], \
-            type=pyarrow.uint16()),pyarrow.array([1,2,3,4,5,4294967295], type=pyarrow.uint32()),\
-                pyarrow.array([1,2,3,4,5,18446744073709551615], type=pyarrow.uint64()))
-
-        tbl = pyarrow.Table.from_arrays([data[0],data[1],data[2],data[3]],['a','b','c','d'])
-        pyarrow.parquet.write_table(tbl, parquet_filename)
-
         cols = 'a, b, c, d'
 
         unsigned_parquet_table = pyarrow.parquet.read_table(parquet_filename)
@@ -66,7 +59,7 @@ class TestArrowIntegration(object):
         arrow_result.combine_chunks()
         arrow_result.validate(full=True)
 
-        round_tripping = duckdb.from_arrow_table(arrow_result).to_arrow_table()
+        round_tripping = duckdb.from_arrow(arrow_result).to_arrow_table()
         round_tripping.validate(full=True)
 
         assert round_tripping.equals(arrow_result, check_metadata=True)
@@ -85,7 +78,7 @@ class TestArrowIntegration(object):
 
         duck_tbl = duckdb_conn.table("test")
 
-        duck_from_arrow = duckdb_conn.from_arrow_table(duck_tbl.arrow())
+        duck_from_arrow = duckdb_conn.from_arrow(duck_tbl.arrow())
 
         duck_from_arrow.create("testarrow")
 
@@ -104,7 +97,7 @@ class TestArrowIntegration(object):
         data = (pyarrow.array(np.array([9999999999999999999999999999999999]), type=pyarrow.decimal128(38,0)))
         arrow_tbl = pyarrow.Table.from_arrays([data],['a'])
         duckdb_conn = duckdb.connect()
-        duckdb_conn.from_arrow_table(arrow_tbl).create("bigdecimal")
+        duckdb_conn.from_arrow(arrow_tbl).create("bigdecimal")
         result = duckdb_conn.execute('select * from bigdecimal')
         assert (result.fetchone()[0] == 9999999999999999999999999999999999)
 
@@ -124,7 +117,7 @@ class TestArrowIntegration(object):
 
         duck_tbl = duckdb_conn.table("test")
 
-        duck_from_arrow = duckdb_conn.from_arrow_table(duck_tbl.arrow())
+        duck_from_arrow = duckdb_conn.from_arrow(duck_tbl.arrow())
 
         duck_from_arrow.create("testarrow")
 

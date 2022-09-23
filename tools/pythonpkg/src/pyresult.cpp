@@ -1,15 +1,19 @@
+#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 
 #include "datetime.h" // from Python
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb_python/array_wrapper.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
-#include "duckdb/common/result_arrow_wrapper.hpp"
+#include "duckdb_python/array_wrapper.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -17,24 +21,29 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	py::class_<DuckDBPyResult>(m, "DuckDBPyResult", py::module_local())
 	    .def("description", &DuckDBPyResult::Description)
 	    .def("close", &DuckDBPyResult::Close)
-	    .def("fetchone", &DuckDBPyResult::Fetchone)
-	    .def("fetchall", &DuckDBPyResult::Fetchall)
-	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy)
-	    .def("fetchdf", &DuckDBPyResult::FetchDF)
-	    .def("fetch_df", &DuckDBPyResult::FetchDF)
-	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
-	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table",
-	         py::arg("stream") = false, py::arg("num_of_vectors") = 1, py::arg("return_table") = true)
+	    .def("fetchone", &DuckDBPyResult::Fetchone, "Fetch a single row as a tuple")
+	    .def("fetchmany", &DuckDBPyResult::Fetchmany, "Fetch the next set of rows as a list of tuples",
+	         py::arg("size") = 1)
+	    .def("fetchall", &DuckDBPyResult::Fetchall, "Fetch all rows as a list of tuples")
+	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy,
+	         "Fetch all rows as a Python dict mapping each column to one numpy arrays")
+	    .def("df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetchdf", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetch_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk, "Fetch a chunk of rows as a pandas DataFrame",
+	         py::arg("num_of_vectors") = 1)
+	    .def("arrow", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
+	         py::arg("chunk_size") = 1000000)
+	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
+	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
-	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"))
-	    .def("fetch_arrow_chunk", &DuckDBPyResult::FetchArrowTableChunk)
-	    .def("arrow", &DuckDBPyResult::FetchArrowTable)
-	    .def("df", &DuckDBPyResult::FetchDF);
+	         "Fetch all rows as an Arrow Record Batch Reader", py::arg("approx_batch_size"));
 
 	PyDateTime_IMPORT;
 }
 
 py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType &type) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	if (val.IsNull()) {
 		return py::none();
 	}
@@ -64,11 +73,11 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	case LogicalTypeId::DOUBLE:
 		return py::cast(val.GetValue<double>());
 	case LogicalTypeId::DECIMAL: {
-		py::object decimal_py = py::module_::import("decimal").attr("Decimal");
-		return decimal_py(val.ToString());
+		return import_cache.decimal.Decimal()(val.ToString());
 	}
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:
@@ -137,33 +146,40 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	}
 	case LogicalTypeId::UUID: {
 		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
-		return py::cast<py::object>(py::module::import("uuid").attr("UUID")(UUID::ToString(uuid_value)));
+		return py::cast<py::object>(import_cache.uuid.UUID()(UUID::ToString(uuid_value)));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
 		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
 		return py::cast<py::object>(
-		    py::module::import("datetime")
-		        .attr("timedelta")(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
+		    import_cache.datetime.timedelta()(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
 	}
 
 	default:
-		throw NotImplementedException("unsupported type: " + type.ToString());
+		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
 	}
 }
 
-unique_ptr<DataChunk> FetchNext(QueryResult &result) {
+unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
+	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
+		result_closed = true;
+		return nullptr;
+	}
 	auto chunk = result.Fetch();
-	if (!result.success) {
-		throw std::runtime_error(result.error);
+	if (result.HasError()) {
+		result.ThrowError();
 	}
 	return chunk;
 }
 
-unique_ptr<DataChunk> FetchNextRaw(QueryResult &result) {
+unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &result) {
+	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
+		result_closed = true;
+		return nullptr;
+	}
 	auto chunk = result.FetchRaw();
-	if (!result.success) {
-		throw std::runtime_error(result.error);
+	if (result.HasError()) {
+		result.ThrowError();
 	}
 	return chunk;
 }
@@ -172,7 +188,7 @@ py::object DuckDBPyResult::Fetchone() {
 	{
 		py::gil_scoped_release release;
 		if (!result) {
-			throw std::runtime_error("result closed");
+			throw InvalidInputException("result closed");
 		}
 		if (!current_chunk || chunk_offset >= current_chunk->size()) {
 			current_chunk = FetchNext(*result);
@@ -198,6 +214,18 @@ py::object DuckDBPyResult::Fetchone() {
 	return move(res);
 }
 
+py::list DuckDBPyResult::Fetchmany(idx_t size) {
+	py::list res;
+	for (idx_t i = 0; i < size; i++) {
+		auto fres = Fetchone();
+		if (fres.is_none()) {
+			break;
+		}
+		res.append(fres);
+	}
+	return res;
+}
+
 py::list DuckDBPyResult::Fetchall() {
 	py::list res;
 	while (true) {
@@ -209,6 +237,7 @@ py::list DuckDBPyResult::Fetchall() {
 	}
 	return res;
 }
+
 py::dict DuckDBPyResult::FetchNumpy() {
 	return FetchNumpyInternal();
 }
@@ -229,9 +258,25 @@ void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversi
 	}
 }
 
+void InsertCategory(QueryResult &result, unordered_map<idx_t, py::list> &categories) {
+	for (idx_t col_idx = 0; col_idx < result.types.size(); col_idx++) {
+		auto &type = result.types[col_idx];
+		if (type.id() == LogicalTypeId::ENUM) {
+			// It's an ENUM type, in addition to converting the codes we must convert the categories
+			if (categories.find(col_idx) == categories.end()) {
+				auto &categories_list = EnumType::GetValuesInsertOrder(type);
+				auto categories_size = EnumType::GetSize(type);
+				for (idx_t i = 0; i < categories_size; i++) {
+					categories[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));
+				}
+			}
+		}
+	}
+}
+
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
-		throw std::runtime_error("result closed");
+		throw InvalidInputException("result closed");
 	}
 
 	// iterate over the result to materialize the data needed for the NumPy arrays
@@ -239,16 +284,17 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		// materialized query result: we know exactly how much space we need
 		auto &materialized = (MaterializedQueryResult &)*result;
-		initial_capacity = materialized.collection.Count();
+		initial_capacity = materialized.RowCount();
 	}
 
 	NumpyResultConversion conversion(result->types, initial_capacity);
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = (MaterializedQueryResult &)*result;
-		for (auto &chunk : materialized.collection.Chunks()) {
-			conversion.Append(*chunk, &categories);
+		for (auto &chunk : materialized.Collection().Chunks()) {
+			conversion.Append(chunk);
 		}
-		materialized.collection.Reset();
+		InsertCategory(materialized, categories);
+		materialized.Collection().Reset();
 	} else {
 		D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
 		if (!stream) {
@@ -268,7 +314,8 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 				//! finished
 				break;
 			}
-			conversion.Append(*chunk, &categories);
+			conversion.Append(*chunk);
+			InsertCategory(*stream_result, categories);
 		}
 	}
 
@@ -292,90 +339,101 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	return res;
 }
 
-py::object DuckDBPyResult::FetchDF() {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal());
-}
-
-py::object DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal(true, num_of_vectors));
-}
-
-bool FetchArrowChunk(QueryResult *result, py::list &batches,
-                     pybind11::detail::accessor<pybind11::detail::accessor_policies::str_attr> &batch_import_func,
-                     bool copy = false) {
-	if (result->type == QueryResultType::STREAM_RESULT) {
-		auto stream_result = (StreamQueryResult *)result;
-		if (!stream_result->IsOpen()) {
-			return false;
+void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
+	for (idx_t i = 0; i < result->ColumnCount(); i++) {
+		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
+			// first localize to UTC then convert to timezone_config
+			auto utc_local = df[result->names[i].c_str()].attr("dt").attr("tz_localize")("UTC");
+			df[result->names[i].c_str()] = utc_local.attr("dt").attr("tz_convert")(timezone_config);
 		}
 	}
-	auto data_chunk = FetchNext(*result);
-	if (!data_chunk || data_chunk->size() == 0) {
+}
+
+DataFrame DuckDBPyResult::FrameFromNumpy(const py::handle &o) {
+	auto df = py::cast<DataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
+	ChangeToTZType(df);
+	return df;
+}
+
+DataFrame DuckDBPyResult::FetchDF() {
+	timezone_config = QueryResult::GetConfigTimezone(*result);
+	return FrameFromNumpy(FetchNumpyInternal());
+}
+
+DataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
+	if (timezone_config.empty()) {
+		timezone_config = QueryResult::GetConfigTimezone(*result);
+	}
+	return FrameFromNumpy(FetchNumpyInternal(true, num_of_vectors));
+}
+
+void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches) {
+	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
+	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+}
+
+bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
+	ArrowArray data;
+	auto count = ArrowUtil::FetchChunk(result, chunk_size, &data);
+	if (count == 0) {
 		return false;
 	}
-	if (result->type == QueryResultType::STREAM_RESULT && copy) {
-		auto new_chunk = make_unique<DataChunk>();
-		new_chunk->Initialize(data_chunk->GetTypes());
-		data_chunk->Copy(*new_chunk);
-		data_chunk = move(new_chunk);
-	}
-	ArrowArray data;
-	data_chunk->ToArrowArray(&data);
 	ArrowSchema arrow_schema;
-	result->ToArrowSchema(&arrow_schema);
-	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+	timezone_config = QueryResult::GetConfigTimezone(*result);
+	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
+	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;
 }
 
-py::object DuckDBPyResult::FetchArrowTable(bool stream, idx_t num_of_vectors, bool return_table) {
+py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("result closed");
+		throw InvalidInputException("result closed");
 	}
-	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 
-	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
-	auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
-	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
-	ArrowSchema schema;
-	result->ToArrowSchema(&schema);
-	auto schema_obj = schema_import_func((uint64_t)&schema);
-
 	py::list batches;
-	if (stream) {
-		for (idx_t i = 0; i < num_of_vectors; i++) {
-			if (!FetchArrowChunk(result.get(), batches, batch_import_func, true)) {
-				break;
-			}
-		}
-	} else {
-		if (result->type == QueryResultType::STREAM_RESULT) {
-			result = ((StreamQueryResult *)result.get())->Materialize();
-		}
-		while (FetchArrowChunk(result.get(), batches, batch_import_func)) {
-		}
-	}
-	if (return_table) {
-		return from_batches_func(batches, schema_obj);
+
+	while (FetchArrowChunk(result.get(), batches, chunk_size)) {
 	}
 	return std::move(batches);
 }
 
-py::object DuckDBPyResult::FetchRecordBatchReader(idx_t approx_batch_size) {
+duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("There is no query result");
+		throw InvalidInputException("There is no query result");
+	}
+	py::gil_scoped_acquire acquire;
+
+	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+	auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
+
+	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
+	ArrowSchema schema;
+
+	timezone_config = QueryResult::GetConfigTimezone(*result);
+	ArrowConverter::ToArrowSchema(&schema, result->types, result->names, timezone_config);
+
+	auto schema_obj = schema_import_func((uint64_t)&schema);
+
+	py::list batches = FetchAllArrowChunks(chunk_size);
+
+	// We return an Arrow Table
+	return py::cast<duckdb::pyarrow::Table>(from_batches_func(batches, schema_obj));
+}
+
+duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
+	if (!result) {
+		throw InvalidInputException("There is no query result");
 	}
 	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
 	//! We have to construct an Arrow Array Stream
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), approx_batch_size);
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), chunk_size);
 	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
-	return record_batch_reader;
-}
-
-py::object DuckDBPyResult::FetchArrowTableChunk(idx_t num_of_vectors, bool return_table) {
-	return FetchArrowTable(true, num_of_vectors, return_table);
+	return py::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {
@@ -396,6 +454,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::DECIMAL: {
 		return py::str("NUMBER");
 	}
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return py::str("STRING");
 	case LogicalTypeId::BLOB:
@@ -420,23 +479,27 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::LIST: {
 		return py::str("list");
 	}
+	case LogicalTypeId::INTERVAL: {
+		return py::str("TIMEDELTA");
+	}
+	case LogicalTypeId::USER:
+	case LogicalTypeId::ENUM: {
+		return py::str(type.ToString());
+	}
 	default:
-		throw NotImplementedException("unsupported type: " + type.ToString());
+		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
 	}
 }
 
 py::list DuckDBPyResult::Description() {
-	py::list desc(result->names.size());
-	for (idx_t col_idx = 0; col_idx < result->names.size(); col_idx++) {
-		py::tuple col_desc(7);
-		col_desc[0] = py::str(result->names[col_idx]);
-		col_desc[1] = GetTypeToPython(result->types[col_idx]);
-		col_desc[2] = py::none();
-		col_desc[3] = py::none();
-		col_desc[4] = py::none();
-		col_desc[5] = py::none();
-		col_desc[6] = py::none();
-		desc[col_idx] = col_desc;
+	const auto names = result->names;
+
+	py::list desc(names.size());
+
+	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
+		auto py_name = py::str(names[col_idx]);
+		auto py_type = GetTypeToPython(result->types[col_idx]);
+		desc[col_idx] = py::make_tuple(py_name, py_type, py::none(), py::none(), py::none(), py::none(), py::none());
 	}
 	return desc;
 }

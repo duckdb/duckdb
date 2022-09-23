@@ -1,0 +1,93 @@
+# name: test/sql/types/test_null_type.test
+# description: Test null type
+# group: [types]
+
+require skip_reload
+
+statement ok
+pragma enable_verification
+
+query T
+create table null_table (i "null")
+
+statement ok
+insert into null_table values (null)
+
+foreach type <integral> float double varchar
+
+# explicit cast
+statement error
+select 42::${type}::"null"
+
+# implicit cast
+statement error
+insert into null_table values (42::${type})
+
+endloop
+
+# list
+statement ok
+create table null_list (i "null"[])
+
+statement ok
+insert into null_list values (null), ([null])
+
+query T
+select i from null_list
+----
+NULL
+[NULL]
+
+foreach type <integral> float double varchar
+
+query T
+select i::${type}[] from null_list
+----
+NULL
+[NULL]
+
+statement error
+insert into null_list values ([42::${type}])
+
+endloop
+
+# struct
+statement ok
+create table null_struct (i struct(n "null"))
+
+statement ok
+insert into null_struct values (null), ({n:null})
+
+query T
+select i from null_struct
+----
+NULL
+{'n': NULL}
+
+foreach type <integral> float double varchar
+
+query T
+select i::struct(n ${type}) from null_struct
+----
+NULL
+{'n': NULL}
+
+statement error
+insert into null_struct values ({n: 42::${type}})
+
+endloop
+
+# map
+statement ok
+create table null_map (i map("null", "null"))
+
+# Map keys cant be NULL
+statement error
+insert into null_map values (null), (map([null], [null]))
+
+foreach type <integral> float double varchar
+
+statement error
+insert into null_map values (map([42::${type}], [7::${type}]))
+
+endloop

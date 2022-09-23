@@ -12,7 +12,6 @@
 #include "duckdb.hpp"
 
 namespace duckdb {
-
 struct RawArrayWrapper {
 	explicit RawArrayWrapper(const LogicalType &type);
 
@@ -27,7 +26,6 @@ public:
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
 };
-
 struct ArrayWrapper {
 	explicit ArrayWrapper(const LogicalType &type);
 
@@ -46,7 +44,7 @@ class NumpyResultConversion {
 public:
 	NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity);
 
-	void Append(DataChunk &chunk, unordered_map<idx_t, py::list> *categories = nullptr);
+	void Append(DataChunk &chunk);
 
 	py::object ToArray(idx_t col_idx) {
 		return owned_data[col_idx].ToArray(count);

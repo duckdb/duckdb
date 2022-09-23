@@ -19,14 +19,16 @@ namespace duckdb {
 class MacroCatalogEntry : public StandardEntry {
 public:
 	MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info);
-
 	//! The macro function
 	unique_ptr<MacroFunction> function;
 
 public:
-	//! Serialize the meta information of the MacroCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer);
-	//! Deserializes to a CreateMacroInfo
-	static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source);
+	//! Serialize the meta information
+	virtual void Serialize(Serializer &serializer) = 0;
+
+	string ToSQL() override {
+		return function->ToSQL(schema->name, name);
+	}
 };
+
 } // namespace duckdb

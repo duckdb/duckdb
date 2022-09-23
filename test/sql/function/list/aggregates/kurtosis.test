@@ -1,0 +1,40 @@
+# name: test/sql/function/list/aggregates/kurtosis.test
+# description: Test the list_kurtosis aggregate function
+# group: [aggregates]
+
+query I
+select list_kurtosis([1])
+----
+NULL
+
+query I
+select list_kurtosis([0, 0, 0, 0, 0, 0])
+----
+NULL
+
+# out of range
+statement error
+select list_kurtosis([2e304, 2e305, 2e306, 2e307])
+
+statement ok
+create table aggr(k int[]);
+
+statement ok
+insert into aggr values ([1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]), 
+	([10, 10, 10, 10, 20, 20, 25, 30, 30, 30, 30]),
+	([NULL, 11, 15, 18, 22, 25, NULL, 35, 40, 50, 51]), 
+	(NULL), ([]), ([NULL]);
+
+query I
+select list_kurtosis(k) from aggr;
+----
+11.000000
+-1.961428
+-1.445120
+NULL
+NULL
+NULL
+
+# incorrect usage
+statement error
+select list_kurtosis()

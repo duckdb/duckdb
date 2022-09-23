@@ -3,6 +3,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/preserved_error.hpp"
 #include "duckdb.hpp"
 
 #include <memory>
@@ -15,7 +16,7 @@
 struct sqlite3 {
 	std::unique_ptr<duckdb::DuckDB> db;
 	std::unique_ptr<duckdb::Connection> con;
-	std::string last_error;
+	duckdb::PreservedError last_error;
 	int64_t last_changes = 0;
 	int64_t total_changes = 0;
 	int errCode; /* Most recent error code (SQLITE_*) */
@@ -26,15 +27,11 @@ struct sqlite3_value {
 		double r;  /* Real value used when MEM_Real is set in flags */
 		int64_t i; /* Integer value used when MEM_Int is set in flags */
 		           // int nZero;          /* Extra zero bytes when MEM_Zero and MEM_Blob set */
-		           // const char *zPType; /* Pointer type when MEM_Term|MEM_Subtype|MEM_Null */
 	} u;
 	duckdb::SQLiteTypeValue type;
 
-	int n;                  /* Number of characters in string value, excluding '\0' */
-	duckdb::string_t str_t; /* String or BLOB value */
-	char *zMalloc;          /* Space to hold MEM_Str or MEM_Blob if szMalloc>0 */
-	int szMalloc = 0;       /* Size of the zMalloc allocation */
-	sqlite3 *db;            /* The associated database connection */
+	std::string str;
+	sqlite3 *db; /* The associated database connection */
 };
 
 struct FuncDef {

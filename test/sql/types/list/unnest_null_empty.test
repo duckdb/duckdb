@@ -23,6 +23,14 @@ insert into people values (4, 'Elvis', ARRAY[NULL, NULL, NULL]);
 statement ok
 insert into people values (5, 'Mark', ARRAY[]::VARCHAR[]);
 
+query I
+SELECT UNNEST(NULL);
+----
+
+query I
+SELECT UNNEST(NULL::BOOLEAN[]);
+----
+
 query II
 SELECT name, UNNEST(address) FROM people;
 ----

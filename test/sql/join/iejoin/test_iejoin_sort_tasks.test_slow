@@ -1,0 +1,29 @@
+# name: test/sql/join/iejoin/test_iejoin_sort_tasks.test_slow
+# description: Test IEJoin
+# group: [iejoin]
+
+# No verification - it doesn't scale
+
+# Otherwise we run out of memory
+require 64bit
+
+statement ok
+PRAGMA verify_parallelism
+
+# Stream tables with minimal overlap that require merge tasks on both sides.
+query II
+SELECT lhs.begin, rhs.begin
+FROM (
+	SELECT
+		i AS id,
+		i AS begin,
+		i + 1 AS end
+	FROM range(1, 100000002) tbl(i)) lhs,
+	(SELECT
+		i - 100000000 AS id,
+		i AS begin,
+		i + 1 AS end
+	FROM range(100000001, 200000002) tbl(i)) rhs
+WHERE lhs.begin < rhs.end AND rhs.begin < lhs.end
+----
+100000001	100000001

@@ -1,0 +1,74 @@
+# name: test/sql/keywords/escaped_quotes_expressions.test
+# description: Test escaped quotes in expressions
+# group: [keywords]
+
+require skip_reload
+
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE SCHEMA "SCH""EMA";
+
+statement ok
+CREATE TYPE "EN""UM" AS ENUM('ALL');
+
+statement ok
+CREATE TABLE "SCH""EMA"."TA""BLE"("COL""UMN" "EN""UM");
+
+statement ok
+INSERT INTO "SCH""EMA"."TA""BLE" VALUES ('ALL');
+
+# column references
+query I
+SELECT "COL""UMN" FROM "SCH""EMA"."TA""BLE";
+----
+ALL
+
+query I
+SELECT "TA""BLE"."COL""UMN" FROM "SCH""EMA"."TA""BLE";
+----
+ALL
+
+query I
+SELECT "SCH""EMA"."TA""BLE"."COL""UMN" FROM "SCH""EMA"."TA""BLE";
+----
+ALL
+
+statement ok
+DROP TABLE "SCH""EMA"."TA""BLE";
+
+statement ok
+CREATE TABLE "SCH""EMA"."TA""BLE"("COL""UMN" ROW("SO""ME" ROW("I""N" INTEGER)));
+
+statement ok
+INSERT INTO "SCH""EMA"."TA""BLE" VALUES ({'so"me': {'i"n': 3}});
+
+# struct fields with column references
+query I
+SELECT "COL""UMN"."SO""ME"."I""N" FROM "SCH""EMA"."TA""BLE";
+----
+3
+
+query I
+SELECT "TA""BLE"."COL""UMN"."SO""ME"."I""N" FROM "SCH""EMA"."TA""BLE";
+----
+3
+
+query I
+SELECT "SCH""EMA"."TA""BLE"."COL""UMN"."SO""ME"."I""N" FROM "SCH""EMA"."TA""BLE";
+----
+3
+
+# struct extract
+query I
+SELECT (("SCH""EMA"."TA""BLE"."COL""UMN")."SO""ME")."I""N" FROM "SCH""EMA"."TA""BLE";
+----
+3
+
+# array index
+query I
+SELECT "SCH""EMA"."TA""BLE"."COL""UMN"['SO"ME']['I"N'] FROM "SCH""EMA"."TA""BLE";
+----
+3

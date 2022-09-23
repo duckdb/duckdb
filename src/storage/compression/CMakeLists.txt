@@ -4,6 +4,7 @@ add_library_unity(
   numeric_constant.cpp
   fixed_size_uncompressed.cpp
   rle.cpp
+  dictionary_compression.cpp
   string_uncompressed.cpp
   uncompressed.cpp
   validity_uncompressed.cpp

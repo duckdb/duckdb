@@ -1,0 +1,73 @@
+# name: test/sql/function/list/aggregates/sum.test
+# description: Test the list_sum aggregate function
+# group: [aggregates]
+
+query I
+SELECT list_sum([2, 2])
+----
+4
+
+statement ok
+CREATE TABLE integers(i INTEGER[]);
+
+# positive numbers
+statement ok
+INSERT INTO integers SELECT LIST(i) FROM range(0, 1000, 1) tbl(i);
+
+# negative numbers
+statement ok
+INSERT INTO integers SELECT LIST(i) FROM range(-999, 1000, 1) tbl(i);
+
+# more negative numbers
+statement ok
+INSERT INTO integers SELECT LIST(i) FROM range(0, -1000, -1) tbl(i);
+
+# empty/NULLs
+statement ok
+INSERT INTO integers VALUES (NULL), ([NULL]), ([]);
+
+query I
+SELECT list_sum(i) FROM integers;
+----
+499500
+0
+-499500
+NULL
+NULL
+NULL
+
+statement ok
+CREATE TABLE doubles(n DOUBLE[]);
+
+statement ok
+INSERT INTO doubles (n) VALUES (['9007199254740992'::DOUBLE, 1::DOUBLE, 1::DOUBLE, 0::DOUBLE]);
+
+# this would give the wrong result with a simple sum
+query I
+SELECT list_aggr(n, 'fsum') FROM doubles;
+----
+9007199254740994
+
+query I
+SELECT list_aggr(n, 'sumKahan') FROM doubles;
+----
+9007199254740994
+
+query I
+SELECT list_aggr(n, 'kahan_sum') FROM doubles;
+----
+9007199254740994
+
+# bigint sum
+statement ok
+CREATE TABLE bigints(i BIGINT[]);
+
+# a bunch of huge values
+statement ok
+INSERT INTO bigints SELECT LIST(i) FROM range(4611686018427387904, 4611686018427388904, 1) tbl(i);
+
+# sum them up
+query I
+SELECT list_sum(i) FROM bigints
+----
+4611686018427388403500

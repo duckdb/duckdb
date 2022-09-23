@@ -1,4 +1,3 @@
-library("testthat")
 skip_on_cran()
 
 DBItest::test_all(c(
@@ -41,5 +40,7 @@ DBItest::test_all(c(
   "write_table_row_names_string_missing",
   "write_table_row_names_na_missing",
   "append_roundtrip_factor",
-  "bind_factor"
+  "bind_factor",
+
+  NULL
 ))

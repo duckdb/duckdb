@@ -1,4 +1,5 @@
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 
 namespace duckdb {
 
@@ -99,6 +100,11 @@ int NumericHelper::UnsignedLength(uint64_t value) {
 			return length;
 		}
 	}
+}
+
+template <>
+std::string NumericHelper::ToString(hugeint_t value) {
+	return Hugeint::ToString(value);
 }
 
 } // namespace duckdb

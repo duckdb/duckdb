@@ -11,6 +11,7 @@ BoundStatement Binder::Bind(SetStatement &stmt) {
 	result.names = {"Success"};
 
 	result.plan = make_unique<LogicalSet>(stmt.name, stmt.value, stmt.scope);
+	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
 

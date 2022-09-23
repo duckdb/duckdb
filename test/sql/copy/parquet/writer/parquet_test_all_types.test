@@ -25,7 +25,8 @@ query I nosort alltypes
 SELECT * REPLACE (
 	hugeint::DOUBLE AS hugeint,
 	time_tz::TIME AS time_tz,
-	timestamp_tz::TIMESTAMP AS timestamp_tz
+	timestamp_tz::TIMESTAMP AS timestamp_tz,
+	timestamptz_array::TIMESTAMP[] AS timestamptz_array,
 )
 FROM all_types
 ----

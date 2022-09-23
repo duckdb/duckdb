@@ -2,6 +2,14 @@
 # description: Test invalid prepare statements
 # group: [prepared]
 
+# cannot execute a statement with prepared statement parameters
+statement error
+select ?;
+
+# cannot create a view with prepared statement parameters
+statement error
+create view v1 as select ?;
+
 # start with a higher index than 1
 statement ok
 prepare v1 as select $2::int;

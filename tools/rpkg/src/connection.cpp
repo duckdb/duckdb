@@ -2,47 +2,26 @@
 
 using namespace duckdb;
 
-static SEXP duckdb_finalize_connection_R(SEXP connsexp) {
-	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_finalize_connection_R: Need external pointer parameter");
-	}
-	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
-	if (conn_wrapper) {
-		cpp11::warning(
-		    "duckdb_finalize_connection_R: Connection is garbage-collected, use dbDisconnect() to avoid this.");
-		R_ClearExternalPtr(connsexp);
-		delete conn_wrapper;
-	}
-	return R_NilValue;
+void duckdb::ConnDeleter(ConnWrapper *conn) {
+	cpp11::warning("Connection is garbage-collected, use dbDisconnect() to avoid this.");
+	delete conn;
 }
 
-SEXP RApi::Connect(SEXP dbsexp) {
-	if (TYPEOF(dbsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_connect_R: Need external pointer parameter");
-	}
-	auto db_wrapper = (DBWrapper *)R_ExternalPtrAddr(dbsexp);
-	if (!db_wrapper || !db_wrapper->db) {
-		cpp11::stop("duckdb_connect_R: Invalid database reference");
+[[cpp11::register]] duckdb::conn_eptr_t rapi_connect(duckdb::db_eptr_t db) {
+	if (!db || !db.get() || !db->db) {
+		cpp11::stop("rapi_connect: Invalid database reference");
 	}
 
-	RProtector r;
 	auto conn_wrapper = new ConnWrapper();
-	conn_wrapper->db_sexp = dbsexp;
-	conn_wrapper->conn = make_unique<Connection>(*db_wrapper->db);
+	conn_wrapper->conn = make_unique<Connection>(*db->db);
+	conn_wrapper->db_eptr.swap(db);
 
-	SEXP connsexp = r.Protect(R_MakeExternalPtr(conn_wrapper, R_NilValue, R_NilValue));
-	R_RegisterCFinalizer(connsexp, (void (*)(SEXP))duckdb_finalize_connection_R);
-
-	return connsexp;
+	return conn_eptr_t(conn_wrapper);
 }
 
-void RApi::Disconnect(SEXP connsexp) {
-	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		cpp11::stop("duckdb_disconnect_R: Need external pointer parameter");
-	}
-	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
+[[cpp11::register]] void rapi_disconnect(duckdb::conn_eptr_t conn) {
+	auto conn_wrapper = conn.release();
 	if (conn_wrapper) {
-		R_ClearExternalPtr(connsexp);
 		delete conn_wrapper;
 	}
 }

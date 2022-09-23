@@ -1,0 +1,109 @@
+# name: test/sql/function/list/aggregates/max.test
+# description: Test the list_max aggregate function
+# group: [aggregates]
+
+# incorrect usage
+statement error
+SELECT list_max()
+
+# test different types
+
+# numerics
+foreach type <numeric>
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
+
+query I
+SELECT list_max(i) FROM five
+----
+5
+NULL
+NULL
+NULL
+2
+
+statement ok
+DROP TABLE five
+
+endloop
+
+# temporal
+statement ok
+CREATE TABLE five_dates AS
+	SELECT
+		LIST(i::integer) AS i,
+		LIST('2021-08-20'::DATE + i::INTEGER) AS d,
+		LIST('2021-08-20'::TIMESTAMP + INTERVAL (i) HOUR) AS dt,
+		LIST('14:59:37'::TIME + INTERVAL (i) MINUTE) AS t,
+		LIST(INTERVAL (i) SECOND) AS s
+	FROM range(1, 6, 1) t1(i)
+
+query IIII
+SELECT list_max(d), list_max(dt), list_max(t), list_max(s) FROM five_dates
+----
+2021-08-25	2021-08-20 05:00:00	15:04:37	00:00:05
+
+statement ok
+DROP TABLE five_dates
+
+# with time zone
+statement ok
+CREATE TABLE five_dates_tz AS
+	SELECT
+		LIST(('2021-08-20'::TIMESTAMP + INTERVAL (i) HOUR)::TIMESTAMPTZ) AS dt,
+		LIST(('14:59:37'::TIME + INTERVAL (i) MINUTE)::TIMETZ) AS t,
+	FROM range(1, 6, 1) t1(i)
+
+query II
+SELECT list_max(dt), list_max(t) FROM five_dates_tz
+----
+2021-08-20 05:00:00+00	15:04:37+00
+
+statement ok
+DROP TABLE five_dates_tz
+
+# complex types
+statement ok
+CREATE TABLE five_complex AS
+	SELECT
+		LIST(i::integer) AS i,
+		LIST(i::VARCHAR) AS s,
+		LIST([i]) AS l,
+		LIST({'a': i}) AS r
+	FROM range(1, 6, 1) t1(i)
+
+query III
+SELECT list_max(s), list_max(l), list_max(r)
+FROM five_complex
+----
+5	[5]	{'a': 5}
+
+statement ok
+DROP TABLE five_complex
+
+# decimals
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
+
+query I
+SELECT list_max(i) FROM five
+----
+5.0
+NULL
+NULL
+NULL
+2.0
+
+statement ok
+DROP TABLE five
+
+endloop

@@ -1,0 +1,20 @@
+# name: test/issues/fuzz/recursive_view_expression_assertion.test
+# description: Issue #3354: Assertion Failed at expression_iterator.cpp:187
+# group: [fuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=1
+
+statement ok
+create view strings as (with recursive t(a) as (select 1 union select a+1 from t where a < 3) select * from t order by a);
+
+# this is the original issue #3354 bug
+statement ok
+SELECT a, (SELECT a FROM strings i2 WHERE a=(SELECT SUM(a) FROM strings i2 WHERE i2.a>i1.a)) FROM strings i1 ORDER BY 1;
+
+# related issue #4445 bug
+statement ok
+SELECT a, (SELECT a FROM strings i2 RIGHT JOIN (SELECT SUM(a) sum_a FROM strings i2 WHERE i2.a>i1.a) sq ON i2.a = sq.sum_a) FROM strings i1 ORDER BY 1;

@@ -27,6 +27,9 @@ public:
 	                                      const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
 	static void EnumerateQueryNodeChildren(QueryNode &node,
 	                                       const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
+
+	static void EnumerateQueryNodeModifiers(QueryNode &node,
+	                                        const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
 };
 
 } // namespace duckdb

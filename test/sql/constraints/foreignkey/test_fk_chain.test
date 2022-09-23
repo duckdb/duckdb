@@ -1,0 +1,87 @@
+# name: test/sql/constraints/foreignkey/test_fk_chain.test
+# description: tests involving longer chains of foreign key tables
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE t1(i1 INTEGER UNIQUE)
+
+statement ok
+INSERT INTO t1 VALUES (1), (2), (3), (4)
+
+statement ok
+CREATE TABLE t2(i2 INTEGER PRIMARY KEY, FOREIGN KEY (i2) REFERENCES t1(i1))
+
+statement ok
+INSERT INTO t2 VALUES (1), (2), (3)
+
+statement ok
+CREATE TABLE t3(i3 INTEGER UNIQUE, FOREIGN KEY (i3) REFERENCES t2(i2))
+
+statement ok
+INSERT INTO t3 VALUES (1), (2)
+
+statement ok
+CREATE TABLE t4(i4 INTEGER, FOREIGN KEY (i4) REFERENCES t3(i3))
+
+statement ok
+INSERT INTO t4 VALUES (1)
+
+# insert
+statement error
+INSERT INTO t2 VALUES (5)
+
+statement error
+INSERT INTO t3 VALUES (4)
+
+statement error
+INSERT INTO t4 VALUES (3)
+
+statement ok
+INSERT INTO t2 VALUES (4)
+
+statement ok
+INSERT INTO t3 VALUES (3)
+
+statement ok
+INSERT INTO t4 VALUES (2)
+
+# delete
+statement error
+DELETE FROM t1 WHERE i1=4
+
+statement error
+DELETE FROM t2 WHERE i2=3
+
+statement error
+DELETE FROM t3 WHERE i3=2
+
+statement ok
+DELETE FROM t2 WHERE i2=4
+
+statement ok
+DELETE FROM t3 WHERE i3=3
+
+statement ok
+DELETE FROM t4 WHERE i4=2
+
+# drop table
+statement error
+DROP TABLE t1;
+
+statement error
+DROP TABLE t2;
+
+statement error
+DROP TABLE t3;
+
+statement ok
+DROP TABLE t4;
+
+statement ok
+DROP TABLE t3;
+
+statement ok
+DROP TABLE t2;
+
+statement ok
+DROP TABLE t1;

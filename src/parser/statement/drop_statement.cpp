@@ -5,10 +5,11 @@ namespace duckdb {
 DropStatement::DropStatement() : SQLStatement(StatementType::DROP_STATEMENT), info(make_unique<DropInfo>()) {
 }
 
+DropStatement::DropStatement(const DropStatement &other) : SQLStatement(other), info(other.info->Copy()) {
+}
+
 unique_ptr<SQLStatement> DropStatement::Copy() const {
-	auto result = make_unique<DropStatement>();
-	result->info = info->Copy();
-	return move(result);
+	return unique_ptr<DropStatement>(new DropStatement(*this));
 }
 
 } // namespace duckdb

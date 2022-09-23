@@ -1,0 +1,117 @@
+# name: test/sql/function/list/aggregates/bigints_sum_avg.test
+# description: Test list_sum and list_avg with bigints
+# group: [aggregates]
+
+statement ok
+CREATE TABLE bigints (i BIGINT[]);
+
+statement ok
+INSERT INTO bigints VALUES ([1, 2, 3]);
+
+# sum
+query I
+SELECT list_sum(i) FROM bigints;
+----
+6
+
+# avg
+query I
+SELECT list_avg(i) FROM bigints;
+----
+2
+
+statement ok
+DELETE FROM bigints;
+
+# sum no longer fits in int64
+statement ok
+INSERT INTO bigints VALUES ([1, 2, 3, 9223372036854775806]);
+
+# sum
+query I
+SELECT list_sum(i) FROM bigints;
+----
+9223372036854775812
+
+# avg
+query I
+SELECT list_avg(i) FROM bigints;
+----
+2305843009213693952
+
+statement ok
+DELETE FROM bigints;
+
+statement ok
+INSERT INTO bigints VALUES ([-1, -2, -3]);
+
+# sum
+query I
+SELECT list_sum(i) FROM bigints;
+----
+-6
+
+# avg
+query I
+SELECT list_avg(i) FROM bigints;
+----
+-2
+
+statement ok
+DELETE FROM bigints;
+
+# sum no longer fits in int64 [negative]
+statement ok
+INSERT INTO bigints VALUES ([-1, -2, -3, -9223372036854775806]);
+
+# sum
+query I
+SELECT list_sum(i) FROM bigints;
+----
+-9223372036854775812
+
+# avg
+query I
+SELECT list_avg(i) FROM bigints;
+----
+-2305843009213693952
+
+# now with decimals
+
+statement ok
+CREATE TABLE decimals (i DECIMAL(18,1)[]);
+
+statement ok
+INSERT INTO decimals VALUES ([1, 2, 3]);
+
+# sum
+query I
+SELECT list_sum(i) FROM decimals;
+----
+6.0
+
+# avg
+query I
+SELECT list_avg(i) FROM decimals;
+----
+2.0
+
+statement ok
+DELETE FROM decimals;
+
+# sum no longer fits in int64
+statement ok
+INSERT INTO decimals VALUES ([99999999999999999.9, 99999999999999999.9, 99999999999999999.9,
+    99999999999999999.9, 99999999999999999.9, 99999999999999999.9, 99999999999999999.9,
+    99999999999999999.9, 99999999999999999.9, 99999999999999999.9, 1.0, 2.0, 3.0]);
+
+# sum
+query I
+SELECT list_sum(i) FROM decimals;
+----
+1000000000000000005.0
+
+query I
+SELECT list_avg(i) FROM decimals;
+----
+76923076923076923

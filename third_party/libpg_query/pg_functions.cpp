@@ -36,6 +36,7 @@ static void allocate_new(parser_state *state, size_t n) {
 	if (state->malloc_ptr_idx >= state->malloc_ptr_size) {
 		size_t new_size = state->malloc_ptr_size * 2;
 		auto new_malloc_ptrs = (char **) malloc(sizeof(char *) * new_size);
+		memset(new_malloc_ptrs, 0, sizeof(char*) * new_size);
 		memcpy(new_malloc_ptrs, state->malloc_ptrs, state->malloc_ptr_size * sizeof(char*));
 		free(state->malloc_ptrs);
 		state->malloc_ptr_size = new_size;
@@ -77,6 +78,7 @@ void pg_parser_init() {
 
 	pg_parser_state.malloc_ptr_size = 4;
 	pg_parser_state.malloc_ptrs = (char **) malloc(sizeof(char *) * pg_parser_state.malloc_ptr_size);
+	memset(pg_parser_state.malloc_ptrs, 0, sizeof(char*) * pg_parser_state.malloc_ptr_size);
 	pg_parser_state.malloc_ptr_idx = 0;
 	allocate_new(&pg_parser_state, 1);
 }
@@ -88,14 +90,7 @@ void pg_parser_parse(const char *query, parse_result *res) {
 		res->success = pg_parser_state.pg_err_code == PGUNDEFINED;
 	} catch (std::exception &ex) {
 		res->success = false;
-		// copy the error message of the exception
-		auto error_message = ex.what();
-		uint32_t pos = 0;
-		while(pos < 1023 && error_message[pos]) {
-			pg_parser_state.pg_err_msg[pos] = error_message[pos];
-			pos++;
-		}
-		pg_parser_state.pg_err_msg[pos] = '\0';
+		res->error_message = ex.what();
 	}
 	res->error_message = pg_parser_state.pg_err_msg;
 	res->error_location = pg_parser_state.pg_err_pos;

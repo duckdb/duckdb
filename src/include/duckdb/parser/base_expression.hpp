@@ -64,7 +64,7 @@ public:
 	//! Convert the Expression to a String
 	virtual string ToString() const = 0;
 	//! Print the expression to stdout
-	void Print();
+	void Print() const;
 
 	//! Creates a hash value of this expression. It is important that if two expressions are identical (i.e.
 	//! Expression::Equals() returns true), that their hash value is identical as well.
@@ -84,6 +84,8 @@ public:
 	bool operator==(const BaseExpression &rhs) {
 		return this->Equals(&rhs);
 	}
+
+	virtual void Verify() const;
 };
 
 } // namespace duckdb

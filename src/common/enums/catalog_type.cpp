@@ -27,6 +27,8 @@ string CatalogTypeToString(CatalogType type) {
 		return "Pragma Function";
 	case CatalogType::MACRO_ENTRY:
 		return "Macro Function";
+	case CatalogType::TABLE_MACRO_ENTRY:
+		return "Table Macro Function";
 	case CatalogType::VIEW_ENTRY:
 		return "View";
 	case CatalogType::INDEX_ENTRY:

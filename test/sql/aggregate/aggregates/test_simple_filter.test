@@ -32,3 +32,50 @@ FROM generate_series(1,11) tbl(i)
 ----
 5	6	11
 
+# Test filtered aggregates with arguments
+statement ok
+CREATE TABLE issue3105(gender VARCHAR, pay FLOAT);
+
+statement ok
+INSERT INTO issue3105 VALUES
+	('male', 100),
+	('male', 200),
+	('male', 300),
+	('female', 150),
+	('female', 250);
+
+query III
+SELECT
+	SUM(pay) FILTER (WHERE gender = 'male'),
+	SUM(pay) FILTER (WHERE gender = 'female'),
+	SUM(pay)
+FROM issue3105;
+----
+600.000000	400.000000	1000.000000
+
+query III
+SELECT
+	SUM(pay),
+	SUM(pay) FILTER (WHERE gender = 'male'),
+	SUM(pay) FILTER (WHERE gender = 'female')
+FROM issue3105;
+----
+1000.000000	600.000000	400.000000
+
+query III
+SELECT
+	SUM(pay) FILTER (WHERE gender = 'male'),
+	SUM(pay),
+	SUM(pay) FILTER (WHERE gender = 'female')
+FROM issue3105;
+----
+600.000000	1000.000000	400.000000
+
+query III
+SELECT
+	SUM(pay) FILTER (gender = 'male'),
+	SUM(pay),
+	SUM(pay) FILTER (gender = 'female')
+FROM issue3105;
+----
+600.000000	1000.000000	400.000000

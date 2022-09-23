@@ -16,7 +16,7 @@ namespace duckdb {
 class LogicalInsert : public LogicalOperator {
 public:
 	explicit LogicalInsert(TableCatalogEntry *table)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(0), return_chunk(false) {
 	}
 
 	vector<vector<unique_ptr<Expression>>> insert_values;
@@ -26,12 +26,30 @@ public:
 	vector<LogicalType> expected_types;
 	//! The base table to insert into
 	TableCatalogEntry *table;
+	idx_t table_index;
+	//! if returning option is used, return actual chunk to projection
+	bool return_chunk;
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
 protected:
+	vector<ColumnBinding> GetColumnBindings() override {
+		if (return_chunk) {
+			return GenerateColumnBindings(table_index, table->GetTypes().size());
+		}
+		return {ColumnBinding(0, 0)};
+	}
+
 	void ResolveTypes() override {
-		types.emplace_back(LogicalType::BIGINT);
+		if (return_chunk) {
+			types = table->GetTypes();
+		} else {
+			types.emplace_back(LogicalType::BIGINT);
+		}
 	}
 };
 } // namespace duckdb

@@ -1,0 +1,142 @@
+# name: test/sql/constraints/foreignkey/test_fk_multiple.test
+# description: Test multiple foreign key constraint
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE pkt1(i1 INTEGER PRIMARY KEY CHECK(i1 < 3), j1 INTEGER UNIQUE);
+
+statement ok
+CREATE TABLE pkt2(i2 INTEGER PRIMARY KEY, j2 INTEGER UNIQUE CHECK (j2 > 1000));
+
+statement ok
+CREATE TABLE fkt1(k1 INTEGER, l1 INTEGER, FOREIGN KEY(k1) REFERENCES pkt1(i1), FOREIGN KEY(l1) REFERENCES pkt2(i2));
+
+statement ok
+CREATE TABLE fkt2(k2 INTEGER, l2 INTEGER, FOREIGN KEY(k2) REFERENCES pkt1(j1), FOREIGN KEY(l2) REFERENCES pkt2(j2));
+
+# ensure the constraints are being correctly copied
+statement error
+INSERT INTO pkt1 VALUES (3, 11);
+
+statement error
+INSERT INTO pkt2 VALUES (101, 1000);
+
+# test multiple foreign key constraints
+statement ok
+INSERT INTO pkt1 VALUES (1, 11), (2, 12);
+
+statement ok
+INSERT INTO pkt2 VALUES (101, 1001), (102, 1002);
+
+statement error
+INSERT INTO fkt1 VALUES (3, 101);
+
+statement error
+INSERT INTO fkt1 VALUES (2, 103);
+
+statement ok
+INSERT INTO fkt1 VALUES (1, 102), (2, 101);
+
+statement error
+INSERT INTO fkt2 VALUES (13, 1002);
+
+statement error
+INSERT INTO fkt1 VALUES (12, 1003);
+
+statement ok
+INSERT INTO fkt2 VALUES (12, 1001), (11, 1002);
+
+statement error
+DELETE FROM pkt1 WHERE i1=1
+
+statement error
+DELETE FROM pkt2 WHERE i2=102
+
+statement ok
+DELETE FROM fkt1 WHERE k1=1
+
+statement error
+DELETE FROM pkt1 WHERE i1=1
+
+statement ok
+DELETE FROM fkt2 WHERE k2=11
+
+statement ok
+DELETE FROM pkt1 WHERE i1=1
+
+query II
+SELECT * FROM pkt1;
+----
+2	12	
+
+query II
+SELECT * FROM pkt2;
+----
+101	1001	
+102	1002	
+
+query II
+SELECT * FROM fkt1;
+----
+2	101	
+
+query II
+SELECT * FROM fkt2;
+----
+12	1001	
+
+statement error
+UPDATE pkt1 SET i1=3, j1=13 WHERE i1=2;
+
+statement error
+UPDATE pkt2 SET i2=103, j2=1003 WHERE i2=101;
+
+statement ok
+UPDATE pkt2 SET i2=103, j2=1003 WHERE i2=102;
+
+statement ok
+DELETE FROM fkt1 WHERE k1=2
+
+statement ok
+DELETE FROM fkt2 WHERE k2=12
+
+statement ok
+UPDATE pkt1 SET i1=1, j1=11 WHERE i1=2;
+
+statement ok
+UPDATE pkt2 SET i2=104, j2=1004 WHERE i2=101;
+
+query II
+SELECT * FROM pkt1;
+----
+1	11	
+
+query II
+SELECT * FROM pkt2;
+----
+103	1003	
+104	1004	
+
+statement error
+DROP TABLE pkt1
+
+statement error
+DROP TABLE pkt2
+
+statement ok
+DROP TABLE fkt2
+
+statement error
+DROP TABLE pkt1
+
+statement error
+DROP TABLE pkt2
+
+statement ok
+DROP TABLE fkt1
+
+statement ok
+DROP TABLE pkt1
+
+statement ok
+DROP TABLE pkt2

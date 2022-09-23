@@ -604,8 +604,8 @@ std::string Transformer::NodetypeToString(duckdb_libpgquery::PGNodeTag type) { /
 		return "T_ReassignOwnedStmt";
 	case duckdb_libpgquery::T_PGCompositeTypeStmt:
 		return "T_CompositeTypeStmt";
-	case duckdb_libpgquery::T_PGCreateEnumStmt:
-		return "T_CreateEnumStmt";
+	case duckdb_libpgquery::T_PGCreateTypeStmt:
+		return "T_CreateTypeStmt";
 	case duckdb_libpgquery::T_PGCreateRangeStmt:
 		return "T_CreateRangeStmt";
 	case duckdb_libpgquery::T_PGAlterEnumStmt:

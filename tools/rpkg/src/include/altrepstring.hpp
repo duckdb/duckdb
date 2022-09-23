@@ -16,7 +16,6 @@ struct AltrepString {
 	static void SetElt(SEXP x, R_xlen_t i, SEXP val);
 	static int IsSorted(SEXP x);
 	static int NoNA(SEXP x);
-	static void Finalize(SEXP x);
 
 	static R_altrep_class_t rclass;
 };

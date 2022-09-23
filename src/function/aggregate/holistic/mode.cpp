@@ -109,7 +109,34 @@ struct ModeState {
 	}
 };
 
-template <typename KEY_TYPE>
+struct ModeIncluded {
+	inline explicit ModeIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p, idx_t bias_p)
+	    : fmask(fmask_p), dmask(dmask_p), bias(bias_p) {
+	}
+
+	inline bool operator()(const idx_t &idx) const {
+		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx - bias);
+	}
+	const ValidityMask &fmask;
+	const ValidityMask &dmask;
+	const idx_t bias;
+};
+
+struct ModeAssignmentStandard {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
+		return RESULT_TYPE(input);
+	}
+};
+
+struct ModeAssignmentString {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
+		return StringVector::AddString(result, input);
+	}
+};
+
+template <typename KEY_TYPE, typename ASSIGN_OP>
 struct ModeFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
@@ -117,7 +144,7 @@ struct ModeFunction {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->frequency_map) {
 			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
 		}
@@ -126,7 +153,7 @@ struct ModeFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.frequency_map) {
 			return;
 		}
@@ -141,7 +168,7 @@ struct ModeFunction {
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, INPUT_TYPE *target, ValidityMask &mask,
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, INPUT_TYPE *target, ValidityMask &mask,
 	                     idx_t idx) {
 		if (!state->frequency_map) {
 			mask.SetInvalid(idx);
@@ -155,7 +182,7 @@ struct ModeFunction {
 		}
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
+	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		if (!state->frequency_map) {
 			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
@@ -165,10 +192,13 @@ struct ModeFunction {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid, idx_t bias) {
+	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
+	                   AggregateInputData &, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
+	                   Vector &result, idx_t rid, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
+
+		ModeIncluded included(fmask, dmask, bias);
 
 		if (!state->frequency_map) {
 			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
@@ -178,31 +208,31 @@ struct ModeFunction {
 			state->Reset();
 			// for f ∈ F do
 			for (auto f = frame.first; f < frame.second; ++f) {
-				if (dmask.RowIsValid(f - bias)) {
+				if (included(f)) {
 					state->ModeAdd(KEY_TYPE(data[f]));
 				}
 			}
 		} else {
 			// for f ∈ P \ F do
 			for (auto p = prev.first; p < frame.first; ++p) {
-				if (dmask.RowIsValid(p - bias)) {
+				if (included(p)) {
 					state->ModeRm(KEY_TYPE(data[p]));
 				}
 			}
 			for (auto p = frame.second; p < prev.second; ++p) {
-				if (dmask.RowIsValid(p - bias)) {
+				if (included(p)) {
 					state->ModeRm(KEY_TYPE(data[p]));
 				}
 			}
 
 			// for f ∈ F \ P do
 			for (auto f = frame.first; f < prev.first; ++f) {
-				if (dmask.RowIsValid(f - bias)) {
+				if (included(f)) {
 					state->ModeAdd(KEY_TYPE(data[f]));
 				}
 			}
 			for (auto f = prev.second; f < frame.second; ++f) {
-				if (dmask.RowIsValid(f - bias)) {
+				if (included(f)) {
 					state->ModeAdd(KEY_TYPE(data[f]));
 				}
 			}
@@ -219,7 +249,7 @@ struct ModeFunction {
 		}
 
 		if (state->valid) {
-			rdata[rid] = RESULT_TYPE(*state->mode);
+			rdata[rid] = ASSIGN_OP::template Assign<INPUT_TYPE, RESULT_TYPE>(result, *state->mode);
 		} else {
 			rmask.Set(rid, false);
 		}
@@ -235,10 +265,10 @@ struct ModeFunction {
 	}
 };
 
-template <typename INPUT_TYPE, typename KEY_TYPE>
+template <typename INPUT_TYPE, typename KEY_TYPE, typename ASSIGN_OP = ModeAssignmentStandard>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<KEY_TYPE>;
-	using OP = ModeFunction<KEY_TYPE>;
+	using OP = ModeFunction<KEY_TYPE, ASSIGN_OP>;
 	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	func.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	return func;
@@ -274,7 +304,7 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 		return GetTypedModeFunction<interval_t, interval_t>(type);
 
 	case PhysicalType::VARCHAR:
-		return GetTypedModeFunction<string_t, string>(type);
+		return GetTypedModeFunction<string_t, string, ModeAssignmentString>(type);
 
 	default:
 		throw NotImplementedException("Unimplemented mode aggregate");

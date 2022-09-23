@@ -1,0 +1,52 @@
+# name: test/sql/generated_columns/virtual/circular_dependency_stresstest.test
+# description: Test circular dependency detection
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+CREATE TABLE tbl (
+	gcol1 AS (gcol10),
+	gcol2 AS (gcol4),
+	gcol3 AS (gcol7),
+	gcol4 AS (gcol6),
+	gcol5 AS (x),
+	gcol6 AS (gcol2),
+	gcol7 AS (gcol8),
+	gcol8 AS (gcol1),
+	gcol9 AS (gcol2),
+	gcol10 AS (gcol3),
+	x INTEGER
+);
+
+statement ok
+CREATE TABLE tbl (
+	gcol1 AS (gcol2),
+	gcol2 AS (gcol3),
+	gcol3 AS (gcol4),
+	gcol4 AS (gcol5),
+	gcol5 AS (gcol6),
+	gcol6 AS (gcol7),
+	gcol7 AS (gcol8),
+	gcol8 AS (gcol9),
+	gcol9 AS (gcol10),
+	gcol10 AS (x),
+	x INTEGER,
+);
+
+statement error
+CREATE TABLE circular (
+	a AS (k),
+	k AS (j),
+	j AS (i),
+	i AS (h),
+	h AS (g),
+	g AS (f),
+	f AS (e),
+	e AS (d),
+	d AS (c),
+	c AS (b),
+	b AS (a),
+	x INTEGER,
+);

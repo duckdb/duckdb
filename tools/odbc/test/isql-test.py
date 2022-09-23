@@ -60,7 +60,6 @@ test("""CREATE TABLE people(id INTEGER, name VARCHAR);
 INSERT INTO people VALUES (1, 'Mark'), (2, 'Hannes');
 SELECT * FROM people;""",
 out=(
-"2\n"
 "1|Mark\n"
 "2|Hannes")
 )
@@ -82,11 +81,11 @@ SELECT * FROM a;
 
 test("""INSERT INTO a VALUES (42, 84);
 SELECT * FROM a;
-""", out="1\n42|84")
+""", out="42|84")
 
 test("""CREATE TABLE test (a INTEGER, b INTEGER);
 INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);
-""", out="3")
+""", out="")
 
 test('SELECT a, b FROM test;',
 out=(
@@ -116,7 +115,7 @@ out=(
 test(
 """CREATE TABLE IF NOT EXISTS timestamp (t TIMESTAMP);
 INSERT INTO timestamp VALUES ('2008-01-01 00:00:01'), (NULL), ('2007-01-01 00:00:01'), ('2008-02-01 00:00:01'), ('2008-01-02 00:00:01'), ('2008-01-01 10:00:00'), ('2008-01-01 00:10:00'), ('2008-01-01 00:00:10')
-""", out='8')
+""")
 
 test("SELECT timestamp '2017-07-23 13:10:11';", out='2017-07-23 13:10:11')
 test("SELECT timestamp '2017-07-23T13:10:11', timestamp '2017-07-23T13:10:11Z';",
@@ -176,7 +175,7 @@ test("SELECT TIMESTAMP '100000-01-01 00:00:01.5'::VARCHAR", out='100000-01-01 00
 test(
 """CREATE TABLE times(i TIME);
 INSERT INTO times VALUES ('00:01:20'), ('20:08:10.998'), ('20:08:10.33'), ('20:08:10.001'), (NULL);
-""", out='5')
+""")
 
 test("SELECT * FROM times",
 out=(
@@ -214,7 +213,7 @@ test(
 """DROP TABLE test
 CREATE TABLE test (a INTEGER, b INTEGER);
 INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)
-""", out='3')
+""")
 
 test("SELECT a FROM test",
 out=(
@@ -250,7 +249,7 @@ test("SELECT '9223372036854788.758'::DECIMAL;", err="[ISQL]ERROR")
 
 test("SELECT '0.1'::DECIMAL(3, 0)::VARCHAR;", out='0')
 test("SELECT '123.4'::DECIMAL(9)::VARCHAR;", out='123')
-test("SELECT '0.1'::DECIMAL(3, 3)::VARCHAR, '-0.1'::DECIMAL(3, 3)::VARCHAR;", out='0.100|-0.100')
+test("SELECT '0.1'::DECIMAL(3, 3)::VARCHAR, '-0.1'::DECIMAL(3, 3)::VARCHAR;", out='.100|-.100')
 
 test("SELECT '1'::DECIMAL(3, 3)::VARCHAR;", err="[ISQL]ERROR")
 test("SELECT '-1'::DECIMAL(3, 3)::VARCHAR;", err="[ISQL]ERROR")
@@ -277,7 +276,7 @@ test("SELECT '1'::INTEGER(1000);", err="[ISQL]ERROR")
 test(
 """CREATE TABLE dates(i DATE);
 INSERT INTO dates VALUES ('1993-08-14'), (NULL);
-""", out='2')
+""")
 
 # NULL is print as an empty string, thus python removes it from the stoudt
 test("SELECT * FROM dates", out='1993-08-14')
@@ -305,7 +304,7 @@ test("SELECT '30000307-01-01 (BC)'::DATE", err="[ISQL]ERROR")
 test(
 """CREATE TABLE blobs (b BYTEA);
 INSERT INTO blobs VALUES('\\xaa\\xff\\xaa'), ('\\xAA\\xFF\\xAA\\xAA\\xFF\\xAA'), ('\\xAA\\xFF\\xAA\\xAA\\xFF\\xAA\\xAA\\xFF\\xAA');
-""", out='3')
+""")
 
 test("SELECT * FROM blobs",
 out=(
@@ -317,7 +316,7 @@ out=(
 test(
 """DELETE FROM blobs;
 INSERT INTO blobs VALUES('\\xaa\\xff\\xaa'), ('\\xaa\\xff\\xaa\\xaa\\xff\\xaa'), ('\\xaa\\xff\\xaa\\xaa\\xff\\xaa\\xaa\\xff\\xaa');
-""", out='3\n3')
+""")
 
 test("SELECT * FROM blobs",
 out=(
@@ -329,7 +328,7 @@ out=(
 test(
 """DELETE FROM blobs;
 INSERT INTO blobs VALUES('\\xaa1199'), ('\\xaa1199aa1199'), ('\\xaa1199aa1199aa1199');
-""", out='3')
+""")
 
 test("SELECT * FROM blobs",
 out=(
@@ -351,7 +350,7 @@ test(
 """CREATE TABLE blob_empty (b BYTEA);
 INSERT INTO blob_empty VALUES(''), (''::BLOB);
 INSERT INTO blob_empty VALUES(NULL), (NULL::BLOB);
-""", out='2\n2')
+""")
 
 test("SELECT * FROM blob_empty", out='')
 
@@ -361,7 +360,7 @@ test("SELECT 'ü'::blob;", err="[ISQL]ERROR")
 test(
 """CREATE TABLE emojis(id INTEGER, s VARCHAR);
 INSERT INTO emojis VALUES (1, '🦆'), (2, '🦆🍞🦆')
-""", out='2')
+""")
 
 test("SELECT * FROM emojis ORDER BY id",
 out=(

@@ -1,0 +1,53 @@
+# name: test/sql/function/list/lambdas/storage.test
+# description: Test storing lambda functions
+# group: [lambdas]
+
+# load the DB from disk
+load __TEST_DIR__/lambda_storage.db
+
+statement ok
+PRAGMA enable_verification
+
+# create macros containing a lambda functions
+
+statement ok
+CREATE MACRO my_transform(list) AS list_transform(list, x -> x * x)
+
+statement ok
+CREATE MACRO my_filter(list) AS list_filter(list, x -> x > 42)
+
+statement ok
+CREATE MACRO my_nested_lambdas(nested_list) AS list_filter(nested_list, elem -> list_sum(list_transform(elem, x -> x + 1)) > 42)
+
+query I
+SELECT my_transform([1, 2, 3])
+----
+[1, 4, 9]
+
+query I
+SELECT my_filter([41, 42, NULL, 43, 44])
+----
+[43, 44]
+
+query I
+SELECT my_nested_lambdas([[40, NULL], [20, 21], [10, 10, 20]])
+----
+[[20, 21], [10, 10, 20]]
+
+# restart the system
+restart
+
+query I
+SELECT my_transform([1, 2, 3])
+----
+[1, 4, 9]
+
+query I
+SELECT my_filter([41, 42, NULL, 43, 44])
+----
+[43, 44]
+
+query I
+SELECT my_nested_lambdas([[40, NULL], [20, 21], [10, 10, 20]])
+----
+[[20, 21], [10, 10, 20]]

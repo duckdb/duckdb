@@ -6,6 +6,7 @@ add_library_unity(
   pushdown_filter.cpp
   pushdown_get.cpp
   pushdown_inner_join.cpp
+  pushdown_limit.cpp
   pushdown_left_join.cpp
   pushdown_mark_join.cpp
   pushdown_projection.cpp

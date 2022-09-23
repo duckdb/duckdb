@@ -1,9 +1,13 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include <cmath>
+#include <limits>
 
 namespace duckdb {
 
-struct TestAllTypesData : public FunctionOperatorData {
+struct TestAllTypesData : public GlobalTableFunctionState {
 	TestAllTypesData() : offset(0) {
 	}
 
@@ -11,22 +15,7 @@ struct TestAllTypesData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-struct TestType {
-	TestType(LogicalType type_p, string name_p)
-	    : type(move(type_p)), name(move(name_p)), min_value(Value::MinimumValue(type)),
-	      max_value(Value::MaximumValue(type)) {
-	}
-	TestType(LogicalType type_p, string name_p, Value min, Value max)
-	    : type(move(type_p)), name(move(name_p)), min_value(move(min)), max_value(move(max)) {
-	}
-
-	LogicalType type;
-	string name;
-	Value min_value;
-	Value max_value;
-};
-
-static vector<TestType> GetTestTypes() {
+vector<TestType> TestAllTypesFun::GetTestTypes() {
 	vector<TestType> result;
 	// scalar types/numerics
 	result.emplace_back(LogicalType::BOOLEAN, "bool");
@@ -54,6 +43,7 @@ static vector<TestType> GetTestTypes() {
 	result.emplace_back(LogicalType::DECIMAL(18, 6), "dec_18_6");
 	result.emplace_back(LogicalType::DECIMAL(38, 10), "dec38_10");
 	result.emplace_back(LogicalType::UUID, "uuid");
+
 	// interval
 	interval_t min_interval;
 	min_interval.months = 0;
@@ -68,8 +58,9 @@ static vector<TestType> GetTestTypes() {
 	                    Value::INTERVAL(max_interval));
 	// strings/blobs
 	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
+	result.emplace_back(LogicalType::JSON, "json", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
-	                    Value("\\x00\\x00\\x00a"));
+	                    Value::BLOB("\\x00\\x00\\x00a"));
 
 	// enums
 	Vector small_enum(LogicalType::VARCHAR, 2);
@@ -99,6 +90,34 @@ static vector<TestType> GetTestTypes() {
 	auto int_list = Value::LIST({Value::INTEGER(42), Value::INTEGER(999), Value(LogicalType::INTEGER),
 	                             Value(LogicalType::INTEGER), Value::INTEGER(-42)});
 	result.emplace_back(int_list_type, "int_array", empty_int_list, int_list);
+
+	auto double_list_type = LogicalType::LIST(LogicalType::DOUBLE);
+	auto empty_double_list = Value::EMPTYLIST(LogicalType::DOUBLE);
+	auto double_list = Value::LIST(
+	    {Value::DOUBLE(42), Value::DOUBLE(NAN), Value::DOUBLE(std::numeric_limits<double>::infinity()),
+	     Value::DOUBLE(-std::numeric_limits<double>::infinity()), Value(LogicalType::DOUBLE), Value::DOUBLE(-42)});
+	result.emplace_back(double_list_type, "double_array", empty_double_list, double_list);
+
+	auto date_list_type = LogicalType::LIST(LogicalType::DATE);
+	auto empty_date_list = Value::EMPTYLIST(LogicalType::DATE);
+	auto date_list =
+	    Value::LIST({Value::DATE(date_t()), Value::DATE(date_t::infinity()), Value::DATE(date_t::ninfinity()),
+	                 Value(LogicalType::DATE), Value::DATE(Date::FromString("2022-05-12"))});
+	result.emplace_back(date_list_type, "date_array", empty_date_list, date_list);
+
+	auto timestamp_list_type = LogicalType::LIST(LogicalType::TIMESTAMP);
+	auto empty_timestamp_list = Value::EMPTYLIST(LogicalType::TIMESTAMP);
+	auto timestamp_list = Value::LIST({Value::TIMESTAMP(timestamp_t()), Value::TIMESTAMP(timestamp_t::infinity()),
+	                                   Value::TIMESTAMP(timestamp_t::ninfinity()), Value(LogicalType::TIMESTAMP),
+	                                   Value::TIMESTAMP(Timestamp::FromString("2022-05-12 16:23:45"))});
+	result.emplace_back(timestamp_list_type, "timestamp_array", empty_timestamp_list, timestamp_list);
+
+	auto timestamptz_list_type = LogicalType::LIST(LogicalType::TIMESTAMP_TZ);
+	auto empty_timestamptz_list = Value::EMPTYLIST(LogicalType::TIMESTAMP_TZ);
+	auto timestamptz_list = Value::LIST({Value::TIMESTAMPTZ(timestamp_t()), Value::TIMESTAMPTZ(timestamp_t::infinity()),
+	                                     Value::TIMESTAMPTZ(timestamp_t::ninfinity()), Value(LogicalType::TIMESTAMP_TZ),
+	                                     Value::TIMESTAMPTZ(Timestamp::FromString("2022-05-12 16:23:45-07"))});
+	result.emplace_back(timestamptz_list_type, "timestamptz_array", empty_timestamptz_list, timestamptz_list);
 
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto empty_varchar_list = Value::EMPTYLIST(LogicalType::VARCHAR);
@@ -165,12 +184,9 @@ static vector<TestType> GetTestTypes() {
 	return result;
 }
 
-static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, vector<Value> &inputs,
-                                                 named_parameter_map_t &named_parameters,
-                                                 vector<LogicalType> &input_table_types,
-                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                 vector<string> &names) {
-	auto test_types = GetTestTypes();
+static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                 vector<LogicalType> &return_types, vector<string> &names) {
+	auto test_types = TestAllTypesFun::GetTestTypes();
 	for (auto &test_type : test_types) {
 		return_types.push_back(move(test_type.type));
 		names.push_back(move(test_type.name));
@@ -178,10 +194,9 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, vector<
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const FunctionData *bind_data,
-                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<TestAllTypesData>();
-	auto test_types = GetTestTypes();
+	auto test_types = TestAllTypesFun::GetTestTypes();
 	// 3 rows: min, max and NULL
 	result->entries.resize(3);
 	// initialize the values
@@ -193,9 +208,8 @@ unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const 
 	return move(result);
 }
 
-void TestAllTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
-	auto &data = (TestAllTypesData &)*operator_state;
+void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (TestAllTypesData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

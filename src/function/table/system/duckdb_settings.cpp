@@ -12,7 +12,7 @@ struct DuckDBSettingValue {
 	string input_type;
 };
 
-struct DuckDBSettingsData : public FunctionOperatorData {
+struct DuckDBSettingsData : public GlobalTableFunctionState {
 	DuckDBSettingsData() : offset(0) {
 	}
 
@@ -20,11 +20,8 @@ struct DuckDBSettingsData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, vector<Value> &inputs,
-                                                   named_parameter_map_t &named_parameters,
-                                                   vector<LogicalType> &input_table_types,
-                                                   vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                   vector<string> &names) {
+static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, TableFunctionBindInput &input,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -40,9 +37,7 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, vecto
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBSettingsInit(ClientContext &context, const FunctionData *bind_data,
-                                                    const vector<column_t> &column_ids,
-                                                    TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBSettingsData>();
 
 	auto &config = DBConfig::GetConfig(context);
@@ -75,9 +70,8 @@ unique_ptr<FunctionOperatorData> DuckDBSettingsInit(ClientContext &context, cons
 	return move(result);
 }
 
-void DuckDBSettingsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                            DataChunk *input, DataChunk &output) {
-	auto &data = (DuckDBSettingsData &)*operator_state;
+void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBSettingsData &)*data_p.global_state;
 	if (data.offset >= data.settings.size()) {
 		// finished returning values
 		return;

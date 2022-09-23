@@ -9,7 +9,7 @@ statement ok
 INSERT INTO lists SELECT [i, NULL, i+1] FROM range(10000) tbl(i);
 
 statement ok
-DELETE FROM lists WHERE i[0] <= 9995
+DELETE FROM lists WHERE i[1] <= 9995
 
 query I
 SELECT * FROM lists
@@ -30,7 +30,7 @@ statement ok
 INSERT INTO lists SELECT [[i], NULL, [i+1, 4], [NULL, 1, 2]] FROM range(10000) tbl(i);
 
 statement ok
-DELETE FROM lists WHERE i[0][0] <= 9995
+DELETE FROM lists WHERE i[1][1] <= 9995
 
 query I
 SELECT * FROM lists

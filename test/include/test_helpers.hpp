@@ -19,6 +19,7 @@
 namespace duckdb {
 
 bool TestForceStorage();
+bool TestForceReload();
 void RegisterSqllogictests();
 
 void DeleteDatabase(string path);
@@ -29,7 +30,7 @@ void TestChangeDirectory(string path);
 string TestDirectoryPath();
 string TestCreatePath(string suffix);
 unique_ptr<DBConfig> GetTestConfig();
-bool TestIsInternalError(const string &error);
+bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error);
 
 string GetCSVPath();
 void WriteCSV(string path, const char *csv);
@@ -39,7 +40,7 @@ bool NO_FAIL(QueryResult &result);
 bool NO_FAIL(unique_ptr<QueryResult> result);
 
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
-#define REQUIRE_FAIL(result)    REQUIRE(!(result)->success)
+#define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())
 
 #define COMPARE_CSV(result, csv, header)                                                                               \
 	{                                                                                                                  \

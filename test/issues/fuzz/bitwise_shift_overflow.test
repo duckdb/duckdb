@@ -1,0 +1,79 @@
+# name: test/issues/fuzz/bitwise_shift_overflow.test
+# description: Issue #3365: Undefined behavior at bitwise.cpp:148:38
+# group: [fuzz]
+
+statement ok
+PRAGMA enable_verification
+
+# issue tests
+statement error
+SELECT 1000::bigint<<55;
+
+statement error
+SELECT 256::bigint<<55;
+
+query I
+SELECT 255::bigint<<55;
+----
+9187343239835811840
+
+query I
+SELECT 0::bigint<<999;
+----
+0
+
+# all integer types
+# tinyint
+statement error
+SELECT 10::tinyint<<4::tinyint;
+
+query I
+SELECT 10::tinyint<<3::tinyint;
+----
+80
+
+# cannot left shift negative numbers
+statement error
+SELECT (-128)::tinyint<<0::tinyint;
+
+statement error
+SELECT (-10)::tinyint<<4::tinyint;
+
+statement error
+SELECT (-10)::tinyint<<3::tinyint;
+
+# smallint
+statement error
+SELECT 1000::smallint<<6::smallint;
+
+query I
+SELECT 1000::smallint<<5::smallint;
+----
+32000
+
+# integer
+statement error
+SELECT 1000::integer<<22::integer;
+
+query I
+SELECT 1000::integer<<21::integer;
+----
+2097152000
+
+# bigint
+statement error
+SELECT 1000::bigint<<54::bigint;
+
+query I
+SELECT 1000::bigint<<53::bigint;
+----
+9007199254740992000
+
+# hugeint
+statement error
+SELECT 1000::hugeint<<118::hugeint;
+
+query I
+SELECT 1000::hugeint<<117::hugeint;
+----
+166153499473114484112975882535043072000

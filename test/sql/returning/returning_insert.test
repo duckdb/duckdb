@@ -1,0 +1,184 @@
+# name: test/sql/returning/returning_insert.test
+# description: Test returning with top level INSERT statement
+# group: [returning]
+
+statement ok
+CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
+
+# standard insert still works
+query I
+INSERT INTO table1 VALUES (1, 2, 3);
+----
+1
+
+# returning 1 named column
+query I
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING a;
+----
+1
+
+# returning all columns with *
+query III
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING *;
+----
+1	2	3
+
+# returning * expression with more named columns
+query IIIIII
+INSERT INTO table1 VALUES (10, 20, 30), (40, 50, 60), (70, 80, 90) RETURNING *, c, b, a;
+----
+10	20	30	30	20	10
+40	50	60	60	50	40
+70	80	90	90	80	70
+
+# returning column names out of order
+query III
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING c, a, b;
+----
+3	1	2
+
+# inserting column names out of order, then returning them in order
+query III
+INSERT INTO table1 (c, b, a) VALUES (3, 2, 1) RETURNING a, b, c;
+----
+1	2	3
+
+# returning using a column alias
+query II
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING a AS alias1, b AS alias2;
+----
+1	2
+
+# returning expression with aggregate function at top level is not allowed
+statement error
+INSERT INTO table1 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3) RETURNING SUM(a);
+
+# returning * while inserting only a subset of columns
+query III
+INSERT INTO table1(a) VALUES (10) RETURNING *;
+----
+10	-2	-3
+
+
+# returning while insert uses a subquery
+query III
+INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 10 and b=-2 and c=-3 RETURNING *;
+----
+10	-2	-3
+
+# Using a Window function to insert
+query III
+INSERT INTO table1 (SELECT row_number() OVER (ORDER BY a) as row_number, b, c FROM table1 LIMIT 1) RETURNING *;
+----
+1	2	3
+
+# inserting empty subquery returns nothing
+query III
+INSERT INTO table1 (a, b, c) SELECT * from table1 WHERE a = 100000 and b = 10000 and c=100000 RETURNING a, b, c;
+----
+
+# returning subquery should result in error (test 2).
+statement error
+INSERT INTO table1 (a, b, c) VALUES (10, 1000, 1000) RETURNING a IN (SELECT a from table1 where b = -2);
+
+# using case statement
+query I
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING CASE WHEN b=2 THEN a ELSE b END;
+----
+1
+
+# using case statement
+query I
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING CASE WHEN b=3 THEN a ELSE b END;
+----
+2
+
+# returning combination of columns
+query I
+INSERT INTO table1 VALUES (1, 1, -3) RETURNING a + b + c;
+----
+-1
+
+# returning string literal
+query I
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING 'hello';
+----
+hello
+
+# returning a list
+query I
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING [a, b, c];
+----
+[1, 2, 3]
+
+# returning a structure
+query I
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING {'a':a, 'b':b, 'c':c};
+----
+{'a': 1, 'b': 2, 'c': 3}
+
+# uncorrelated scalar subqueries in returning statement
+query II
+INSERT INTO table1(a) (SELECT 42) RETURNING a, b;
+----
+42	-2
+
+# insert VALUES (scalar) throws error
+statement error
+INSERT INTO table1(a) VALUES (SELECT 42) RETURNING a, b, (select 10);
+
+# unknown columns
+statement error
+INSERT INTO table1 VALUES (1,2,3) RETURNING d, e, f
+
+# Top level statement cannot contain a window function in returning statement
+statement error
+INSERT INTO table1 SELECT * from table1 RETURNING row_number() OVER (ORDER BY a) as row_number, a, b FROM table1;
+
+statement error
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING [1, 2] IN (SELECT [a, b] from table1);
+----
+1
+
+# scalar subquery (should fail since scalar is a subquery)
+statement error
+INSERT INTO table1(a, b) VALUES (42, 43) RETURNING (SELECT a), (SELECT b), NULL;
+
+# Window function in subquery
+statement error
+INSERT INTO table1 VALUES (-10, -20, -30)
+    RETURNING '-10.-20' IN (SELECT group_concat(a) OVER (ORDER BY b) as GC FROM table1);
+
+
+# new table with multiple types
+statement ok
+CREATE TABLE table2 (a VARCHAR DEFAULT 'hello world', b INT);
+
+query II
+INSERT INTO table2(a,b) VALUES ('hello duckdb', 1) RETURNING b, a;
+----
+1	hello duckdb
+
+query I
+INSERT INTO table2(b) VALUES (97) RETURNING b::VARCHAR;
+----
+97
+
+query I
+INSERT INTO table2(a, b) VALUES ('duckdb', 97) RETURNING {'a': a, 'b': b};
+----
+{'a': duckdb, 'b': 97}
+
+
+### SEQUENCES
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE table3 (a INTEGER DEFAULT nextval('seq'), b INTEGER);
+
+query II
+INSERT INTO table3(b) VALUES (4), (5) RETURNING a, b;
+----
+1	4
+2	5

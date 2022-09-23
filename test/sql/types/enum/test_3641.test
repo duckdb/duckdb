@@ -1,0 +1,39 @@
+# name: test/sql/types/enum/test_3641.test
+# description: Test Enum -> Enum missing conversion
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TYPE mood_2 AS ENUM ('very sad', 'very ok', 'very happy');
+
+statement ok
+CREATE TABLE m (
+    m mood,
+    m_2 mood_2
+);
+
+statement ok
+insert into m values ('sad', 'very sad')
+
+query II
+select *  from m where m = ''
+----
+
+query I
+SELECT m='' FROM m
+----
+NULL
+
+# implicit cast
+query II
+SELECT * FROM m WHERE m=m_2
+----
+
+# explicit cast
+statement error
+SELECT * FROM m WHERE m::mood_2=m_2

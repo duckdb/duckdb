@@ -1,0 +1,31 @@
+# name: test/sql/catalog/sequence/sequence_cycle.test
+# description: Test Sequences with cycles
+# group: [sequence]
+
+statement ok
+create sequence minseq INCREMENT BY -1 MINVALUE -5 MAXVALUE 5 CYCLE;
+
+query I
+SELECT nextval('minseq') from generate_series(0,20);
+----
+5
+4
+3
+2
+1
+0
+-1
+-2
+-3
+-4
+-5
+5
+4
+3
+2
+1
+0
+-1
+-2
+-3
+-4

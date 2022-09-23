@@ -1,7 +1,8 @@
 #include "odbc_fetch.hpp"
 #include "duckdb_odbc.hpp"
-#include "statement_functions.hpp"
 #include "api_info.hpp"
+#include "row_descriptor.hpp"
+#include "statement_functions.hpp"
 
 #include <sql.h>
 #include <sqltypes.h>
@@ -15,8 +16,8 @@ OdbcFetch::~OdbcFetch() {
 }
 
 void OdbcFetch::IncreaseRowCount() {
-	if ((chunk_row + rowset_size) < current_chunk->size()) {
-		row_count += rowset_size;
+	if ((chunk_row + stmt_ref->row_desc->ard->header.sql_desc_array_size) < current_chunk->size()) {
+		row_count += stmt_ref->row_desc->ard->header.sql_desc_array_size;
 	} else {
 		row_count += current_chunk->size() - chunk_row;
 	}
@@ -64,12 +65,12 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 			// it's need to reset the last_fetched_len
 			ResetLastFetchedVariableVal();
 			auto chunk = stmt->res->Fetch();
-			if (!stmt->res->success) {
+			if (stmt->res->HasError()) {
 				stmt->open = false;
-				stmt->error_messages.emplace_back(stmt->res->error);
+				stmt->error_messages.emplace_back(stmt->res->GetError());
 				return SQL_ERROR;
 			}
-			if (!chunk) {
+			if (!chunk || chunk->size() == 0) {
 				resultset_end = true;
 				return SQL_NO_DATA;
 			}
@@ -84,8 +85,7 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 			}
 		} catch (duckdb::Exception &e) {
 			// TODO this is quite dirty, we should have separate error holder
-			stmt->res->error = e.what();
-			stmt->res->success = false;
+			stmt->res->SetError(PreservedError(e));
 			stmt->open = false;
 			stmt->error_messages.emplace_back(std::string(e.what()));
 			return SQL_ERROR;
@@ -114,7 +114,7 @@ SQLRETURN OdbcFetch::SetCurrentChunk(OdbcHandleStmt *stmt) {
 }
 
 SQLRETURN OdbcFetch::SetPriorCurrentChunk(OdbcHandleStmt *stmt) {
-	prior_chunk_row -= rowset_size;
+	prior_chunk_row -= stmt_ref->row_desc->ard->header.sql_desc_array_size;
 
 	// case the current chunk is the first one and fetch prior has reached the position "before start"
 	if (current_chunk_idx == 0 && prior_chunk_row < -1) {
@@ -125,7 +125,7 @@ SQLRETURN OdbcFetch::SetPriorCurrentChunk(OdbcHandleStmt *stmt) {
 	if (prior_chunk_row < -1) {
 		--current_chunk_idx;
 		current_chunk = chunks[current_chunk_idx].get();
-		prior_chunk_row = current_chunk->size() - rowset_size - 1;
+		prior_chunk_row = current_chunk->size() - stmt_ref->row_desc->ard->header.sql_desc_array_size - 1;
 		if (prior_chunk_row < 0) {
 			prior_chunk_row = -1;
 		}
@@ -169,14 +169,15 @@ SQLRETURN OdbcFetch::SetAbsoluteCurrentChunk(OdbcHandleStmt *stmt, SQLLEN fetch_
 	}
 
 	// FetchOffset < 0    AND | FetchOffset |    > LastResultRow AND |FetchOffset | > RowsetSize
-	if ((fetch_offset < 0) && (std::abs(fetch_offset) > chunk_row) && ((SQLULEN)std::abs(fetch_offset) > rowset_size)) {
+	if ((fetch_offset < 0) && (std::abs(fetch_offset) > chunk_row) &&
+	    ((SQLULEN)std::abs(fetch_offset) > stmt_ref->row_desc->ard->header.sql_desc_array_size)) {
 		// Before start, return to BOF
 		return BeforeStart();
 	}
 
 	// FetchOffset < 0    AND | FetchOffset |   > LastResultRow AND | FetchOffset | <= RowsetSize
 	if ((fetch_offset < 0) && (std::abs(fetch_offset) > chunk_row) &&
-	    ((SQLULEN)std::abs(fetch_offset) <= rowset_size)) {
+	    ((SQLULEN)std::abs(fetch_offset) <= stmt_ref->row_desc->ard->header.sql_desc_array_size)) {
 		chunk_row = prior_chunk_row = 0;
 		return SQL_SUCCESS;
 	}
@@ -244,6 +245,30 @@ SQLRETURN OdbcFetch::FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *s
 	}
 }
 
+SQLRETURN OdbcFetch::DummyFetch() {
+	if (stmt_ref->retrieve_data == SQL_RD_OFF) {
+		auto row_set_size = (SQLLEN)stmt_ref->row_desc->ard->header.sql_desc_array_size;
+
+		if (stmt_ref->odbc_fetcher->chunk_row + row_set_size > stmt_ref->odbc_fetcher->row_count) {
+			row_set_size = stmt_ref->odbc_fetcher->row_count - stmt_ref->odbc_fetcher->chunk_row;
+		}
+		if (row_set_size <= 0) {
+			return SQL_NO_DATA;
+		}
+		if (stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr) {
+			duckdb::idx_t row_idx;
+			for (row_idx = 0; row_idx < (duckdb::idx_t)row_set_size; row_idx++) {
+				stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr[row_idx] = SQL_ROW_SUCCESS;
+			}
+			for (; row_idx < stmt_ref->row_desc->ard->header.sql_desc_array_size; row_idx++) {
+				stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr[row_idx] = SQL_ROW_NOROW;
+			}
+		}
+		return SQL_SUCCESS;
+	}
+	return SQL_NEED_DATA;
+}
+
 SQLRETURN OdbcFetch::GetValue(SQLUSMALLINT col_idx, duckdb::Value &value) {
 	if (!current_chunk) {
 		// TODO could throw an exception instead
@@ -266,7 +291,7 @@ SQLRETURN OdbcFetch::Fetch(SQLHSTMT statement_handle, OdbcHandleStmt *stmt, SQLU
 	// case there is no bound column
 	if (stmt->bound_cols.empty()) {
 		// increment fetched row
-		chunk_row += rowset_size;
+		chunk_row += stmt_ref->row_desc->ard->header.sql_desc_array_size;
 		if (stmt->rows_fetched_ptr) {
 			(*stmt->rows_fetched_ptr) = 1;
 		}
@@ -274,12 +299,14 @@ SQLRETURN OdbcFetch::Fetch(SQLHSTMT statement_handle, OdbcHandleStmt *stmt, SQLU
 		return SQL_SUCCESS;
 	}
 
-	if (bind_orientation == FetchBindingOrientation::COLUMN) {
+	if (stmt_ref->row_desc->ard->header.sql_desc_bind_type == SQL_BIND_BY_COLUMN) {
 		if (!SQL_SUCCEEDED(OdbcFetch::ColumnWise(statement_handle, stmt))) {
 			stmt->error_messages.emplace_back("Column-wise fetching failed.");
 			return SQL_ERROR;
 		}
 	} else {
+		// sql_desc_bind_type should be greater than 0 because it contains the length of the row to be fetched
+		D_ASSERT(stmt->row_desc->ard->header.sql_desc_bind_type > 0);
 		if (!SQL_SUCCEEDED(duckdb::OdbcFetch::RowWise(statement_handle, stmt))) {
 			stmt->error_messages.emplace_back("Row-wise fetching failed.");
 			return SQL_ERROR;
@@ -301,7 +328,7 @@ SQLRETURN OdbcFetch::ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt)
 	SQLRETURN ret = SQL_SUCCESS;
 
 	SQLLEN first_row_to_fetch = chunk_row + 1;
-	SQLULEN last_row_to_fetch = first_row_to_fetch + this->rowset_size;
+	SQLULEN last_row_to_fetch = first_row_to_fetch + stmt_ref->row_desc->ard->header.sql_desc_array_size;
 
 	if (last_row_to_fetch > current_chunk->size()) {
 		last_row_to_fetch = current_chunk->size();
@@ -309,10 +336,7 @@ SQLRETURN OdbcFetch::ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt)
 
 	for (SQLULEN row_idx = first_row_to_fetch; row_idx < last_row_to_fetch; ++row_idx) {
 		++chunk_row;
-
-		if (this->row_status_buff) {
-			this->row_status_buff[row_idx] = SQL_SUCCESS;
-		}
+		SetRowStatus(row_idx, SQL_SUCCESS);
 		// now fill buffers in fetch if set
 		// TODO actually vectorize this
 		for (duckdb::idx_t col_idx = 0; col_idx < stmt->stmt->ColumnCount(); col_idx++) {
@@ -324,7 +348,7 @@ SQLRETURN OdbcFetch::ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt)
 			auto target_val_addr = bound_col.ptr;
 			auto target_len_addr = bound_col.strlen_or_ind;
 
-			if (this->rowset_size != SINGLE_VALUE_FETCH) {
+			if (stmt_ref->row_desc->ard->header.sql_desc_array_size != SINGLE_VALUE_FETCH) {
 				// need specialized pointer arithmetic according with the value type
 				auto pointer_size = ApiInfo::PointerSizeOf(bound_col.type);
 				if (pointer_size < 0) {
@@ -336,10 +360,7 @@ SQLRETURN OdbcFetch::ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt)
 
 			if (!SQL_SUCCEEDED(duckdb::GetDataStmtResult(statement_handle, col_idx + 1, bound_col.type, target_val_addr,
 			                                             bound_col.len, target_len_addr))) {
-
-				if (this->row_status_buff) {
-					this->row_status_buff[row_idx] = SQL_ROW_ERROR;
-				}
+				SetRowStatus(row_idx, SQL_ROW_ERROR);
 				stmt->error_messages.emplace_back("Error retriving #row: " + std::to_string(row_idx) +
 				                                  " and column: " + stmt->stmt->GetNames()[col_idx]);
 				ret = SQL_SUCCESS_WITH_INFO;
@@ -356,10 +377,10 @@ SQLRETURN OdbcFetch::ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt)
 
 SQLRETURN OdbcFetch::RowWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt) {
 	SQLRETURN ret = SQL_SUCCESS;
-	SQLULEN row_size = *(SQLULEN *)this->row_length;
+	SQLULEN row_size = stmt->row_desc->ard->header.sql_desc_bind_type;
 
 	SQLLEN first_row_to_fetch = chunk_row + 1;
-	SQLULEN last_row_to_fetch = first_row_to_fetch + this->rowset_size;
+	SQLULEN last_row_to_fetch = first_row_to_fetch + stmt_ref->row_desc->ard->header.sql_desc_array_size;
 
 	if (last_row_to_fetch > current_chunk->size()) {
 		last_row_to_fetch = current_chunk->size();
@@ -368,10 +389,7 @@ SQLRETURN OdbcFetch::RowWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt) {
 	SQLULEN rows_fetched = 0;
 	for (SQLULEN row_idx = first_row_to_fetch; row_idx < last_row_to_fetch; ++row_idx, ++rows_fetched) {
 		++chunk_row;
-
-		if (this->row_status_buff) {
-			this->row_status_buff[row_idx] = SQL_SUCCESS;
-		}
+		SetRowStatus(row_idx, SQL_SUCCESS);
 		auto row_offeset = row_size * row_idx;
 		for (duckdb::idx_t col_idx = 0; col_idx < stmt->stmt->ColumnCount(); col_idx++) {
 			auto bound_col = stmt->bound_cols[col_idx];
@@ -385,9 +403,7 @@ SQLRETURN OdbcFetch::RowWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt) {
 
 			if (!SQL_SUCCEEDED(duckdb::GetDataStmtResult(statement_handle, col_idx + 1, bound_col.type, target_val_addr,
 			                                             bound_col.len, (SQLLEN *)target_len_addr))) {
-				if (this->row_status_buff) {
-					this->row_status_buff[row_idx] = SQL_ROW_ERROR;
-				}
+				SetRowStatus(row_idx, SQL_ROW_ERROR);
 				stmt->error_messages.emplace_back("Error retriving #row: " + std::to_string(row_idx) +
 				                                  " and column: " + stmt->stmt->GetNames()[col_idx]);
 				ret = SQL_SUCCESS_WITH_INFO;
@@ -434,4 +450,17 @@ size_t OdbcFetch::GetLastFetchedLength() {
 
 bool OdbcFetch::IsInExecutionState() {
 	return !chunks.empty() && current_chunk != nullptr;
+}
+
+SQLLEN OdbcFetch::GetRowCount() {
+	if (current_chunk) {
+		return duckdb::MaxValue(row_count, (SQLLEN)current_chunk->size());
+	}
+	return row_count;
+}
+
+void OdbcFetch::SetRowStatus(idx_t row_idx, SQLINTEGER status) {
+	if (stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr) {
+		stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr[row_idx] = status;
+	}
 }

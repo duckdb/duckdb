@@ -1,0 +1,12 @@
+Append100KIntegersINSERT
+Append100KIntegersPREPARED
+benchmark/micro/cast/cast_date_string.benchmark
+benchmark/micro/cast/cast_int_string.benchmark
+benchmark/micro/cast/cast_double_string.benchmark
+benchmark/micro/cast/cast_string_double.benchmark
+benchmark/micro/cast/cast_string_int.benchmark
+benchmark/micro/cast/cast_timestamp_string.benchmark
+benchmark/micro/limit/parallel_limit.benchmark
+benchmark/micro/filter/parallel_complex_filter.benchmark
+benchmark/micro/catalog/add_column_empty.benchmark
+benchmark/micro/groupby-parallel/many_groups_large_values_small.benchmark

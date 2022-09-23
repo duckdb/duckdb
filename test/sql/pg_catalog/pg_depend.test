@@ -3,7 +3,7 @@
 # group: [pg_catalog]
 
 query IIIIII nosort pg_depend
-SELECT * FROM pg_depend
+SELECT * FROM pg_depend ORDER BY ALL
 
 query IIIIII nosort pg_depend
-SELECT * FROM pg_catalog.pg_depend
+SELECT * FROM pg_catalog.pg_depend ORDER BY ALL

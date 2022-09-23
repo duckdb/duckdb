@@ -108,3 +108,16 @@ else:
 # now write it to the output Makevars
 with open_utf8(os.path.join('src', 'Makevars'), 'w+') as f:
     f.write(text)
+
+# same dance for Windows
+# read Makevars.in and replace the {{ SOURCES }} and {{ INCLUDES }} macros
+with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:
+    text = f.read()
+
+text = text.replace('{{ SOURCES }}', object_list)
+text = text.replace('{{ INCLUDES }}', include_list)
+text = text.replace('{{ LINK_FLAGS }}', "-lws2_32")
+
+# now write it to the output Makevars
+with open_utf8(os.path.join('src', 'Makevars.win'), 'w+') as f:
+    f.write(text)

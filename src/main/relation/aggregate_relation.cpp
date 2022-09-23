@@ -10,7 +10,7 @@ AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
     : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(move(parsed_expressions)),
       child(move(child_p)) {
 	// bind the expressions
-	context.TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
@@ -19,7 +19,7 @@ AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
     : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(move(parsed_expressions)),
       groups(move(groups_p)), child(move(child_p)) {
 	// bind the expressions
-	context.TryBindRelation(*this, this->columns);
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {

@@ -11,41 +11,51 @@
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
-
-struct ArrowSchema;
+#include "duckdb/common/preserved_error.hpp"
 
 namespace duckdb {
 
 enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT };
 
+//! A set of properties from the client context that can be used to interpret the query result
+struct ClientProperties {
+	string timezone;
+};
+
 class BaseQueryResult {
 public:
-	//! Creates a successful empty query result
-	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
-	                           vector<string> names);
+	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+	                           vector<LogicalType> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API BaseQueryResult(QueryResultType type, string error);
+	DUCKDB_API BaseQueryResult(QueryResultType type, PreservedError error);
 	DUCKDB_API virtual ~BaseQueryResult();
 
 	//! The type of the result (MATERIALIZED or STREAMING)
 	QueryResultType type;
 	//! The type of the statement that created this result
 	StatementType statement_type;
+	//! Properties of the statement
+	StatementProperties properties;
 	//! The SQL types of the result
 	vector<LogicalType> types;
 	//! The names of the result
 	vector<string> names;
-	//! Whether or not execution was successful
-	bool success;
-	//! The error string (in case execution was not successful)
-	string error;
 
 public:
-	DUCKDB_API bool HasError();
-	DUCKDB_API const string &GetError();
+	DUCKDB_API void ThrowError(const string &prepended_message = "") const;
+	DUCKDB_API void SetError(PreservedError error);
+	DUCKDB_API bool HasError() const;
+	DUCKDB_API const ExceptionType &GetErrorType() const;
+	DUCKDB_API const std::string &GetError();
+	DUCKDB_API PreservedError &GetErrorObject();
 	DUCKDB_API idx_t ColumnCount();
+
+protected:
+	//! Whether or not execution was successful
+	bool success;
+	//! The error (in case execution was not successful)
+	PreservedError error;
 };
 
 //! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the
@@ -53,15 +63,15 @@ public:
 //! incrementally fetch data from the database.
 class QueryResult : public BaseQueryResult {
 public:
-	//! Creates a successful empty query result
-	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
-	                       vector<string> names);
+	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+	                       vector<LogicalType> types, vector<string> names, ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API QueryResult(QueryResultType type, string error);
+	DUCKDB_API QueryResult(QueryResultType type, PreservedError error);
 	DUCKDB_API virtual ~QueryResult() override;
 
+	//! Properties from the client context
+	ClientProperties client_properties;
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
 
@@ -80,30 +90,29 @@ public:
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
 
-	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, string &error) {
+	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
 		try {
 			result = Fetch();
 			return success;
+		} catch (const Exception &ex) {
+			error = PreservedError(ex);
+			return false;
 		} catch (std::exception &ex) {
-			error = ex.what();
+			error = PreservedError(ex);
 			return false;
 		} catch (...) {
-			error = "Unknown error in Fetch";
+			error = PreservedError("Unknown error in Fetch");
 			return false;
 		}
 	}
 
-	DUCKDB_API void ToArrowSchema(ArrowSchema *out_array);
-
-private:
-	//! The current chunk used by the iterator
-	unique_ptr<DataChunk> iterator_chunk;
+	static string GetConfigTimezone(QueryResult &query_result);
 
 private:
 	class QueryResultIterator;
 	class QueryResultRow {
 	public:
-		explicit QueryResultRow(QueryResultIterator &iterator) : iterator(iterator), row(0) {
+		explicit QueryResultRow(QueryResultIterator &iterator_p, idx_t row_idx) : iterator(iterator_p), row(0) {
 		}
 
 		QueryResultIterator &iterator;
@@ -111,32 +120,39 @@ private:
 
 		template <class T>
 		T GetValue(idx_t col_idx) const {
-			return iterator.result->iterator_chunk->GetValue(col_idx, iterator.row_idx).GetValue<T>();
+			return iterator.chunk->GetValue(col_idx, row).GetValue<T>();
 		}
 	};
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {
 	public:
-		explicit QueryResultIterator(QueryResult *result) : current_row(*this), result(result), row_idx(0) {
+		explicit QueryResultIterator(QueryResult *result) : current_row(*this, 0), result(result), base_row(0) {
 			if (result) {
-				result->iterator_chunk = result->Fetch();
+				chunk = shared_ptr<DataChunk>(result->Fetch().release());
 			}
 		}
 
 		QueryResultRow current_row;
+		shared_ptr<DataChunk> chunk;
 		QueryResult *result;
-		idx_t row_idx;
+		idx_t base_row;
 
 	public:
 		void Next() {
-			if (!result->iterator_chunk) {
+			if (!chunk) {
 				return;
 			}
 			current_row.row++;
-			row_idx++;
-			if (row_idx >= result->iterator_chunk->size()) {
-				result->iterator_chunk = result->Fetch();
-				row_idx = 0;
+			if (current_row.row >= chunk->size()) {
+				base_row += chunk->size();
+				chunk = result->Fetch();
+				current_row.row = 0;
+				if (!chunk || chunk->size() == 0) {
+					// exhausted all rows
+					base_row = 0;
+					result = nullptr;
+					chunk.reset();
+				}
 			}
 		}
 
@@ -145,7 +161,7 @@ private:
 			return *this;
 		}
 		bool operator!=(const QueryResultIterator &other) const {
-			return result->iterator_chunk && result->iterator_chunk->ColumnCount() > 0;
+			return result != other.result || base_row != other.base_row || current_row.row != other.current_row.row;
 		}
 		const QueryResultRow &operator*() const {
 			return current_row;

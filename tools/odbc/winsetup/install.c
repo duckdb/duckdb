@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <shlobj_core.h>
 
 static const char *driver_name = "DuckDB Driver";
 static const char *data_source_name = "DuckDB";
@@ -20,6 +21,14 @@ static const char *duckdb_odbc_ver = "3.0";
 
 // global option do show or not message box, useful on the CI
 static bool show_msg_box = true;
+
+void PrintInfoMsg(const char *func, const char *msg, int errnr) {
+	if (show_msg_box) {
+		MessageBox(NULL, msg, func, MB_ICONINFORMATION | MB_TASKMODAL | MB_SETFOREGROUND);
+	} else {
+		printf("%d - %s: %s\n", errnr, func, msg);
+	}
+}
 
 void PrintMsg(const char *func, const char *msg, int errnr) {
 	if (show_msg_box) {
@@ -114,6 +123,7 @@ static BOOL RemoveMyDriver(const char *drivername) {
 	rc = SHGetValue(HKEY_LOCAL_MACHINE, buf, "UsageCount", &valtype, &usagecount, &valsize);
 	if (rc == ERROR_FILE_NOT_FOUND) {
 		/* not installed, do nothing */
+		PrintInfoMsg(drivername, "Driver removed already.", 0);
 		exit(0);
 	}
 	if (rc != ERROR_SUCCESS) {
@@ -225,16 +235,66 @@ static BOOL Uninstall(const char *dsn, const char *drivername) {
 	return TRUE;
 }
 
+void ElevatePrivilegesAsAdmin(char **parameters) {
+	char szPath[MAX_PATH];
+	if (GetModuleFileName(NULL, szPath, ARRAYSIZE(szPath))) {
+		// Launch itself as admin
+		SHELLEXECUTEINFO sei = {sizeof(sei)};
+		sei.lpVerb = "runas";
+		sei.lpFile = szPath;
+		sei.lpParameters = *parameters;
+		sei.hwnd = NULL;
+		sei.nShow = SW_NORMAL;
+		if (!ShellExecuteEx(&sei)) {
+			DWORD dwError = GetLastError();
+			if (dwError == ERROR_CANCELLED) {
+				PrintMsg("Admin Privileges", "User did not allow privileges elevation", 0);
+			} else {
+				PrintMsg("Admin Privileges", "Error during privileges elevation", 0);
+			}
+			exit(1);
+		} else {
+			_exit(1);
+		}
+	}
+}
+
+void CopyParameters(int argc, char **argv, char **parameters) {
+	size_t alloc_size, last_alloc_pos = 0;
+	for (int i = 1; i < argc; i++) {
+		alloc_size = strlen(argv[i]) + 1;
+		*parameters = (char *)realloc(*parameters, alloc_size);
+		strcat(*parameters, argv[i]);
+		if ((i + 1) != argc) {
+			strcat(*parameters, " ");
+		}
+	}
+}
+
 int main(int argc, char **argv) {
-	if (argc < 2 || argc > 5) {
-		PrintMsg(argv[0], "[/Install | /Uninstall]", 0);
+	if (argc > 5) {
+		PrintMsg(argv[0], "/CI [/Install | /Uninstall]", 0);
 		exit(1);
 	}
 
-	bool is_ci = (strcmp("/CI", argv[1]) == 0) ? true : false;
-	char *cmd = is_ci ? argv[2] : argv[1];
-	if (is_ci) {
-		show_msg_box = false;
+	char *parameters = NULL;
+	if (!IsUserAnAdmin()) {
+		CopyParameters(argc, argv, &parameters);
+		ElevatePrivilegesAsAdmin(&parameters);
+	}
+
+	char *install_cmd = "/Install";
+	char *cmd;
+	bool is_ci;
+	// Default mode is Install to allow double click
+	if (argc == 1) {
+		cmd = install_cmd;
+	} else {
+		is_ci = (strcmp("/CI", argv[1]) == 0) ? true : false;
+		cmd = is_ci ? argv[2] : argv[1];
+		if (is_ci) {
+			show_msg_box = false;
+		}
 	}
 
 	/* after /Install or /Uninstall we optionally accept the DSN and the driver name */
@@ -270,17 +330,14 @@ int main(int argc, char **argv) {
 	if (p != NULL) {
 		// remove last component
 		*p = '\0';
-		if (p > buf + 4 && strcmp(p - 4, "\\bin") == 0) {
-			// also remove \bin directory
-			p -= 4;
-			*p = '\0';
-		}
 	}
 
 	if (strcmp("/Install", cmd) == 0) {
 		if (!Install(buf, dsn, drivername)) {
 			PrintMsg(argv[0], "ODBC Install Failed", 0);
 			exit(1);
+		} else {
+			PrintInfoMsg(argv[0], "ODBC Installation completed successfully", 0);
 		}
 	} else if (strcmp("/Uninstall", cmd) == 0) {
 		/* remove file we've installed in previous versions of this program */
@@ -290,10 +347,15 @@ int main(int argc, char **argv) {
 		if (!Uninstall(dsn, drivername)) {
 			PrintMsg(argv[0], "ODBC Uninstall Failed", 0);
 			exit(1);
+		} else {
+			PrintInfoMsg(argv[0], "ODBC Uninstall completed successfully", 0);
 		}
 	} else {
 		PrintMsg(argv[0], "[/Install | /Uninstall]", 0);
 		exit(1);
+	}
+	if (parameters) {
+		free(parameters);
 	}
 	return 0;
 }

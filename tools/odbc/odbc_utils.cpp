@@ -1,5 +1,6 @@
 #include "odbc_utils.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "sqlext.h"
 
 #include <sql.h>
 #include <regex>
@@ -12,15 +13,6 @@ string OdbcUtils::ReadString(const SQLPOINTER ptr, const SQLSMALLINT len) {
 	return len == SQL_NTS ? string((const char *)ptr) : string((const char *)ptr, (size_t)len);
 }
 
-void OdbcUtils::WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, SQLSMALLINT *out_len) {
-	if (out_buf) {
-		snprintf((char *)out_buf, buf_len, "%s", s.c_str());
-	}
-	if (out_len) {
-		*out_len = s.size();
-	}
-}
-
 SQLRETURN OdbcUtils::SetStringValueLength(const string &val_str, SQLLEN *str_len_or_ind_ptr) {
 	if (str_len_or_ind_ptr) {
 		// it fills the required lenght from string value
@@ -29,6 +21,18 @@ SQLRETURN OdbcUtils::SetStringValueLength(const string &val_str, SQLLEN *str_len
 	}
 	// there is no length pointer
 	return SQL_ERROR;
+}
+
+bool OdbcUtils::IsCharType(SQLSMALLINT type) {
+	switch (type) {
+	case SQL_CHAR:
+	case SQL_VARCHAR:
+	case SQL_WVARCHAR:
+	case SQL_BINARY:
+		return true;
+	default:
+		return false;
+	}
 }
 
 SQLRETURN OdbcUtils::SetStringAndLength(vector<string> &error_messages, const string &val_str,
@@ -157,9 +161,19 @@ string OdbcUtils::GetQueryDuckdbColumns(const string &catalog_filter, const stri
 		FROM duckdb_columns
 	)";
 
-	sql_duckdb_columns +=
-	    " WHERE " + catalog_filter + " AND " + schema_filter + " AND " + table_filter + " AND " + column_filter;
+	sql_duckdb_columns += " WHERE ";
+	if (!catalog_filter.empty()) {
+		sql_duckdb_columns += catalog_filter + " AND ";
+	}
+	if (!schema_filter.empty()) {
+		sql_duckdb_columns += schema_filter + " AND ";
+	}
+	if (!table_filter.empty()) {
+		sql_duckdb_columns += table_filter + " AND ";
+	}
+	sql_duckdb_columns += column_filter;
 	sql_duckdb_columns += " ORDER BY \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\", \"ORDINAL_POSITION\"";
+
 	return sql_duckdb_columns;
 }
 
@@ -182,10 +196,41 @@ string OdbcUtils::GetQueryDuckdbTables(const string &schema_filter, const string
 	sql_duckdb_tables += " WHERE " + schema_filter + " AND " + table_filter;
 
 	if (!table_type_filter.empty()) {
-		sql_duckdb_tables += " AND table_type IN (" + table_type_filter + ") ";
+		if (table_type_filter != "'%'") {
+			sql_duckdb_tables += " AND table_type IN (" + table_type_filter + ") ";
+		}
 	}
 
 	sql_duckdb_tables += "ORDER BY TABLE_TYPE, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME";
 
 	return sql_duckdb_tables;
+}
+
+void OdbcUtils::SetValueFromConnStr(const string &conn_str, const char *key, string &value) {
+	std::string pattern = std::string(key) + ".*";
+	std::smatch match_str;
+	std::regex re(pattern, std::regex_constants::icase);
+	if (std::regex_search(conn_str, match_str, re)) {
+		std::string matched_str = match_str.str();
+		auto pos_start_value = matched_str.find('=');
+		if (pos_start_value == string::npos) {
+			// an equal '=' char must be present (syntax error)
+			return;
+		}
+		++pos_start_value;
+		auto pos_end_value = matched_str.find(';', pos_start_value);
+		if (pos_end_value == string::npos) {
+			// there is no ';', reached the end of the string
+			pos_end_value = matched_str.size();
+		}
+		value = matched_str.substr(pos_start_value, pos_end_value - pos_start_value);
+	}
+}
+
+void OdbcUtils::SetValueFromConnStr(SQLCHAR *conn_c_str, const char *key, string &value) {
+	if (conn_c_str == nullptr || key == nullptr) {
+		return;
+	}
+	string conn_str((char *)conn_c_str);
+	SetValueFromConnStr(conn_str, key, value);
 }

@@ -1,0 +1,77 @@
+# name: test/sql/function/list/aggregates/string_agg.test
+# description: Test the list_string_agg aggregate function
+# group: [aggregates]
+
+# incorrect usage
+statement error
+SELECT list_string_agg()
+
+# scalar values
+query T
+SELECT list_string_agg(['a', ','])
+----
+a,,
+
+query T
+SELECT list_string_agg(['a'])
+----
+a
+
+statement ok
+CREATE TABLE str_aggs (str varchar[]);
+
+statement ok
+INSERT INTO str_aggs VALUES (['a', ',']), ([NULL, ',']), (['a', NULL]), ([NULL, NULL]), (NULL), ([]), ([NULL]);
+
+query T
+SELECT list_string_agg(str) from str_aggs;
+----
+a,,
+,
+a
+NULL
+NULL
+NULL
+NULL
+
+# test string aggregation on lists of values
+statement ok
+CREATE TABLE strings(g INTEGER[], x VARCHAR[], y VARCHAR[]);
+
+statement ok
+INSERT INTO strings VALUES ([1, 1, 2, 2, 2, 3, 4, 4, 4], ['a', 'b', 'i', NULL, 'j', 'p', 'x', 'y', 'z'],
+	['/', '-', '/', '-', '+', '/', '/', '-', '+']);
+
+query TTT
+SELECT list_string_agg(x), list_string_agg(y), list_string_agg(g) FROM strings
+----
+a,b,i,j,p,x,y,z	/,-,/,-,+,/,/,-,+	1,1,2,2,2,3,4,4,4
+
+query T
+SELECT list_string_agg(x) FROM strings WHERE g > [100]
+----
+
+# numerics are auto cast to strings
+query T
+SELECT list_string_agg([1, 2])
+----
+1,2
+
+# group concat is an alias for list_string_agg
+query T
+SELECT list_aggr(['a'], 'group_concat')
+----
+a
+
+statement ok
+CREATE TABLE long AS SELECT LIST('a') g FROM range(0, 10, 1) t1(c), range(0, 10, 1) t2(e);
+
+query II
+SELECT list_count(g), list_count(g) FROM long;
+----
+100	100
+
+query I
+SELECT list_string_agg(g) FROM long
+----
+a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a

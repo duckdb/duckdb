@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
+#include "duckdb/storage/statistics/column_statistics.hpp"
 
 namespace duckdb {
 struct ParallelTableScanState;
@@ -22,7 +23,8 @@ public:
 	RowGroupCollection(shared_ptr<DataTableInfo> info, vector<LogicalType> types, idx_t row_start, idx_t total_rows = 0);
 
 public:
-	idx_t GetTotalRows();
+	idx_t GetTotalRows() const;
+	Allocator &GetAllocator() const;
 
 	void Initialize(PersistentTableData &data);
 	void InitializeEmpty();
@@ -65,12 +67,11 @@ public:
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ColumnDefinition &new_column, Expression *default_value,
-	                                         BaseStatistics &stats);
+	                                         ColumnStatistics &stats);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<column_t> bound_columns, Expression &cast_expr,
-	                                         BaseStatistics &stats);
-
+	                                         ColumnStatistics &stats);
 private:
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;

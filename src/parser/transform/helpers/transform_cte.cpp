@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, QueryNode &select) {
+void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, CommonTableExpressionMap &cte_map) {
 	// TODO: might need to update in case of future lawsuit
 	D_ASSERT(de_with_clause);
 
@@ -36,7 +36,7 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, 
 		}
 		// we need a query
 		if (!cte->ctequery || cte->ctequery->type != duckdb_libpgquery::T_PGSelectStmt) {
-			throw InternalException("A CTE needs a SELECT");
+			throw NotImplementedException("A CTE needs a SELECT");
 		}
 
 		// CTE transformation can either result in inlining for non recursive CTEs, or in recursive CTE bindings
@@ -49,12 +49,12 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, 
 		D_ASSERT(info->query);
 		auto cte_name = string(cte->ctename);
 
-		auto it = select.cte_map.find(cte_name);
-		if (it != select.cte_map.end()) {
+		auto it = cte_map.map.find(cte_name);
+		if (it != cte_map.map.end()) {
 			// can't have two CTEs with same name
 			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
 		}
-		select.cte_map[cte_name] = move(info);
+		cte_map.map[cte_name] = move(info);
 	}
 }
 

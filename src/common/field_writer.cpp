@@ -6,13 +6,15 @@ namespace duckdb {
 // Field Writer
 //===--------------------------------------------------------------------===//
 FieldWriter::FieldWriter(Serializer &serializer_p)
-    : serializer(serializer_p), buffer(make_unique<BufferedSerializer>()), field_count(0) {
+    : serializer(serializer_p), buffer(make_unique<BufferedSerializer>()), field_count(0), finalized(false) {
+	buffer->SetVersion(serializer.GetVersion());
 }
 
 FieldWriter::~FieldWriter() {
 	if (Exception::UncaughtException()) {
 		return;
 	}
+	D_ASSERT(finalized);
 	// finalize should always have been called, unless this is destroyed as part of stack unwinding
 	D_ASSERT(!buffer);
 }
@@ -32,7 +34,8 @@ void FieldWriter::Write(const string &val) {
 
 void FieldWriter::Finalize() {
 	D_ASSERT(buffer);
-
+	D_ASSERT(!finalized);
+	finalized = true;
 	serializer.Write<uint32_t>(field_count);
 	serializer.Write<uint64_t>(buffer->blob.size);
 	serializer.WriteData(buffer->blob.data.get(), buffer->blob.size);
@@ -44,6 +47,7 @@ void FieldWriter::Finalize() {
 // Field Deserializer
 //===--------------------------------------------------------------------===//
 FieldDeserializer::FieldDeserializer(Deserializer &root) : root(root), remaining_data(idx_t(-1)) {
+	SetVersion(root.GetVersion());
 }
 
 void FieldDeserializer::ReadData(data_ptr_t buffer, idx_t read_size) {
@@ -64,7 +68,7 @@ void FieldDeserializer::SetRemainingData(idx_t remaining_data) {
 //===--------------------------------------------------------------------===//
 // Field Reader
 //===--------------------------------------------------------------------===//
-FieldReader::FieldReader(Deserializer &source_p) : source(source_p), field_count(0) {
+FieldReader::FieldReader(Deserializer &source_p) : source(source_p), field_count(0), finalized(false) {
 	max_field_count = source_p.Read<uint32_t>();
 	total_size = source_p.Read<uint64_t>();
 	D_ASSERT(max_field_count > 0);
@@ -72,9 +76,15 @@ FieldReader::FieldReader(Deserializer &source_p) : source(source_p), field_count
 }
 
 FieldReader::~FieldReader() {
+	if (Exception::UncaughtException()) {
+		return;
+	}
+	D_ASSERT(finalized);
 }
 
 void FieldReader::Finalize() {
+	D_ASSERT(!finalized);
+	finalized = true;
 	if (field_count < max_field_count) {
 		// we can handle this case by calling source.ReadData(buffer, source.RemainingData())
 		throw SerializationException("Not all fields were read. This file might have been written with a newer version "

@@ -72,8 +72,9 @@ struct LikeSegment {
 };
 
 struct LikeMatcher : public FunctionData {
-	LikeMatcher(vector<LikeSegment> segments, bool has_start_percentage, bool has_end_percentage)
-	    : segments(move(segments)), has_start_percentage(has_start_percentage), has_end_percentage(has_end_percentage) {
+	LikeMatcher(string like_pattern_p, vector<LikeSegment> segments, bool has_start_percentage, bool has_end_percentage)
+	    : like_pattern(move(like_pattern_p)), segments(move(segments)), has_start_percentage(has_start_percentage),
+	      has_end_percentage(has_end_percentage) {
 	}
 
 	bool Match(string_t &str) {
@@ -169,14 +170,20 @@ struct LikeMatcher : public FunctionData {
 		if (segments.empty()) {
 			return nullptr;
 		}
-		return make_unique<LikeMatcher>(move(segments), has_start_percentage, has_end_percentage);
+		return make_unique<LikeMatcher>(move(like_pattern), move(segments), has_start_percentage, has_end_percentage);
 	}
 
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<LikeMatcher>(segments, has_start_percentage, has_end_percentage);
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<LikeMatcher>(like_pattern, segments, has_start_percentage, has_end_percentage);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const LikeMatcher &)other_p;
+		return like_pattern == other.like_pattern;
 	}
 
 private:
+	string like_pattern;
 	vector<LikeSegment> segments;
 	bool has_start_percentage;
 	bool has_end_percentage;
@@ -188,6 +195,9 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		if (pattern_str.IsNull()) {
+			return nullptr;
+		}
 		return LikeMatcher::CreateLikeMatcher(pattern_str.ToString());
 	}
 	return nullptr;
@@ -335,14 +345,18 @@ parse_bracket : {
 }
 }
 
+static char GetEscapeChar(string_t escape) {
+	// Only one escape character should be allowed
+	if (escape.GetSize() > 1) {
+		throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
+	}
+	return escape.GetSize() == 0 ? '\0' : *escape.GetDataUnsafe();
+}
+
 struct LikeEscapeOperator {
 	template <class TA, class TB, class TC>
 	static inline bool Operation(TA str, TB pattern, TC escape) {
-		// Only one escape character should be allowed
-		if (escape.GetSize() > 1) {
-			throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
-		}
-		char escape_char = escape.GetSize() == 0 ? '\0' : *escape.GetDataUnsafe();
+		char escape_char = GetEscapeChar(escape);
 		return LikeOperatorFunction(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(),
 		                            escape_char);
 	}
@@ -362,24 +376,44 @@ struct LikeOperator {
 	}
 };
 
+bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0') {
+	auto str_data = str.GetDataUnsafe();
+	auto str_size = str.GetSize();
+	auto pat_data = pattern.GetDataUnsafe();
+	auto pat_size = pattern.GetSize();
+
+	// lowercase both the str and the pattern
+	idx_t str_llength = LowerFun::LowerLength(str_data, str_size);
+	auto str_ldata = unique_ptr<char[]>(new char[str_llength]);
+	LowerFun::LowerCase(str_data, str_size, str_ldata.get());
+
+	idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
+	auto pat_ldata = unique_ptr<char[]>(new char[pat_llength]);
+	LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
+	string_t str_lcase(str_ldata.get(), str_llength);
+	string_t pat_lcase(pat_ldata.get(), pat_llength);
+	return LikeOperatorFunction(str_lcase, pat_lcase, escape);
+}
+
+struct ILikeEscapeOperator {
+	template <class TA, class TB, class TC>
+	static inline bool Operation(TA str, TB pattern, TC escape) {
+		char escape_char = GetEscapeChar(escape);
+		return ILikeOperatorFunction(str, pattern, escape_char);
+	}
+};
+
+struct NotILikeEscapeOperator {
+	template <class TA, class TB, class TC>
+	static inline bool Operation(TA str, TB pattern, TC escape) {
+		return !ILikeEscapeOperator::Operation(str, pattern, escape);
+	}
+};
+
 struct ILikeOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		auto str_data = str.GetDataUnsafe();
-		auto str_size = str.GetSize();
-		auto pat_data = pattern.GetDataUnsafe();
-		auto pat_size = pattern.GetSize();
-		// lowercase both the str and the pattern
-		idx_t str_llength = LowerFun::LowerLength(str_data, str_size);
-		auto str_ldata = unique_ptr<char[]>(new char[str_llength]);
-		LowerFun::LowerCase(str_data, str_size, str_ldata.get());
-
-		idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
-		auto pat_ldata = unique_ptr<char[]>(new char[pat_llength]);
-		LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
-		string_t str_lcase(str_ldata.get(), str_llength);
-		string_t pat_lcase(pat_ldata.get(), pat_llength);
-		return LikeOperatorFunction(str_lcase, pat_lcase);
+		return ILikeOperatorFunction(str, pattern);
 	}
 };
 
@@ -431,9 +465,9 @@ static void LikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 template <class ASCII_OP>
-static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                      FunctionData *bind_data,
-                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() >= 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
@@ -464,21 +498,21 @@ static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	// like
 	set.AddFunction(ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               RegularLikeFunction<LikeOperator, false>, false, LikeBindFunction));
+	                               RegularLikeFunction<LikeOperator, false>, LikeBindFunction));
 	// not like
 	set.AddFunction(ScalarFunction("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               RegularLikeFunction<NotLikeOperator, true>, false, LikeBindFunction));
+	                               RegularLikeFunction<NotLikeOperator, true>, LikeBindFunction));
 	// glob
 	set.AddFunction(ScalarFunction("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator>));
 	// ilike
 	set.AddFunction(ScalarFunction("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, false,
-	                               nullptr, nullptr, ILikePropagateStats<ILikeOperatorASCII>));
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, nullptr,
+	                               nullptr, ILikePropagateStats<ILikeOperatorASCII>));
 	// not ilike
 	set.AddFunction(ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, false,
-	                               nullptr, nullptr, ILikePropagateStats<NotILikeOperatorASCII>));
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, nullptr,
+	                               nullptr, ILikePropagateStats<NotILikeOperatorASCII>));
 }
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
@@ -487,5 +521,11 @@ void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"not_like_escape"},
 	                ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                               LogicalType::BOOLEAN, LikeEscapeFunction<NotLikeEscapeOperator>));
+
+	set.AddFunction({"ilike_escape"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                                                 LogicalType::BOOLEAN, LikeEscapeFunction<ILikeEscapeOperator>));
+	set.AddFunction({"not_ilike_escape"},
+	                ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                               LogicalType::BOOLEAN, LikeEscapeFunction<NotILikeEscapeOperator>));
 }
 } // namespace duckdb

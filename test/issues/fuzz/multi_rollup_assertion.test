@@ -1,0 +1,14 @@
+# name: test/issues/fuzz/multi_rollup_assertion.test
+# description: Issue 3349: Assertion Failed: chunk.ColumnCount() == op.aggregates.size()
+# group: [fuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table strings (a VARCHAR, b VARCHAR);
+
+query III
+select b, b, count(*) from strings group by rollup (b, b) order by 1, 2, 3;
+----
+NULL	NULL	0

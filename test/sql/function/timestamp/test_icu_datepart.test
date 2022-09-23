@@ -16,7 +16,10 @@ CREATE TABLE timestamps AS SELECT ts::TIMESTAMPTZ AS ts, part FROM (VALUES
 	('2021-11-26 10:15:13.123456+00', 'microsecond'),
 	('2021-11-15 02:30:00-08', 'hour'),
 	('2021-11-15 02:30:00-07', 'minute'),
-	('2021-12-25 00:00:00+02', 'day')
+	('2021-12-25 00:00:00+02', 'day'),
+	('infinity', 'second'),
+	('-infinity', 'decade'),
+	(NULL, 'century'),
 ) tbl(ts, part);
 
 query II
@@ -30,6 +33,9 @@ SELECT year(ts), year(ts::TIMESTAMP) FROM timestamps;
 2021	2021
 2021	2021
 2021	2021
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT month(ts), month(ts::TIMESTAMP) FROM timestamps;
@@ -42,6 +48,9 @@ SELECT month(ts), month(ts::TIMESTAMP) FROM timestamps;
 11	11
 11	11
 12	12
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT day(ts), day(ts::TIMESTAMP) FROM timestamps;
@@ -54,6 +63,9 @@ SELECT day(ts), day(ts::TIMESTAMP) FROM timestamps;
 15	15
 15	15
 24	24
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT decade(ts), decade(ts::TIMESTAMP) FROM timestamps;
@@ -66,6 +78,9 @@ SELECT decade(ts), decade(ts::TIMESTAMP) FROM timestamps;
 202	202
 202	202
 202	202
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT century(ts), century(ts::TIMESTAMP) FROM timestamps;
@@ -78,6 +93,9 @@ SELECT century(ts), century(ts::TIMESTAMP) FROM timestamps;
 21	21
 21	21
 21	21
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT millennium(ts), millennium(ts::TIMESTAMP) FROM timestamps;
@@ -90,6 +108,9 @@ SELECT millennium(ts), millennium(ts::TIMESTAMP) FROM timestamps;
 3	3
 3	3
 3	3
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 # ICU loses accuracy far from the epoch
 query II
@@ -103,6 +124,9 @@ SELECT microsecond(ts), microsecond(ts::TIMESTAMP) FROM timestamps;
 0	0
 0	0
 0	0
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT millisecond(ts), millisecond(ts::TIMESTAMP) FROM timestamps;
@@ -115,6 +139,9 @@ SELECT millisecond(ts), millisecond(ts::TIMESTAMP) FROM timestamps;
 0	0
 0	0
 0	0
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT second(ts), second(ts::TIMESTAMP) FROM timestamps;
@@ -127,6 +154,9 @@ SELECT second(ts), second(ts::TIMESTAMP) FROM timestamps;
 0	0
 0	0
 0	0
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT minute(ts), minute(ts::TIMESTAMP) FROM timestamps;
@@ -139,6 +169,9 @@ SELECT minute(ts), minute(ts::TIMESTAMP) FROM timestamps;
 30	30
 30	30
 0	0
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT hour(ts), hour(ts::TIMESTAMP) FROM timestamps;
@@ -151,6 +184,9 @@ SELECT hour(ts), hour(ts::TIMESTAMP) FROM timestamps;
 2	10
 1	9
 14	22
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT dayofweek(ts), dayofweek(ts::TIMESTAMP) FROM timestamps;
@@ -163,6 +199,9 @@ SELECT dayofweek(ts), dayofweek(ts::TIMESTAMP) FROM timestamps;
 1	1
 1	1
 5	5
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT isodow(ts), isodow(ts::TIMESTAMP) FROM timestamps;
@@ -175,6 +214,9 @@ SELECT isodow(ts), isodow(ts::TIMESTAMP) FROM timestamps;
 2	1
 2	1
 6	5
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT week(ts), week(ts::TIMESTAMP) FROM timestamps;
@@ -187,6 +229,9 @@ SELECT week(ts), week(ts::TIMESTAMP) FROM timestamps;
 46	46
 46	46
 51	51
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT dayofyear(ts), dayofyear(ts::TIMESTAMP) FROM timestamps;
@@ -199,6 +244,9 @@ SELECT dayofyear(ts), dayofyear(ts::TIMESTAMP) FROM timestamps;
 319	319
 319	319
 358	358
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT quarter(ts), quarter(ts::TIMESTAMP) FROM timestamps;
@@ -211,6 +259,9 @@ SELECT quarter(ts), quarter(ts::TIMESTAMP) FROM timestamps;
 4	4
 4	4
 4	4
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT yearweek(ts), yearweek(ts::TIMESTAMP) FROM timestamps;
@@ -223,6 +274,9 @@ SELECT yearweek(ts), yearweek(ts::TIMESTAMP) FROM timestamps;
 202146	202146
 202146	202146
 202151	202151
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT isoyear(ts), isoyear(ts::TIMESTAMP) FROM timestamps;
@@ -235,6 +289,9 @@ SELECT isoyear(ts), isoyear(ts::TIMESTAMP) FROM timestamps;
 2021	2021
 2021	2021
 2021	2021
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT epoch(ts), epoch(ts::TIMESTAMP) FROM timestamps;
@@ -247,6 +304,9 @@ SELECT epoch(ts), epoch(ts::TIMESTAMP) FROM timestamps;
 1636943400	1636972200
 1636939800	1636968600
 1640354400	1640383200
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query III
 SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part FROM timestamps;
@@ -259,7 +319,9 @@ SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part FROM timestamps
 2	10	hour
 30	30	minute
 24	24	day
-
+NULL	NULL	second
+NULL	NULL	decade
+NULL	NULL	century
 
 query I
 SELECT ERA(ts) FROM timestamps;
@@ -272,6 +334,9 @@ SELECT ERA(ts) FROM timestamps;
 1
 1
 1
+NULL
+NULL
+NULL
 
 query I
 SELECT DATE_PART('era', ts) FROM timestamps;
@@ -284,6 +349,9 @@ SELECT DATE_PART('era', ts) FROM timestamps;
 1
 1
 1
+NULL
+NULL
+NULL
 
 # Beware the ides of March
 query I
@@ -302,6 +370,9 @@ SELECT DATE_PART('timezone', ts) FROM timestamps;
 -28800
 -28800
 -28800
+NULL
+NULL
+NULL
 
 query I
 SELECT DATE_PART('timezone_hour', ts) FROM timestamps;
@@ -314,6 +385,9 @@ SELECT DATE_PART('timezone_hour', ts) FROM timestamps;
 -8
 -8
 -8
+NULL
+NULL
+NULL
 
 query I
 SELECT DATE_PART('timezone_minute', ts) FROM timestamps;
@@ -326,6 +400,9 @@ SELECT DATE_PART('timezone_minute', ts) FROM timestamps;
 0
 0
 0
+NULL
+NULL
+NULL
 
 query I
 SELECT DATE_PART('timezone', '2021-07-31 00:00:00-07'::TIMESTAMPTZ);
@@ -365,7 +442,9 @@ SELECT dayofmonth(ts), dayofmonth(ts::TIMESTAMP) FROM timestamps;
 15	15
 15	15
 24	24
-
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT weekday(ts), weekday(ts::TIMESTAMP) FROM timestamps;
@@ -378,6 +457,9 @@ SELECT weekday(ts), weekday(ts::TIMESTAMP) FROM timestamps;
 1	1
 1	1
 5	5
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 query II
 SELECT weekofyear(ts), weekofyear(ts::TIMESTAMP) FROM timestamps;
@@ -390,6 +472,9 @@ SELECT weekofyear(ts), weekofyear(ts::TIMESTAMP) FROM timestamps;
 46	46
 46	46
 51	51
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 # Correctness: Compare date_part to named function
 foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow dayofyear yearweek isoyear epoch timezone timezone_hour timezone_minute
@@ -400,7 +485,7 @@ FROM (
 	SELECT ts, DATE_PART('${partcode}', ts) AS p, ${partcode}(ts) AS f
 	FROM timestamps
 ) tbl
-WHERE p <> f
+WHERE p IS DISTINCT FROM f
 ----
 
 endloop
@@ -415,7 +500,7 @@ foreach partcode era millennium century decade year quarter month day hour minut
 query III
 SELECT ts, DATE_PART('${partcode}', ts) AS pc, DATE_PART(['${partcode}'], ts) AS st
 FROM timestamps
-WHERE pc <> st['${partcode}'];
+WHERE pc IS DISTINCT FROM st['${partcode}'];
 ----
 
 endloop
@@ -426,6 +511,8 @@ SELECT DATE_PART(['era', 'year', 'month', 'day'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
+NULL	NULL
+{'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL}	-infinity
 {'era': 0, 'year': 44, 'month': 3, 'day': 15}	0044-03-13 (BC) 09:33:41.987654+00
 {'era': 1, 'year': 1962, 'month': 7, 'day': 31}	1962-07-31 12:20:48.123456+00
 {'era': 1, 'year': 2020, 'month': 12, 'day': 31}	2021-01-01 00:00:00+00
@@ -434,6 +521,7 @@ ORDER BY 2
 {'era': 1, 'year': 2021, 'month': 11, 'day': 15}	2021-11-15 10:30:00+00
 {'era': 1, 'year': 2021, 'month': 11, 'day': 26}	2021-11-26 10:15:13.123456+00
 {'era': 1, 'year': 2021, 'month': 12, 'day': 24}	2021-12-24 22:00:00+00
+{'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL}	infinity
 
 # Time parts
 query II
@@ -441,6 +529,8 @@ SELECT DATE_PART(['hour', 'minute', 'microsecond'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
+NULL	NULL
+{'hour': NULL, 'minute': NULL, 'microsecond': NULL}	-infinity
 {'hour': 1, 'minute': 40, 'microsecond': 43987654}	0044-03-13 (BC) 09:33:41.987654+00
 {'hour': 5, 'minute': 20, 'microsecond': 48123456}	1962-07-31 12:20:48.123456+00
 {'hour': 16, 'minute': 0, 'microsecond': 0}	2021-01-01 00:00:00+00
@@ -449,6 +539,7 @@ ORDER BY 2
 {'hour': 2, 'minute': 30, 'microsecond': 0}	2021-11-15 10:30:00+00
 {'hour': 2, 'minute': 15, 'microsecond': 13123456}	2021-11-26 10:15:13.123456+00
 {'hour': 14, 'minute': 0, 'microsecond': 0}	2021-12-24 22:00:00+00
+{'hour': NULL, 'minute': NULL, 'microsecond': NULL}	infinity
 
 # Year parts
 query II
@@ -456,6 +547,8 @@ SELECT DATE_PART(['millennium', 'century', 'decade', 'quarter'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
+NULL	NULL
+{'millennium': NULL, 'century': NULL, 'decade': NULL, 'quarter': NULL}	-infinity
 {'millennium': -1, 'century': -1, 'decade': 4, 'quarter': 1}	0044-03-13 (BC) 09:33:41.987654+00
 {'millennium': 2, 'century': 20, 'decade': 196, 'quarter': 3}	1962-07-31 12:20:48.123456+00
 {'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-01-01 00:00:00+00
@@ -464,6 +557,7 @@ ORDER BY 2
 {'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-15 10:30:00+00
 {'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-26 10:15:13.123456+00
 {'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-12-24 22:00:00+00
+{'millennium': NULL, 'century': NULL, 'decade': NULL, 'quarter': NULL}	infinity
 
 # Day parts
 query II
@@ -471,6 +565,8 @@ SELECT DATE_PART(['weekday', 'isodow', 'doy'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
+NULL	NULL
+{'weekday': NULL, 'isodow': NULL, 'doy': NULL}	-infinity
 {'weekday': 3, 'isodow': 4, 'doy': 74}	0044-03-13 (BC) 09:33:41.987654+00
 {'weekday': 2, 'isodow': 3, 'doy': 212}	1962-07-31 12:20:48.123456+00
 {'weekday': 4, 'isodow': 5, 'doy': 366}	2021-01-01 00:00:00+00
@@ -479,6 +575,7 @@ ORDER BY 2
 {'weekday': 1, 'isodow': 2, 'doy': 319}	2021-11-15 10:30:00+00
 {'weekday': 5, 'isodow': 6, 'doy': 330}	2021-11-26 10:15:13.123456+00
 {'weekday': 5, 'isodow': 6, 'doy': 358}	2021-12-24 22:00:00+00
+{'weekday': NULL, 'isodow': NULL, 'doy': NULL}	infinity
 
 # ISO parts
 query II
@@ -486,6 +583,8 @@ SELECT DATE_PART(['isoyear', 'week', 'yearweek'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
+NULL	NULL
+{'isoyear': NULL, 'week': NULL, 'yearweek': NULL}	-infinity
 {'isoyear': -43, 'week': 11, 'yearweek': -4311}	0044-03-13 (BC) 09:33:41.987654+00
 {'isoyear': 1962, 'week': 31, 'yearweek': 196231}	1962-07-31 12:20:48.123456+00
 {'isoyear': 2020, 'week': 53, 'yearweek': 202053}	2021-01-01 00:00:00+00
@@ -494,6 +593,7 @@ ORDER BY 2
 {'isoyear': 2021, 'week': 46, 'yearweek': 202146}	2021-11-15 10:30:00+00
 {'isoyear': 2021, 'week': 47, 'yearweek': 202147}	2021-11-26 10:15:13.123456+00
 {'isoyear': 2021, 'week': 51, 'yearweek': 202151}	2021-12-24 22:00:00+00
+{'isoyear': NULL, 'week': NULL, 'yearweek': NULL}	infinity
 
 # Miscellaneous parts
 query II
@@ -501,6 +601,8 @@ SELECT DATE_PART(['epoch', 'second', 'timezone', 'timezone_hour', 'timezone_minu
 FROM timestamps
 ORDER BY 2
 ----
+NULL	NULL
+{'epoch': NULL, 'second': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}	-infinity
 {'epoch': -63517990756, 'second': 43, 'timezone': -28378, 'timezone_hour': -7, 'timezone_minute': -52}	0044-03-13 (BC) 09:33:41.987654+00
 {'epoch': -234211151, 'second': 48, 'timezone': -25200, 'timezone_hour': -7, 'timezone_minute': 0}	1962-07-31 12:20:48.123456+00
 {'epoch': 1609430400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-01-01 00:00:00+00
@@ -509,6 +611,7 @@ ORDER BY 2
 {'epoch': 1636943400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 10:30:00+00
 {'epoch': 1637892913, 'second': 13, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-26 10:15:13.123456+00
 {'epoch': 1640354400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-12-24 22:00:00+00
+{'epoch': NULL, 'second': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}	infinity
 
 # Correctness: Compare struct values with scalar values
 foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear epoch timezone timezone_hour timezone_minute
@@ -516,7 +619,7 @@ foreach partcode era millennium century decade year quarter month day hour minut
 query III
 SELECT ts, DATE_PART('${partcode}', ts) AS p, DATE_PART(['${partcode}'], ts) AS s
 FROM timestamps
-WHERE p <> s['${partcode}'];
+WHERE p IS DISTINCT FROM s['${partcode}'];
 ----
 
 endloop
@@ -574,6 +677,9 @@ SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM timestamps;
 2021-11-15 10:30:00+00	2021-11-30	2021-11-30
 2021-11-15 09:30:00+00	2021-11-30	2021-11-30
 2021-12-24 22:00:00+00	2021-12-31	2021-12-31
+infinity	NULL	NULL
+-infinity	NULL	NULL
+NULL	NULL	NULL
 
 #
 # Fractional Time Zones

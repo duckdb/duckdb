@@ -15,121 +15,121 @@ query I
 SELECT cast(SIN(n::tinyint)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
-916
+917
 -841
 0
 841
--916
+-917
 
 query I
 SELECT cast(SIN(n::smallint)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
-916
+917
 -841
 0
 841
--916
+-917
 
 query I
 SELECT cast(SIN(n::integer)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
-916
+917
 -841
 0
 841
--916
+-917
 
 query I
 SELECT cast(SIN(n::bigint)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
-916
+917
 -841
 0
 841
--916
+-917
 
 query I
 SELECT cast(SIN(n::float)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
-916
+917
 -841
 0
 841
--916
+-917
 
 query I
 SELECT cast(SIN(n::double)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
-916
+917
 -841
 0
 841
--916
+-917
 
 query I
 SELECT cast(COS(n::tinyint)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--399
+-400
 540
 1000
 540
--399
+-400
 
 query I
 SELECT cast(COS(n::smallint)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--399
+-400
 540
 1000
 540
--399
+-400
 
 query I
 SELECT cast(COS(n::integer)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--399
+-400
 540
 1000
 540
--399
+-400
 
 query I
 SELECT cast(COS(n::bigint)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--399
+-400
 540
 1000
 540
--399
+-400
 
 query I
 SELECT cast(COS(n::float)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--399
+-400
 540
 1000
 540
--399
+-400
 
 query I
 SELECT cast(COS(n::double)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--399
+-400
 540
 1000
 540
--399
+-400
 
 query I
 SELECT cast(TAN(n::tinyint)*1000 as bigint) FROM numbers ORDER BY n
@@ -195,144 +195,144 @@ query I
 SELECT cast(ATAN(n::tinyint)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--1546
+-1547
 -785
 0
 785
-1546
+1547
 
 query I
 SELECT cast(ATAN(n::smallint)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--1546
+-1547
 -785
 0
 785
-1546
+1547
 
 query I
 SELECT cast(ATAN(n::integer)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--1546
+-1547
 -785
 0
 785
-1546
+1547
 
 query I
 SELECT cast(ATAN(n::bigint)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--1546
+-1547
 -785
 0
 785
-1546
+1547
 
 query I
 SELECT cast(ATAN(n::float)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--1546
+-1547
 -785
 0
 785
-1546
+1547
 
 query I
 SELECT cast(ATAN(n::double)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
--1546
+-1547
 -785
 0
 785
-1546
+1547
 
 query I
 SELECT cast(ASIN(n::tinyint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
--1570
+-1571
 0
-1570
+1571
 
 query I
 SELECT cast(ASIN(n::smallint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
--1570
+-1571
 0
-1570
+1571
 
 query I
 SELECT cast(ASIN(n::integer)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
--1570
+-1571
 0
-1570
+1571
 
 query I
 SELECT cast(ASIN(n::bigint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
--1570
+-1571
 0
-1570
+1571
 
 query I
 SELECT cast(ASIN(n::float)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
--1570
+-1571
 0
-1570
+1571
 
 query I
 SELECT cast(ASIN(n::double)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
--1570
+-1571
 0
-1570
+1571
 
 query I
 SELECT cast(ACOS(n::tinyint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
-3141
-1570
+3142
+1571
 0
 
 query I
 SELECT cast(ACOS(n::smallint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
-3141
-1570
+3142
+1571
 0
 
 query I
 SELECT cast(ACOS(n::integer)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
-3141
-1570
+3142
+1571
 0
 
 query I
 SELECT cast(ACOS(n::bigint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
-3141
-1570
+3142
+1571
 0
 
 query I
 SELECT cast(ACOS(n::float)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
-3141
-1570
+3142
+1571
 0
 
 query I
 SELECT cast(ACOS(n::double)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
 ----
-3141
-1570
+3142
+1571
 0
 
 statement error
@@ -391,9 +391,9 @@ SELECT cast(ATAN2(n::tinyint, 42)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
 -785
--23
+-24
 0
-23
+24
 785
 
 query I
@@ -401,9 +401,9 @@ SELECT cast(ATAN2(n::smallint, 42)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
 -785
--23
+-24
 0
-23
+24
 785
 
 query I
@@ -411,9 +411,9 @@ SELECT cast(ATAN2(n::integer, 42)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
 -785
--23
+-24
 0
-23
+24
 785
 
 query I
@@ -421,9 +421,9 @@ SELECT cast(ATAN2(n::bigint, 42)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
 -785
--23
+-24
 0
-23
+24
 785
 
 query I
@@ -431,9 +431,9 @@ SELECT cast(ATAN2(n::float, 42)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
 -785
--23
+-24
 0
-23
+24
 785
 
 query I
@@ -441,8 +441,8 @@ SELECT cast(ATAN2(n::double, 42)*1000 as bigint) FROM numbers ORDER BY n
 ----
 NULL
 -785
--23
+-24
 0
-23
+24
 785
 

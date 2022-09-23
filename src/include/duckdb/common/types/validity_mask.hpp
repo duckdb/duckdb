@@ -171,6 +171,13 @@ public:
 		entry_idx = row_idx / BITS_PER_VALUE;
 		idx_in_entry = row_idx % BITS_PER_VALUE;
 	}
+	//! Get an entry that has first-n bits set as valid and rest set as invalid
+	static inline V EntryWithValidBits(idx_t n) {
+		if (n == 0) {
+			return V(0);
+		}
+		return ValidityBuffer::MAX_ENTRY >> (BITS_PER_VALUE - n);
+	}
 
 	//! RowIsValidUnsafe should only be used if AllValid() is false: it achieves the same as RowIsValid but skips a
 	//! not-null check
@@ -246,20 +253,33 @@ public:
 		}
 	}
 
-	//! Marks "count" entries in the validity mask as invalid (null)
+	//! Marks exactly "count" bits in the validity mask as invalid (null)
 	inline void SetAllInvalid(idx_t count) {
 		EnsureWritable();
-		for (idx_t i = 0; i < ValidityBuffer::EntryCount(count); i++) {
+		if (count == 0) {
+			return;
+		}
+		auto last_entry_index = ValidityBuffer::EntryCount(count) - 1;
+		for (idx_t i = 0; i < last_entry_index; i++) {
 			validity_mask[i] = 0;
 		}
+		auto last_entry_bits = count % static_cast<idx_t>(BITS_PER_VALUE);
+		validity_mask[last_entry_index] = (last_entry_bits == 0) ? 0 : (ValidityBuffer::MAX_ENTRY << (last_entry_bits));
 	}
 
-	//! Marks "count" entries in the validity mask as valid (not null)
+	//! Marks exactly "count" bits in the validity mask as valid (not null)
 	inline void SetAllValid(idx_t count) {
 		EnsureWritable();
-		for (idx_t i = 0; i < ValidityBuffer::EntryCount(count); i++) {
+		if (count == 0) {
+			return;
+		}
+		auto last_entry_index = ValidityBuffer::EntryCount(count) - 1;
+		for (idx_t i = 0; i < last_entry_index; i++) {
 			validity_mask[i] = ValidityBuffer::MAX_ENTRY;
 		}
+		auto last_entry_bits = count % static_cast<idx_t>(BITS_PER_VALUE);
+		validity_mask[last_entry_index] |=
+		    (last_entry_bits == 0) ? ValidityBuffer::MAX_ENTRY : ~(ValidityBuffer::MAX_ENTRY << (last_entry_bits));
 	}
 
 	inline bool IsMaskSet() const {

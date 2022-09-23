@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-void BaseExpression::Print() {
+void BaseExpression::Print() const {
 	Printer::Print(ToString());
 }
 
@@ -20,6 +20,9 @@ bool BaseExpression::Equals(const BaseExpression *other) const {
 		return false;
 	}
 	return true;
+}
+
+void BaseExpression::Verify() const {
 }
 
 } // namespace duckdb

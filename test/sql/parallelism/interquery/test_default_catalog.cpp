@@ -19,7 +19,7 @@ public:
 		*read_correct = true;
 		for (idx_t i = 0; i < CONCURRENT_DEFAULT_ITERATION_COUNT; i++) {
 			auto result = con.Query("SELECT * FROM pg_class");
-			if (!result->success) {
+			if (result->HasError()) {
 				*read_correct = false;
 			}
 		}
@@ -35,7 +35,7 @@ public:
 		*read_correct = true;
 		for (idx_t i = 0; i < CONCURRENT_DEFAULT_ITERATION_COUNT; i++) {
 			auto result = con.Query("SELECT * FROM " + random_default_views[rand() % random_default_views.size()]);
-			if (!result->success) {
+			if (result->HasError()) {
 				*read_correct = false;
 			}
 		}
@@ -71,7 +71,7 @@ public:
 		*read_correct = true;
 		for (idx_t i = 0; i < CONCURRENT_DEFAULT_ITERATION_COUNT; i++) {
 			auto result = con.Query(random_queries[rand() % random_queries.size()]);
-			if (!result->success) {
+			if (result->HasError()) {
 				*read_correct = false;
 			}
 		}

@@ -1,21 +1,15 @@
-#include "include/icu-datetrunc.hpp"
-#include "include/icu-datefunc.hpp"
-
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/senary_executor.hpp"
 #include "duckdb/common/vector_operations/septenary_executor.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "include/icu-datefunc.hpp"
+#include "include/icu-datetrunc.hpp"
 
 namespace duckdb {
 
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {
-	static inline void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
-		auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id.GetString())));
-		calendar->setTimeZone(*tz);
-	}
-
 	template <typename T>
 	static inline timestamp_t Operation(icu::Calendar *calendar, T yyyy, T mm, T dd, T hr, T mn, double ss) {
 		const auto year = yyyy + (yyyy < 0);
@@ -77,13 +71,13 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	template <typename TA>
 	static ScalarFunction GetSenaryFunction(const LogicalTypeId &type) {
 		return ScalarFunction({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
-		                      Execute<TA>, false, Bind);
+		                      Execute<TA>, Bind);
 	}
 
 	template <typename TA>
 	static ScalarFunction GetSeptenaryFunction(const LogicalTypeId &type) {
 		return ScalarFunction({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
-		                      LogicalType::TIMESTAMP_TZ, Execute<TA>, false, Bind);
+		                      LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
 	}
 
 	static void AddFunction(const string &name, ClientContext &context) {

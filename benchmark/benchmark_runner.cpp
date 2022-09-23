@@ -28,7 +28,7 @@ Benchmark::Benchmark(bool register_benchmark, string name, string group) : name(
 }
 
 static void listFiles(FileSystem &fs, const string &path, std::function<void(const string &)> cb) {
-	fs.ListFiles(path, [&](string fname, bool is_dir) {
+	fs.ListFiles(path, [&](const string &fname, bool is_dir) {
 		string full_path = fs.JoinPath(path, fname);
 		if (is_dir) {
 			// recurse into directory
@@ -47,17 +47,23 @@ static bool endsWith(const string &mainStr, const string &toMatch) {
 BenchmarkRunner::BenchmarkRunner() {
 }
 
-void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
-	auto &fs = db.GetFileSystem();
+void BenchmarkRunner::InitializeBenchmarkDirectory() {
+	auto fs = FileSystem::CreateLocal();
 	// check if the database directory exists; if not create it
-	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
-		fs.CreateDirectory(DUCKDB_BENCHMARK_DIRECTORY);
+	if (!fs->DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
+		fs->CreateDirectory(DUCKDB_BENCHMARK_DIRECTORY);
 	}
+}
+
+void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
+	InitializeBenchmarkDirectory();
+
+	auto &fs = db.GetFileSystem();
 	Connection con(db);
 	auto result = con.Query(
 	    StringUtil::Format("EXPORT DATABASE '%s' (FORMAT CSV)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
-	if (!result->success) {
-		throw Exception("Failed to save database: " + result->error);
+	if (result->HasError()) {
+		result->ThrowError("Failed to save database: ");
 	}
 }
 
@@ -73,8 +79,8 @@ bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, string name) {
 	}
 	Connection con(db);
 	auto result = con.Query(StringUtil::Format("IMPORT DATABASE '%s'", base_dir));
-	if (!result->success) {
-		throw Exception("Failed to load database: " + result->error);
+	if (result->HasError()) {
+		result->ThrowError("Failed to load database: ");
 	}
 	return true;
 }
@@ -174,7 +180,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 
 void BenchmarkRunner::RunBenchmarks() {
 	LogLine("Starting benchmark run.");
-	LogLine("name\trun\tnruns\ttiming");
+	LogLine("name\trun\ttiming");
 	for (auto &benchmark : benchmarks) {
 		RunBenchmark(benchmark);
 	}
@@ -201,7 +207,7 @@ enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };
 void LoadInterpretedBenchmarks() {
 	// load interpreted benchmarks
 	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	listFiles(*fs, "benchmark", [](string path) {
+	listFiles(*fs, "benchmark", [](const string &path) {
 		if (endsWith(path, ".benchmark")) {
 			new InterpretedBenchmark(path);
 		}
@@ -266,6 +272,8 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
  * Returns an configuration error code.
  */
 ConfigurationError run_benchmarks() {
+	BenchmarkRunner::InitializeBenchmarkDirectory();
+
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
 	if (!instance.configuration.name_pattern.empty()) {
@@ -343,4 +351,5 @@ int main(int argc, char **argv) {
 		print_error_message(configuration_error);
 		exit(1);
 	}
+	return 0;
 }

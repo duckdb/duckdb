@@ -11,10 +11,11 @@ namespace duckdb {
 FunctionExpression::FunctionExpression(string schema, const string &function_name,
                                        vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
-                                       bool distinct, bool is_operator)
+                                       bool distinct, bool is_operator, bool export_state_p)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(std::move(schema)),
       function_name(StringUtil::Lower(function_name)), is_operator(is_operator), children(move(children_p)),
-      distinct(distinct), filter(move(filter)), order_bys(move(order_bys_p)) {
+      distinct(distinct), filter(move(filter)), order_bys(move(order_bys_p)), export_state(export_state_p) {
+	D_ASSERT(!function_name.empty());
 	if (!order_bys) {
 		order_bys = make_unique<OrderModifier>();
 	}
@@ -22,39 +23,14 @@ FunctionExpression::FunctionExpression(string schema, const string &function_nam
 
 FunctionExpression::FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
-                                       bool distinct, bool is_operator)
+                                       bool distinct, bool is_operator, bool export_state_p)
     : FunctionExpression(INVALID_SCHEMA, function_name, move(children_p), move(filter), move(order_bys), distinct,
-                         is_operator) {
+                         is_operator, export_state_p) {
 }
 
 string FunctionExpression::ToString() const {
-	if (is_operator) {
-		// built-in operator
-		if (children.size() == 1) {
-			return function_name + children[0]->ToString();
-		} else if (children.size() == 2) {
-			return children[0]->ToString() + " " + function_name + " " + children[1]->ToString();
-		}
-	}
-	// standard function call
-	string result = function_name + "(";
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
-
-	// filtered aggregate
-	if (filter) {
-		result += " FILTER " + filter->ToString();
-	}
-
-	// ordered aggregate
-	if (!order_bys->orders.empty()) {
-		result += " ORDER BY";
-		for (const auto &order : order_bys->orders) {
-			result += " " + order.ToString();
-		}
-	}
-
-	return result + ")";
+	return ToString<FunctionExpression, ParsedExpression>(*this, schema, function_name, is_operator, distinct,
+	                                                      filter.get(), order_bys.get(), export_state, true);
 }
 
 bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpression *b) {
@@ -75,6 +51,9 @@ bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpre
 	if (!a->order_bys->Equals(b->order_bys.get())) {
 		return false;
 	}
+	if (a->export_state != b->export_state) {
+		return false;
+	}
 	return true;
 }
 
@@ -83,6 +62,7 @@ hash_t FunctionExpression::Hash() const {
 	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
 	result = CombineHash(result, duckdb::Hash<const char *>(function_name.c_str()));
 	result = CombineHash(result, duckdb::Hash<bool>(distinct));
+	result = CombineHash(result, duckdb::Hash<bool>(export_state));
 	return result;
 }
 
@@ -101,7 +81,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	}
 
 	auto copy = make_unique<FunctionExpression>(function_name, move(copy_children), move(filter_copy), move(order_copy),
-	                                            distinct, is_operator);
+	                                            distinct, is_operator, export_state);
 	copy->schema = schema;
 	copy->CopyProperties(*this);
 	return move(copy);
@@ -115,6 +95,7 @@ void FunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable((ResultModifier &)*order_bys);
 	writer.WriteField<bool>(distinct);
 	writer.WriteField<bool>(is_operator);
+	writer.WriteField<bool>(export_state);
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, FieldReader &reader) {
@@ -125,11 +106,17 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	auto order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(reader.ReadRequiredSerializable<ResultModifier>());
 	auto distinct = reader.ReadRequired<bool>();
 	auto is_operator = reader.ReadRequired<bool>();
+	auto export_state = reader.ReadField<bool>(false);
+
 	unique_ptr<FunctionExpression> function;
 	function = make_unique<FunctionExpression>(function_name, move(children), move(filter), move(order_bys), distinct,
-	                                           is_operator);
+	                                           is_operator, export_state);
 	function->schema = schema;
 	return move(function);
+}
+
+void FunctionExpression::Verify() const {
+	D_ASSERT(!function_name.empty());
 }
 
 } // namespace duckdb

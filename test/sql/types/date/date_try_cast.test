@@ -85,19 +85,19 @@ NULL
 
 # try cast on dates near the limits
 query I
-select try_cast('5877642-06-23 (BC)' as date)
+select try_cast('5877642-06-25 (BC)' as date)
 ----
-5877642-06-23 (BC)
+5877642-06-25 (BC)
 
 query I
-select try_cast('5877642-06-22 (BC)' as date)
+select try_cast('5877642-06-24 (BC)' as date)
 ----
 NULL
 
 query I
-select try_cast('5877680-06-22 (BC)' as date);
+select try_cast('-infinity' as date);
 ----
-NULL
+-infinity
 
 query I
 select try_cast('99999999-06-22 (BC)' as date);
@@ -116,19 +116,24 @@ select try_cast('290309-01-01 (BC)'::date as timestamp)
 NULL
 
 query I
-select try_cast('5877642-06-23 (BC)'::date as timestamp)
+select try_cast('5877642-06-25 (BC)'::date as timestamp)
 ----
 NULL
+
+query I
+select try_cast('5881580-07-10' as date)
+----
+5881580-07-10
 
 query I
 select try_cast('5881580-07-11' as date)
 ----
-5881580-07-11
+NULL
 
 query I
-select try_cast('5881580-07-12' as date)
+select try_cast('infinity' as date)
 ----
-NULL
+infinity
 
 query I
 select try_cast('5881580-08-11' as date)

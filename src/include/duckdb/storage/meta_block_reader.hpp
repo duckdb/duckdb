@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 class BlockHandle;
@@ -25,7 +26,7 @@ public:
 
 	DatabaseInstance &db;
 	shared_ptr<BlockHandle> block;
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 	idx_t offset;
 	block_id_t next_block;
 

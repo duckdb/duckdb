@@ -19,7 +19,8 @@ CREATE TABLE integral_values (
     r bytea,
     s date,
     t time,
-    u timestamp
+    u timestamp,
+	v date[]
 );
 
 # has_schema
@@ -148,7 +149,7 @@ seq
 
 # get_view_definition
 query I
-SELECT string_split_regex(pg_get_viewdef(c.oid), '\n')[0] view_def FROM pg_class c
+SELECT string_split_regex(pg_get_viewdef(c.oid), '\n')[1] view_def FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'myschema' AND c.relname = 'v1'
 AND c.relkind IN ('v', 'm')
@@ -187,6 +188,7 @@ r	bytea	NULL	false
 s	date	NULL	false
 t	time without time zone	NULL	false
 u	timestamp without time zone	NULL	false
+v	list	NULL	false
 
 # get_pk_constraint
 statement ok

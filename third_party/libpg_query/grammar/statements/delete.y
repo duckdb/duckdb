@@ -47,6 +47,6 @@ where_or_current_clause:
 
 
 using_clause:
-				USING from_list						{ $$ = $2; }
+				USING from_list_opt_comma						{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;

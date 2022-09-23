@@ -37,7 +37,7 @@ NULL
 # delete
 
 query I
-DELETE FROM a WHERE b[0]=1
+DELETE FROM a WHERE b[1]=1
 ----
 1
 
@@ -83,7 +83,7 @@ NULL
 [[NULL, 6], NULL, [1, 2, NULL]]
 
 query I
-DELETE FROM b WHERE b[0][0]=1
+DELETE FROM b WHERE b[1][1]=1
 ----
 1
 

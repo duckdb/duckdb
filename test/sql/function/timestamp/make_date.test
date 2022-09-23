@@ -62,6 +62,12 @@ FROM (SELECT d, make_date(year(d), month(d), day(d)) md FROM dates) tbl
 WHERE md IS DISTINCT FROM d;
 ----
 
+query I
+SELECT d
+FROM (SELECT d, make_date(date_part(['year', 'month', 'day'], d)) md FROM dates) tbl
+WHERE md IS DISTINCT FROM d;
+----
+
 # Null parts
 query I
 SELECT md

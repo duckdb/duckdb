@@ -2,13 +2,54 @@
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
-	return make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
+	auto bound_comparison = make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
+	return move(bound_comparison);
+}
+
+unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> conditions) {
+	unique_ptr<Expression> result;
+	for (auto &cond : conditions) {
+		auto expr = CreateExpression(move(cond));
+		if (!result) {
+			result = move(expr);
+		} else {
+			auto conj =
+			    make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(expr), move(result));
+			result = move(conj);
+		}
+	}
+	return result;
+}
+
+//! Serializes a JoinCondition to a stand-alone binary blob
+void JoinCondition::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteOptional(left);
+	writer.WriteOptional(right);
+	writer.WriteField<ExpressionType>(comparison);
+	writer.Finalize();
+}
+
+//! Deserializes a blob back into a JoinCondition
+JoinCondition JoinCondition::Deserialize(Deserializer &source, PlanDeserializationState &state) {
+	auto result = JoinCondition();
+
+	FieldReader reader(source);
+	auto left = reader.ReadOptional<Expression>(nullptr, state);
+	auto right = reader.ReadOptional<Expression>(nullptr, state);
+	result.left = move(left);
+	result.right = move(right);
+	result.comparison = reader.ReadRequired<ExpressionType>();
+	reader.Finalize();
+	return result;
 }
 
 JoinSide JoinSide::CombineJoinSide(JoinSide left, JoinSide right) {

@@ -55,13 +55,13 @@ create  table t as select range a, mod(range,10) b from range(2000);
 query III
 SELECT COUNT( a),approx_count_distinct(a),approx_count_distinct(b) from t
 ----
-2000	1990	10
+2000	1991	10
 
 query I
 SELECT approx_count_distinct(a) from t group by a %2;
 ----
-1007
-1003
+993
+986
 
 require vector_size 512
 
@@ -99,3 +99,13 @@ SELECT COUNT(t),approx_count_distinct(t) from names
 ----
 8	3
 
+statement ok
+create table customers (cname varchar)
+
+statement ok
+insert into customers values ('Customer#000000001'), ('Customer#000000002'), ('Customer#000000003'), ('Customer#000000004')
+
+query T
+select approx_count_distinct(cname) from customers
+----
+4

@@ -1,6 +1,8 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -9,21 +11,7 @@ BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, LogicalTyp
 }
 
 string BoundOperatorExpression::ToString() const {
-	auto op = ExpressionTypeToOperator(type);
-	if (!op.empty()) {
-		// use the operator string to represent the operator
-		if (children.size() == 1) {
-			return op + "(" + children[0]->GetName() + ")";
-		} else if (children.size() == 2) {
-			return children[0]->GetName() + " " + op + " " + children[1]->GetName();
-		}
-	}
-	// if there is no operator we render it as a function
-	auto result = ExpressionTypeToString(type) + "(";
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
-	result += ")";
-	return result;
+	return OperatorExpression::ToString<BoundOperatorExpression, Expression>(*this);
 }
 
 bool BoundOperatorExpression::Equals(const BaseExpression *other_p) const {
@@ -44,6 +32,21 @@ unique_ptr<Expression> BoundOperatorExpression::Copy() {
 		copy->children.push_back(child->Copy());
 	}
 	return move(copy);
+}
+
+void BoundOperatorExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(return_type);
+	writer.WriteSerializableList(children);
+}
+
+unique_ptr<Expression> BoundOperatorExpression::Deserialize(ExpressionDeserializationState &state,
+                                                            FieldReader &reader) {
+	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
+
+	auto result = make_unique<BoundOperatorExpression>(state.type, return_type);
+	result->children = move(children);
+	return move(result);
 }
 
 } // namespace duckdb

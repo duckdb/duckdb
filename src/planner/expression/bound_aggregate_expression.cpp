@@ -1,12 +1,11 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/function/function_serialization.hpp"
 
 namespace duckdb {
 
@@ -16,17 +15,12 @@ BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, v
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.return_type),
       function(move(function)), children(move(children)), bind_info(move(bind_info)), distinct(distinct),
       filter(move(filter)) {
+	D_ASSERT(!function.name.empty());
 }
 
 string BoundAggregateExpression::ToString() const {
-	string result = function.name + "(";
-	if (distinct) {
-		result += "DISTINCT ";
-	}
-	result += StringUtil::Join(children, children.size(), ", ",
-	                           [](const unique_ptr<Expression> &child) { return child->ToString(); });
-	result += ")";
-	return result;
+	return FunctionExpression::ToString<BoundAggregateExpression, Expression>(*this, string(), function.name, false,
+	                                                                          distinct, filter.get());
 }
 
 hash_t BoundAggregateExpression::Hash() const {
@@ -64,6 +58,11 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_p) const {
 	return true;
 }
 
+bool BoundAggregateExpression::PropagatesNullValues() const {
+	return function.null_handling == FunctionNullHandling::SPECIAL_HANDLING ? false
+	                                                                        : Expression::PropagatesNullValues();
+}
+
 unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	vector<unique_ptr<Expression>> new_children;
 	for (auto &child : children) {
@@ -75,6 +74,24 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	                                                  move(new_bind_info), distinct);
 	copy->CopyProperties(*this);
 	return move(copy);
+}
+
+void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteField(distinct);
+	writer.WriteOptional(filter);
+	FunctionSerializer::Serialize<AggregateFunction>(writer, function, return_type, children, bind_info.get());
+}
+
+unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeserializationState &state,
+                                                             FieldReader &reader) {
+	auto distinct = reader.ReadRequired<bool>();
+	auto filter = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	vector<unique_ptr<Expression>> children;
+	unique_ptr<FunctionData> bind_info;
+	auto function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+	    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
+
+	return make_unique<BoundAggregateExpression>(function, move(children), move(filter), move(bind_info), distinct);
 }
 
 } // namespace duckdb

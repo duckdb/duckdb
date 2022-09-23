@@ -21,4 +21,13 @@ unique_ptr<Expression> BoundSubqueryExpression::Copy() {
 	throw SerializationException("Cannot copy BoundSubqueryExpression");
 }
 
+bool BoundSubqueryExpression::PropagatesNullValues() const {
+	// TODO this can be optimized further by checking the actual subquery node
+	return false;
+}
+
+void BoundSubqueryExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

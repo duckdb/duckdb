@@ -12,6 +12,7 @@
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
+class TableCatalogEntry;
 
 struct ExportedTableData {
 	//! Name of the exported table
@@ -24,8 +25,13 @@ struct ExportedTableData {
 	string file_path;
 };
 
+struct ExportedTableInfo {
+	TableCatalogEntry *entry;
+	ExportedTableData table_data;
+};
+
 struct BoundExportData : public ParseInfo {
-	unordered_map<TableCatalogEntry *, ExportedTableData> data;
+	std::vector<ExportedTableInfo> data;
 };
 
 } // namespace duckdb

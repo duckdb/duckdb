@@ -11,7 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/column_statistics.hpp"
 
 namespace duckdb {
 class PersistentTableData;
@@ -32,12 +32,13 @@ public:
 	void InitializeAddColumn(TableStatistics &parent, const LogicalType &new_column_type);
 	void InitializeRemoveColumn(TableStatistics &parent, idx_t removed_column);
 	void InitializeAlterType(TableStatistics &parent, idx_t changed_idx, const LogicalType &new_type);
+	void InitializeAddConstraint(TableStatistics &parent);
 
 	void MergeStats(idx_t i, BaseStatistics &stats);
 	void MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats);
 
 	unique_ptr<BaseStatistics> CopyStats(idx_t i);
-	BaseStatistics &GetStats(idx_t i);
+	ColumnStatistics &GetStats(idx_t i);
 
 	bool Empty();
 
@@ -47,7 +48,7 @@ private:
 	//! The statistics lock
 	mutex stats_lock;
 	//! Column statistics
-	vector<unique_ptr<BaseStatistics>> column_stats;
+	vector<shared_ptr<ColumnStatistics>> column_stats;
 };
 
 } // namespace duckdb

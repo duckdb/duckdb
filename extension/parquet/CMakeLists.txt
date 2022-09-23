@@ -52,6 +52,8 @@ if(NOT CLANG_TIDY)
 endif()
 
 add_library(parquet_extension STATIC ${PARQUET_EXTENSION_FILES})
+set(INGORE_WARNINGS OFF)
+build_loadable_extension(parquet ${PARQUET_EXTENSION_FILES} ${IGNORE_WARNINGS})
 
 install(
   TARGETS parquet_extension
@@ -59,7 +61,7 @@ install(
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
-if(NOT CLANG_TIDY)
+if(NOT CLANG_TIDY AND BUILD_MAIN_DUCKDB_LIBRARY)
   add_executable(parquetcli parquetcli.cpp)
   target_link_libraries(parquetcli parquet_extension)
   target_link_libraries(parquetcli duckdb_static)

@@ -67,7 +67,7 @@ dbWriteTable__duckdb_connection_character_data.frame <- function(conn,
 
     col_names <- dbGetQuery(conn, SQL(sprintf(
       "DESCRIBE %s", view_name
-    )))$Field
+    )))$column_name
 
     cols <- character()
     col_idx <- 1

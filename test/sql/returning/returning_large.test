@@ -1,0 +1,20 @@
+# name: test/sql/returning/returning_large.test
+# description: Test returning with top level INSERT statement
+# group: [returning]
+
+statement ok
+CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
+
+statement ok
+insert into table1(a) select * from range (0, 4000, 1) t1(a);
+
+query I
+SELECT count(*) FROM table1;
+----
+4000
+
+# the following two tests test that all inserts get streamed back to the returning statement
+query I
+INSERT INTO table1(a, b, c) SELECT a, b, c FROM table1  RETURNING a;
+----
+4000 values hashing to b28a0440a7c3898c88617db0673db740

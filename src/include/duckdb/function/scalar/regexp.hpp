@@ -24,14 +24,16 @@ struct RegexpMatchesBindData : public FunctionData {
 	string range_max;
 	bool range_success;
 
-	unique_ptr<FunctionData> Copy() override;
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
 };
 
 struct RegexpReplaceBindData : public FunctionData {
 	duckdb_re2::RE2::Options options;
 	bool global_replace;
 
-	unique_ptr<FunctionData> Copy() override;
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
 };
 
 struct RegexpExtractBindData : public FunctionData {
@@ -43,7 +45,8 @@ struct RegexpExtractBindData : public FunctionData {
 	const string group_string;
 	const duckdb_re2::StringPiece rewrite;
 
-	unique_ptr<FunctionData> Copy() override;
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
 };
 
 } // namespace duckdb

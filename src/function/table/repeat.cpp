@@ -11,31 +11,28 @@ struct RepeatFunctionData : public TableFunctionData {
 	idx_t target_count;
 };
 
-struct RepeatOperatorData : public FunctionOperatorData {
+struct RepeatOperatorData : public GlobalTableFunctionState {
 	RepeatOperatorData() : current_count(0) {
 	}
 	idx_t current_count;
 };
 
-static unique_ptr<FunctionData> RepeatBind(ClientContext &context, vector<Value> &inputs,
-                                           named_parameter_map_t &named_parameters,
-                                           vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+static unique_ptr<FunctionData> RepeatBind(ClientContext &context, TableFunctionBindInput &input,
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	// the repeat function returns the type of the first argument
+	auto &inputs = input.inputs;
 	return_types.push_back(inputs[0].type());
 	names.push_back(inputs[0].ToString());
 	return make_unique<RepeatFunctionData>(inputs[0], inputs[1].GetValue<int64_t>());
 }
 
-static unique_ptr<FunctionOperatorData> RepeatInit(ClientContext &context, const FunctionData *bind_data,
-                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
+static unique_ptr<GlobalTableFunctionState> RepeatInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<RepeatOperatorData>();
 }
 
-static void RepeatFunction(ClientContext &context, const FunctionData *bind_data_p,
-                           FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &bind_data = (RepeatFunctionData &)*bind_data_p;
-	auto &state = (RepeatOperatorData &)*operator_state;
+static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = (const RepeatFunctionData &)*data_p.bind_data;
+	auto &state = (RepeatOperatorData &)*data_p.global_state;
 
 	idx_t remaining = MinValue<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
 	output.data[0].Reference(bind_data.value);
@@ -44,13 +41,13 @@ static void RepeatFunction(ClientContext &context, const FunctionData *bind_data
 }
 
 static unique_ptr<NodeStatistics> RepeatCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (RepeatFunctionData &)*bind_data_p;
+	auto &bind_data = (const RepeatFunctionData &)*bind_data_p;
 	return make_unique<NodeStatistics>(bind_data.target_count, bind_data.target_count);
 }
 
 void RepeatTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, RepeatFunction, RepeatBind, RepeatInit,
-	                     nullptr, nullptr, nullptr, RepeatCardinality);
+	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, RepeatFunction, RepeatBind, RepeatInit);
+	repeat.cardinality = RepeatCardinality;
 	set.AddFunction(repeat);
 }
 

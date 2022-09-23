@@ -16,12 +16,15 @@ namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public ParsedExpression {
 public:
-	FunctionExpression(string schema_name, const string &function_name, vector<unique_ptr<ParsedExpression>> children,
-	                   unique_ptr<ParsedExpression> filter = nullptr, unique_ptr<OrderModifier> order_bys = nullptr,
-	                   bool distinct = false, bool is_operator = false);
-	FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children,
-	                   unique_ptr<ParsedExpression> filter = nullptr, unique_ptr<OrderModifier> order_bys = nullptr,
-	                   bool distinct = false, bool is_operator = false);
+	DUCKDB_API FunctionExpression(string schema_name, const string &function_name,
+	                              vector<unique_ptr<ParsedExpression>> children,
+	                              unique_ptr<ParsedExpression> filter = nullptr,
+	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
+	                              bool is_operator = false, bool export_state = false);
+	DUCKDB_API FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children,
+	                              unique_ptr<ParsedExpression> filter = nullptr,
+	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
+	                              bool is_operator = false, bool export_state = false);
 
 	//! Schema of the function
 	string schema;
@@ -37,6 +40,8 @@ public:
 	unique_ptr<ParsedExpression> filter;
 	//! Modifier representing an ORDER BY, only used for aggregates
 	unique_ptr<OrderModifier> order_bys;
+	//! whether this function should export its state or not
+	bool export_state;
 
 public:
 	string ToString() const override;
@@ -48,5 +53,65 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+
+	void Verify() const override;
+
+public:
+	template <class T, class BASE>
+	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false,
+	                       bool distinct = false, BASE *filter = nullptr, OrderModifier *order_bys = nullptr,
+	                       bool export_state = false, bool add_alias = false) {
+		if (is_operator) {
+			// built-in operator
+			D_ASSERT(!distinct);
+			if (entry.children.size() == 1) {
+				if (StringUtil::Contains(function_name, "__postfix")) {
+					return "(" + entry.children[0]->ToString() + ")" +
+					       StringUtil::Replace(function_name, "__postfix", "");
+				} else {
+					return function_name + "(" + entry.children[0]->ToString() + ")";
+				}
+			} else if (entry.children.size() == 2) {
+				return StringUtil::Format("(%s) %s (%s)", entry.children[0]->ToString(), function_name,
+				                          entry.children[1]->ToString());
+			}
+		}
+		// standard function call
+		string result = schema.empty() ? function_name : schema + "." + function_name;
+		result += "(";
+		if (distinct) {
+			result += "DISTINCT ";
+		}
+		result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
+			return child->alias.empty() || !add_alias
+			           ? child->ToString()
+			           : KeywordHelper::WriteOptionallyQuoted(child->alias) + " := " + child->ToString();
+		});
+		// ordered aggregate
+		if (order_bys && !order_bys->orders.empty()) {
+			if (entry.children.empty()) {
+				result += ") WITHIN GROUP (";
+			}
+			result += " ORDER BY ";
+			for (idx_t i = 0; i < order_bys->orders.size(); i++) {
+				if (i > 0) {
+					result += ", ";
+				}
+				result += order_bys->orders[i].ToString();
+			}
+		}
+		result += ")";
+
+		// filtered aggregate
+		if (filter) {
+			result += " FILTER (WHERE " + filter->ToString() + ")";
+		}
+
+		if (export_state) {
+			result += " EXPORT_STATE";
+		}
+
+		return result;
+	}
 };
 } // namespace duckdb

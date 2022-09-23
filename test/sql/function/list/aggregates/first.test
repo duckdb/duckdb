@@ -1,0 +1,114 @@
+# name: test/sql/function/list/aggregates/first.test
+# description: Test the list_first aggregate function
+# group: [aggregates]
+
+query I
+SELECT list_aggr([1, 2], 'arbitrary')
+----
+1
+
+# incorrect usage
+statement error
+SELECT list_first()
+
+# different types
+
+# numerics
+foreach type <numeric>
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
+
+query I
+SELECT list_first(i) FROM five
+----
+1
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE five
+
+endloop
+
+# temporal
+statement ok
+CREATE TABLE five_dates AS
+	SELECT
+		LIST(i::integer) AS i,
+		LIST('2021-08-20'::DATE + i::INTEGER) AS d,
+		LIST('2021-08-20'::TIMESTAMP + INTERVAL (i) HOUR) AS dt,
+		LIST('14:59:37'::TIME + INTERVAL (i) MINUTE) AS t,
+		LIST(INTERVAL (i) SECOND) AS s
+	FROM range(1, 6, 1) t1(i)
+
+query IIII
+SELECT list_first(d), list_first(dt), list_first(t), list_first(s) FROM five_dates
+----
+2021-08-21	2021-08-20 01:00:00	15:00:37	00:00:01
+
+statement ok
+DROP TABLE five_dates
+
+# with time zone
+statement ok
+CREATE TABLE five_dates_tz AS
+	SELECT
+		LIST(('2021-08-20'::TIMESTAMP + INTERVAL (i) HOUR)::TIMESTAMPTZ) AS dt,
+		LIST(('14:59:37'::TIME + INTERVAL (i) MINUTE)::TIMETZ) AS t,
+	FROM range(1, 6, 1) t1(i)
+
+query II
+SELECT list_first(dt), list_first(t) FROM five_dates_tz
+----
+2021-08-20 01:00:00+00	15:00:37+00
+
+statement ok
+DROP TABLE five_dates_tz
+
+# complex types
+statement ok
+CREATE TABLE five_complex AS
+	SELECT
+		LIST(i::integer) AS i,
+		LIST(i::VARCHAR) AS s,
+		LIST([i]) AS l,
+		LIST({'a': i}) AS r
+	FROM range(1, 6, 1) t1(i)
+
+query III
+SELECT list_first(s), list_first(l), list_first(r)
+FROM five_complex
+----
+1	[1]	{'a': 1}
+
+statement ok
+DROP TABLE five_complex
+
+# decimals
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
+
+query I
+SELECT list_first(i) FROM five
+----
+1.0
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE five
+
+endloop

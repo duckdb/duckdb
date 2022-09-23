@@ -25,3 +25,15 @@ endif()
 if(${BUILD_VISUALIZER_EXTENSION})
   add_subdirectory(visualizer)
 endif()
+
+if(${BUILD_JSON_EXTENSION})
+  add_subdirectory(json)
+endif()
+
+if(${BUILD_EXCEL_EXTENSION})
+  add_subdirectory(excel)
+endif()
+
+if(${BUILD_SQLSMITH_EXTENSION})
+  add_subdirectory(sqlsmith)
+endif()

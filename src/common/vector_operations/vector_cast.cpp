@@ -159,6 +159,7 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 		return VectorTryCastLoop<SRC, double, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::DECIMAL:
 		return ToDecimalCast<SRC>(source, result, count, error_message);
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		VectorStringCast<SRC, duckdb::StringCast>(source, result, count);
 		return true;
@@ -212,8 +213,8 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count, string *error_me
 		                error_message, nullptr);
 	}
 	default: {
-		VectorData vdata;
-		source.Orrify(count, vdata);
+		UnifiedVectorFormat vdata;
+		source.ToUnifiedFormat(count, vdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
@@ -317,6 +318,10 @@ static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 		                                                                           error_message);
 	case LogicalTypeId::SQLNULL:
 		return TryVectorNullCast(source, result, count, error_message);
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
+		result.Reinterpret(source);
+		return true;
 	default:
 		return VectorStringCastNumericSwitch(source, result, count, strict, error_message);
 	}
@@ -326,6 +331,7 @@ static bool DateCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// date to varchar
 		VectorStringCast<date_t, duckdb::StringCast>(source, result, count);
 		return true;
@@ -333,6 +339,15 @@ static bool DateCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	case LogicalTypeId::TIMESTAMP_TZ:
 		// date to timestamp
 		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCast>(source, result, count, error_message);
+	case LogicalTypeId::TIMESTAMP_NS:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampNS>(source, result, count,
+		                                                                            error_message);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampSec>(source, result, count,
+		                                                                             error_message);
+	case LogicalTypeId::TIMESTAMP_MS:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampMS>(source, result, count,
+		                                                                            error_message);
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}
@@ -342,6 +357,7 @@ static bool TimeCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// time to varchar
 		VectorStringCast<dtime_t, duckdb::StringCast>(source, result, count);
 		return true;
@@ -358,6 +374,7 @@ static bool TimeTzCastSwitch(Vector &source, Vector &result, idx_t count, string
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// time with time zone to varchar
 		VectorStringCast<dtime_t, duckdb::StringCastTZ>(source, result, count);
 		return true;
@@ -374,6 +391,7 @@ static bool TimestampCastSwitch(Vector &source, Vector &result, idx_t count, str
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// timestamp to varchar
 		VectorStringCast<timestamp_t, duckdb::StringCast>(source, result, count);
 		break;
@@ -412,16 +430,13 @@ static bool TimestampTzCastSwitch(Vector &source, Vector &result, idx_t count, s
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// timestamp with time zone to varchar
 		VectorStringCast<timestamp_t, duckdb::StringCastTZ>(source, result, count);
 		break;
-	case LogicalTypeId::DATE:
-		// timestamp with time zone to date
-		UnaryExecutor::Execute<timestamp_t, date_t, duckdb::Cast>(source, result, count);
-		break;
-	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
-		// timestamp with time zone to time
+		// timestamp with time zone to time with time zone.
+		// TODO: set the offset to +00
 		UnaryExecutor::Execute<timestamp_t, dtime_t, duckdb::Cast>(source, result, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -438,6 +453,7 @@ static bool TimestampNsCastSwitch(Vector &source, Vector &result, idx_t count, s
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// timestamp (ns) to varchar
 		VectorStringCast<timestamp_t, duckdb::CastFromTimestampNS>(source, result, count);
 		break;
@@ -455,6 +471,7 @@ static bool TimestampMsCastSwitch(Vector &source, Vector &result, idx_t count, s
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// timestamp (ms) to varchar
 		VectorStringCast<timestamp_t, duckdb::CastFromTimestampMS>(source, result, count);
 		break;
@@ -472,6 +489,7 @@ static bool TimestampSecCastSwitch(Vector &source, Vector &result, idx_t count, 
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// timestamp (sec) to varchar
 		VectorStringCast<timestamp_t, duckdb::CastFromTimestampSec>(source, result, count);
 		break;
@@ -489,6 +507,7 @@ static bool IntervalCastSwitch(Vector &source, Vector &result, idx_t count, stri
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// time to varchar
 		VectorStringCast<interval_t, duckdb::StringCast>(source, result, count);
 		break;
@@ -502,6 +521,7 @@ static bool UUIDCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// uuid to varchar
 		VectorStringCast<hugeint_t, duckdb::CastFromUUID>(source, result, count);
 		break;
@@ -515,8 +535,12 @@ static bool BlobCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		// blob to varchar
 		VectorStringCast<string_t, duckdb::CastFromBlob>(source, result, count);
+		break;
+	case LogicalTypeId::AGGREGATE_STATE:
+		result.Reinterpret(source);
 		break;
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
@@ -527,6 +551,7 @@ static bool BlobCastSwitch(Vector &source, Vector &result, idx_t count, string *
 static bool ValueStringCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::JSON:
 		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(source.GetVectorType());
 		} else {
@@ -534,8 +559,12 @@ static bool ValueStringCastSwitch(Vector &source, Vector &result, idx_t count, s
 		}
 		for (idx_t i = 0; i < count; i++) {
 			auto src_val = source.GetValue(i);
-			auto str_val = src_val.ToString();
-			result.SetValue(i, Value(str_val));
+			if (src_val.IsNull()) {
+				result.SetValue(i, Value(result.GetType()));
+			} else {
+				auto str_val = src_val.ToString();
+				result.SetValue(i, Value(str_val));
+			}
 		}
 		return true;
 	default:
@@ -548,14 +577,14 @@ static bool ListCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	case LogicalTypeId::LIST: {
 		// only handle constant and flat vectors here for now
 		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(source.GetVectorType());
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, ConstantVector::IsNull(source));
 
 			auto ldata = ConstantVector::GetData<list_entry_t>(source);
 			auto tdata = ConstantVector::GetData<list_entry_t>(result);
 			*tdata = *ldata;
 		} else {
-			source.Normalify(count);
+			source.Flatten(count);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			FlatVector::SetValidity(result, FlatVector::Validity(source));
 
@@ -582,8 +611,8 @@ static bool ListCastSwitch(Vector &source, Vector &result, idx_t count, string *
 }
 
 template <class SRC_TYPE, class RES_TYPE>
-void FillEnum(Vector &source, Vector &result, idx_t count) {
-
+bool FillEnum(Vector &source, Vector &result, idx_t count, string *error_message) {
+	bool all_converted = true;
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	auto &str_vec = EnumType::GetValuesInsertOrder(source.GetType());
@@ -591,8 +620,8 @@ void FillEnum(Vector &source, Vector &result, idx_t count) {
 
 	auto res_enum_type = result.GetType();
 
-	VectorData vdata;
-	source.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	source.ToUnifiedFormat(count, vdata);
 
 	auto source_data = (SRC_TYPE *)vdata.data;
 	auto source_sel = vdata.sel;
@@ -611,25 +640,29 @@ void FillEnum(Vector &source, Vector &result, idx_t count) {
 		auto key = EnumType::GetPos(res_enum_type, str);
 		if (key == -1) {
 			// key doesn't exist on result enum
-			result_mask.SetInvalid(i);
+			if (!error_message) {
+				result_data[i] = HandleVectorCastError::Operation<RES_TYPE>(
+				    CastExceptionText<SRC_TYPE, RES_TYPE>(source_data[src_idx]), result_mask, i, error_message,
+				    all_converted);
+			} else {
+				result_mask.SetInvalid(i);
+			}
 			continue;
 		}
 		result_data[i] = key;
 	}
+	return all_converted;
 }
 
 template <class SRC_TYPE>
-void FillEnumResultTemplate(Vector &source, Vector &result, idx_t count) {
+bool FillEnumResultTemplate(Vector &source, Vector &result, idx_t count, string *error_message) {
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::UINT8:
-		FillEnum<SRC_TYPE, uint8_t>(source, result, count);
-		break;
+		return FillEnum<SRC_TYPE, uint8_t>(source, result, count, error_message);
 	case PhysicalType::UINT16:
-		FillEnum<SRC_TYPE, uint16_t>(source, result, count);
-		break;
+		return FillEnum<SRC_TYPE, uint16_t>(source, result, count, error_message);
 	case PhysicalType::UINT32:
-		FillEnum<SRC_TYPE, uint32_t>(source, result, count);
-		break;
+		return FillEnum<SRC_TYPE, uint32_t>(source, result, count, error_message);
 	default:
 		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 	}
@@ -645,6 +678,7 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 	auto str_vec_ptr = FlatVector::GetData<string_t>(str_vec);
 	auto res_vec_ptr = FlatVector::GetData<string_t>(result);
 
+	// TODO remove value api from this loop
 	for (idx_t i = 0; i < count; i++) {
 		auto src_val = source.GetValue(i);
 		if (src_val.IsNull()) {
@@ -663,8 +697,14 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 		case PhysicalType::UINT32:
 			enum_idx = UIntegerValue::Get(src_val);
 			break;
+		case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
+		{
+			res_vec_ptr[i] = (const char *)UBigIntValue::Get(src_val);
+			continue;
+		}
+
 		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 		res_vec_ptr[i] = str_vec_ptr[enum_idx];
 	}
@@ -677,19 +717,16 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 		// This means they are both ENUMs, but of different types.
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:
-			FillEnumResultTemplate<uint8_t>(source, result, count);
-			break;
+			return FillEnumResultTemplate<uint8_t>(source, result, count, error_message);
 		case PhysicalType::UINT16:
-			FillEnumResultTemplate<uint16_t>(source, result, count);
-			break;
+			return FillEnumResultTemplate<uint16_t>(source, result, count, error_message);
 		case PhysicalType::UINT32:
-			FillEnumResultTemplate<uint32_t>(source, result, count);
-			break;
+			return FillEnumResultTemplate<uint32_t>(source, result, count, error_message);
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
-		break;
 	}
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		EnumToVarchar(source, result, count, enum_physical_type);
 		break;
@@ -703,6 +740,15 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 		break;
 	}
 	}
+	return true;
+}
+
+static bool AggregateStateToBlobCast(Vector &source, Vector &result, idx_t count, string *error_message, bool strict) {
+	if (result.GetType().id() != LogicalTypeId::BLOB) {
+		throw TypeMismatchException(source.GetType(), result.GetType(),
+		                            "Cannot cast AGGREGATE_STATE to anything but BLOB");
+	}
+	result.Reinterpret(source);
 	return true;
 }
 
@@ -732,11 +778,12 @@ static bool StructCastSwitch(Vector &source, Vector &result, idx_t count, string
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, ConstantVector::IsNull(source));
 		} else {
-			source.Normalify(count);
+			source.Flatten(count);
 			FlatVector::Validity(result) = FlatVector::Validity(source);
 		}
 		return true;
 	}
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(source.GetVectorType());
@@ -804,6 +851,7 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 		return TimestampSecCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::INTERVAL:
 		return IntervalCastSwitch(source, result, count, error_message);
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return StringCastSwitch(source, result, count, strict, error_message);
 	case LogicalTypeId::BLOB:
@@ -821,6 +869,8 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 		return ListCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(source, result, count, error_message, strict);
+	case LogicalTypeId::AGGREGATE_STATE:
+		return AggregateStateToBlobCast(source, result, count, error_message, strict);
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}

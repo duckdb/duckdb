@@ -55,10 +55,6 @@ public:
 			}
 			if (filter[row_idx + result_offset]) {
 				VALUE_TYPE val = VALUE_CONVERSION::DictRead(*dict, offsets[offset_idx++], *this);
-				if (!Value::IsValid(val)) {
-					result_mask.SetInvalid(row_idx + result_offset);
-					continue;
-				}
 				result_ptr[row_idx + result_offset] = val;
 			} else {
 				offset_idx++;
@@ -77,10 +73,6 @@ public:
 			}
 			if (filter[row_idx + result_offset]) {
 				VALUE_TYPE val = VALUE_CONVERSION::PlainRead(*plain_data, *this);
-				if (!Value::IsValid(val)) {
-					result_mask.SetInvalid(row_idx + result_offset);
-					continue;
-				}
 				result_ptr[row_idx + result_offset] = val;
 			} else { // there is still some data there that we have to skip over
 				VALUE_CONVERSION::PlainSkip(*plain_data, *this);

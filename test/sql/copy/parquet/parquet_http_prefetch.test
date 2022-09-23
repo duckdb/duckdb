@@ -1,0 +1,32 @@
+# name: test/sql/copy/parquet/parquet_http_prefetch.test
+# description: This test triggers the http prefetch mechanism.
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
+statement ok
+SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='minio_duckdb_user';SET s3_region='eu-west-1'; SET s3_endpoint='duckdb-minio.com:9000';SET s3_use_ssl=false;
+
+statement ok
+CREATE TABLE test_fetch_delay (a INT, b INT);
+
+statement ok
+INSERT INTO test_fetch_delay (SELECT (i%2) * 2, (i%2) * 2 from range(0,2500000) as tbl(i));
+
+statement ok
+COPY test_fetch_delay to 's3://test-bucket/skip_delay.parquet';
+
+statement ok
+CREATE TABLE test as SELECT * from 's3://test-bucket/skip_delay.parquet' where a = 1;
+
+query I
+SELECT COUNT(*) FROM test;
+----
+0

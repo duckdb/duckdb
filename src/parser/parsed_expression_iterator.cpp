@@ -85,7 +85,8 @@ void ParsedExpressionIterator::EnumerateChildren(
 	}
 	case ExpressionClass::LAMBDA: {
 		auto &lambda_expr = (LambdaExpression &)expr;
-		callback(lambda_expr.expression);
+		callback(lambda_expr.lhs);
+		callback(lambda_expr.expr);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
@@ -112,6 +113,9 @@ void ParsedExpressionIterator::EnumerateChildren(
 		}
 		for (auto &child : window_expr.children) {
 			callback(child);
+		}
+		if (window_expr.filter_expr) {
+			callback(window_expr.filter_expr);
 		}
 		if (window_expr.start_expr) {
 			callback(window_expr.start_expr);
@@ -142,6 +146,52 @@ void ParsedExpressionIterator::EnumerateChildren(
 	}
 }
 
+void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
+    QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
+
+	for (auto &modifier : node.modifiers) {
+		switch (modifier->type) {
+		case ResultModifierType::LIMIT_MODIFIER: {
+			auto &limit_modifier = (LimitModifier &)*modifier;
+			if (limit_modifier.limit) {
+				callback(limit_modifier.limit);
+			}
+			if (limit_modifier.offset) {
+				callback(limit_modifier.offset);
+			}
+		} break;
+
+		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+			auto &limit_modifier = (LimitPercentModifier &)*modifier;
+			if (limit_modifier.limit) {
+				callback(limit_modifier.limit);
+			}
+			if (limit_modifier.offset) {
+				callback(limit_modifier.offset);
+			}
+		} break;
+
+		case ResultModifierType::ORDER_MODIFIER: {
+			auto &order_modifier = (OrderModifier &)*modifier;
+			for (auto &order : order_modifier.orders) {
+				callback(order.expression);
+			}
+		} break;
+
+		case ResultModifierType::DISTINCT_MODIFIER: {
+			auto &distinct_modifier = (DistinctModifier &)*modifier;
+			for (auto &target : distinct_modifier.distinct_on_targets) {
+				callback(target);
+			}
+		} break;
+
+		// do nothing
+		default:
+			break;
+		}
+	}
+}
+
 void ParsedExpressionIterator::EnumerateTableRefChildren(
     TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (ref.type) {
@@ -164,7 +214,9 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		auto &j_ref = (JoinRef &)ref;
 		EnumerateTableRefChildren(*j_ref.left, callback);
 		EnumerateTableRefChildren(*j_ref.right, callback);
-		callback(j_ref.condition);
+		if (j_ref.condition) {
+			callback(j_ref.condition);
+		}
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {
@@ -225,7 +277,12 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	default:
 		throw NotImplementedException("QueryNode type not implemented for traversal");
 	}
-	for (auto &kv : node.cte_map) {
+
+	if (!node.modifiers.empty()) {
+		EnumerateQueryNodeModifiers(node, callback);
+	}
+
+	for (auto &kv : node.cte_map.map) {
 		EnumerateQueryNodeChildren(*kv.second->query->node, callback);
 	}
 }

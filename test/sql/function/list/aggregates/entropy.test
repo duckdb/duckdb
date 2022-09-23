@@ -1,0 +1,67 @@
+# name: test/sql/function/list/aggregates/entropy.test
+# description: Test the list_entropy aggregate function
+# group: [aggregates]
+
+# incorrect usage
+statement error
+select list_entropy()
+
+query I
+select list_entropy([1])
+----
+0
+
+statement ok
+create table aggr(k int[]);
+
+statement ok
+insert into aggr values ([0, 1, 1, 1, 4, 0, 3, 3, 2, 2, 4, 4, 2, 4, 0, 0, 0, 1, 2, 3, 4, 2, 3, 3, 1]);
+
+statement ok
+insert into aggr values ([]), ([NULL]), (NULL), ([0, 1, 1, 1, 4, NULL, 0, 3, 3, 2, NULL, 2, 4, 4, 2, 4, 0, 0, 0, 1, NULL, 2, 3, 4, 2, 3, 3, 1]);
+
+query I
+select list_entropy(k) from aggr;
+----
+2.321928
+0
+0
+NULL
+2.321928
+
+statement ok
+CREATE TABLE entr (l INTEGER[]);
+
+statement ok
+INSERT INTO entr SELECT LIST(2) FROM range(100) tbl(i);
+
+query I
+SELECT list_entropy(l) FROM entr;
+----
+0
+
+statement ok
+create table aggr2 (k int[]);
+
+statement ok
+INSERT INTO aggr2 VALUES ([0, 4, 0, 2, 2, 4, 4, 2, 4, 0, 0, 0, 2, 4, 2]);
+
+statement ok
+INSERT INTO aggr2 VALUES ([1, 1, 1, 3, 3, 1, 3, 3, 3, 1]);
+
+query I
+select list_entropy(k) from aggr2
+----
+1.584963
+1.000000
+
+statement ok
+create table names (name string[])
+
+statement ok
+insert into names values (['pedro', 'pedro', 'pedro', 'hannes', 'hannes', 'mark', null]);
+
+query I
+select list_entropy(name) from names;
+----
+1.459148

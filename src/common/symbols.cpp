@@ -50,6 +50,7 @@ template class std::unique_ptr<TransactionStatement>;
 template class std::unique_ptr<UpdateStatement>;
 template class std::unique_ptr<PrepareStatement>;
 template class std::unique_ptr<ExecuteStatement>;
+template class std::unique_ptr<VacuumStatement>;
 template class std::unique_ptr<QueryNode>;
 template class std::unique_ptr<SelectNode>;
 template class std::unique_ptr<SetOperationNode>;
@@ -71,6 +72,7 @@ template class std::unique_ptr<Constraint>;
 template class std::unique_ptr<NotNullConstraint>;
 template class std::unique_ptr<CheckConstraint>;
 template class std::unique_ptr<UniqueConstraint>;
+template class std::unique_ptr<ForeignKeyConstraint>;
 // template class std::unique_ptr<TableRef>;
 template class std::unique_ptr<BaseTableRef>;
 template class std::unique_ptr<CrossProductRef>;
@@ -83,6 +85,7 @@ template class std::weak_ptr<Pipeline>;
 template class std::unique_ptr<RowGroup>;
 template class std::shared_ptr<RowGroupCollection>;
 template class std::shared_ptr<PreparedStatementData>;
+template class std::unique_ptr<VacuumInfo>;
 
 template class std::unique_ptr<Expression>;
 template class std::unique_ptr<BoundQueryNode>;
@@ -102,6 +105,7 @@ template class std::unique_ptr<BoundParameterExpression>;
 template class std::unique_ptr<BoundReferenceExpression>;
 template class std::unique_ptr<BoundSubqueryExpression>;
 template class std::unique_ptr<BoundWindowExpression>;
+template class std::unique_ptr<BoundBaseTableRef>;
 
 template class std::unique_ptr<CatalogEntry>;
 template class std::unique_ptr<BindContext>;
@@ -129,7 +133,7 @@ template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<LogicalComparisonJoin>;
 template class std::unique_ptr<FilterInfo>;
-template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
+template class std::unique_ptr<JoinNode>;
 template class std::unique_ptr<SingleJoinRelation>;
 template class std::shared_ptr<Relation>;
 template class std::unique_ptr<CatalogSet>;
@@ -151,13 +155,14 @@ INSTANTIATE_VECTOR(std::vector<OrderByNode>)
 template class std::vector<uint64_t>;
 template class std::vector<string>;
 INSTANTIATE_VECTOR(std::vector<Expression *>)
+INSTANTIATE_VECTOR(std::vector<BoundParameterExpression *>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Expression>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinOrderOptimizer::JoinNode>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinNode>>)
 template class std::vector<PhysicalType>;
 template class std::vector<Value>;
 template class std::vector<int>;
@@ -166,6 +171,7 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Pipeline>>)
 INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Pipeline>>)
 template class std::vector<std::vector<Expression *>>;
 template class std::vector<LogicalType>;
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinHashTable>>)
 
 #if !defined(__clang__)
 template struct std::atomic<uint64_t>;

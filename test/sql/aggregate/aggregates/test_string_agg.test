@@ -24,7 +24,7 @@ a
 
 # test string aggregation on scalar values
 query TTTT
-SELECT STRING_AGG('a',','), STRING_AGG(NULL,','), STRING_AGG('a',NULL), STRING_AGG(NULL,NULL)
+SELECT STRING_AGG('a',','), STRING_AGG(NULL,','), STRING_AGG('a', NULL), STRING_AGG(NULL,NULL)
 ----
 a
 NULL
@@ -38,33 +38,22 @@ CREATE TABLE strings(g INTEGER, x VARCHAR, y VARCHAR);
 statement ok
 INSERT INTO strings VALUES (1,'a','/'), (1,'b','-'), (2,'i','/'), (2,NULL,'-'), (2,'j','+'), (3,'p','/'), (4,'x','/'), (4,'y','-'), (4,'z','+')
 
-query TT
+# string agg separator must be a constant
+statement error
 SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings
-----
-a,b,i,j,p,x,y,z
-a-b/i+j/p/x-y+z
 
-query ITT
-SELECT g, STRING_AGG(x,','), STRING_AGG(x,y) FROM strings GROUP BY g ORDER BY g
+query II
+SELECT g, STRING_AGG(x,'|') FROM strings GROUP BY g ORDER BY g
 ----
-1
-a,b
-a-b
-2
-i,j
-i+j
-3
-p
-p
-4
-x,y,z
-x-y+z
+1	a|b
+2	i|j
+3	p
+4	x|y|z
 
 # test agg on empty set
-query TT
-SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings WHERE g > 100
+query T
+SELECT STRING_AGG(x,',') FROM strings WHERE g > 100
 ----
-NULL
 NULL
 
 # numerics are auto cast to strings
@@ -102,50 +91,40 @@ PRAGMA verify_parallelism
 
 # Single group
 query TT
-SELECT STRING_AGG(x,',' ORDER BY x ASC), STRING_AGG(x,y ORDER BY x ASC) FROM strings
+SELECT STRING_AGG(x ORDER BY x ASC), STRING_AGG(x, '|' ORDER BY x ASC) FROM strings
 ----
 a,b,i,j,p,x,y,z
-a-b/i+j/p/x-y+z
+a|b|i|j|p|x|y|z
 
 query TT
-SELECT STRING_AGG(x,',' ORDER BY x DESC), STRING_AGG(x,y ORDER BY x DESC) FROM strings
+SELECT STRING_AGG(x ORDER BY x DESC), STRING_AGG(x,'|' ORDER BY x DESC) FROM strings
 ----
 z,y,x,p,j,i,b,a
-z-y/x/p+j/i-b/a
+z|y|x|p|j|i|b|a
 
 # Constant separator
-query II
-SELECT g, STRING_AGG(x, ',' ORDER BY x ASC) FROM strings GROUP BY g ORDER BY 1
+query III
+SELECT g, STRING_AGG(x ORDER BY x ASC), STRING_AGG(x, '|' ORDER BY x ASC) FROM strings GROUP BY g ORDER BY 1
 ----
-1	a,b
-2	i,j
-3	p
-4	x,y,z
+1	a,b	a|b
+2	i,j	i|j
+3	p	p
+4	x,y,z	x|y|z
 
-query II
-SELECT g, STRING_AGG(x, ',' ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
+query III
+SELECT g, STRING_AGG(x ORDER BY x DESC), STRING_AGG(x, '|' ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
 ----
-1	b,a
-2	j,i
-3	p
-4	z,y,x
+1	b,a	b|a
+2	j,i	j|i
+3	p	p
+4	z,y,x	z|y|x
 
 # Variable separator
-query II
+statement error
 SELECT g, STRING_AGG(x, y ORDER BY x ASC) FROM strings GROUP BY g ORDER BY 1
-----
-1	a-b
-2	i+j
-3	p
-4	x-y+z
 
-query II
+statement error
 SELECT g, STRING_AGG(x, y ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
-----
-1	b/a
-2	j/i
-3	p
-4	z-y/x
 
 # A more complex ORDER BY expression
 # Ordering [NULL a b i j p x y z]

@@ -10,7 +10,7 @@ BetweenExpression::BetweenExpression(unique_ptr<ParsedExpression> input_p, uniqu
 }
 
 string BetweenExpression::ToString() const {
-	return input->ToString() + " BETWEEN " + lower->ToString() + " AND " + upper->ToString();
+	return ToString<BetweenExpression, ParsedExpression>(*this);
 }
 
 bool BetweenExpression::Equals(const BetweenExpression *a, const BetweenExpression *b) {

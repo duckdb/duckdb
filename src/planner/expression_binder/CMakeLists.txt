@@ -13,6 +13,7 @@ add_library_unity(
   insert_binder.cpp
   order_binder.cpp
   relation_binder.cpp
+  returning_binder.cpp
   select_binder.cpp
   update_binder.cpp
   where_binder.cpp)

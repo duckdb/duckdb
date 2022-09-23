@@ -3,29 +3,31 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
-struct PragmaLastProfilingOutputOperatorData : public FunctionOperatorData {
-	PragmaLastProfilingOutputOperatorData() : chunk_index(0), initialized(false) {
+struct PragmaLastProfilingOutputOperatorData : public GlobalTableFunctionState {
+	PragmaLastProfilingOutputOperatorData() : initialized(false) {
 	}
-	idx_t chunk_index;
+
+	ColumnDataScanState scan_state;
 	bool initialized;
 };
 
 struct PragmaLastProfilingOutputData : public TableFunctionData {
 	explicit PragmaLastProfilingOutputData(vector<LogicalType> &types) : types(types) {
 	}
-	unique_ptr<ChunkCollection> collection;
+	unique_ptr<ColumnDataCollection> collection;
 	vector<LogicalType> types;
 };
 
-static unique_ptr<FunctionData>
-PragmaLastProfilingOutputBind(ClientContext &context, vector<Value> &inputs, named_parameter_map_t &named_parameters,
-                              vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-                              vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> PragmaLastProfilingOutputBind(ClientContext &context, TableFunctionBindInput &input,
+                                                              vector<LogicalType> &return_types,
+                                                              vector<string> &names) {
 	names.emplace_back("OPERATOR_ID");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -53,26 +55,24 @@ static void SetValue(DataChunk &output, int index, int op_id, string name, doubl
 	output.SetValue(4, index, move(description));
 }
 
-unique_ptr<FunctionOperatorData> PragmaLastProfilingOutputInit(ClientContext &context, const FunctionData *bind_data,
-                                                               const vector<column_t> &column_ids,
-                                                               TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaLastProfilingOutputInit(ClientContext &context,
+                                                                   TableFunctionInitInput &input) {
 	return make_unique<PragmaLastProfilingOutputOperatorData>();
 }
 
-static void PragmaLastProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                              FunctionOperatorData *operator_state, DataChunk *input,
-                                              DataChunk &output) {
-	auto &state = (PragmaLastProfilingOutputOperatorData &)*operator_state;
-	auto &data = (PragmaLastProfilingOutputData &)*bind_data_p;
+static void PragmaLastProfilingOutputFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &state = (PragmaLastProfilingOutputOperatorData &)*data_p.global_state;
+	auto &data = (PragmaLastProfilingOutputData &)*data_p.bind_data;
 	if (!state.initialized) {
-		// create a ChunkCollection
-		auto collection = make_unique<ChunkCollection>();
+		// create a ColumnDataCollection
+		auto collection = make_unique<ColumnDataCollection>(context, data.types);
 
 		DataChunk chunk;
-		chunk.Initialize(data.types);
+		chunk.Initialize(context, data.types);
 		int operator_counter = 1;
-		if (!context.query_profiler_history->GetPrevProfilers().empty()) {
-			for (auto op : context.query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
+		if (!ClientData::Get(context).query_profiler_history->GetPrevProfilers().empty()) {
+			for (auto op :
+			     ClientData::Get(context).query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
 				SetValue(chunk, chunk.size(), operator_counter++, op.second->name, op.second->info.time,
 				         op.second->info.elements, " ");
 				chunk.SetCardinality(chunk.size() + 1);
@@ -84,14 +84,11 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, const Func
 		}
 		collection->Append(chunk);
 		data.collection = move(collection);
+		data.collection->InitializeScan(state.scan_state);
 		state.initialized = true;
 	}
 
-	if (state.chunk_index >= data.collection->ChunkCount()) {
-		output.SetCardinality(0);
-		return;
-	}
-	output.Reference(data.collection->GetChunk(state.chunk_index++));
+	data.collection->Scan(state.scan_state, output);
 }
 
 void PragmaLastProfilingOutput::RegisterFunction(BuiltinFunctions &set) {

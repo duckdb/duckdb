@@ -1,0 +1,132 @@
+# name: test/sql/types/float/nan_functions.test
+# description: Test functions on NaN values
+# group: [float]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type FLOAT DOUBLE
+
+# nextafter
+query I
+SELECT nextafter(3, '-inf'::${type})
+----
+3.0
+
+query I
+SELECT nextafter(3, 'inf'::${type})
+----
+3.0
+
+query I
+SELECT nextafter('inf'::${type}, 'inf'::${type})
+----
+inf
+
+query I
+SELECT nextafter('-inf'::${type}, '-inf'::${type})
+----
+-inf
+
+
+query I
+SELECT nextafter('nan'::${type}, '-inf'::${type})
+----
+nan
+
+query I
+SELECT nextafter(0, 'nan'::${type})
+----
+nan
+
+# sign
+query I
+SELECT sign('-inf'::${type})
+----
+-1
+
+query I
+SELECT sign('inf'::${type})
+----
+1
+
+query I
+SELECT sign('nan'::${type})
+----
+0
+
+# nop unary functions
+foreach unary_func ceil floor round
+
+query I
+SELECT ${unary_func}('-inf'::${type})
+----
+-inf
+
+query I
+SELECT ${unary_func}('inf'::${type})
+----
+inf
+
+query I
+SELECT ${unary_func}('nan'::${type})
+----
+nan
+
+endloop
+
+statement ok
+create table floats(f ${type});
+
+statement ok
+insert into floats values ('inf'), ('-inf'), ('nan');
+
+# several numeric functions
+query IIIIIIIIIIIII
+select f, abs(f), exp(f), pow(f, 2), sqrt(case when f < 0 then NULL else f end), cbrt(f), ln(case when f < 0 then NULL else f end), degrees(f), radians(f), gamma(f), lgamma(f), atan(f), atan2(f, 0)
+from floats;
+----
+inf	inf	inf	inf	inf	inf	inf	inf	inf	inf	inf	1.570796	1.570796
+-inf	inf	0.000000	inf	NULL	-inf	NULL	-inf	-inf	nan	inf	-1.570796	-1.570796
+nan	nan	nan	nan	nan	nan	nan	nan	nan	nan	nan	nan	nan
+
+# numeric functions that are undefined on infinity
+foreach unary_func sin sin cos tan asin acos cot
+
+statement error
+select ${unary_func}('inf'::${type})
+
+statement error
+select ${unary_func}('-inf'::${type})
+
+query I
+select ${unary_func}('nan'::${type})
+----
+nan
+
+endloop
+
+statement ok
+drop table floats
+
+endloop
+
+query I
+SELECT nextafter('inf'::float, '-inf'::float)
+----
+340282346638528859811704183484516925440.000000
+
+query I
+SELECT nextafter('-inf'::float, 'inf'::float)
+----
+-340282346638528859811704183484516925440.000000
+
+query I
+SELECT nextafter('inf'::double, '-inf'::double)
+----
+179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000
+
+query I
+SELECT nextafter('-inf'::double, 'inf'::double)
+----
+-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000

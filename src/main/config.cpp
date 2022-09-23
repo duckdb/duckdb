@@ -1,6 +1,7 @@
 #include "duckdb/main/config.hpp"
-#include "duckdb/common/string_util.hpp"
+
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -26,6 +27,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),
                                                  DUCKDB_LOCAL(DebugForceExternal),
+                                                 DUCKDB_LOCAL(DebugForceNoCrossProduct),
                                                  DUCKDB_GLOBAL(DebugManyFreeListBlocks),
                                                  DUCKDB_GLOBAL(DebugWindowMode),
                                                  DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
@@ -33,17 +35,23 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(DefaultNullOrderSetting),
                                                  DUCKDB_GLOBAL(DisabledOptimizersSetting),
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
+                                                 DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
                                                  DUCKDB_LOCAL(EnableProgressBarSetting),
                                                  DUCKDB_LOCAL(ExplainOutputSetting),
+                                                 DUCKDB_GLOBAL(ExternalThreadsSetting),
+                                                 DUCKDB_LOCAL(FileSearchPathSetting),
                                                  DUCKDB_GLOBAL(ForceCompressionSetting),
+                                                 DUCKDB_LOCAL(HomeDirectorySetting),
                                                  DUCKDB_LOCAL(LogQueryPathSetting),
+                                                 DUCKDB_LOCAL(MaximumExpressionDepthSetting),
                                                  DUCKDB_GLOBAL(MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
                                                  DUCKDB_LOCAL(PerfectHashThresholdSetting),
                                                  DUCKDB_LOCAL(PreserveIdentifierCase),
+                                                 DUCKDB_GLOBAL(PreserveInsertionOrder),
                                                  DUCKDB_LOCAL(ProfilerHistorySize),
                                                  DUCKDB_LOCAL(ProfileOutputSetting),
                                                  DUCKDB_LOCAL(ProfilingModeSetting),

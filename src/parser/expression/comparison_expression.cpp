@@ -8,13 +8,11 @@ namespace duckdb {
 
 ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
                                            unique_ptr<ParsedExpression> right)
-    : ParsedExpression(type, ExpressionClass::COMPARISON) {
-	this->left = move(left);
-	this->right = move(right);
+    : ParsedExpression(type, ExpressionClass::COMPARISON), left(move(left)), right(move(right)) {
 }
 
 string ComparisonExpression::ToString() const {
-	return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
+	return ToString<ComparisonExpression, ParsedExpression>(*this);
 }
 
 bool ComparisonExpression::Equals(const ComparisonExpression *a, const ComparisonExpression *b) {

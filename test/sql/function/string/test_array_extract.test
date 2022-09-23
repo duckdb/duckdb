@@ -9,18 +9,18 @@ statement ok
 CREATE TABLE strings(s VARCHAR, off INTEGER);
 
 statement ok
-INSERT INTO strings VALUES ('hello', 0), ('world', 1), ('b', 0), (NULL, 1)
+INSERT INTO strings VALUES ('hello', 1), ('world', 2), ('b', 1), (NULL, 2)
 
 # test zero length
 query TT
-SELECT array_extract('🦆ab', 3), array_extract('abc', 3)
+SELECT array_extract('🦆ab', 4), array_extract('abc', 4)
 ----
 (empty)	(empty)
 
 # constant offset/length
 # normal array_extract
 query T
-SELECT array_extract(s, 1) FROM strings
+SELECT array_extract(s, 2) FROM strings
 ----
 e
 o
@@ -29,7 +29,7 @@ NULL
 
 # array_extract out of range
 query T
-SELECT array_extract(s, 2) FROM strings
+SELECT array_extract(s, 3) FROM strings
 ----
 l
 r
@@ -46,7 +46,7 @@ b
 NULL
 
 query T
-SELECT array_extract(s, 1) FROM strings
+SELECT array_extract(s, 2) FROM strings
 ----
 e
 o
@@ -113,7 +113,7 @@ NULL
 
 # zero offset
 query T
-SELECT array_extract(s, 0) FROM strings
+SELECT array_extract(s, 1) FROM strings
 ----
 h
 w
@@ -122,7 +122,7 @@ NULL
 
 # length 0
 query T
-SELECT array_extract(s, 5) FROM strings
+SELECT array_extract(s, 6) FROM strings
 ----
 (empty)
 (empty)

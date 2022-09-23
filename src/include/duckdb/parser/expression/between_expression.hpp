@@ -14,8 +14,8 @@ namespace duckdb {
 
 class BetweenExpression : public ParsedExpression {
 public:
-	BetweenExpression(unique_ptr<ParsedExpression> input, unique_ptr<ParsedExpression> lower,
-	                  unique_ptr<ParsedExpression> upper);
+	DUCKDB_API BetweenExpression(unique_ptr<ParsedExpression> input, unique_ptr<ParsedExpression> lower,
+	                             unique_ptr<ParsedExpression> upper);
 
 	unique_ptr<ParsedExpression> input;
 	unique_ptr<ParsedExpression> lower;
@@ -30,5 +30,11 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+
+public:
+	template <class T, class BASE>
+	static string ToString(const T &entry) {
+		return entry.input->ToString() + " BETWEEN " + entry.lower->ToString() + " AND " + entry.upper->ToString();
+	}
 };
 } // namespace duckdb
