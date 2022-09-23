@@ -12,7 +12,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
-#include "duckdb/main/client_config.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 
