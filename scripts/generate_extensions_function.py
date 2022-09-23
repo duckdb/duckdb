@@ -47,10 +47,23 @@ if args.validate:
     pattern = re.compile("{\"(.*?)\", \"(.*?)\"},")
     cur_function_map = dict(pattern.findall(file.read()))
     print("Cur Function Map: ")
-    print(cur_function_map)
+    print(sorted(list(cur_function_map)))
     print("Function Map: ")
-    print(function_map)
-    assert cur_function_map == function_map and len(cur_function_map) != 0
+    print(sorted(list(function_map)))
+    if len(cur_function_map) == 0:
+        print("Current function map is empty?")
+        exit(1)
+    if cur_function_map != function_map:
+        print("Difference between current functions and function map")
+        print(f"Current function map length: {len(cur_function_map)}")
+        print(f"Function map length: {len(function_map)}")
+        for f in function_map:
+            if f not in cur_function_map:
+                print(f"Function {f} of function_map does not exist in cur_function_map")
+        for f in cur_function_map:
+            if f not in function_map:
+                print(f"Function {f} of cur_function_map does not exist in function_map")
+        exit(1)
 else:
     # Generate Header
     file = open(os.path.join("..","src","include","extension_functions.hpp"),'w')
