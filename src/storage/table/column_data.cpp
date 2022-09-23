@@ -118,12 +118,12 @@ idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, Co
 
 template idx_t ColumnData::ScanVector<false, false>(TransactionData transaction, idx_t vector_index,
                                                     ColumnScanState &state, Vector &result);
-template idx_t ColumnData::ScanVector<true, false>(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
-                                                   Vector &result);
-template idx_t ColumnData::ScanVector<false, true>(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
-                                                   Vector &result);
-template idx_t ColumnData::ScanVector<true, true>(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
-                                                  Vector &result);
+template idx_t ColumnData::ScanVector<true, false>(TransactionData transaction, idx_t vector_index,
+                                                   ColumnScanState &state, Vector &result);
+template idx_t ColumnData::ScanVector<false, true>(TransactionData transaction, idx_t vector_index,
+                                                   ColumnScanState &state, Vector &result);
+template idx_t ColumnData::ScanVector<true, true>(TransactionData transaction, idx_t vector_index,
+                                                  ColumnScanState &state, Vector &result);
 
 idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
 	return ScanVector<false, true>(transaction, vector_index, state, result);

@@ -73,8 +73,7 @@ bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 
 	state.row_group = this;
 	state.vector_index = vector_offset;
-	state.max_row =
-	    this->start > parent_max_row ? 0 : MinValue<idx_t>(this->count, parent_max_row - this->start);
+	state.max_row = this->start > parent_max_row ? 0 : MinValue<idx_t>(this->count, parent_max_row - this->start);
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -99,8 +98,7 @@ bool RowGroup::InitializeScan(RowGroupScanState &state) {
 	}
 	state.row_group = this;
 	state.vector_index = 0;
-	state.max_row =
-	    this->start > parent_max_row ? 0 : MinValue<idx_t>(this->count, parent_max_row - this->start);
+	state.max_row = this->start > parent_max_row ? 0 : MinValue<idx_t>(this->count, parent_max_row - this->start);
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -319,8 +317,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, RowGroupScanState &sta
 				continue;
 			}
 		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED) {
-			count = state.row_group->GetCommittedSelVector(transaction.start_time, transaction.transaction_id, state.vector_index,
-			                                               valid_sel, max_count);
+			count = state.row_group->GetCommittedSelVector(transaction.start_time, transaction.transaction_id,
+			                                               state.vector_index, valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
 				NextVector(state);
@@ -456,7 +454,8 @@ ChunkInfo *RowGroup::GetChunkInfo(idx_t vector_idx) {
 	return version_info->info[vector_idx].get();
 }
 
-idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count) {
+idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
+                             idx_t max_count) {
 	lock_guard<mutex> lock(row_group_lock);
 
 	auto info = GetChunkInfo(vector_idx);

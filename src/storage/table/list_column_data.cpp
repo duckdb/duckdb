@@ -224,8 +224,8 @@ void ListColumnData::Update(TransactionData transaction, idx_t column_index, Vec
 	throw NotImplementedException("List Update is not supported.");
 }
 
-void ListColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
-                                  row_t *row_ids, idx_t update_count, idx_t depth) {
+void ListColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
+                                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
 	throw NotImplementedException("List Update Column is not supported");
 }
 

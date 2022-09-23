@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p)
+RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, vector<LogicalType> types_p, idx_t row_start_p,
+                                       idx_t total_rows_p)
     : total_rows(total_rows_p), info(move(info_p)), types(move(types_p)), row_start(row_start_p) {
 	row_groups = make_shared<SegmentTree>();
 }
@@ -82,8 +83,8 @@ void RowGroupCollection::InitializeScanWithOffset(CollectionScanState &state, co
 	}
 }
 
-bool RowGroupCollection::InitializeScanInRowGroup(CollectionScanState &state, RowGroup *row_group,
-                                                  idx_t vector_index, idx_t max_row) {
+bool RowGroupCollection::InitializeScanInRowGroup(CollectionScanState &state, RowGroup *row_group, idx_t vector_index,
+                                                  idx_t max_row) {
 	state.max_row = max_row;
 	return row_group->InitializeScanWithOffset(state.row_group_state, vector_index);
 }
@@ -96,7 +97,7 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 
 bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
                                           CollectionScanState &scan_state) {
-	while (state.current_row_group) {
+	while (state.current_row_group && state.current_row_group->count > 0) {
 		idx_t vector_index;
 		idx_t max_row;
 		if (ClientConfig::GetConfig(context).verify_parallelism) {
@@ -513,7 +514,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 	// now alter the type of the column within all of the row_groups individually
 	auto current_row_group = (RowGroup *)row_groups->GetRootSegment();
 	while (current_row_group) {
-		auto new_row_group = current_row_group->AlterType(target_type, changed_idx, executor, scan_state.table_state.row_group_state, scan_chunk);
+		auto new_row_group = current_row_group->AlterType(target_type, changed_idx, executor,
+		                                                  scan_state.table_state.row_group_state, scan_chunk);
 		new_row_group->MergeIntoStatistics(changed_idx, *stats.stats);
 		result->row_groups->AppendSegment(move(new_row_group));
 		current_row_group = (RowGroup *)current_row_group->next.get();

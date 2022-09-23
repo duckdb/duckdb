@@ -1,13 +1,13 @@
-#include "duckdb/storage/table_index.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
-void TableIndex::AddIndex(unique_ptr<Index> index) {
+void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
 	lock_guard<mutex> lock(indexes_lock);
 	indexes.push_back(move(index));
 }
-void TableIndex::RemoveIndex(Index *index) {
+void TableIndexList::RemoveIndex(Index *index) {
 	D_ASSERT(index);
 	lock_guard<mutex> lock(indexes_lock);
 
@@ -20,17 +20,22 @@ void TableIndex::RemoveIndex(Index *index) {
 	}
 }
 
-bool TableIndex::Empty() {
+bool TableIndexList::Empty() {
 	lock_guard<mutex> lock(indexes_lock);
 	return indexes.empty();
 }
 
-idx_t TableIndex::Count() {
+idx_t TableIndexList::Count() {
 	lock_guard<mutex> lock(indexes_lock);
 	return indexes.size();
 }
 
-Index *TableIndex::FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type) {
+void TableIndexList::Move(TableIndexList &other) {
+	D_ASSERT(indexes.empty());
+	indexes = move(other.indexes);
+}
+
+Index *TableIndexList::FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type) {
 	Index *result = nullptr;
 	Scan([&](Index &index) {
 		if (DataTable::IsForeignKeyIndex(fk_keys, index, fk_type)) {
@@ -41,7 +46,7 @@ Index *TableIndex::FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyT
 	return result;
 }
 
-vector<BlockPointer> TableIndex::SerializeIndexes(duckdb::MetaBlockWriter &writer) {
+vector<BlockPointer> TableIndexList::SerializeIndexes(duckdb::MetaBlockWriter &writer) {
 	vector<BlockPointer> blocks_info;
 	for (auto &index : indexes) {
 		blocks_info.emplace_back(index->Serialize(writer));

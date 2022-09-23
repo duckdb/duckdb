@@ -22,7 +22,7 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/storage/table_index.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
@@ -56,7 +56,7 @@ struct DataTableInfo {
 	// name of the table
 	string table;
 
-	TableIndex indexes;
+	TableIndexList indexes;
 
 	bool IsTemporary() {
 		return schema == TEMP_SCHEMA;

@@ -23,11 +23,13 @@ public:
 	// Create a new LocalTableStorage
 	explicit LocalTableStorage(DataTable &table);
 	// Create a LocalTableStorage from an ALTER TYPE
-	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t changed_idx, const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
+	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t changed_idx, const LogicalType &target_type,
+	                  const vector<column_t> &bound_columns, Expression &cast_expr);
 	// Create a LocalTableStorage from a DROP COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from a ADD COLUMN
-	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column, Expression *default_value);
+	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
+	                  Expression *default_value);
 
 	~LocalTableStorage();
 
@@ -65,7 +67,8 @@ public:
 	void Scan(CollectionScanState &state, const vector<column_t> &column_ids, DataChunk &result);
 
 	void InitializeParallelScan(DataTable *table, ParallelCollectionScanState &state);
-	bool NextParallelScan(ClientContext &context, DataTable *table, ParallelCollectionScanState &state, CollectionScanState &scan_state);
+	bool NextParallelScan(ClientContext &context, DataTable *table, ParallelCollectionScanState &state,
+	                      CollectionScanState &scan_state);
 
 	//! Append a chunk to the local storage
 	void Append(DataTable *table, DataChunk &chunk);

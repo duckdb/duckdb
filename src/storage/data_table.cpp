@@ -21,9 +21,10 @@
 
 namespace duckdb {
 
-DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &table, vector<ColumnDefinition> column_definitions_p,
-                     unique_ptr<PersistentTableData> data)
-    : info(make_shared<DataTableInfo>(db, schema, table)), column_definitions(move(column_definitions_p)), db(db), is_root(true) {
+DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &table,
+                     vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data)
+    : info(make_shared<DataTableInfo>(db, schema, table)), column_definitions(move(column_definitions_p)), db(db),
+      is_root(true) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
 	this->row_groups = make_shared<RowGroupCollection>(info, types, 0);
@@ -116,8 +117,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 // Alter column to add new constraint
 DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint)
-    : info(parent.info), db(parent.db), row_groups(parent.row_groups),
-      is_root(true) {
+    : info(parent.info), db(parent.db), row_groups(parent.row_groups), is_root(true) {
 
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	for (auto &column_def : parent.column_definitions) {
@@ -367,17 +367,17 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	bool transaction_check = transaction.storage.Find(data_table);
 	if (transaction_check) {
 		throw InternalException("FIXME: transaction local index scan fk");
-//		auto &transact_index = transaction.storage.GetIndexes(data_table);
-//		auto transaction_fk_index = transact_index.FindForeignKeyIndex(*dst_keys_ptr, fk_type);
-//		for (idx_t i = 0; i < transact_index_vec.size(); i++) {
-//			if (DataTable::IsForeignKeyIndex(*dst_keys_ptr, *transact_index_vec[i], fk_type)) {
-//				if (is_append) {
-//					transact_index_vec[i]->VerifyAppendForeignKey(dst_chunk, tran_err_msgs.data());
-//				} else {
-//					transact_index_vec[i]->VerifyDeleteForeignKey(dst_chunk, tran_err_msgs.data());
-//				}
-//			}
-//		}
+		//		auto &transact_index = transaction.storage.GetIndexes(data_table);
+		//		auto transaction_fk_index = transact_index.FindForeignKeyIndex(*dst_keys_ptr, fk_type);
+		//		for (idx_t i = 0; i < transact_index_vec.size(); i++) {
+		//			if (DataTable::IsForeignKeyIndex(*dst_keys_ptr, *transact_index_vec[i], fk_type)) {
+		//				if (is_append) {
+		//					transact_index_vec[i]->VerifyAppendForeignKey(dst_chunk, tran_err_msgs.data());
+		//				} else {
+		//					transact_index_vec[i]->VerifyDeleteForeignKey(dst_chunk, tran_err_msgs.data());
+		//				}
+		//			}
+		//		}
 	}
 
 	// we need to look at the error messages concurrently in data table's index and transaction local storage's index
@@ -428,55 +428,55 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 	}
 
 	throw InternalException("VerifyNewConstraint");
-//
-//	// scan the original table, check if there's any null value
-//	auto &not_null_constraint = (BoundNotNullConstraint &)*constraint;
-//	auto &transaction = Transaction::GetTransaction(context);
-//	vector<LogicalType> scan_types;
-//	D_ASSERT(not_null_constraint.index < parent.column_definitions.size());
-//	scan_types.push_back(parent.column_definitions[not_null_constraint.index].Type());
-//	DataChunk scan_chunk;
-//	auto &allocator = Allocator::Get(context);
-//	scan_chunk.Initialize(allocator, scan_types);
-//
-//	CreateIndexScanState state;
-//	vector<column_t> cids;
-//	cids.push_back(not_null_constraint.index);
-//	// Use ScanCreateIndex to scan the latest committed data
-//	InitializeCreateIndexScan(state, cids);
-//	while (true) {
-//		scan_chunk.Reset();
-//		ScanCreateIndex(state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
-//		if (scan_chunk.size() == 0) {
-//			break;
-//		}
-//		// Check constraint
-//		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-//			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
-//			                          column_definitions[not_null_constraint.index].GetName());
-//		}
-//	}
-//
-//	TableScanState scan_state;
-//	scan_state.column_ids.push_back(not_null_constraint.index);
-//	scan_state.max_row = total_rows;
-//
-//	// For local storage
-//	transaction.storage.InitializeScan(&parent, scan_state.local_state, nullptr);
-//	if (scan_state.local_state.GetStorage()) {
-//		while (scan_state.local_state.chunk_index <= scan_state.local_state.max_index) {
-//			scan_chunk.Reset();
-//			transaction.storage.Scan(scan_state.local_state, scan_state.column_ids, scan_chunk);
-//			if (scan_chunk.size() == 0) {
-//				break;
-//			}
-//			// Check constraint
-//			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-//				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
-//				                          column_definitions[not_null_constraint.index].GetName());
-//			}
-//		}
-//	}
+	//
+	//	// scan the original table, check if there's any null value
+	//	auto &not_null_constraint = (BoundNotNullConstraint &)*constraint;
+	//	auto &transaction = Transaction::GetTransaction(context);
+	//	vector<LogicalType> scan_types;
+	//	D_ASSERT(not_null_constraint.index < parent.column_definitions.size());
+	//	scan_types.push_back(parent.column_definitions[not_null_constraint.index].Type());
+	//	DataChunk scan_chunk;
+	//	auto &allocator = Allocator::Get(context);
+	//	scan_chunk.Initialize(allocator, scan_types);
+	//
+	//	CreateIndexScanState state;
+	//	vector<column_t> cids;
+	//	cids.push_back(not_null_constraint.index);
+	//	// Use ScanCreateIndex to scan the latest committed data
+	//	InitializeCreateIndexScan(state, cids);
+	//	while (true) {
+	//		scan_chunk.Reset();
+	//		ScanCreateIndex(state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+	//		if (scan_chunk.size() == 0) {
+	//			break;
+	//		}
+	//		// Check constraint
+	//		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
+	//			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
+	//			                          column_definitions[not_null_constraint.index].GetName());
+	//		}
+	//	}
+	//
+	//	TableScanState scan_state;
+	//	scan_state.column_ids.push_back(not_null_constraint.index);
+	//	scan_state.max_row = total_rows;
+	//
+	//	// For local storage
+	//	transaction.storage.InitializeScan(&parent, scan_state.local_state, nullptr);
+	//	if (scan_state.local_state.GetStorage()) {
+	//		while (scan_state.local_state.chunk_index <= scan_state.local_state.max_index) {
+	//			scan_chunk.Reset();
+	//			transaction.storage.Scan(scan_state.local_state, scan_state.column_ids, scan_chunk);
+	//			if (scan_chunk.size() == 0) {
+	//				break;
+	//			}
+	//			// Check constraint
+	//			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
+	//				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
+	//				                          column_definitions[not_null_constraint.index].GetName());
+	//			}
+	//		}
+	//	}
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
@@ -694,9 +694,8 @@ bool DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t
 }
 
 bool DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
-	throw InternalException("AppendToIndexes");
-//	D_ASSERT(is_root);
-//	return AppendToIndexes(info->indexes, chunk, row_start);
+	D_ASSERT(is_root);
+	return AppendToIndexes(info->indexes, chunk, row_start);
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
@@ -971,7 +970,8 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 			intermediate.Reset();
 			result.Reset();
 			// scan a new chunk from the table to index
-			state.table_state.ScanCommitted(intermediate, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+			state.table_state.ScanCommitted(intermediate,
+			                                TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
 			if (intermediate.size() == 0) {
 				// finished scanning for index creation
 				// release all locks

@@ -87,7 +87,6 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 	return bind_data.table->GetStatistics(context, column_id);
 }
 
-
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (TableScanBindData &)*data_p.bind_data;
 	auto &state = (TableScanLocalState &)*data_p.local_state;
@@ -132,7 +131,6 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 
 idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                              LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &state = (TableScanLocalState &)*local_state;
 	if (state.scan_state.table_state.row_group_state.row_group) {
 		return state.scan_state.table_state.row_group_state.row_group->start;
@@ -180,7 +178,8 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	auto &transaction = Transaction::GetTransaction(context);
 	result->column_ids = input.column_ids;
 	result->local_storage_state.Initialize(input.column_ids, input.filters);
-	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state.local_state, input.filters);
+	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state.local_state,
+	                                   input.filters);
 
 	result->finished = false;
 	return move(result);
@@ -196,7 +195,7 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 		state.finished = true;
 	}
 	if (output.size() == 0) {
-		 transaction.storage.Scan(state.local_storage_state.local_state, state.column_ids, output);
+		transaction.storage.Scan(state.local_storage_state.local_state, state.column_ids, output);
 	}
 }
 

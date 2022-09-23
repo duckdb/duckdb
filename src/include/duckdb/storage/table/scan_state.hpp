@@ -74,7 +74,8 @@ struct ColumnFetchState {
 
 class RowGroupScanState {
 public:
-	RowGroupScanState(CollectionScanState &parent_p) : row_group(nullptr), vector_index(0), max_row(0), parent(parent_p) {
+	RowGroupScanState(CollectionScanState &parent_p)
+	    : row_group(nullptr), vector_index(0), max_row(0), parent(parent_p) {
 	}
 
 	//! The current row_group we are scanning
@@ -132,6 +133,7 @@ public:
 	const vector<column_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
+
 private:
 	//! The column identifiers of the scan
 	vector<column_t> column_ids;

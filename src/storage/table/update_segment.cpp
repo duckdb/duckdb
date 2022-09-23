@@ -1048,7 +1048,7 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 
 UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count, unique_ptr<char[]> &data) {
 	data = unique_ptr<char[]>(new char[sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE]);
-	auto update_info = (UpdateInfo *) data.get();
+	auto update_info = (UpdateInfo *)data.get();
 	update_info->max = STANDARD_VECTOR_SIZE;
 	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
 	update_info->tuple_data = ((data_ptr_t)update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
@@ -1056,8 +1056,8 @@ UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, 
 	return update_info;
 }
 
-void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids,
-                           idx_t count, Vector &base_data) {
+void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
+                           Vector &base_data) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 

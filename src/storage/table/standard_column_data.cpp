@@ -53,7 +53,8 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 	state.child_states.push_back(move(child_state));
 }
 
-idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
+                               Vector &result) {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	auto scan_count = ColumnData::Scan(transaction, vector_index, state, result);
 	validity.Scan(transaction, vector_index, state.child_states[0], result);

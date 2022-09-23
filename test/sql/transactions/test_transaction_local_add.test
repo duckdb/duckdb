@@ -1,4 +1,4 @@
-# name: test/sql/transactions/test_transaction_local_drop.test
+# name: test/sql/transactions/test_transaction_local_add.test
 # description: Test ADD COLUMN on transaction local data
 # group: [transactions]
 

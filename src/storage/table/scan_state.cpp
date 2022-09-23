@@ -3,7 +3,6 @@
 
 namespace duckdb {
 
-
 void TableScanState::Initialize(vector<column_t> column_ids, TableFilterSet *table_filters) {
 	this->column_ids = column_ids;
 	this->table_filters = table_filters;
@@ -26,7 +25,6 @@ TableFilterSet *TableScanState::GetFilters() {
 AdaptiveFilter *TableScanState::GetAdaptiveFilter() {
 	return adaptive_filter.get();
 }
-
 
 void ColumnScanState::NextInternal(idx_t count) {
 	if (!current) {
@@ -122,5 +120,4 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 	return false;
 }
 
-}
-
+} // namespace duckdb

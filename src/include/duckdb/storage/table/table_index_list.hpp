@@ -1,18 +1,17 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/table_index_list.hpp
+// duckdb/storage/table_index_list.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/index.hpp"
 
 namespace duckdb {
-
 class TableIndexList {
 public:
 	//! Scan the catalog set, invoking the callback method for every entry
@@ -27,48 +26,24 @@ public:
 		}
 	}
 
-	void AddIndex(unique_ptr<Index> index) {
-		D_ASSERT(index);
-		lock_guard<mutex> lock(indexes_lock);
-		indexes.push_back(move(index));
-	}
+	void AddIndex(unique_ptr<Index> index);
 
-	void RemoveIndex(Index *index) {
-		D_ASSERT(index);
-		lock_guard<mutex> lock(indexes_lock);
+	void RemoveIndex(Index *index);
 
-		for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
-			auto &index_entry = indexes[index_idx];
-			if (index_entry.get() == index) {
-				indexes.erase(indexes.begin() + index_idx);
-				break;
-			}
-		}
-	}
+	bool Empty();
 
-	void Clear() {
-		lock_guard<mutex> lock(indexes_lock);
-		indexes.clear();
-	}
+	idx_t Count();
 
-	bool Empty() {
-		lock_guard<mutex> lock(indexes_lock);
-		return indexes.empty();
-	}
+	void Move(TableIndexList &other);
 
-	idx_t Count() {
-		lock_guard<mutex> lock(indexes_lock);
-		return indexes.size();
-	}
+	Index *FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type);
 
-	void Move(TableIndexList &other) {
-		indexes = move(other.indexes);
-	}
+	//! Serialize all indexes owned by this table, returns a vector of block info of all indexes
+	vector<BlockPointer> SerializeIndexes(duckdb::MetaBlockWriter &writer);
 
 private:
 	//! Indexes associated with the current table
 	mutex indexes_lock;
 	vector<unique_ptr<Index>> indexes;
 };
-
-}
+} // namespace duckdb

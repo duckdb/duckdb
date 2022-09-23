@@ -20,7 +20,8 @@ class TableStatistics;
 
 class RowGroupCollection {
 public:
-	RowGroupCollection(shared_ptr<DataTableInfo> info, vector<LogicalType> types, idx_t row_start, idx_t total_rows = 0);
+	RowGroupCollection(shared_ptr<DataTableInfo> info, vector<LogicalType> types, idx_t row_start,
+	                   idx_t total_rows = 0);
 
 public:
 	idx_t GetTotalRows() const;
@@ -41,8 +42,8 @@ public:
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
-	void Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_identifiers,
-	           idx_t fetch_count, ColumnFetchState &state);
+	void Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids,
+	           Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
 
 	void InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count);
 	void Append(TransactionData transaction, DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
@@ -72,6 +73,7 @@ public:
 	shared_ptr<RowGroupCollection> AlterType(idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<column_t> bound_columns, Expression &cast_expr,
 	                                         ColumnStatistics &stats);
+
 private:
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
