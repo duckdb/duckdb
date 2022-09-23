@@ -17,6 +17,7 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/common/string_map_set.hpp"
 
 #include <cmath>
 
@@ -672,6 +673,13 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
+	// we always prefer aliased types
+	if (!left.GetAlias().empty()) {
+		return left;
+	}
+	if (!right.GetAlias().empty()) {
+		return right;
+	}
 	if (left.id() != right.id() && left.IsNumeric() && right.IsNumeric()) {
 		return CombineNumericTypes(left, right);
 	} else if (left.id() == LogicalTypeId::UNKNOWN) {
@@ -1272,8 +1280,18 @@ template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
 	explicit EnumTypeInfoTemplated(const string &enum_name_p, Vector &values_insert_order_p, idx_t size_p)
 	    : EnumTypeInfo(enum_name_p, values_insert_order_p, size_p) {
-		for (idx_t count = 0; count < size_p; count++) {
-			values[values_insert_order_p.GetValue(count).ToString()] = count;
+		D_ASSERT(values_insert_order_p.GetType().InternalType() == PhysicalType::VARCHAR);
+
+		UnifiedVectorFormat vdata;
+		values_insert_order.ToUnifiedFormat(size_p, vdata);
+
+		auto data = (string_t *)vdata.data;
+		for (idx_t i = 0; i < size_p; i++) {
+			auto idx = vdata.sel->get_index(i);
+			if (!vdata.validity.RowIsValid(i)) {
+				continue;
+			}
+			values[data[idx]] = i;
 		}
 	}
 
@@ -1283,7 +1301,8 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		values_insert_order.Deserialize(size, reader.GetSource());
 		return make_shared<EnumTypeInfoTemplated>(move(enum_name), values_insert_order, size);
 	}
-	unordered_map<string, T> values;
+
+	string_map_t<T> values;
 };
 
 const string &EnumType::GetTypeName(const LogicalType &type) {
@@ -1333,14 +1352,15 @@ LogicalType LogicalType::DEDUP_POINTER_ENUM() { // NOLINT
 }
 
 template <class T>
-int64_t TemplatedGetPos(unordered_map<string, T> &map, const string &key) {
+int64_t TemplatedGetPos(string_map_t<T> &map, const string_t &key) {
 	auto it = map.find(key);
 	if (it == map.end()) {
 		return -1;
 	}
 	return it->second;
 }
-int64_t EnumType::GetPos(const LogicalType &type, const string &key) {
+
+int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 	auto info = type.AuxInfo();
 	switch (type.InternalType()) {
 	case PhysicalType::UINT8:
@@ -1427,7 +1447,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 			return make_shared<ExtraTypeInfo>(type, alias);
 		}
 		return nullptr;
-	} break;
+	}
 	case ExtraTypeInfoType::GENERIC_TYPE_INFO: {
 		extra_info = make_shared<ExtraTypeInfo>(type);
 	} break;

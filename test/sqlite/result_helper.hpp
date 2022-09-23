@@ -36,9 +36,8 @@ public:
 	void CheckStatementResult();
 
 	static void PrintExpectedResult(vector<string> &values, idx_t columns, bool row_wise);
-	static string SQLLogicTestConvertValue(Value value, LogicalType sql_type, bool original_sqlite_test);
-	static void DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test,
-	                                vector<string> &out_result);
+	string SQLLogicTestConvertValue(Value value, LogicalType sql_type, bool original_sqlite_test);
+	void DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test, vector<string> &out_result);
 	static void PrintLineSep();
 	static void PrintHeader(string header);
 	static void PrintSQL(string sql);

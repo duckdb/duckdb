@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -374,7 +375,8 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 		arguments.resize(2);
 	}
 
-	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, aggr_function, move(children));
+	FunctionBinder function_binder(context);
+	auto bound_aggr_function = function_binder.BindAggregateFunction(aggr_function, move(children));
 	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]);
 
 	if (IS_AGGR) {
@@ -432,7 +434,9 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	for (idx_t i = 2; i < arguments.size(); i++) {
 		types.push_back(arguments[i]->return_type);
 	}
-	auto best_function_idx = Function::BindFunction(func->name, func->functions, types, error);
+
+	FunctionBinder function_binder(context);
+	auto best_function_idx = function_binder.BindFunction(func->name, func->functions, types, error);
 	if (best_function_idx == DConstants::INVALID_INDEX) {
 		throw BinderException("No matching aggregate function\n%s", error);
 	}

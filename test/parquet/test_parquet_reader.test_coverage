@@ -495,12 +495,12 @@ SELECT * FROM parquet_scan('data/parquet-testing/lineitem-top10000.gzip.parquet'
 query III
 SELECT * FROM parquet_scan('data/parquet-testing/arrow/nested_maps.snappy.parquet') limit 50;
 ----
-{a={1=True, 2=False}}	1	1.000000
-{b={1=True}}	1	1.000000
+{a={1=true, 2=false}}	1	1.000000
+{b={1=true}}	1	1.000000
 {c=NULL}	1	1.000000
 {d={}}	1	1.000000
-{e={1=True}}	1	1.000000
-{f={3=True, 4=False, 5=True}}	1	1.000000
+{e={1=true}}	1	1.000000
+{f={3=true, 4=false, 5=true}}	1	1.000000
 
 query I
 SELECT * FROM parquet_scan('data/parquet-testing/arrow/dict-page-offset-zero.parquet') limit 50;

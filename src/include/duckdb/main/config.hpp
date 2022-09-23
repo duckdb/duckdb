@@ -23,12 +23,14 @@
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 
 namespace duckdb {
+class CastFunctionSet;
 class ClientContext;
-class TableFunctionRef;
 class CompressionFunction;
+class TableFunctionRef;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -120,6 +122,7 @@ struct DBConfigOptions {
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
 };
+
 struct DBConfig {
 	friend class DatabaseInstance;
 	friend class StorageManager;
@@ -139,9 +142,9 @@ public:
 	unique_ptr<Allocator> allocator;
 	//! Database configuration options
 	DBConfigOptions options;
-
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
+	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
 
 	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
@@ -169,8 +172,11 @@ public:
 	//! Return the compression function for the specified compression type/physical type combo
 	DUCKDB_API CompressionFunction *GetCompressionFunction(CompressionType type, PhysicalType data_type);
 
+	DUCKDB_API CastFunctionSet &GetCastFunctions();
+
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
+	unique_ptr<CastFunctionSet> cast_functions;
 };
 
 } // namespace duckdb

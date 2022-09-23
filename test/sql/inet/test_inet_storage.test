@@ -1,0 +1,55 @@
+# name: test/sql/inet/test_inet_storage.test
+# description: Test inet table
+# group: [inet]
+
+require inet
+
+# load the DB from disk
+load __TEST_DIR__/store_inet.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(id INTEGER, i INET);
+
+query IIIIII
+DESCRIBE tbl
+----
+id	INTEGER	YES	NULL	NULL	NULL
+i	inet	YES	NULL	NULL	NULL
+
+statement ok
+CREATE VIEW iview AS SELECT INET '127.0.0000.1'
+
+restart
+
+query IIIIII
+DESCRIBE tbl
+----
+id	INTEGER	YES	NULL	NULL	NULL
+i	inet	YES	NULL	NULL	NULL
+
+statement ok
+INSERT INTO tbl VALUES (1, '127.0.0.1'), (2, NULL), (3, '255.255.255.255/31'), (4, '0.0.0.0/0')
+
+restart
+
+query I
+SELECT i FROM tbl ORDER BY id
+----
+127.0.0.1
+NULL
+255.255.255.255/31
+0.0.0.0/0
+
+query I
+SELECT i FROM tbl WHERE id%2=1 ORDER BY id
+----
+127.0.0.1
+255.255.255.255/31
+
+query I
+SELECT * FROM iview
+----
+127.0.0.1

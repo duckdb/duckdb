@@ -4,6 +4,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/alter_info.hpp"
 
 namespace duckdb {
 void CreateInfo::DeserializeBase(Deserializer &deserializer) {
@@ -48,4 +49,9 @@ void CreateInfo::CopyProperties(CreateInfo &other) const {
 	other.internal = internal;
 	other.sql = sql;
 }
+
+unique_ptr<AlterInfo> CreateInfo::GetAlterInfo() const {
+	throw NotImplementedException("GetAlterInfo not implemented for this type");
+}
+
 } // namespace duckdb
