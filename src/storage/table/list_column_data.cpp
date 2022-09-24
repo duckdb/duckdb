@@ -165,9 +165,13 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	idx_t child_count = 0;
 
 	auto append_offsets = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
+	bool child_contiguous = false;
 	for (idx_t i = 0; i < count; i++) {
 		if (list_validity.RowIsValid(i)) {
-			append_offsets[i].offset = start_offset + input_offsets[i].offset;
+			if (input_offsets[i].offset != child_count) {
+				child_contiguous = false;
+			}
+			append_offsets[i].offset = start_offset + child_count;
 			append_offsets[i].length = input_offsets[i].length;
 			child_count += input_offsets[i].length;
 		} else {
@@ -178,6 +182,21 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 			}
 			append_offsets[i].length = 0;
 		}
+	}
+	if (!child_contiguous) {
+		auto &child_vector = ListVector::GetEntry(vector);
+		SelectionVector child_sel(child_count);
+		idx_t current_count = 0;
+		for (idx_t i = 0; i < count; i++) {
+			if (list_validity.RowIsValid(i)) {
+				for (idx_t list_idx = 0; list_idx < input_offsets[i].length; list_idx++) {
+					child_sel.set_index(current_count++, input_offsets[i].offset + list_idx);
+				}
+			}
+		}
+		D_ASSERT(current_count == child_count);
+		child_vector.Slice(child_sel, child_count);
+		child_vector.Flatten(child_count);
 	}
 #ifdef DEBUG
 	D_ASSERT(append_offsets[0].offset == start_offset);
