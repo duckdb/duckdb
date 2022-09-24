@@ -136,7 +136,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
-                     vector<column_t> bound_columns, Expression &cast_expr)
+                     const vector<column_t> &bound_columns, Expression &cast_expr)
     : info(parent.info), db(parent.db), is_root(true) {
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);

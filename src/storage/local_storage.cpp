@@ -190,7 +190,7 @@ bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage
 
 	// initialize the scan
 	TableScanState state;
-	state.Initialize(move(column_ids), nullptr);
+	state.Initialize(column_ids, nullptr);
 	storage.InitializeScan(state.local_state, nullptr);
 
 	while (true) {

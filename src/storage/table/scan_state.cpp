@@ -1,5 +1,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
