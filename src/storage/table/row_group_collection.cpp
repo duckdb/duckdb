@@ -330,7 +330,7 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 	} while (pos < updates.size());
 }
 
-void RowGroupCollection::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
+void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
 	// figure out which row_group to fetch from
@@ -366,7 +366,7 @@ void RowGroupCollection::RemoveFromIndexes(Vector &row_identifiers, idx_t count)
 	                         TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES);
 	result.Slice(sel, count);
 
-	info->indexes.Scan([&](Index &index) {
+	indexes.Scan([&](Index &index) {
 		index.Delete(result, row_identifiers);
 		return false;
 	});

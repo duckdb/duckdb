@@ -674,7 +674,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 
 void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	D_ASSERT(is_root);
-	row_groups->RemoveFromIndexes(row_identifiers, count);
+	row_groups->RemoveFromIndexes(info->indexes, row_identifiers, count);
 }
 
 void DataTable::VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {

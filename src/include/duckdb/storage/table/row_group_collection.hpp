@@ -16,6 +16,7 @@ namespace duckdb {
 struct ParallelTableScanState;
 
 class PersistentTableData;
+class TableIndexList;
 class TableStatistics;
 
 class RowGroupCollection {
@@ -50,7 +51,7 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row, idx_t count);
 
-	void RemoveFromIndexes(Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
 	idx_t Delete(TransactionData transaction, DataTable *table, row_t *ids, idx_t count);
 	void Update(TransactionData transaction, row_t *ids, const vector<column_t> &column_ids, DataChunk &updates,

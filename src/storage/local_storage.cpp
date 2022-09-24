@@ -160,44 +160,8 @@ idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 
 	// delete from unique indices (if any)
 	if (!storage->indexes.Empty()) {
-		throw InternalException("FIXME: delete from indexes");
-		//	}
-		//		// Index::Delete assumes that ALL rows are being deleted, so
-		//		// Slice out the rows that are being deleted from the storage Chunk
-		//		auto &chunk = storage->collection.GetChunk(chunk_idx);
-		//
-		//		UnifiedVectorFormat row_ids_data;
-		//		row_ids.ToUnifiedFormat(count, row_ids_data);
-		//		auto row_identifiers = (const row_t *)row_ids_data.data;
-		//		SelectionVector sel(count);
-		//		for (idx_t i = 0; i < count; ++i) {
-		//			const auto idx = row_ids_data.sel->get_index(i);
-		//			sel.set_index(i, row_identifiers[idx] - MAX_ROW_ID);
-		//		}
-		//
-		//		DataChunk deleted;
-		//		deleted.InitializeEmpty(chunk.GetTypes());
-		//		deleted.Slice(chunk, sel, count);
-		//		for (auto &index : storage->indexes) {
-		//			index->Delete(deleted, row_ids);
-		//		}
+		storage->row_groups->RemoveFromIndexes(storage->indexes, row_ids, count);
 	}
-	//
-	//	// get a pointer to the deleted entries for this chunk
-	//	bool *deleted;
-	//	auto entry = storage->deleted_entries.find(chunk_idx);
-	//	if (entry == storage->deleted_entries.end()) {
-	//		// nothing deleted yet, add the deleted entries
-	//		auto del_entries = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
-	//		memset(del_entries.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
-	//		deleted = del_entries.get();
-	//		storage->deleted_entries.insert(make_pair(chunk_idx, move(del_entries)));
-	//	} else {
-	//		deleted = entry->second.get();
-	//	}
-	//
-	//	// now actually mark the entries as deleted in the deleted vector
-	//	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	idx_t delete_count = storage->row_groups->Delete(TransactionData(0, 0), table, ids, count);
