@@ -20,10 +20,12 @@ class OrderGlobalState;
 //! Physically re-orders the input data
 class PhysicalOrder : public PhysicalOperator {
 public:
-	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality);
+	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
+	              idx_t estimated_cardinality);
 
 	//! Input data
 	vector<BoundOrderByNode> orders;
+	vector<idx_t> projections;
 
 public:
 	// Source interface
