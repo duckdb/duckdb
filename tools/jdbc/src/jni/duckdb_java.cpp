@@ -244,8 +244,7 @@ static Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
 }
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv *env, jclass, jbyteArray database_j,
-                                                                             jboolean read_only,
-                                                                             jobject props) {
+                                                                             jboolean read_only, jobject props) {
 	auto database = byte_array_to_string(env, database_j);
 	DBConfig config;
 	if (read_only) {
