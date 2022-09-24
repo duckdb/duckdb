@@ -176,11 +176,6 @@ public:
 // Decompression
 //===--------------------------------------------------------------------===//
 
-struct StoredZeros {
-	uint8_t leading;
-	uint8_t trailing;
-};
-
 struct Chimp128DecompressionState {
 public:
 	Chimp128DecompressionState() :
@@ -199,23 +194,28 @@ public:
 		first = true;
 	}
 
-	inline void SetLeadingZeros(uint8_t value = std::numeric_limits<uint8_t>::max()) {
-		this->zeros.leading = value;
+	inline void SetLeadingZeros(const uint8_t &value) {
+		leading_zeros = value;
 	}
-	inline void SetTrailingZeros(uint8_t value = 0) {
+
+	inline void SetLeadingZeros(uint8_t &&value = std::numeric_limits<uint8_t>::max()) {
+		leading_zeros = value;
+	}
+	inline void SetTrailingZeros(uint8_t &&value = 0) {
 		assert(value <= sizeof(uint64_t) * 8);
-		this->zeros.trailing = value;
+		trailing_zeros = value;
 	}
 
 	const uint8_t &LeadingZeros() const {
-		return zeros.leading;
+		return leading_zeros;
 	}
 	const uint8_t &TrailingZeros() const {
-		return zeros.trailing;
+		return trailing_zeros;
 	}
 
 	InputBitStream input;
-	StoredZeros zeros;
+	uint8_t leading_zeros;
+	uint8_t trailing_zeros;
 	uint64_t reference_value = 0;
 	RingBuffer	ring_buffer;
 
@@ -243,7 +243,7 @@ public:
 	// IIIIIII				//! Index (7 bits, shifted by 9)
 	//        LLL			//! LeadingZeros (3 bits, shifted by 6)
 	//           SSSSSS 	//! SignificantBits (6 bits)
-	static void UnpackPackedData(uint16_t packed_data, uint16_t& index, uint16_t& leading_zeros, uint16_t& significant_bits) {
+	static inline void UnpackPackedData(uint16_t packed_data, uint16_t& index, uint8_t& leading_zeros, uint16_t& significant_bits) {
 		index = packed_data >> INDEX_SHIFT_AMOUNT & INDEX_MASK;
 		leading_zeros = packed_data >> LEADING_SHIFT_AMOUNT & LEADING_MASK;
 		significant_bits = packed_data & SIGNIFICANT_MASK;
@@ -267,13 +267,32 @@ public:
 	}
 
 	static inline bool DecompressValue(RETURN_TYPE &value, Chimp128DecompressionState& state) {
+		alignas(8) static constexpr uint8_t LEADING_REPRESENTATION[] = {
+			0, 8, 12, 16, 18, 20, 22, 24
+		};
+
 		auto flag = state.input.template ReadValue<uint8_t>(2);
 		switch (flag) {
-		case LEADING_ZERO_LOAD: {
-			auto deserialized_leading_zeros = state.input.template ReadValue<uint8_t>(LEADING_BITS_SIZE);
-			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[deserialized_leading_zeros]);
-            value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
-            value ^= state.reference_value;
+		case VALUE_IDENTICAL: {
+			//! Value is identical to previous value
+			auto index = state.input.template ReadValue<uint8_t, INDEX_BITS_SIZE>();
+			value = state.ring_buffer.Value(index);
+			break;
+		}
+		case TRAILING_EXCEEDS_THRESHOLD: {
+			uint16_t index;
+			uint8_t leading_zeros;
+			uint16_t significant_bits;
+			uint16_t temp = state.input.template ReadValue<uint64_t, INITIAL_FILL>();
+			UnpackPackedData(temp, index, leading_zeros, significant_bits);
+			state.leading_zeros = LEADING_REPRESENTATION[leading_zeros];
+			if (significant_bits == 0) {
+				significant_bits = 64;
+			}
+			state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
+			value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros() - state.TrailingZeros());
+			value <<= state.TrailingZeros();
+			value ^= state.ring_buffer.Value(index);
 			break;
 		}
 		case LEADING_ZERO_EQUALITY: {
@@ -281,25 +300,11 @@ public:
 			value ^= state.reference_value;
 			break;
 		}
-		case TRAILING_EXCEEDS_THRESHOLD: {
-			uint16_t index, leading_zeros, significant_bits;
-			uint16_t temp = state.input.template ReadValue<uint64_t, INITIAL_FILL>();
-			UnpackPackedData(temp, index, leading_zeros, significant_bits);
-			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
-			if (significant_bits == 0) {
-				significant_bits = 64;
-			}
-			state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
-			auto bits_to_read = BIT_SIZE - state.LeadingZeros() - state.TrailingZeros();
-			value = state.input.template ReadValue<uint64_t>(bits_to_read);
-			value <<= state.TrailingZeros();
-			value ^= state.ring_buffer.Value(index);
-			break;
-		}
-		case VALUE_IDENTICAL: {
-			//! Value is identical to previous value
-			auto index = state.input.template ReadValue<uint8_t, INDEX_BITS_SIZE>();
-			value = state.ring_buffer.Value(index);
+		case LEADING_ZERO_LOAD: {
+			const auto deserialized_leading_zeros = state.input.template ReadValue<uint8_t>(LEADING_BITS_SIZE);
+			state.SetLeadingZeros(LEADING_REPRESENTATION[deserialized_leading_zeros]);
+            value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
+            value ^= state.reference_value;
 			break;
 		}
 		default:

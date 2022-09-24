@@ -74,10 +74,4 @@ struct ChimpCompressionConstants {
 	};
 };
 
-struct ChimpDecompressionConstants {
-	static constexpr uint8_t LEADING_REPRESENTATION[] = {
-		0, 8, 12, 16, 18, 20, 22, 24
-	};
-};
-
 } //namespace duckdb_chimp
