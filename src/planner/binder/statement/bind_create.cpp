@@ -332,6 +332,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::INDEX_ENTRY: {
 		auto &base = (CreateIndexInfo &)*stmt.info;
+
 		// visit the table reference
 		auto bound_table = Bind(*base.table);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
@@ -339,6 +340,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 		auto &table_binding = (BoundBaseTableRef &)*bound_table;
 		auto table = table_binding.table;
+
 		// bind the index expressions
 		vector<unique_ptr<Expression>> expressions;
 		IndexBinder binder(*this, context);
@@ -350,17 +352,25 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
 			throw BinderException("Cannot create index on a view!");
 		}
+
 		auto &get = (LogicalGet &)*plan;
 		for (auto &column_id : get.column_ids) {
 			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot create an index on the rowid!");
 			}
 		}
-		// this gives us a logical table scan
-		// we take the required columns from here
-		// create the logical operator
-		result.plan = make_unique<LogicalCreateIndex>(*table, get.column_ids, move(expressions),
-		                                              unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)));
+
+		auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info));
+		for (auto &index : get.column_ids) {
+			create_index_info->scan_types.push_back(get.returned_types[index]);
+		}
+		create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
+		create_index_info->names = get.names;
+		create_index_info->column_ids = get.column_ids;
+
+		// the logical CREATE INDEX also needs all fields to scan the referenced table
+		result.plan = make_unique<LogicalCreateIndex>(move(get.bind_data), move(create_index_info), move(expressions),
+		                                              *table, move(get.function));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {

@@ -5,6 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/sort/sort.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/constraints/list.hpp"
@@ -641,7 +642,7 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 	InitializeCreateIndexScan(state, cids);
 	while (true) {
 		scan_chunk.Reset();
-		ScanCreateIndex(state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		CreateIndexScan(state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
@@ -842,7 +843,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 
 	idx_t current_row = row_start_aligned;
 	while (current_row < end) {
-		ScanCreateIndex(state, chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		CreateIndexScan(state, chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		if (chunk.size() == 0) {
 			break;
 		}
@@ -1315,7 +1316,7 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vec
 	InitializeScan(state, column_ids);
 }
 
-bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, TableScanType type) {
+bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type) {
 	auto current_row_group = state.row_group_scan_state.row_group;
 	while (current_row_group) {
 		current_row_group->ScanCommitted(state.row_group_scan_state, result, type);
@@ -1329,59 +1330,6 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 		}
 	}
 	return false;
-}
-
-void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions) {
-	auto &allocator = Allocator::Get(db);
-
-	DataChunk result;
-	result.Initialize(allocator, index->logical_types);
-
-	DataChunk intermediate;
-	vector<LogicalType> intermediate_types;
-	auto column_ids = index->column_ids;
-	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-	for (auto &id : index->column_ids) {
-		auto &col = column_definitions[id];
-		intermediate_types.push_back(col.Type());
-	}
-	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
-	intermediate.Initialize(allocator, intermediate_types);
-
-	// initialize an index scan
-	CreateIndexScanState state;
-	InitializeCreateIndexScan(state, column_ids);
-
-	if (!is_root) {
-		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
-	}
-
-	// now start incrementally building the index
-	{
-		IndexLock lock;
-		index->InitializeLock(lock);
-		ExpressionExecutor executor(allocator, expressions);
-		while (true) {
-			intermediate.Reset();
-			result.Reset();
-			// scan a new chunk from the table to index
-			ScanCreateIndex(state, intermediate, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
-			if (intermediate.size() == 0) {
-				// finished scanning for index creation
-				// release all locks
-				break;
-			}
-			// resolve the expressions for this chunk
-			executor.Execute(intermediate, result);
-
-			// insert into the index
-			if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {
-				throw ConstraintException(
-				    "Cant create unique index, table contains duplicate data on indexed column(s)");
-			}
-		}
-	}
-	info->indexes.AddIndex(move(index));
 }
 
 unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, column_t column_id) {
