@@ -2310,6 +2310,29 @@ public class TestDuckDBJDBC {
 		rs.next();
 		assertEquals(rs.getString(1), "INTEGER");
 	}
+	
+	public static void test_config() throws Exception {
+		String memory_limit = "memory_limit";
+		String threads = "threads";
+
+		Properties info = new Properties();
+		info.put(memory_limit, "500MB");
+		info.put(threads, "5");
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:", info);
+
+		assertEquals("500.0MB", getSetting(conn, memory_limit));
+		assertEquals("5", getSetting(conn, threads));
+	}
+
+	private static String getSetting(Connection conn, String settingName) throws Exception {
+		try (PreparedStatement stmt = conn.prepareStatement("select value from duckdb_settings() where name = ?")) {
+			stmt.setString(1, settingName);
+			ResultSet rs = stmt.executeQuery();
+			rs.next();
+
+			return rs.getString(1);
+		}
+	}
 
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
