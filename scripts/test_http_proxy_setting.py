@@ -22,7 +22,6 @@ args = parser.parse_args()
 duckdb_path = args.binary_root / "duckdb"
 ext_path = args.binary_root / "extension/httpfs/httpfs.duckdb_extension"
 assert duckdb_path.exists()
-assert ext_path.exists()
 
 EXPECTED_REQUESTS = [
     ("HEAD", "/fake.csv"),
@@ -101,6 +100,8 @@ class HttpProxyTest(TestCase):
             remove(extension_filename)
 
     def test_csv_via_httpfs(self):
+        self.assertTrue(ext_path.exists(), ext_path)
+
         with make_proxy("bucket.s3.amazonaws.com", CSV_RESPONSE) as (
             proxy_url,
             requests,
