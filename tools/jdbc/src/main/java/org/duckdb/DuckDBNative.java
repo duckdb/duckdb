@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
+import java.util.Properties;
 
 public class DuckDBNative {
 	static {
@@ -64,7 +65,7 @@ public class DuckDBNative {
 	 */
 
 	// results db_ref database reference object
-	protected static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only) throws SQLException;
+	protected static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only, Properties props) throws SQLException;
 
 	protected static native void duckdb_jdbc_shutdown(ByteBuffer db_ref);
 
