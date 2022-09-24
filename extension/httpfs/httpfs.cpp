@@ -206,7 +206,7 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 	// splitting query params from base path
 	string stripped_path, query_param;
 
-	auto question_pos = path.find('?');
+	auto question_pos = path.find_last_of('?');
 	if (question_pos == string::npos) {
 		stripped_path = path;
 		query_param = "";

@@ -21,7 +21,6 @@ static HeaderMap create_s3_header(string url, string query, string host, string 
 
 	HeaderMap res;
 	res["Host"] = host;
-
 	// If access key is not set, we don't set the headers at all to allow accessing public files through s3 urls
 	if (auth_params.secret_access_key.empty() && auth_params.access_key_id.empty()) {
 		return res;
@@ -533,7 +532,8 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 	if (bucket.empty()) {
 		throw std::runtime_error("URL needs to contain a bucket name");
 	}
-	auto question_pos = url.find('?', 5);
+
+	auto question_pos = url.find_last_of('?');
 
 	// See https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html
 	if (params.url_style == "path") {
@@ -616,7 +616,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::PutRequest(FileHandle &handle, string 
 
 unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
 	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
-	url = url.substr(0, url.find('?'));
+	url = url.substr(0, url.find_last_of('?'));
 	auto parsed_url = S3UrlParse(url, auth_params);
 	string full_url = get_full_s3_url(auth_params, parsed_url);
 	auto headers = create_s3_header(parsed_url.path, parsed_url.query_param, parsed_url.host, "s3", "HEAD", auth_params,
@@ -627,7 +627,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string
 unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                           idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
 	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
-	url = url.substr(0, url.find('?'));
+	url = url.substr(0, url.find_last_of('?'));
 	auto parsed_url = S3UrlParse(url, auth_params);
 	string full_url = get_full_s3_url(auth_params, parsed_url);
 	auto headers = create_s3_header(parsed_url.path, parsed_url.query_param, parsed_url.host, "s3", "GET", auth_params,
@@ -642,11 +642,10 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, const 
 		throw std::runtime_error("CreateHandle called on S3FileSystem without FileOpener");
 	}
 	auto s3authparams = S3AuthParams::ReadFrom(opener);
-	string stripped_path = path;
 	ReadQueryParams(query_param, s3authparams);
 	string full_path = query_param.empty() ? path : path + "?" + query_param;
 
-	return duckdb::make_unique<S3FileHandle>(*this, full_path, stripped_path, flags,
+	return duckdb::make_unique<S3FileHandle>(*this, full_path, path, flags,
 	                                         opener ? HTTPParams::ReadFrom(opener) : HTTPParams(), s3authparams,
 	                                         S3ConfigParams::ReadFrom(opener));
 }
