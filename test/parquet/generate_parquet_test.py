@@ -32,11 +32,12 @@ def get_files():
                 files_path.append(os.path.join(root, file))
     return files_path
 
-def get_parquet_answer(file_path):
+def get_duckdb_answer(file_path):
     answer = []
     try:
         answer = duckdb.query("SELECT * FROM parquet_scan('"+file_path+"') limit 50").fetchall()
-    except:
+    except Exception as e:
+        print(e)
         answer = 'fail'
     return answer
 
@@ -44,7 +45,7 @@ def get_arrow_answer(file_path):
     answer = []
     try:
         arrow = pyarrow.parquet.read_table(file_path)
-        duck_rel = duckdb.from_arrow_table(arrow).limit(50)
+        duck_rel = duckdb.from_arrow(arrow).limit(50)
         answer = duck_rel.fetchall()
         return answer
     except:
@@ -52,20 +53,33 @@ def get_arrow_answer(file_path):
 
     
 
-def check_result(parquet_result, arrow_result):
+def check_result(duckdb_result, arrow_result):
     if (arrow_result == 'fail'):
         return 'skip'
-    if (parquet_result == 'fail'):
+    if (duckdb_result == 'fail'):
         return 'fail'
-    if (parquet_result != arrow_result):
+    if (duckdb_result != arrow_result):
         return 'fail'
     return 'pass'
+
+def sanitize_string(s):
+    return str(s).replace('None','NULL').replace("b'","").replace("'","")
 
 def result_to_string(arrow_result):
     result = ''
     for row_idx in range(len(arrow_result)):
         for col_idx in  range(len(arrow_result[0])):
-            result += str(arrow_result[row_idx][col_idx]) + "\t"
+            value = arrow_result[row_idx][col_idx]
+            if isinstance(value, dict):
+                items = [
+                    f"'{k}': {sanitize_string(v)}"  # no quotes
+                    for k, v in value.items()
+                ]
+                value = "{" + ", ".join(items) + "}"
+                print(type(value), value)
+            else:
+                value = sanitize_string(value)
+            result += value + "\t"
         result +="\n"
     result += "\n"
     return result
@@ -75,13 +89,13 @@ def generate_parquet_test_body(result, arrow_result,file_path):
     test_body = "query " + columns + "\n" 
     test_body += "SELECT * FROM parquet_scan('"+file_path+"') limit 50 \n" 
     test_body +=  "----\n"
-    test_body += result_to_string(arrow_result).replace('None','NULL').replace("b'","").replace("'","")
+    test_body += result_to_string(arrow_result)
     return test_body
 
 def generate_test(file_path):
-    parquet_result = get_parquet_answer(file_path)
+    duckdb_result = get_duckdb_answer(file_path)
     arrow_result = get_arrow_answer(file_path)
-    result = check_result(parquet_result,arrow_result)
+    result = check_result(duckdb_result,arrow_result)
     test_body = ""
     if (result == 'skip'):
         return
@@ -90,7 +104,7 @@ def generate_test(file_path):
         test_body += generate_parquet_test_body(result,arrow_result,file_path)
         test_body += "mode unskip \n\n"
     else:
-        test_body += generate_parquet_test_body(result,parquet_result,file_path)
+        test_body += generate_parquet_test_body(result,duckdb_result,file_path)
     return test_body
 
 
