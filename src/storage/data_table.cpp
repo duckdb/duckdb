@@ -351,33 +351,13 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	err_msgs.resize(count);
 	tran_err_msgs.resize(count);
 
-	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
-	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
-	auto index = data_table->info->indexes.FindForeignKeyIndex(*dst_keys_ptr, fk_type);
-	if (!index) {
-		throw InternalException("Internal Foreign Key error: could not find index to verify...");
-	}
-	if (is_append) {
-		index->VerifyAppendForeignKey(dst_chunk, err_msgs.data());
-	} else {
-		index->VerifyDeleteForeignKey(dst_chunk, err_msgs.data());
-	}
+	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, err_msgs);
 	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
 	auto &transaction = Transaction::GetTransaction(context);
 	bool transaction_check = transaction.storage.Find(data_table);
 	if (transaction_check) {
-		throw InternalException("FIXME: transaction local index scan fk");
-		//		auto &transact_index = transaction.storage.GetIndexes(data_table);
-		//		auto transaction_fk_index = transact_index.FindForeignKeyIndex(*dst_keys_ptr, fk_type);
-		//		for (idx_t i = 0; i < transact_index_vec.size(); i++) {
-		//			if (DataTable::IsForeignKeyIndex(*dst_keys_ptr, *transact_index_vec[i], fk_type)) {
-		//				if (is_append) {
-		//					transact_index_vec[i]->VerifyAppendForeignKey(dst_chunk, tran_err_msgs.data());
-		//				} else {
-		//					transact_index_vec[i]->VerifyDeleteForeignKey(dst_chunk, tran_err_msgs.data());
-		//				}
-		//			}
-		//		}
+		auto &transact_index = transaction.storage.GetIndexes(data_table);
+		transact_index.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, tran_err_msgs);
 	}
 
 	// we need to look at the error messages concurrently in data table's index and transaction local storage's index

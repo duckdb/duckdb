@@ -321,13 +321,12 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 	table_storage.erase(old_dt);
 }
 
-void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &dst_chunk) {
+void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &verify_chunk) {
 	auto storage = GetStorage(table);
 
 	ColumnFetchState fetch_state;
 	vector<column_t> col_ids;
 	vector<LogicalType> types = storage->table.GetTypes();
-	DataChunk verify_chunk;
 	for (idx_t i = 0; i < types.size(); i++) {
 		col_ids.push_back(i);
 	}

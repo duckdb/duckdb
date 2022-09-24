@@ -46,6 +46,22 @@ Index *TableIndexList::FindForeignKeyIndex(const vector<idx_t> &fk_keys, Foreign
 	return result;
 }
 
+void TableIndexList::VerifyForeignKey(const vector<idx_t> &fk_keys, bool is_append, DataChunk &chunk,
+                                      vector<string> &err_msgs) {
+	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+
+	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
+	auto index = FindForeignKeyIndex(fk_keys, fk_type);
+	if (!index) {
+		throw InternalException("Internal Foreign Key error: could not find index to verify...");
+	}
+	if (is_append) {
+		index->VerifyAppendForeignKey(chunk, err_msgs.data());
+	} else {
+		index->VerifyDeleteForeignKey(chunk, err_msgs.data());
+	}
+}
+
 vector<BlockPointer> TableIndexList::SerializeIndexes(duckdb::MetaBlockWriter &writer) {
 	vector<BlockPointer> blocks_info;
 	for (auto &index : indexes) {
