@@ -89,7 +89,7 @@ logical_opt	<REGEX>:.*EMPTY_RESULT.*
 query II
 EXPLAIN SELECT i BETWEEN -1 AND 0 FROM (SELECT * FROM integers LIMIT 10) integers(i);
 ----
-logical_opt	<REGEX>:.*False.*
+logical_opt	<REGEX>:.*false.*
 
 # verify the results
 query I

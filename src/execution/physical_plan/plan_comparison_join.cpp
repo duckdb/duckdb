@@ -51,7 +51,7 @@ bool ExtractNumericValue(Value val, int64_t &result) {
 			return false;
 		}
 	} else {
-		if (!val.TryCastAs(LogicalType::BIGINT)) {
+		if (!val.DefaultTryCastAs(LogicalType::BIGINT)) {
 			return false;
 		}
 		result = val.GetValue<int64_t>();

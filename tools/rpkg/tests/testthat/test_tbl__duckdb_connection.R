@@ -29,11 +29,11 @@ test_that("Object cache can be enabled for parquet files with dplyr::tbl()", {
 
   DBI::dbExecute(con, "SET enable_object_cache=False;")
   tab1 <- dplyr::tbl(con, "data/userdata1.parquet", cache = TRUE)
-  expect_true(DBI::dbGetQuery(con, "SELECT value FROM duckdb_settings() WHERE name='enable_object_cache';") == "True")
+  expect_true(DBI::dbGetQuery(con, "SELECT value FROM duckdb_settings() WHERE name='enable_object_cache';") == "true")
 
   DBI::dbExecute(con, "SET enable_object_cache=False;")
   tab2 <- dplyr::tbl(con, "'data/userdata1.parquet'", cache = FALSE)
-  expect_true(DBI::dbGetQuery(con, "SELECT value FROM duckdb_settings() WHERE name='enable_object_cache';") == "False")
+  expect_true(DBI::dbGetQuery(con, "SELECT value FROM duckdb_settings() WHERE name='enable_object_cache';") == "false")
 })
 
 

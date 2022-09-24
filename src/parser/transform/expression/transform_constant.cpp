@@ -57,7 +57,7 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 			if (width <= Decimal::MAX_WIDTH_DECIMAL) {
 				// we can cast the value as a decimal
 				Value val = Value(str_val);
-				val = val.CastAs(LogicalType::DECIMAL(width, scale));
+				val = val.DefaultCastAs(LogicalType::DECIMAL(width, scale));
 				return make_unique<ConstantExpression>(move(val));
 			}
 		}

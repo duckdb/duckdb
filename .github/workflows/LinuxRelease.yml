@@ -33,6 +33,7 @@ jobs:
       GEN: ninja
       BUILD_BENCHMARK: 1
       BUILD_ICU: 1
+      BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
       BUILD_JDBC: 1
@@ -100,6 +101,7 @@ jobs:
      GEN: ninja
      BUILD_BENCHMARK: 1
      BUILD_ICU: 1
+     BUILD_INET: 1
      BUILD_TPCH: 1
      BUILD_FTS: 1
      BUILD_JSON: 1
@@ -412,6 +414,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
+      BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1

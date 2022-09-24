@@ -7,6 +7,7 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -95,8 +96,8 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	children.push_back(move(date_part.children[1]));
 
 	string error;
-	auto function = ScalarFunction::BindScalarFunction(rewriter.context, DEFAULT_SCHEMA, new_function_name,
-	                                                   move(children), error, false);
+	FunctionBinder binder(rewriter.context);
+	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, new_function_name, move(children), error, false);
 	if (!function) {
 		throw BinderException(error);
 	}

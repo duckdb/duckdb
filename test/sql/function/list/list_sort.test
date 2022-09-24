@@ -209,7 +209,7 @@ SELECT list_reverse_sort([1, 3, NULL, 2], 'NULLS FIRST')
 query I
 SELECT list_sort([True, False, NULL, True, True, NULL])
 ----
-[NULL, NULL, False, True, True, True]
+[NULL, NULL, false, true, true, true]
 
 query I
 SELECT list_sort([NULL::BOOLEAN])

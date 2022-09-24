@@ -105,13 +105,17 @@ void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) 
 	if (!option.set_global) {
 		throw InternalException("Could not set option \"%s\" as a global option", option.name);
 	}
-	Value input = value.CastAs(option.parameter_type);
+	Value input = value.DefaultCastAs(option.parameter_type);
 	option.set_global(nullptr, *this, input);
 }
 
 void DBConfig::AddExtensionOption(string name, string description, LogicalType parameter,
                                   set_option_callback_t function) {
 	extension_parameters.insert(make_pair(move(name), ExtensionOption(move(description), move(parameter), function)));
+}
+
+CastFunctionSet &DBConfig::GetCastFunctions() {
+	return *cast_functions;
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
