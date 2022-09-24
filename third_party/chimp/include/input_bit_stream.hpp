@@ -22,7 +22,7 @@ namespace duckdb_chimp {
 //! With a shift of 3
 
 //! Align the masks to the right
-uint8_t masks[] = {
+static const uint8_t masks[] = {
 	0b00000000,
 	0b10000000,
 	0b11000000,
@@ -42,7 +42,7 @@ uint8_t masks[] = {
 	0b10000000,
 };
 
-uint8_t remainder_masks[] = {
+static const uint8_t remainder_masks[] = {
 	0,
 	0,
 	0,
@@ -63,7 +63,7 @@ uint8_t remainder_masks[] = {
 };
 
 //! Left shifts
-uint8_t shifts[] = {
+static const uint8_t shifts[] = {
 	0, //unused
 	7,
 	6,
@@ -84,7 +84,7 @@ uint8_t shifts[] = {
 
 //! Right shifts
 //! Right shift the values to cut off the mask when SIZE + bit_index exceeds 8
-uint8_t right_shifts[] = {
+static const uint8_t right_shifts[] = {
 	0,
 	0,
 	0,
@@ -122,8 +122,9 @@ public:
 		return (masks[size] >> bit_index);
 	}
 
-	uint8_t InnerRead(uint8_t size) {
+	inline uint8_t InnerRead(uint8_t size) {
 		const uint8_t left_shift = 8 - size;
+		// Create a mask given the size and bit_index
 		uint8_t result = ((input[byte_index] & CreateMask(size, bit_index)) << bit_index) >> left_shift;
 		byte_index += (size + bit_index >= 8);
 		const uint8_t bit_remainder = (size + bit_index) - 8;

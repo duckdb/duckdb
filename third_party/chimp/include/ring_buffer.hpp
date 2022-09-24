@@ -34,22 +34,22 @@ public:
 		buffer[index % RING_SIZE] = value;
 		indices[Key(value)] = index;
 	}
-	const uint64_t& Top() const {
+	inline const uint64_t& Top() const {
 		return buffer[index % RING_SIZE];
 	}
 	//! Get the index where values that produce this 'key' are stored
-	const uint64_t& IndexOf(uint64_t key) const {
+	inline const uint64_t& IndexOf(const uint64_t &key) const {
 		return indices[key];
 	}
 	//! Get the value at position 'index' of the buffer
-	uint64_t Value(uint8_t index_p) {
+	inline const uint64_t &Value(const uint8_t& index_p) const {
 		return buffer[index_p];
 	}
 	//! Get the amount of values that are inserted
-	uint64_t Size() const {
+	inline const uint64_t &Size() const {
 		return index;
 	}
-	uint64_t Key(uint64_t value) const {
+	inline uint64_t Key(const uint64_t &value) const {
 		return value & LEAST_SIGNIFICANT_BIT_MASK;
 	}
 

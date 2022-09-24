@@ -12,7 +12,7 @@ PRAGMA force_compression='chimp';
 CREATE TABLE temperatures (
 	temperature DOUBLE
 );
-COPY temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv';
+COPY temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature_enlarged.csv';
 checkpoint;
 
 run

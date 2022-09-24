@@ -37,7 +37,7 @@ struct Chimp128CompressionState {
 		ring_buffer(),
 		previous_leading_zeros(std::numeric_limits<uint8_t>::max()) {}
 
-	void SetLeadingZeros(int32_t value = std::numeric_limits<uint8_t>::max()) {
+	inline void SetLeadingZeros(int32_t value = std::numeric_limits<uint8_t>::max()) {
 		this->previous_leading_zeros = value;
 	}
 
@@ -199,18 +199,18 @@ public:
 		first = true;
 	}
 
-	void SetLeadingZeros(uint8_t value = std::numeric_limits<uint8_t>::max()) {
+	inline void SetLeadingZeros(uint8_t value = std::numeric_limits<uint8_t>::max()) {
 		this->zeros.leading = value;
 	}
-	void SetTrailingZeros(uint8_t value = 0) {
+	inline void SetTrailingZeros(uint8_t value = 0) {
 		assert(value <= sizeof(uint64_t) * 8);
 		this->zeros.trailing = value;
 	}
 
-	uint8_t LeadingZeros() const {
+	const uint8_t &LeadingZeros() const {
 		return zeros.leading;
 	}
-	uint8_t TrailingZeros() const {
+	const uint8_t &TrailingZeros() const {
 		return zeros.trailing;
 	}
 
@@ -249,7 +249,7 @@ public:
 		significant_bits = packed_data & SIGNIFICANT_MASK;
 	}
 
-	static RETURN_TYPE Load(RETURN_TYPE &value, Chimp128DecompressionState& state) {
+	static inline RETURN_TYPE Load(RETURN_TYPE &value, Chimp128DecompressionState& state) {
 		if (state.first) {
 			return LoadFirst(value, state);
 		}
@@ -258,7 +258,7 @@ public:
 		}
 	}
 
-	static bool LoadFirst(RETURN_TYPE &value, Chimp128DecompressionState& state) {
+	static inline bool LoadFirst(RETURN_TYPE &value, Chimp128DecompressionState& state) {
 		value = state.input.template ReadValue<RETURN_TYPE>();
 		state.ring_buffer.Insert<true>(value);
 		state.first = false;
@@ -266,7 +266,7 @@ public:
 		return true;
 	}
 
-	static bool DecompressValue(RETURN_TYPE &value, Chimp128DecompressionState& state) {
+	static inline bool DecompressValue(RETURN_TYPE &value, Chimp128DecompressionState& state) {
 		auto flag = state.input.template ReadValue<uint8_t>(2);
 		switch (flag) {
 		case LEADING_ZERO_LOAD: {
@@ -286,7 +286,6 @@ public:
 			uint16_t temp = state.input.template ReadValue<uint64_t, INITIAL_FILL>();
 			UnpackPackedData(temp, index, leading_zeros, significant_bits);
 			state.SetLeadingZeros(ChimpDecompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
-			state.reference_value = state.ring_buffer.Value(index);
 			if (significant_bits == 0) {
 				significant_bits = 64;
 			}
@@ -294,7 +293,7 @@ public:
 			auto bits_to_read = BIT_SIZE - state.LeadingZeros() - state.TrailingZeros();
 			value = state.input.template ReadValue<uint64_t>(bits_to_read);
 			value <<= state.TrailingZeros();
-			value ^= state.reference_value;
+			value ^= state.ring_buffer.Value(index);
 			break;
 		}
 		case VALUE_IDENTICAL: {
