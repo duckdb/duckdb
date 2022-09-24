@@ -123,9 +123,6 @@ public:
 	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
-	//! Add an index to the DataTable
-	void AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions);
-
 	//! Begin appending structs to this table, obtaining necessary locks, etc
 	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
 	//! Append a chunk to the table using the AppendState obtained from BeginAppend
@@ -155,6 +152,9 @@ public:
 	void SetAsRoot() {
 		this->is_root = true;
 	}
+	bool IsRoot() {
+		return this->is_root;
+	}
 
 	//! Get statistics of a physical column within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
@@ -171,6 +171,11 @@ public:
 	vector<vector<Value>> GetStorageInfo();
 	static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type);
 
+	//! Initializes a special scan that is used to create an index on the table, it keeps locks on the table
+	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
+	//! Scans the next chunk for the CREATE INDEX operator
+	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
+
 private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint);
@@ -183,9 +188,6 @@ private:
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);
-
-	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
-	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
 
 private:
 	//! Lock for appending entries to the table

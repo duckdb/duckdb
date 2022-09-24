@@ -43,10 +43,7 @@ string LogicalOperator::ParamsToString() const {
 }
 
 void LogicalOperator::ResolveOperatorTypes() {
-	// if (types.size() > 0) {
-	// 	// types already resolved for this node
-	// 	return;
-	// }
+
 	types.clear();
 	// first resolve child types
 	for (auto &child : children) {
