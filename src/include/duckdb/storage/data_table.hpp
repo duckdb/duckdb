@@ -16,7 +16,6 @@
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/index.hpp"
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
@@ -24,11 +23,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/transaction/local_storage.hpp"
-#include "duckdb/common/enums/scan_options.hpp"
-#include "duckdb/storage/table/table_index_list.hpp"
-
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class ClientContext;

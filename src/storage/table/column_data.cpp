@@ -12,8 +12,6 @@
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
-#include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 
