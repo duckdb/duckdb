@@ -363,7 +363,7 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 
 	row_group->InitializeScanWithOffset(state.table_state.row_group_state, row_group_vector_idx);
 	row_group->ScanCommitted(state.table_state.row_group_state, result,
-	                         TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES);
+	                         TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 	result.Slice(sel, count);
 
 	indexes.Scan([&](Index &index) {
