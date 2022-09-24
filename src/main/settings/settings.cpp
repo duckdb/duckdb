@@ -426,6 +426,9 @@ Value HomeDirectorySetting::GetSetting(ClientContext &context) {
 	return Value(config.home_directory);
 }
 
+//===--------------------------------------------------------------------===//
+// HTTP Proxy
+//===--------------------------------------------------------------------===//
 static shared_ptr<ProxyUri> SetHttpProxy(DBConfig &config, const string &url) {
 	config.options.http_proxy = ProxyUri::FromString(url);
 
