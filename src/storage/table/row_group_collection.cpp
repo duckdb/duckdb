@@ -536,7 +536,7 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 	CreateIndexScanState state;
 	vector<column_t> cids;
 	cids.push_back(not_null_constraint.index);
-	// Use ScanCreateIndex to scan the latest committed data
+	// Use ScanCommitted to scan the latest committed data
 	InitializeCreateIndexScan(state);
 	state.Initialize(cids, nullptr);
 	InitializeScan(state.table_state, cids, nullptr);
