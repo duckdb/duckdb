@@ -184,6 +184,8 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 		}
 	}
 	if (!child_contiguous) {
+		// if the child of the list vector is a non-contiguous vector (i.e. list elements are repeating or have gaps)
+		// we first push a selection vector and flatten the child vector to turn it into a contiguous vector
 		auto &child_vector = ListVector::GetEntry(vector);
 		SelectionVector child_sel(child_count);
 		idx_t current_count = 0;
