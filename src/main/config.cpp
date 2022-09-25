@@ -81,6 +81,14 @@ idx_t DBConfig::GetOptionCount() {
 	return count;
 }
 
+vector<std::string> DBConfig::GetOptionNames() {
+	vector<string> names;
+	for (idx_t i = 0, option_count = DBConfig::GetOptionCount(); i < option_count; i++) {
+		names.emplace_back(DBConfig::GetOptionByIndex(i)->name);
+	}
+	return names;
+}
+
 ConfigurationOption *DBConfig::GetOptionByIndex(idx_t target_index) {
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		if (index == target_index) {

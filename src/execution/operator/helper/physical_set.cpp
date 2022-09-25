@@ -16,10 +16,7 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 		if (entry == config.extension_parameters.end()) {
 			// it is not!
 			// get a list of all options
-			vector<string> potential_names;
-			for (idx_t i = 0, option_count = DBConfig::GetOptionCount(); i < option_count; i++) {
-				potential_names.emplace_back(DBConfig::GetOptionByIndex(i)->name);
-			}
+			vector<string> potential_names = DBConfig::GetOptionNames();
 			for (auto &entry : config.extension_parameters) {
 				potential_names.push_back(entry.first);
 			}
