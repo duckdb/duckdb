@@ -1,26 +1,25 @@
-import argparse
 import gzip
 import io
 import json
+import os
+import unittest
 from contextlib import contextmanager
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from itertools import chain
-from os import remove
-from os.path import expanduser, exists
+from os.path import expanduser
 from pathlib import Path
+from shutil import rmtree
 from subprocess import check_output, PIPE
 from threading import Thread
 from typing import Type, Generator, BinaryIO, Union, Tuple, Any, List
 from unittest import TestCase, main
 from urllib.parse import urlparse
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--binary-root", default="../build/debug", type=Path)
-args = parser.parse_args()
-
-duckdb_path = args.binary_root / "duckdb"
-ext_path = args.binary_root / "extension/httpfs/httpfs.duckdb_extension"
+binary_root = Path(os.environ.get('DUCKDB_BINARY_ROOT' "../build/debug"))
+duckdb_path = binary_root / "duckdb"
+assert duckdb_path.exists(), duckdb_path
+ext_path = binary_root / "extension/httpfs/httpfs.duckdb_extension"
 assert duckdb_path.exists()
 
 EXPECTED_REQUESTS = [
@@ -93,15 +92,9 @@ class HttpProxyTest(TestCase):
 
     def setUp(self) -> None:
         self.version = call_duckdb("pragma version")[0]["source_id"]
-        extension_filename = expanduser(
-            f"~/.duckdb/extensions/{self.version}/linux_amd64/fake_extension.duckdb_extension"
-        )
-        if exists(extension_filename):
-            remove(extension_filename)
+        rmtree(expanduser(f"~/.duckdb/extensions/{self.version}"), ignore_errors=True)
 
     def test_csv_via_httpfs(self):
-        self.assertTrue(ext_path.exists(), ext_path)
-
         with make_proxy("bucket.s3.amazonaws.com", CSV_RESPONSE) as (
             proxy_url,
             requests,
@@ -109,13 +102,19 @@ class HttpProxyTest(TestCase):
             stdout = call_duckdb(
                 f"set http_proxy='{proxy_url}'",
                 "set s3_use_ssl=false",
-                f"install '{ext_path}'",
+                f"install '{self.ext_path()}'",
                 "load httpfs",
                 "select * from 's3://bucket/fake.csv'",
             )
 
             self.assertEqual(stdout, CSV_JSON)
             self.assertEqual(EXPECTED_REQUESTS, requests)
+
+    def ext_path(self):
+        ext_path = binary_root / "extension/httpfs/httpfs.duckdb_extension"
+        if not ext_path.exists():
+            raise unittest.SkipTest('missing httpfs extension')
+        return ext_path
 
     def test_csv_via_http(self):
         with make_proxy("bucket.s3.amazonaws.com", CSV_RESPONSE) as (
@@ -124,6 +123,8 @@ class HttpProxyTest(TestCase):
         ):
             stdout = call_duckdb(
                 f"set http_proxy='{proxy_url}'",
+                f"install '{self.ext_path()}'",
+                "load httpfs",
                 "select * from 'http://bucket.s3.amazonaws.com/fake.csv'",
             )
 
