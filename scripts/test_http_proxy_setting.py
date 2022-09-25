@@ -88,11 +88,9 @@ def call_duckdb(*sql: str) -> Any:
 
 
 class HttpProxyTest(TestCase):
-    version: str
-
     def setUp(self) -> None:
-        self.version = call_duckdb("pragma version")[0]["source_id"]
-        rmtree(expanduser(f"~/.duckdb/extensions/{self.version}"), ignore_errors=True)
+        version = call_duckdb("pragma version")[0]["source_id"]
+        rmtree(expanduser(f"~/.duckdb/extensions/{version}"), ignore_errors=True)
 
     def test_csv_via_httpfs(self):
         with make_proxy("bucket.s3.amazonaws.com", CSV_RESPONSE) as (
@@ -144,14 +142,10 @@ class HttpProxyTest(TestCase):
             )
 
             self.assertEqual([{"extension_name": "fake_extension"}], res)
-            self.assertEqual(
-                [
-                    (
-                        "GET",
-                        f"/{self.version}/linux_amd64/fake_extension.duckdb_extension.gz",
-                    )
-                ],
-                requests,
+            self.assertEqual(len(requests), 1)
+            self.assertTrue(
+                requests[0][1].endswith("fake_extension.duckdb_extension.gz"),
+                requests[0][1],
             )
 
 
