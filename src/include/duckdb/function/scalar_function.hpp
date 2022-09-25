@@ -85,20 +85,6 @@ public:
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
 
-	DUCKDB_API static unique_ptr<Expression> BindScalarFunction(ClientContext &context, const string &schema,
-	                                                            const string &name,
-	                                                            vector<unique_ptr<Expression>> children, string &error,
-	                                                            bool is_operator = false, Binder *binder = nullptr);
-	DUCKDB_API static unique_ptr<Expression> BindScalarFunction(ClientContext &context,
-	                                                            ScalarFunctionCatalogEntry &function,
-	                                                            vector<unique_ptr<Expression>> children, string &error,
-	                                                            bool is_operator = false, Binder *binder = nullptr);
-
-	DUCKDB_API static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,
-	                                                                         ScalarFunction bound_function,
-	                                                                         vector<unique_ptr<Expression>> children,
-	                                                                         bool is_operator = false);
-
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
 

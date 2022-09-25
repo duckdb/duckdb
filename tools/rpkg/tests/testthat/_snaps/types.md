@@ -2,7 +2,7 @@
 
     Code
       as.list(dbGetQuery(con,
-        "SELECT * EXCLUDE (timestamp_tz, time_tz, uuid, interval, json, map) FROM test_all_types()"))
+        "SELECT * EXCLUDE (timestamp_tz, time_tz, map) FROM test_all_types()"))
     Output
       $bool
       [1] FALSE  TRUE    NA
@@ -75,7 +75,19 @@
       $dec38_10
       [1] -1e+28  1e+28     NA
       
+      $uuid
+      [1] "00000000-0000-0000-0000-000000000001"
+      [2] "ffffffff-ffff-ffff-ffff-ffffffffffff"
+      [3] NA                                    
+      
+      $interval
+      Time differences in secs
+      [1]          0 2675722599         NA
+      
       $varchar
+      [1] "🦆🦆🦆🦆🦆🦆" "goose"        NA            
+      
+      $json
       [1] "🦆🦆🦆🦆🦆🦆" "goose"        NA            
       
       $blob

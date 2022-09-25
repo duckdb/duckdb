@@ -299,7 +299,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
 	if (val.type() != GetType()) {
-		SetValue(index, val.CastAs(GetType()));
+		SetValue(index, val.DefaultCastAs(GetType()));
 		return;
 	}
 	D_ASSERT(val.type().InternalType() == GetType().InternalType());
@@ -1346,6 +1346,24 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 		return;
 	}
 	StringVector::AddBuffer(vector, other.auxiliary);
+}
+
+Vector &MapVector::GetKeys(Vector &vector) {
+	auto &entries = StructVector::GetEntries(vector);
+	D_ASSERT(entries.size() == 2);
+	return *entries[0];
+}
+Vector &MapVector::GetValues(Vector &vector) {
+	auto &entries = StructVector::GetEntries(vector);
+	D_ASSERT(entries.size() == 2);
+	return *entries[1];
+}
+
+const Vector &MapVector::GetKeys(const Vector &vector) {
+	return GetKeys((Vector &)vector);
+}
+const Vector &MapVector::GetValues(const Vector &vector) {
+	return GetValues((Vector &)vector);
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {

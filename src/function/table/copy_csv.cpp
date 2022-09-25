@@ -325,7 +325,7 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		} else {
 			// non varchar column, perform the cast
-			VectorOperations::Cast(input.data[col_idx], cast_chunk.data[col_idx], input.size());
+			VectorOperations::Cast(context.client, input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		}
 	}
 

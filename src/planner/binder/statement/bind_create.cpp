@@ -126,18 +126,22 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 	if (type.id() == LogicalTypeId::LIST) {
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, schema);
+		auto alias = type.GetAlias();
 		type = LogicalType::LIST(child_type);
+		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
 			BindLogicalType(context, child_type.second, schema);
 		}
 		// Generate new Struct/Map Type
+		auto alias = type.GetAlias();
 		if (type.id() == LogicalTypeId::STRUCT) {
 			type = LogicalType::STRUCT(child_types);
 		} else {
 			type = LogicalType::MAP(child_types);
 		}
+		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto &catalog = Catalog::GetCatalog(context);
 		type = catalog.GetType(context, schema, UserType::GetTypeName(type));

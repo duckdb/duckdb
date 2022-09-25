@@ -76,10 +76,10 @@ NULL
 query I
 SELECT list_transform(l, x -> x < 2) FROM lists
 ----
-[True]
-[True, False, False]
+[true]
+[true, false, false]
 NULL
-[True, NULL, False]
+[true, NULL, false]
 
 # test other operators and more complex/nested functions
 
@@ -155,7 +155,7 @@ select list_apply(i, x -> (6 + 2 * 12) / x) from (values (list_value(1, 2, 3))) 
 query I
 select list_apply(i, x -> x + 1 AND x + 1) from (values (list_value(1, 2, 3))) tbl(i);
 ----
-[True, True, True]
+[true, true, true]
 
 # very large lists
 

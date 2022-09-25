@@ -23,11 +23,13 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	Execute(*expr.child, child_state, sel, count, child);
 	if (expr.try_cast) {
 		string error_message;
-		VectorOperations::TryCast(child, result, count, &error_message);
+		CastParameters parameters(expr.bound_cast.cast_data.get(), false, &error_message);
+		expr.bound_cast.function(child, result, count, parameters);
 	} else {
 		// cast it to the type specified by the cast expression
 		D_ASSERT(result.GetType() == expr.return_type);
-		VectorOperations::Cast(child, result, count);
+		CastParameters parameters(expr.bound_cast.cast_data.get(), false, nullptr);
+		expr.bound_cast.function(child, result, count, parameters);
 	}
 }
 

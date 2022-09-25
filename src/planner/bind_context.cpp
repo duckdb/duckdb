@@ -167,7 +167,9 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &ta
 	auto binding = GetBinding(table_name, error_message);
 	D_ASSERT(binding);
 	auto &table_binding = *(TableBinding *)binding;
-	return table_binding.ExpandGeneratedColumn(column_name);
+	auto result = table_binding.ExpandGeneratedColumn(column_name);
+	result->alias = column_name;
+	return result;
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &table_name, const string &column_name) {
@@ -419,13 +421,15 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
-                               const vector<LogicalType> &types, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index, true));
+                               const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
+                               StandardEntry *entry) {
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, bound_column_ids, entry, index, true));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
-                                   const vector<LogicalType> &types, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index));
+                                   const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
+                                   StandardEntry *entry) {
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, bound_column_ids, entry, index));
 }
 
 static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {

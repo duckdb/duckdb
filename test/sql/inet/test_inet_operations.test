@@ -1,0 +1,76 @@
+# name: test/sql/inet/test_inet_operations.test
+# description: Test inet operations
+# group: [inet]
+
+require inet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(id INTEGER, i INET);
+
+statement ok
+INSERT INTO tbl VALUES (1, '127.0.0.1'), (2, NULL), (3, '255.255.255.255/31'), (4, '0.0.0.0/0'), (5, '127.0.0.1/32'), (6, '127.0.0.1/31');
+
+# order by
+query I
+SELECT i FROM tbl ORDER BY i
+----
+NULL
+0.0.0.0/0
+127.0.0.1/31
+127.0.0.1
+127.0.0.1
+255.255.255.255/31
+
+query I
+SELECT i FROM tbl ORDER BY i DESC
+----
+NULL
+255.255.255.255/31
+127.0.0.1
+127.0.0.1
+127.0.0.1/31
+0.0.0.0/0
+
+# group by
+query II
+SELECT i, COUNT(*) FROM tbl GROUP BY i ORDER BY i
+----
+NULL	1
+0.0.0.0/0	1
+127.0.0.1/31	1
+127.0.0.1	2
+255.255.255.255/31	1
+
+# min/max
+query II
+SELECT MIN(i), MAX(i) FROM tbl
+----
+0.0.0.0/0	255.255.255.255/31
+
+# first
+query II
+SELECT FIRST(i ORDER BY id), FIRST(i) FILTER (id=4) FROM tbl
+----
+127.0.0.1	0.0.0.0/0
+
+# join
+statement ok
+CREATE TABLE tbl2(id INTEGER, j INET);
+
+statement ok
+INSERT INTO tbl2 VALUES (3, '127.0.0.1')
+
+query III
+SELECT id, i, j FROM tbl JOIN tbl2 USING (id)
+----
+3	255.255.255.255/31	127.0.0.1
+
+
+query IIII
+SELECT tbl.id, tbl2.id, i, j FROM tbl JOIN tbl2 ON (i=j) ORDER BY tbl.id
+----
+1	3	127.0.0.1	127.0.0.1
+5	3	127.0.0.1	127.0.0.1
