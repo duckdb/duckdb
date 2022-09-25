@@ -77,8 +77,9 @@ class S3FileHandle : public HTTPFileHandle {
 	friend class S3FileSystem;
 
 public:
-	S3FileHandle(FileSystem &fs, string path_p, const string &stripped_path_p, uint8_t flags, const HTTPParams &http_params,
-	             const S3AuthParams &auth_params_p, const S3ConfigParams &config_params_p)
+	S3FileHandle(FileSystem &fs, string path_p, const string &stripped_path_p, uint8_t flags,
+	             const HTTPParams &http_params, const S3AuthParams &auth_params_p,
+	             const S3ConfigParams &config_params_p)
 	    : HTTPFileHandle(fs, move(path_p), flags, http_params), auth_params(auth_params_p),
 	      config_params(config_params_p), stripped_path(stripped_path_p) {
 
@@ -143,7 +144,7 @@ public:
 	unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map, idx_t file_offset,
 	                                            char *buffer_out, idx_t buffer_out_len) override;
 
-	void Verify();
+	static void Verify();
 
 	bool CanHandleFile(const string &fpath) override;
 	bool OnDiskFile(FileHandle &handle) override {
