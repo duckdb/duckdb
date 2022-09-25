@@ -16,7 +16,7 @@ from typing import Type, Generator, BinaryIO, Union, Tuple, Any, List
 from unittest import TestCase, main
 from urllib.parse import urlparse
 
-binary_root = Path(os.environ.get('DUCKDB_BINARY_ROOT' "../build/debug"))
+binary_root = Path(os.environ.get('DUCKDB_BINARY_ROOT', "../build/debug"))
 duckdb_path = binary_root / "duckdb"
 assert duckdb_path.exists(), duckdb_path
 ext_path = binary_root / "extension/httpfs/httpfs.duckdb_extension"
