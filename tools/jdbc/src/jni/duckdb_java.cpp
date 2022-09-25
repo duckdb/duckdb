@@ -269,8 +269,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 			if (pOption) {
 				config.SetOption(*pOption, Value(value_str));
 			} else {
-				throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", key_str,
-				                       StringUtil::CandidatesErrorMessage(DBConfig::GetOptionNames(), key_str, "Did you mean"));
+				throw CatalogException(
+				    "unrecognized configuration parameter \"%s\"\n%s", key_str,
+				    StringUtil::CandidatesErrorMessage(DBConfig::GetOptionNames(), key_str, "Did you mean"));
 			}
 		}
 
