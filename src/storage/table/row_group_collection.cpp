@@ -195,7 +195,7 @@ void RowGroupCollection::Append(TransactionData transaction, DataChunk &chunk, T
 			D_ASSERT(chunk.size() == remaining + append_count);
 			// slice the input chunk
 			if (remaining < chunk.size()) {
-				SelectionVector sel(STANDARD_VECTOR_SIZE);
+				SelectionVector sel(remaining);
 				for (idx_t i = 0; i < remaining; i++) {
 					sel.set_index(i, append_count + i);
 				}

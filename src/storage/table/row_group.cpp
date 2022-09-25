@@ -334,7 +334,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, RowGroupScanState &sta
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
 					// scan row id
 					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-					result.data[i].Sequence(this->start + current_row, 1);
+					result.data[i].Sequence(this->start + current_row, 1, count);
 				} else {
 					if (TYPE != TableScanType::TABLE_SCAN_REGULAR) {
 						columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],

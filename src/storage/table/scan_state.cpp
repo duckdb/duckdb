@@ -96,7 +96,7 @@ bool CollectionScanState::Scan(Transaction &transaction, DataChunk &result) {
 				if (current_row_group) {
 					bool scan_row_group = current_row_group->InitializeScan(row_group_state);
 					if (scan_row_group) {
-						// skip this row group
+						// scan this row group
 						break;
 					}
 				}
