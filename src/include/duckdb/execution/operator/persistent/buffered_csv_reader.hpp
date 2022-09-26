@@ -176,6 +176,7 @@ public:
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
 	vector<string> col_names;
+	case_insensitive_map_t<idx_t> col_names_map;
 	unique_ptr<CSVFileHandle> file_handle;
 
 	unique_ptr<char[]> buffer;
@@ -209,6 +210,9 @@ public:
 	void ParseCSV(DataChunk &insert_chunk);
 
 	idx_t GetFileSize();
+	
+	//! Adds some cols to fill the insert_chunk miss union name match 
+	void AlignUnionCols(DataChunk &insert_chunk, vector<string> &union_names, vector<LogicalType> &union_types);
 
 private:
 	//! Initialize Parser

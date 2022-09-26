@@ -48,6 +48,10 @@ struct ReadCSVData : public BaseCSVData {
 	//! The initial reader (if any): this is used when automatic detection is used during binding.
 	//! In this case, the CSV reader is already created and might as well be re-used.
 	unique_ptr<BufferedCSVReader> initial_reader;
+	//! The header names of all csv files (option union_by_name)
+	vector<string> union_col_names;
+	//! The type of all csv files (option union_by_name)
+	vector<LogicalType> union_col_types;
 };
 
 struct CSVCopyFunction {
