@@ -58,7 +58,7 @@ public:
 
 		scan_arrow_ipc_func.cardinality = ArrowTableFunction::ArrowScanCardinality;
 		scan_arrow_ipc_func.projection_pushdown = true;
-		scan_arrow_ipc_func.filter_pushdown = true;
+		scan_arrow_ipc_func.filter_pushdown = false;
 		scan_arrow_ipc_func.table_scan_progress = ArrowTableFunction::ArrowProgress;
 
 		return scan_arrow_ipc_func;
@@ -200,7 +200,8 @@ static void ToArrowIpcFunction(ClientContext &context, TableFunctionInput &data_
 
 	output.SetCardinality(1);
 
-	if (false) {
+	// TODO: benchmark difference here
+	if (true) {
 		auto wrapped_buffer = make_buffer<ArrowStringVectorBuffer>(arrow_serialized_ipc_buffer);
 
 		// Instead of calling setvalue which copies the blob, we need to move it into there
@@ -218,6 +219,8 @@ static void LoadInternal(DatabaseInstance &instance) {
 	con.BeginTransaction();
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
+	// TODO refactor to take a Query as a parameter instead of a String. There's a way to do this, see:
+	// test/sql/function/generic/test_table_param.test
 	TableFunction get_arrow_ipc_func("get_arrow_ipc", {LogicalType::VARCHAR, LogicalType::INTEGER},
 	                                 ToArrowIpcFunction, ToArrowIpcBind);
 	CreateTableFunctionInfo get_arrow_ipc_info(get_arrow_ipc_func);

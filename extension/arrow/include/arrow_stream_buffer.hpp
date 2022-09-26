@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/function/table/arrow.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "arrow/ipc/reader.h"
 #include "arrow/record_batch.h"
@@ -67,9 +68,7 @@ struct ArrowIPCStreamBufferReader : public arrow::RecordBatchReader {
     arrow::Status ReadNext(std::shared_ptr<arrow::RecordBatch>* batch) override;
 
     /// Create arrow array stream wrapper
-    static std::unique_ptr<ArrowArrayStreamWrapper> CreateStream(
-        uintptr_t buffer_ptr, std::pair<std::unordered_map<idx_t, string>, std::vector<string>>& project_columns,
-        TableFilterSet* filters);
+	static std::unique_ptr<ArrowArrayStreamWrapper> CreateStream(uintptr_t buffer_ptr, ArrowStreamParameters &parameters);
     /// Create arrow array stream wrapper
     static void GetSchema(uintptr_t buffer_ptr, ArrowSchemaWrapper& schema);
 };
