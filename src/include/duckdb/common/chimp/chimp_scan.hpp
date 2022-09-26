@@ -34,10 +34,13 @@ public:
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		chimp_state.input.SetStream((uint8_t *)(dataptr + segment.GetBlockOffset()));
+		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
+		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
 	}
 
 	duckdb_chimp::Chimp128DecompressionState chimp_state;
 	BufferHandle handle;
+	data_ptr_t metadata_ptr;
 	idx_t group_idx = 0;
 	ColumnSegment &segment;
 
@@ -66,6 +69,13 @@ public:
 				break;
 			}
 		}
+	}
+
+private:
+	void LoadCurrentMetaData() {
+		D_ASSERT(metadata_ptr > handle.Ptr() && metadata_ptr < handle.Ptr() + Storage::BLOCK_SIZE);
+		metadata_ptr -= sizeof(bit_index_t);
+		auto start_bit_index = Load<bit_index_t>(metadata_ptr);
 	}
 };
 

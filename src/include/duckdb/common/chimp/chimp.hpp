@@ -35,6 +35,9 @@ class ChimpPrimitives {
 public:
 	static constexpr uint32_t CHIMP_SEQUENCE_SIZE = 1024;
 	static constexpr uint8_t MAX_BITS_PER_VALUE = 74;
+	static constexpr uint8_t CACHELINE_SIZE = 64;
+	static constexpr uint8_t HEADER_SIZE = sizeof(uint32_t);
+	static constexpr uint8_t FLAG_BIT_SIZE = 2;
 };
 
 //! Where all the magic happens

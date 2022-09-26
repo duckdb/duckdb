@@ -43,6 +43,12 @@ public:
 		}
 	}
 
+	void ByteAlign() {
+		// Skip the last bits of the current byte
+		// Does nothing if already byte-aligned
+		free_bits -= (free_bits & 7);
+	}
+
 	void	SetStream(uint8_t* output_stream) {
 		stream = output_stream;
 		stream_index = 0;
@@ -55,10 +61,6 @@ public:
 		return (uint64_t*)stream;
 	}
 
-	//! The amount of bytes we've filled
-	size_t ByteSize() const {
-		return (stream_index * sizeof(INTERNAL_TYPE)) + 1;
-	}
 	size_t BitSize() const {
 		return (stream_index * INTERNAL_TYPE_BITSIZE) + (INTERNAL_TYPE_BITSIZE - free_bits);
 	}

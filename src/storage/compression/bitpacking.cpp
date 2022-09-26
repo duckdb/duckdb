@@ -195,6 +195,8 @@ public:
 			auto state = (BitpackingCompressState<T> *)data_ptr;
 			auto total_bits_needed = (width * BITPACKING_METADATA_GROUP_SIZE);
 			D_ASSERT(total_bits_needed % 8 == 0);
+			// FIXME: we call AlignValue in FlushSegment, this could add up to 7 bytes
+			// That space is unaccounted for here, which on rare occassions might lead to a heap-buffer overflow
 			auto total_bytes_needed = total_bits_needed / 8;
 			total_bytes_needed += sizeof(bitpacking_width_t);
 			total_bytes_needed += sizeof(VALUE_TYPE);
@@ -230,9 +232,8 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
-		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
-		metadata_ptr =
-		    handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
+		data_ptr = handle.Ptr() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
+		metadata_ptr = handle.Ptr() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {

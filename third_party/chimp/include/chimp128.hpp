@@ -19,6 +19,8 @@
 
 namespace duckdb_chimp {
 
+using bit_index_t = uint32_t;
+
 enum CompressionFlags {
 	VALUE_IDENTICAL = 0,
 	TRAILING_EXCEEDS_THRESHOLD = 1,
@@ -65,6 +67,7 @@ template <bool EMPTY>
 class Chimp128Compression {
 public:
 	using State = Chimp128CompressionState<EMPTY>;
+	static constexpr uint8_t FLAG_MASK = (1 << 2) - 1;
 
 	//this.previousValuesLog2 =  (int)(Math.log(previousValues) / Math.log(2));
 	//! With 'previous_values' set to 128 this resolves to 7
@@ -168,6 +171,8 @@ public:
 				state.SetLeadingZeros(leading_zeros);
 			}
 		}
+		// Byte-align every value we write to the output
+		state.output.ByteAlign();
 		state.ring_buffer.Insert(in);
 	}
 };
