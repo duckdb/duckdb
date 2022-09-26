@@ -1213,7 +1213,7 @@ public class TestDuckDBJDBC {
 	public static void test_borked_string_bug539() throws Exception {
 		Connection con = DriverManager.getConnection("jdbc:duckdb:");
 		Statement s = con.createStatement();
-		s.execute("CREATE TABLE t0 (c0 VARCHAR)");
+		s.executeUpdate("CREATE TABLE t0 (c0 VARCHAR)");
 		String q = String.format("INSERT INTO t0 VALUES('%c')", 55995);
 		s.executeUpdate(q);
 		s.close();
@@ -1315,7 +1315,7 @@ public class TestDuckDBJDBC {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 
 		conn.createStatement()
-				.execute("create table ctstable1 (TYPE_ID int, TYPE_DESC varchar(32), primary key(TYPE_ID))");
+				.executeUpdate("create table ctstable1 (TYPE_ID int, TYPE_DESC varchar(32), primary key(TYPE_ID))");
 		PreparedStatement pStmt1 = conn.prepareStatement("insert into ctstable1 values(?, ?)");
 		for (int j = 1; j <= 10; j++) {
 			String sTypeDesc = "Type-" + j;
@@ -1327,7 +1327,7 @@ public class TestDuckDBJDBC {
 		}
 		pStmt1.close();
 
-		conn.createStatement().execute(
+		conn.createStatement().executeUpdate(
 				"create table ctstable2 (KEY_ID int, COF_NAME varchar(32), PRICE float, TYPE_ID int, primary key(KEY_ID) )");
 
 		PreparedStatement pStmt = conn.prepareStatement("insert into ctstable2 values(?, ?, ?, ?)");
@@ -1354,7 +1354,7 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getInt(1), 10);
 		rs.close();
 
-		stmt.execute("DELETE FROM ctstable1");
+		stmt.executeUpdate("DELETE FROM ctstable1");
 
 		rs = stmt.executeQuery("SELECT COUNT(*) FROM ctstable1");
 		assertTrue(rs.next());
@@ -1766,7 +1766,7 @@ public class TestDuckDBJDBC {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		PreparedStatement stmt = conn.prepareStatement("CREATE TABLE ontime(flightdate DATE)");
 		conn.setAutoCommit(false); // The is the key to getting the crash to happen.
-		stmt.execute();
+		stmt.executeUpdate();
 		stmt.close();
 		conn.close();
 	}

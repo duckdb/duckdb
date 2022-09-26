@@ -42,6 +42,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	private DuckDBResultSet select_result = null;
 	private int update_result = 0;
 	private boolean returnsChangedRows = false;
+	private boolean returnsNothing = false;
 	private boolean returnsResultSet = false;
 	private Object[] params = new Object[0];
 	private DuckDBResultSetMetaData meta = null;
@@ -104,6 +105,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			params = new Object[0];
 			returnsResultSet = meta.return_type.equals(StatementReturnType.QUERY_RESULT);
 			returnsChangedRows = meta.return_type.equals(StatementReturnType.CHANGED_ROWS);
+			returnsNothing = meta.return_type.equals(StatementReturnType.NOTHING);
 		}
 		catch (SQLException e) {
 			// Delete stmt_ref as it might already be allocated
@@ -155,7 +157,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public int executeUpdate() throws SQLException {
-		if (!returnsChangedRows) {
+		if (!(returnsChangedRows || returnsNothing)) {
 			throw new SQLException("executeUpdate() cannot be used with SELECT queries");
 		}
 		execute();
