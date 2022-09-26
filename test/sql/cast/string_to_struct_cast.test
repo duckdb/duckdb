@@ -1,0 +1,37 @@
+# name: test/sql/cast/string_structure_cast.test
+# description: cast strings into (nested) list structures
+# group: [cast]
+
+# statement ok
+# PRAGMA enable_verification
+
+# This already works. Casting to list makes LEN() and other list functions possible
+# https://duckdb.org/docs/sql/functions/nested
+# list_value() creates a list variable
+query I
+SELECT LEN( CAST(list_value(12.25, 13.45) AS INTEGER[]) );
+----
+2
+
+# Same as above, alternative syntax for casting
+# LIST() can only create a list of 1 element
+query I
+SELECT LEN( list_value(12.25)::INT[] );
+----
+1   
+
+# Casting string to int already works
+statement ok
+SELECT CAST('12' AS INTEGER);
+
+# Casting list to string works
+query I
+SELECT list_value(1,2,4)::VARCHAR;
+----
+[1, 2, 4]
+
+# This is work to be done
+# query I
+# SELECT LEN( CAST('[12,13,14]' AS INT[]) );
+# ----
+# 3

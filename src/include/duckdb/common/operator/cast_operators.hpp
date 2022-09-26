@@ -53,6 +53,7 @@ struct Cast {
 	template <class SRC, class DST>
 	static inline DST Operation(SRC input) {
 		DST result;
+		puts("CAST");
 		if (!TryCast::Operation(input, result)) {
 			throw InvalidInputException(CastExceptionText<SRC, DST>(input));
 		}

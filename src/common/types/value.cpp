@@ -816,6 +816,9 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::DOUBLE:
 		return Cast::Operation<double, T>(value_.double_);
 	case LogicalTypeId::VARCHAR:
+		puts("casting from string to T");
+		puts(str_value.c_str());
+		puts("\n");
 		return Cast::Operation<string_t, T>(str_value.c_str());
 	case LogicalTypeId::INTERVAL:
 		return Cast::Operation<interval_t, T>(value_.interval);
