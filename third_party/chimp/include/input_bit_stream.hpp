@@ -127,9 +127,8 @@ public:
 
 	inline uint8_t InnerReadByte() {
 		// Create a mask given the size and bit_index
-		uint8_t result = ((input[byte_index] & CreateMask(8, bit_index)) << bit_index);
+		uint8_t result = (input[byte_index] << bit_index) & masks[8] | ((input[byte_index + 1] & remainder_masks[8 + bit_index]) >> (8 - bit_index));
 		byte_index++;
-		result |= ((input[byte_index] & remainder_masks[8 + bit_index]) >> (8 - bit_index));
 		return result;
 	}
 
@@ -161,7 +160,7 @@ public:
 		// We bit-wise AND these together (no need to shift anything because the bit_index is essentially zero for this new byte)
 		// And we then right-shift these bits in place (to the right of the previous bits)
 		const bool spill_to_next_byte = (size + bit_index >= 8);
-		uint8_t result = (((input[byte_index] << bit_index) & masks[size])) >> right_shift | ((input[byte_index + spill_to_next_byte] & remainder_masks[size + bit_index]) >> bit_remainder);
+		uint8_t result = ((input[byte_index] << bit_index) & masks[size]) >> right_shift | ((input[byte_index + spill_to_next_byte] & remainder_masks[size + bit_index]) >> bit_remainder);
 		byte_index += spill_to_next_byte;
 		bit_index = (size + bit_index) & 7;
 		return result;
