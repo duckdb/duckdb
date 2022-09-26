@@ -245,7 +245,12 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	}
 	//! Generated column returns generated expression
 	if (expr->type != ExpressionType::COLUMN_REF) {
-		return BindExpression(&expr, depth);
+		auto alias = expr->alias;
+		auto result = BindExpression(&expr, depth);
+		if (result.expression) {
+			result.expression->alias = move(alias);
+		}
+		return result;
 	}
 	auto &colref = (ColumnRefExpression &)*expr;
 	D_ASSERT(colref.IsQualified());

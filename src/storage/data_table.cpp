@@ -5,6 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/sort/sort.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/constraints/list.hpp"
@@ -171,7 +172,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 }
 
 // Alter column to add new constraint
-DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Constraint> constraint)
+DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint)
     : info(parent.info), db(parent.db), total_rows(parent.total_rows.load()), row_groups(parent.row_groups),
       is_root(true) {
 
@@ -346,7 +347,7 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
                                  const vector<column_t> &column_ids) {
-	while (state.current_row_group) {
+	while (state.current_row_group && state.current_row_group->count > 0) {
 		idx_t vector_index;
 		idx_t max_row;
 		if (ClientConfig::GetConfig(context).verify_parallelism) {
@@ -360,13 +361,8 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 			max_row = state.current_row_group->start + state.current_row_group->count;
 		}
 		max_row = MinValue<idx_t>(max_row, state.max_row);
-		bool need_to_scan;
-		if (state.current_row_group->count == 0) {
-			need_to_scan = false;
-		} else {
-			need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters,
-			                                        state.current_row_group, vector_index, max_row);
-		}
+		bool need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters,
+		                                             state.current_row_group, vector_index, max_row);
 		if (ClientConfig::GetConfig(context).verify_parallelism) {
 			state.vector_index++;
 			if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
@@ -625,14 +621,15 @@ static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bf
 	VerifyForeignKeyConstraint(bfk, context, chunk, false);
 }
 
-void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, const Constraint *constraint) {
+void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint) {
 	if (constraint->type != ConstraintType::NOT_NULL) {
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 	// scan the original table, check if there's any null value
-	auto &not_null_constraint = (NotNullConstraint &)*constraint;
+	auto &not_null_constraint = (BoundNotNullConstraint &)*constraint;
 	auto &transaction = Transaction::GetTransaction(context);
 	vector<LogicalType> scan_types;
+	D_ASSERT(not_null_constraint.index < parent.column_definitions.size());
 	scan_types.push_back(parent.column_definitions[not_null_constraint.index].Type());
 	DataChunk scan_chunk;
 	auto &allocator = Allocator::Get(context);
@@ -645,7 +642,7 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 	InitializeCreateIndexScan(state, cids);
 	while (true) {
 		scan_chunk.Reset();
-		ScanCreateIndex(state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		CreateIndexScan(state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
@@ -698,8 +695,9 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		auto &constraint = table.bound_constraints[i];
 		switch (base_constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
-			VerifyNotNullConstraint(table, chunk.data[not_null.index], chunk.size(),
+			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
+			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
+			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index], chunk.size(),
 			                        table.columns[not_null.index].Name());
 			break;
 		}
@@ -845,7 +843,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 
 	idx_t current_row = row_start_aligned;
 	while (current_row < end) {
-		ScanCreateIndex(state, chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		CreateIndexScan(state, chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		if (chunk.size() == 0) {
 			break;
 		}
@@ -1170,13 +1168,16 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &co
 
 void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk,
                                         const vector<column_t> &column_ids) {
-	for (auto &constraint : table.bound_constraints) {
+	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
+		auto &base_constraint = table.constraints[i];
+		auto &constraint = table.bound_constraints[i];
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
+			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
+			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
 			// check if the constraint is in the list of column_ids
 			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (column_ids[i] == not_null.index) {
+				if (column_ids[i] == bound_not_null.index) {
 					// found the column id: check the data in
 					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), table.columns[not_null.index].Name());
 					break;
@@ -1315,7 +1316,7 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vec
 	InitializeScan(state, column_ids);
 }
 
-bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, TableScanType type) {
+bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type) {
 	auto current_row_group = state.row_group_scan_state.row_group;
 	while (current_row_group) {
 		current_row_group->ScanCommitted(state.row_group_scan_state, result, type);
@@ -1331,64 +1332,14 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 	return false;
 }
 
-void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions) {
-	auto &allocator = Allocator::Get(db);
-
-	DataChunk result;
-	result.Initialize(allocator, index->logical_types);
-
-	DataChunk intermediate;
-	vector<LogicalType> intermediate_types;
-	auto column_ids = index->column_ids;
-	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-	for (auto &id : index->column_ids) {
-		auto &col = column_definitions[id];
-		intermediate_types.push_back(col.Type());
-	}
-	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
-	intermediate.Initialize(allocator, intermediate_types);
-
-	// initialize an index scan
-	CreateIndexScanState state;
-	InitializeCreateIndexScan(state, column_ids);
-
-	if (!is_root) {
-		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
-	}
-
-	// now start incrementally building the index
-	{
-		IndexLock lock;
-		index->InitializeLock(lock);
-		ExpressionExecutor executor(allocator, expressions);
-		while (true) {
-			intermediate.Reset();
-			result.Reset();
-			// scan a new chunk from the table to index
-			ScanCreateIndex(state, intermediate, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
-			if (intermediate.size() == 0) {
-				// finished scanning for index creation
-				// release all locks
-				break;
-			}
-			// resolve the expressions for this chunk
-			executor.Execute(intermediate, result);
-
-			// insert into the index
-			if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {
-				throw ConstraintException(
-				    "Cant create unique index, table contains duplicate data on indexed column(s)");
-			}
-		}
-	}
-	info->indexes.AddIndex(move(index));
-}
-
 unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, column_t column_id) {
 	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 		return nullptr;
 	}
 	lock_guard<mutex> stats_guard(stats_lock);
+	if (column_id >= column_stats.size()) {
+		throw InternalException("Call to GetStatistics is out of range");
+	}
 	return column_stats[column_id]->stats->Copy();
 }
 

@@ -174,7 +174,7 @@ query I
 SELECT [NULL] UNION ALL SELECT [True]
 ----
 [NULL]
-[True]
+[true]
 
 # nulls in structs
 query I
@@ -186,7 +186,7 @@ query I
 SELECT {'x': NULL} UNION ALL SELECT {'x': True}
 ----
 {'x': NULL}
-{'x': True}
+{'x': true}
 
 # ctes
 query I

@@ -36,11 +36,10 @@ unique_ptr<GlobalSinkState> PhysicalCreateTableAs::GetGlobalSinkState(ClientCont
 SinkResultType PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                            DataChunk &input) const {
 	auto &sink = (CreateTableAsGlobalState &)state;
-	if (sink.table) {
-		lock_guard<mutex> client_guard(sink.append_lock);
-		sink.table->storage->Append(*sink.table, context.client, input);
-		sink.inserted_count += input.size();
-	}
+	D_ASSERT(sink.table);
+	lock_guard<mutex> client_guard(sink.append_lock);
+	sink.table->storage->Append(*sink.table, context.client, input);
+	sink.inserted_count += input.size();
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

@@ -1,0 +1,40 @@
+# name: test/sql/inet/test_inet_functions.test
+# description: Test inet type
+# group: [inet]
+
+require inet
+
+statement ok
+PRAGMA enable_verification
+
+# host
+query I
+SELECT host(INET '127.0.0.1/17')
+----
+127.0.0.1
+
+# we support auto-cast from varchar to inet
+query I
+SELECT host('127.0.0.1/17')
+----
+127.0.0.1
+
+# subtract
+query I
+SELECT INET '127.0.0.255' - 32;
+----
+127.0.0.223
+
+query I
+SELECT INET '127.0.0.31' - 32;
+----
+126.255.255.255
+
+query I
+SELECT INET '127.0.0.31' - -32;
+----
+127.0.0.63
+
+# underflow
+statement error
+SELECT INET '0.0.0.0' - 32;
