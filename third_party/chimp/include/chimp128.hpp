@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include "chimp_utils.hpp"
 #include "output_bit_stream.hpp"
-#include "bit_reader.hpp"
+#include "bit_reader_optimized.hpp"
 #include "ring_buffer.hpp"
 #include <assert.h>
 
