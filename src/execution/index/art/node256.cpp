@@ -1,5 +1,6 @@
-#include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
+
+#include "duckdb/execution/index/art/node48.hpp"
 
 namespace duckdb {
 
@@ -37,10 +38,6 @@ idx_t Node256::GetMin() {
 	return DConstants::INVALID_INDEX;
 }
 
-void Node256::ReplaceChildPointer(idx_t pos, Node *node) {
-	children[pos] = node;
-}
-
 idx_t Node256::GetNextPos(idx_t pos) {
 	for (pos == DConstants::INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
 		if (children[pos].pointer) {
@@ -54,14 +51,18 @@ Node *Node256::GetChild(ART &art, idx_t pos) {
 	return children[pos].Unswizzle(art);
 }
 
-void Node256::Insert(Node *&node, uint8_t key_byte, Node *child) {
+void Node256::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[pos] = node;
+}
+
+void Node256::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 	auto n = (Node256 *)(node);
 
 	n->count++;
-	n->children[key_byte] = child;
+	n->children[key_byte] = new_child;
 }
 
-void Node256::Erase(Node *&node, int pos, ART &art) {
+void Node256::EraseChild(Node *&node, int pos, ART &art) {
 	auto n = (Node256 *)(node);
 	n->children[pos].Reset();
 	n->count--;
@@ -79,6 +80,22 @@ void Node256::Erase(Node *&node, int pos, ART &art) {
 		delete node;
 		node = new_node;
 	}
+}
+
+void Node256::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
+
+	for (idx_t i = 0; i < 256; i++) {
+		if (info.r_node->GetChildPos(i) != DConstants::INVALID_INDEX) {
+
+			auto l_child_pos = info.l_node->GetChildPos(i);
+			auto key_byte = (uint8_t)i;
+			Node::MergeAtByte(info, depth, l_child_pos, i, key_byte, l_parent, l_pos);
+		}
+	}
+}
+
+idx_t Node256::GetSize() {
+	return 256;
 }
 
 } // namespace duckdb

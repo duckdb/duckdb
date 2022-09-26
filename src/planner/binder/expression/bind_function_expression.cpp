@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -76,8 +77,10 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		D_ASSERT(child.expr);
 		children.push_back(move(child.expr));
 	}
+
+	FunctionBinder function_binder(context);
 	unique_ptr<Expression> result =
-	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator, &binder);
+	    function_binder.BindScalarFunction(*func, move(children), error, function.is_operator, &binder);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}
@@ -155,8 +158,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	CaptureLambdaColumns(bound_lambda_expr.captures, list_child_type, bound_lambda_expr.lambda_expr,
 	                     children[0]->alias);
 
+	FunctionBinder function_binder(context);
 	unique_ptr<Expression> result =
-	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator, &binder);
+	    function_binder.BindScalarFunction(*func, move(children), error, function.is_operator, &binder);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}

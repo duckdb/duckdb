@@ -1,5 +1,6 @@
-#include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
+
+#include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 
 namespace duckdb {
@@ -32,6 +33,15 @@ idx_t Node48::GetChildGreaterEqual(uint8_t k, bool &equal) {
 	return Node::GetChildGreaterEqual(k, equal);
 }
 
+idx_t Node48::GetMin() {
+	for (idx_t i = 0; i < 256; i++) {
+		if (child_index[i] != Node::EMPTY_MARKER) {
+			return i;
+		}
+	}
+	return DConstants::INVALID_INDEX;
+}
+
 idx_t Node48::GetNextPos(idx_t pos) {
 	for (pos == DConstants::INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
 		if (child_index[pos] != Node::EMPTY_MARKER) {
@@ -46,19 +56,14 @@ Node *Node48::GetChild(ART &art, idx_t pos) {
 	return children[child_index[pos]].Unswizzle(art);
 }
 
-idx_t Node48::GetMin() {
-	for (idx_t i = 0; i < 256; i++) {
-		if (child_index[i] != Node::EMPTY_MARKER) {
-			return i;
-		}
-	}
-	return DConstants::INVALID_INDEX;
+void Node48::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[child_index[pos]] = node;
 }
 
-void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
+void Node48::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 	auto n = (Node48 *)node;
 
-	// Insert leaf into inner node
+	// Insert new child node into node
 	if (node->count < 48) {
 		// Insert element
 		idx_t pos = n->count;
@@ -69,7 +74,7 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 				pos++;
 			}
 		}
-		n->children[pos] = child;
+		n->children[pos] = new_child;
 		n->child_index[key_byte] = pos;
 		n->count++;
 	} else {
@@ -85,15 +90,11 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 		new_node->prefix = move(n->prefix);
 		delete node;
 		node = new_node;
-		Node256::Insert(node, key_byte, child);
+		Node256::InsertChild(node, key_byte, new_child);
 	}
 }
 
-void Node48::ReplaceChildPointer(idx_t pos, Node *node) {
-	children[child_index[pos]] = node;
-}
-
-void Node48::Erase(Node *&node, int pos, ART &art) {
+void Node48::EraseChild(Node *&node, int pos, ART &art) {
 	auto n = (Node48 *)(node);
 	n->children[n->child_index[pos]].Reset();
 	n->child_index[pos] = Node::EMPTY_MARKER;
@@ -111,6 +112,24 @@ void Node48::Erase(Node *&node, int pos, ART &art) {
 		delete node;
 		node = new_node;
 	}
+}
+
+void Node48::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
+
+	Node48 *r_n = (Node48 *)info.r_node;
+
+	for (idx_t i = 0; i < 256; i++) {
+		if (r_n->child_index[i] != Node::EMPTY_MARKER) {
+
+			auto l_child_pos = info.l_node->GetChildPos(i);
+			auto key_byte = (uint8_t)i;
+			Node::MergeAtByte(info, depth, l_child_pos, i, key_byte, l_parent, l_pos);
+		}
+	}
+}
+
+idx_t Node48::GetSize() {
+	return 48;
 }
 
 } // namespace duckdb

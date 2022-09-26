@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
@@ -40,6 +41,21 @@ void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);
 	Delete(state, entries, row_identifiers);
+}
+
+void Index::MergeIndexes(Index *other_index) {
+
+	// create the global index
+	switch (this->type) {
+	case IndexType::ART: {
+		auto this_art = (ART *)this;
+		auto other_art = (ART *)other_index;
+		ART::Merge(this_art, other_art);
+		break;
+	}
+	default:
+		throw InternalException("Unimplemented index type for merge");
+	}
 }
 
 void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {

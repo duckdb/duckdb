@@ -9,7 +9,7 @@ statement ok
 PRAGMA temp_directory=''
 
 statement ok
-PRAGMA memory_limit='1MB'
+PRAGMA memory_limit='2MB'
 
 # we can't offload anything to disk now
 # hence this creation should fail as the table does not fit within our memory limit

@@ -10,6 +10,8 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
+#include "duckdb/transaction/transaction.hpp"
+
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 
@@ -94,7 +96,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 }
 
 template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
-idx_t ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
 	auto scan_count = ScanVector(state, result, STANDARD_VECTOR_SIZE);
 
 	lock_guard<mutex> update_guard(update_lock);
@@ -106,31 +108,30 @@ idx_t ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, Colum
 		if (SCAN_COMMITTED) {
 			updates->FetchCommitted(vector_index, result);
 		} else {
-			D_ASSERT(transaction);
-			updates->FetchUpdates(*transaction, vector_index, result);
+			updates->FetchUpdates(transaction, vector_index, result);
 		}
 	}
 	return scan_count;
 }
 
-template idx_t ColumnData::ScanVector<false, false>(Transaction *transaction, idx_t vector_index,
+template idx_t ColumnData::ScanVector<false, false>(TransactionData transaction, idx_t vector_index,
                                                     ColumnScanState &state, Vector &result);
-template idx_t ColumnData::ScanVector<true, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
-                                                   Vector &result);
-template idx_t ColumnData::ScanVector<false, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
-                                                   Vector &result);
-template idx_t ColumnData::ScanVector<true, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
-                                                  Vector &result);
+template idx_t ColumnData::ScanVector<true, false>(TransactionData transaction, idx_t vector_index,
+                                                   ColumnScanState &state, Vector &result);
+template idx_t ColumnData::ScanVector<false, true>(TransactionData transaction, idx_t vector_index,
+                                                   ColumnScanState &state, Vector &result);
+template idx_t ColumnData::ScanVector<true, true>(TransactionData transaction, idx_t vector_index,
+                                                  ColumnScanState &state, Vector &result);
 
-idx_t ColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	return ScanVector<false, true>(&transaction, vector_index, state, result);
+idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+	return ScanVector<false, true>(transaction, vector_index, state, result);
 }
 
 idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
 	if (allow_updates) {
-		return ScanVector<true, true>(nullptr, vector_index, state, result);
+		return ScanVector<true, true>(TransactionData(0, 0), vector_index, state, result);
 	} else {
-		return ScanVector<true, false>(nullptr, vector_index, state, result);
+		return ScanVector<true, false>(TransactionData(0, 0), vector_index, state, result);
 	}
 }
 
@@ -153,14 +154,14 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count)
 	return ScanVector(state, result, count);
 }
 
-void ColumnData::Select(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 	result.Flatten(scan_count);
 	ColumnSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
 }
 
-void ColumnData::FilterScan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+void ColumnData::FilterScan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                             SelectionVector &sel, idx_t count) {
 	Scan(transaction, vector_index, state, result);
 	result.Slice(sel, count);
@@ -174,34 +175,6 @@ void ColumnData::FilterScanCommitted(idx_t vector_index, ColumnScanState &state,
 
 void ColumnData::Skip(ColumnScanState &state, idx_t count) {
 	state.Next(count);
-}
-
-void ColumnScanState::NextInternal(idx_t count) {
-	if (!current) {
-		//! There is no column segment
-		return;
-	}
-	row_index += count;
-	while (row_index >= current->start + current->count) {
-		current = (ColumnSegment *)current->next.get();
-		initialized = false;
-		segment_checked = false;
-		if (!current) {
-			break;
-		}
-	}
-	D_ASSERT(!current || (row_index >= current->start && row_index < current->start + current->count));
-}
-
-void ColumnScanState::Next(idx_t count) {
-	NextInternal(count);
-	for (auto &child_state : child_states) {
-		child_state.Next(count);
-	}
-}
-
-void ColumnScanState::NextVector() {
-	Next(STANDARD_VECTOR_SIZE);
 }
 
 void ColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
@@ -285,7 +258,7 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE);
 }
 
-void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
+void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                           idx_t result_idx) {
 	auto segment = (ColumnSegment *)data.GetSegment(row_id);
 
@@ -298,7 +271,7 @@ void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row
 	}
 }
 
-void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                         idx_t update_count) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
@@ -312,7 +285,7 @@ void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &up
 	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
-void ColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector,
+void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
                               row_t *row_ids, idx_t update_count, idx_t depth) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());

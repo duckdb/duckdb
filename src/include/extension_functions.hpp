@@ -35,6 +35,7 @@ static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = {
     {"json", "json"},
     {"json_array", "json"},
     {"json_array_length", "json"},
+    {"json_contains", "json"},
     {"json_extract", "json"},
     {"json_extract_path", "json"},
     {"json_extract_path_text", "json"},

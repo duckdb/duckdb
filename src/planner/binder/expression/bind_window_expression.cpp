@@ -9,6 +9,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -88,7 +89,7 @@ static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> 
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 
 	auto &bound = (BoundExpression &)*expr;
-	bound.expr = BoundCastExpression::AddCastToType(move(bound.expr), type);
+	bound.expr = BoundCastExpression::AddDefaultCastToType(move(bound.expr), type);
 
 	return move(bound.expr);
 }
@@ -109,7 +110,8 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	children.emplace_back(move(bound.expr));
 
 	string error;
-	auto function = ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, name, move(children), error, true);
+	FunctionBinder function_binder(context);
+	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, move(children), error, true);
 	if (!function) {
 		throw BinderException(error);
 	}
@@ -170,13 +172,13 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		case ExpressionType::WINDOW_NTILE:
 			// ntile(bigint)
 			if (argno == 0) {
-				bound.expr = BoundCastExpression::AddCastToType(move(bound.expr), LogicalType::BIGINT);
+				bound.expr = BoundCastExpression::AddCastToType(context, move(bound.expr), LogicalType::BIGINT);
 			}
 			break;
 		case ExpressionType::WINDOW_NTH_VALUE:
 			// nth_value(<expr>, index)
 			if (argno == 1) {
-				bound.expr = BoundCastExpression::AddCastToType(move(bound.expr), LogicalType::BIGINT);
+				bound.expr = BoundCastExpression::AddCastToType(context, move(bound.expr), LogicalType::BIGINT);
 			}
 		default:
 			break;
@@ -197,13 +199,14 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 
 		// bind the aggregate
 		string error;
-		auto best_function = Function::BindFunction(func->name, func->functions, types, error);
+		FunctionBinder function_binder(context);
+		auto best_function = function_binder.BindFunction(func->name, func->functions, types, error);
 		if (best_function == DConstants::INVALID_INDEX) {
 			throw BinderException(binder.FormatError(window, error));
 		}
 		// found a matching function! bind it as an aggregate
 		auto bound_function = func->functions.GetFunctionByOffset(best_function);
-		auto bound_aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children));
+		auto bound_aggregate = function_binder.BindAggregateFunction(bound_function, move(children));
 		// create the aggregate
 		aggregate = make_unique<AggregateFunction>(bound_aggregate->function);
 		bind_info = move(bound_aggregate->bind_info);
@@ -269,7 +272,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		}
 
 		// Cast all three to match
-		bound_order.expr = BoundCastExpression::AddCastToType(move(bound_order.expr), order_type);
+		bound_order.expr = BoundCastExpression::AddCastToType(context, move(bound_order.expr), order_type);
 		start_type = end_type = order_type;
 	}
 

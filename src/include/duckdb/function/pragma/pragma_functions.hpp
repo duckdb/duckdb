@@ -20,4 +20,6 @@ struct PragmaFunctions {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+string PragmaShow(ClientContext &context, const FunctionParameters &parameters);
+
 } // namespace duckdb

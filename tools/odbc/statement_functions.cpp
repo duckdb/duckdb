@@ -161,7 +161,7 @@ static SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Va
 	// When the driver returns fixed-length data, such as an integer or a date structure, the driver ignores
 	// BufferLength... D_ASSERT(((size_t)buffer_length) >= sizeof(DEST));
 	try {
-		auto casted_value = val.CastAs(type).GetValue<SRC>();
+		auto casted_value = val.CastAs(*stmt->dbc->conn->context, type).GetValue<SRC>();
 		Store<DEST>(casted_value, (duckdb::data_ptr_t)target_value_ptr);
 		if (str_len_or_ind_ptr) {
 			*str_len_or_ind_ptr = sizeof(casted_value);

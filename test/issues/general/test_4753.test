@@ -1,0 +1,25 @@
+# name: test/issues/general/test_4753.test
+# description: Issue 4753: Exists and ANY correlated subquery produce incorrect result
+# group: [general]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t (x INT);
+
+statement ok
+INSERT INTO t VALUES (1), (2);
+
+query I
+SELECT NULL = ANY(SELECT sum(x) FROM t t2 WHERE t1.x > 2) FROM t t1;
+----
+NULL
+NULL
+
+query I
+SELECT EXISTS(SELECT sum(x) FROM t t2 WHERE t1.x > 2) FROM t t1;
+----
+true
+true
+
