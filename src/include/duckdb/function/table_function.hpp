@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/function/function.hpp"
-#include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 
 #include <functional>
 
@@ -69,14 +69,46 @@ struct TableFunctionInitInput {
 };
 
 struct TableFunctionInput {
+public:
 	TableFunctionInput(const FunctionData *bind_data_p, LocalTableFunctionState *local_state_p,
-	                   GlobalTableFunctionState *global_state_p)
-	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p) {
+	                   GlobalTableFunctionState *global_state_p, const vector<column_t> *projection_ids = nullptr,
+	                   DataChunk *pre_projection_chunk = nullptr)
+	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p),
+	      projection_ids(projection_ids), pre_projection_chunk(pre_projection_chunk) {
 	}
 
+	bool CanRemoveFilterColumns() {
+		if (projection_ids == nullptr) {
+			D_ASSERT(pre_projection_chunk == nullptr);
+			return false;
+		}
+
+		if (projection_ids->empty()) {
+			return false;
+		}
+
+		D_ASSERT(pre_projection_chunk);
+		if (projection_ids->size() == pre_projection_chunk->data.size()) {
+			return false;
+		}
+
+		return true;
+	}
+
+	void RemoveFilterColumns(DataChunk &output) {
+		D_ASSERT(CanRemoveFilterColumns());
+		output.ReferenceColumns(*pre_projection_chunk, *projection_ids);
+	}
+
+public:
 	const FunctionData *bind_data;
 	LocalTableFunctionState *local_state;
 	GlobalTableFunctionState *global_state;
+
+	//! Indices of the columns that are projected out (excludes filter columns that are unused in remainder of plan)
+	const vector<column_t> *projection_ids;
+	//! DataChunk that holds all the scanned columns (including filter columns that will be immediately projected out)
+	DataChunk *pre_projection_chunk;
 };
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,

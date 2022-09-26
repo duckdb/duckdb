@@ -3,13 +3,13 @@
 #include "duckdb.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb/common/types/vector_buffer.hpp"
 
 namespace duckdb {
 
@@ -307,7 +307,13 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
 	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
+	if (data_p.CanRemoveFilterColumns()) {
+		ArrowToDuckDB(state, data.arrow_convert_data, *data_p.pre_projection_chunk, data.lines_read - output_size);
+		data_p.RemoveFilterColumns(output);
+	} else {
+		ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
+	}
+
 	output.Verify();
 	state.chunk_offset += output.size();
 }

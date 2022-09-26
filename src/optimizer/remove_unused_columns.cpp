@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -16,7 +17,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
-#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -215,9 +215,15 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		if (!everything_referenced) {
 			auto &get = (LogicalGet &)op;
 
-			// Get projection indices (excluding filter columns that are unused)
-			auto proj_column_ids = get.column_ids;
-			ClearUnusedExpressions(proj_column_ids, get.table_index, false);
+			// Create "selection vector" of all column ids
+			vector<column_t> proj_sel;
+			for (idx_t col_idx = 0; col_idx < get.column_ids.size(); col_idx++) {
+				proj_sel.push_back(col_idx);
+			}
+			// Create a copy that we can use to match ids later
+			auto col_sel = proj_sel;
+			// Clear unused ids, exclude filter columns that are projected out immediately
+			ClearUnusedExpressions(proj_sel, get.table_index, false);
 
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
@@ -238,15 +244,25 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				}
 			}
 
-			// table scan: figure out which columns are referenced
-			ClearUnusedExpressions(get.column_ids, get.table_index);
+			// Clear unused ids, include filter columns that are projected out immediately
+			ClearUnusedExpressions(col_sel, get.table_index);
 
-			// If we have "SELECT b FROM test WHERE a = 42", we don't want 'a' to leave the table scan at all
-			// So, we put the projection columns within the GET
-			for (idx_t proj_id : proj_column_ids) {
-				for (idx_t col_idx = 0; col_idx < get.column_ids.size(); col_idx++) {
-					if (get.column_ids[col_idx] == proj_id) {
+			// Now set the column ids in the LogicalGet using the "selection vector"
+			vector<column_t> column_ids;
+			column_ids.reserve(col_sel.size());
+			for (auto col_sel_idx : col_sel) {
+				column_ids.push_back(get.column_ids[col_sel_idx]);
+			}
+			get.column_ids = move(column_ids);
+
+			// Now set the projection cols by matching the "selection vector" that excludes filter columns
+			// with the "selection vector" that includes filter columns
+			idx_t col_idx = 0;
+			for (auto proj_sel_idx : proj_sel) {
+				for (; col_idx < col_sel.size(); col_idx++) {
+					if (proj_sel_idx == col_sel[col_idx]) {
 						get.projection_ids.push_back(col_idx);
+						break;
 					}
 				}
 			}

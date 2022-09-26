@@ -18,6 +18,11 @@ namespace duckdb {
 //! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
 public:
+	//! Regular Table Scan
+	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
+	                  vector<column_t> column_ids, vector<string> names, unique_ptr<TableFilterSet> table_filters,
+	                  idx_t estimated_cardinality);
+	//! Table scan that immediately projects out filter columns that are unused in the remainder of the query plan
 	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
 	                  vector<LogicalType> returned_types, vector<column_t> column_ids, vector<column_t> projection_ids,
 	                  vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality);
@@ -36,6 +41,17 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
+
+	//! Whether we can remove filter columns immediately
+	bool CanRemoveFilterColumns() const {
+		if (projection_ids.empty()) {
+			return false;
+		} else if (projection_ids.size() == column_ids.size()) {
+			return false;
+		} else {
+			return true;
+		}
+	}
 
 public:
 	string GetName() const override;

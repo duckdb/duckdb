@@ -1,42 +1,37 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include <string>
-#include <vector>
+#include "parquet-extension.hpp"
+
+#include "duckdb.hpp"
+#include "parquet_metadata.hpp"
+#include "parquet_reader.hpp"
+#include "parquet_writer.hpp"
+#include "zstd_file_system.hpp"
+
 #include <fstream>
 #include <iostream>
 #include <numeric>
-
-#include "parquet-extension.hpp"
-#include "parquet_reader.hpp"
-#include "parquet_writer.hpp"
-#include "parquet_metadata.hpp"
-#include "zstd_file_system.hpp"
-
-#include "duckdb.hpp"
+#include <string>
+#include <vector>
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-
-#include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-
-#include "duckdb/storage/statistics/base_statistics.hpp"
-
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/field_writer.hpp"
-
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #endif
 
 namespace duckdb {
@@ -422,7 +417,13 @@ public:
 		auto &bind_data = (ParquetReadBindData &)*data_p.bind_data;
 
 		do {
-			data.reader->Scan(data.scan_state, output);
+			if (data_p.CanRemoveFilterColumns()) {
+				data.reader->Scan(data.scan_state, *data_p.pre_projection_chunk);
+				data_p.RemoveFilterColumns(output);
+			} else {
+				data.reader->Scan(data.scan_state, output);
+			}
+
 			bind_data.chunk_count++;
 			if (output.size() > 0) {
 				return;

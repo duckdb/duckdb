@@ -97,6 +97,9 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 		if (bind_data.is_create_index) {
 			bind_data.table->storage->CreateIndexScan(
 			    state.scan_state, output, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+		} else if (data_p.CanRemoveFilterColumns()) {
+			bind_data.table->storage->Scan(transaction, *data_p.pre_projection_chunk, state.scan_state);
+			data_p.RemoveFilterColumns(output);
 		} else {
 			bind_data.table->storage->Scan(transaction, output, state.scan_state);
 		}
@@ -197,8 +200,15 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 	auto &state = (IndexScanGlobalState &)*data_p.global_state;
 	auto &transaction = Transaction::GetTransaction(context);
 	if (!state.finished) {
-		bind_data.table->storage->Fetch(transaction, output, state.column_ids, state.row_ids,
-		                                bind_data.result_ids.size(), state.fetch_state);
+		if (data_p.CanRemoveFilterColumns()) {
+			bind_data.table->storage->Fetch(transaction, *data_p.pre_projection_chunk, state.column_ids, state.row_ids,
+			                                bind_data.result_ids.size(), state.fetch_state);
+			data_p.RemoveFilterColumns(output);
+		} else {
+			bind_data.table->storage->Fetch(transaction, output, state.column_ids, state.row_ids,
+			                                bind_data.result_ids.size(), state.fetch_state);
+		}
+
 		state.finished = true;
 	}
 	if (output.size() == 0) {

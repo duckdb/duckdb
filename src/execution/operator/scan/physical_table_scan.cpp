@@ -10,6 +10,15 @@
 namespace duckdb {
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
+                                     unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
+                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
+                                     idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types), estimated_cardinality),
+      function(move(function_p)), bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)),
+      table_filters(move(table_filters_p)) {
+}
+
+PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
                                      vector<column_t> column_ids_p, vector<column_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
@@ -50,15 +59,17 @@ public:
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.table_filters.get());
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
-		vector<LogicalType> types;
-		for (auto col_id : op.column_ids) {
-			if (col_id == COLUMN_IDENTIFIER_ROW_ID) {
-				types.emplace_back(LogicalType::ROW_TYPE);
-			} else {
-				types.push_back(op.returned_types[col_id]);
+		if (op.CanRemoveFilterColumns()) {
+			vector<LogicalType> types;
+			for (auto col_id : op.column_ids) {
+				if (col_id == COLUMN_IDENTIFIER_ROW_ID) {
+					types.emplace_back(LogicalType::ROW_TYPE);
+				} else {
+					types.push_back(op.returned_types[col_id]);
+				}
 			}
+			table_function_chunk.Initialize(Allocator::Get(context.client), types);
 		}
-		table_function_chunk.Initialize(Allocator::Get(context.client), types);
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
@@ -80,14 +91,14 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 	auto &gstate = (TableScanGlobalSourceState &)gstate_p;
 	auto &state = (TableScanLocalSourceState &)lstate;
 
-	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
-
-	if (projection_ids.empty()) {
+	if (CanRemoveFilterColumns()) {
+		TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get(), &projection_ids,
+		                        &state.table_function_chunk);
+		state.table_function_chunk.Reset();
 		function.function(context.client, data, chunk);
 	} else {
-		state.table_function_chunk.Reset();
-		function.function(context.client, data, state.table_function_chunk);
-		chunk.ReferenceColumns(state.table_function_chunk, projection_ids);
+		TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+		function.function(context.client, data, chunk);
 	}
 }
 
