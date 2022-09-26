@@ -120,7 +120,7 @@ void PyDecimal::SetExponent(py::handle &exponent) {
 	ExponentNotRecognized();
 }
 
-static bool WidthIsCorrect(int32_t width) {
+static bool WidthFitsInDecimal(int32_t width) {
 	return width >= 0 && width <= Decimal::MAX_WIDTH_DECIMAL;
 }
 
@@ -143,7 +143,7 @@ Value PyDecimalCastSwitch(PyDecimal &decimal, uint8_t width, uint8_t scale) {
 }
 
 //! Wont fit in a DECIMAL, fall back to DOUBLE
-static Value FallbackToDouble(py::handle &obj) {
+static Value CastToDouble(py::handle &obj) {
 	string converted = py::str(obj);
 	string_t decimal_string(converted);
 	double double_val;
@@ -156,24 +156,27 @@ static Value FallbackToDouble(py::handle &obj) {
 
 Value PyDecimal::ToDuckValue() {
 	int32_t width = digits.size();
-	if (!WidthIsCorrect(width)) {
-		return FallbackToDouble(obj);
+	if (!WidthFitsInDecimal(width)) {
+		return CastToDouble(obj);
 	}
 	switch (exponent_type) {
 	case PyDecimalExponentType::EXPONENT_SCALE: {
 		uint8_t scale = exponent_value;
-		D_ASSERT(WidthIsCorrect(width));
+		D_ASSERT(WidthFitsInDecimal(width));
 		if (scale > width) {
 			//! Values like '0.001'
 			width = scale + 1; //! leave 1 room for the non-decimal value
+		}
+		if (!WidthFitsInDecimal(width)) {
+			return CastToDouble(obj);
 		}
 		return PyDecimalCastSwitch<PyDecimalScaleConverter>(*this, width, scale);
 	}
 	case PyDecimalExponentType::EXPONENT_POWER: {
 		uint8_t scale = exponent_value;
 		width += scale;
-		if (!WidthIsCorrect(width)) {
-			return FallbackToDouble(obj);
+		if (!WidthFitsInDecimal(width)) {
+			return CastToDouble(obj);
 		}
 		return PyDecimalCastSwitch<PyDecimalPowerConverter>(*this, width, scale);
 	}

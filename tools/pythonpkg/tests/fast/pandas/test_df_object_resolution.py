@@ -603,6 +603,40 @@ class TestResolveObjectColumns(object):
         assert(conversion == reference)
         assert(isinstance(conversion[0][0], float))
 
+    def test_numeric_decimal_double_mixed(self):
+        duckdb_conn = duckdb.connect()
+        data = [
+            Decimal("1.234"),
+            Decimal("1.234567891234567890123456789012345678901234567890123456789"),
+            Decimal("0.00000000000345"),
+            Decimal("0.00000000000000000000000000000000000000000000000000000000000123456789"),
+            Decimal("1234543534535213412342342.2345456"),
+            Decimal("123456789123456789123456789123456789123456789123456789123456789123456789"),
+            Decimal("1232354.000000000000000000000000000035"),
+        ]
+        decimals = pd.DataFrame(
+            data={
+                "0": data
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                    (1.234),
+                    (1.234567891234567890123456789012345678901234567890123456789),
+                    (0.00000000000345),
+                    (0.00000000000000000000000000000000000000000000000000000000000123456789),
+                    (1234543534535213412342342.2345456),
+                    (123456789123456789123456789123456789123456789123456789123456789123456789),
+                    (1232354.000000000000000000000000000035)
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+        assert(conversion == reference)
+        assert(isinstance(conversion[0][0], float))
+
     def test_numeric_decimal_out_of_range(self):
         duckdb_conn = duckdb.connect()
         data = [Decimal("1.234567890123456789012345678901234567"), Decimal("123456789012345678901234567890123456.0")]
