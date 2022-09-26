@@ -404,13 +404,13 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 				if (result_values[r][c] == value.ToString()) {
 					continue;
 				}
-				verify_val = verify_val.CastAs(state.result->types[c]);
+				verify_val = verify_val.CastAs(*state.con.context, state.result->types[c]);
 				if (result_values[r][c] == "(empty)" && (verify_val.ToString() == "" || value.IsNull())) {
 					continue;
 				}
 			} catch (...) {
 			}
-			if (!Value::ValuesAreEqual(value, verify_val)) {
+			if (!Value::ValuesAreEqual(*state.con.context, value, verify_val)) {
 				return StringUtil::Format(
 				    "Error in result on row %lld column %lld: expected value \"%s\" but got value \"%s\"", r + 1, c + 1,
 				    verify_val.ToString().c_str(), value.ToString().c_str());

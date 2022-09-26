@@ -190,16 +190,24 @@ static int64_t ImplicitCastDate(const LogicalType &to) {
 }
 
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
-	if (to.id() == LogicalTypeId::ANY) {
-		// anything can be cast to ANY type for no cost
-		return 0;
-	}
 	if (from.id() == LogicalTypeId::SQLNULL) {
 		// NULL expression can be cast to anything
 		return TargetTypeCost(to);
 	}
 	if (from.id() == LogicalTypeId::UNKNOWN) {
 		// parameter expression can be cast to anything for no cost
+		return 0;
+	}
+	if (to.id() == LogicalTypeId::ANY) {
+		// anything can be cast to ANY type for (almost no) cost
+		return 1;
+	}
+	if (from.GetAlias() != to.GetAlias()) {
+		// if aliases are different, an implicit cast is not possible
+		return -1;
+	}
+	if (from.id() == to.id()) {
+		// arguments match: do nothing
 		return 0;
 	}
 	if (from.id() == LogicalTypeId::BLOB && to.id() == LogicalTypeId::VARCHAR) {

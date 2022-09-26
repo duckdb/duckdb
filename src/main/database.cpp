@@ -11,6 +11,7 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/replacement_opens.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -21,6 +22,7 @@ namespace duckdb {
 DBConfig::DBConfig() {
 	compression_functions = make_unique<CompressionFunctionSet>();
 	replacement_opens.push_back(ExtensionPrefixReplacementOpen());
+	cast_functions = make_unique<CastFunctionSet>();
 }
 
 DBConfig::~DBConfig() {

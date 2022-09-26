@@ -103,7 +103,7 @@ create table a as select list(i%2=0) AS l from range(1, 6, 1) t1(i);
 query I
 select l from a order by 1;
 ----
-[False, True, False, True, False]
+[false, true, false, true, false]
 
 query I
 select unnest(l) from a order by 1;

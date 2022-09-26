@@ -68,11 +68,13 @@ public:
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
 //! node for projection pushdown purposes.
 struct TableBinding : public Binding {
-	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, LogicalGet &get, idx_t index,
-	             bool add_row_id = false);
+	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
+	             vector<column_t> &bound_column_ids, StandardEntry *entry, idx_t index, bool add_row_id = false);
 
-	//! the underlying LogicalGet
-	LogicalGet &get;
+	//! A reference to the set of bound column ids
+	vector<column_t> &bound_column_ids;
+	//! The underlying catalog entry (if any)
+	StandardEntry *entry;
 
 public:
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);

@@ -27,7 +27,8 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 			if (source_types[i] != target_types[i]) {
 				// differing types, have to add a cast
 				string alias = node->expressions[i]->alias;
-				node->expressions[i] = make_unique<BoundCastExpression>(move(node->expressions[i]), target_types[i]);
+				node->expressions[i] =
+				    BoundCastExpression::AddCastToType(context, move(node->expressions[i]), target_types[i]);
 				node->expressions[i]->alias = alias;
 			}
 		}
@@ -46,7 +47,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 			unique_ptr<Expression> result = make_unique<BoundColumnRefExpression>(source_types[i], setop_columns[i]);
 			if (source_types[i] != target_types[i]) {
 				// add a cast only if the source and target types are not equivalent
-				result = make_unique<BoundCastExpression>(move(result), target_types[i]);
+				result = BoundCastExpression::AddCastToType(context, move(result), target_types[i]);
 			}
 			select_list.push_back(move(result));
 		}
