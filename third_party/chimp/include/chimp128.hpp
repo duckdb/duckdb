@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include "chimp_utils.hpp"
 #include "output_bit_stream.hpp"
-#include "input_bit_stream.hpp"
+#include "bit_reader.hpp"
 #include "ring_buffer.hpp"
 #include <assert.h>
 
@@ -213,7 +213,7 @@ public:
 		return trailing_zeros;
 	}
 
-	InputBitStream input;
+	BitReader input;
 	uint8_t leading_zeros;
 	uint8_t trailing_zeros;
 	uint64_t reference_value = 0;

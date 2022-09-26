@@ -78,7 +78,6 @@ public:
 
 public:
 	idx_t RequiredSpace() const {
-		// FIXME add padding to avoid having to check if we have enough data in Scan (InputBitStream)
 		return ChimpPrimitives::MAX_BITS_PER_VALUE;
 	}
 	idx_t UsedSpace() const {

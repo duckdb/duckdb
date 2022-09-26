@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// third_party/chimp/include/input_bit_stream.hpp
+// third_party/chimp/include/bit_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -103,10 +103,10 @@ static const uint8_t right_shifts[] = {
 	8,
 };
 
-struct InputBitStream {
+struct BitReader {
 public:
 public:
-	InputBitStream() : input(nullptr), bit_index(0), byte_index(0) {}
+	BitReader() : input(nullptr), bit_index(0), byte_index(0) {}
 	uint8_t *input;
 	uint8_t bit_index; //Index in the current byte, starting from the right
 	uint64_t byte_index;
