@@ -170,6 +170,15 @@ public:
         return result << remainder | InnerRead(remainder);
     }
 
+    template <class T>
+    inline T ReadBytes(const uint8_t &bytes, const uint8_t &remainder) {
+        T result = 0;
+        for (uint8_t i = 0; i < bytes; i++) {
+            result = result << 8 | InnerReadByte();
+        }
+        return result << remainder | InnerRead(remainder);
+    }
+
 	template <class T, uint8_t SIZE>
 	inline T ReadValue() {
 		constexpr uint8_t BYTES = (SIZE >> 3);
@@ -178,21 +187,10 @@ public:
 	}
 
 	template <class T>
-	inline T ReadValue(uint8_t size = sizeof(T) * __CHAR_BIT__) {
+	inline T ReadValue(uint8_t size) {
 		const uint8_t bytes = size >> 3; //divide by 8;
 		const uint8_t remainder = size & 7;
-		switch (bytes) {
-			case 0: return ReadBytes<uint8_t, 0>(remainder);
-			case 1: return ReadBytes<uint16_t, 1>(remainder);
-			case 2: return ReadBytes<uint32_t, 2>(remainder);
-			case 3: return ReadBytes<uint32_t, 3>(remainder);
-			case 4: return ReadBytes<uint64_t, 4>(remainder);
-			case 5: return ReadBytes<uint64_t, 5>(remainder);
-			case 6: return ReadBytes<uint64_t, 6>(remainder);
-			case 7: return ReadBytes<uint64_t, 7>(remainder);
-			case 8: return ReadBytes<uint64_t, 8>(remainder);
-			default: throw std::runtime_error("ReadValue reports that it needs to read " + std::to_string(bytes) + " bytes");
-		}
+		return ReadBytes<T>(bytes, remainder);
 	}
 };
 

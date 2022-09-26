@@ -259,7 +259,7 @@ public:
 	}
 
 	static inline bool LoadFirst(RETURN_TYPE &value, Chimp128DecompressionState& state) {
-		value = state.input.template ReadValue<RETURN_TYPE>();
+		value = state.input.template ReadValue<RETURN_TYPE, (sizeof(RETURN_TYPE) * 8)>();
 		state.ring_buffer.Insert<true>(value);
 		state.first = false;
 		state.reference_value = value;
@@ -271,7 +271,7 @@ public:
 			0, 8, 12, 16, 18, 20, 22, 24
 		};
 
-		auto flag = state.input.template ReadValue<uint8_t>(2);
+		auto flag = state.input.template ReadValue<uint8_t, 2>();
 		switch (flag) {
 		case VALUE_IDENTICAL: {
 			//! Value is identical to previous value
