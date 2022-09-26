@@ -18,11 +18,7 @@
 namespace duckdb_chimp {
 
 //! Every byte read touches at most 2 bytes (1 if it's perfectly aligned)
-//! Within a byte we need to mask off the bytes that we're interested in
-//! And then we need to shift these to the start of the byte
-//! I.E we want 4 bits, but our bit index is 3, our mask becomes:
-//! 0111 1000
-//! With a shift of 3
+//! Within a byte we need to mask off the bits that we're interested in
 
 //! Align the masks to the right
 static constexpr uint8_t masks[] = {
