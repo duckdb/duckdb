@@ -135,8 +135,9 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_DuckResultSetMeta = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
 
-	J_DuckResultSetMeta_init = env->GetMethodID(J_DuckResultSetMeta, "<init>",
-	                                            "(II[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)V");
+	J_DuckResultSetMeta_init =
+	    env->GetMethodID(J_DuckResultSetMeta, "<init>",
+	                     "(II[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)V");
 
 	tmpLocalRef = env->FindClass("org/duckdb/DuckDBVector");
 	J_DuckVector = (jclass)env->NewGlobalRef(tmpLocalRef);
@@ -530,8 +531,11 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 		                           env->NewStringUTF(type_to_jduckdb_type(types[col_idx]).c_str()));
 	}
 
+	auto return_type =
+	    env->NewStringUTF(StatementReturnTypeToString(stmt_ref->stmt->GetStatementProperties().return_type).c_str());
+
 	return env->NewObject(J_DuckResultSetMeta, J_DuckResultSetMeta_init, stmt_ref->stmt->n_param, column_count,
-	                      name_array, type_array, type_detail_array);
+	                      name_array, type_array, type_detail_array, return_type);
 }
 
 JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv *env, jclass,
@@ -689,17 +693,6 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv *, jclass) {
 	return STANDARD_VECTOR_SIZE;
-}
-
-JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare_1type(JNIEnv *env, jclass,
-                                                                                   jobject stmt_ref_buf) {
-
-	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
-	if (!stmt_ref || !stmt_ref->stmt || stmt_ref->stmt->HasError()) {
-		env->ThrowNew(J_SQLException, "Invalid statement");
-		return nullptr;
-	}
-	return env->NewStringUTF(StatementTypeToString(stmt_ref->stmt->GetStatementType()).c_str());
 }
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1appender(JNIEnv *env, jclass,
