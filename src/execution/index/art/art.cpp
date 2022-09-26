@@ -307,8 +307,6 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 
 	ArenaAllocator arena_allocator(allocator);
 	vector<Key> keys;
-
-	// TODO: check where GenerateKeys gets called and decide where to best put this
 	keys.reserve(STANDARD_VECTOR_SIZE);
 
 	auto skipped_all_nulls = false;
@@ -374,9 +372,9 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
 
 	// generate the keys for the given input
-	// TODO: reserve the keys vector once
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
 	vector<Key> keys;
+	keys.reserve(input.size());
 	GenerateKeys(arena_allocator, input, keys);
 
 	// now insert the elements into the index
@@ -600,7 +598,7 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 //===--------------------------------------------------------------------===//
 // Point Query
 //===--------------------------------------------------------------------===//
-static Key CreateKey(ArenaAllocator &allocator, ART &art, PhysicalType type, Value &value) {
+static Key CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value) {
 	D_ASSERT(type == value.type().InternalType());
 	switch (type) {
 	case PhysicalType::BOOL:
@@ -634,12 +632,7 @@ static Key CreateKey(ArenaAllocator &allocator, ART &art, PhysicalType type, Val
 	}
 }
 
-bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids) {
-
-	// TODO: the key directly owning the data for a single key might be more efficient
-	// TODO: the index join should be refactored anyways, look-ups should be vectorized for multiple keys
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	auto key = CreateKey(arena_allocator, *this, types[0], state->values[0]);
+bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 
 	auto leaf = static_cast<Leaf *>(Lookup(tree, key, 0));
 	if (!leaf) {
@@ -655,14 +648,9 @@ bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &
 	return true;
 }
 
-void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
+void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
 
 	// we need to look for a leaf
-	// TODO: the key directly owning the data for a single key might be more efficient
-	// TODO: the index join should be refactored anyways, look-ups should be vectorized for multiple keys
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	auto key = CreateKey(arena_allocator, *this, types[0], equal_value);
-
 	auto leaf = (Leaf *)(Lookup(tree, key, 0));
 	if (!leaf) {
 		return;
@@ -707,12 +695,10 @@ Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
 // Returns: True (If found leaf >= key)
 //          False (Otherwise)
 //===--------------------------------------------------------------------===//
-bool ART::SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids) {
-	Iterator *it = &state->iterator;
+bool ART::SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_t max_count,
+                        vector<row_t> &result_ids) {
 
-	// TODO: the key directly owning the data for a single key might be more efficient
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	auto key = CreateKey(arena_allocator, *this, types[0], state->values[0]);
+	Iterator *it = &state->iterator;
 
 	// greater than scan: first set the iterator to the node at which we will start our scan by finding the lowest node
 	// that satisfies our requirement
@@ -732,16 +718,13 @@ bool ART::SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_coun
 //===--------------------------------------------------------------------===//
 // Less Than
 //===--------------------------------------------------------------------===//
-bool ART::SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids) {
+bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive, idx_t max_count,
+                     vector<row_t> &result_ids) {
+
 	if (!tree) {
 		return true;
 	}
-
 	Iterator *it = &state->iterator;
-
-	// TODO: the key directly owning the data for a single key might be more efficient
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	auto upper_bound = CreateKey(arena_allocator, *this, types[0], state->values[0]);
 
 	if (!it->art) {
 		it->art = this;
@@ -759,15 +742,11 @@ bool ART::SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, 
 //===--------------------------------------------------------------------===//
 // Closed Range Query
 //===--------------------------------------------------------------------===//
-bool ART::SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
-                           vector<row_t> &result_ids) {
-
-	// TODO: the key directly owning the data for a single key might be more efficient
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	auto lower_bound = CreateKey(arena_allocator, *this, types[0], state->values[0]);
-	auto upper_bound = CreateKey(arena_allocator, *this, types[0], state->values[1]);
+bool ART::SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &upper_bound, bool left_inclusive,
+                           bool right_inclusive, idx_t max_count, vector<row_t> &result_ids) {
 
 	Iterator *it = &state->iterator;
+
 	// first find the first node that satisfies the left predicate
 	if (!it->art) {
 		it->art = this;
@@ -782,48 +761,60 @@ bool ART::SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool r
 
 bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table_state, idx_t max_count,
                vector<row_t> &result_ids) {
+
 	auto state = (ARTIndexScanState *)&table_state;
-
-	D_ASSERT(state->values[0].type().InternalType() == types[0]);
-
 	vector<row_t> row_ids;
 	bool success;
+
+	// FIXME: the key directly owning the data for a single key might be more efficient
+	D_ASSERT(state->values[0].type().InternalType() == types[0]);
+	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	auto key = CreateKey(arena_allocator, types[0], state->values[0]);
+
 	if (state->values[1].IsNull()) {
-		lock_guard<mutex> l(lock);
+
 		// single predicate
+		lock_guard<mutex> l(lock);
 		switch (state->expressions[0]) {
 		case ExpressionType::COMPARE_EQUAL:
-			success = SearchEqual(state, max_count, row_ids);
+			success = SearchEqual(key, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			success = SearchGreater(state, true, max_count, row_ids);
+			success = SearchGreater(state, key, true, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			success = SearchGreater(state, false, max_count, row_ids);
+			success = SearchGreater(state, key, false, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			success = SearchLess(state, true, max_count, row_ids);
+			success = SearchLess(state, key, true, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
-			success = SearchLess(state, false, max_count, row_ids);
+			success = SearchLess(state, key, false, max_count, row_ids);
 			break;
 		default:
 			throw InternalException("Operation not implemented");
 		}
+
 	} else {
-		lock_guard<mutex> l(lock);
+
 		// two predicates
+		lock_guard<mutex> l(lock);
+
 		D_ASSERT(state->values[1].type().InternalType() == types[0]);
+		auto upper_bound = CreateKey(arena_allocator, types[0], state->values[1]);
+
 		bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 		bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
-		success = SearchCloseRange(state, left_inclusive, right_inclusive, max_count, row_ids);
+		success = SearchCloseRange(state, key, upper_bound, left_inclusive, right_inclusive, max_count, row_ids);
 	}
+
 	if (!success) {
 		return false;
 	}
 	if (row_ids.empty()) {
 		return true;
 	}
+
 	// sort the row ids
 	sort(row_ids.begin(), row_ids.end());
 	// duplicate eliminate the row ids and append them to the row ids of the state
@@ -852,9 +843,9 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	ExecuteExpressions(chunk, expression_chunk);
 
 	// generate the keys for the given input
-	// TODO: no new allocator for each chunk, pass to method
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
 	vector<Key> keys;
+	keys.reserve(expression_chunk.size());
 	GenerateKeys(arena_allocator, expression_chunk, keys);
 
 	for (idx_t i = 0; i < chunk.size(); i++) {

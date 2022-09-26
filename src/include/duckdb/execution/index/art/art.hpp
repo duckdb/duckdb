@@ -89,14 +89,17 @@ public:
 	//! Construct ARTs from sorted chunks and merge them.
 	void ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
 
-	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
+	//! Search Equal and fetches the row IDs
+	bool SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids);
 	//! Search Equal used for Joins that do not need to fetch data
-	void SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size);
+	void SearchEqualJoinNoFetch(Key &key, idx_t &result_size);
 	//! Serialized the ART
 	BlockPointer Serialize(duckdb::MetaBlockWriter &writer) override;
 
 	//! Merge two ARTs
 	static void Merge(ART *l_art, ART *r_art);
+	//! Generate ART keys for an input chunk
+	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys);
 
 private:
 	//! Insert a row id into a leaf node
@@ -110,12 +113,11 @@ private:
 	//! Find the node with a matching key, optimistic version
 	Node *Lookup(Node *node, Key &key, unsigned depth);
 
-	bool SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
-	bool SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
-	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
-	                      vector<row_t> &result_ids);
-
-	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys);
+	bool SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
+	bool SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive, idx_t max_count,
+	                vector<row_t> &result_ids);
+	bool SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &upper_bound, bool left_inclusive,
+	                      bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
 
 	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);
 };
