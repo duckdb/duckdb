@@ -28,7 +28,6 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 struct TableScanLocalState : public LocalTableFunctionState {
 	//! The current position in the scan
 	TableScanState scan_state;
-	vector<column_t> column_ids;
 };
 
 static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
@@ -59,13 +58,12 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
                                                               GlobalTableFunctionState *gstate) {
 	auto result = make_unique<TableScanLocalState>();
 	auto &bind_data = (TableScanBindData &)*input.bind_data;
-	result->column_ids = input.column_ids;
-	for (auto &col : result->column_ids) {
+	vector<column_t> column_ids = input.column_ids;
+	for (auto &col : column_ids) {
 		auto storage_idx = GetStorageIndex(*bind_data.table, col);
 		col = storage_idx;
 	}
-
-	result->scan_state.table_filters = input.filters;
+	result->scan_state.Initialize(move(column_ids), input.filters);
 	TableScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	return move(result);
 }
@@ -100,7 +98,7 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 			bind_data.table->storage->CreateIndexScan(
 			    state.scan_state, output, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
 		} else {
-			bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
+			bind_data.table->storage->Scan(transaction, output, state.scan_state);
 		}
 		if (output.size() > 0) {
 			return;
@@ -118,8 +116,7 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	auto &state = (TableScanLocalState &)*local_state;
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
-	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state,
-	                                                  state.column_ids);
+	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state);
 }
 
 double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -141,13 +138,12 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 
 idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                              LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &state = (TableScanLocalState &)*local_state;
-	if (state.scan_state.row_group_scan_state.row_group) {
-		return state.scan_state.row_group_scan_state.row_group->start;
+	if (state.scan_state.table_state.row_group_state.row_group) {
+		return state.scan_state.table_state.row_group_state.row_group->start;
 	}
-	if (state.scan_state.local_state.max_index > 0) {
-		return bind_data.table->storage->GetTotalRows() + state.scan_state.local_state.chunk_index;
+	if (state.scan_state.local_state.row_group_state.row_group) {
+		return state.scan_state.local_state.row_group_state.row_group->start;
 	}
 	return 0;
 }
@@ -174,7 +170,7 @@ struct IndexScanGlobalState : public GlobalTableFunctionState {
 
 	Vector row_ids;
 	ColumnFetchState fetch_state;
-	LocalScanState local_storage_state;
+	TableScanState local_storage_state;
 	vector<column_t> column_ids;
 	bool finished;
 };
@@ -188,7 +184,9 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	auto result = make_unique<IndexScanGlobalState>(row_id_data);
 	auto &transaction = Transaction::GetTransaction(context);
 	result->column_ids = input.column_ids;
-	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state, input.filters);
+	result->local_storage_state.Initialize(input.column_ids, input.filters);
+	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state.local_state,
+	                                   input.filters);
 
 	result->finished = false;
 	return move(result);
@@ -204,7 +202,7 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 		state.finished = true;
 	}
 	if (output.size() == 0) {
-		transaction.storage.Scan(state.local_storage_state, state.column_ids, output);
+		transaction.storage.Scan(state.local_storage_state.local_state, state.column_ids, output);
 	}
 }
 
