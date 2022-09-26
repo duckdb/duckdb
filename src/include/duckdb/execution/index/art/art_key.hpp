@@ -51,6 +51,7 @@ public:
 	bool operator==(const Key &k) const;
 
 	bool ByteMatches(Key &other, idx_t &depth);
+	bool Empty();
 
 private:
 	template <class T>

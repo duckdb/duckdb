@@ -95,10 +95,13 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 	auto input_data = (T *)idata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
-		if (keys[i].len != 0) {
+
+		// key is not NULL (no previous column entry was NULL)
+		if (!keys[i].Empty()) {
 			if (!idata.validity.RowIsValid(idx)) {
-				// either this column is NULL, or the previous column is NULL!
+				// this column entry is NULL, set whole key to NULL
 				keys[i] = Key();
+
 			} else {
 				// concatenate the keys
 				auto new_key = Key::CreateKey<T>(allocator, input_data[idx]);
@@ -288,7 +291,7 @@ void FindFirstNotNullKey(vector<Key> &keys, bool &skipped_all_nulls, idx_t &star
 
 	if (!skipped_all_nulls) {
 		for (idx_t i = 0; i < keys.size(); i++) {
-			if (keys[i].len != 0) {
+			if (!keys[i].Empty()) {
 				start_idx = i;
 				skipped_all_nulls = true;
 				return;
@@ -304,6 +307,8 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 
 	ArenaAllocator arena_allocator(allocator);
 	vector<Key> keys;
+
+	// TODO: check where GenerateKeys gets called and decide where to best put this
 	keys.reserve(STANDARD_VECTOR_SIZE);
 
 	auto skipped_all_nulls = false;
@@ -369,6 +374,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
 
 	// generate the keys for the given input
+	// TODO: reserve the keys vector once
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
 	vector<Key> keys;
 	GenerateKeys(arena_allocator, input, keys);
@@ -378,7 +384,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 	idx_t failed_index = DConstants::INVALID_INDEX;
 	for (idx_t i = 0; i < input.size(); i++) {
-		if (keys[i].len == 0) {
+		if (keys[i].Empty()) {
 			continue;
 		}
 
@@ -390,16 +396,10 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		}
 	}
 	if (failed_index != DConstants::INVALID_INDEX) {
+
 		// failed to insert because of constraint violation: remove previously inserted entries
-
-		// TODO: re-generation might not be necessary anymore, because we no longer move keys out of the vector
-		// generate keys again
-		keys.clear();
-		GenerateKeys(arena_allocator, input, keys);
-
-		// now erase the entries
 		for (idx_t i = 0; i < failed_index; i++) {
-			if (keys[i].len == 0) {
+			if (keys[i].Empty()) {
 				continue;
 			}
 			row_t row_id = row_identifiers[i];
@@ -536,7 +536,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 
 	for (idx_t i = 0; i < input.size(); i++) {
-		if (keys[i].len == 0) {
+		if (keys[i].Empty()) {
 			continue;
 		}
 		Erase(tree, keys[i], 0, row_identifiers[i]);
@@ -858,7 +858,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	GenerateKeys(arena_allocator, expression_chunk, keys);
 
 	for (idx_t i = 0; i < chunk.size(); i++) {
-		if (keys[i].len == 0) {
+		if (keys[i].Empty()) {
 			continue;
 		}
 		Node *node_ptr = Lookup(tree, keys[i], 0);

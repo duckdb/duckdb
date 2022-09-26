@@ -123,7 +123,7 @@ void Iterator::PushKey(Node *cur_node, uint16_t pos) {
 bool Iterator::Scan(Key &bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive) {
 	bool has_next;
 	do {
-		if (bound.len != 0) {
+		if (!bound.Empty()) {
 			if (is_inclusive) {
 				if (cur_key > bound) {
 					break;
