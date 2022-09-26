@@ -22,10 +22,10 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 			// no cast required: type matches
 			return BindResult(move(child.expr));
 		}
-		child.expr = make_unique<BoundCastExpression>(move(child.expr), expr.cast_type, true);
+		child.expr = BoundCastExpression::AddCastToType(context, move(child.expr), expr.cast_type, true);
 	} else {
 		// otherwise add a cast to the target type
-		child.expr = BoundCastExpression::AddCastToType(move(child.expr), expr.cast_type);
+		child.expr = BoundCastExpression::AddCastToType(context, move(child.expr), expr.cast_type);
 	}
 	return BindResult(move(child.expr));
 }

@@ -13,6 +13,7 @@
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -167,6 +168,7 @@ public:
 
 //! The set of compression functions
 struct CompressionFunctionSet {
+	mutex lock;
 	map<CompressionType, map<PhysicalType, CompressionFunction>> functions;
 };
 

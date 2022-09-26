@@ -8,8 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
 class DataTable;
@@ -18,28 +20,34 @@ struct TableAppendState;
 
 class LocalTableStorage : public std::enable_shared_from_this<LocalTableStorage> {
 public:
+	// Create a new LocalTableStorage
 	explicit LocalTableStorage(DataTable &table);
+	// Create a LocalTableStorage from an ALTER TYPE
+	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t changed_idx, const LogicalType &target_type,
+	                  const vector<column_t> &bound_columns, Expression &cast_expr);
+	// Create a LocalTableStorage from a DROP COLUMN
+	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
+	// Create a LocalTableStorage from a ADD COLUMN
+	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
+	                  Expression *default_value);
+
 	~LocalTableStorage();
 
 	DataTable &table;
 
 	Allocator &allocator;
 	//! The main chunk collection holding the data
-	ChunkCollection collection;
+	shared_ptr<RowGroupCollection> row_groups;
 	//! The set of unique indexes
-	vector<unique_ptr<Index>> indexes;
-	//! The set of deleted entries
-	unordered_map<idx_t, unique_ptr<bool[]>> deleted_entries;
+	TableIndexList indexes;
+	//! Stats
+	TableStatistics stats;
 	//! The number of deleted rows
 	idx_t deleted_rows;
-	//! The number of active scans
-	atomic<idx_t> active_scans;
 
 public:
-	void InitializeScan(LocalScanState &state, TableFilterSet *table_filters = nullptr);
+	void InitializeScan(CollectionScanState &state, TableFilterSet *table_filters = nullptr);
 	idx_t EstimatedSize();
-
-	void Clear();
 };
 
 //! The LocalStorage class holds appends that have not been committed yet
@@ -54,9 +62,13 @@ public:
 	}
 
 	//! Initialize a scan of the local storage
-	void InitializeScan(DataTable *table, LocalScanState &state, TableFilterSet *table_filters);
+	void InitializeScan(DataTable *table, CollectionScanState &state, TableFilterSet *table_filters);
 	//! Scan
-	void Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result);
+	void Scan(CollectionScanState &state, const vector<column_t> &column_ids, DataChunk &result);
+
+	void InitializeParallelScan(DataTable *table, ParallelCollectionScanState &state);
+	bool NextParallelScan(ClientContext &context, DataTable *table, ParallelCollectionScanState &state,
+	                      CollectionScanState &scan_state);
 
 	//! Append a chunk to the local storage
 	void Append(DataTable *table, DataChunk &chunk);
@@ -78,21 +90,18 @@ public:
 		return table_storage.find(table) != table_storage.end();
 	}
 
-	idx_t AddedRows(DataTable *table) {
-		auto entry = table_storage.find(table);
-		if (entry == table_storage.end()) {
-			return 0;
-		}
-		return entry->second->collection.Count() - entry->second->deleted_rows;
-	}
+	idx_t AddedRows(DataTable *table);
 
 	void AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column, Expression *default_value);
+	void DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t removed_column);
 	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<column_t> &bound_columns, Expression &cast_expr);
 
 	void MoveStorage(DataTable *old_dt, DataTable *new_dt);
 	void FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &chunk);
-	vector<unique_ptr<Index>> &GetIndexes(DataTable *table);
+	TableIndexList &GetIndexes(DataTable *table);
+
+	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 private:
 	LocalTableStorage *GetStorage(DataTable *table);

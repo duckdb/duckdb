@@ -77,8 +77,8 @@ int main(int argc, const char **argv) {
 			PrintUsage();
 		}
 		auto idx = entry->second;
-		auto filter =
-		    make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(splits[1]).CastAs(return_types[idx]));
+		auto filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL,
+		                                          Value(splits[1]).DefaultCastAs(return_types[idx]));
 		filters.filters[idx] = move(filter);
 	}
 
