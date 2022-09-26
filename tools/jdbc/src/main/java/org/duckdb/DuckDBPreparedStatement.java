@@ -103,7 +103,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			params = new Object[0];
 			// TODO add query type to meta
 			String query_type = DuckDBNative.duckdb_jdbc_prepare_type(stmt_ref);
-			is_update = !query_type.equals("SELECT") && !query_type.equals("PRAGMA") && !query_type.equals("EXPLAIN");
+			is_update = !(
+				query_type.equals("SELECT") ||
+				query_type.equals("PRAGMA") ||
+				query_type.equals("EXPLAIN") ||
+				query_type.equals("SHOW")
+			);
 		}
 		catch (SQLException e) {
 			// Delete stmt_ref as it might already be allocated
