@@ -149,7 +149,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	@Override
 	public ResultSet executeQuery() throws SQLException {
 		if (!returnsResultSet) {
-			throw new SQLException("executeQuery() can only be used with SELECT queries");
+			throw new SQLException("executeQuery() can only be used with queries that return a ResultSet");
 		}
 		execute();
 		return getResultSet();
@@ -158,7 +158,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	@Override
 	public int executeUpdate() throws SQLException {
 		if (!(returnsChangedRows || returnsNothing)) {
-			throw new SQLException("executeUpdate() cannot be used with SELECT queries");
+			throw new SQLException("executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
 		}
 		execute();
 		update_result = 0;
