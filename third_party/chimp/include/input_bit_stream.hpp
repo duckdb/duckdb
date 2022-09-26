@@ -25,7 +25,7 @@ namespace duckdb_chimp {
 //! With a shift of 3
 
 //! Align the masks to the right
-static const uint8_t masks[] = {
+static constexpr uint8_t masks[] = {
 	0b00000000,
 	0b10000000,
 	0b11000000,
@@ -126,8 +126,7 @@ public:
 	}
 
 	inline uint8_t InnerReadByte() {
-		// Create a mask given the size and bit_index
-		uint8_t result = (input[byte_index] << bit_index) & masks[8] | ((input[byte_index + 1] & remainder_masks[8 + bit_index]) >> (8 - bit_index));
+		uint8_t result = input[byte_index] << bit_index | ((input[byte_index + 1] & remainder_masks[8 + bit_index]) >> (8 - bit_index));
 		byte_index++;
 		return result;
 	}
@@ -137,19 +136,19 @@ public:
 	//! input: [12345678][12345678]
 	//! result:   [-AAAA  BBB]
 	//!
-	//! Result contains 4 bits from the first byte (making up the least significant bits)
-	//! And 3 bits from the second byte (the most significant bits)
+	//! Result contains 4 bits from the first byte (making up the most significant bits)
+	//! And 3 bits from the second byte (the least significant bits)
 	inline uint8_t InnerRead(const uint8_t &size) {
 		const uint8_t right_shift = 8 - size;
 		const uint8_t bit_remainder = (8 - ((size + bit_index) - 8)) & 7;
-		// The most significant bits are positioned at the far right of the byte
+		// The least significant bits are positioned at the far right of the byte
 
 		// Create a mask given the size and bit_index
 		// Take the first byte
 		// Left-shift it by bit_index, to line up the bits we're interested in with the mask
 		// Get the mask for the given size
 		// Bit-wise AND the byte and the mask together
-		// Right-shift this result (the least significant bits if SPILL is true)
+		// Right-shift this result (the most significant bits)
 
 		// Sometimes we will need to read from the second byte
 		// But to make this branchless, we will perform what is basically a no-op if this condition is not true
