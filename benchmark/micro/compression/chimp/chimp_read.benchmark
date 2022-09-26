@@ -8,11 +8,11 @@ storage persistent
 
 load
 DROP TABLE IF EXISTS integers;
-PRAGMA force_compression='chimp';
+PRAGMA force_compression='uncompressed';
 CREATE TABLE temperatures (
 	temperature DOUBLE
 );
-COPY temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature_enlarged.csv';
+INSERT INTO temperatures SELECT temp FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv' t(temp), range(28);
 checkpoint;
 
 run

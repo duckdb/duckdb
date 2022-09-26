@@ -20,6 +20,9 @@ namespace duckdb_chimp {
 //! Every byte read touches at most 2 bytes (1 if it's perfectly aligned)
 //! Within a byte we need to mask off the bits that we're interested in
 
+#define BYTE_INDEX ((bit_index) >> 3)
+#define BIT_INDEX ((bit_index) & 7)
+
 //! Align the masks to the right
 static constexpr uint8_t masks[] = {
 	0b00000000,
@@ -106,23 +109,17 @@ static const uint8_t right_shifts[] = {
 struct BitReader {
 public:
 public:
-	BitReader() : input(nullptr), bit_index(0), byte_index(0) {}
+	BitReader() : input(nullptr), bit_index(0) {}
 	uint8_t *input;
-	uint8_t bit_index; //Index in the current byte, starting from the right
-	uint64_t byte_index;
+	uint32_t bit_index;
 public:
 	void SetStream(uint8_t* input) {
 		this->input = input;
 		bit_index = 0;
-		byte_index = 0;
-	}
-
-	static inline uint8_t CreateMask(const uint8_t &size, const uint8_t &bit_index) {
-		return (masks[size] >> bit_index);
 	}
 
 	inline uint8_t InnerReadByte(const uint8_t& offset) {
-		uint8_t result = input[byte_index + offset] << bit_index | ((input[byte_index + offset + 1] & remainder_masks[8 + bit_index]) >> (8 - bit_index));
+		uint8_t result = input[BYTE_INDEX + offset] << BIT_INDEX | ((input[BYTE_INDEX + offset + 1] & remainder_masks[8 + BIT_INDEX]) >> (8 - BIT_INDEX));
 		return result;
 	}
 
@@ -154,7 +151,7 @@ public:
 	//! And 3 bits from the second byte (the least significant bits)
 	inline uint8_t InnerRead(const uint8_t &size, const uint8_t &offset) {
 		const uint8_t right_shift = 8 - size;
-		const uint8_t bit_remainder = (8 - ((size + bit_index) - 8)) & 7;
+		const uint8_t bit_remainder = (8 - ((size + BIT_INDEX) - 8)) & 7;
 		// The least significant bits are positioned at the far right of the byte
 
 		// Create a mask given the size and bit_index
@@ -172,53 +169,51 @@ public:
 		// The remainder_masks gives us the mask for the bits we're interested in
 		// We bit-wise AND these together (no need to shift anything because the bit_index is essentially zero for this new byte)
 		// And we then right-shift these bits in place (to the right of the previous bits)
-		const bool spill_to_next_byte = (size + bit_index >= 8);
-		uint8_t result = ((input[byte_index + offset] << bit_index) & masks[size]) >> right_shift | ((input[byte_index + offset + spill_to_next_byte] & remainder_masks[size + bit_index]) >> bit_remainder);
-		byte_index += spill_to_next_byte;
-		bit_index = (size + bit_index) & 7;
+		const bool spill_to_next_byte = (size + BIT_INDEX >= 8);
+		uint8_t result = ((input[BYTE_INDEX + offset] << BIT_INDEX) & masks[size]) >> right_shift | ((input[BYTE_INDEX + offset + spill_to_next_byte] & remainder_masks[size + BIT_INDEX]) >> bit_remainder);
 		return result;
 	}
 
-	template <uint8_t SIZE, uint8_t BIT_INDEX>
-	inline uint8_t InnerReadTemplatedInner(const uint8_t& offset) {
-		constexpr uint8_t right_shift = 8 - SIZE;
-		constexpr uint8_t bit_remainder = (8 - ((SIZE + BIT_INDEX) - 8)) & 7;
+	//template <uint8_t SIZE, uint8_t BIT_INDEX>
+	//inline uint8_t InnerReadTemplatedInner(const uint8_t& offset) {
+	//	constexpr uint8_t right_shift = 8 - SIZE;
+	//	constexpr uint8_t bit_remainder = (8 - ((SIZE + BIT_INDEX) - 8)) & 7;
 
-		constexpr bool spill_to_next_byte = (SIZE + BIT_INDEX >= 8);
-		uint8_t result = ((input[byte_index + offset] << BIT_INDEX) & masks[SIZE]) >> right_shift | ((input[byte_index + offset + spill_to_next_byte] & remainder_masks[SIZE + BIT_INDEX]) >> bit_remainder);
-		byte_index += spill_to_next_byte;
-		bit_index = (SIZE + BIT_INDEX) & 7;
-		return result;
-	}
+	//	constexpr bool spill_to_next_byte = (SIZE + BIT_INDEX >= 8);
+	//	uint8_t result = ((input[byte_index + offset] << BIT_INDEX) & masks[SIZE]) >> right_shift | ((input[byte_index + offset + spill_to_next_byte] & remainder_masks[SIZE + BIT_INDEX]) >> bit_remainder);
+	//	byte_index += spill_to_next_byte;
+	//	bit_index = (SIZE + BIT_INDEX) & 7;
+	//	return result;
+	//}
 
-	template<uint8_t REMAINING>
-	inline uint8_t InnerReadTemplated(const uint8_t& offset) {
-		switch(bit_index) {
-		case 0: return InnerReadTemplatedInner<REMAINING, 0>(offset);
-		case 1: return InnerReadTemplatedInner<REMAINING, 1>(offset);
-		case 2: return InnerReadTemplatedInner<REMAINING, 2>(offset);
-		case 3: return InnerReadTemplatedInner<REMAINING, 3>(offset);
-		case 4: return InnerReadTemplatedInner<REMAINING, 4>(offset);
-		case 5: return InnerReadTemplatedInner<REMAINING, 5>(offset);
-		case 6: return InnerReadTemplatedInner<REMAINING, 6>(offset);
-		case 7: return InnerReadTemplatedInner<REMAINING, 7>(offset);
-		default: throw std::runtime_error("InnerReadTemplate not implemented for offset: " + std::to_string(offset));
-		};
-	}
+	//template<uint8_t REMAINING>
+	//inline uint8_t InnerReadTemplated(const uint8_t& offset) {
+	//	switch(bit_index) {
+	//	case 0: return InnerReadTemplatedInner<REMAINING, 0>(offset);
+	//	case 1: return InnerReadTemplatedInner<REMAINING, 1>(offset);
+	//	case 2: return InnerReadTemplatedInner<REMAINING, 2>(offset);
+	//	case 3: return InnerReadTemplatedInner<REMAINING, 3>(offset);
+	//	case 4: return InnerReadTemplatedInner<REMAINING, 4>(offset);
+	//	case 5: return InnerReadTemplatedInner<REMAINING, 5>(offset);
+	//	case 6: return InnerReadTemplatedInner<REMAINING, 6>(offset);
+	//	case 7: return InnerReadTemplatedInner<REMAINING, 7>(offset);
+	//	default: throw std::runtime_error("InnerReadTemplate not implemented for offset: " + std::to_string(offset));
+	//	};
+	//}
 
-	inline uint8_t InnerReadSwitch(const uint8_t &remaining, const uint8_t& offset) {
-		switch(remaining) {
-		case 0: return 0;
-		case 1: return InnerReadTemplated<1>(offset);
-		case 2: return InnerReadTemplated<2>(offset);
-		case 3: return InnerReadTemplated<3>(offset);
-		case 4: return InnerReadTemplated<4>(offset);
-		case 5: return InnerReadTemplated<5>(offset);
-		case 6: return InnerReadTemplated<6>(offset);
-		case 7: return InnerReadTemplated<7>(offset);
-		default: throw std::runtime_error("InnerReadSwitch not implemented for remaining: " + std::to_string(remaining));
-		};
-	}
+	//inline uint8_t InnerReadSwitch(const uint8_t &remaining, const uint8_t& offset) {
+	//	switch(remaining) {
+	//	case 0: return 0;
+	//	case 1: return InnerReadTemplated<1>(offset);
+	//	case 2: return InnerReadTemplated<2>(offset);
+	//	case 3: return InnerReadTemplated<3>(offset);
+	//	case 4: return InnerReadTemplated<4>(offset);
+	//	case 5: return InnerReadTemplated<5>(offset);
+	//	case 6: return InnerReadTemplated<6>(offset);
+	//	case 7: return InnerReadTemplated<7>(offset);
+	//	default: throw std::runtime_error("InnerReadSwitch not implemented for remaining: " + std::to_string(remaining));
+	//	};
+	//}
 
     template <class T, uint8_t BYTES>
     inline T ReadBytes(const uint8_t &remainder) {
@@ -226,8 +221,8 @@ public:
         for (uint8_t i = 0; i < BYTES; i++) {
             result = result << 8 | InnerReadByte(i);
         }
-        result = result << remainder | InnerReadSwitch(remainder, BYTES);
-		byte_index += BYTES;
+        result = result << remainder | InnerRead(remainder, BYTES);
+		bit_index += (BYTES << 3) + remainder;
         return result;
     }
 
@@ -237,8 +232,8 @@ public:
         for (uint8_t i = 0; i < bytes; i++) {
             result = result << 8 | InnerReadByte(i);
         }
-        result = result << remainder | InnerReadSwitch(remainder, bytes);
-		byte_index += bytes;
+        result = result << remainder | InnerRead(remainder, bytes);
+		bit_index += (bytes << 3) + remainder;
 		return result;
     }
 
