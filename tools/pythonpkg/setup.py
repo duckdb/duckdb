@@ -282,7 +282,6 @@ setup(
     ],
     data_files = data_files,
     packages=[
-        'pyduckdb',
         'duckdb_query_graph',
         'duckdb-stubs'
     ],
