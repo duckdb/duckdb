@@ -5,8 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-mode skip
-
 statement ok
 create table TEST2 (i int[], j int);
 
@@ -382,8 +380,6 @@ endloop
 
 # issue 3450 test case
 
-mode unskip
-
 statement ok
 CREATE TABLE functions (function_name varchar, function_type varchar, parameter_types varchar[]);
 
@@ -397,8 +393,6 @@ WHERE function_type = 'scalar' AND list_has(parameter_types, 'TIMESTAMP');
 ----
 last_day
 scalar_part
-
-mode skip
 
 # issue 3457 test case
 
