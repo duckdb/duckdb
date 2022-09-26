@@ -87,6 +87,10 @@ struct BufferedCSVReaderOptions {
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! The column names of the columns to read/write
 	vector<string> names;
+	//! The header names of all csv files (option union_by_name)
+	vector<string> union_col_names;
+	//! The type of all csv files (option union_by_name)
+	vector<LogicalType> union_col_types;
 
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
@@ -210,8 +214,8 @@ public:
 	void ParseCSV(DataChunk &insert_chunk);
 
 	idx_t GetFileSize();
-	
-	//! Adds some cols to fill the insert_chunk miss union name match 
+
+	//! Adds some cols to fill the insert_chunk miss union name match
 	void AlignUnionCols(DataChunk &insert_chunk, vector<string> &union_names, vector<LogicalType> &union_types);
 
 private:

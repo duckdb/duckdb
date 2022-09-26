@@ -85,33 +85,33 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		D_ASSERT(return_types.size() == names.size());
 	}
 
-	//union_col_names will exclude filename hivepart
-	if(options.union_by_name) {
+	// union_col_names will exclude filename hivepart
+	if (options.union_by_name) {
 		idx_t union_names_index = 0;
 		case_insensitive_map_t<idx_t> union_names_map;
 
-		for(idx_t file_index = 0 ; file_index < result->files.size(); ++file_index){
-			options.file_path = result->files[file_index];
-			auto reader = make_unique<BufferedCSVReader>(context, options); 
-			auto& col_names = reader->col_names;
-			auto& sql_types = reader->sql_types;
+		for (idx_t file_idx = 0; file_idx < result->files.size(); ++file_idx) {
+			options.file_path = result->files[file_idx];
+			auto reader = make_unique<BufferedCSVReader>(context, options);
+			auto &col_names = reader->col_names;
+			auto &sql_types = reader->sql_types;
 
-			
-			for(idx_t i = 0 ; i < col_names.size(); ++i){
-				//TODO throw type non match exception
-				if(union_names_map.find(col_names[i]) == union_names_map.end()){
-					union_names_map[col_names[i]] = i;
+			for (idx_t col_idx = 0; col_idx < col_names.size(); ++col_idx) {
+				// TODO throw type non match exception
+				if (union_names_map.find(col_names[col_idx]) == union_names_map.end()) {
+					union_names_map[col_names[col_idx]] = col_idx;
 
-					result->union_col_names.emplace_back(col_names[i]);
-					result->union_col_types.emplace_back(sql_types[i]);
+					options.union_col_names.emplace_back(col_names[col_idx]);
+					options.union_col_types.emplace_back(sql_types[col_idx]);
 					union_names_index++;
 				}
 			}
 		}
-		names.assign(result->union_col_names.begin(),result->union_col_names.end());
-		return_types.assign(result->union_col_types.begin(),result->union_col_types.end());
+		names.assign(options.union_col_names.begin(), options.union_col_names.end());
+		return_types.assign(options.union_col_types.begin(), options.union_col_types.end());
 
-		D_ASSERT(result->union_col_names.size() == names.size());
+		D_ASSERT(names.size() == return_types.size());
+		D_ASSERT(options.union_col_names.size() == names.size());
 	}
 
 	if (result->options.include_file_name) {
@@ -182,11 +182,11 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			// exhausted this file, but we have more files we can read
 			// open the next file and increment the counter
 			bind_data.options.file_path = bind_data.files[data.file_index];
-			if(bind_data.options.union_by_name){
+			if (bind_data.options.union_by_name) {
 				data.csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options);
-			}
-			else{
-				data.csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, data.csv_reader->sql_types);
+			} else {
+				data.csv_reader =
+				    make_unique<BufferedCSVReader>(context, bind_data.options, data.csv_reader->sql_types);
 			}
 			data.file_index++;
 		} else {
@@ -194,6 +194,24 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		}
 	} while (true);
 
+	if (bind_data.options.union_by_name) {
+		data.csv_reader->AlignUnionCols(output, bind_data.options.union_col_names, bind_data.options.union_col_types);
+
+		if (bind_data.options.include_file_name) {
+			Vector filename_col(LogicalType::VARCHAR);
+			filename_col.Flatten(output.size());
+			output.data.push_back(move(filename_col));
+		}
+
+		if (bind_data.options.include_parsed_hive_partitions) {
+			auto partitions = HivePartitioning::Parse(bind_data.options.file_path);
+			for (auto &part : partitions) {
+				Vector hive_col(LogicalType::VARCHAR);
+				hive_col.Flatten(output.size());
+				output.data.push_back(move(hive_col));
+			}
+		}
+	}
 	if (bind_data.options.include_file_name) {
 		auto &col = output.data[bind_data.filename_col_idx];
 		col.SetValue(0, Value(data.csv_reader->options.file_path));
@@ -221,11 +239,6 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			col.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	}
-
-	if (bind_data.options.union_by_name){
-		data.csv_reader->AlignUnionCols(output  ,bind_data.union_col_names, bind_data.union_col_types );
-	}
-
 }
 
 static void ReadCSVAddNamedParameters(TableFunction &table_function) {

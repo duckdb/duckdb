@@ -1973,21 +1973,22 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	return false;
 }
 
-void BufferedCSVReader::AlignUnionCols(DataChunk &insert_chunk, vector<string> &union_col_names, vector<LogicalType> &union_col_types){
-	//todo Dassert union_col_types.size == union_col_name.size 
-	// FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
-	//Vector result(new_column_type);
+void BufferedCSVReader::AlignUnionCols(DataChunk &insert_chunk, vector<string> &union_col_names,
+                                       vector<LogicalType> &union_col_types) {
+	// todo Dassert union_col_types.size == union_col_name.size
+	//  FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
+	// Vector result(new_column_type);
 	auto union_chunk = make_unique<DataChunk>();
-	union_chunk->Initialize(allocator,union_col_types);
+	union_chunk->Initialize(allocator, union_col_types);
 	union_chunk->SetCardinality(insert_chunk.size());
 
-	for(idx_t col=0; col < union_col_names.size(); ++col){
+	for (idx_t col = 0; col < union_col_names.size(); ++col) {
 		auto index = col_names_map.find(union_col_names[col]);
 		bool match = index != col_names_map.end();
 
-		if(match){
+		if (match) {
 			VectorOperations::Copy(insert_chunk.data[index->second], union_chunk->data[col], insert_chunk.size(), 0, 0);
-		}else{
+		} else {
 			union_chunk->data[col].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(union_chunk->data[col], true);
 		}
@@ -1996,6 +1997,7 @@ void BufferedCSVReader::AlignUnionCols(DataChunk &insert_chunk, vector<string> &
 	insert_chunk.Move(*union_chunk);
 	;
 }
+
 void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	if (parse_chunk.size() == 0) {
 		return;
