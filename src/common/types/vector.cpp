@@ -744,12 +744,12 @@ void Vector::Flatten(idx_t count) {
 		break;
 	}
 	case VectorType::SEQUENCE_VECTOR: {
-		int64_t start, increment;
-		SequenceVector::GetSequence(*this, start, increment);
+		int64_t start, increment, sequence_count;
+		SequenceVector::GetSequence(*this, start, increment, sequence_count);
 
 		buffer = VectorBuffer::CreateStandardVector(GetType());
 		data = buffer->GetData();
-		VectorOperations::GenerateSequence(*this, count, start, increment);
+		VectorOperations::GenerateSequence(*this, sequence_count, start, increment);
 		break;
 	}
 	default:
@@ -812,12 +812,13 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) {
 	}
 }
 
-void Vector::Sequence(int64_t start, int64_t increment) {
+void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->vector_type = VectorType::SEQUENCE_VECTOR;
-	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 2);
+	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 3);
 	auto data = (int64_t *)buffer->GetData();
 	data[0] = start;
 	data[1] = increment;
+	data[2] = int64_t(count);
 	validity.Reset();
 	auxiliary.reset();
 }

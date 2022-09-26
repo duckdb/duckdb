@@ -82,6 +82,8 @@ template class std::unique_ptr<TableFunctionRef>;
 template class std::unique_ptr<Pipeline>;
 template class std::shared_ptr<Pipeline>;
 template class std::weak_ptr<Pipeline>;
+template class std::unique_ptr<RowGroup>;
+template class std::shared_ptr<RowGroupCollection>;
 template class std::shared_ptr<PreparedStatementData>;
 template class std::unique_ptr<VacuumInfo>;
 

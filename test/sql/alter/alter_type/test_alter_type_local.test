@@ -14,7 +14,22 @@ BEGIN TRANSACTION
 statement ok
 INSERT INTO test VALUES (3, 3)
 
-# not currently supported
-statement error
+statement ok
 ALTER TABLE test ALTER i SET DATA TYPE BIGINT
 
+query II
+SELECT * FROM test
+----
+1	1
+2	2
+3	3
+
+statement ok
+COMMIT
+
+query II
+SELECT * FROM test
+----
+1	1
+2	2
+3	3

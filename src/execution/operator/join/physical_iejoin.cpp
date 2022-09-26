@@ -319,7 +319,7 @@ idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, S
 		executor.Execute(scanned, keys);
 
 		// Mark the rid column
-		payload.data[0].Sequence(rid, increment);
+		payload.data[0].Sequence(rid, increment, scan_count);
 		payload.SetCardinality(scan_count);
 		keys.Fuse(payload);
 		rid += increment * scan_count;
