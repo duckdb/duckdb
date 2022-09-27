@@ -1987,7 +1987,12 @@ void BufferedCSVReader::AlignUnionCols(DataChunk &insert_chunk, vector<string> &
 		bool match = index != col_names_map.end();
 
 		if (match) {
-			VectorOperations::Copy(insert_chunk.data[index->second], union_chunk->data[col], insert_chunk.size(), 0, 0);
+			string error_message;
+			if(VectorOperations::DefaultTryCast(insert_chunk.data[index->second], union_chunk->data[col],insert_chunk.size(), &error_message, true)){
+				// VectorOperations::Copy(insert_chunk.data[index->second], union_chunk->data[col], insert_chunk.size(), 0, 0);
+			}else{
+				throw InvalidInputException("Could not cast");
+			}
 		} else {
 			union_chunk->data[col].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(union_chunk->data[col], true);

@@ -85,7 +85,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		D_ASSERT(return_types.size() == names.size());
 	}
 
-	// union_col_names will exclude filename hivepart
+	// union_col_names will exclude filename hivepartition
 	if (options.union_by_name) {
 		idx_t union_names_index = 0;
 		case_insensitive_map_t<idx_t> union_names_map;
@@ -95,10 +95,17 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			auto reader = make_unique<BufferedCSVReader>(context, options);
 			auto &col_names = reader->col_names;
 			auto &sql_types = reader->sql_types;
+			D_ASSERT(col_names.size() == sql_types.size());
 
-			for (idx_t col_idx = 0; col_idx < col_names.size(); ++col_idx) {
-				// TODO throw type non match exception
-				if (union_names_map.find(col_names[col_idx]) == union_names_map.end()) {
+			for (idx_t col_idx = 0; col_idx < col_names.size(); ++col_idx) {  
+				auto union_find = union_names_map.find(col_names[col_idx]);
+
+				if(union_find != union_names_map.end()){
+					//given same name , union_col's type must compatible with col's type
+					LogicalType compatible_type;
+					compatible_type = LogicalType::MaxLogicalType(options.union_col_types[union_find->second] , sql_types[col_idx]);
+					options.union_col_types[union_find->second] = compatible_type;
+				}else{
 					union_names_map[col_names[col_idx]] = col_idx;
 
 					options.union_col_names.emplace_back(col_names[col_idx]);
@@ -106,6 +113,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 					union_names_index++;
 				}
 			}
+			result->union_readers.push_back(move(reader));
 		}
 		names.assign(options.union_col_names.begin(), options.union_col_names.end());
 		return_types.assign(options.union_col_types.begin(), options.union_col_types.end());
@@ -182,8 +190,9 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			// exhausted this file, but we have more files we can read
 			// open the next file and increment the counter
 			bind_data.options.file_path = bind_data.files[data.file_index];
+			// reuse csv_readers was created during binding
 			if (bind_data.options.union_by_name) {
-				data.csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options);
+				data.csv_reader = move(bind_data.union_readers[data.file_index]);
 			} else {
 				data.csv_reader =
 				    make_unique<BufferedCSVReader>(context, bind_data.options, data.csv_reader->sql_types);
@@ -205,7 +214,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 		if (bind_data.options.include_parsed_hive_partitions) {
 			auto partitions = HivePartitioning::Parse(bind_data.options.file_path);
-			for (auto &part : partitions) {
+			for (idx_t p_idx=0; p_idx<partitions.size(); ++p_idx) {
 				Vector hive_col(LogicalType::VARCHAR);
 				hive_col.Flatten(output.size());
 				output.data.push_back(move(hive_col));
