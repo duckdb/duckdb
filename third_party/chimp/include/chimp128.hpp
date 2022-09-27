@@ -43,10 +43,6 @@ struct Chimp128CompressionState {
 		this->previous_leading_zeros = value;
 	}
 
-	void	SetOutputBuffer(uint8_t* stream) {
-		output.SetStream(stream);
-	}
-
 	size_t CompressedSize() const {
 		return output.BitsWritten();
 	}

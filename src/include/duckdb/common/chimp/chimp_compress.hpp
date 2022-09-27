@@ -118,9 +118,9 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
-		segment_data = handle.Ptr() + current_segment->GetBlockOffset() + ChimpPrimitives::BITPACKING_HEADER_SIZE;
+		segment_data = handle.Ptr() + current_segment->GetBlockOffset() + ChimpPrimitives::HEADER_SIZE;
 		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE;
-		state.chimp_state.SetOutputBuffer(segment_data);
+		state.AssignBuffers(segment_data);
 		state.chimp_state.Reset();
 	}
 

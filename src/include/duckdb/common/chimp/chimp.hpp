@@ -51,6 +51,11 @@ public:
 	duckdb_chimp::Chimp128CompressionState<EMPTY> chimp_state;
 
 public:
+	// TODO: take a flag_output, and a leading_zero_output
+	void AssignBuffers(uint8_t *data_out) {
+		AssignDataBuffer(data_out);
+	}
+
 	template <class OP>
 	void Flush() {
 		chimp_state.output.Flush();
@@ -60,6 +65,17 @@ public:
 	bool Update(T uncompressed_value, bool is_valid) {
 		OP::template Operation<T>(uncompressed_value, is_valid, data_ptr);
 		return true;
+	}
+
+private:
+	void AssignDataBuffer(uint8_t *data_out) {
+		chimp_state.output.SetStream(data_out);
+	}
+	void AssignFlagBuffer(uint8_t *flag_out) {
+		chimp_state.flag_output.SetStream(flag_out);
+	}
+	void AssignLeadingZeroBuffer(uint8_t *leading_zero_out) {
+		chimp_state.leading_zero_output.SetStream(leading_zero_out);
 	}
 };
 
