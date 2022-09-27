@@ -490,15 +490,14 @@ _tls_callback(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 #    pragma comment(linker, "/INCLUDE:_tls_callback")
 #  else
 #    pragma comment(linker, "/INCLUDE:_tls_used")
-#    pragma comment(linker, "/INCLUDE:" STRINGIFY(tls_callback) )
-#  endif
-//#  pragma section(".CRT$XLY",long,read)
+#    pragma comment(linker, "/INCLUDE:" STRINGIFY(tls_callback))
 #endif
-//JEMALLOC_SECTION(".CRT$XLY")
+#pragma section(".CRT$XLY", long, read)
+#endif
+extern "C"
+JEMALLOC_SECTION(".CRT$XLY")
 JEMALLOC_ATTR(used)
-static BOOL	WINAPI tls_callback(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
-	return _tls_callback(hinstDLL, fdwReason, lpvReserved);
-}
+    BOOL(WINAPI *const tls_callback)(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) = _tls_callback;
 #endif
 
 #if (!defined(JEMALLOC_MALLOC_THREAD_CLEANUP) && !defined(JEMALLOC_TLS) && \
