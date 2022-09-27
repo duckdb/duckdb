@@ -6,47 +6,6 @@ const build = 'debug';
 // const build = 'release';
 const extension_path = `../../build/${build}/extension/arrow/arrow.duckdb_extension`;
 
-// TODO move to duckdb src
-class IpcResultStreamIterator {
-    constructor(stream_result_p) {
-        this._depleted = false;
-        this.stream_result = stream_result_p;
-    }
-
-    async next() {
-        if (this._depleted) {
-            return { done: true, value: null };
-        }
-
-        const ipc_raw = await this.stream_result.nextIpcBuffer();
-        const res = new Uint8Array(ipc_raw);
-
-        this._depleted = res.length == 0;
-        return {
-            done: this._depleted,
-            value: res,
-        };
-    }
-
-    [Symbol.asyncIterator]() {
-        return this;
-    }
-
-    // Materialize the IPC stream into a list of Uint8Arrays
-    async toArray () {
-        const retval = []
-
-        for await (const ipc_buf of this) {
-            retval.push(ipc_buf);
-        }
-
-        // Push EOS message containing 4 bytes of 0
-        retval.push(new Uint8Array([0,0,0,0]));
-
-        return retval;
-    }
-}
-
 describe('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
     const total = 1000;
 
@@ -69,11 +28,8 @@ describe('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
         // Now we fetch the ipc stream object and construct the RecordBatchReader
         const result = await conn.arrowIPCStream('SELECT * FROM range(1001, 2001) tbl(i)');
 
-        // Create iterator from QueryResult, could
-        const it = new IpcResultStreamIterator(result);
-
-        // Materialize into list of Uint8Arrays containing the ipc stream
-        const fully_materialized = await it.toArray();
+        // Materialize returned iterator into list of Uint8Arrays containing the ipc stream
+        const fully_materialized = await result.toArray();
 
         // We can now create a RecordBatchReader & Table from the materialized stream
         const reader = await arrow.RecordBatchReader.from(fully_materialized);
@@ -129,8 +85,7 @@ describe('[Benchmark] single int column load (50M tuples)',() => {
         const batches = [];
 
         const result = await conn.arrowIPCStream('SELECT * FROM test;');
-        const it = new IpcResultStreamIterator(result);
-        const fully_materialized = await it.toArray();
+        const fully_materialized = await result.toArray();
         const reader = await arrow.RecordBatchReader.from(fully_materialized);
         const table = arrow.tableFromIPC(reader);
 
@@ -170,12 +125,8 @@ describe('[Benchmark] TPC-H SF1 lineitem.parquet', () => {
     });
 
     it('lineitem.parquet -> DuckDB -> arrow IPC -> query from DuckDB', async () => {
-        const batches = [];
-        let got_rows = 0;
-
         const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
-        const it = new IpcResultStreamIterator(result);
-        const fully_materialized = await it.toArray();
+        const fully_materialized = await result.toArray();
 
         // We can now create a RecordBatchReader & Table from the materialized stream
         const reader = await arrow.RecordBatchReader.from(fully_materialized);
@@ -255,8 +206,7 @@ describe('Validate with TPCH lineitem SF0.01', () => {
 
             // Secondly copy parquet file completely into Arrow IPC format
             const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
-            const it = new IpcResultStreamIterator(result);
-            const fully_materialized = await it.toArray();
+            const fully_materialized = await result.toArray();
 
             // Now re-run query on Arrow IPC stream
             const reader = await arrow.RecordBatchReader.from(fully_materialized);

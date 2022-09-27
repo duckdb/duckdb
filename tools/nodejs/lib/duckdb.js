@@ -165,6 +165,47 @@ Connection.prototype.arrow = function (sql) {
     return statement.arrow.apply(statement, arguments);
 }
 
+// TODO make a bit nicer, similar to the async iterator on the QueryResult for regular chunks
+class IpcResultStreamIterator {
+    constructor(stream_result_p) {
+        this._depleted = false;
+        this.stream_result = stream_result_p;
+    }
+
+    async next() {
+        if (this._depleted) {
+            return { done: true, value: null };
+        }
+
+        const ipc_raw = await this.stream_result.nextIpcBuffer();
+        const res = new Uint8Array(ipc_raw);
+
+        this._depleted = res.length == 0;
+        return {
+            done: this._depleted,
+            value: res,
+        };
+    }
+
+    [Symbol.asyncIterator]() {
+        return this;
+    }
+
+    // Materialize the IPC stream into a list of Uint8Arrays
+    async toArray () {
+        const retval = []
+
+        for await (const ipc_buf of this) {
+            retval.push(ipc_buf);
+        }
+
+        // Push EOS message containing 4 bytes of 0
+        retval.push(new Uint8Array([0,0,0,0]));
+
+        return retval;
+    }
+}
+
 /**
  * @arg sql
  * @param {...*} params
@@ -174,7 +215,7 @@ Connection.prototype.arrow = function (sql) {
 Connection.prototype.arrowIPCStream = async function (sql) {
     // TODO: allow prepared statements too
     const statement = new Statement(this, "SELECT * FROM get_arrow_ipc('" + sql + "', 120);");
-    return statement.stream.apply(statement, arguments);
+    return new IpcResultStreamIterator(await statement.stream.apply(statement, arguments));
 }
 
 /**
