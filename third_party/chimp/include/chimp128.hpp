@@ -145,6 +145,7 @@ public:
 
 		//! Compress the value
 		if (xor_result == 0) {
+			state.flag_buffer.Insert(VALUE_IDENTICAL);
 			//! The two values are identical (write 9 bits)
 			//! 2 bits for the flag VALUE_IDENTICAL ('00') + 7 bits for the referenced index value
 			state.output.template WriteValue<uint8_t, FLAG_ZERO_SIZE - FLAG_BITS_SIZE>(previous_index);

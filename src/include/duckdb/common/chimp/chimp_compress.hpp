@@ -115,8 +115,12 @@ public:
 
 	// The current segment has enough space to fit this new value
 	bool HasEnoughSpace() {
-		return AlignValue(UsedSpace()) + RequiredSpace() + metadata_byte_size + CurrentGroupMetadataSize() <=
-		       Storage::BLOCK_SIZE;
+		if (handle.Ptr() + AlignValue(UsedSpace() + RequiredSpace()) >= (metadata_ptr - CurrentGroupMetadataSize())) {
+			return false;
+		}
+		return true;
+		// return AlignValue(UsedSpace()) + RequiredSpace() + metadata_byte_size + CurrentGroupMetadataSize() <=
+		//        Storage::BLOCK_SIZE;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -163,6 +167,7 @@ public:
 		metadata_byte_size += sizeof(byte_index_t);
 		// Store where this groups data starts, relative to the start of the segment
 		Store<byte_index_t>(next_group_byte_index_start, metadata_ptr);
+		printf("[WRITE] - BYTE OFFSET: %u\n", next_group_byte_index_start);
 		next_group_byte_index_start = UsedSpace();
 
 		const uint8_t leading_zero_block_count = state.chimp_state.leading_zero_buffer.BlockCount();
@@ -170,6 +175,7 @@ public:
 		metadata_byte_size += sizeof(uint8_t);
 		// Store how many leading zero blocks there are
 		Store<uint8_t>(leading_zero_block_count, metadata_ptr);
+		printf("[WRITE] - LEADING ZERO BLOCK COUNT: %u\n", (uint32_t)leading_zero_block_count);
 
 		const uint64_t bytes_used_by_leading_zero_blocks = 3 * leading_zero_block_count;
 		metadata_ptr -= bytes_used_by_leading_zero_blocks;
@@ -202,12 +208,20 @@ public:
 		// Compact the segment by moving the metadata next to the data.
 		idx_t bytes_used_by_data = UsedSpace();
 		idx_t metadata_offset = AlignValue(bytes_used_by_data);
-		idx_t metadata_size = dataptr + Storage::BLOCK_SIZE - metadata_ptr - 1;
+		// Verify that the metadata_ptr does not cross this threshold
+		D_ASSERT(dataptr + metadata_offset < metadata_ptr);
+		idx_t metadata_size = dataptr + Storage::BLOCK_SIZE - metadata_ptr;
 		idx_t total_segment_size = metadata_offset + metadata_size;
-		memmove(dataptr + metadata_offset, metadata_ptr + 1, metadata_size);
-
+#ifdef DEBUG
+		uint32_t verify_bytes;
+		std::memcpy((void *)&verify_bytes, metadata_ptr, 4);
+#endif
+		memmove(dataptr + metadata_offset, metadata_ptr, metadata_size);
+#ifdef DEBUG
+		D_ASSERT(verify_bytes == *(uint32_t *)(dataptr + metadata_offset));
+#endif
 		// Store the offset of the metadata of the first group (which is at the highest address).
-		Store<idx_t>(metadata_offset + metadata_size - 1, dataptr);
+		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
 
 		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);

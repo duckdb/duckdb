@@ -35,9 +35,20 @@ public:
 	void Reset() {
 		this->counter = 0;
 	}
+
+	void PrintRead(uint64_t result) {
+		static thread_local uint64_t counter = 0;
+		std::cout << "FLAG READ[" << counter++ << "]: " << (uint64_t)result << std::endl;
+	}
+
+	void PrintWrite(uint64_t result) {
+		static thread_local uint64_t counter = 0;
+		std::cout << "FLAG WRITE[" << counter++ << "]: " << (uint64_t)result << std::endl;
+	}
+
 	void Insert(const uint8_t &value) {
-		std::cout << "[FLAG] WRITE: " << (uint64_t)value << std::endl;
 		if (!EMPTY) {
+			PrintWrite(value);
 			if ((counter & 3) == 0) {
 				// Start the new byte fresh
 				buffer[counter >> 2] = 0;
@@ -49,7 +60,7 @@ public:
 	uint8_t Extract() {
 		uint8_t result = (buffer[counter >> 2] & flag_masks[counter & 3]) >> flag_shifts[counter & 3];
 		counter++;
-		std::cout << "[FLAG] READ: " << (uint64_t)result << std::endl;
+		PrintRead(result);
 		return result;
 	}
 	uint32_t BytesUsed() const {

@@ -78,8 +78,19 @@ public:
 		}
 	#endif
 
+	void PrintRead(uint64_t result) {
+		static thread_local uint64_t counter = 0;
+		std::cout << "LZB READ[" << counter++ << "]: " << (uint64_t)result << std::endl;
+	}
+
+	void PrintWrite(uint64_t result) {
+		static thread_local uint64_t counter = 0;
+		std::cout << "LZB WRITE[" << counter++ << "]: " << (uint64_t)result << std::endl;
+	}
+
 	void Insert(const uint8_t &value) {
 		if (!EMPTY) {
+			PrintWrite(value);
 			#ifdef DEBUG
 				flags.push_back(value);
 			#endif
@@ -92,18 +103,11 @@ public:
 			if (counter && (counter & (LEADING_ZERO_BLOCK_SIZE-1)) == 7) {
 				const auto buffer_idx = BLOCK_IDX;
 				std::memcpy((void*)(buffer + buffer_idx), ((uint8_t*)&current) + 1, 3);
-				//buffer[buffer_idx] = ((uint8_t*)&current)[3];
-				//buffer[buffer_idx + 1] = ((uint8_t*)&current)[2];
-				//buffer[buffer_idx + 2] = ((uint8_t*)&current)[1];
-				//std::cout << (uint64_t)byte_one << " | " << (uint64_t)byte_two << " | " << (uint64_t)byte_three << " | " << (uint64_t)byte_four << std::endl;
 				#ifdef DEBUG
 					// Verify that the bits are copied correctly
 
 					uint32_t temp_value = 0;
 					std::memcpy(((uint8_t*)&temp_value) + 1, (void*)(buffer + buffer_idx), 3);
-					//((uint8_t*)&temp_value)[2] = buffer[buffer_idx];
-					//((uint8_t*)&temp_value)[1] = buffer[buffer_idx + 1];
-					//((uint8_t*)&temp_value)[0] = buffer[buffer_idx + 2];
 					for (size_t i = 0; i < 8; i++) {
 						assert(flags[i] == ExtractValue(temp_value, i));
 					}
@@ -118,11 +122,12 @@ public:
 		const auto buffer_idx = BLOCK_IDX;
 		uint32_t temp;
 		//TODO: only copy the bytes relevant to the current value (something % 3) ..
-		std::memcpy(&temp, (void*)(buffer + buffer_idx), 3);
+		std::memcpy(((uint8_t*)&temp) + 1, (void*)(buffer + buffer_idx), 3);
 
 
 		uint8_t result = (temp & leading_zero_masks[counter % 8]) >> leading_zero_shifts[counter % 8];
 		counter++;
+		PrintRead(result);
 		return result;
 	}
 	size_t BlockCount() const {
