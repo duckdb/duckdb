@@ -74,27 +74,37 @@ Statement::Statement(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Statemen
 	}
 
 	// TODO we should do this using replacement scans probably? or at least define a macro? or maybe add a view
-	if (info.Length() > 2 && info[2].IsArray()) {
-		std::string table_scan_str = "scan_arrow_ipc([";
-		auto b = info[2].As<Napi::Array>();
-		for(uint64_t i = 0; i<b.Length(); i++) {
-			table_scan_str += "{";
-			Napi::Value v = b[i];
-			if (!v.IsObject()) {
-				throw std::runtime_error("Expected Object");
+	if (info.Length() > 2 && info[2].IsObject()) {
+
+		sql = info[1].As<Napi::String>().Utf8Value();
+
+		auto ipc_tables_object = info[2].As<Napi::Object>();
+		auto property_names = ipc_tables_object.GetPropertyNames().As<Napi::Array>();
+
+		for (uint64_t table_idx = 0; table_idx < property_names.Length(); table_idx++)
+		{
+			auto name = property_names.Get(table_idx).As<Napi::String>().ToString().Utf8Value();
+			auto ipc_buffer_array = ipc_tables_object.Get(name).As<Napi::Array>();
+
+			std::string table_scan_str = "scan_arrow_ipc([";
+			for (uint64_t ipc_idx = 0; ipc_idx < ipc_buffer_array.Length(); ipc_idx++) {
+				table_scan_str += "{";
+				Napi::Value v = ipc_buffer_array[ipc_idx];
+				if (!v.IsObject()) {
+					throw std::runtime_error("Expected Object");
+				}
+				Napi::Uint8Array arr = v.As<Napi::Uint8Array>();
+				auto raw_ptr = reinterpret_cast<uint64_t>(arr.ArrayBuffer().Data());
+				auto length = (uint64_t)arr.ElementLength();
+
+				table_scan_str += "'ptr': " + std::to_string(raw_ptr) + "::UBIGINT, ";
+				table_scan_str += "'size': " + std::to_string(length) + "},";
 			}
-			Napi::Uint8Array arr = v.As<Napi::Uint8Array>();
-			auto raw_ptr = reinterpret_cast<uint64_t>(arr.ArrayBuffer().Data());
-			auto length = (uint64_t)arr.ElementLength();
+			table_scan_str += "])";
 
-			table_scan_str += "'ptr': " + std::to_string(raw_ptr) + "::UBIGINT, ";
-			table_scan_str += "'size': " + std::to_string(length) + "},";
+			// Find replace our ipc table alias with the table function
+			sql = std::regex_replace(sql, std::regex(name), table_scan_str);
 		}
-	    table_scan_str += "])";
-
-		std::string sql_preprocessed = info[1].As<Napi::String>().Utf8Value();
-		sql_preprocessed = std::regex_replace(sql_preprocessed, std::regex("_arrow_ipc_stream"), table_scan_str);
-		sql = Napi::String::New(env, sql_preprocessed);
 	} else {
 		sql = info[1].As<Napi::String>();
 	}
