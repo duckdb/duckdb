@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <iostream>
 
 namespace duckdb_chimp {
 
@@ -35,21 +36,23 @@ public:
 		this->counter = 0;
 	}
 	void Insert(const uint8_t &value) {
+		std::cout << "[FLAG] WRITE: " << (uint64_t)value << std::endl;
 		if (!EMPTY) {
 			if ((counter & 3) == 0) {
 				// Start the new byte fresh
 				buffer[counter >> 2] = 0;
 			}
-			buffer[counter >> 2] |= (value & 3) << flag_shifts[counter & 3];
+			buffer[counter >> 2] |= ((value & 3) << flag_shifts[counter & 3]);
 		}
 		counter++;
 	}
 	uint8_t Extract() {
 		uint8_t result = (buffer[counter >> 2] & flag_masks[counter & 3]) >> flag_shifts[counter & 3];
 		counter++;
+		std::cout << "[FLAG] READ: " << (uint64_t)result << std::endl;
 		return result;
 	}
-	uint32_t BytesUsed() {
+	uint32_t BytesUsed() const {
 		return (counter >> 2) + ((counter & 3) != 0);
 	}
 private:

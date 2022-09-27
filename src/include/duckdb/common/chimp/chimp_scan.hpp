@@ -36,6 +36,7 @@ public:
 		chimp_state.input.SetStream((uint8_t *)(dataptr + segment.GetBlockOffset() + ChimpPrimitives::HEADER_SIZE));
 		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
 		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
+		LoadGroup();
 	}
 
 	duckdb_chimp::Chimp128DecompressionState chimp_state;
@@ -62,6 +63,8 @@ public:
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_bit_offset = Load<uint32_t>(metadata_ptr);
+		// Only used for point queries
+		(void)data_bit_offset;
 
 		// Load how many blocks of leading zero bits we have
 		metadata_ptr -= sizeof(uint8_t);

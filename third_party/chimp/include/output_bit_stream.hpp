@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <assert.h>
+#include <iostream>
 
 #include "bit_utils.hpp"
 
@@ -51,6 +52,7 @@ public:
 		// Skip the last bits of the current byte
 		// Does nothing if already byte-aligned
 		free_bits -= (free_bits & 7);
+		WriteToStream();
 	}
 
 	void	SetStream(uint8_t* output_stream) {
@@ -71,6 +73,7 @@ public:
 
 	template <class T, uint8_t VALUE_SIZE>
 	void WriteValue(T value) {
+		std::cout << "WRITE: " << (uint64_t)value << " | SIZE: " << (uint64_t)VALUE_SIZE << std::endl;
 		bits_written += 8 * ((VALUE_SIZE >> 3) + ((VALUE_SIZE & 7) != 0));
 		if (EMPTY) {
 			return;
@@ -112,6 +115,7 @@ public:
 		if (EMPTY) {
 			return;
 		}
+		std::cout << "WRITE: " << (uint64_t)value << " | SIZE: " << (uint64_t)value_size << std::endl;
 		if (FitsInCurrent(value_size)) {
 			//! If we can write the entire value in one go
 			WriteInCurrent((INTERNAL_TYPE)value, value_size);
@@ -167,7 +171,9 @@ private:
 		stream[stream_index++] = value;
 	}
 	void WriteToStream() {
-		stream[stream_index++] = current;
+		if (!EMPTY) {
+			stream[stream_index++] = current;
+		}
 		current = 0;
 		free_bits = INTERNAL_TYPE_BITSIZE;
 	}

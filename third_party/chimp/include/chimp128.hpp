@@ -12,16 +12,15 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "chimp_utils.hpp"
-#include "output_bit_stream.hpp"
+//#include "output_bit_stream.hpp"
+#include "byte_writer.hpp"
 #include "leading_zero_buffer.hpp"
 #include "flag_buffer.hpp"
-#include "bit_reader_optimized.hpp"
+#include "byte_reader.hpp"
 #include "ring_buffer.hpp"
 #include <assert.h>
 
 namespace duckdb_chimp {
-
-using byte_index_t = uint32_t;
 
 enum CompressionFlags {
 	VALUE_IDENTICAL = 0,
@@ -53,7 +52,7 @@ struct Chimp128CompressionState {
 		flag_buffer.Reset();
 	}
 
-	OutputBitStream<EMPTY>					output; //The stream to write to
+	ByteWriter<EMPTY>						output; //The stream to write to
 	LeadingZeroBuffer<EMPTY>				leading_zero_buffer;
 	FlagBuffer<EMPTY>						flag_buffer;
 	RingBuffer								ring_buffer; //! The ring buffer that holds the previous values
@@ -102,6 +101,17 @@ public:
 	}
 
 	static void CompressValue(uint64_t in, State& state) {
+		static constexpr uint8_t LEADING_REPRESENTATION[] = {
+			0, 0, 0, 0, 0, 0, 0, 0,
+			1, 1, 1, 1, 2, 2, 2, 2,
+			3, 3, 4, 4, 5, 5, 6, 6,
+			7, 7, 7, 7, 7, 7, 7, 7,
+			7, 7, 7, 7, 7, 7, 7, 7,
+			7, 7, 7, 7, 7, 7, 7, 7,
+			7, 7, 7, 7, 7, 7, 7, 7,
+			7, 7, 7, 7, 7, 7, 7, 7
+		};
+
 		auto key = state.ring_buffer.Key(in);
 		uint64_t xor_result;
 		uint8_t previous_index;
@@ -151,8 +161,8 @@ public:
 				uint32_t significant_bits = BIT_SIZE - leading_zeros - trailing_zeros;
 				//! FIXME: it feels like this would produce '11', indicating LEADING_ZERO_LOAD
 				//! Instead of indicating TRAILING_EXCEEDS_THRESHOLD '01'
-				auto result = 512U * (RingBuffer::RING_SIZE + previous_index) + BIT_SIZE * ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros] + significant_bits;
-				state.output.template WriteValue<uint16_t>((uint16_t)(result & 0xFFFF));
+				auto result = 512U * (RingBuffer::RING_SIZE + previous_index) + BIT_SIZE * LEADING_REPRESENTATION[leading_zeros] + significant_bits;
+				state.output.template WriteValue<uint16_t, 16>((uint16_t)(result & 0xFFFF));
 				//state.output.template WriteValue<uint32_t, FLAG_ONE_SIZE>(result);
 				state.output.template WriteValue<uint64_t>(xor_result >> trailing_zeros, significant_bits);
 				state.SetLeadingZeros();
@@ -170,7 +180,7 @@ public:
 				//! 2 bits for the flag LEADING_ZERO_LOAD ('11') + 3 bits for the leading zeros
 				//uint8_t serialized_value = ((uint8_t)LEADING_ZERO_LOAD << 3) + ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros];
 				//state.output.template WriteValue<uint32_t, 5>(serialized_value);
-				state.leading_zero_buffer.Insert(ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
+				state.leading_zero_buffer.Insert(LEADING_REPRESENTATION[leading_zeros]);
 				state.output.template WriteValue<uint64_t>(xor_result, significant_bits);
 				state.SetLeadingZeros(leading_zeros);
 			}
@@ -222,7 +232,7 @@ public:
 		return trailing_zeros;
 	}
 
-	BitReader 					input;
+	ByteReader 					input;
 	LeadingZeroBuffer<false>	leading_zero_buffer;
 	FlagBuffer<false>			flag_buffer;
 	uint8_t 					leading_zeros;

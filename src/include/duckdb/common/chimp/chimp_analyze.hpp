@@ -20,7 +20,7 @@ template <class T>
 struct ChimpAnalyzeState : public AnalyzeState {
 public:
 	ChimpAnalyzeState() : state((void *)this) {
-		state.chimp_state.SetOutputBuffer(nullptr);
+		state.AssignDataBuffer(nullptr);
 	}
 	ChimpState<T, true> state;
 	idx_t group_idx = 0;

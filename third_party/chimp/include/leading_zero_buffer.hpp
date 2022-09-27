@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 #include <cstring>
+#ifdef DEBUG
+#include <vector>
+#endif
 
 namespace duckdb_chimp {
 
@@ -48,7 +51,7 @@ static constexpr uint8_t leading_zero_shifts[8] = {
 };
 
 public:
-	LeadingZeroBuffer() : counter(0), buffer(nullptr) {}
+	LeadingZeroBuffer() : current(0), counter(0), buffer(nullptr) {}
 	void SetBuffer(uint8_t* buffer) {
 		// Set the internal buffer, when inserting this should be BUFFER_SIZE bytes in length
 		// This buffer does not need to be zero-initialized for inserting
@@ -58,32 +61,81 @@ public:
 	//Reset the counter, but don't replace the buffer
 	void Reset() {
 		this->counter = 0;
+		current = 0;
+		if (!EMPTY && buffer) {
+			buffer[0] = 0;
+			buffer[1] = 0;
+			buffer[2] = 0;
+		}
+		#ifdef DEBUG
+			flags.clear();
+		#endif
 	}
 public:
+	#ifdef DEBUG
+		uint8_t ExtractValue(uint32_t value, uint8_t index) {
+			return (value & leading_zero_masks[index]) >> leading_zero_shifts[index];
+		}
+	#endif
+
 	void Insert(const uint8_t &value) {
 		if (!EMPTY) {
-			const auto buffer_idx = BLOCK_IDX;
-			if ((counter & (LEADING_ZERO_BLOCK_SIZE-1)) == 0) {
-				//Start fresh block
-				*((uint32_t*)(buffer + buffer_idx)) = 0;
+			#ifdef DEBUG
+				flags.push_back(value);
+			#endif
+			current |= (value % 8) << leading_zero_shifts[counter % 8];
+			#ifdef DEBUG
+				//Verify that the bits are serialized correctly
+				assert(flags[counter % 8] == ExtractValue(current, counter % 8));
+			#endif
+
+			if (counter && (counter & (LEADING_ZERO_BLOCK_SIZE-1)) == 7) {
+				const auto buffer_idx = BLOCK_IDX;
+				std::memcpy((void*)(buffer + buffer_idx), ((uint8_t*)&current) + 1, 3);
+				//buffer[buffer_idx] = ((uint8_t*)&current)[3];
+				//buffer[buffer_idx + 1] = ((uint8_t*)&current)[2];
+				//buffer[buffer_idx + 2] = ((uint8_t*)&current)[1];
+				//std::cout << (uint64_t)byte_one << " | " << (uint64_t)byte_two << " | " << (uint64_t)byte_three << " | " << (uint64_t)byte_four << std::endl;
+				#ifdef DEBUG
+					// Verify that the bits are copied correctly
+
+					uint32_t temp_value = 0;
+					std::memcpy(((uint8_t*)&temp_value) + 1, (void*)(buffer + buffer_idx), 3);
+					//((uint8_t*)&temp_value)[2] = buffer[buffer_idx];
+					//((uint8_t*)&temp_value)[1] = buffer[buffer_idx + 1];
+					//((uint8_t*)&temp_value)[0] = buffer[buffer_idx + 2];
+					for (size_t i = 0; i < 8; i++) {
+						assert(flags[i] == ExtractValue(temp_value, i));
+					}
+					flags.clear();
+				#endif
+				current = 0;
 			}
-			*((uint32_t*)(buffer + buffer_idx)) |= (value & 7) << leading_zero_shifts[counter & 7];
 		}
 		counter++;
 	}
 	uint8_t Extract() {
 		const auto buffer_idx = BLOCK_IDX;
-		uint8_t result = (*((uint32_t*)(buffer + buffer_idx)) & leading_zero_masks[counter & 7]) >> leading_zero_shifts[counter & 7];
+		uint32_t temp;
+		//TODO: only copy the bytes relevant to the current value (something % 3) ..
+		std::memcpy(&temp, (void*)(buffer + buffer_idx), 3);
+
+
+		uint8_t result = (temp & leading_zero_masks[counter % 8]) >> leading_zero_shifts[counter % 8];
 		counter++;
 		return result;
 	}
-	size_t BlockCount() {
-		return (counter >> 3) + ((counter & 7) != 0);
+	size_t BlockCount() const {
+		return (counter / 8) + ((counter % 8) != 0);
 	}
 private:
 private:
+	uint32_t current;
 	uint32_t counter = 0; //block_index * 8
 	uint8_t *buffer;
+	#ifdef DEBUG
+	std::vector<uint8_t> flags;
+	#endif
 };
 
 } //namespace duckdb_chimp

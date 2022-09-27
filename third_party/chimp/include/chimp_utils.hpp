@@ -51,16 +51,6 @@ static inline int __builtin_clzll(unsigned long long mask) {
 #endif
 
 struct ChimpCompressionConstants {
-	static constexpr uint8_t LEADING_REPRESENTATION[] = {
-		0, 0, 0, 0, 0, 0, 0, 0,
-		1, 1, 1, 1, 2, 2, 2, 2,
-		3, 3, 4, 4, 5, 5, 6, 6,
-		7, 7, 7, 7, 7, 7, 7, 7,
-		7, 7, 7, 7, 7, 7, 7, 7,
-		7, 7, 7, 7, 7, 7, 7, 7,
-		7, 7, 7, 7, 7, 7, 7, 7,
-		7, 7, 7, 7, 7, 7, 7, 7
-	};
 
 	static constexpr uint8_t LEADING_ROUND[] = {
 		0,  0,  0,  0,  0,  0,  0,  0,
