@@ -394,7 +394,7 @@ malloc_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 		val = va_arg(ap, uintmax_t);				\
 		break;							\
 	case 't':							\
-		val = va_arg(ap, ptrdiff_t);				\
+		val = va_arg(ap, std::ptrdiff_t);				\
 		break;							\
 	case 'z':							\
 		val = va_arg(ap, ssize_t);				\
