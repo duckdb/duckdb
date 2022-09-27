@@ -53,7 +53,7 @@ public:
 
 		TableFunction scan_arrow_ipc_func("scan_arrow_ipc",
 		                                  {LogicalType::LIST(LogicalType::STRUCT(make_buffer_struct_children))},
-		                                  ArrowTableFunction::ArrowScanFunction, ArrowIPCTableFunction::ArrowScanBind,
+		                                  ArrowIPCTableFunction::ArrowScanFunction, ArrowIPCTableFunction::ArrowScanBind,
 		                                  ArrowTableFunction::ArrowScanInitGlobal, ArrowTableFunction::ArrowScanInitLocal);
 
 		scan_arrow_ipc_func.cardinality = ArrowTableFunction::ArrowScanCardinality;
@@ -128,6 +128,29 @@ private:
 		}
 		RenameArrowColumns(names);
 		return move(res);
+	}
+
+	// TODO: cleanup: only difference is the ArrowToDuckDB call
+	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+		if (!data_p.local_state) {
+			return;
+		}
+		auto &data = (ArrowScanFunctionData &)*data_p.bind_data;
+		auto &state = (ArrowScanLocalState &)*data_p.local_state;
+		auto &global_state = (ArrowScanGlobalState &)*data_p.global_state;
+
+		//! Out of tuples in this chunk
+		if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
+			if (!ArrowTableFunction::ArrowScanParallelStateNext(context, data_p.bind_data, state, global_state)) {
+				return;
+			}
+		}
+		int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
+		data.lines_read += output_size;
+		output.SetCardinality(output_size);
+		ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size, false);
+		output.Verify();
+		state.chunk_offset += output.size();
 	}
 };
 

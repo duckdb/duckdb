@@ -188,7 +188,7 @@ Connection.prototype.arrow = function (sql) {
  * @param callback
  * @return QueryResult
  */
-Connection.prototype.arrowStream = async function (sql) {
+Connection.prototype.arrowStreamOld = async function (sql) {
     var statement = new Statement(this, sql);
     return statement.stream.apply(statement, arguments);
 }
@@ -199,7 +199,7 @@ Connection.prototype.arrowStream = async function (sql) {
  * @param callback
  * @return QueryResult
  */
-Connection.prototype.arrowStream2 = async function (sql) {
+Connection.prototype.arrrowIPCStream = async function (sql) {
     // TODO: allow prepared statements too
     const statement = new Statement(this, "SELECT * FROM get_arrow_ipc('" + sql + "', 120);");
     return statement.streamArrowIpc.apply(statement, arguments);

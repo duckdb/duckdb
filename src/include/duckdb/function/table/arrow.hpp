@@ -121,7 +121,11 @@ protected:
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanLocalState &scan_state,
 	                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-	                          DataChunk &output, idx_t start);
+	                          DataChunk &output, idx_t start, bool arrow_scan_is_projected = true);
+
+	//! Get next scan state
+	static bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p, ArrowScanLocalState &state,
+	                                                    ArrowScanGlobalState &parallel_state);
 
 	//! Initialize Global State
 	static unique_ptr<GlobalTableFunctionState> ArrowScanInitGlobal(ClientContext &context,

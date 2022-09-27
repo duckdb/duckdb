@@ -810,13 +810,20 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanL
 	vector.Slice(*dict_vectors[col_idx], sel, size);
 }
 
+// TODO should be a template?
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
                                        unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-                                       DataChunk &output, idx_t start) {
+                                       DataChunk &output, idx_t start, bool arrow_scan_is_projected) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
 		auto col_idx = scan_state.column_ids[idx];
+		auto arrow_array_idx = arrow_scan_is_projected ? idx : col_idx;
+
+		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+			continue;
+		}
+
 		std::pair<idx_t, idx_t> arrow_convert_idx {0, 0};
-		auto &array = *scan_state.chunk->arrow_array.children[idx];
+		auto &array = *scan_state.chunk->arrow_array.children[arrow_array_idx];
 		if (!array.release) {
 			throw InvalidInputException("arrow_scan: released array passed");
 		}

@@ -251,7 +251,7 @@ idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const Func
 	return ((bind_data.number_of_rows + bind_data.rows_per_thread - 1) / bind_data.rows_per_thread) + 1;
 }
 
-bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p, ArrowScanLocalState &state,
+bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p, ArrowScanLocalState &state,
                                 ArrowScanGlobalState &parallel_state) {
 	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
 	state.chunk_offset = 0;
