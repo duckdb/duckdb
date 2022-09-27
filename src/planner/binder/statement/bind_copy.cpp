@@ -43,7 +43,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	for (auto &option : stmt.info->options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
-			use_tmp_file = option.second[0].CastAs(LogicalType::BOOLEAN).GetValue<bool>();
+			use_tmp_file = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			stmt.info->options.erase(option.first);
 			break;
 		}

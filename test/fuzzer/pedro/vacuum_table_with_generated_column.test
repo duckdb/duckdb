@@ -1,0 +1,52 @@
+# name: test/fuzzer/pedro/vacuum_table_with_generated_column.test
+# group: [pedro]
+
+# need this, else the distinct stats sampling is different
+require vector_size 1024
+
+require skip_reload
+
+statement ok
+CREATE TABLE test (x INT, y AS (x + 100));
+
+# Error: Vacuum the same column twice
+statement error
+ANALYZE test(x, x);
+
+statement ok
+ANALYZE test(y, x);
+
+statement ok
+INSERT INTO test SELECT range % 5000 FROM range(10000);
+
+# inaccurate approx unique due to sampling
+query T
+SELECT stats(x) FROM test LIMIT 1;
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9809]
+
+query T
+SELECT stats(y) FROM test LIMIT 1;
+----
+[Min: 100, Max: 5099][Has Null: false, Has No Null: true]
+
+# we enable verify_parallelism only for ANALYZE
+statement ok
+PRAGMA verify_parallelism;
+
+statement ok
+ANALYZE test(x)
+
+statement ok
+PRAGMA disable_verify_parallelism;
+
+# x is more accurate now
+query T
+SELECT stats(x) FROM test LIMIT 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
+
+query T
+SELECT stats(y) FROM test LIMIT 1
+----
+[Min: 100, Max: 5099][Has Null: false, Has No Null: true]

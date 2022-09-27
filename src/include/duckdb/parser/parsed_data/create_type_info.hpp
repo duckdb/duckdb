@@ -16,14 +16,16 @@
 namespace duckdb {
 
 struct CreateTypeInfo : public CreateInfo {
-
 	CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY) {
+	}
+	CreateTypeInfo(string name_p, LogicalType type_p)
+	    : CreateInfo(CatalogType::TYPE_ENTRY), name(move(name_p)), type(move(type_p)) {
 	}
 
 	//! Name of the Type
 	string name;
 	//! Logical Type
-	LogicalType type; // Shouldn't this be named `logical_type`? (shadows a parent member `type`)
+	LogicalType type;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {

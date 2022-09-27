@@ -2,20 +2,20 @@
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/row_data_collection_scanner.hpp"
-#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/partitionable_hashtable.hpp"
 #include "duckdb/execution/window_segment_tree.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/parallel/event.hpp"
-#include "duckdb/execution/partitionable_hashtable.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -34,12 +34,14 @@ public:
 
 	WindowGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
 	                      const Types &payload_types, idx_t max_mem, bool external)
-	    : memory_per_thread(max_mem), count(0), partition_layout(partitions) {
+	    : memory_per_thread(max_mem), count(0) {
 
 		RowLayout payload_layout;
 		payload_layout.Initialize(payload_types);
 		global_sort = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
 		global_sort->external = external;
+
+		partition_layout = global_sort->sort_layout.GetPrefixComparisonLayout(partitions.size());
 	}
 
 	void Combine(LocalSortState &local_sort) {
@@ -712,7 +714,10 @@ struct WindowInputExpression {
 
 	inline bool CellIsNull(idx_t i) const {
 		D_ASSERT(!chunk.data.empty());
-		return FlatVector::IsNull(chunk.data[0], scalar ? 0 : i);
+		if (chunk.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			return ConstantVector::IsNull(chunk.data[0]);
+		}
+		return FlatVector::IsNull(chunk.data[0], i);
 	}
 
 	inline void CopyCell(Vector &target, idx_t target_offset) const {
@@ -1128,7 +1133,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 struct WindowExecutor {
 	WindowExecutor(BoundWindowExpression *wexpr, Allocator &allocator, const idx_t count);
 
-	void Sink(DataChunk &input_chunk, const idx_t input_idx);
+	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count);
 	void Finalize(WindowAggregationMode mode);
 
 	void Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &result, const ValidityMask &partition_mask,
@@ -1202,7 +1207,7 @@ WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, Allocator &allocato
 	PrepareInputExpressions(exprs.data(), exprs.size(), payload_executor, payload_chunk);
 }
 
-void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx) {
+void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) {
 	// Single pass over the input to produce the global data.
 	// Vectorisation for the win...
 
@@ -1237,7 +1242,7 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx) {
 			if (!vdata.validity.AllValid()) {
 				//	Lazily materialise the contents when we find the first NULL
 				if (ignore_nulls.AllValid()) {
-					ignore_nulls.Initialize(payload_collection.Count());
+					ignore_nulls.Initialize(total_count);
 				}
 				// Write to the current position
 				// Chunks in a collection are full, so we don't have to worry about raggedness
@@ -1497,19 +1502,18 @@ private:
 	WindowGlobalHashGroup &hash_group;
 };
 
-class WindowMergeEvent : public Event {
+class WindowMergeEvent : public BasePipelineEvent {
 public:
 	WindowMergeEvent(WindowGlobalSinkState &gstate_p, Pipeline &pipeline_p, WindowGlobalHashGroup &hash_group_p)
-	    : Event(pipeline_p.executor), gstate(gstate_p), pipeline(pipeline_p), hash_group(hash_group_p) {
+	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), hash_group(hash_group_p) {
 	}
 
 	WindowGlobalSinkState &gstate;
-	Pipeline &pipeline;
 	WindowGlobalHashGroup &hash_group;
 
 public:
 	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
+		auto &context = pipeline->GetClientContext();
 
 		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 		auto &ts = TaskScheduler::GetScheduler(context);
@@ -1524,7 +1528,7 @@ public:
 
 	void FinishEvent() override {
 		hash_group.global_sort->CompleteMergeRound(true);
-		CreateMergeTasks(pipeline, *this, gstate, hash_group);
+		CreateMergeTasks(*pipeline, *this, gstate, hash_group);
 	}
 
 	static void CreateMergeTasks(Pipeline &pipeline, Event &event, WindowGlobalSinkState &state,
@@ -1767,7 +1771,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 
 		//	TODO: Parallelization opportunity
 		for (auto &wexec : window_execs) {
-			wexec->Sink(input_chunk, input_idx);
+			wexec->Sink(input_chunk, input_idx, scanner->Count());
 		}
 		input_idx += input_chunk.size();
 	}

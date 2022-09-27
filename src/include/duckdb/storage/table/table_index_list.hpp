@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table_index.hpp
+// duckdb/storage/table_index_list.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,8 +10,9 @@
 
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/index.hpp"
+
 namespace duckdb {
-class TableIndex {
+class TableIndexList {
 public:
 	//! Scan the catalog set, invoking the callback method for every entry
 	template <class T>
@@ -33,7 +34,10 @@ public:
 
 	idx_t Count();
 
+	void Move(TableIndexList &other);
+
 	Index *FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type);
+	void VerifyForeignKey(const vector<idx_t> &fk_keys, bool is_append, DataChunk &chunk, vector<string> &err_msg);
 
 	//! Serialize all indexes owned by this table, returns a vector of block info of all indexes
 	vector<BlockPointer> SerializeIndexes(duckdb::MetaBlockWriter &writer);

@@ -49,6 +49,8 @@ public:
 	bool operator>=(const Key &k) const;
 	bool operator==(const Key &k) const;
 
+	bool ByteMatches(Key &other, idx_t &depth);
+
 private:
 	template <class T>
 	static inline unique_ptr<data_t[]> CreateData(T value) {

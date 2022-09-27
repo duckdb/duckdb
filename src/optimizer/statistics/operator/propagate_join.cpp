@@ -5,6 +5,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
@@ -36,10 +37,15 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					// semi or inner join on false; entire node can be pruned
 					ReplaceWithEmptyResult(*node_ptr);
 					return;
-				case JoinType::ANTI:
-					// anti join: replace entire join with LHS
-					*node_ptr = move(join.children[0]);
+				case JoinType::ANTI: {
+					// when the right child has data, return the left child
+					// when the right child has no data, return an empty set
+					auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
+					limit->AddChild(move(join.children[1]));
+					auto cross_product = LogicalCrossProduct::Create(move(join.children[0]), move(limit));
+					*node_ptr = move(cross_product);
 					return;
+				}
 				case JoinType::LEFT:
 					// anti/left outer join: replace right side with empty node
 					ReplaceWithEmptyResult(join.children[1]);
@@ -67,10 +73,15 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				} else {
 					// this is the only condition and it is always true: all conditions are true
 					switch (join.join_type) {
-					case JoinType::SEMI:
-						// semi join on true: replace entire join with LHS
-						*node_ptr = move(join.children[0]);
+					case JoinType::SEMI: {
+						// when the right child has data, return the left child
+						// when the right child has no data, return an empty set
+						auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
+						limit->AddChild(move(join.children[1]));
+						auto cross_product = LogicalCrossProduct::Create(move(join.children[0]), move(limit));
+						*node_ptr = move(cross_product);
 						return;
+					}
 					case JoinType::INNER:
 					case JoinType::LEFT:
 					case JoinType::RIGHT:
@@ -187,6 +198,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	// then propagate into the join conditions
 	switch (join.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		PropagateStatistics((LogicalComparisonJoin &)join, node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:

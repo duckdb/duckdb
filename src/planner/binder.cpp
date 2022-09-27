@@ -409,12 +409,18 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 
 	auto binder = Binder::CreateBinder(context);
 
+	vector<column_t> bound_columns;
+	idx_t column_count = 0;
 	for (auto &col : table->columns) {
 		names.push_back(col.Name());
 		types.push_back(col.Type());
+		if (!col.Generated()) {
+			bound_columns.push_back(column_count);
+		}
+		column_count++;
 	}
 
-	binder->bind_context.AddGenericBinding(update_table_index, table->name, names, types);
+	binder->bind_context.AddBaseTable(update_table_index, table->name, names, types, bound_columns, table);
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;

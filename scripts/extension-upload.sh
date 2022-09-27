@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Usage: ./extension-upload.sh <architecture> <commithash or version_tag>
+
 set -e
 
 echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
@@ -18,7 +20,7 @@ do
   # compress extension binary
 	gzip < $f > "$f.gz"
 	# upload compressed extension binary to S3
-	aws s3 cp $f.gz s3://duckdb-extensions/`git log -1 --format=%h`/$1/$ext.duckdb_extension.gz --acl public-read
+	aws s3 cp $f.gz s3://duckdb-extensions/$2/$1/$ext.duckdb_extension.gz --acl public-read
 done
 
 rm private.pem

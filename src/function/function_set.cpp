@@ -1,13 +1,15 @@
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
 ScalarFunctionSet::ScalarFunctionSet(string name) : FunctionSet(move(name)) {
 }
 
-ScalarFunction ScalarFunctionSet::GetFunctionByArguments(const vector<LogicalType> &arguments) {
+ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
 	string error;
-	idx_t index = Function::BindFunction(name, *this, arguments, error);
+	FunctionBinder binder(context);
+	idx_t index = binder.BindFunction(name, *this, arguments, error);
 	if (index == DConstants::INVALID_INDEX) {
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                        error);
@@ -18,9 +20,11 @@ ScalarFunction ScalarFunctionSet::GetFunctionByArguments(const vector<LogicalTyp
 AggregateFunctionSet::AggregateFunctionSet(string name) : FunctionSet(move(name)) {
 }
 
-AggregateFunction AggregateFunctionSet::GetFunctionByArguments(const vector<LogicalType> &arguments) {
+AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                               const vector<LogicalType> &arguments) {
 	string error;
-	idx_t index = Function::BindFunction(name, *this, arguments, error);
+	FunctionBinder binder(context);
+	idx_t index = binder.BindFunction(name, *this, arguments, error);
 	if (index == DConstants::INVALID_INDEX) {
 		// check if the arguments are a prefix of any of the arguments
 		// this is used for functions such as quantile or string_agg that delete part of their arguments during bind
@@ -49,9 +53,10 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(const vector<Logi
 TableFunctionSet::TableFunctionSet(string name) : FunctionSet(move(name)) {
 }
 
-TableFunction TableFunctionSet::GetFunctionByArguments(const vector<LogicalType> &arguments) {
+TableFunction TableFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
 	string error;
-	idx_t index = Function::BindFunction(name, *this, arguments, error);
+	FunctionBinder binder(context);
+	idx_t index = binder.BindFunction(name, *this, arguments, error);
 	if (index == DConstants::INVALID_INDEX) {
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                        error);

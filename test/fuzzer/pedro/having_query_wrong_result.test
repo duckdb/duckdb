@@ -1,0 +1,25 @@
+# name: test/fuzzer/pedro/having_query_wrong_result.test
+# description: Issue #4680: Having query with wrong result?
+# group: [pedro]
+
+require skip_reload
+
+statement ok
+CREATE SEQUENCE seq;
+
+query I
+SELECT nextval('seq');
+----
+1
+
+query I
+SELECT currval('seq');
+----
+1
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 1 FROM (SELECT 1) t0(c0) GROUP BY CUBE (1) HAVING (currval('seq') IS NULL);
+----
