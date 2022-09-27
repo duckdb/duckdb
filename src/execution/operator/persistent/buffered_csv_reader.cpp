@@ -1188,7 +1188,6 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 			}
 
 			col_names.push_back(col_name);
-			col_names_map[col_name] = col;
 			name_collision_count[col_name] = 0;
 		}
 
@@ -1197,7 +1196,6 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 		for (idx_t col = 0; col < options.num_cols; col++) {
 			string column_name = GenerateColumnName(options.num_cols, col);
 			col_names.push_back(column_name);
-			col_names_map[column_name] = col;
 		}
 	}
 }
@@ -2009,10 +2007,18 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	}
 
 	bool conversion_error_ignored = false;
+	const bool union_by_name = options.union_by_name;
 
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
+		idx_t insert_col_idx;
+		if(union_by_name){
+			insert_col_idx = col_names_map[col_names[col_idx]];
+		}else{
+			insert_col_idx = col_idx;
+		}
+
 		if (sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
@@ -2033,22 +2039,22 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					}
 				}
 			}
-			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
+			insert_chunk.data[insert_col_idx].Reference(parse_chunk.data[col_idx]);
 		} else {
 			string error_message;
 			bool success;
 			if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx],
+				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_col_idx],
 				                            parse_chunk.size(), error_message);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
 			           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx],
+				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_col_idx],
 				                                 parse_chunk.size(), error_message);
 			} else {
 				// target type is not varchar: perform a cast
-				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
+				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx], insert_chunk.data[insert_col_idx],
 				                                           parse_chunk.size(), &error_message);
 			}
 			if (success) {
