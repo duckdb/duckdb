@@ -13,7 +13,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 	// Locate the first blob row in question
 	data_ptr_t row_ptr = dataptr + start * sort_layout.entry_size;
 	data_ptr_t blob_row_ptr = blob_ptr + Load<uint32_t>(row_ptr + sort_layout.comparison_size) * row_width;
-	if (!Comparators::TieIsBreakable(col_idx, blob_row_ptr, sort_layout.blob_layout)) {
+	if (!Comparators::TieIsBreakable(col_idx, blob_row_ptr, sort_layout)) {
 		// Quick check to see if ties can be broken
 		return;
 	}

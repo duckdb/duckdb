@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-bool Comparators::TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout) {
+bool Comparators::TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const SortLayout &sort_layout) {
 	// Check if the blob is NULL
 	ValidityBytes row_mask(row_ptr);
 	idx_t entry_idx;
@@ -15,10 +15,11 @@ bool Comparators::TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr,
 		// Can't break a NULL tie
 		return false;
 	}
+	auto &row_layout = sort_layout.blob_layout;
 	if (row_layout.GetTypes()[col_idx].InternalType() == PhysicalType::VARCHAR) {
 		const auto &tie_col_offset = row_layout.GetOffsets()[col_idx];
 		string_t tie_string = Load<string_t>(row_ptr + tie_col_offset);
-		if (tie_string.GetSize() < string_t::INLINE_LENGTH) {
+		if (tie_string.GetSize() < sort_layout.prefix_lengths[col_idx]) {
 			// No need to break the tie - we already compared the full string
 			return false;
 		}
@@ -66,7 +67,7 @@ int Comparators::BreakBlobTie(const idx_t &tie_col, const SBScanState &left, con
 	const idx_t &col_idx = sort_layout.sorting_to_blob_col.at(tie_col);
 	data_ptr_t l_data_ptr = left.DataPtr(*left.sb->blob_sorting_data);
 	data_ptr_t r_data_ptr = right.DataPtr(*right.sb->blob_sorting_data);
-	if (!TieIsBreakable(col_idx, l_data_ptr, sort_layout.blob_layout)) {
+	if (!TieIsBreakable(col_idx, l_data_ptr, sort_layout)) {
 		// Quick check to see if ties can be broken
 		return 0;
 	}
