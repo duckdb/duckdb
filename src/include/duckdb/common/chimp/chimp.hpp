@@ -34,10 +34,11 @@ struct ChimpType<float> {
 class ChimpPrimitives {
 public:
 	static constexpr uint32_t CHIMP_SEQUENCE_SIZE = 1024;
-	static constexpr uint8_t MAX_BITS_PER_VALUE = 74;
+	static constexpr uint8_t MAX_BYTES_PER_VALUE = sizeof(double) + 1; // extra wiggle room
 	static constexpr uint8_t CACHELINE_SIZE = 64;
 	static constexpr uint8_t HEADER_SIZE = sizeof(uint32_t);
 	static constexpr uint8_t FLAG_BIT_SIZE = 2;
+	static constexpr uint8_t LEADING_ZERO_BLOCK_BUFFERSIZE = 385;
 };
 
 //! Where all the magic happens

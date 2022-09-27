@@ -16,6 +16,10 @@
 
 namespace duckdb_chimp {
 
+// This class writes arbitrary amounts of bits to a stream
+// The way these bits are written is most-significant bit first
+// For example if 6 bits are given as:    0b0011 1111
+// The bits are written to the stream as: 0b1111 1100
 template <bool EMPTY>
 class OutputBitStream {
 	using INTERNAL_TYPE = uint8_t;
@@ -32,8 +36,8 @@ public:
 public:
 	static constexpr uint8_t INTERNAL_TYPE_BITSIZE = sizeof(INTERNAL_TYPE) * 8;
 
-	size_t BitsWritten() const {
-		return bits_written;
+	size_t BytesWritten() const {
+		return (bits_written >> 3) + ((bits_written & 7) != 0);
 	}
 	
 	void Flush() {
@@ -67,7 +71,7 @@ public:
 
 	template <class T, uint8_t VALUE_SIZE>
 	void WriteValue(T value) {
-		bits_written += VALUE_SIZE;
+		bits_written += 8 * ((VALUE_SIZE >> 3) + ((VALUE_SIZE & 7) != 0));
 		if (EMPTY) {
 			return;
 		}
@@ -103,8 +107,8 @@ public:
 		if (i > 7) WriteToStream(value);
 	}
 	template <class T>
-	void WriteValue(T value, uint8_t value_size) {
-		bits_written += value_size;
+	void WriteValue(T value, const uint8_t &value_size) {
+		bits_written += 8 * ((value_size >> 3) + ((value_size & 7) != 0));
 		if (EMPTY) {
 			return;
 		}

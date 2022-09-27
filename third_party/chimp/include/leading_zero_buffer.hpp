@@ -9,7 +9,8 @@ namespace duckdb_chimp {
 
 //! This class is in charge of storing the leading_zero_bits, which are of a fixed size
 //! These are packed together so that the rest of the data can be byte-aligned
-//! This data is read from left to right
+//! The leading zero bit data is read from left to right
+template <bool EMPTY>
 class LeadingZeroBuffer {
 public:
 static constexpr uint32_t CHIMP_GROUP_SIZE = 1024;
@@ -35,12 +36,12 @@ static constexpr uint32_t leading_zero_masks[8] = {
 };
 
 // We're not using the last byte of the 4 bytes we're accessing
-static constexpr leading_zero_shifts[8] = {
+static constexpr uint8_t leading_zero_shifts[8] = {
 	29,
 	26,
 	23,
 	20,
-	17
+	17,
 	14,
 	11,
 	8
@@ -52,15 +53,22 @@ public:
 		// Set the internal buffer, when inserting this should be BUFFER_SIZE bytes in length
 		// This buffer does not need to be zero-initialized for inserting
 		this->buffer = buffer;
+		this->counter = 0;
+	}
+	//Reset the counter, but don't replace the buffer
+	void Reset() {
+		this->counter = 0;
 	}
 public:
 	void Insert(const uint8_t &value) {
-		const auto buffer_idx = BLOCK_IDX;
-		if ((counter & (LEADING_ZERO_BLOCK_SIZE-1)) == 0) {
-			//Start fresh block
-			*((uint32_t*)(buffer + buffer_idx)) = 0;
+		if (!EMPTY) {
+			const auto buffer_idx = BLOCK_IDX;
+			if ((counter & (LEADING_ZERO_BLOCK_SIZE-1)) == 0) {
+				//Start fresh block
+				*((uint32_t*)(buffer + buffer_idx)) = 0;
+			}
+			*((uint32_t*)(buffer + buffer_idx)) |= (value & 7) << leading_zero_shifts[counter & 7];
 		}
-		*((uint32_t*)(buffer + buffer_idx)) |= (value & 7) << leading_zero_shifts[counter & 7];
 		counter++;
 	}
 	uint8_t Extract() {
@@ -68,6 +76,9 @@ public:
 		uint8_t result = (*((uint32_t*)(buffer + buffer_idx)) & leading_zero_masks[counter & 7]) >> leading_zero_shifts[counter & 7];
 		counter++;
 		return result;
+	}
+	size_t BlockCount() {
+		return (counter >> 3) + ((counter & 7) != 0);
 	}
 private:
 private:

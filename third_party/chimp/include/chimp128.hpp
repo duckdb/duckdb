@@ -13,13 +13,15 @@
 #include <stdint.h>
 #include "chimp_utils.hpp"
 #include "output_bit_stream.hpp"
+#include "leading_zero_buffer.hpp"
+#include "flag_buffer.hpp"
 #include "bit_reader_optimized.hpp"
 #include "ring_buffer.hpp"
 #include <assert.h>
 
 namespace duckdb_chimp {
 
-using bit_index_t = uint32_t;
+using byte_index_t = uint32_t;
 
 enum CompressionFlags {
 	VALUE_IDENTICAL = 0,
@@ -43,17 +45,17 @@ struct Chimp128CompressionState {
 		this->previous_leading_zeros = value;
 	}
 
-	size_t CompressedSize() const {
-		return output.BitsWritten();
-	}
-
 	void Reset() {
 		first = true;
 		ring_buffer.Reset();
 		SetLeadingZeros();
+		leading_zero_buffer.Reset();
+		flag_buffer.Reset();
 	}
 
 	OutputBitStream<EMPTY>					output; //The stream to write to
+	LeadingZeroBuffer<EMPTY>				leading_zero_buffer;
+	FlagBuffer<EMPTY>						flag_buffer;
 	RingBuffer								ring_buffer; //! The ring buffer that holds the previous values
 	uint8_t									previous_leading_zeros; //! The leading zeros of the reference value
 	bool									first = true;
@@ -102,7 +104,7 @@ public:
 	static void CompressValue(uint64_t in, State& state) {
 		auto key = state.ring_buffer.Key(in);
 		uint64_t xor_result;
-		uint32_t previous_index;
+		uint8_t previous_index;
 		uint32_t trailing_zeros = 0;
 		bool trailing_zeros_exceed_threshold = false;
 
@@ -135,7 +137,7 @@ public:
 		if (xor_result == 0) {
 			//! The two values are identical (write 9 bits)
 			//! 2 bits for the flag VALUE_IDENTICAL ('00') + 7 bits for the referenced index value
-			state.output.template WriteValue<uint32_t, FLAG_ZERO_SIZE>(previous_index);
+			state.output.template WriteValue<uint8_t, FLAG_ZERO_SIZE - FLAG_BITS_SIZE>(previous_index);
 			state.SetLeadingZeros();
 		}
 		else {
@@ -144,25 +146,31 @@ public:
 			uint8_t leading_zeros = ChimpCompressionConstants::LEADING_ROUND[leading_zeros_raw];
 
 			if (trailing_zeros_exceed_threshold) {
+				state.flag_buffer.Insert(TRAILING_EXCEEDS_THRESHOLD);
 				//! write (64 - [0|8|12|16|18|20|22|24] - [14+])(26-50 bits) and 18 bits
 				uint32_t significant_bits = BIT_SIZE - leading_zeros - trailing_zeros;
 				//! FIXME: it feels like this would produce '11', indicating LEADING_ZERO_LOAD
 				//! Instead of indicating TRAILING_EXCEEDS_THRESHOLD '01'
 				auto result = 512U * (RingBuffer::RING_SIZE + previous_index) + BIT_SIZE * ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros] + significant_bits;
-				state.output.template WriteValue<uint32_t, FLAG_ONE_SIZE>(result);
+				state.output.template WriteValue<uint16_t>((uint16_t)(result & 0xFFFF));
+				//state.output.template WriteValue<uint32_t, FLAG_ONE_SIZE>(result);
 				state.output.template WriteValue<uint64_t>(xor_result >> trailing_zeros, significant_bits);
 				state.SetLeadingZeros();
 			}
 			else if (leading_zeros == state.previous_leading_zeros) {
+				state.flag_buffer.Insert(LEADING_ZERO_EQUALITY);
 				//! write 2 + [?] bits
 				int32_t significant_bits = BIT_SIZE - leading_zeros;
-				state.output.template WriteValue<uint8_t, 2>(LEADING_ZERO_EQUALITY);
+				//state.output.template WriteValue<uint8_t, 2>(LEADING_ZERO_EQUALITY);
 				state.output.template WriteValue<uint64_t>(xor_result, significant_bits);
 			}
 			else {
-				int32_t significant_bits = BIT_SIZE - leading_zeros;
+				state.flag_buffer.Insert(LEADING_ZERO_LOAD);
+				const int32_t significant_bits = BIT_SIZE - leading_zeros;
 				//! 2 bits for the flag LEADING_ZERO_LOAD ('11') + 3 bits for the leading zeros
-				state.output.template WriteValue<uint32_t, 5>(((uint8_t)LEADING_ZERO_LOAD << 3) + ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
+				//uint8_t serialized_value = ((uint8_t)LEADING_ZERO_LOAD << 3) + ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros];
+				//state.output.template WriteValue<uint32_t, 5>(serialized_value);
+				state.leading_zero_buffer.Insert(ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
 				state.output.template WriteValue<uint64_t>(xor_result, significant_bits);
 				state.SetLeadingZeros(leading_zeros);
 			}
@@ -214,11 +222,13 @@ public:
 		return trailing_zeros;
 	}
 
-	BitReader input;
-	uint8_t leading_zeros;
-	uint8_t trailing_zeros;
-	uint64_t reference_value = 0;
-	RingBuffer	ring_buffer;
+	BitReader 					input;
+	LeadingZeroBuffer<false>	leading_zero_buffer;
+	FlagBuffer<false>			flag_buffer;
+	uint8_t 					leading_zeros;
+	uint8_t 					trailing_zeros;
+	uint64_t 					reference_value = 0;
+	RingBuffer					ring_buffer;
 
 	bool first;
 };
@@ -272,7 +282,7 @@ public:
 			0, 8, 12, 16, 18, 20, 22, 24
 		};
 
-		auto flag = state.input.template ReadValue<uint8_t, 2>();
+		auto flag = state.flag_buffer.Extract();
 		switch (flag) {
 		case VALUE_IDENTICAL: {
 			//! Value is identical to previous value
@@ -302,14 +312,14 @@ public:
 			break;
 		}
 		case LEADING_ZERO_LOAD: {
-			const auto deserialized_leading_zeros = state.input.template ReadValue<uint8_t>(LEADING_BITS_SIZE);
+			const auto deserialized_leading_zeros = state.leading_zero_buffer.Extract();
 			state.SetLeadingZeros(LEADING_REPRESENTATION[deserialized_leading_zeros]);
             value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
             value ^= state.reference_value;
 			break;
 		}
 		default:
-			//! This should not happen, value isn't properly (de)serialized if it does
+			//! This should not happen, value isn't properly (de)serialized if it does)
 			assert(1 == 0);
 		}
 		state.reference_value = value;

@@ -33,7 +33,7 @@ public:
 		auto dataptr = handle.Ptr();
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
-		chimp_state.input.SetStream((uint8_t *)(dataptr + segment.GetBlockOffset()));
+		chimp_state.input.SetStream((uint8_t *)(dataptr + segment.GetBlockOffset() + ChimpPrimitives::HEADER_SIZE));
 		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
 		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
 	}
@@ -42,6 +42,7 @@ public:
 	BufferHandle handle;
 	data_ptr_t metadata_ptr;
 	idx_t group_idx = 0;
+	idx_t total_value_count = 0;
 	ColumnSegment &segment;
 
 	template <class CHIMP_TYPE>
@@ -50,13 +51,38 @@ public:
 		group_idx++;
 		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
 			chimp_state.Reset();
+			total_value_count += group_idx;
 			group_idx = 0;
+			LoadGroup();
 		}
 		return result;
 	}
 
+	void LoadGroup() {
+		// Load the offset indicating where a groups data starts
+		metadata_ptr -= sizeof(uint32_t);
+		auto data_bit_offset = Load<uint32_t>(metadata_ptr);
+
+		// Load how many blocks of leading zero bits we have
+		metadata_ptr -= sizeof(uint8_t);
+		auto leading_zero_block_count = Load<uint8_t>(metadata_ptr);
+
+		// Load the leading zero blocks
+		metadata_ptr -= 3 * leading_zero_block_count;
+		chimp_state.leading_zero_buffer.SetBuffer(metadata_ptr);
+
+		// Load how many flag bytes there are
+		metadata_ptr -= sizeof(uint8_t);
+		auto size_of_group = Load<uint8_t>(metadata_ptr);
+
+		// Load the flags
+		metadata_ptr -= size_of_group;
+		chimp_state.flag_buffer.SetBuffer(metadata_ptr);
+	}
+
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
+	// TODO: use the metadata to determine if we can skip a group
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
 		using INTERNAL_TYPE = typename ChimpType<T>::type;
 		INTERNAL_TYPE unused;
@@ -74,8 +100,8 @@ public:
 private:
 	void LoadCurrentMetaData() {
 		D_ASSERT(metadata_ptr > handle.Ptr() && metadata_ptr < handle.Ptr() + Storage::BLOCK_SIZE);
-		metadata_ptr -= sizeof(bit_index_t);
-		auto start_bit_index = Load<bit_index_t>(metadata_ptr);
+		metadata_ptr -= sizeof(byte_index_t);
+		auto start_bit_index = Load<byte_index_t>(metadata_ptr);
 	}
 };
 

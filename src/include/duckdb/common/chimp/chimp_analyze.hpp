@@ -15,6 +15,7 @@ namespace duckdb {
 
 struct EmptyChimpWriter;
 
+// TODO: overhaul this to use bytes, and measure the cost of the new group header
 template <class T>
 struct ChimpAnalyzeState : public AnalyzeState {
 public:
@@ -25,7 +26,6 @@ public:
 	idx_t group_idx = 0;
 	idx_t written_bits = 0;
 	//! Keep track of when a segment would end, to accurately simulate Reset()s in compress step
-	idx_t written_bits_in_current_segment = 0;
 
 public:
 	void WriteValue(uint64_t value, bool is_valid) {
@@ -45,26 +45,25 @@ public:
 	void StartNewSegment() {
 		state.template Flush<EmptyChimpWriter>();
 		StartNewGroup();
-		written_bits += written_bits_in_current_segment;
-		written_bits_in_current_segment = 0;
+		written_bits += UsedSpace();
+		state.chimp_state.output.SetStream(nullptr);
 	}
 
 	void StartNewGroup() {
 		group_idx = 0;
-		written_bits_in_current_segment += state.chimp_state.output.BitsWritten();
 		state.chimp_state.Reset();
 	}
 
 	idx_t UsedSpace() const {
-		return written_bits_in_current_segment + state.chimp_state.output.BitsWritten();
+		return state.chimp_state.output.BytesWritten();
 	}
 
 	bool HasEnoughSpace() {
-		return UsedSpace() + ChimpPrimitives::MAX_BITS_PER_VALUE <= Storage::BLOCK_SIZE * 8;
+		return UsedSpace() + ChimpPrimitives::MAX_BYTES_PER_VALUE <= Storage::BLOCK_SIZE;
 	}
 
 	idx_t TotalUsedBytes() const {
-		return (written_bits / 8) + (written_bits % 8 != 0);
+		return written_bits + UsedSpace();
 	}
 };
 
