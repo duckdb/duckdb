@@ -338,7 +338,7 @@ struct sc_data_s {
 	/* True if the sc_data_t has been initialized (for debugging only). */
 	bool initialized;
 
-	sc_t sc[];
+	sc_t sc[SC_NSIZES];
 };
 
 size_t reg_size_compute(int lg_base, int lg_delta, int ndelta);
