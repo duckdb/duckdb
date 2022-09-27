@@ -211,7 +211,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	} while (true);
 
 	if (bind_data.options.union_by_name) {
-		data.csv_reader->AlignUnionCols(output, bind_data.options.union_col_names, bind_data.options.union_col_types);
+		data.csv_reader->SetNullUnionCols(output, bind_data.options.union_col_names);
 
 		if (bind_data.options.include_file_name) {
 			Vector filename_col(LogicalType::VARCHAR);

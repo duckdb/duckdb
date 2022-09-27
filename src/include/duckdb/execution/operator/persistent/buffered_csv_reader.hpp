@@ -216,7 +216,7 @@ public:
 	idx_t GetFileSize();
 
 	//! Adds some cols to fill the insert_chunk miss union name match
-	void AlignUnionCols(DataChunk &insert_chunk, vector<string> &union_names, vector<LogicalType> &union_types);
+	void SetNullUnionCols(DataChunk &insert_chunk, vector<string> &union_names);
 
 private:
 	//! Initialize Parser
