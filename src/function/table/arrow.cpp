@@ -306,11 +306,12 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 	}
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
-	output.SetCardinality(output_size);
 	if (data_p.CanRemoveFilterColumns()) {
+		data_p.pre_projection_chunk->SetCardinality(output_size);
 		ArrowToDuckDB(state, data.arrow_convert_data, *data_p.pre_projection_chunk, data.lines_read - output_size);
 		data_p.RemoveFilterColumns(output);
 	} else {
+		output.SetCardinality(output_size);
 		ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
 	}
 
