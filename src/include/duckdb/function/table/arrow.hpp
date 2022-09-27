@@ -66,7 +66,6 @@ struct ArrowScanFunctionData : public PyTableFunctionData {
 	    : lines_read(0), rows_per_thread(rows_per_thread_p), stream_factory_ptr(stream_factory_ptr_p),
 	      scanner_producer(scanner_producer_p), number_of_rows(0) {
 	}
-//	virtual ~ArrowScanFunctionData(){};
 	//! This holds the original list type (col_idx, [ArrowListType,size])
 	unordered_map<idx_t, unique_ptr<ArrowConvertData>> arrow_convert_data;
 	atomic<idx_t> lines_read;

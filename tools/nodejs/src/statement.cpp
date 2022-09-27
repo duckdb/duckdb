@@ -19,8 +19,7 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	    DefineClass(env, "Statement",
 	                {InstanceMethod("run", &Statement::Run), InstanceMethod("all", &Statement::All),
 	                 InstanceMethod("each", &Statement::Each), InstanceMethod("finalize", &Statement::Finish),
-	                 InstanceMethod("stream", &Statement::Stream), InstanceMethod("arrow", &Statement::Arrow),
-	                 InstanceMethod("streamArrowIpc", &Statement::StreamArrowIpc)});
+	                 InstanceMethod("stream", &Statement::Stream)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -266,7 +265,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 	return scope.Escape(result);
 }
 
-enum RunType { RUN, EACH, ALL, ARROW };
+enum RunType { RUN, EACH, ALL };
 
 struct StatementParam {
 	std::vector<duckdb::Value> params;
@@ -336,27 +335,6 @@ struct RunPreparedTask : public Task {
 			if (!params->complete.IsUndefined() && params->complete.IsFunction()) {
 				params->complete.MakeCallback(statement.Value(), {env.Null(), Napi::Number::New(env, count)});
 			}
-			break;
-		}
-		case RunType::ARROW: {
-			auto timezone_config = duckdb::QueryResult::GetConfigTimezone(*result);
-
-			while (true) {
-				Napi::HandleScope scope(env);
-
-				auto chunk = result->Fetch();
-				if (!chunk || chunk->size() == 0) {
-					break;
-				}
-				ArrowArray carray;
-				ArrowSchema cschema;
-				duckdb::ArrowConverter::ToArrowArray(*chunk, &carray);
-				duckdb::ArrowConverter::ToArrowSchema(&cschema, result->types, result->names, timezone_config);
-
-				cb.MakeCallback(statement.Value(), {env.Null(), Napi::Number::New(env, (int64_t)&carray),
-				                                    Napi::Number::New(env, (int64_t)&cschema)});
-			}
-
 			break;
 		}
 		case RunType::ALL: {
@@ -468,20 +446,7 @@ Napi::Value Statement::Each(const Napi::CallbackInfo &info) {
 	return info.This();
 }
 
-Napi::Value Statement::Arrow(const Napi::CallbackInfo &info) {
-	connection_ref->database_ref->Schedule(
-	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::ARROW));
-	return info.This();
-}
-
 Napi::Value Statement::Stream(const Napi::CallbackInfo &info) {
-	auto deferred = Napi::Promise::Deferred::New(info.Env());
-	connection_ref->database_ref->Schedule(info.Env(),
-	                                       duckdb::make_unique<RunQueryTask>(*this, HandleArgs(info), deferred));
-	return deferred.Promise();
-}
-
-Napi::Value Statement::StreamArrowIpc(const Napi::CallbackInfo &info) {
 	auto deferred = Napi::Promise::Deferred::New(info.Env());
 	connection_ref->database_ref->Schedule(info.Env(),
 	                                       duckdb::make_unique<RunQueryTask>(*this, HandleArgs(info), deferred));
@@ -513,31 +478,17 @@ Napi::Value Statement::Finish(const Napi::CallbackInfo &info) {
 }
 
 Napi::FunctionReference QueryResult::constructor;
-Napi::FunctionReference RecordBatchWrapper::constructor;
 
 Napi::Object QueryResult::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
 	Napi::Function t = DefineClass(env, "QueryResult", {InstanceMethod("nextChunk", &QueryResult::NextChunk),
-	                                                    InstanceMethod("nextRecordBatch", &QueryResult::NextRecordBatch),
 	                                                    InstanceMethod("nextIpcBuffer", &QueryResult::NextIpcBuffer)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
 
 	exports.Set("QueryResult", t);
-	return exports;
-}
-
-Napi::Object RecordBatchWrapper::Init(Napi::Env env, Napi::Object exports) {
-	Napi::HandleScope scope(env);
-
-	Napi::Function t = DefineClass(env, "RecordBatchWrapper", {InstanceMethod("GetCDataPointers", &RecordBatchWrapper::GetCDataPointers)});
-
-	constructor = Napi::Persistent(t);
-	constructor.SuppressDestruct();
-
-	exports.Set("RecordBatchWrapper", t);
 	return exports;
 }
 
@@ -549,12 +500,6 @@ QueryResult::QueryResult(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Quer
 QueryResult::~QueryResult() {
 	database_ref->Unref();
 	database_ref = nullptr;
-}
-
-RecordBatchWrapper::RecordBatchWrapper(const Napi::CallbackInfo &info) : Napi::ObjectWrap<RecordBatchWrapper>(info) {
-}
-
-RecordBatchWrapper::~RecordBatchWrapper() {
 }
 
 struct GetChunkTask : public Task {
@@ -586,58 +531,6 @@ struct GetChunkTask : public Task {
 
 	Napi::Promise::Deferred deferred;
 	std::unique_ptr<duckdb::DataChunk> chunk;
-};
-
-struct GetRecordBatchTask : public Task {
-	GetRecordBatchTask(QueryResult &query_result, Napi::Promise::Deferred deferred, duckdb::idx_t batch_size_p) : Task(query_result), batch_size(batch_size_p), deferred(deferred){
-	}
-
-	void DoWork() override {
-		auto &query_result = Get<QueryResult>();
-
-		// TODO remove this and think if it can happen, if so handle it
-		if (query_result.result->type != duckdb::QueryResultType::STREAM_RESULT) {
-			throw duckdb::Exception("Not a stream result");
-		}
-
-		// TODO why can't we share the schema between batches?
-		if (true || !query_result.cschema) {
-			auto timezone_config = duckdb::QueryResult::GetConfigTimezone(*query_result.result);
-			query_result.cschema = duckdb::make_shared<ArrowSchema>();
-			duckdb::ArrowConverter::ToArrowSchema(query_result.cschema.get(), query_result.result->types,
-			                                      query_result.result->names, timezone_config);
-		}
-
-		carray = duckdb::make_unique<ArrowArray>();
-		count = duckdb::ArrowUtil::FetchChunk(query_result.result.get(), batch_size, carray.get());
-	}
-
-	void DoCallback() override {
-		auto &query_result = Get<QueryResult>();
-		Napi::Env env = query_result.Env();
-		Napi::HandleScope scope(env);
-
-		if (count == 0) {
-			deferred.Resolve(env.Null());
-			return;
-		}
-
-		auto return_value = duckdb::make_unique<Napi::Object>(RecordBatchWrapper::constructor.New({}));
-		auto unwrapped = Napi::ObjectWrap<RecordBatchWrapper>::Unwrap(*return_value);
-
-		// Copy shared pointer into result object to hand over buffer to JS TODO: verify this is how it should go
-		unwrapped->cschema = query_result.cschema;
-		unwrapped->carray = std::move(carray);
-
-		deferred.Resolve(*return_value);
-	}
-
-	// Should be on stack
-	duckdb::unique_ptr<ArrowArray> carray;
-
-	duckdb::idx_t count;
-	duckdb::idx_t batch_size;
-	Napi::Promise::Deferred deferred;
 };
 
 struct GetNextArrowIpcTask : public Task {
@@ -685,39 +578,12 @@ Napi::Value QueryResult::NextChunk(const Napi::CallbackInfo &info) {
 	return deferred.Promise();
 }
 
-Napi::Value QueryResult::NextRecordBatch(const Napi::CallbackInfo &info) {
-	duckdb::idx_t batch_size;
-	auto env = info.Env();
-	auto deferred = Napi::Promise::Deferred::New(env);
-
-	if (info.Length() > 0) {
-		batch_size = info[0].As<Napi::Number>().Int64Value();
-	} else {
-		batch_size = 1024;
-	}
-	database_ref->Schedule(env, duckdb::make_unique<GetRecordBatchTask>(*this, deferred, batch_size));
-
-	return deferred.Promise();
-}
-
 // Should only be called on an arrow ipc query
 Napi::Value QueryResult::NextIpcBuffer(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	auto deferred = Napi::Promise::Deferred::New(env);
 	database_ref->Schedule(env, duckdb::make_unique<GetNextArrowIpcTask>(*this, deferred));
 	return deferred.Promise();
-}
-
-Napi::Value RecordBatchWrapper::GetCDataPointers(const Napi::CallbackInfo &info) {
-	auto env = info.Env();
-	Napi::HandleScope scope(env);
-
-	// Create a new instance
-	auto retval = Napi::Object::New(env);
-
-	retval.Set("schema", (int64_t)cschema.get());
-	retval.Set("data", (int64_t)carray.get());
-	return retval;
 }
 
 } // namespace node_duckdb

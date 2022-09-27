@@ -62,11 +62,6 @@ var Statement = duckdb.Statement;
 var QueryResult = duckdb.QueryResult;
 
 /**
- * @class
- */
-var RecordBatchWrapper = duckdb.RecordBatchWrapper;
-
-/**
  * @method
  * @return data chunk
  */
@@ -74,21 +69,9 @@ QueryResult.prototype.nextChunk;
 
 /**
  * @method
- * @return data chunk
- */
-QueryResult.prototype.nextRecordBatch;
-
-/**
- * @method
  * @return Blob containing IPC buffer
  */
 QueryResult.prototype.nextIpcBuffer;
-
-/**
- * @method
- * @return data chunk
- */
-RecordBatchWrapper.prototype.GetCDataPointers;
 
 /**
  * @name asyncIterator
@@ -188,21 +171,10 @@ Connection.prototype.arrow = function (sql) {
  * @param callback
  * @return QueryResult
  */
-Connection.prototype.arrowStreamOld = async function (sql) {
-    var statement = new Statement(this, sql);
-    return statement.stream.apply(statement, arguments);
-}
-
-/**
- * @arg sql
- * @param {...*} params
- * @param callback
- * @return QueryResult
- */
-Connection.prototype.arrrowIPCStream = async function (sql) {
+Connection.prototype.arrowIPCStream = async function (sql) {
     // TODO: allow prepared statements too
     const statement = new Statement(this, "SELECT * FROM get_arrow_ipc('" + sql + "', 120);");
-    return statement.streamArrowIpc.apply(statement, arguments);
+    return statement.stream.apply(statement, arguments);
 }
 
 /**
@@ -571,26 +543,3 @@ Statement.prototype.finalize
  * @yield callback
  */
 Statement.prototype.stream;
-/**
- * @method
- * @arg sql
- * @param {...*} params
- * @yield callback
- */
-Statement.prototype.arrow;
-
-/**
- * @method
- * @arg sql
- * @param {...*} params
- * @yield callback
- */
-Statement.prototype.streamArrowIpc;
-
-/**
- * @method
- * @arg sql
- * @param {...*} params
- * @yield callback
- */
-Statement.prototype.scanArrowIpc;

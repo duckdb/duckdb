@@ -151,8 +151,6 @@ public:
 	Napi::Value Run(const Napi::CallbackInfo &info);
 	Napi::Value Finish(const Napi::CallbackInfo &info);
 	Napi::Value Stream(const Napi::CallbackInfo &info);
-	Napi::Value Arrow(const Napi::CallbackInfo &info);
-	Napi::Value StreamArrowIpc(const Napi::CallbackInfo &info);
 
 public:
 	static Napi::FunctionReference constructor;
@@ -175,24 +173,11 @@ public:
 public:
 	static Napi::FunctionReference constructor;
 	Napi::Value NextChunk(const Napi::CallbackInfo &info);
-	Napi::Value NextRecordBatch(const Napi::CallbackInfo &info);
 	Napi::Value NextIpcBuffer(const Napi::CallbackInfo &info);
 	duckdb::shared_ptr<ArrowSchema> cschema;
 
 private:
 	Database *database_ref;
-};
-
-class RecordBatchWrapper : public Napi::ObjectWrap<RecordBatchWrapper> {
-public:
-	explicit RecordBatchWrapper(const Napi::CallbackInfo &info);
-	~RecordBatchWrapper() override;
-	static Napi::Object Init(Napi::Env env, Napi::Object exports);
-public:
-	static Napi::FunctionReference constructor;
-	Napi::Value GetCDataPointers(const Napi::CallbackInfo &info);
-	duckdb::shared_ptr<ArrowSchema> cschema;
-	duckdb::unique_ptr<ArrowArray> carray;
 };
 
 struct TaskHolder {

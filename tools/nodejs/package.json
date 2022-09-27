@@ -7,8 +7,7 @@
   "dependencies": {
     "@mapbox/node-pre-gyp": "^1.0.0",
     "node-addon-api": "*",
-    "node-gyp": "^7.1.2",
-    "apache-arrow": "^9.0.0"
+    "node-gyp": "^7.1.2"
   },
   "binary": {
     "module_name": "duckdb",
@@ -29,7 +28,8 @@
     "aws-sdk": "^2.790.0",
     "chai": "^4.3.6",
     "jsdoc3-parser": "^2.0.0",
-    "mocha": "^8.3.0"
+    "mocha": "^8.3.0",
+    "apache-arrow": "^9.0.0"
   },
   "repository": {
     "type": "git",

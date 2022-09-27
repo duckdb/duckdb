@@ -2,8 +2,8 @@ var duckdb = require('..');
 var assert = require('assert');
 var arrow = require('apache-arrow')
 
-// const build = 'debug';
 const build = 'debug';
+// const build = 'release';
 const extension_path = `../../build/${build}/extension/arrow/arrow.duckdb_extension`;
 
 // TODO move to duckdb src
@@ -67,7 +67,7 @@ describe('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
 
     it('Simple int column', async () => {
         // Now we fetch the ipc stream object and construct the RecordBatchReader
-        const result = await conn.arrrowIPCStream('SELECT * FROM range(1001, 2001) tbl(i)');
+        const result = await conn.arrowIPCStream('SELECT * FROM range(1001, 2001) tbl(i)');
 
         // Create iterator from QueryResult, could
         const it = new IpcResultStreamIterator(result);
@@ -78,7 +78,7 @@ describe('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
         // We can now create a RecordBatchReader & Table from the materialized stream
         const reader = await arrow.RecordBatchReader.from(fully_materialized);
 
-        // We now have an Arrow table containing the data
+        // We now have an Arrow table containing the data:
         // const table = arrow.tableFromIPC(reader);
         // console.log(table.toArray());
 
@@ -128,7 +128,7 @@ describe('[Benchmark] single int column load (50M tuples)',() => {
         let got_rows = 0;
         const batches = [];
 
-        const result = await conn.arrrowIPCStream('SELECT * FROM test;');
+        const result = await conn.arrowIPCStream('SELECT * FROM test;');
         const it = new IpcResultStreamIterator(result);
         const fully_materialized = await it.toArray();
         const reader = await arrow.RecordBatchReader.from(fully_materialized);
@@ -143,12 +143,12 @@ describe('[Benchmark] TPC-H SF1 lineitem.parquet', () => {
     // const tpch_q06 = "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date) AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity < 24; "
     const simple_query = "select sum(l_orderkey) as sum_orderkey FROM lineitem";
 
-	// const expected_rows = 60175;
-	// const expected_orderkey_sum = 1802759573;
-	// const parquet_file_path = "/tmp/lineitem_sf0_01.parquet";
-	const expected_rows = 6001215;
-    const expected_orderkey_sum = 18005322964949;
-	const parquet_file_path = "/tmp/lineitem_sf1.parquet";
+	const expected_rows = 60175;
+	const expected_orderkey_sum = 1802759573;
+	const parquet_file_path = "/tmp/lineitem_sf0_01.parquet";
+	// const expected_rows = 6001215;
+    // const expected_orderkey_sum = 18005322964949;
+	// const parquet_file_path = "/tmp/lineitem_sf1.parquet";
 
     // Which query to run
     // const sql = tpch_q06;
@@ -173,7 +173,7 @@ describe('[Benchmark] TPC-H SF1 lineitem.parquet', () => {
         const batches = [];
         let got_rows = 0;
 
-        const result = await conn.arrrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
+        const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
         const it = new IpcResultStreamIterator(result);
         const fully_materialized = await it.toArray();
 
@@ -211,7 +211,7 @@ describe('[Benchmark] TPC-H SF1 lineitem.parquet', () => {
     });
 });
 
-describe.only('Validate with TPCH lineitem SF0.01', () => {
+describe('Validate with TPCH lineitem SF0.01', () => {
     const parquet_file_path = "/tmp/lineitem_sf0_01.parquet";
 
     const queries = [
@@ -254,7 +254,7 @@ describe.only('Validate with TPCH lineitem SF0.01', () => {
             });
 
             // Secondly copy parquet file completely into Arrow IPC format
-            const result = await conn.arrrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
+            const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
             const it = new IpcResultStreamIterator(result);
             const fully_materialized = await it.toArray();
 

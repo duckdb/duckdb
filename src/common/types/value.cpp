@@ -29,7 +29,6 @@
 
 #include <utility>
 #include <cmath>
-#include <iostream>
 
 
 namespace duckdb {
@@ -907,7 +906,6 @@ DUCKDB_API Value Value::GetValue() const {
 }
 
 uintptr_t Value::GetPointer() const {
-	std::cout << "Type: " << type().ToString() << "\n";
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
 }
