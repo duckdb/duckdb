@@ -1,0 +1,61 @@
+name: Out-of-tree Extension Rebuild
+on:
+  workflow_dispatch:
+    inputs:
+      extension_name:
+        description: 'Extension name (e.g. postgres_scanner)'
+        required: true 
+        type: string
+      extension_repo:
+        description: 'Extension git repo (e.g. https://github.com/duckdblabs/postgres_scanner)'
+        required: true 
+        type: string
+      extension_ref:
+        description: 'Extension version (e.g. a commit hash or a tag)'
+        required: true 
+        type: string
+      duckdb_ref:
+        description: 'DuckDB ref (e.g. a commit hash or a tag)'
+        required: true 
+        type: string
+
+jobs:
+ linux-extensions-64:
+    name: Linux Extensions (64 Bit)
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
+    needs: linux-release-64
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.duckdb_ref }}
+
+    - uses: ./.github/actions/ubuntu_16_setup
+      with:
+        openssl: 1
+
+    - name: Override extensions.csv
+      shell: bash
+      run: |
+        echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' >> extensions.csv
+        cat extensions.csv
+    - uses: ./.github/actions/build_extensions
+      with:
+        visualizer: 0
+        icu: 0
+        tpch: 0
+        tpcds: 0
+        httpfs: 0
+        fts: 0
+        json: 0
+        excel: 0
+        post_install: rm build/release/src/libduckdb*
+        deploy_as: linux_amd64
+        static_link_build: 1
+        out_of_tree_ext: 1
+        run_tests: 0
+        s3_id: ${{ secrets.S3_ID }}
+        s3_key: ${{ secrets.S3_KEY }}
+        signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
