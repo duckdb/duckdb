@@ -35,3 +35,15 @@ SELECT list_value(1,2,4)::VARCHAR;
 # SELECT LEN( CAST('[12,13,14]' AS INT[]) );
 # ----
 # 3
+
+# query I
+# SELECT LEN( CAST('[12,13,14]'::INT[]) );
+# ----
+# 3
+
+# This is work to be done
+# query I
+# SELECT LEN( CAST('[[12,13,14], [8, 9], [4], [2, 1, 0]]' AS INT[]) );
+# ----
+# 3
+
