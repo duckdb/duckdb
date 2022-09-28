@@ -95,16 +95,6 @@ public:
 		}
 	#endif
 
-	void PrintRead(uint64_t result) {
-		static thread_local uint64_t counter = 0;
-		//std::cout << "LZB READ[" << counter++ << "]: " << (uint64_t)result << std::endl;
-	}
-
-	void PrintWrite(uint64_t result) {
-		static thread_local uint64_t counter = 0;
-		//std::cout << "LZB WRITE[" << counter++ << "]: " << (uint64_t)result << std::endl;
-	}
-
 	void FlushBuffer() {
 		if (EMPTY) {
 			return;
@@ -125,7 +115,6 @@ public:
 
 	void Insert(const uint8_t &value) {
 		if (!EMPTY) {
-			PrintWrite(value);
 			#ifdef DEBUG
 				flags.push_back(value);
 			#endif
@@ -150,7 +139,6 @@ public:
 
 		uint8_t result = (temp & leading_zero_masks[counter & 7]) >> leading_zero_shifts[counter & 7];
 		counter++;
-		PrintRead(result);
 		return result;
 	}
 	size_t BlockCount() const {

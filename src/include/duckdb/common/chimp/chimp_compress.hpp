@@ -115,12 +115,11 @@ public:
 
 	// The current segment has enough space to fit this new value
 	bool HasEnoughSpace() {
-		if (handle.Ptr() + AlignValue(UsedSpace() + RequiredSpace()) >= (metadata_ptr - CurrentGroupMetadataSize())) {
+		if (handle.Ptr() + ChimpPrimitives::HEADER_SIZE + AlignValue(UsedSpace() + RequiredSpace()) >=
+		    (metadata_ptr - CurrentGroupMetadataSize())) {
 			return false;
 		}
 		return true;
-		// return AlignValue(UsedSpace()) + RequiredSpace() + metadata_byte_size + CurrentGroupMetadataSize() <=
-		//        Storage::BLOCK_SIZE;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -170,7 +169,6 @@ public:
 		metadata_byte_size += sizeof(byte_index_t);
 		// Store where this groups data starts, relative to the start of the segment
 		Store<byte_index_t>(next_group_byte_index_start, metadata_ptr);
-		// printf("[WRITE] - BYTE OFFSET: %u\n", next_group_byte_index_start);
 		next_group_byte_index_start = UsedSpace();
 
 		const uint8_t leading_zero_block_count = state.chimp_state.leading_zero_buffer.BlockCount();
@@ -178,7 +176,6 @@ public:
 		metadata_byte_size += sizeof(uint8_t);
 		// Store how many leading zero blocks there are
 		Store<uint8_t>(leading_zero_block_count, metadata_ptr);
-		// printf("[WRITE] - LEADING ZERO BLOCK COUNT: %u\n", (uint32_t)leading_zero_block_count);
 
 		const uint64_t bytes_used_by_leading_zero_blocks = 3 * leading_zero_block_count;
 		metadata_ptr -= bytes_used_by_leading_zero_blocks;
@@ -195,7 +192,6 @@ public:
 		// We cant use the 'count' of the segment to figure this out, because NULLs increase count
 		Store<uint16_t>(flag_bytes, metadata_ptr);
 
-		// printf("FLAG_BYTES: %u\n", (uint32_t)flag_bytes);
 		metadata_ptr -= flag_bytes;
 		metadata_byte_size += flag_bytes;
 		// Store the flags (4 per byte) for this group

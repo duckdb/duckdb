@@ -64,14 +64,12 @@ public:
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_bit_offset = Load<uint32_t>(metadata_ptr);
-		// printf("[READ] - BYTE OFFSET: %u\n", data_bit_offset);
 		//  Only used for point queries
 		(void)data_bit_offset;
 
 		// Load how many blocks of leading zero bits we have
 		metadata_ptr -= sizeof(uint8_t);
 		auto leading_zero_block_count = Load<uint8_t>(metadata_ptr);
-		// printf("[READ] - LEADING ZERO BLOCK COUNT: %u\n", (uint32_t)leading_zero_block_count);
 
 		// Load the leading zero blocks
 		metadata_ptr -= 3 * leading_zero_block_count;

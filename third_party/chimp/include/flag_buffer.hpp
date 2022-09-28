@@ -42,16 +42,6 @@ public:
 		#endif
 	}
 
-	void PrintRead(uint64_t result) {
-		static thread_local uint64_t counter = 0;
-		//std::cout << "FLAG READ[" << counter++ << "]: " << (uint64_t)result << std::endl;
-	}
-
-	void PrintWrite(uint64_t result) {
-		static thread_local uint64_t counter = 0;
-		//std::cout << "FLAG WRITE[" << counter++ << "]: " << (uint64_t)result << std::endl;
-	}
-
 	#ifdef DEBUG
 	uint8_t ExtractValue(uint32_t value, uint8_t index) {
 		return (value & flag_masks[index]) >> flag_shifts[index];
@@ -60,7 +50,6 @@ public:
 
 	void Insert(const uint8_t &value) {
 		if (!EMPTY) {
-			PrintWrite(value);
 			if ((counter & 3) == 0) {
 				// Start the new byte fresh
 				buffer[counter >> 2] = 0;
@@ -82,7 +71,6 @@ public:
 	uint8_t Extract() {
 		uint8_t result = (buffer[counter >> 2] & flag_masks[counter & 3]) >> flag_shifts[counter & 3];
 		counter++;
-		PrintRead(result);
 		return result;
 	}
 	uint32_t BytesUsed() const {

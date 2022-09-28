@@ -12,7 +12,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "chimp_utils.hpp"
-//#include "output_bit_stream.hpp"
 #include "byte_writer.hpp"
 #include "leading_zero_buffer.hpp"
 #include "flag_buffer.hpp"
@@ -168,7 +167,6 @@ public:
 				//! Instead of indicating TRAILING_EXCEEDS_THRESHOLD '01'
 				auto result = 512U * (RingBuffer::RING_SIZE + previous_index) + BIT_SIZE * LEADING_REPRESENTATION[leading_zeros] + significant_bits;
 				state.output.template WriteValue<uint16_t, 16>((uint16_t)(result & 0xFFFF));
-				//state.output.template WriteValue<uint32_t, FLAG_ONE_SIZE>(result);
 				state.output.template WriteValue<uint64_t>(xor_result >> trailing_zeros, significant_bits);
 				state.SetLeadingZeros();
 			}
@@ -176,15 +174,12 @@ public:
 				state.flag_buffer.Insert(LEADING_ZERO_EQUALITY);
 				//! write 2 + [?] bits
 				int32_t significant_bits = BIT_SIZE - leading_zeros;
-				//state.output.template WriteValue<uint8_t, 2>(LEADING_ZERO_EQUALITY);
 				state.output.template WriteValue<uint64_t>(xor_result, significant_bits);
 			}
 			else {
 				state.flag_buffer.Insert(LEADING_ZERO_LOAD);
 				const int32_t significant_bits = BIT_SIZE - leading_zeros;
 				//! 2 bits for the flag LEADING_ZERO_LOAD ('11') + 3 bits for the leading zeros
-				//uint8_t serialized_value = ((uint8_t)LEADING_ZERO_LOAD << 3) + ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros];
-				//state.output.template WriteValue<uint32_t, 5>(serialized_value);
 				state.leading_zero_buffer.Insert(LEADING_REPRESENTATION[leading_zeros]);
 				state.output.template WriteValue<uint64_t>(xor_result, significant_bits);
 				state.SetLeadingZeros(leading_zeros);
@@ -309,7 +304,7 @@ public:
 			uint16_t index;
 			uint8_t leading_zeros;
 			uint16_t significant_bits;
-			uint16_t temp = state.input.template ReadValue<uint64_t, INITIAL_FILL>();
+			uint16_t temp = state.input.template ReadValue<uint16_t, INITIAL_FILL>();
 			UnpackPackedData(temp, index, leading_zeros, significant_bits);
 			state.leading_zeros = LEADING_REPRESENTATION[leading_zeros];
 			if (significant_bits == 0) {

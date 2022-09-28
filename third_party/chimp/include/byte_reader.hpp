@@ -36,12 +36,6 @@ public:
 		return buffer[index + ((offset+1 >= bytes_to_read) * offset)] * (offset+1 >= bytes_to_read);
 	}
 
-	void PrintResult(uint64_t result, const uint8_t &size) {
-		static thread_local uint64_t counter = 0;
-		//std::cout << "READ[" << counter++ << "]: " << (uint64_t)result << " | SIZE: " << (uint64_t)size << std::endl;
-		//std::cout << "R" << counter++ << ": " << (uint64_t)result << std::endl;
-	}
-
 	template <class T, uint8_t SIZE>
 	T ReadValue() {
 		uint64_t bytes = 0;
@@ -49,8 +43,13 @@ public:
 		std::memcpy(&bytes, (void*)(buffer + index), bytes_to_read);
 		T result = (T)bytes;
 		index += bytes_to_read;
-		PrintResult(result, SIZE);
 		return result;
+	}
+
+	template <>
+	uint16_t ReadValue<uint16_t, 16>() {
+		index += 2;
+		return *(uint16_t*)(buffer + index - 2);
 	}
 
 	template <class T> 
@@ -68,12 +67,10 @@ public:
 		//index += bytes_to_read;
 		//// Bytes are packed most-significant first, so if we're only interested in 2 bits, we need to shift them 6 to the right
 		////auto result = (T)(*((uint64_t*)(bytes)) >> final_shifts[size & 7]);
-		//std::cout << "READ: " << (uint64_t)result << " | SIZE: " << (uint64_t)size << std::endl;
 		std::memcpy(&bytes, (void*)(buffer + index), bytes_to_read);
 		T result = (T)bytes;
 		index += bytes_to_read;
 		//result = result >> final_shifts[(size & 7)];
-		PrintResult(result, size);
 		return result;
 	}
 private:
