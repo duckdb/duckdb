@@ -1,0 +1,28 @@
+# name: test/fuzzer/pedro/alter_dependency_conflict.test
+# description: Issue #4696: Alter table dependency conflict
+# group: [pedro]
+
+load __TEST_DIR__/alter_dependency_conflict.db
+
+statement ok
+CREATE TABLE t4 (c0 DATE, c3 VARCHAR(10));
+
+statement ok
+CREATE INDEX i2 ON t4 (c3);
+
+# Catalog Error: Cannot alter entry "t4" because there are entries that depend on it.
+statement error
+ALTER TABLE t4 ADD c1 BLOB;
+
+# the table should still be in a usable state after the alter
+statement ok
+INSERT INTO t4 VALUES (NULL, NULL)
+
+statement ok
+START TRANSACTION;
+
+statement ok
+CREATE INDEX i3 ON t4 (c3);
+
+statement ok
+COMMIT;

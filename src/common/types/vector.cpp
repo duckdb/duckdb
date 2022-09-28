@@ -309,7 +309,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
 	if (val.type() != GetType()) {
-		SetValue(index, val.CastAs(GetType()));
+		SetValue(index, val.DefaultCastAs(GetType()));
 		return;
 	}
 	D_ASSERT(val.type().InternalType() == GetType().InternalType());
@@ -789,12 +789,12 @@ void Vector::Flatten(idx_t count) {
 		break;
 	}
 	case VectorType::SEQUENCE_VECTOR: {
-		int64_t start, increment;
-		SequenceVector::GetSequence(*this, start, increment);
+		int64_t start, increment, sequence_count;
+		SequenceVector::GetSequence(*this, start, increment, sequence_count);
 
 		buffer = VectorBuffer::CreateStandardVector(GetType());
 		data = buffer->GetData();
-		VectorOperations::GenerateSequence(*this, count, start, increment);
+		VectorOperations::GenerateSequence(*this, sequence_count, start, increment);
 		break;
 	}
 	default:
@@ -866,12 +866,13 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) {
 	}
 }
 
-void Vector::Sequence(int64_t start, int64_t increment) {
+void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->vector_type = VectorType::SEQUENCE_VECTOR;
-	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 2);
+	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 3);
 	auto data = (int64_t *)buffer->GetData();
 	data[0] = start;
 	data[1] = increment;
+	data[2] = int64_t(count);
 	validity.Reset();
 	auxiliary.reset();
 }
@@ -1461,6 +1462,24 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 			tdata[target_idx] = string_t(nullptr, 0);
 		}
 	}
+}
+
+Vector &MapVector::GetKeys(Vector &vector) {
+	auto &entries = StructVector::GetEntries(vector);
+	D_ASSERT(entries.size() == 2);
+	return *entries[0];
+}
+Vector &MapVector::GetValues(Vector &vector) {
+	auto &entries = StructVector::GetEntries(vector);
+	D_ASSERT(entries.size() == 2);
+	return *entries[1];
+}
+
+const Vector &MapVector::GetKeys(const Vector &vector) {
+	return GetKeys((Vector &)vector);
+}
+const Vector &MapVector::GetValues(const Vector &vector) {
+	return GetValues((Vector &)vector);
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {

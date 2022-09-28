@@ -599,18 +599,18 @@ statement ok
 CREATE TABLE test0 (i BOOL[])
 
 statement ok
-INSERT INTO test0 VALUES ([True]), ([False]), ([False, True]), ([]), ([True, True]), ([NULL]), (NULL), ([False, False])
+INSERT INTO test0 VALUES ([true]), ([false]), ([false, true]), ([]), ([true, true]), ([NULL]), (NULL), ([false, false])
 
 query T
 SELECT * FROM test0 ORDER BY i
 ----
 NULL
 []
-[False]
-[False, False]
-[False, True]
-[True]
-[True, True]
+[false]
+[false, false]
+[false, true]
+[true]
+[true, true]
 [NULL]
 
 query T
@@ -618,11 +618,11 @@ SELECT * FROM test0 ORDER BY i DESC
 ----
 NULL
 [NULL]
-[True, True]
-[True]
-[False, True]
-[False, False]
-[False]
+[true, true]
+[true]
+[false, true]
+[false, false]
+[false]
 []
 
 statement ok
@@ -630,27 +630,27 @@ CREATE TABLE test10 (s STRUCT(i BOOL, j BOOL));
 
 statement ok
 INSERT INTO test10 values
-({'i': True, 'j': NULL}),
-({'i': False, 'j': NULL}),
-({'i': True, 'j': True}),
-({'i': False, 'j': True}),
-({'i': NULL, 'j': False}),
-({'i': NULL, 'j': True}),
+({'i': true, 'j': NULL}),
+({'i': false, 'j': NULL}),
+({'i': true, 'j': true}),
+({'i': false, 'j': true}),
+({'i': NULL, 'j': false}),
+({'i': NULL, 'j': true}),
 ({'i': NULL, 'j': NULL}),
 (NULL),
-({'i': False, 'j': False})
+({'i': false, 'j': false})
 
 query T
 SELECT * FROM test10 ORDER BY s
 ----
 NULL
-{'i': False, 'j': False}
-{'i': False, 'j': True}
-{'i': False, 'j': NULL}
-{'i': True, 'j': True}
-{'i': True, 'j': NULL}
-{'i': NULL, 'j': False}
-{'i': NULL, 'j': True}
+{'i': false, 'j': false}
+{'i': false, 'j': true}
+{'i': false, 'j': NULL}
+{'i': true, 'j': true}
+{'i': true, 'j': NULL}
+{'i': NULL, 'j': false}
+{'i': NULL, 'j': true}
 {'i': NULL, 'j': NULL}
 
 query T
@@ -658,13 +658,13 @@ SELECT * FROM test10 ORDER BY s DESC
 ----
 NULL
 {'i': NULL, 'j': NULL}
-{'i': NULL, 'j': True}
-{'i': NULL, 'j': False}
-{'i': True, 'j': NULL}
-{'i': True, 'j': True}
-{'i': False, 'j': NULL}
-{'i': False, 'j': True}
-{'i': False, 'j': False}
+{'i': NULL, 'j': true}
+{'i': NULL, 'j': false}
+{'i': true, 'j': NULL}
+{'i': true, 'j': true}
+{'i': false, 'j': NULL}
+{'i': false, 'j': true}
+{'i': false, 'j': false}
 
 statement ok
 DROP TABLE test0

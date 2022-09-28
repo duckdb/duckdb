@@ -156,6 +156,13 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->schema = table->schema->name;
 		info->table = table->name;
 
+		// We can not export generated columns
+		for (auto &col : table->columns) {
+			if (!col.Generated()) {
+				info->select_list.push_back(col.GetName());
+			}
+		}
+
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;
 		exported_data.file_path = info->file_path;

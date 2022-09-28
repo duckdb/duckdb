@@ -204,9 +204,9 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_TIMESTAMP_NS => DateTime,
     DUCKDB_TYPE_INTERVAL => Dates.CompoundPeriod,
     DUCKDB_TYPE_UUID => UUID,
-    DUCKDB_TYPE_VARCHAR => AbstractString,
-    DUCKDB_TYPE_JSON => AbstractString,
-    DUCKDB_TYPE_ENUM => AbstractString,
+    DUCKDB_TYPE_VARCHAR => String,
+    DUCKDB_TYPE_JSON => String,
+    DUCKDB_TYPE_ENUM => String,
     DUCKDB_TYPE_BLOB => Base.CodeUnits{UInt8, String},
     DUCKDB_TYPE_MAP => Dict
 )

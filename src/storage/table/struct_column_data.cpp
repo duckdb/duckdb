@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
@@ -65,7 +66,7 @@ void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t ro
 	}
 }
 
-idx_t StructColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
 	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
@@ -90,6 +91,15 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 		sub_columns[i]->ScanCount(state.child_states[i + 1], *child_entries[i], count);
 	}
 	return scan_count;
+}
+
+void StructColumnData::Skip(ColumnScanState &state, idx_t count) {
+	validity.Skip(state.child_states[0], count);
+
+	// skip inside the sub-columns
+	for (idx_t child_idx = 0; child_idx < sub_columns.size(); child_idx++) {
+		sub_columns[child_idx]->Skip(state.child_states[child_idx + 1], count);
+	}
 }
 
 void StructColumnData::InitializeAppend(ColumnAppendState &state) {
@@ -151,7 +161,7 @@ idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resu
 	return scan_count;
 }
 
-void StructColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+void StructColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                               idx_t update_count) {
 	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
 	auto &child_entries = StructVector::GetEntries(update_vector);
@@ -160,7 +170,7 @@ void StructColumnData::Update(Transaction &transaction, idx_t column_index, Vect
 	}
 }
 
-void StructColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path,
+void StructColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
                                     Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
 	// we can never DIRECTLY update a struct column
 	if (depth >= column_path.size()) {
@@ -193,7 +203,7 @@ unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
-void StructColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
+void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                                 idx_t result_idx) {
 	// fetch validity mask
 	auto &child_entries = StructVector::GetEntries(result);

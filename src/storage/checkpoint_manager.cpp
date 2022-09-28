@@ -81,7 +81,7 @@ void CheckpointManager::CreateCheckpoint() {
 	wal->Flush();
 
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
-		throw IOException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
+		throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
 	}
 
 	// finally write the updated header
@@ -90,7 +90,7 @@ void CheckpointManager::CreateCheckpoint() {
 	block_manager.WriteHeader(header);
 
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
-		throw IOException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
+		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
 	}
 
 	// truncate the WAL

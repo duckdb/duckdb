@@ -24,7 +24,7 @@ SELECT struct_insert (data, d := 4) FROM data
 query T
 select struct_insert({'a': 1, 'b': 'abc', 'c': true}, d := {'a': 'new stuff'})
 ----
-{'a': 1, 'b': abc, 'c': True, 'd': {'a': new stuff}}
+{'a': 1, 'b': abc, 'c': true, 'd': {'a': new stuff}}
 
 # test incorrect usage
 statement error

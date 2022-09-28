@@ -256,50 +256,53 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
-	if (ele.is_none()) {
+	auto object_type = GetPythonObjectType(ele);
+
+	switch (object_type) {
+	case PythonObjectType::None:
 		return LogicalType::SQLNULL;
-	} else if (py::isinstance<py::bool_>(ele)) {
+	case PythonObjectType::Bool:
 		return LogicalType::BOOLEAN;
-	} else if (py::isinstance<py::int_>(ele)) {
+	case PythonObjectType::Integer: {
 		Value integer;
 		if (!TryTransformPythonNumeric(integer, ele)) {
 			can_convert = false;
 			return LogicalType::SQLNULL;
 		}
 		return integer.type();
-	} else if (py::isinstance<py::float_>(ele)) {
+	}
+	case PythonObjectType::Float:
 		if (std::isnan(PyFloat_AsDouble(ele.ptr()))) {
 			return LogicalType::SQLNULL;
 		}
 		return LogicalType::DOUBLE;
-	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
+	case PythonObjectType::Decimal: {
 		PyDecimal decimal(ele);
 		LogicalType type;
 		if (!decimal.TryGetType(type)) {
 			can_convert = false;
 		}
 		return type;
-	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
+	}
+	case PythonObjectType::Datetime:
 		return LogicalType::TIMESTAMP;
-	} else if (py::isinstance(ele, import_cache.datetime.time())) {
+	case PythonObjectType::Time:
 		return LogicalType::TIME;
-	} else if (py::isinstance(ele, import_cache.datetime.date())) {
+	case PythonObjectType::Date:
 		return LogicalType::DATE;
-	} else if (py::isinstance(ele, import_cache.datetime.timedelta())) {
+	case PythonObjectType::Timedelta:
 		return LogicalType::INTERVAL;
-	} else if (py::isinstance<py::str>(ele)) {
+	case PythonObjectType::String:
 		return LogicalType::VARCHAR;
-	} else if (py::isinstance(ele, import_cache.uuid.UUID())) {
+	case PythonObjectType::Uuid:
 		return LogicalType::UUID;
-	} else if (py::isinstance<py::bytearray>(ele)) {
+	case PythonObjectType::ByteArray:
+	case PythonObjectType::MemoryView:
+	case PythonObjectType::Bytes:
 		return LogicalType::BLOB;
-	} else if (py::isinstance<py::memoryview>(ele)) {
-		return LogicalType::BLOB;
-	} else if (py::isinstance<py::bytes>(ele)) {
-		return LogicalType::BLOB;
-	} else if (py::isinstance<py::list>(ele)) {
+	case PythonObjectType::List:
 		return GetListType(ele, can_convert);
-	} else if (py::isinstance<py::dict>(ele)) {
+	case PythonObjectType::Dict: {
 		PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
 		// Assuming keys and values are the same size
 
@@ -310,7 +313,8 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 			return DictToMap(dict, can_convert);
 		}
 		return DictToStruct(dict, can_convert);
-	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
+	}
+	case PythonObjectType::NdArray: {
 		auto extended_type = ConvertPandasType(ele.attr("dtype"));
 		LogicalType ltype;
 		ltype = PandasToLogicalType(extended_type);
@@ -321,7 +325,8 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 			}
 		}
 		return LogicalType::LIST(ltype);
-	} else {
+	}
+	case PythonObjectType::Other:
 		// Fall back to string for unknown types
 		can_convert = false;
 		return LogicalType::VARCHAR;

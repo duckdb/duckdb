@@ -448,7 +448,7 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 			auto lvalue = GetValue(col_idx, row_idx);
 			auto rvalue = other.GetValue(col_idx, row_idx);
-			if (!Value::ValuesAreEqual(lvalue, rvalue)) {
+			if (!Value::DefaultValuesAreEqual(lvalue, rvalue)) {
 				compare_equals = false;
 				break;
 			}
@@ -481,7 +481,7 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 			auto lvalue = GetValue(col_idx, lrow);
 			auto rvalue = other.GetValue(col_idx, rrow);
-			if (!Value::ValuesAreEqual(lvalue, rvalue)) {
+			if (!Value::DefaultValuesAreEqual(lvalue, rvalue)) {
 				return false;
 			}
 		}

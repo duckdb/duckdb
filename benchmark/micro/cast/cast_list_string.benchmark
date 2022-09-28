@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_list_string.benchmark
+# description: Cast list values to string
+# group: [cast]
+
+name Cast LIST -> VARCHAR
+group cast
+
+load
+CREATE TABLE lists AS SELECT [i, i+1, NULL, i+2] l FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN(CAST(l AS VARCHAR)) FROM lists;
+
+result I
+[0, 1, NULL, 2]
