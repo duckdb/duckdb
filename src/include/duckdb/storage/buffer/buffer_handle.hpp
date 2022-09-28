@@ -38,7 +38,9 @@ public:
 	//! Destroys the buffer handle
 	DUCKDB_API void Destroy();
 
-	const shared_ptr<BlockHandle> &GetBlockHandle() const { return handle; }
+	const shared_ptr<BlockHandle> &GetBlockHandle() const {
+		return handle;
+	}
 
 private:
 	//! The block handle

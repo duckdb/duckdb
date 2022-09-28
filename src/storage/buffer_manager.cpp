@@ -26,7 +26,8 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p)
 
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
                          bool can_destroy_p, idx_t block_size)
-    : block_manager(block_manager), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p), unswizzled(nullptr) {
+    : block_manager(block_manager), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p),
+      unswizzled(nullptr) {
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	buffer = move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
@@ -64,8 +65,7 @@ unique_ptr<Block> AllocateBlock(Allocator &allocator, unique_ptr<FileBuffer> reu
 	}
 }
 
-unique_ptr<FileBuffer> AllocateManagedBuffer(DatabaseInstance &db, unique_ptr<FileBuffer> reusable_buffer,
-                                                idx_t size) {
+unique_ptr<FileBuffer> AllocateManagedBuffer(DatabaseInstance &db, unique_ptr<FileBuffer> reusable_buffer, idx_t size) {
 	if (reusable_buffer) {
 		auto tmp = move(reusable_buffer);
 		return make_unique<FileBuffer>(*tmp, FileBufferType::MANAGED_BUFFER);
@@ -84,7 +84,8 @@ BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileB
 
 	auto &block_manager = handle->block_manager;
 	if (handle->block_id < MAXIMUM_BLOCK) {
-		auto block = AllocateBlock(Allocator::Get(block_manager.buffer_manager.GetDatabase()), move(reusable_buffer), handle->block_id);
+		auto block = AllocateBlock(Allocator::Get(block_manager.buffer_manager.GetDatabase()), move(reusable_buffer),
+		                           handle->block_id);
 		block_manager.Read(*block);
 		handle->buffer = move(block);
 	} else {
@@ -206,7 +207,7 @@ BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_mem
       queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_unique<BufferAllocatorData>(*this)) {
-  	temp_block_manager = make_unique<InMemoryBlockManager>(*this);
+	temp_block_manager = make_unique<InMemoryBlockManager>(*this);
 }
 
 BufferManager::~BufferManager() {
@@ -231,8 +232,7 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 	return result;
 }
 
-shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id,
-                                                           shared_ptr<BlockHandle> old_block) {
+shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
 
 	// pin the old block to ensure we have it loaded in memory
 	auto old_handle = buffer_manager.Pin(old_block);
@@ -445,9 +445,8 @@ void BufferManager::SetLimit(idx_t limit) {
 //===--------------------------------------------------------------------===//
 // Temporary File Management
 //===--------------------------------------------------------------------===//
-unique_ptr<FileBuffer> ReadTemporaryBufferInternal(DatabaseInstance &db, FileHandle &handle, idx_t position,
-                                                      idx_t size,
-                                                      unique_ptr<FileBuffer> reusable_buffer) {
+unique_ptr<FileBuffer> ReadTemporaryBufferInternal(DatabaseInstance &db, FileHandle &handle, idx_t position, idx_t size,
+                                                   unique_ptr<FileBuffer> reusable_buffer) {
 	auto buffer = AllocateManagedBuffer(db, move(reusable_buffer), size);
 	buffer->Read(handle, position);
 	return buffer;

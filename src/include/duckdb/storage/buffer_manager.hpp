@@ -74,7 +74,9 @@ public:
 
 	DUCKDB_API Allocator &GetBufferAllocator();
 
-	DatabaseInstance &GetDatabase() { return db; }
+	DatabaseInstance &GetDatabase() {
+		return db;
+	}
 
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible

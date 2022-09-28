@@ -22,7 +22,8 @@ class DatabaseInstance;
 //! BlockManager creates and accesses blocks. The concrete types implements how blocks are stored.
 class BlockManager {
 public:
-	explicit BlockManager(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {}
+	explicit BlockManager(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
+	}
 	virtual ~BlockManager() = default;
 
 	virtual void StartCheckpoint() = 0;
@@ -59,8 +60,7 @@ public:
 	//! Register a block with the given block id in the base file
 	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id);
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
-	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id,
-	                                            shared_ptr<BlockHandle> old_block);
+	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
 
 	void UnregisterBlock(block_id_t block_id, bool can_destroy);
 
