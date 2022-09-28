@@ -330,6 +330,7 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 
 		// generate the keys for the given input
 		keys.clear();
+		arena_allocator.Reset();
 		GenerateKeys(arena_allocator, ordered_chunk, keys);
 
 		// we order NULLS FIRST, so we might have to skip nulls at the start of our sorted data

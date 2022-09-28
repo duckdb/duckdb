@@ -156,6 +156,7 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 
 	// generate the keys for this chunk
 	state.keys.clear();
+	state.arena_allocator.Reset();
 	ART::GenerateKeys(state.arena_allocator, state.join_keys, state.keys);
 
 	for (idx_t i = 0; i < input.size(); i++) {
