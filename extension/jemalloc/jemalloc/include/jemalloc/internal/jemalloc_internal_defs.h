@@ -96,7 +96,7 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_HAVE_PTHREAD_SETNAME_NP */
 
 /* Defined if pthread_getname_np(3) is available. */
-//#define JEMALLOC_HAVE_PTHREAD_GETNAME_NP 
+#define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
 
 /* Defined if pthread_get_name_np(3) is available. */
 /* #undef JEMALLOC_HAVE_PTHREAD_GET_NAME_NP */
@@ -199,7 +199,7 @@ namespace duckdb_jemalloc {
 /* #undef LG_QUANTUM */
 
 /* One page is 2^LG_PAGE bytes. */
-#define LG_PAGE 14
+#define LG_PAGE 12
 
 /* Maximum number of regions in a slab. */
 /* #undef CONFIG_LG_SLAB_MAXREGS */
@@ -300,7 +300,7 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY */
 
 /* Defined if madvise(2) is available. */
-#define JEMALLOC_HAVE_MADVISE 
+#define JEMALLOC_HAVE_MADVISE
 
 /*
  * Defined if transparent huge pages are supported via the MADV_[NO]HUGEPAGE
@@ -339,7 +339,7 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_MADVISE_NOCORE */
 
 /* Defined if mprotect(2) is available. */
-//#define JEMALLOC_HAVE_MPROTECT 
+#define JEMALLOC_HAVE_MPROTECT
 
 /*
  * Defined if transparent huge pages (THPs) are supported via the
@@ -372,7 +372,7 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_HAS_ALLOCA_H */
 
 /* C99 restrict keyword supported. */
-//#define JEMALLOC_HAS_RESTRICT
+#define JEMALLOC_HAS_RESTRICT
 
 /* For use by hash code. */
 /* #undef JEMALLOC_BIG_ENDIAN */
