@@ -20,11 +20,10 @@ on:
         type: string
 
 jobs:
- linux-extensions-64:
+ linux-extensions-64-rebuild:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
-    needs: linux-release-64
 
     steps:
     - uses: actions/checkout@v3
@@ -41,6 +40,7 @@ jobs:
       run: |
         echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' >> extensions.csv
         cat extensions.csv
+
     - uses: ./.github/actions/build_extensions
       with:
         visualizer: 0
