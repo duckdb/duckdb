@@ -566,12 +566,10 @@ struct GetNextArrowIpcTask : public Task {
 		D_ASSERT(chunk->size() == 1 && chunk->ColumnCount() == 1);
 		D_ASSERT(chunk->data[0].GetType() == duckdb::LogicalType::BLOB);
 
-		duckdb::Value ipc_blob = chunk->GetValue(0, 0);
-
-		// TODO There's so many copies happening here
-		auto blob_str = duckdb::StringValue::Get(ipc_blob);
-		auto buf = Napi::ArrayBuffer::New(env, blob_str.size());
-		memcpy(buf.Data(), (const void *) blob_str.c_str(), blob_str.size());
+		// TODO: can we also remove this copy? Yes we can by returning a wrapper that holds the reference to the chunk
+		duckdb::string_t blob = *(duckdb::string_t*)(chunk->data[0].GetData());
+		auto buf = Napi::ArrayBuffer::New(env, blob.GetSize());
+		memcpy(buf.Data(), (const void *) blob.GetDataUnsafe(), blob.GetSize());
 
 		deferred.Resolve(buf);
 	}

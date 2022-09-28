@@ -1,6 +1,7 @@
 var duckdb = require('..');
 var assert = require('assert');
 var arrow = require('apache-arrow')
+const { performance } = require('perf_hooks');
 
 // const build = 'debug';
 const build = 'release';
@@ -121,13 +122,15 @@ describe('[Benchmark] single int column load (50M tuples)',() => {
 describe('[Benchmark] TPC-H lineitem.parquet', () => {
     const sql = "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date) AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity < 24;"
 	const parquet_file_path_sf0_01 = "/tmp/lineitem_sf0_01.parquet";
-	const parquet_file_sf1 = "/tmp/lineitem_sf1.parquet";
+	const parquet_file_path_sf1 = "/tmp/lineitem_sf1.parquet";
     const tpch_answer_sf0_01 = [{revenue: 1193053.2253}];
     const tpch_answer_sf1 = [{revenue: 123141078.2283}];
 
     // Which query to run
-    const parquet_file_path = parquet_file_path_sf0_01;
-    const answer = tpch_answer_sf0_01;
+    // const parquet_file_path = parquet_file_path_sf0_01;
+    const parquet_file_path = parquet_file_path_sf1;
+    // const answer = tpch_answer_sf0_01;
+    const answer = tpch_answer_sf1;
 
 	let db;
 	let conn;
@@ -144,14 +147,17 @@ describe('[Benchmark] TPC-H lineitem.parquet', () => {
     });
 
     it('lineitem.parquet -> DuckDB -> arrow IPC -> query from DuckDB', async () => {
+        const startTimeLoad = performance.now()
         const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
         const ipc_buffers = await result.toArray();
 
         // We can now create a RecordBatchReader & Table from the materialized stream
         const reader = await arrow.RecordBatchReader.from(ipc_buffers);
         const table = arrow.tableFromIPC(reader);
+        // console.log("Load time: " + Math.round(performance.now() - startTimeLoad) + "ms");
 
         const query = sql.replace("lineitem", "my_arrow_ipc_stream");
+        const startTimeQuery = performance.now()
         await new Promise((resolve, reject) => {
             db.scanArrowIpc(query, {"my_arrow_ipc_stream" : ipc_buffers} , function (err, result) {
                 if (err) {
@@ -162,22 +168,38 @@ describe('[Benchmark] TPC-H lineitem.parquet', () => {
                 resolve();
             })
         });
+        // console.log("Query time: " + Math.round(performance.now() - startTimeQuery) + "ms");
     });
 
-    it('lineitem.parquet -> DuckDB table -> query from DuckDB', (done) => {
+    it('lineitem.parquet -> DuckDB table -> query from DuckDB', async () => {
         const batches = [];
         let got_rows = 0;
 
-        conn.run('CREATE TABLE load_parquet_directly AS SELECT * FROM "' + parquet_file_path + '";');
-        const query = sql.replace("lineitem", "load_parquet_directly");
-        db.all(query, function(err, result) {
-            if (err) {
-                throw err;
-            }
-
-            assert.deepEqual(result, answer);
-            done()
+        const startTimeLoad = performance.now()
+        await new Promise((resolve, reject) => {
+            conn.run('CREATE TABLE load_parquet_directly AS SELECT * FROM "' + parquet_file_path + '";', (err) => {
+                if (err) {
+                    reject(err)
+                }
+                resolve()
+            });
         });
+        // console.log("Load time: " + Math.round(performance.now() - startTimeLoad) + "ms");
+
+        const query = sql.replace("lineitem", "load_parquet_directly");
+        const startTimeQuery = performance.now()
+
+        const result = await new Promise((resolve, reject) => {
+            db.all(query, function (err, result) {
+                if (err) {
+                    throw err;
+                }
+                resolve(result)
+            });
+        });
+        // console.log("Query time: " + Math.round(performance.now() - startTimeQuery) + "ms");
+
+        assert.deepEqual(result, answer);
     });
 });
 
