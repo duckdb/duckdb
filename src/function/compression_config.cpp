@@ -75,6 +75,7 @@ vector<CompressionFunction *> DBConfig::GetCompressionFunctions(PhysicalType dat
 }
 
 CompressionFunction *DBConfig::GetCompressionFunction(CompressionType type, PhysicalType data_type) {
+	lock_guard<mutex> l(compression_functions->lock);
 	// check if the function is already loaded
 	auto function = FindCompressionFunction(*compression_functions, type, data_type);
 	if (function) {

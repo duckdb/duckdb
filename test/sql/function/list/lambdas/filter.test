@@ -22,7 +22,7 @@ NULL
 query I
 SELECT list_filter([True], x -> x)
 ----
-[True]
+[true]
 
 query I
 SELECT list_filter(['duck', 'a', 'ö'], duck -> contains(concat(duck, 'DB'), 'duck'))

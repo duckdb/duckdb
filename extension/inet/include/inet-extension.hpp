@@ -1,20 +1,22 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table_statistics.hpp
+// inet-extension.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
-struct TableStatistics {
-	idx_t estimated_cardinality;
+class INETExtension : public Extension {
+public:
+	void Load(DuckDB &db) override;
+	std::string Name() override;
 };
 
 } // namespace duckdb

@@ -159,7 +159,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 			continue;
 		}
 
-		if (!Value::ValuesAreEqual(value, values[row_idx])) {
+		if (!Value::DefaultValuesAreEqual(value, values[row_idx])) {
 			// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString()
 			// +
 			//      " but expected " + values[i + j].ToString());
@@ -216,7 +216,7 @@ string show_diff(DataChunk &left, DataChunk &right) {
 			for (size_t j = 0; j < left.size(); j++) {
 				auto left_value = left_vector.GetValue(j);
 				auto right_value = right_vector.GetValue(j);
-				if (!Value::ValuesAreEqual(left_value, right_value)) {
+				if (!Value::DefaultValuesAreEqual(left_value, right_value)) {
 					left_column += left_value.ToString() + ",";
 					right_column += right_value.ToString() + ",";
 					has_differences = true;

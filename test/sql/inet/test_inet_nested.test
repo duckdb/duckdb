@@ -1,0 +1,32 @@
+# name: test/sql/inet/test_inet_nested.test
+# description: Test inet type with nested functions
+# group: [inet]
+
+require inet
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT {'a': INET '127.0.0.1/17'}, NULL::STRUCT(a INET), {'a': INET '255.255.255.255/31'}
+----
+{'a': 127.0.0.1/17}	NULL	{'a': 255.255.255.255/31}
+
+query III
+SELECT {'a': INET '127.0.0.1/17'}::STRUCT(a VARCHAR), NULL::STRUCT(a INET)::STRUCT(a VARCHAR), {'a': INET '255.255.255.255/31'}::STRUCT(a VARCHAR)
+----
+{'a': 127.0.0.1/17}	NULL	{'a': 255.255.255.255/31}
+
+query I
+SELECT [INET '127.0.0.1/17', NULL, INET '255.255.255.255/31']::VARCHAR[]
+----
+[127.0.0.1/17, NULL, 255.255.255.255/31]
+
+query I
+SELECT [INET '127.0.0.1/17', NULL, '255.255.255.255/31']
+----
+[127.0.0.1/17, NULL, 255.255.255.255/31]
+
+# unsupported cast from int to inet
+statement error
+SELECT [INET '127.0.0.1/17', 3, INET '255.255.255.255/31']::VARCHAR[]

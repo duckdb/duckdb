@@ -671,4 +671,16 @@ template <>
 DUCKDB_API bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector,
                                          string *error_message, bool strict);
 
+//===--------------------------------------------------------------------===//
+// Pointers
+//===--------------------------------------------------------------------===//
+struct CastFromPointer {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from pointer could not be performed!");
+	}
+};
+template <>
+duckdb::string_t CastFromPointer::Operation(uintptr_t input, Vector &vector);
+
 } // namespace duckdb
