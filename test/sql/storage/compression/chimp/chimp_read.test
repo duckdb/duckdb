@@ -15,7 +15,7 @@ CREATE TABLE temperatures (
 );
 
 statement ok
-COPY temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature_small.csv'
+COPY temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv'
 
 statement ok
 CHECKPOINT;
@@ -29,7 +29,7 @@ statement ok
 PRAGMA force_compression='uncompressed';
 
 statement ok
-COPY reference_temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature_small.csv';
+COPY reference_temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv';
 
 statement ok
 checkpoint;

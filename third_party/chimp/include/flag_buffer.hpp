@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 #include <iostream>
+#ifdef DEBUG
+#include <vector>
+#endif
 
 namespace duckdb_chimp {
 
@@ -34,17 +37,26 @@ public:
 	}
 	void Reset() {
 		this->counter = 0;
+		#ifdef DEBUG
+			this->flags.clear();
+		#endif
 	}
 
 	void PrintRead(uint64_t result) {
 		static thread_local uint64_t counter = 0;
-		std::cout << "FLAG READ[" << counter++ << "]: " << (uint64_t)result << std::endl;
+		//std::cout << "FLAG READ[" << counter++ << "]: " << (uint64_t)result << std::endl;
 	}
 
 	void PrintWrite(uint64_t result) {
 		static thread_local uint64_t counter = 0;
-		std::cout << "FLAG WRITE[" << counter++ << "]: " << (uint64_t)result << std::endl;
+		//std::cout << "FLAG WRITE[" << counter++ << "]: " << (uint64_t)result << std::endl;
 	}
+
+	#ifdef DEBUG
+	uint8_t ExtractValue(uint32_t value, uint8_t index) {
+		return (value & flag_masks[index]) >> flag_shifts[index];
+	}
+	#endif
 
 	void Insert(const uint8_t &value) {
 		if (!EMPTY) {
@@ -52,8 +64,18 @@ public:
 			if ((counter & 3) == 0) {
 				// Start the new byte fresh
 				buffer[counter >> 2] = 0;
+				#ifdef DEBUG
+					flags.clear();
+				#endif
 			}
+			#ifdef DEBUG
+				flags.push_back(value);
+			#endif
 			buffer[counter >> 2] |= ((value & 3) << flag_shifts[counter & 3]);
+			#ifdef DEBUG
+				//Verify that the bits are serialized correctly
+				assert(flags[counter & 3] == ExtractValue(buffer[counter >> 2], counter & 3));
+			#endif
 		}
 		counter++;
 	}
@@ -70,6 +92,9 @@ private:
 private:
 	uint32_t counter = 0;
 	uint8_t *buffer;
+	#ifdef DEBUG
+	std::vector<uint8_t> flags;
+	#endif
 };
 
 } //namespace duckdb_chimp

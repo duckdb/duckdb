@@ -8,7 +8,7 @@ storage persistent
 
 load
 DROP TABLE IF EXISTS integers;
-PRAGMA force_compression='uncompressed';
+PRAGMA force_compression='chimp';
 CREATE TABLE temperatures (
 	temperature DOUBLE
 );

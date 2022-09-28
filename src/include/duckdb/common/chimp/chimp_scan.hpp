@@ -64,22 +64,22 @@ public:
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_bit_offset = Load<uint32_t>(metadata_ptr);
-		printf("[READ] - BYTE OFFSET: %u\n", data_bit_offset);
-		// Only used for point queries
+		// printf("[READ] - BYTE OFFSET: %u\n", data_bit_offset);
+		//  Only used for point queries
 		(void)data_bit_offset;
 
 		// Load how many blocks of leading zero bits we have
 		metadata_ptr -= sizeof(uint8_t);
 		auto leading_zero_block_count = Load<uint8_t>(metadata_ptr);
-		printf("[READ] - LEADING ZERO BLOCK COUNT: %u\n", (uint32_t)leading_zero_block_count);
+		// printf("[READ] - LEADING ZERO BLOCK COUNT: %u\n", (uint32_t)leading_zero_block_count);
 
 		// Load the leading zero blocks
 		metadata_ptr -= 3 * leading_zero_block_count;
 		chimp_state.leading_zero_buffer.SetBuffer(metadata_ptr);
 
 		// Load how many flag bytes there are
-		metadata_ptr -= sizeof(uint8_t);
-		auto size_of_group = Load<uint8_t>(metadata_ptr);
+		metadata_ptr -= sizeof(uint16_t);
+		auto size_of_group = Load<uint16_t>(metadata_ptr);
 
 		// Load the flags
 		metadata_ptr -= size_of_group;

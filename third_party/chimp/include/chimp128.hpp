@@ -44,6 +44,10 @@ struct Chimp128CompressionState {
 		this->previous_leading_zeros = value;
 	}
 
+	void Flush() {
+		leading_zero_buffer.Flush();
+	}
+
 	void Reset() {
 		first = true;
 		ring_buffer.Reset();

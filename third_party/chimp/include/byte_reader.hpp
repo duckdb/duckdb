@@ -38,7 +38,8 @@ public:
 
 	void PrintResult(uint64_t result, const uint8_t &size) {
 		static thread_local uint64_t counter = 0;
-		std::cout << "READ[" << counter++ << "]: " << (uint64_t)result << " | SIZE: " << (uint64_t)size << std::endl;
+		//std::cout << "READ[" << counter++ << "]: " << (uint64_t)result << " | SIZE: " << (uint64_t)size << std::endl;
+		//std::cout << "R" << counter++ << ": " << (uint64_t)result << std::endl;
 	}
 
 	template <class T, uint8_t SIZE>

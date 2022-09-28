@@ -163,11 +163,14 @@ public:
 	}
 
 	void FlushGroup() {
+		// Has to be called first to flush the last values in the LeadingZeroBuffer
+		state.chimp_state.Flush();
+
 		metadata_ptr -= sizeof(byte_index_t);
 		metadata_byte_size += sizeof(byte_index_t);
 		// Store where this groups data starts, relative to the start of the segment
 		Store<byte_index_t>(next_group_byte_index_start, metadata_ptr);
-		printf("[WRITE] - BYTE OFFSET: %u\n", next_group_byte_index_start);
+		// printf("[WRITE] - BYTE OFFSET: %u\n", next_group_byte_index_start);
 		next_group_byte_index_start = UsedSpace();
 
 		const uint8_t leading_zero_block_count = state.chimp_state.leading_zero_buffer.BlockCount();
@@ -175,7 +178,7 @@ public:
 		metadata_byte_size += sizeof(uint8_t);
 		// Store how many leading zero blocks there are
 		Store<uint8_t>(leading_zero_block_count, metadata_ptr);
-		printf("[WRITE] - LEADING ZERO BLOCK COUNT: %u\n", (uint32_t)leading_zero_block_count);
+		// printf("[WRITE] - LEADING ZERO BLOCK COUNT: %u\n", (uint32_t)leading_zero_block_count);
 
 		const uint64_t bytes_used_by_leading_zero_blocks = 3 * leading_zero_block_count;
 		metadata_ptr -= bytes_used_by_leading_zero_blocks;
@@ -183,13 +186,16 @@ public:
 		// Store the leading zeros (8 per 3 bytes) for this group
 		memcpy((void *)metadata_ptr, (void *)leading_zero_blocks, bytes_used_by_leading_zero_blocks);
 
-		const uint8_t flag_bytes = state.chimp_state.flag_buffer.BytesUsed();
-		metadata_ptr -= sizeof(uint8_t);
-		metadata_byte_size += sizeof(uint8_t);
+		// FIXME: This is max 256, which BARELY doesn't fit into a single byte
+		// instead we could use 0 to denote 256, saving an extra byte every (CHIMP_SEQUENCE_SIZE)1024 values
+		const uint16_t flag_bytes = state.chimp_state.flag_buffer.BytesUsed();
+		metadata_ptr -= sizeof(uint16_t);
+		metadata_byte_size += sizeof(uint16_t);
 		// Store how many flag bytes there are
 		// We cant use the 'count' of the segment to figure this out, because NULLs increase count
-		Store<uint8_t>(flag_bytes, metadata_ptr);
+		Store<uint16_t>(flag_bytes, metadata_ptr);
 
+		// printf("FLAG_BYTES: %u\n", (uint32_t)flag_bytes);
 		metadata_ptr -= flag_bytes;
 		metadata_byte_size += flag_bytes;
 		// Store the flags (4 per byte) for this group
@@ -206,7 +212,7 @@ public:
 		auto dataptr = handle.Ptr();
 
 		// Compact the segment by moving the metadata next to the data.
-		idx_t bytes_used_by_data = UsedSpace();
+		idx_t bytes_used_by_data = ChimpPrimitives::HEADER_SIZE + UsedSpace();
 		idx_t metadata_offset = AlignValue(bytes_used_by_data);
 		// Verify that the metadata_ptr does not cross this threshold
 		D_ASSERT(dataptr + metadata_offset < metadata_ptr);
