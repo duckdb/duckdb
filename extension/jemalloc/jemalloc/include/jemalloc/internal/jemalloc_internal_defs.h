@@ -396,7 +396,7 @@ namespace duckdb_jemalloc {
 #define LG_SIZEOF_LONG_LONG 3
 
 /* sizeof(intmax_t) == 2^LG_SIZEOF_INTMAX_T. */
-#define LG_SIZEOF_INTMAX_T sizeof(intmax_t)
+#define LG_SIZEOF_INTMAX_T 3
 
 /* glibc malloc hooks (__malloc_hook, __realloc_hook, __free_hook). */
 /* #undef JEMALLOC_GLIBC_MALLOC_HOOK */

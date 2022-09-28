@@ -46,7 +46,7 @@ namespace duckdb_jemalloc {
  * present on the system.
  */
 /* #undef JEMALLOC_OVERRIDE_MEMALIGN */
-#define JEMALLOC_OVERRIDE_VALLOC
+// #define JEMALLOC_OVERRIDE_VALLOC
 
 /*
  * At least Linux omits the "const" in:
@@ -73,7 +73,11 @@ namespace duckdb_jemalloc {
 #endif
 
 /* sizeof(void *) == 2^LG_SIZEOF_PTR. */
-#define LG_SIZEOF_PTR 3
+#ifdef _MSC_VER
+#  define LG_SIZEOF_PTR LG_SIZEOF_PTR_WIN
+#else
+#  define LG_SIZEOF_PTR 3
+#endif
 
 /*
  * Name mangling for public symbols is controlled by --with-mangling and

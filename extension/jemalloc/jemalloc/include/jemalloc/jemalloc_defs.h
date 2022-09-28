@@ -54,4 +54,8 @@
 #endif
 
 /* sizeof(void *) == 2^LG_SIZEOF_PTR. */
-#define LG_SIZEOF_PTR 3
+#ifdef _MSC_VER
+#  define LG_SIZEOF_PTR LG_SIZEOF_PTR_WIN
+#else
+#  define LG_SIZEOF_PTR 3
+#endif
