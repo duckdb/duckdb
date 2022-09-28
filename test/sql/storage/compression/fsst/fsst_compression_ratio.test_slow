@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/fsst/fsst_compression_ratio.test
+# name: test/sql/storage/compression/fsst/fsst_compression_ratio.test_slow
 # description: Assert fsst compression ratio is within reasonable margins
 # group: [fsst]
 
