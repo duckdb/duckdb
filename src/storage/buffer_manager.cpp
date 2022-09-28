@@ -576,7 +576,7 @@ public:
 			D_ASSERT(handle);
 			RemoveTempBlockIndex(lock, block_index);
 		}
-		return move(buffer);
+		return buffer;
 	}
 
 	bool DeleteIfEmpty() {
@@ -811,7 +811,7 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id, unique_
 
 	handle.reset();
 	DeleteTemporaryFile(id);
-	return move(buffer);
+	return buffer;
 }
 
 void BufferManager::DeleteTemporaryFile(block_id_t id) {
