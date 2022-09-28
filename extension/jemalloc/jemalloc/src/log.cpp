@@ -26,8 +26,8 @@ log_var_matches_segment(const char *segment_begin, const char *segment_end,
 	assert(segment_begin <= segment_end);
 	assert(log_var_begin < log_var_end);
 
-	std::ptrdiff_t segment_len = segment_end - segment_begin;
-	std::ptrdiff_t log_var_len = log_var_end - log_var_begin;
+	ptrdiff_t segment_len = segment_end - segment_begin;
+	ptrdiff_t log_var_len = log_var_end - log_var_begin;
 	/* The special '.' segment matches everything. */
 	if (segment_len == 1 && *segment_begin == '.') {
 		return true;

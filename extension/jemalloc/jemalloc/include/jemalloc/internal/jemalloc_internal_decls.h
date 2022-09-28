@@ -65,13 +65,6 @@
 #  define SSIZE_MAX	((ssize_t)(SIZE_T_MAX >> 1))
 #endif
 
-//#include <cstdarg>
-//#include <cstdbool>
-//#include <cstdio>
-//#include <cstdlib>
-//#include <cstdint>
-//#include <cstddef>
-
 #ifndef offsetof
 #  define offsetof(type, member)	((size_t)&(((type *)NULL)->member))
 #endif
