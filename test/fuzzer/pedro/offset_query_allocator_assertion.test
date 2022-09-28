@@ -1,0 +1,16 @@
+# name: test/fuzzer/pedro/offset_query_allocator_assertion.test
+# description: Issue #4576: OFFSET query taking too long
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c0 INT, c1 INT);
+
+statement ok
+INSERT INTO t0 (VALUES (1, 1),(2, 2),(3, 3));
+
+query I
+SELECT c0 FROM t0 OFFSET 42949672960;
+----

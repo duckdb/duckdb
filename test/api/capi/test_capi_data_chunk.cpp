@@ -3,6 +3,56 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test table_info incorrect 'is_valid' value for 'dflt_value' column", "[capi]") {
+	duckdb_database db;
+	duckdb_connection con;
+	duckdb_result result;
+
+	REQUIRE(duckdb_open(NULL, &db) != DuckDBError);
+	REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+	//! Create a table with 40 columns
+	REQUIRE(duckdb_query(con,
+	                     "CREATE TABLE foo (c00 varchar, c01 varchar, c02 varchar, c03 varchar, c04 varchar, c05 "
+	                     "varchar, c06 varchar, c07 varchar, c08 varchar, c09 varchar, c10 varchar, c11 varchar, c12 "
+	                     "varchar, c13 varchar, c14 varchar, c15 varchar, c16 varchar, c17 varchar, c18 varchar, c19 "
+	                     "varchar, c20 varchar, c21 varchar, c22 varchar, c23 varchar, c24 varchar, c25 varchar, c26 "
+	                     "varchar, c27 varchar, c28 varchar, c29 varchar, c30 varchar, c31 varchar, c32 varchar, c33 "
+	                     "varchar, c34 varchar, c35 varchar, c36 varchar, c37 varchar, c38 varchar, c39 varchar);",
+	                     NULL) != DuckDBError);
+	//! Get table info for the created table
+	REQUIRE(duckdb_query(con, "PRAGMA table_info(foo);", &result) != DuckDBError);
+
+	//! Columns ({cid, name, type, notnull, dflt_value, pk}}
+	idx_t col_count = duckdb_column_count(&result);
+	REQUIRE(col_count == 6);
+	idx_t chunk_count = duckdb_result_chunk_count(result);
+
+	// Loop over the produced chunks
+	for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx++) {
+		duckdb_data_chunk chunk = duckdb_result_get_chunk(result, chunk_idx);
+		idx_t row_count = duckdb_data_chunk_get_size(chunk);
+
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
+				//! Get the column
+				duckdb_vector vector = duckdb_data_chunk_get_vector(chunk, col_idx);
+				uint64_t *validity = duckdb_vector_get_validity(vector);
+				bool is_valid = duckdb_validity_row_is_valid(validity, row_idx);
+
+				if (col_idx == 4) {
+					//'dflt_value' column
+					REQUIRE(is_valid == false);
+				}
+			}
+		}
+		duckdb_destroy_data_chunk(&chunk);
+	}
+
+	duckdb_destroy_result(&result);
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+}
+
 TEST_CASE("Test Logical Types C API", "[capi]") {
 	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
 	REQUIRE(type);

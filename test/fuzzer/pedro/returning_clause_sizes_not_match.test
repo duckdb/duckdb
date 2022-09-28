@@ -1,0 +1,79 @@
+# name: test/fuzzer/pedro/returning_clause_sizes_not_match.test
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE test (x INT, y AS(x + 100));
+
+query II
+INSERT INTO test VALUES (1), (2) RETURNING *;
+----
+1	101
+2	102
+
+query I
+SELECT test FROM test
+----
+{'x': 1, 'y': 101}
+{'x': 2, 'y': 102}
+
+query IIII
+INSERT INTO test VALUES (1), (2) RETURNING *, *;
+----
+1	101	1	101
+2	102	2	102
+
+query II
+DELETE FROM test WHERE x=2 RETURNING *;
+----
+2	102
+2	102
+
+query II
+UPDATE test SET x=0 WHERE x = 1 RETURNING *;
+----
+0	100
+0	100
+
+# Error: Binder Error: Referenced table "y" not found!
+statement error
+INSERT INTO test VALUES(1) RETURNING y.y;
+
+# Error: Binder Error: Referenced table "y" not found!
+statement error
+INSERT INTO test VALUES(1) RETURNING y.*;
+
+query I
+INSERT INTO test VALUES(1) RETURNING test;
+----
+{'x': 1, 'y': 101}
+
+query I
+INSERT INTO test VALUES(1) RETURNING test.y;
+----
+101
+
+query I
+INSERT INTO test VALUES(1) RETURNING {'i' : x, 'j' : y};
+----
+{'i': 1, 'j': 101}
+
+query I
+INSERT INTO test VALUES (1), (2) RETURNING y;
+----
+101
+102
+
+query IIII
+INSERT INTO test VALUES (1), (2) RETURNING y, y, y, x;
+----
+101	101	101	1
+102	102	102	2
+
+query II
+INSERT INTO test VALUES (1), (2) RETURNING y + y, x + y;
+----
+202	102
+204	104

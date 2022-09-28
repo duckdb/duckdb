@@ -14,7 +14,6 @@ static void StructInsertFunction(DataChunk &args, ExpressionState &state, Vector
 	starting_vec.Verify(args.size());
 
 	auto &starting_child_entries = StructVector::GetEntries(starting_vec);
-
 	auto &result_child_entries = StructVector::GetEntries(result);
 
 	// Assign the starting vector entries to the result vector
@@ -29,6 +28,10 @@ static void StructInsertFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 
 	result.Verify(args.size());
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarFunction &bound_function,

@@ -39,7 +39,7 @@ void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chu
 
 	for (idx_t i = 0; i < data_chunk.ColumnCount(); ++i) {
 		if (CastSQLite::RequiresCastToVarchar(data_chunk.data[i].GetType())) {
-			VectorOperations::Cast(data_chunk.data[i], new_chunk.data[i], data_chunk.size(), true);
+			VectorOperations::DefaultCast(data_chunk.data[i], new_chunk.data[i], data_chunk.size(), true);
 		} else {
 			new_chunk.data[i].Reference(data_chunk.data[i]);
 		}

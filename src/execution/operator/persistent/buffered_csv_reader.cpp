@@ -45,7 +45,7 @@ static bool ParseBoolean(const Value &value, const string &loption) {
 	    value.type().id() == LogicalTypeId::DECIMAL) {
 		throw BinderException("\"%s\" expects a boolean value (e.g. TRUE or 1)", loption);
 	}
-	return BooleanValue::Get(value.CastAs(LogicalType::BOOLEAN));
+	return BooleanValue::Get(value.DefaultCastAs(LogicalType::BOOLEAN));
 }
 
 static string ParseString(const Value &value, const string &loption) {
@@ -798,7 +798,7 @@ bool BufferedCSVReader::TryCastValue(const Value &value, const LogicalType &sql_
 	} else {
 		Value new_value;
 		string error_message;
-		return value.TryCastAs(sql_type, new_value, &error_message, true);
+		return value.DefaultTryCastAs(sql_type, new_value, &error_message, true);
 	}
 }
 
@@ -856,7 +856,7 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const
 	} else {
 		// target type is not varchar: perform a cast
 		string error_message;
-		return VectorOperations::TryCast(parse_chunk_col, dummy_result, size, &error_message, true);
+		return VectorOperations::DefaultTryCast(parse_chunk_col, dummy_result, size, &error_message, true);
 	}
 }
 
@@ -2014,8 +2014,8 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				                                 parse_chunk.size(), error_message);
 			} else {
 				// target type is not varchar: perform a cast
-				success = VectorOperations::TryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
-				                                    parse_chunk.size(), &error_message);
+				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
+				                                           parse_chunk.size(), &error_message);
 			}
 			if (success) {
 				continue;

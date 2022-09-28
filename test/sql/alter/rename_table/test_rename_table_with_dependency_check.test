@@ -1,0 +1,28 @@
+# name: test/sql/alter/rename_table/test_rename_table_with_dependency_check.test
+# description: Test RENAME TABLE with dependency check
+# group: [rename_table]
+
+statement ok
+CREATE TABLE t0 (c0 INT);
+
+statement ok
+CREATE UNIQUE INDEX i1 ON t0 (c0);
+
+# Cannot alter entry "t0" because there are entries that depend on it
+statement error
+ALTER TABLE t0 RENAME TO t3;
+
+# t3 is not exist
+statement ok
+CREATE TABLE t3 (c0 INT);
+
+# Cannot alter entry "t0" because there are entries that depend on it
+statement error
+ALTER TABLE t0 RENAME TO t4;
+
+statement ok
+DROP TABLE t0;
+
+# t4 is not exist
+statement error
+ANALYZE t4;

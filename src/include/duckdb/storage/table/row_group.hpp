@@ -27,6 +27,7 @@ class TableDataWriter;
 class UpdateSegment;
 class Vector;
 struct RowGroupPointer;
+struct TransactionData;
 struct VersionNode;
 
 class RowGroup : public SegmentBase {
@@ -72,9 +73,9 @@ public:
 		return 0;
 	}
 
-	unique_ptr<RowGroup> AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx,
-	                               ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk);
-	unique_ptr<RowGroup> AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor,
+	unique_ptr<RowGroup> AlterType(const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor,
+	                               RowGroupScanState &scan_state, DataChunk &scan_chunk);
+	unique_ptr<RowGroup> AddColumn(ColumnDefinition &new_column, ExpressionExecutor &executor,
 	                               Expression *default_value, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(idx_t removed_column);
 
@@ -92,41 +93,41 @@ public:
 	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were
 	//! skipped.
 	bool CheckZonemapSegments(RowGroupScanState &state);
-	void Scan(Transaction &transaction, RowGroupScanState &state, DataChunk &result);
+	void Scan(TransactionData transaction, RowGroupScanState &state, DataChunk &result);
 	void ScanCommitted(RowGroupScanState &state, DataChunk &result, TableScanType type);
 
-	idx_t GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
+	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
 	                            SelectionVector &sel_vector, idx_t max_count);
 
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
-	bool Fetch(Transaction &transaction, idx_t row);
+	bool Fetch(TransactionData transaction, idx_t row);
 	//! Fetch a specific row from the row_group and insert it into the result at the specified index
-	void FetchRow(Transaction &transaction, ColumnFetchState &state, const vector<column_t> &column_ids, row_t row_id,
-	              DataChunk &result, idx_t result_idx);
+	void FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<column_t> &column_ids,
+	              row_t row_id, DataChunk &result, idx_t result_idx);
 
 	//! Append count rows to the version info
-	void AppendVersionInfo(Transaction &transaction, idx_t start, idx_t count, transaction_t commit_id);
+	void AppendVersionInfo(TransactionData transaction, idx_t start, idx_t count, transaction_t commit_id);
 	//! Commit a previous append made by RowGroup::AppendVersionInfo
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t count);
 	//! Revert a previous append made by RowGroup::AppendVersionInfo
 	void RevertAppend(idx_t start);
 
 	//! Delete the given set of rows in the version manager
-	idx_t Delete(Transaction &transaction, DataTable *table, row_t *row_ids, idx_t count);
+	idx_t Delete(TransactionData transaction, DataTable *table, row_t *row_ids, idx_t count);
 
 	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);
 
-	void InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state, idx_t remaining_append_count);
+	void InitializeAppend(TransactionData transaction, RowGroupAppendState &append_state, idx_t remaining_append_count);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
-	void Update(Transaction &transaction, DataChunk &updates, row_t *ids, idx_t offset, idx_t count,
+	void Update(TransactionData transaction, DataChunk &updates, row_t *ids, idx_t offset, idx_t count,
 	            const vector<column_t> &column_ids);
 	//! Update a single column; corresponds to DataTable::UpdateColumn
 	//! This method should only be called from the WAL
-	void UpdateColumn(Transaction &transaction, DataChunk &updates, Vector &row_ids,
+	void UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
 	                  const vector<column_t> &column_path);
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
@@ -143,7 +144,7 @@ private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
 
 	template <TableScanType TYPE>
-	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
+	void TemplatedScan(TransactionData transaction, RowGroupScanState &state, DataChunk &result);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);

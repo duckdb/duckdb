@@ -26,6 +26,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 
 #include <utility>
 #include <cmath>
@@ -132,9 +133,9 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::TIMESTAMP(Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY),
 		                        dtime_t(0));
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return MinimumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_S);
+		return MinimumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return MinimumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_MS);
+		return MinimumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_MS);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
@@ -201,11 +202,11 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_MS:
-		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_MS);
+		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_MS);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_S);
+		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIME_TZ:
 		return Value::TIMETZ(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -561,7 +562,7 @@ Value Value::LIST(LogicalType child_type, vector<Value> values) {
 		return Value::EMPTYLIST(move(child_type));
 	}
 	for (auto &val : values) {
-		val = val.CastAs(child_type);
+		val = val.DefaultCastAs(child_type);
 	}
 	return Value::LIST(move(values));
 }
@@ -705,8 +706,33 @@ Value Value::CreateValue(dtime_t value) {
 }
 
 template <>
+Value Value::CreateValue(dtime_tz_t value) {
+	return Value::TIMETZ(value);
+}
+
+template <>
 Value Value::CreateValue(timestamp_t value) {
 	return Value::TIMESTAMP(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_sec_t value) {
+	return Value::TIMESTAMPSEC(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_ms_t value) {
+	return Value::TIMESTAMPMS(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_ns_t value) {
+	return Value::TIMESTAMPNS(value);
+}
+
+template <>
+Value Value::CreateValue(timestamp_tz_t value) {
+	return Value::TIMESTAMPTZ(value);
 }
 
 template <>
@@ -794,7 +820,7 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::INTERVAL:
 		return Cast::Operation<interval_t, T>(value_.interval);
 	case LogicalTypeId::DECIMAL:
-		return CastAs(LogicalType::DOUBLE).GetValueInternal<T>();
+		return DefaultCastAs(LogicalType::DOUBLE).GetValueInternal<T>();
 	case LogicalTypeId::ENUM: {
 		switch (type_.InternalType()) {
 		case PhysicalType::UINT8:
@@ -986,7 +1012,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 Value Value::Numeric(const LogicalType &type, hugeint_t value) {
 #ifdef DEBUG
 	// perform a throwing cast to verify that the type fits
-	Value::HUGEINT(value).CastAs(type);
+	Value::HUGEINT(value).DefaultCastAs(type);
 #endif
 	switch (type.id()) {
 	case LogicalTypeId::HUGEINT:
@@ -1209,195 +1235,19 @@ hash_t Value::Hash() const {
 	if (IsNull()) {
 		return 0;
 	}
-	switch (type_.InternalType()) {
-	case PhysicalType::BOOL:
-		return duckdb::Hash(value_.boolean);
-	case PhysicalType::INT8:
-		return duckdb::Hash(value_.tinyint);
-	case PhysicalType::INT16:
-		return duckdb::Hash(value_.smallint);
-	case PhysicalType::INT32:
-		return duckdb::Hash(value_.integer);
-	case PhysicalType::INT64:
-		return duckdb::Hash(value_.bigint);
-	case PhysicalType::UINT8:
-		return duckdb::Hash(value_.utinyint);
-	case PhysicalType::UINT16:
-		return duckdb::Hash(value_.usmallint);
-	case PhysicalType::UINT32:
-		return duckdb::Hash(value_.uinteger);
-	case PhysicalType::UINT64:
-		return duckdb::Hash(value_.ubigint);
-	case PhysicalType::INT128:
-		return duckdb::Hash(value_.hugeint);
-	case PhysicalType::FLOAT:
-		return duckdb::Hash(value_.float_);
-	case PhysicalType::DOUBLE:
-		return duckdb::Hash(value_.double_);
-	case PhysicalType::INTERVAL:
-		return duckdb::Hash(value_.interval);
-	case PhysicalType::VARCHAR:
-		return duckdb::Hash(string_t(StringValue::Get(*this)));
-	case PhysicalType::STRUCT: {
-		auto &struct_children = StructValue::GetChildren(*this);
-		hash_t hash = 0;
-		for (auto &entry : struct_children) {
-			hash ^= entry.Hash();
-		}
-		return hash;
-	}
-	case PhysicalType::LIST: {
-		auto &list_children = ListValue::GetChildren(*this);
-		hash_t hash = 0;
-		for (auto &entry : list_children) {
-			hash ^= entry.Hash();
-		}
-		return hash;
-	}
-	default:
-		throw InternalException("Unimplemented type for value hash");
-	}
+	Vector input(*this);
+	Vector result(LogicalType::HASH);
+	VectorOperations::Hash(input, result, 1);
+
+	auto data = FlatVector::GetData<hash_t>(result);
+	return data[0];
 }
 
 string Value::ToString() const {
 	if (IsNull()) {
 		return "NULL";
 	}
-	switch (type_.id()) {
-	case LogicalTypeId::BOOLEAN:
-		return value_.boolean ? "True" : "False";
-	case LogicalTypeId::TINYINT:
-		return to_string(value_.tinyint);
-	case LogicalTypeId::SMALLINT:
-		return to_string(value_.smallint);
-	case LogicalTypeId::INTEGER:
-		return to_string(value_.integer);
-	case LogicalTypeId::BIGINT:
-		return to_string(value_.bigint);
-	case LogicalTypeId::UTINYINT:
-		return to_string(value_.utinyint);
-	case LogicalTypeId::USMALLINT:
-		return to_string(value_.usmallint);
-	case LogicalTypeId::UINTEGER:
-		return to_string(value_.uinteger);
-	case LogicalTypeId::UBIGINT:
-		return to_string(value_.ubigint);
-	case LogicalTypeId::HUGEINT:
-		return Hugeint::ToString(value_.hugeint);
-	case LogicalTypeId::UUID:
-		return UUID::ToString(value_.hugeint);
-	case LogicalTypeId::FLOAT:
-		return duckdb_fmt::format("{}", value_.float_);
-	case LogicalTypeId::DOUBLE:
-		return duckdb_fmt::format("{}", value_.double_);
-	case LogicalTypeId::DECIMAL: {
-		auto internal_type = type_.InternalType();
-		auto width = DecimalType::GetWidth(type_);
-		auto scale = DecimalType::GetScale(type_);
-		if (internal_type == PhysicalType::INT16) {
-			return Decimal::ToString(value_.smallint, width, scale);
-		} else if (internal_type == PhysicalType::INT32) {
-			return Decimal::ToString(value_.integer, width, scale);
-		} else if (internal_type == PhysicalType::INT64) {
-			return Decimal::ToString(value_.bigint, width, scale);
-		} else {
-			D_ASSERT(internal_type == PhysicalType::INT128);
-			return Decimal::ToString(value_.hugeint, width, scale);
-		}
-	}
-	case LogicalTypeId::DATE:
-		return Date::ToString(value_.date);
-	case LogicalTypeId::TIME:
-		return Time::ToString(value_.time);
-	case LogicalTypeId::TIMESTAMP:
-		return Timestamp::ToString(value_.timestamp);
-	case LogicalTypeId::TIME_TZ:
-		return Time::ToString(value_.time) + Time::ToUTCOffset(0, 0);
-	case LogicalTypeId::TIMESTAMP_TZ: {
-		// Infinite TSTZ values do not display offsets in PG.
-		auto ret = Timestamp::ToString(value_.timestamp);
-		if (Timestamp::IsFinite(value_.timestamp)) {
-			ret += Time::ToUTCOffset(0, 0);
-		}
-		return ret;
-	}
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return Timestamp::ToString(Timestamp::FromEpochSeconds(value_.timestamp.value));
-	case LogicalTypeId::TIMESTAMP_MS:
-		return Timestamp::ToString(Timestamp::FromEpochMs(value_.timestamp.value));
-	case LogicalTypeId::TIMESTAMP_NS:
-		return Timestamp::ToString(Timestamp::FromEpochNanoSeconds(value_.timestamp.value));
-	case LogicalTypeId::INTERVAL:
-		return Interval::ToString(value_.interval);
-	case LogicalTypeId::JSON:
-	case LogicalTypeId::VARCHAR:
-		return str_value;
-	case LogicalTypeId::BLOB:
-		return Blob::ToString(string_t(str_value));
-	case LogicalTypeId::POINTER:
-		return to_string(value_.pointer);
-	case LogicalTypeId::STRUCT: {
-		string ret = "{";
-		auto &child_types = StructType::GetChildTypes(type_);
-		for (size_t i = 0; i < struct_value.size(); i++) {
-			auto &name = child_types[i].first;
-			auto &child = struct_value[i];
-			ret += "'" + name + "': " + child.ToString();
-			if (i < struct_value.size() - 1) {
-				ret += ", ";
-			}
-		}
-		ret += "}";
-		return ret;
-	}
-	case LogicalTypeId::LIST: {
-		string ret = "[";
-		for (size_t i = 0; i < list_value.size(); i++) {
-			auto &child = list_value[i];
-			ret += child.ToString();
-			if (i < list_value.size() - 1) {
-				ret += ", ";
-			}
-		}
-		ret += "]";
-		return ret;
-	}
-	case LogicalTypeId::MAP: {
-		string ret = "{";
-		auto &key_list = struct_value[0].list_value;
-		auto &value_list = struct_value[1].list_value;
-		for (size_t i = 0; i < key_list.size(); i++) {
-			ret += key_list[i].ToString() + "=" + value_list[i].ToString();
-			if (i < key_list.size() - 1) {
-				ret += ", ";
-			}
-		}
-		ret += "}";
-		return ret;
-	}
-	case LogicalTypeId::ENUM: {
-		auto &values_insert_order = EnumType::GetValuesInsertOrder(type_);
-		uint64_t enum_idx;
-		switch (type_.InternalType()) {
-		case PhysicalType::UINT8:
-			enum_idx = value_.utinyint;
-			break;
-		case PhysicalType::UINT16:
-			enum_idx = value_.usmallint;
-			break;
-		case PhysicalType::UINT32:
-			enum_idx = value_.uinteger;
-			break;
-		case PhysicalType::UINT64:
-			return string((const char *)value_.bigint);
-		default:
-			throw InternalException("ENUM can only have unsigned integers as physical types");
-		}
-		return values_insert_order.GetValue(enum_idx).ToString();
-	}
-	default:
-		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());
-	}
+	return DefaultCastAs(LogicalType::VARCHAR).str_value;
 }
 
 string Value::ToSQLString() const {
@@ -1624,33 +1474,54 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type_, rhs);
 }
 
-bool Value::TryCastAs(const LogicalType &target_type, Value &new_value, string *error_message, bool strict) const {
+bool Value::TryCastAs(CastFunctionSet &set, const LogicalType &target_type, Value &new_value, string *error_message,
+                      bool strict) const {
 	if (type_ == target_type) {
 		new_value = Copy();
 		return true;
 	}
 	Vector input(*this);
 	Vector result(target_type);
-	if (!VectorOperations::TryCast(input, result, 1, error_message, strict)) {
+	if (!VectorOperations::TryCast(set, input, result, 1, error_message, strict)) {
 		return false;
 	}
 	new_value = result.GetValue(0);
 	return true;
 }
 
-Value Value::CastAs(const LogicalType &target_type, bool strict) const {
+bool Value::TryCastAs(ClientContext &context, const LogicalType &target_type, Value &new_value, string *error_message,
+                      bool strict) const {
+	return TryCastAs(CastFunctionSet::Get(context), target_type, new_value, error_message, strict);
+}
+
+bool Value::DefaultTryCastAs(const LogicalType &target_type, Value &new_value, string *error_message,
+                             bool strict) const {
+	CastFunctionSet set;
+	return TryCastAs(set, target_type, new_value, error_message, strict);
+}
+
+Value Value::CastAs(CastFunctionSet &set, const LogicalType &target_type, bool strict) const {
 	Value new_value;
 	string error_message;
-	if (!TryCastAs(target_type, new_value, &error_message, strict)) {
+	if (!TryCastAs(set, target_type, new_value, &error_message, strict)) {
 		throw InvalidInputException("Failed to cast value: %s", error_message);
 	}
 	return new_value;
 }
 
-bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
+Value Value::CastAs(ClientContext &context, const LogicalType &target_type, bool strict) const {
+	return CastAs(CastFunctionSet::Get(context), target_type, strict);
+}
+
+Value Value::DefaultCastAs(const LogicalType &target_type, bool strict) const {
+	CastFunctionSet set;
+	return CastAs(set, target_type, strict);
+}
+
+bool Value::TryCastAs(CastFunctionSet &set, const LogicalType &target_type, bool strict) {
 	Value new_value;
 	string error_message;
-	if (!TryCastAs(target_type, new_value, &error_message, strict)) {
+	if (!TryCastAs(set, target_type, new_value, &error_message, strict)) {
 		return false;
 	}
 	type_ = target_type;
@@ -1660,6 +1531,15 @@ bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
 	struct_value = new_value.struct_value;
 	list_value = new_value.list_value;
 	return true;
+}
+
+bool Value::TryCastAs(ClientContext &context, const LogicalType &target_type, bool strict) {
+	return TryCastAs(CastFunctionSet::Get(context), target_type, strict);
+}
+
+bool Value::DefaultTryCastAs(const LogicalType &target_type, bool strict) {
+	CastFunctionSet set;
+	return TryCastAs(set, target_type, strict);
 }
 
 void Value::Serialize(Serializer &main_serializer) const {
@@ -1794,7 +1674,7 @@ bool Value::NotDistinctFrom(const Value &lvalue, const Value &rvalue) {
 	return ValueOperations::NotDistinctFrom(lvalue, rvalue);
 }
 
-bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
+bool Value::ValuesAreEqual(CastFunctionSet &set, const Value &result_value, const Value &value) {
 	if (result_value.IsNull() != value.IsNull()) {
 		return false;
 	}
@@ -1804,19 +1684,19 @@ bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 	}
 	switch (value.type_.id()) {
 	case LogicalTypeId::FLOAT: {
-		auto other = result_value.CastAs(LogicalType::FLOAT);
+		auto other = result_value.CastAs(set, LogicalType::FLOAT);
 		float ldecimal = value.value_.float_;
 		float rdecimal = other.value_.float_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
 	case LogicalTypeId::DOUBLE: {
-		auto other = result_value.CastAs(LogicalType::DOUBLE);
+		auto other = result_value.CastAs(set, LogicalType::DOUBLE);
 		double ldecimal = value.value_.double_;
 		double rdecimal = other.value_.double_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
 	case LogicalTypeId::VARCHAR: {
-		auto other = result_value.CastAs(LogicalType::VARCHAR);
+		auto other = result_value.CastAs(set, LogicalType::VARCHAR);
 		// some results might contain padding spaces, e.g. when rendering
 		// VARCHAR(10) and the string only has 6 characters, they will be padded
 		// with spaces to 10 in the rendering. We don't do that here yet as we
@@ -1830,10 +1710,18 @@ bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 	}
 	default:
 		if (result_value.type_.id() == LogicalTypeId::FLOAT || result_value.type_.id() == LogicalTypeId::DOUBLE) {
-			return Value::ValuesAreEqual(value, result_value);
+			return Value::ValuesAreEqual(set, value, result_value);
 		}
 		return value == result_value;
 	}
+}
+
+bool Value::ValuesAreEqual(ClientContext &context, const Value &result_value, const Value &value) {
+	return Value::ValuesAreEqual(CastFunctionSet::Get(context), result_value, value);
+}
+bool Value::DefaultValuesAreEqual(const Value &result_value, const Value &value) {
+	CastFunctionSet set;
+	return Value::ValuesAreEqual(set, result_value, value);
 }
 
 } // namespace duckdb

@@ -129,7 +129,7 @@ Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format:
 	if (!stats_is_set) {
 		return Value(LogicalType::VARCHAR);
 	}
-	return ParquetStatisticsUtils::ConvertValue(type, schema_ele, stats).CastAs(LogicalType::VARCHAR);
+	return ParquetStatisticsUtils::ConvertValue(type, schema_ele, stats).DefaultCastAs(LogicalType::VARCHAR);
 }
 
 void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types,

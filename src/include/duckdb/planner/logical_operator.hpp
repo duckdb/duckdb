@@ -77,6 +77,10 @@ public:
 
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
 
+	virtual bool RequireOptimizer() const {
+		return true;
+	}
+
 protected:
 	//! Resolve types for this specific operator
 	virtual void ResolveTypes() = 0;

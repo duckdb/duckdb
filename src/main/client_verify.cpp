@@ -2,6 +2,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -72,6 +73,14 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
 			statement_verifiers.push_back(move(prepared_statement_verifier));
+		}
+	} else {
+		if (db->IsInvalidated()) {
+			for (auto &verifier : statement_verifiers) {
+				if (verifier->materialized_result->HasError()) {
+					return verifier->materialized_result->GetErrorObject();
+				}
+			}
 		}
 	}
 

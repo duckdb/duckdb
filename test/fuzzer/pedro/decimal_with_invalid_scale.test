@@ -1,0 +1,6 @@
+# name: test/fuzzer/pedro/decimal_with_invalid_scale.test
+# group: [pedro]
+
+# scale is bigger than width, and both these numbers are ginormous
+statement error
+CREATE TABLE x(x DECIMAL(38763269, 77914819));
