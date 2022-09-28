@@ -826,10 +826,8 @@ endif()
 # build out-of-tree extensions on demand
 if(NOT "${EXTERNAL_EXTENSION_DIRECTORIES}" STREQUAL "")
   separate_arguments(EXTERNAL_EXTENSION_DIRECTORIES)
-  message(FATAL ${EXTERNAL_EXTENSION_DIRECTORIES})
 
   foreach(EXTERNAL_EXTENSION_DIRECTORY IN LISTS EXTERNAL_EXTENSION_DIRECTORIES)
-      message(FATAL ${EXTERNAL_EXTENSION_DIRECTORY})
 
     # the build path seems to get ignored on windows in just the right way. no idea why.
     get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
