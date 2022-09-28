@@ -110,11 +110,6 @@ void Leaf::Merge(bool &has_constraint, Node *&l_node, Node *&r_node) {
 	if (has_constraint && l_n->count > 1) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
-
-	// TODO. Does it really though?
-	// this speeds up the destruction of the leafs
-	r_n->count = 0;
-	r_n->row_ids.reset(nullptr);
 }
 
 } // namespace duckdb
