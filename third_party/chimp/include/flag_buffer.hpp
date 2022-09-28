@@ -68,8 +68,8 @@ public:
 		}
 		counter++;
 	}
-	uint8_t Extract() {
-		uint8_t result = (buffer[counter >> 2] & flag_masks[counter & 3]) >> flag_shifts[counter & 3];
+	inline uint8_t Extract() {
+		const uint8_t result = (buffer[counter >> 2] & flag_masks[counter & 3]) >> flag_shifts[counter & 3];
 		counter++;
 		return result;
 	}

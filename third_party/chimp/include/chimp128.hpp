@@ -304,7 +304,7 @@ public:
 			uint16_t index;
 			uint8_t leading_zeros;
 			uint16_t significant_bits;
-			uint16_t temp = state.input.template ReadValue<uint16_t, INITIAL_FILL>();
+			const uint16_t temp = state.input.template ReadValue<uint16_t, INITIAL_FILL>();
 			UnpackPackedData(temp, index, leading_zeros, significant_bits);
 			state.leading_zeros = LEADING_REPRESENTATION[leading_zeros];
 			if (significant_bits == 0) {

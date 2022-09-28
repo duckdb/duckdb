@@ -46,10 +46,16 @@ public:
 		return result;
 	}
 
-	template <>
-	uint16_t ReadValue<uint16_t, 16>() {
+	// Need this because this pointer is not guaranteed to be aligned on a 2-byte boundary
+	__attribute__((no_sanitize("alignment")))
+	inline uint16_t ReadShort() {
 		index += 2;
 		return *(uint16_t*)(buffer + index - 2);
+	}
+
+	template <>
+	uint16_t ReadValue<uint16_t, 16>() {
+		return ReadShort();
 	}
 
 	template <class T> 
