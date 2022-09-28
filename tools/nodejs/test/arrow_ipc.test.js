@@ -2,8 +2,8 @@ var duckdb = require('..');
 var assert = require('assert');
 var arrow = require('apache-arrow')
 
-const build = 'debug';
-// const build = 'release';
+// const build = 'debug';
+const build = 'release';
 const extension_path = `../../build/${build}/extension/arrow/arrow.duckdb_extension`;
 
 describe('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
@@ -29,15 +29,15 @@ describe('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
         const result = await conn.arrowIPCStream('SELECT * FROM range(1001, 2001) tbl(i)');
 
         // Materialize returned iterator into list of Uint8Arrays containing the ipc stream
-        const fully_materialized = await result.toArray();
+        const ipc_buffers = await result.toArray();
 
         //! NOTE: We can now create an Arrow RecordBatchReader and Table from the materialized stream
-        // const reader = await arrow.RecordBatchReader.from(fully_materialized);
+        // const reader = await arrow.RecordBatchReader.from(ipc_buffers);
         // const table = arrow.tableFromIPC(reader);
         // console.log(table.toArray());
 
         // Now we can query the ipc buffer using DuckDB by providing an object with an alias and the materialized ipc buffers
-        db.scanArrowIpc(`SELECT avg(i) as average, count(1) as total FROM ipc_table;`, { ipc_table: fully_materialized }, function(err, result) {
+        db.scanArrowIpc(`SELECT avg(i) as average, count(1) as total FROM ipc_table;`, { ipc_table: ipc_buffers }, function(err, result) {
             if (err) {
                 throw err;
             }
@@ -48,16 +48,16 @@ describe('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
     it('Joining 2 IPC-based tables in DuckDB', async () => {
         // Insert first table
         const result1 = await conn.arrowIPCStream('SELECT * FROM range(1001, 2001) tbl(i)');
-        const fully_materialized1 = await result1.toArray();
+        const ipc_buffers1 = await result1.toArray();
 
         // Insert second table
         const result2 = await conn.arrowIPCStream('SELECT * FROM range(1999, 3000) tbl(i)');
-        const fully_materialized2 = await result2.toArray();
+        const ipc_buffers2 = await result2.toArray();
 
         // Construct the materialized tables object for scanning with DuckDB
         const ipc_tables = {
-            table1: fully_materialized1,
-            table2: fully_materialized2
+            table1: ipc_buffers1,
+            table2: ipc_buffers2
         };
 
         // NOTE: currently this query does a slightly hacky find+replace of the keys of the ipc_tables JS object in
@@ -110,30 +110,24 @@ describe('[Benchmark] single int column load (50M tuples)',() => {
         const batches = [];
 
         const result = await conn.arrowIPCStream('SELECT * FROM test;');
-        const fully_materialized = await result.toArray();
-        const reader = await arrow.RecordBatchReader.from(fully_materialized);
+        const ipc_buffers = await result.toArray();
+        const reader = await arrow.RecordBatchReader.from(ipc_buffers);
         const table = arrow.tableFromIPC(reader);
 
         assert.equal(table.numRows, column_size);
     });
 });
 
-describe('[Benchmark] TPC-H SF1 lineitem.parquet', () => {
-	// Config
-    // const tpch_q06 = "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date) AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity < 24;"
-    const simple_query = "select sum(l_orderkey) as sum_orderkey FROM lineitem";
-
-	const expected_rows = 60175;
-	const expected_orderkey_sum = 1802759573;
-	const parquet_file_path = "/tmp/lineitem_sf0_01.parquet";
-	// const expected_rows = 6001215;
-    // const expected_orderkey_sum = 18005322964949;
-	// const parquet_file_path = "/tmp/lineitem_sf1.parquet";
+describe('[Benchmark] TPC-H lineitem.parquet', () => {
+    const sql = "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date) AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity < 24;"
+	const parquet_file_path_sf0_01 = "/tmp/lineitem_sf0_01.parquet";
+	const parquet_file_sf1 = "/tmp/lineitem_sf1.parquet";
+    const tpch_answer_sf0_01 = [{revenue: 1193053.2253}];
+    const tpch_answer_sf1 = [{revenue: 123141078.2283}];
 
     // Which query to run
-    // const sql = tpch_q06;
-    const sql = simple_query;
-
+    const parquet_file_path = parquet_file_path_sf0_01;
+    const answer = tpch_answer_sf0_01;
 
 	let db;
 	let conn;
@@ -151,20 +145,20 @@ describe('[Benchmark] TPC-H SF1 lineitem.parquet', () => {
 
     it('lineitem.parquet -> DuckDB -> arrow IPC -> query from DuckDB', async () => {
         const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
-        const fully_materialized = await result.toArray();
+        const ipc_buffers = await result.toArray();
 
         // We can now create a RecordBatchReader & Table from the materialized stream
-        const reader = await arrow.RecordBatchReader.from(fully_materialized);
+        const reader = await arrow.RecordBatchReader.from(ipc_buffers);
         const table = arrow.tableFromIPC(reader);
 
         const query = sql.replace("lineitem", "my_arrow_ipc_stream");
         await new Promise((resolve, reject) => {
-            db.scanArrowIpc(query, {"my_arrow_ipc_stream" : fully_materialized} , function (err, result) {
+            db.scanArrowIpc(query, {"my_arrow_ipc_stream" : ipc_buffers} , function (err, result) {
                 if (err) {
                     reject(err)
                 }
 
-                assert.deepEqual(result, [{sum_orderkey: expected_orderkey_sum}]);
+                assert.deepEqual(result, answer);
                 resolve();
             })
         });
@@ -181,7 +175,7 @@ describe('[Benchmark] TPC-H SF1 lineitem.parquet', () => {
                 throw err;
             }
 
-            assert.deepEqual(result, [{sum_orderkey: expected_orderkey_sum}]);
+            assert.deepEqual(result, answer);
             done()
         });
     });
@@ -190,6 +184,7 @@ describe('[Benchmark] TPC-H SF1 lineitem.parquet', () => {
 describe('Validate with TPCH lineitem SF0.01', () => {
     const parquet_file_path = "/tmp/lineitem_sf0_01.parquet";
 
+    // `table_name` in these queries will be replaced by either the parquet file directly, or the ipc buffer
     const queries = [
         "select count(*) from table_name LIMIT 10;",
         "select sum(l_orderkey) as sum_orderkey FROM table_name",
@@ -232,12 +227,12 @@ describe('Validate with TPCH lineitem SF0.01', () => {
 
             // Secondly copy parquet file completely into Arrow IPC format
             const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
-            const fully_materialized = await result.toArray();
+            const ipc_buffers = await result.toArray();
 
             // Now re-run query on Arrow IPC stream
-            const reader = await arrow.RecordBatchReader.from(fully_materialized);
+            const reader = await arrow.RecordBatchReader.from(ipc_buffers);
             await new Promise((resolve, reject) => {
-                db.scanArrowIpc(query, { table_name: fully_materialized }, function (err, result) {
+                db.scanArrowIpc(query, { table_name: ipc_buffers }, function (err, result) {
                     if (err) {
                         reject(err)
                     }

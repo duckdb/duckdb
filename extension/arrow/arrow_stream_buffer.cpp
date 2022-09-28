@@ -46,13 +46,6 @@ std::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowIPCStreamBufferReader::Cre
     auto buffer = reinterpret_cast<std::shared_ptr<ArrowIPCStreamBuffer>*>(buffer_ptr);
     auto reader = std::make_shared<ArrowIPCStreamBufferReader>(*buffer);
 
-	// TODO we should handle pushdown here i think?
-	// - Filter pushdown on top of IPC makes not a lot of sense as there are no statistics?
-	// - Projection pushdown does make sense, we should be able to use the projected columns from the ArrowStreamParameters
-	// 		- However im not sure where to pass this, the StreamDecoder does have a option for it, also the RecordBatchStreamReader,
-	//        seems to, but im not really sure yet how this would work. We could re-decode the stream with the projection pushdown
-	//        but it seems like there should be a better way?
-
     // Create arrow stream
     auto stream_wrapper = duckdb::make_unique<duckdb::ArrowArrayStreamWrapper>();
     stream_wrapper->arrow_array_stream.release = nullptr;
@@ -89,6 +82,6 @@ void ArrowIPCStreamBufferReader::GetSchema(uintptr_t buffer_ptr, duckdb::ArrowSc
 }
 
 /// Constructor
-BufferingArrowIPCStreamDecoder::BufferingArrowIPCStreamDecoder(std::shared_ptr<ArrowIPCStreamBuffer> buffer) : buffer_(buffer), arrow::ipc::StreamDecoder(buffer) {}
+BufferingArrowIPCStreamDecoder::BufferingArrowIPCStreamDecoder(std::shared_ptr<ArrowIPCStreamBuffer> buffer) : arrow::ipc::StreamDecoder(buffer), buffer_(buffer) {}
 
 }  // namespace duckdb

@@ -11,11 +11,6 @@ add_library(arrow_extension STATIC arrow-extension.cpp arrow_stream_buffer.cpp)
 set(INGORE_WARNINGS OFF)
 build_loadable_extension(arrow arrow-extension.cpp arrow_stream_buffer.cpp ${IGNORE_WARNINGS})
 
-# set arrow path
-set(ARROW_PATH /opt/homebrew/Cellar/apache-arrow/9.0.0_1)
-set(ARROW_INCLUDE /opt/homebrew/Cellar/apache-arrow/9.0.0_1/include)
-set(Lz4_SOURCE /opt/homebrew/Cellar/lz4/1.9.4)
-
 find_package(Arrow REQUIRED)
 target_link_libraries(arrow_loadable_extension arrow_shared)
 target_link_libraries(arrow_extension arrow_shared)
