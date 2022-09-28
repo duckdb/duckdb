@@ -1,5 +1,5 @@
-# name: test/sql/storage/compression/string/large.test
-# description: Test large storage with string compression (many row groups
+# name: test/sql/storage/compression/string/large.test_slow
+# description: Test large storage with string compression (many row groups)
 # group: [string]
 
 # load the DB from disk
