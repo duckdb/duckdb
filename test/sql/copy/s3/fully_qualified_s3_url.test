@@ -94,15 +94,15 @@ SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1
 statement ok
 SET s3_region='eu-west-1';
 
-#test endpoint param
-# statement ok
-# SET s3_endpoint='false_endpoint';
+# test endpoint param
+statement ok
+SET s3_endpoint='false_endpoint';
 
-# statement ok
-# SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_endpoint=duckdb-minio.com:9000" LIMIT 3
+statement ok
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_endpoint=duckdb-minio.com:9000" LIMIT 3
 
-# statement ok
-# SET s3_endpoint='duckdb-minio.com:9000';
+statement ok
+SET s3_endpoint='duckdb-minio.com:9000';
 
 #test secret_access_key
 statement ok
@@ -139,14 +139,14 @@ statement ok
 SET s3_url_style='path';
 
 # test combinations
-# statement ok
-# SET s3_access_key_id='false_id'; SET s3_region='false_region';
+statement ok
+SET s3_access_key_id='false_id'; SET s3_region='false_region';
 
-# statement ok
-# SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1&s3_access_key_id=minio_duckdb_user&s3_endpoint=duckdb-minio.com:9000" LIMIT 3
+statement ok
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1&s3_access_key_id=minio_duckdb_user&s3_endpoint=duckdb-minio.com:9000" LIMIT 3
 
-# statement ok
-# SET s3_access_key_id='minio_duckdb_user'; SET s3_region='eu-west-1';
+statement ok
+SET s3_access_key_id='minio_duckdb_user'; SET s3_region='eu-west-1';
 
 # test faulty input
 statement error

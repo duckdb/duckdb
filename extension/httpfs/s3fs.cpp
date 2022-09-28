@@ -616,7 +616,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::PutRequest(FileHandle &handle, string 
 
 unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
 	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
-	// url = url.substr(0, url.find_last_of('?'));
+	url = url.substr(0, url.find_last_of('?'));
 	auto parsed_url = S3UrlParse(url, auth_params);
 	string full_url = get_full_s3_url(auth_params, parsed_url);
 	auto headers = create_s3_header(parsed_url.path, parsed_url.query_param, parsed_url.host, "s3", "HEAD", auth_params,
