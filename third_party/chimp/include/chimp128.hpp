@@ -12,14 +12,17 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "chimp_utils.hpp"
-#include "byte_writer.hpp"
 #include "leading_zero_buffer.hpp"
 #include "flag_buffer.hpp"
-#include "byte_reader.hpp"
 #include "ring_buffer.hpp"
-#include <assert.h>
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/likely.hpp"
+
+//#include "byte_writer.hpp"
+//#include "byte_reader.hpp"
+
+#include "bit_reader_optimized.hpp"
+#include "output_bit_stream.hpp"
 
 namespace duckdb_chimp {
 
@@ -57,7 +60,7 @@ struct Chimp128CompressionState {
 		flag_buffer.Reset();
 	}
 
-	ByteWriter<EMPTY>						output; //The stream to write to
+	OutputBitStream<EMPTY>					output; //The stream to write to
 	LeadingZeroBuffer<EMPTY>				leading_zero_buffer;
 	FlagBuffer<EMPTY>						flag_buffer;
 	RingBuffer								ring_buffer; //! The ring buffer that holds the previous values
@@ -188,7 +191,6 @@ public:
 			}
 		}
 		// Byte-align every value we write to the output
-		state.output.ByteAlign();
 		state.ring_buffer.Insert(in);
 	}
 };
@@ -234,7 +236,7 @@ public:
 		return trailing_zeros;
 	}
 
-	ByteReader 					input;
+	BitReader 					input;
 	//LeadingZeroBuffer<false>	leading_zero_buffer;
 	//FlagBuffer<false>			flag_buffer;
 	uint8_t 					leading_zeros;
@@ -282,7 +284,7 @@ public:
 	}
 
 	static inline RETURN_TYPE LoadFirst(Chimp128DecompressionState& state) {
-		RETURN_TYPE result = state.input.template ReadValue<RETURN_TYPE>();
+		RETURN_TYPE result = state.input.template ReadValue<RETURN_TYPE, sizeof(RETURN_TYPE) * __CHAR_BIT__>();
 		state.ring_buffer.Insert<true>(result);
 		state.first = false;
 		state.reference_value = result;
@@ -293,11 +295,14 @@ public:
 		static const constexpr uint8_t LEADING_REPRESENTATION[] = {
 			0, 8, 12, 16, 18, 20, 22, 24
 		};
+		//static thread_local uint64_t flag_count[4] = {0};
+		//flag_count[flag]++;
+		//printf("FLAG[%u] - total_count: %llu\n", (uint32_t)flag, (uint64_t)flag_count[flag]);
 
 		switch (flag) {
 		case VALUE_IDENTICAL: {
 			//! Value is identical to previous value
-			auto index = state.input.template ReadValue<uint8_t>();
+			auto index = state.input.template ReadValue<uint8_t, 7>();
 			RETURN_TYPE result = state.ring_buffer.Value(index);
 			state.reference_value = result;
 			state.ring_buffer.Insert(result);
@@ -307,29 +312,38 @@ public:
 			uint16_t index;
 			uint8_t leading_zeros;
 			uint16_t significant_bits;
-			const uint16_t temp = state.input.template ReadValue<uint16_t>();
+			const uint16_t temp = state.input.template ReadValue<uint16_t, sizeof(uint16_t) * __CHAR_BIT__>();
 			UnpackPackedData(temp, index, leading_zeros, significant_bits);
 			state.leading_zeros = LEADING_REPRESENTATION[leading_zeros];
 			if (significant_bits == 0) {
 				significant_bits = 64;
 			}
-			state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
-			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros() - state.TrailingZeros());
-			result <<= state.TrailingZeros();
+			state.trailing_zeros = BIT_SIZE - significant_bits - state.leading_zeros;
+			const auto bits_to_read = BIT_SIZE - state.leading_zeros - state.trailing_zeros;
+			//static thread_local uint64_t total_bitcount_read = 0;
+			//static thread_local uint64_t bits_to_read_count[65] = {0};
+			//static thread_local uint64_t total_read_count = 0;
+			//bits_to_read_count[bits_to_read]++;
+			//total_bitcount_read += bits_to_read;
+			//total_read_count++;
+			//printf("BITS_READ[%u] - count: %llu\n", (uint32_t)bits_to_read, bits_to_read_count[bits_to_read]);
+			//printf("[%llu] - TOTAL BITS READ: %llu\n", total_read_count, total_bitcount_read);
+			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(bits_to_read);
+			result <<= state.trailing_zeros;
 			result ^= state.ring_buffer.Value(index);
 			state.reference_value = result;
 			state.ring_buffer.Insert(result);
 			return result;
 		}
 		case LEADING_ZERO_EQUALITY: {
-			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
+			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.leading_zeros);
 			result ^= state.reference_value;
 			state.reference_value = result;
 			state.ring_buffer.Insert(result);
 			return result;
 		}
 		case LEADING_ZERO_LOAD: {
-			auto leading_zero = leading_zeros[leading_zero_index++];
+			const auto leading_zero = leading_zeros[leading_zero_index++];
 			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(BIT_SIZE - leading_zero);
 			result ^= state.reference_value;
 			state.reference_value = result;

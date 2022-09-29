@@ -38,6 +38,9 @@ public:
 	static constexpr uint8_t INTERNAL_TYPE_BITSIZE = sizeof(INTERNAL_TYPE) * 8;
 
 	size_t BytesWritten() const {
+		if (EMPTY) {
+			return (bits_written >> 3) + ((bits_written & 7) != 0);
+		}
 		return (bits_written >> 3) + ((bits_written & 7) != 0);
 	}
 	
@@ -46,13 +49,6 @@ public:
 			//the bit buffer is empty, nothing to write
 			WriteToStream();
 		}
-	}
-
-	void ByteAlign() {
-		// Skip the last bits of the current byte
-		// Does nothing if already byte-aligned
-		free_bits -= (free_bits & 7);
-		WriteToStream();
 	}
 
 	void	SetStream(uint8_t* output_stream) {
@@ -74,7 +70,7 @@ public:
 	template <class T, uint8_t VALUE_SIZE>
 	void WriteValue(T value) {
 		//std::cout << "WRITE: " << (uint64_t)value << " | SIZE: " << (uint64_t)VALUE_SIZE << std::endl;
-		bits_written += 8 * ((VALUE_SIZE >> 3) + ((VALUE_SIZE & 7) != 0));
+		bits_written += VALUE_SIZE;
 		if (EMPTY) {
 			return;
 		}
@@ -111,7 +107,7 @@ public:
 	}
 	template <class T>
 	void WriteValue(T value, const uint8_t &value_size) {
-		bits_written += 8 * ((value_size >> 3) + ((value_size & 7) != 0));
+		bits_written += value_size;
 		if (EMPTY) {
 			return;
 		}
@@ -171,9 +167,7 @@ private:
 		stream[stream_index++] = value;
 	}
 	void WriteToStream() {
-		if (!EMPTY) {
-			stream[stream_index++] = current;
-		}
+		stream[stream_index++] = current;
 		current = 0;
 		free_bits = INTERNAL_TYPE_BITSIZE;
 	}

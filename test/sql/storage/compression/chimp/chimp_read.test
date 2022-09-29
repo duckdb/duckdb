@@ -18,7 +18,7 @@ CREATE TABLE temperatures (
 );
 
 statement ok
-INSERT INTO temperatures SELECT temp FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv' t(temp), range(1);
+INSERT INTO temperatures SELECT temp FROM 'benchmark/trainbenchmark/float_datasets/city_temperature_small.csv' t(temp), range(1);
 
 statement ok
 CHECKPOINT;
@@ -32,7 +32,7 @@ statement ok
 PRAGMA force_compression='uncompressed';
 
 statement ok
-INSERT INTO reference_temperatures SELECT temp FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv' t(temp), range(1);
+INSERT INTO reference_temperatures SELECT temp FROM 'benchmark/trainbenchmark/float_datasets/city_temperature_small.csv' t(temp), range(1);
 
 statement ok
 checkpoint;
