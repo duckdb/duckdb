@@ -132,7 +132,7 @@ public:
 	__attribute__((no_sanitize("alignment")))
 	inline uint8_t Extract() {
 		const auto buffer_idx = BLOCK_IDX;
-		auto const temp = *(uint32_t*)(buffer + buffer_idx);
+		auto const temp = Load<uint32_t>(buffer + buffer_idx);
 
 		const uint8_t result = (temp & leading_zero_masks[counter & 7]) >> leading_zero_shifts[counter & 7];
 		counter++;

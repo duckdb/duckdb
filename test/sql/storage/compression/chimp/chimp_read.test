@@ -10,12 +10,15 @@ statement ok
 PRAGMA force_compression='chimp';
 
 statement ok
+PRAGMA threads=1;
+
+statement ok
 CREATE TABLE temperatures (
 	temperature DOUBLE
 );
 
 statement ok
-COPY temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature_small.csv'
+INSERT INTO temperatures SELECT temp FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv' t(temp), range(1);
 
 statement ok
 CHECKPOINT;
@@ -29,7 +32,7 @@ statement ok
 PRAGMA force_compression='uncompressed';
 
 statement ok
-COPY reference_temperatures FROM 'benchmark/trainbenchmark/float_datasets/city_temperature_small.csv';
+INSERT INTO reference_temperatures SELECT temp FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv' t(temp), range(1);
 
 statement ok
 checkpoint;

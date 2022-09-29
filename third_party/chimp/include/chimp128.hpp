@@ -233,8 +233,8 @@ public:
 	}
 
 	ByteReader 					input;
-	LeadingZeroBuffer<false>	leading_zero_buffer;
-	FlagBuffer<false>			flag_buffer;
+	//LeadingZeroBuffer<false>	leading_zero_buffer;
+	//FlagBuffer<false>			flag_buffer;
 	uint8_t 					leading_zeros;
 	uint8_t 					trailing_zeros;
 	uint64_t 					reference_value = 0;
@@ -270,12 +270,12 @@ public:
 		significant_bits = packed_data & SIGNIFICANT_MASK;
 	}
 
-	static inline RETURN_TYPE Load(RETURN_TYPE &value, Chimp128DecompressionState& state) {
+	static inline bool Load(RETURN_TYPE &value, const uint8_t& flag, const uint8_t &leading_zero, Chimp128DecompressionState& state) {
 		if (state.first) {
 			return LoadFirst(value, state);
 		}
 		else {
-			return DecompressValue(value, state);
+			return DecompressValue(value, flag, leading_zero, state);
 		}
 	}
 
@@ -284,15 +284,20 @@ public:
 		state.ring_buffer.Insert<true>(value);
 		state.first = false;
 		state.reference_value = value;
-		return true;
+		return false;
 	}
 
-	static inline bool DecompressValue(RETURN_TYPE &value, Chimp128DecompressionState& state) {
+	static inline bool DecompressValue(RETURN_TYPE &value, const uint8_t& flag, const uint8_t &leading_zero, Chimp128DecompressionState& state) {
 		alignas(8) static constexpr uint8_t LEADING_REPRESENTATION[] = {
 			0, 8, 12, 16, 18, 20, 22, 24
 		};
+		static thread_local uint64_t counter = 0;
+		if (counter++ == 434085) {
+			value = value + 5;
+		}
 
-		auto flag = state.flag_buffer.Extract();
+
+		bool leading_zero_used = false;
 		switch (flag) {
 		case VALUE_IDENTICAL: {
 			//! Value is identical to previous value
@@ -322,8 +327,8 @@ public:
 			break;
 		}
 		case LEADING_ZERO_LOAD: {
-			const auto deserialized_leading_zeros = state.leading_zero_buffer.Extract();
-			state.SetLeadingZeros(LEADING_REPRESENTATION[deserialized_leading_zeros]);
+			leading_zero_used = true;
+			state.SetLeadingZeros(LEADING_REPRESENTATION[leading_zero]);
             value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
             value ^= state.reference_value;
 			break;
@@ -334,7 +339,7 @@ public:
 		}
 		state.reference_value = value;
 		state.ring_buffer.Insert(value);
-		return true;
+		return leading_zero_used;
 	}
 
 };
