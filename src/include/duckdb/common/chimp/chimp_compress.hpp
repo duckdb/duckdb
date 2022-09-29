@@ -65,6 +65,7 @@ public:
 		// These buffers are recycled for every group, so they only have to be set once
 		state.AssignLeadingZeroBuffer((uint8_t *)leading_zero_blocks);
 		state.AssignFlagBuffer((uint8_t *)flags);
+		state.AssignPackedDataBuffer((uint16_t *)packed_data_blocks);
 
 		state.data_ptr = (void *)this;
 	}
@@ -76,6 +77,7 @@ public:
 	idx_t group_idx = 0;
 	uint8_t flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE / 4];
 	uint8_t leading_zero_blocks[ChimpPrimitives::LEADING_ZERO_BLOCK_BUFFERSIZE];
+	uint16_t packed_data_blocks[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
 
 	// Ptr to next free spot in segment;
 	data_ptr_t segment_data;
@@ -110,7 +112,12 @@ public:
 	}
 
 	idx_t CurrentGroupMetadataSize() const {
-		return (3 * state.chimp_state.leading_zero_buffer.BlockCount()) + state.chimp_state.flag_buffer.BytesUsed();
+		idx_t metadata_size = 0;
+
+		metadata_size += 3 * state.chimp_state.leading_zero_buffer.BlockCount();
+		metadata_size += state.chimp_state.flag_buffer.BytesUsed();
+		metadata_size += 2 * state.chimp_state.packed_data_buffer.index;
+		return metadata_size;
 	}
 
 	// The current segment has enough space to fit this new value
@@ -186,16 +193,33 @@ public:
 		// FIXME: This is max 256, which BARELY doesn't fit into a single byte
 		// instead we could use 0 to denote 256, saving an extra byte every (CHIMP_SEQUENCE_SIZE)1024 values
 		const uint16_t flag_bytes = state.chimp_state.flag_buffer.BytesUsed();
+		const uint16_t flag_count = state.chimp_state.flag_buffer.FlagCount();
 		metadata_ptr -= sizeof(uint16_t);
 		metadata_byte_size += sizeof(uint16_t);
 		// Store how many flag bytes there are
 		// We cant use the 'count' of the segment to figure this out, because NULLs increase count
-		Store<uint16_t>(flag_bytes, metadata_ptr);
+		Store<uint16_t>(flag_count, metadata_ptr);
 
 		metadata_ptr -= flag_bytes;
 		metadata_byte_size += flag_bytes;
 		// Store the flags (4 per byte) for this group
 		memcpy((void *)metadata_ptr, (void *)flags, flag_bytes);
+
+		// Store the packed data blocks (2 bytes each)
+		// We dont need to store an extra count for this,
+		// as the count can be derived from unpacking the flags and counting the '1' flags
+
+		// FIXME: this does stop us from skipping groups with point queries,
+		// because the metadata has a variable size
+		const uint16_t packed_data_blocks_count = state.chimp_state.packed_data_buffer.index;
+		metadata_ptr -= packed_data_blocks_count * 2;
+		metadata_byte_size += packed_data_blocks_count * 2;
+		if ((uint64_t)metadata_ptr & 1) {
+			// Align on a two-byte boundary
+			metadata_ptr--;
+			metadata_byte_size++;
+		}
+		memcpy((void *)metadata_ptr, (void *)packed_data_blocks, packed_data_blocks_count * sizeof(uint16_t));
 
 		state.chimp_state.Reset();
 		group_idx = 0;

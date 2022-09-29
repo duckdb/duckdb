@@ -59,11 +59,13 @@ struct Chimp128CompressionState {
 		SetLeadingZeros();
 		leading_zero_buffer.Reset();
 		flag_buffer.Reset();
+		packed_data_buffer.Reset();
 	}
 
 	OutputBitStream<EMPTY>					output; //The stream to write to
 	LeadingZeroBuffer<EMPTY>				leading_zero_buffer;
 	FlagBuffer<EMPTY>						flag_buffer;
+	PackedDataBuffer<EMPTY>					packed_data_buffer;
 	RingBuffer								ring_buffer; //! The ring buffer that holds the previous values
 	uint8_t									previous_leading_zeros; //! The leading zeros of the reference value
 	bool									first = true;
@@ -172,7 +174,8 @@ public:
 				//! FIXME: it feels like this would produce '11', indicating LEADING_ZERO_LOAD
 				//! Instead of indicating TRAILING_EXCEEDS_THRESHOLD '01'
 				auto result = 512U * (RingBuffer::RING_SIZE + previous_index) + BIT_SIZE * LEADING_REPRESENTATION[leading_zeros] + significant_bits;
-				state.output.template WriteValue<uint16_t, 16>((uint16_t)(result & 0xFFFF));
+				state.packed_data_buffer.Insert(result & 0xFFFF);
+				//state.output.template WriteValue<uint16_t, 16>((uint16_t)(result & 0xFFFF));
 				state.output.template WriteValue<uint64_t>(xor_result >> trailing_zeros, significant_bits);
 				state.SetLeadingZeros();
 			}
@@ -258,20 +261,18 @@ public:
 	static constexpr uint8_t INITIAL_FILL = INDEX_BITS_SIZE + LEADING_BITS_SIZE + SIGNIFICANT_BITS_SIZE;
 	static constexpr uint8_t BIT_SIZE = sizeof(uint64_t) * 8;
 
-	//|----------------|	//! INITIAL_FILL(16) bits
-	// IIIIIII				//! Index (7 bits, shifted by 9)
-	//        LLL			//! LeadingZeros (3 bits, shifted by 6)
-	//           SSSSSS 	//! SignificantBits (6 bits)
-	static inline void UnpackPackedData(uint16_t packed_data, uint16_t& index, uint8_t& leading_zeros, uint16_t& significant_bits) {
-		return PackedData::Unpack(packed_data, index, leading_zeros, significant_bits);
+
+	static inline void UnpackPackedData(uint16_t packed_data, UnpackedData& dest) {
+		return PackedDataUtils::Unpack(packed_data, dest);
 	}
 
-	static inline RETURN_TYPE Load(uint8_t flag, uint8_t leading_zeros[], uint32_t &leading_zero_index, Chimp128DecompressionState& state) {
+	static inline RETURN_TYPE Load(uint8_t flag, uint8_t leading_zeros[], uint32_t &leading_zero_index,
+	   UnpackedData unpacked_data[], uint32_t& unpacked_index, Chimp128DecompressionState& state) {
 		if (DUCKDB_UNLIKELY(state.first)) {
 			return LoadFirst(state);
 		}
 		else {
-			return DecompressValue(flag, leading_zeros, leading_zero_index, state);
+			return DecompressValue(flag, leading_zeros, leading_zero_index, unpacked_data, unpacked_index, state);
 		}
 	}
 
@@ -283,7 +284,9 @@ public:
 		return result;
 	}
 
-	static inline RETURN_TYPE DecompressValue(uint8_t flag, uint8_t leading_zeros[], uint32_t &leading_zero_index, Chimp128DecompressionState& state) {
+	static inline RETURN_TYPE DecompressValue(uint8_t flag, uint8_t leading_zeros[],
+	   uint32_t &leading_zero_index, UnpackedData unpacked_data[], uint32_t& unpacked_index, 
+	   Chimp128DecompressionState& state) {
 		static const constexpr uint8_t LEADING_REPRESENTATION[] = {
 			0, 8, 12, 16, 18, 20, 22, 24
 		};
@@ -301,16 +304,11 @@ public:
 			return result;
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
-			uint16_t index;
-			uint8_t leading_zeros;
-			uint16_t significant_bits;
-			const uint16_t temp = state.input.template ReadValue<uint16_t, sizeof(uint16_t) * __CHAR_BIT__>();
-			UnpackPackedData(temp, index, leading_zeros, significant_bits);
-			state.leading_zeros = LEADING_REPRESENTATION[leading_zeros];
-			if (significant_bits == 0) {
-				significant_bits = 64;
-			}
-			state.trailing_zeros = BIT_SIZE - significant_bits - state.leading_zeros;
+			const UnpackedData &unpacked = unpacked_data[unpacked_index++];
+			//const uint16_t temp = state.input.template ReadValue<uint16_t, sizeof(uint16_t) * __CHAR_BIT__>();
+			//UnpackPackedData(temp, unpacked);
+			state.leading_zeros = LEADING_REPRESENTATION[unpacked.leading_zero];
+			state.trailing_zeros = BIT_SIZE - unpacked.significant_bits - state.leading_zeros;
 			const auto bits_to_read = BIT_SIZE - state.leading_zeros - state.trailing_zeros;
 			//static thread_local uint64_t total_bitcount_read = 0;
 			//static thread_local uint64_t bits_to_read_count[65] = {0};
@@ -322,7 +320,7 @@ public:
 			//printf("[%llu] - TOTAL BITS READ: %llu\n", total_read_count, total_bitcount_read);
 			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(bits_to_read);
 			result <<= state.trailing_zeros;
-			result ^= state.ring_buffer.Value(index);
+			result ^= state.ring_buffer.Value(unpacked.index);
 			state.reference_value = result;
 			state.ring_buffer.Insert(result);
 			return result;

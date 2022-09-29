@@ -61,6 +61,11 @@ public:
 	void AssignFlagBuffer(uint8_t *flag_out) {
 		chimp_state.flag_buffer.SetBuffer(flag_out);
 	}
+
+	void AssignPackedDataBuffer(uint16_t *packed_data_out) {
+		chimp_state.packed_data_buffer.SetBuffer(packed_data_out);
+	}
+
 	void AssignLeadingZeroBuffer(uint8_t *leading_zero_out) {
 		chimp_state.leading_zero_buffer.SetBuffer(leading_zero_out);
 	}

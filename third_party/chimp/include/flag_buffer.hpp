@@ -73,9 +73,15 @@ public:
 		counter++;
 		return result;
 	}
+	//deprecated
 	uint32_t BytesUsed() const {
 		return (counter >> 2) + ((counter & 3) != 0);
 	}
+
+	uint32_t FlagCount() const {
+		return counter;
+	}
+
 private:
 private:
 	uint32_t counter = 0;

@@ -28,13 +28,6 @@ namespace duckdb {
 
 struct ChimpGroupState {
 public:
-	void Load(uint8_t *packed_flags, uint8_t *packed_leading_zeros, const idx_t &group_size,
-	          const idx_t &leading_zero_block_size) {
-		LoadFlags(packed_flags, group_size);
-		LoadLeadingZeros(packed_leading_zeros, leading_zero_block_size);
-		index = 0;
-		leading_zero_index = 0;
-	}
 	bool Started() const {
 		return !!index;
 	}
@@ -47,8 +40,6 @@ public:
 	idx_t RemainingInGroup() const {
 		return ChimpPrimitives::CHIMP_SEQUENCE_SIZE - index;
 	}
-
-private:
 	static constexpr uint8_t LEADING_REPRESENTATION[] = {0, 8, 12, 16, 18, 20, 22, 24};
 
 	void LoadFlags(uint8_t *packed_data, idx_t group_size) {
@@ -59,6 +50,7 @@ private:
 			flags[1 + i] = flag_buffer.Extract();
 		}
 		max_flags_to_read = group_size;
+		index = 0;
 	}
 	void LoadLeadingZeros(uint8_t *packed_data, idx_t leading_zero_block_size) {
 		duckdb_chimp::LeadingZeroBuffer<false> leading_zero_buffer;
@@ -67,6 +59,23 @@ private:
 			leading_zeros[i] = LEADING_REPRESENTATION[leading_zero_buffer.Extract()];
 		}
 		max_leading_zeros_to_read = leading_zero_block_size;
+		leading_zero_index = 0;
+	}
+
+	idx_t CalculatePackedDataCount() const {
+		D_ASSERT(max_flags_to_read != 0);
+		idx_t count = 0;
+		for (idx_t i = 0; i < max_flags_to_read; i++) {
+			count += flags[1 + i] == duckdb_chimp::TRAILING_EXCEEDS_THRESHOLD;
+		}
+		return count;
+	}
+
+	void LoadPackedData(uint16_t *packed_data, idx_t packed_data_block_count) {
+		for (idx_t i = 0; i < packed_data_block_count; i++) {
+			duckdb_chimp::PackedDataUtils::Unpack(packed_data[i], unpacked_data_blocks[i]);
+		}
+		unpacked_index = 0;
 	}
 
 public:
@@ -74,6 +83,8 @@ public:
 	uint8_t flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
 	uint8_t leading_zeros[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
 	uint32_t leading_zero_index;
+	uint32_t unpacked_index;
+	duckdb_chimp::UnpackedData unpacked_data_blocks[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
 
 private:
 	idx_t max_flags_to_read;
@@ -122,7 +133,8 @@ public:
 		values[0] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::LoadFirst(chimp_state);
 		for (idx_t i = 1; i < group_size; i++) {
 			values[i] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::DecompressValue(
-			    group_state.flags[i], group_state.leading_zeros, group_state.leading_zero_index, chimp_state);
+			    group_state.flags[i], group_state.leading_zeros, group_state.leading_zero_index,
+			    group_state.unpacked_data_blocks, group_state.unpacked_index, chimp_state);
 		}
 		group_state.index += group_size;
 		total_value_count += group_size;
@@ -139,7 +151,7 @@ public:
 		for (idx_t i = 0; i < group_size; i++) {
 			values[i] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::Load(
 			    group_state.flags[group_state.index + i], group_state.leading_zeros, group_state.leading_zero_index,
-			    chimp_state);
+			    group_state.unpacked_data_blocks, group_state.unpacked_index, chimp_state);
 		}
 		group_state.index += group_size;
 		total_value_count += group_size;
@@ -163,17 +175,26 @@ public:
 
 		// Load the leading zero blocks
 		metadata_ptr -= 3 * leading_zero_block_count;
-		auto leading_zero_blocks = metadata_ptr;
+		group_state.LoadLeadingZeros(metadata_ptr, (uint32_t)leading_zero_block_count * 8);
 
-		// Load how many flag bytes there are
+		// Load how many flags there are
 		metadata_ptr -= sizeof(uint16_t);
 		auto size_of_group = Load<uint16_t>(metadata_ptr);
+		const auto flag_byte_count = AlignValue<uint16_t, 4>(size_of_group) / 4;
 
 		// Load the flags
-		metadata_ptr -= size_of_group;
+		metadata_ptr -= flag_byte_count;
 		auto flags = metadata_ptr;
-		group_state.Load(flags, leading_zero_blocks, (uint32_t)size_of_group * 4,
-		                 (uint32_t)leading_zero_block_count * 8);
+		group_state.LoadFlags(flags, size_of_group);
+
+		// Load packed data blocks
+		auto packed_data_block_count = group_state.CalculatePackedDataCount();
+		metadata_ptr -= packed_data_block_count * 2;
+		if ((uint64_t)metadata_ptr & 1) {
+			// Align on a two-byte boundary
+			metadata_ptr--;
+		}
+		group_state.LoadPackedData((uint16_t *)metadata_ptr, packed_data_block_count);
 	}
 
 public:
