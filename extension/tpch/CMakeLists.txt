@@ -8,9 +8,9 @@ add_subdirectory(dbgen)
 
 add_library(tpch_extension STATIC tpch-extension.cpp ${DBGEN_OBJECT_FILES})
 
-set(INGORE_WARNINGS OFF)
+set(PARAMETERS "-warnings")
 build_loadable_extension(tpch tpch-extension.cpp ${DBGEN_OBJECT_FILES}
-                         ${IGNORE_WARNINGS})
+                         ${PARAMETERS})
 
 install(
   TARGETS tpch_extension
