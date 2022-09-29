@@ -83,8 +83,8 @@ private:
 
 private:
 	idx_t index;
-	uint8_t flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
-	uint8_t leading_zeros[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
+	uint8_t flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
+	uint8_t leading_zeros[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
 	uint32_t leading_zero_index;
 
 private:
@@ -117,6 +117,14 @@ public:
 
 	ColumnSegment &segment;
 
+	idx_t LeftInGroup() const {
+		return ChimpPrimitives::CHIMP_SEQUENCE_SIZE - (total_value_count & (ChimpPrimitives::CHIMP_SEQUENCE_SIZE - 1));
+	}
+
+	bool GroupFinished() const {
+		return (total_value_count & (ChimpPrimitives::CHIMP_SEQUENCE_SIZE - 1)) == 0;
+	}
+
 	// Scan a group from the start
 	template <class CHIMP_TYPE>
 	void ScanGroup(CHIMP_TYPE *values, idx_t group_size) {
@@ -134,7 +142,7 @@ public:
 			}
 		}
 		total_value_count += group_size;
-		if ((total_value_count & (ChimpPrimitives::CHIMP_SEQUENCE_SIZE - 1)) == 0) {
+		if (GroupFinished() && total_value_count < segment.count) {
 			LoadGroup();
 		}
 	}
@@ -153,7 +161,7 @@ public:
 			}
 		}
 		total_value_count += group_size;
-		if ((total_value_count & (ChimpPrimitives::CHIMP_SEQUENCE_SIZE - 1)) == 0) {
+		if (GroupFinished() && total_value_count < segment.count) {
 			LoadGroup();
 		}
 	}
@@ -195,9 +203,7 @@ public:
 
 		idx_t to_skip = skip_count;
 		while (to_skip) {
-			const auto left_in_group =
-			    ChimpPrimitives::CHIMP_SEQUENCE_SIZE - (total_value_count & (ChimpPrimitives::CHIMP_SEQUENCE_SIZE - 1));
-			auto skip_size = std::min(to_skip, left_in_group);
+			auto skip_size = std::min(to_skip, LeftInGroup());
 			if (group_state.Started()) {
 				ScanGroup(buffer, skip_size);
 			} else {
@@ -228,10 +234,7 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 
 	auto current_result_ptr = (INTERNAL_TYPE *)(result_data + result_offset);
 
-	const auto left_in_group = ChimpPrimitives::CHIMP_SEQUENCE_SIZE -
-	                           (scan_state.total_value_count & (ChimpPrimitives::CHIMP_SEQUENCE_SIZE - 1));
-
-	auto scan_size = std::min(scan_count, left_in_group);
+	auto scan_size = std::min(scan_count, scan_state.LeftInGroup());
 
 	if (!scan_state.group_state.Started()) {
 		scan_state.template ScanGroup<INTERNAL_TYPE>(current_result_ptr, scan_size);

@@ -12,8 +12,7 @@ PRAGMA force_compression='chimp';
 CREATE TABLE temperatures (
 	temperature DOUBLE
 );
-INSERT INTO temperatures SELECT temp FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv' t(temp), range(1);
-PRAGMA threads=1;
+INSERT INTO temperatures SELECT temp FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv' t(temp), range(28);
 checkpoint;
 
 run
