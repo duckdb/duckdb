@@ -32,10 +32,9 @@ jobs:
 
     - uses: ./.github/actions/ubuntu_16_setup
 
-    - name: Checkout ref
+    - name: Checkout specific DuckDB version
       shell: bash
-      run: |
-        git checkout ${{ inputs.duckdb_ref }}
+      run: git checkout ${{ inputs.duckdb_ref }}
 
     - name: Override extensions.csv
       shell: bash
@@ -78,7 +77,10 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ inputs.duckdb_ref }}
+
+      - name: Checkout specific DuckDB version
+        shell: bash
+        run: git checkout ${{ inputs.duckdb_ref }}
 
       - name: Override extensions.csv
         shell: bash
@@ -121,7 +123,10 @@ jobs:
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
-         ref: ${{ inputs.duckdb_ref }}
+
+     - name: Checkout specific DuckDB version
+       shell: bash
+       run: git checkout ${{ inputs.duckdb_ref }}
 
      - name: Override extensions.csv
        shell: bash
@@ -179,7 +184,10 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-        ref: ${{ inputs.duckdb_ref }}
+
+    - name: Checkout specific DuckDB version
+      shell: bash
+      run: git checkout ${{ inputs.duckdb_ref }}
 
     - name: Override extensions.csv
       shell: bash
