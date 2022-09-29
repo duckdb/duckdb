@@ -356,16 +356,20 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 		// construct the ART of this chunk
 		auto art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
 		auto key_section = KeySection(start_idx, ordered_chunk.size() - 1, 0, 0);
-		auto has_constraint = IsPrimary() || IsUnique();
+		auto has_constraint = IsUnique();
 		Construct(keys, row_ids, art->tree, key_section, has_constraint);
 
 		// merge art into temp_art
-		ART::Merge(temp_art.get(), art.get());
+		if (!temp_art->MergeIndexes(lock, art.get())) {
+			throw ConstraintException("Data contains duplicates on indexed column(s)");
+		}
 	}
 
 	// NOTE: currently this code is only used for index creation, so we can assume that there are no
-	// duplicate violations between the existing index and the new data
-	ART::Merge(this, temp_art.get());
+	// duplicate violations between the existing index and the new data,
+	// so we do not need to revert any changes
+	auto success = this->MergeIndexes(lock, temp_art.get());
+	D_ASSERT(success);
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
@@ -910,15 +914,17 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 //===--------------------------------------------------------------------===//
 // Merge ARTs
 //===--------------------------------------------------------------------===//
-void ART::Merge(ART *l_art, ART *r_art) {
+bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 
-	if (!l_art->tree) {
-		l_art->tree = r_art->tree;
-		r_art->tree = nullptr;
-		return;
+	auto other_art = (ART *)other_index;
+
+	if (!this->tree) {
+		this->tree = other_art->tree;
+		other_art->tree = nullptr;
+		return true;
 	}
 
-	Node::MergeARTs(l_art, r_art);
+	return Node::MergeARTs(this, other_art);
 }
 
 string ART::ToString() {

@@ -97,7 +97,7 @@ public:
 	BlockPointer Serialize(duckdb::MetaBlockWriter &writer) override;
 
 	//! Merge two ARTs
-	static void Merge(ART *l_art, ART *r_art);
+	bool MergeIndexes(IndexLock &state, Index *other_index) override;
 	//! Generate ART keys for an input chunk
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys);
 	//! Returns the string representation of an ART

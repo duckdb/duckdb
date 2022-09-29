@@ -260,7 +260,7 @@ void UpdateParentsOfNodes(Node *&l_node, Node *&r_node, ParentsOfNodes &parents)
 	}
 }
 
-void Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
+bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 
 	// always try to merge the smaller node into the bigger node
 	// because maybe there is enough free space in the bigger node to fit the smaller one
@@ -291,7 +291,7 @@ void Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 	throw InternalException("Invalid node type for right node in merge.");
 }
 
-void ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
+bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 
 	auto &l_node = info.l_node;
 	auto &r_node = info.r_node;
@@ -332,7 +332,7 @@ void ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 			Node::InsertChild(l_node, mismatch_byte, r_node);
 			UpdateParentsOfNodes(l_node, null_parent, parents);
 			r_node = nullptr;
-			return;
+			return true;
 		}
 
 		// recurse
@@ -359,9 +359,10 @@ void ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 	l_node = new_node;
 	UpdateParentsOfNodes(l_node, null_parent, parents);
 	r_node = nullptr;
+	return true;
 }
 
-void Node::MergeAtByte(MergeInfo &info, idx_t depth, idx_t &l_child_pos, idx_t &r_pos, uint8_t &key_byte,
+bool Node::MergeAtByte(MergeInfo &info, idx_t depth, idx_t &l_child_pos, idx_t &r_pos, uint8_t &key_byte,
                        Node *&l_parent, idx_t l_pos) {
 
 	auto r_child = info.r_node->GetChild(*info.r_art, r_pos);
@@ -373,22 +374,22 @@ void Node::MergeAtByte(MergeInfo &info, idx_t depth, idx_t &l_child_pos, idx_t &
 			l_parent->ReplaceChildPointer(l_pos, info.l_node);
 		}
 		info.r_node->ReplaceChildPointer(r_pos, nullptr);
-		return;
+		return true;
 	}
 
 	// recurse
 	auto l_child = info.l_node->GetChild(*info.l_art, l_child_pos);
 	MergeInfo child_info(info.l_art, info.r_art, l_child, r_child);
 	ParentsOfNodes child_parents(info.l_node, l_child_pos, info.r_node, r_pos);
-	ResolvePrefixesAndMerge(child_info, depth + 1, child_parents);
+	return ResolvePrefixesAndMerge(child_info, depth + 1, child_parents);
 }
 
-void Node::MergeARTs(ART *l_art, ART *r_art) {
+bool Node::MergeARTs(ART *l_art, ART *r_art) {
 
 	Node *null_parent = nullptr;
 	MergeInfo info(l_art, r_art, l_art->tree, r_art->tree);
 	ParentsOfNodes parents(null_parent, 0, null_parent, 0);
-	ResolvePrefixesAndMerge(info, 0, parents);
+	return ResolvePrefixesAndMerge(info, 0, parents);
 }
 
 } // namespace duckdb

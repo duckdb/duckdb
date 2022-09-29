@@ -79,7 +79,7 @@ string Leaf::ToString(Node *node) {
 	return str + "]";
 }
 
-void Leaf::Merge(bool &has_constraint, Node *&l_node, Node *&r_node) {
+bool Leaf::Merge(bool &has_constraint, Node *&l_node, Node *&r_node) {
 
 	Leaf *l_n = (Leaf *)l_node;
 	Leaf *r_n = (Leaf *)r_node;
@@ -89,9 +89,11 @@ void Leaf::Merge(bool &has_constraint, Node *&l_node, Node *&r_node) {
 		l_n->Insert(r_n->GetRowId(i));
 	}
 
+	// TODO: Does this have to happen after the Insert or can it happen first thing in this method?
 	if (has_constraint && l_n->count > 1) {
-		throw ConstraintException("Data contains duplicates on indexed column(s)");
+		return false;
 	}
+	return true;
 }
 
 BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
