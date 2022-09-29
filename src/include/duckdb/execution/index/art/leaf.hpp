@@ -31,6 +31,8 @@ public:
 	//! Remove a row_id from a leaf
 	void Remove(row_t row_id);
 
+	//! Returns the string representation of a leaf
+	static string ToString(Node *node);
 	//! Merge two NLeaf nodes
 	static void Merge(bool &has_constraint, Node *&l_node, Node *&r_node);
 

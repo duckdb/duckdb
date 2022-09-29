@@ -69,6 +69,31 @@ void Leaf::Remove(row_t row_id) {
 	}
 }
 
+string Leaf::ToString(Node *node) {
+
+	Leaf *leaf = (Leaf *)node;
+	string str = "Leaf: [";
+	for (idx_t i = 0; i < leaf->count; i++) {
+		str += i == 0 ? to_string(leaf->row_ids[i]) : ", " + to_string(leaf->row_ids[i]);
+	}
+	return str + "]";
+}
+
+void Leaf::Merge(bool &has_constraint, Node *&l_node, Node *&r_node) {
+
+	Leaf *l_n = (Leaf *)l_node;
+	Leaf *r_n = (Leaf *)r_node;
+
+	// append non-duplicate row_ids to l_n
+	for (idx_t i = 0; i < r_n->count; i++) {
+		l_n->Insert(r_n->GetRowId(i));
+	}
+
+	if (has_constraint && l_n->count > 1) {
+		throw ConstraintException("Data contains duplicates on indexed column(s)");
+	}
+}
+
 BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
 	auto block_id = writer.block->id;
 	uint32_t offset = writer.offset;
@@ -95,21 +120,6 @@ Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
 		elements[i] = reader.Read<row_t>();
 	}
 	return new Leaf(move(elements), num_elements, prefix);
-}
-
-void Leaf::Merge(bool &has_constraint, Node *&l_node, Node *&r_node) {
-
-	Leaf *l_n = (Leaf *)l_node;
-	Leaf *r_n = (Leaf *)r_node;
-
-	// append non-duplicate row_ids to l_n
-	for (idx_t i = 0; i < r_n->count; i++) {
-		l_n->Insert(r_n->GetRowId(i));
-	}
-
-	if (has_constraint && l_n->count > 1) {
-		throw ConstraintException("Data contains duplicates on indexed column(s)");
-	}
 }
 
 } // namespace duckdb

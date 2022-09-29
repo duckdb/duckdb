@@ -921,4 +921,11 @@ void ART::Merge(ART *l_art, ART *r_art) {
 	Node::MergeARTs(l_art, r_art);
 }
 
+string ART::ToString() {
+	if (tree) {
+		return tree->ToString(*this);
+	}
+	return "[empty]";
+}
+
 } // namespace duckdb

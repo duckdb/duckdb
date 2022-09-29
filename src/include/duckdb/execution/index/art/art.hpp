@@ -100,6 +100,8 @@ public:
 	static void Merge(ART *l_art, ART *r_art);
 	//! Generate ART keys for an input chunk
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys);
+	//! Returns the string representation of an ART
+	string ToString() override;
 
 private:
 	//! Insert a row id into a leaf node

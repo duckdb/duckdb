@@ -132,6 +132,36 @@ void Node::New(NodeType &type, Node *&node) {
 	}
 }
 
+string Node::ToString(ART &art) {
+
+	string str = "Node";
+	switch (this->type) {
+	case NodeType::NLeaf:
+		return Leaf::ToString(this);
+	case NodeType::N4:
+		str += to_string(Node4::GetSize());
+		break;
+	case NodeType::N16:
+		str += to_string(Node16::GetSize());
+		break;
+	case NodeType::N48:
+		str += to_string(Node48::GetSize());
+		break;
+	case NodeType::N256:
+		str += to_string(Node256::GetSize());
+		break;
+	}
+
+	str += ": [";
+	auto next_pos = GetNextPos(DConstants::INVALID_INDEX);
+	while (next_pos != DConstants::INVALID_INDEX) {
+		auto child = GetChild(art, next_pos);
+		str += "(" + to_string(next_pos) + ", " + child->ToString(art) + ")";
+		next_pos = GetNextPos(next_pos);
+	}
+	return str + "]";
+}
+
 BlockPointer Node::SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, InternalType &internal_type) {
 	// Iterate through children and annotate their offsets
 	vector<BlockPointer> child_offsets;
