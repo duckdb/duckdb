@@ -6,7 +6,7 @@ include_directories(include)
 
 add_library(visualizer_extension STATIC visualizer-extension.cpp)
 set(PARAMETERS "-warnings")
-build_loadable_extension(visualizer visualizer-extension.cpp ${PARAMETERS})
+build_loadable_extension(visualizer ${PARAMETERS} visualizer-extension.cpp)
 install(
   TARGETS visualizer_extension
   EXPORT "${DUCKDB_EXPORT_SET}"

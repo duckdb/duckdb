@@ -11,7 +11,7 @@ set(SQLSMITH_SOURCES sqlsmith-extension.cpp statement_simplifier.cpp
 
 add_library(sqlsmith_extension STATIC ${SQLSMITH_SOURCES})
 set(PARAMETERS "-warnings")
-build_loadable_extension(sqlsmith ${SQLSMITH_SOURCES} ${PARAMETERS})
+build_loadable_extension(sqlsmith ${PARAMETERS} ${SQLSMITH_SOURCES})
 
 install(
   TARGETS sqlsmith_extension

@@ -8,7 +8,7 @@ set(INET_EXTENSION_FILES inet-extension.cpp inet_functions.cpp ipaddress.cpp)
 
 add_library(inet_extension STATIC ${INET_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
-build_loadable_extension(inet ${INET_EXTENSION_FILES} ${PARAMETERS})
+build_loadable_extension(inet ${PARAMETERS} ${INET_EXTENSION_FILES})
 
 install(
   TARGETS inet_extension

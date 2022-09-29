@@ -681,7 +681,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   # remove output_directory
   list(REMOVE_AT FILES 0)
   # remove parameters
-  list(REMOVE_AT FILES -1)
+  list(REMOVE_AT FILES 0)
 
   # parse parameters
   string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
@@ -768,7 +768,7 @@ function(build_loadable_extension NAME PARAMETERS)
   # all parameters after name
   set(FILES ${ARGV})
   list(REMOVE_AT FILES 0)
-  list(REMOVE_AT FILES -1)
+  list(REMOVE_AT FILES 0)
 
   build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
 endfunction()
