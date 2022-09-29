@@ -31,13 +31,9 @@ void ChimpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 	ChimpScanState<T> scan_state(segment);
 	scan_state.Skip(segment, row_id);
 	auto result_data = FlatVector::GetData<INTERNAL_TYPE>(result);
-	auto current_result_ptr = result_data + result_idx;
-
-	if (duckdb_chimp::Chimp128Decompression<INTERNAL_TYPE>::Load(*current_result_ptr, scan_state.group_state.GetFlag(),
-	                                                             scan_state.group_state.GetLeadingZero(),
-	                                                             scan_state.chimp_state)) {
-		scan_state.group_state.IncreaseLeadingZeroIndex();
-	}
+	result_data[result_idx] = duckdb_chimp::Chimp128Decompression<INTERNAL_TYPE>::Load(
+	    scan_state.group_state.GetFlag(), scan_state.group_state.leading_zeros,
+	    scan_state.group_state.leading_zero_index, scan_state.chimp_state);
 }
 
 } // namespace duckdb

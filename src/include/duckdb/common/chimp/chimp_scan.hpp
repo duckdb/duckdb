@@ -38,16 +38,7 @@ public:
 	bool Started() const {
 		return !!index;
 	}
-	void IncreaseLeadingZeroIndex() {
-		leading_zero_index++;
-	}
-	const uint8_t &GetLeadingZero() const {
-		//! +1 because we increase the index after every use
-		//! We just need to make sure we don't actually need this 1-past-the-end index
-		D_ASSERT(leading_zero_index <= max_leading_zeros_to_read + 1);
-		return leading_zeros[leading_zero_index];
-	}
-	const uint8_t &GetFlag() {
+	uint8_t GetFlag() {
 		D_ASSERT(index <= max_flags_to_read);
 		D_ASSERT(index <= 1024);
 		return flags[index++];
@@ -78,7 +69,7 @@ private:
 		max_leading_zeros_to_read = leading_zero_block_size;
 	}
 
-private:
+public:
 	idx_t index;
 	uint8_t flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
 	uint8_t leading_zeros[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
@@ -128,16 +119,12 @@ public:
 		D_ASSERT(group_size <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 
 		// Increase the internal index used for the flags
-		(void)group_state.GetFlag();
-		duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::LoadFirst(*(values), chimp_state);
+		values[0] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::LoadFirst(chimp_state);
 		for (idx_t i = 1; i < group_size; i++) {
-			const bool refresh_leading_zero = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::DecompressValue(
-			    *(values + i), group_state.GetFlag(), group_state.GetLeadingZero(), chimp_state);
-			if (refresh_leading_zero) {
-				//! The leading zero value was used, need to get the next one
-				group_state.IncreaseLeadingZeroIndex();
-			}
+			values[i] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::DecompressValue(
+			    group_state.flags[i], group_state.leading_zeros, group_state.leading_zero_index, chimp_state);
 		}
+		group_state.index += group_size;
 		total_value_count += group_size;
 		if (GroupFinished() && total_value_count < segment.count) {
 			LoadGroup();
@@ -150,13 +137,11 @@ public:
 		D_ASSERT(group_size <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 
 		for (idx_t i = 0; i < group_size; i++) {
-			const bool refresh_leading_zero = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::Load(
-			    *(values + i), group_state.GetFlag(), group_state.GetLeadingZero(), chimp_state);
-			if (refresh_leading_zero) {
-				//! The leading zero value was used, need to get the next one
-				group_state.IncreaseLeadingZeroIndex();
-			}
+			values[i] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::Load(
+			    group_state.flags[group_state.index + i], group_state.leading_zeros, group_state.leading_zero_index,
+			    chimp_state);
 		}
+		group_state.index += group_size;
 		total_value_count += group_size;
 		if (GroupFinished() && total_value_count < segment.count) {
 			LoadGroup();

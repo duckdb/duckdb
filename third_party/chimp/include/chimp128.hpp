@@ -18,6 +18,8 @@
 #include "byte_reader.hpp"
 #include "ring_buffer.hpp"
 #include <assert.h>
+#include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/likely.hpp"
 
 namespace duckdb_chimp {
 
@@ -225,10 +227,10 @@ public:
 		trailing_zeros = value;
 	}
 
-	const uint8_t &LeadingZeros() const {
+	uint8_t LeadingZeros() const {
 		return leading_zeros;
 	}
-	const uint8_t &TrailingZeros() const {
+	uint8_t TrailingZeros() const {
 		return trailing_zeros;
 	}
 
@@ -270,75 +272,73 @@ public:
 		significant_bits = packed_data & SIGNIFICANT_MASK;
 	}
 
-	static inline bool Load(RETURN_TYPE &value, const uint8_t& flag, const uint8_t &leading_zero, Chimp128DecompressionState& state) {
-		if (state.first) {
-			return LoadFirst(value, state);
+	static inline RETURN_TYPE Load(uint8_t flag, uint8_t leading_zeros[], uint32_t &leading_zero_index, Chimp128DecompressionState& state) {
+		if (DUCKDB_UNLIKELY(state.first)) {
+			return LoadFirst(state);
 		}
 		else {
-			return DecompressValue(value, flag, leading_zero, state);
+			return DecompressValue(flag, leading_zeros, leading_zero_index, state);
 		}
 	}
 
-	static inline bool LoadFirst(RETURN_TYPE &value, Chimp128DecompressionState& state) {
-		value = state.input.template ReadValue<RETURN_TYPE, (sizeof(RETURN_TYPE) * 8)>();
-		state.ring_buffer.Insert<true>(value);
+	static inline RETURN_TYPE LoadFirst(Chimp128DecompressionState& state) {
+		RETURN_TYPE result = state.input.template ReadValue<RETURN_TYPE>();
+		state.ring_buffer.Insert<true>(result);
 		state.first = false;
-		state.reference_value = value;
-		return false;
+		state.reference_value = result;
+		return result;
 	}
 
-	static inline bool DecompressValue(RETURN_TYPE &value, const uint8_t& flag, const uint8_t &leading_zero, Chimp128DecompressionState& state) {
-		static constexpr uint8_t LEADING_REPRESENTATION[] = {
+	static inline RETURN_TYPE DecompressValue(uint8_t flag, uint8_t leading_zeros[], uint32_t &leading_zero_index, Chimp128DecompressionState& state) {
+		static const constexpr uint8_t LEADING_REPRESENTATION[] = {
 			0, 8, 12, 16, 18, 20, 22, 24
 		};
 
-		bool leading_zero_used = false;
 		switch (flag) {
 		case VALUE_IDENTICAL: {
 			//! Value is identical to previous value
-			auto index = state.input.template ReadValue<uint8_t, INDEX_BITS_SIZE>();
-			value = state.ring_buffer.Value(index);
-			state.reference_value = value;
-			state.ring_buffer.Insert(value);
-			return false;
+			auto index = state.input.template ReadValue<uint8_t>();
+			RETURN_TYPE result = state.ring_buffer.Value(index);
+			state.reference_value = result;
+			state.ring_buffer.Insert(result);
+			return result;
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
 			uint16_t index;
 			uint8_t leading_zeros;
 			uint16_t significant_bits;
-			const uint16_t temp = state.input.template ReadValue<uint16_t, INITIAL_FILL>();
+			const uint16_t temp = state.input.template ReadValue<uint16_t>();
 			UnpackPackedData(temp, index, leading_zeros, significant_bits);
 			state.leading_zeros = LEADING_REPRESENTATION[leading_zeros];
 			if (significant_bits == 0) {
 				significant_bits = 64;
 			}
 			state.SetTrailingZeros(BIT_SIZE - significant_bits - state.LeadingZeros());
-			value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros() - state.TrailingZeros());
-			value <<= state.TrailingZeros();
-			value ^= state.ring_buffer.Value(index);
-			state.reference_value = value;
-			state.ring_buffer.Insert(value);
-			return false;
+			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros() - state.TrailingZeros());
+			result <<= state.TrailingZeros();
+			result ^= state.ring_buffer.Value(index);
+			state.reference_value = result;
+			state.ring_buffer.Insert(result);
+			return result;
 		}
 		case LEADING_ZERO_EQUALITY: {
-			value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
-			value ^= state.reference_value;
-			state.reference_value = value;
-			state.ring_buffer.Insert(value);
-			return false;
+			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
+			result ^= state.reference_value;
+			state.reference_value = result;
+			state.ring_buffer.Insert(result);
+			return result;
 		}
 		case LEADING_ZERO_LOAD: {
-            value = state.input.template ReadValue<uint64_t>(BIT_SIZE - leading_zero);
-            value ^= state.reference_value;
-			state.reference_value = value;
-			state.ring_buffer.Insert(value);
+			auto leading_zero = leading_zeros[leading_zero_index++];
+			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(BIT_SIZE - leading_zero);
+			result ^= state.reference_value;
+			state.reference_value = result;
+			state.ring_buffer.Insert(result);
 			state.leading_zeros = leading_zero;
-			return true;
+			return result;
 		}
 		default:
-			//! This should not happen, value isn't properly (de)serialized if it does)
-			assert(1 == 0);
-			return false;
+			throw std::runtime_error("eek");
 		}
 	}
 };

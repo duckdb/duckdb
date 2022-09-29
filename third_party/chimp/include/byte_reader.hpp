@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <iostream>
+#include "duckdb/common/fast_mem.hpp"
 
 namespace duckdb_chimp {
 
@@ -30,55 +31,129 @@ public:
 		index = 0;
 	}
 
-	template <typename T>
-	const T Load(const uint8_t* ptr) {
-		T ret;
-		memcpy(&ret, ptr, sizeof(ret));
-		return ret;
-	}
-
-	uint8_t ReadByte(const uint32_t& offset, const uint8_t& bytes_to_read) const {
-		// Dont touch bytes that we shouldn't
-		// If offset is too high, return the result * 0
-		return buffer[index + ((offset+1 >= bytes_to_read) * offset)] * (offset+1 >= bytes_to_read);
-	}
-
-	template <class T, uint8_t SIZE>
+	template <class T>
 	T ReadValue() {
-		uint64_t bytes = 0;
-		const uint8_t bytes_to_read = (SIZE >> 3) + ((SIZE & 7) != 0);
-		std::memcpy(&bytes, (void*)(buffer + index), bytes_to_read);
-		T result = (T)bytes;
-		index += bytes_to_read;
-		return result;
+		throw std::runtime_error("fixme read value");
+//		uint64_t bytes = 0;
+//		const uint8_t bytes_to_read = (SIZE >> 3) + ((SIZE & 7) != 0);
+//		duckdb::FastMemcpy(&bytes, (void*)(buffer + index), bytes_to_read);
+//		T result = (T)bytes;
+//		index += bytes_to_read;
+//		return result;
 	}
 
 	template <>
-	uint16_t ReadValue<uint16_t, 16>() {
+	uint8_t ReadValue<uint8_t>() {
+		auto result = duckdb::Load<uint8_t>(buffer + index);
+		index ++;
+		return result;
+	}
+	template <>
+	uint16_t ReadValue<uint16_t>() {
+		auto result = duckdb::Load<uint16_t>(buffer + index);
 		index += 2;
-		return Load<uint16_t>(buffer + (index - 2));
+		return result;
+	}
+	template <>
+	uint32_t ReadValue<uint32_t>() {
+		auto result = duckdb::Load<uint32_t>(buffer + index);
+		index += 4;
+		return result;
+	}
+	template <>
+	uint64_t ReadValue<uint64_t>() {
+		auto result = duckdb::Load<uint64_t>(buffer + index);
+		index += 8;
+		return result;
 	}
 
 	template <class T> 
 	T ReadValue(const uint8_t &size) {
-		uint64_t bytes = 0;
-		const uint8_t bytes_to_read = (size >> 3) + ((size & 7) != 0);
-		//bytes[0] = ReadByte(0, bytes_to_read);
-		//bytes[1] = ReadByte(1, bytes_to_read);
-		//bytes[2] = ReadByte(2, bytes_to_read);
-		//bytes[3] = ReadByte(3, bytes_to_read);
-		//bytes[4] = ReadByte(4, bytes_to_read);
-		//bytes[5] = ReadByte(5, bytes_to_read);
-		//bytes[6] = ReadByte(6, bytes_to_read);
-		//bytes[7] = ReadByte(7, bytes_to_read);
-		//index += bytes_to_read;
-		//// Bytes are packed most-significant first, so if we're only interested in 2 bits, we need to shift them 6 to the right
-		////auto result = (T)(*((uint64_t*)(bytes)) >> final_shifts[size & 7]);
-		std::memcpy(&bytes, (void*)(buffer + index), bytes_to_read);
-		T result = (T)bytes;
-		index += bytes_to_read;
-		//result = result >> final_shifts[(size & 7)];
-		return result;
+		T result = 0;
+		switch(size) {
+		case 1:
+		case 2:
+		case 3:
+		case 4:
+		case 5:
+		case 6:
+		case 7:
+		case 8:
+			result = duckdb::Load<uint8_t>(buffer + index);
+			index++;
+			return result;
+		case 9:
+		case 10:
+		case 11:
+		case 12:
+		case 13:
+		case 14:
+		case 15:
+		case 16:
+			result = duckdb::Load<uint16_t>(buffer + index);
+			index+=2;
+			return result;
+		case 17:
+		case 18:
+		case 19:
+		case 20:
+		case 21:
+		case 22:
+		case 23:
+		case 24:
+			memcpy(&result, (void *)(buffer + index), 3);
+			index+=3;
+			return result;
+		case 25:
+		case 26:
+		case 27:
+		case 28:
+		case 29:
+		case 30:
+		case 31:
+		case 32:
+			result = duckdb::Load<uint32_t>(buffer + index);
+			index+=4;
+			return result;
+		case 33:
+		case 34:
+		case 35:
+		case 36:
+		case 37:
+		case 38:
+		case 39:
+		case 40:
+			memcpy(&result, (void *)(buffer + index), 5);
+			index+=5;
+			return result;
+		case 41:
+		case 42:
+		case 43:
+		case 44:
+		case 45:
+		case 46:
+		case 47:
+		case 48:
+			memcpy(&result, (void *)(buffer + index), 6);
+			index+=6;
+			return result;
+		case 49:
+		case 50:
+		case 51:
+		case 52:
+		case 53:
+		case 54:
+		case 55:
+		case 56:
+			memcpy(&result, (void *)(buffer + index), 7);
+			index+=7;
+			return result;
+		default:
+			result = duckdb::Load<uint64_t>(buffer + index);
+//			memcpy(&result, (void *)(buffer + index), 8);
+			index+=8;
+			return result;
+		}
 	}
 private:
 private:
