@@ -21,7 +21,10 @@ StructColumnData::StructColumnData(DataTableInfo &info, idx_t column_index, idx_
 
 StructColumnData::StructColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
     : ColumnData(original, start_row, parent), validity(((StructColumnData &)original).validity, start_row, this) {
-	throw InternalException("FIXME: StructColumnData constructor");
+	auto &struct_data = (StructColumnData &)original;
+	for (auto &child_col : struct_data.sub_columns) {
+		sub_columns.push_back(ColumnData::CreateColumnUnique(*child_col, start_row, this));
+	}
 }
 
 bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {

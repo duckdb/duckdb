@@ -15,7 +15,8 @@ ListColumnData::ListColumnData(DataTableInfo &info, idx_t column_index, idx_t st
 
 ListColumnData::ListColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
     : ColumnData(original, start_row, parent), validity(((ListColumnData &)original).validity, start_row, this) {
-	throw InternalException("FIXME: ListColumnData constructor");
+	auto &list_data = (ListColumnData &)original;
+	child_column = ColumnData::CreateColumnUnique(*list_data.child_column, start_row, this);
 }
 
 bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
