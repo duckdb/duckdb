@@ -8,6 +8,6 @@ parquet,,,true
 tpcds,,,true
 tpch,,,true
 visualizer,,,true
-sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,d557bc54390e5c5240b0872e17dcdc39f688b58d,true
+sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,3a2fb1ae5baeb585512f2aa9b471907acce7c18b,true
 postgres_scanner,https://github.com/duckdblabs/postgres_scanner,58153e0d8196dfef54a175e311e63d18605534a2,true
 substrait,https://github.com/duckdblabs/substrait,43a77c0c7a1f4da52bfdfc4430f74d495dc59195,false
