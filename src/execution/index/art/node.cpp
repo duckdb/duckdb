@@ -285,8 +285,11 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 	case NodeType::NLeaf:
 		D_ASSERT(info.l_node->type == NodeType::NLeaf);
 		D_ASSERT(info.r_node->type == NodeType::NLeaf);
-		auto has_constraint = info.l_art->IsPrimary() || info.l_art->IsUnique();
-		return Leaf::Merge(has_constraint, info.l_node, info.r_node);
+		if (info.l_art->IsUnique()) {
+			return false;
+		}
+		Leaf::Merge(info.l_node, info.r_node);
+		return true;
 	}
 	throw InternalException("Invalid node type for right node in merge.");
 }
