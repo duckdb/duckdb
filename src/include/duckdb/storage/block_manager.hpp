@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
@@ -26,6 +27,10 @@ public:
 	}
 	virtual ~BlockManager() = default;
 
+	//! The buffer manager
+	BufferManager &buffer_manager;
+
+public:
 	virtual void StartCheckpoint() = 0;
 	//! Creates a new block inside the block manager
 	virtual unique_ptr<Block> CreateBlock(block_id_t block_id) = 0;
@@ -66,9 +71,6 @@ public:
 
 	static BlockManager &GetBlockManager(ClientContext &context);
 	static BlockManager &GetBlockManager(DatabaseInstance &db);
-
-	//! The buffer manager
-	BufferManager &buffer_manager;
 
 private:
 	//! The lock for the set of blocks
