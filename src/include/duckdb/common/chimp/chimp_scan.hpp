@@ -48,11 +48,6 @@ public:
 		return leading_zeros[leading_zero_index];
 	}
 	const uint8_t &GetFlag() {
-		static thread_local uint64_t count = 0;
-		count++;
-		if (count == 434085) {
-			;
-		}
 		D_ASSERT(index <= max_flags_to_read);
 		D_ASSERT(index <= 1024);
 		return flags[index++];
@@ -63,6 +58,8 @@ public:
 	}
 
 private:
+	static constexpr uint8_t LEADING_REPRESENTATION[] = {0, 8, 12, 16, 18, 20, 22, 24};
+
 	void LoadFlags(uint8_t *packed_data, idx_t group_size) {
 		duckdb_chimp::FlagBuffer<false> flag_buffer;
 		flag_buffer.SetBuffer(packed_data);
@@ -76,7 +73,7 @@ private:
 		duckdb_chimp::LeadingZeroBuffer<false> leading_zero_buffer;
 		leading_zero_buffer.SetBuffer(packed_data);
 		for (idx_t i = 0; i < leading_zero_block_size; i++) {
-			leading_zeros[i] = leading_zero_buffer.Extract();
+			leading_zeros[i] = LEADING_REPRESENTATION[leading_zero_buffer.Extract()];
 		}
 		max_leading_zeros_to_read = leading_zero_block_size;
 	}

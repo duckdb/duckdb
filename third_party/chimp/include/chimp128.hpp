@@ -201,26 +201,26 @@ public:
 		reference_value(0),
 		first(true)
 	{
-		SetLeadingZeros();
-		SetTrailingZeros();
+		ResetZeros();
 	}
 
 	void Reset() {
-		SetLeadingZeros();
-		SetTrailingZeros();
+		ResetZeros();
 		reference_value = 0;
 		ring_buffer.Reset();
 		first = true;
 	}
 
-	inline void SetLeadingZeros(const uint8_t &value) {
+	inline void ResetZeros() {
+		leading_zeros = std::numeric_limits<uint8_t>::max();
+		trailing_zeros = 0;
+	}
+
+	inline void SetLeadingZeros(uint8_t value) {
 		leading_zeros = value;
 	}
 
-	inline void SetLeadingZeros(uint8_t &&value = std::numeric_limits<uint8_t>::max()) {
-		leading_zeros = value;
-	}
-	inline void SetTrailingZeros(uint8_t &&value = 0) {
+	inline void SetTrailingZeros(uint8_t value) {
 		assert(value <= sizeof(uint64_t) * 8);
 		trailing_zeros = value;
 	}
@@ -288,14 +288,9 @@ public:
 	}
 
 	static inline bool DecompressValue(RETURN_TYPE &value, const uint8_t& flag, const uint8_t &leading_zero, Chimp128DecompressionState& state) {
-		alignas(8) static constexpr uint8_t LEADING_REPRESENTATION[] = {
+		static constexpr uint8_t LEADING_REPRESENTATION[] = {
 			0, 8, 12, 16, 18, 20, 22, 24
 		};
-		static thread_local uint64_t counter = 0;
-		if (counter++ == 434085) {
-			value = value + 5;
-		}
-
 
 		bool leading_zero_used = false;
 		switch (flag) {
@@ -303,7 +298,9 @@ public:
 			//! Value is identical to previous value
 			auto index = state.input.template ReadValue<uint8_t, INDEX_BITS_SIZE>();
 			value = state.ring_buffer.Value(index);
-			break;
+			state.reference_value = value;
+			state.ring_buffer.Insert(value);
+			return false;
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
 			uint16_t index;
@@ -319,29 +316,31 @@ public:
 			value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros() - state.TrailingZeros());
 			value <<= state.TrailingZeros();
 			value ^= state.ring_buffer.Value(index);
-			break;
+			state.reference_value = value;
+			state.ring_buffer.Insert(value);
+			return false;
 		}
 		case LEADING_ZERO_EQUALITY: {
 			value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
 			value ^= state.reference_value;
-			break;
+			state.reference_value = value;
+			state.ring_buffer.Insert(value);
+			return false;
 		}
 		case LEADING_ZERO_LOAD: {
-			leading_zero_used = true;
-			state.SetLeadingZeros(LEADING_REPRESENTATION[leading_zero]);
-            value = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.LeadingZeros());
+            value = state.input.template ReadValue<uint64_t>(BIT_SIZE - leading_zero);
             value ^= state.reference_value;
-			break;
+			state.reference_value = value;
+			state.ring_buffer.Insert(value);
+			state.leading_zeros = leading_zero;
+			return true;
 		}
 		default:
 			//! This should not happen, value isn't properly (de)serialized if it does)
 			assert(1 == 0);
+			return false;
 		}
-		state.reference_value = value;
-		state.ring_buffer.Insert(value);
-		return leading_zero_used;
 	}
-
 };
 
 } //namespace duckdb_chimp

@@ -30,6 +30,13 @@ public:
 		index = 0;
 	}
 
+	template <typename T>
+	const T Load(const uint8_t* ptr) {
+		T ret;
+		memcpy(&ret, ptr, sizeof(ret));
+		return ret;
+	}
+
 	uint8_t ReadByte(const uint32_t& offset, const uint8_t& bytes_to_read) const {
 		// Dont touch bytes that we shouldn't
 		// If offset is too high, return the result * 0
@@ -46,16 +53,10 @@ public:
 		return result;
 	}
 
-	// Need this because this pointer is not guaranteed to be aligned on a 2-byte boundary
-	__attribute__((no_sanitize("alignment")))
-	inline uint16_t ReadShort() {
-		index += 2;
-		return *(uint16_t*)(buffer + index - 2);
-	}
-
 	template <>
 	uint16_t ReadValue<uint16_t, 16>() {
-		return ReadShort();
+		index += 2;
+		return Load<uint16_t>(buffer + (index - 2));
 	}
 
 	template <class T> 
