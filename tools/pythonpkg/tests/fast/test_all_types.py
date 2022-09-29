@@ -356,7 +356,7 @@ class TestAllTypes(object):
                 round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
                 assert arrow_table.equals(round_trip_arrow_table, check_metadata=True)
 
-    def test_pandas(self, duckdb_cursor):
+    def test_pandas(self):
         # We skip those since the extreme ranges are not supported in python.
         replacement_values = { 'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",
             'timestamp_s': "'1990-01-01 00:00:00'::TIMESTAMP_S",
@@ -378,5 +378,6 @@ class TestAllTypes(object):
             print(cur_type)
             round_trip_dataframe = conn.execute("select * from dataframe").df()
             result_dataframe = conn.execute("select * from dataframe").fetchall()
+            print(round_trip_dataframe)
             result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
             assert recursive_equality(result_dataframe, result_roundtrip)

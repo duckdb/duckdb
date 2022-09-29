@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < argc; i++) {
 		if (string(argv[i]) == "--force-storage") {
 			test_force_storage = true;
-		} else if (string(argv[i]) == "--force-reload") {
+		} else if (string(argv[i]) == "--force-reload" || string(argv[i]) == "--force-restart") {
 			test_force_reload = true;
 		} else if (string(argv[i]) == "--test-dir") {
 			test_directory = string(argv[++i]);

@@ -1,0 +1,13 @@
+name,url,commit,build_on_windows
+excel,,,true
+fts,,,true
+httpfs,,,true
+icu,,,true
+json,,,true
+parquet,,,true
+tpcds,,,true
+tpch,,,true
+visualizer,,,true
+sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,3a2fb1ae5baeb585512f2aa9b471907acce7c18b,true
+postgres_scanner,https://github.com/duckdblabs/postgresscanner,d12c21e2059944b289f0582df18e44f346c251cb,true
+substrait,https://github.com/duckdblabs/substrait,43a77c0c7a1f4da52bfdfc4430f74d495dc59195,false

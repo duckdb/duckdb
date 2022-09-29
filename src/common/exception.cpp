@@ -164,6 +164,8 @@ void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message
 		throw ParameterNotAllowedException(message);
 	case ExceptionType::PARAMETER_NOT_RESOLVED:
 		throw ParameterNotResolvedException();
+	case ExceptionType::FATAL:
+		throw FatalException(message);
 	default:
 		throw Exception(type, message);
 	}

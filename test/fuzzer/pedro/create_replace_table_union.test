@@ -1,0 +1,25 @@
+# name: test/fuzzer/pedro/create_replace_table_union.test
+# description: Error thrown in CREATE TABLE AS
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE t0 AS ((SELECT 1) UNION ALL ((SELECT 2) INTERSECT ALL (SELECT 2)));
+
+statement ok
+CREATE VIEW t1(c1) AS ((SELECT 1) UNION DISTINCT (SELECT 1));
+
+loop i 0 10
+
+statement error
+CREATE OR REPLACE TABLE t1 AS (SELECT * FROM range(10) ORDER BY 1) UNION ALL (SELECT * FROM range(10) ORDER BY 1);
+
+statement error
+CREATE OR REPLACE TABLE t1 AS (SELECT 1) UNION ALL (SELECT * FROM range(10) ORDER BY 1);
+
+statement error
+CREATE OR REPLACE TABLE t1 AS ((SELECT 1) UNION ALL ((SELECT 2) INTERSECT ALL (SELECT 2)));
+
+endloop

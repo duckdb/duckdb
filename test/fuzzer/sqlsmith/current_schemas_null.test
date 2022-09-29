@@ -1,0 +1,25 @@
+# name: test/fuzzer/sqlsmith/current_schemas_null.test
+# description: current_schemas null input
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE booleans(bool BOOLEAN);
+
+statement ok
+INSERT INTO booleans VALUES(NULL);
+
+statement error
+SELECT current_schemas(ref_0.bool) AS c4 FROM booleans AS ref_0;
+
+query I
+SELECT current_schemas(false);
+----
+[]
+
+query I
+SELECT current_schemas(NULL);
+----
+NULL

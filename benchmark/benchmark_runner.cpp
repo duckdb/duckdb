@@ -240,7 +240,7 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 		} else if (StringUtil::StartsWith(arg, "--threads=")) {
 			// write info of benchmark
 			auto splits = StringUtil::Split(arg, '=');
-			instance.threads = Value(splits[1]).CastAs(LogicalType::UINTEGER).GetValue<uint32_t>();
+			instance.threads = Value(splits[1]).DefaultCastAs(LogicalType::UINTEGER).GetValue<uint32_t>();
 		} else if (arg == "--query") {
 			// write group of benchmark
 			instance.configuration.meta = BenchmarkMetaType::QUERY;

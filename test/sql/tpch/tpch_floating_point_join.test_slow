@@ -1,0 +1,35 @@
+# name: test/sql/tpch/tpch_floating_point_join.test_slow
+# description: Join using floating point keys
+# group: [tpch]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.1, suffix='_normal');
+
+statement ok
+CREATE TABLE lineitem_flt AS SELECT * REPLACE (l_orderkey::DOUBLE AS l_orderkey) FROM lineitem_normal;
+
+statement ok
+CREATE TABLE orders_flt AS SELECT * REPLACE (o_orderkey::DOUBLE AS o_orderkey) FROM orders_normal;
+
+statement ok
+CREATE TABLE lineitem_dbl AS SELECT * REPLACE (l_orderkey::DOUBLE AS l_orderkey) FROM lineitem_normal;
+
+statement ok
+CREATE TABLE orders_dbl AS SELECT * REPLACE (o_orderkey::DOUBLE AS o_orderkey) FROM orders_normal;
+
+query I
+SELECT COUNT(*) from lineitem_normal join orders_normal on (l_orderkey=o_orderkey);
+----
+600572
+
+query I
+SELECT COUNT(*) from lineitem_dbl join orders_dbl on (l_orderkey=o_orderkey);
+----
+600572
+
+query I
+SELECT COUNT(*) from lineitem_flt join orders_flt on (l_orderkey=o_orderkey);
+----
+600572

@@ -34,12 +34,12 @@ public:
 	bool HasUpdates(idx_t start_row_idx, idx_t end_row_idx);
 	void ClearUpdates();
 
-	void FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
+	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
 	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
-	void Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
+	void Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
 	            Vector &base_data);
-	void FetchRow(Transaction &transaction, idx_t row_id, Vector &result, idx_t result_idx);
+	void FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
 	void RollbackUpdate(UpdateInfo *info);
 	void CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo *info);

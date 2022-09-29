@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_json_functions
   OBJECT
   json_array_length.cpp
+  json_contains.cpp
   json_extract.cpp
   json_merge_patch.cpp
   json_structure.cpp

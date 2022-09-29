@@ -204,6 +204,161 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	}
 }
 
+struct KeySection {
+	KeySection(idx_t start_p, idx_t end_p, idx_t depth_p, data_t key_byte_p)
+	    : start(start_p), end(end_p), depth(depth_p), key_byte(key_byte_p) {};
+	KeySection(idx_t start_p, idx_t end_p, vector<unique_ptr<Key>> &keys, KeySection &key_section)
+	    : start(start_p), end(end_p), depth(key_section.depth + 1), key_byte(keys[end_p]->data[key_section.depth]) {};
+	idx_t start;
+	idx_t end;
+	idx_t depth;
+	data_t key_byte;
+};
+
+void GetChildSections(vector<KeySection> &child_sections, vector<unique_ptr<Key>> &keys, KeySection &key_section) {
+
+	idx_t child_start_idx = key_section.start;
+	for (idx_t i = key_section.start + 1; i <= key_section.end; i++) {
+		if (keys[i - 1]->data[key_section.depth] != keys[i]->data[key_section.depth]) {
+			child_sections.emplace_back(child_start_idx, i - 1, keys, key_section);
+			child_start_idx = i;
+		}
+	}
+	child_sections.emplace_back(child_start_idx, key_section.end, keys, key_section);
+}
+
+void Construct(vector<unique_ptr<Key>> &keys, row_t *row_ids, Node *&node, KeySection &key_section,
+               bool &has_constraint) {
+
+	D_ASSERT(key_section.start < keys.size());
+	D_ASSERT(key_section.end < keys.size());
+	D_ASSERT(key_section.start <= key_section.end);
+
+	auto &start_key = *keys[key_section.start];
+	auto &end_key = *keys[key_section.end];
+
+	// increment the depth until we reach a leaf or find a mismatching byte
+	auto prefix_start = key_section.depth;
+	while (start_key.len != key_section.depth && start_key.ByteMatches(end_key, key_section.depth)) {
+		key_section.depth++;
+	}
+
+	// we reached a leaf, i.e. all the bytes of start_key and end_key match
+	if (start_key.len == key_section.depth) {
+
+		// end_idx is inclusive
+		auto num_row_ids = key_section.end - key_section.start + 1;
+
+		// check for possible constraint violation
+		if (has_constraint && num_row_ids != 1) {
+			throw ConstraintException("New data contains duplicates on indexed column(s)");
+		}
+
+		// new row ids of this leaf
+		auto new_row_ids = unique_ptr<row_t[]>(new row_t[num_row_ids]);
+		for (idx_t i = 0; i < num_row_ids; i++) {
+			new_row_ids[i] = row_ids[key_section.start + i];
+		}
+
+		node = new Leaf(start_key, prefix_start, move(new_row_ids), num_row_ids);
+
+	} else { // create a new node and recurse
+
+		// we will find at least two child entries of this node, otherwise we'd have reached a leaf
+		vector<KeySection> child_sections;
+		GetChildSections(child_sections, keys, key_section);
+
+		auto node_type = Node::GetTypeBySize(child_sections.size());
+		Node::New(node_type, node);
+
+		auto prefix_length = key_section.depth - prefix_start;
+		node->prefix = Prefix(start_key, prefix_start, prefix_length);
+
+		// recurse on each child section
+		for (auto &child_section : child_sections) {
+			Node *new_child = nullptr;
+			Construct(keys, row_ids, new_child, child_section, has_constraint);
+			Node::InsertChild(node, child_section.key_byte, new_child);
+		}
+	}
+}
+
+void FindFirstNotNullKey(vector<unique_ptr<Key>> &keys, bool &skipped_all_nulls, idx_t &start_idx) {
+
+	if (!skipped_all_nulls) {
+		for (idx_t i = 0; i < keys.size(); i++) {
+			if (keys[i]) {
+				start_idx = i;
+				skipped_all_nulls = true;
+				return;
+			}
+		}
+	}
+}
+
+void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) {
+
+	auto payload_types = logical_types;
+	payload_types.emplace_back(LogicalType::ROW_TYPE);
+
+	auto skipped_all_nulls = false;
+	auto temp_art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
+	for (;;) {
+		DataChunk ordered_chunk;
+		ordered_chunk.Initialize(allocator, payload_types);
+		ordered_chunk.SetCardinality(0);
+		scanner.Scan(ordered_chunk);
+		if (ordered_chunk.size() == 0) {
+			break;
+		}
+
+		// get the key chunk and the row_identifiers vector
+		DataChunk row_id_chunk;
+		ordered_chunk.Split(row_id_chunk, ordered_chunk.ColumnCount() - 1);
+		auto &row_identifiers = row_id_chunk.data[0];
+
+		D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
+		D_ASSERT(logical_types[0] == ordered_chunk.data[0].GetType());
+
+		// generate the keys for the given input
+		vector<unique_ptr<Key>> keys;
+		GenerateKeys(ordered_chunk, keys);
+
+		// we order NULLS FIRST, so we might have to skip nulls at the start of our sorted data
+		idx_t start_idx = 0;
+		FindFirstNotNullKey(keys, skipped_all_nulls, start_idx);
+
+		if (start_idx != 0 && IsPrimary()) {
+			throw ConstraintException("NULLs in new data violate the primary key constraint of the index");
+		}
+
+		if (!skipped_all_nulls) {
+			if (IsPrimary()) {
+				// chunk consists only of NULLs
+				throw ConstraintException("NULLs in new data violate the primary key constraint of the index");
+			}
+			continue;
+		}
+
+		// prepare the row_identifiers
+		row_identifiers.Flatten(ordered_chunk.size());
+		auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+
+		// construct the ART of this chunk
+		auto art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
+		auto key_section = KeySection(start_idx, ordered_chunk.size() - 1, 0, 0);
+		auto has_constraint = IsPrimary() || IsUnique();
+		Construct(keys, row_ids, art->tree, key_section, has_constraint);
+
+		// merge art into temp_art
+		ART::Merge(temp_art.get(), art.get());
+	}
+
+	// NOTE: currently this code is only used for index creation, so we can assume that there are no
+	// duplicate violations between the existing index and the new data
+	ART::Merge(this, temp_art.get());
+}
+
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
@@ -298,13 +453,14 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 
 		auto &leaf_prefix = leaf->prefix;
 		uint32_t new_prefix_length = 0;
-		// Leaf node is already there, update row_id vector
+
+		// Leaf node is already there (its key matches the current key), update row_id vector
 		if (new_prefix_length == leaf->prefix.Size() && depth + leaf->prefix.Size() == key.len) {
 			return InsertToLeaf(*leaf, row_id);
 		}
 		while (leaf_prefix[new_prefix_length] == key[depth + new_prefix_length]) {
 			new_prefix_length++;
-			// Leaf node is already there, update row_id vector
+			// Leaf node is already there (its key matches the current key), update row_id vector
 			if (new_prefix_length == leaf->prefix.Size() && depth + leaf->prefix.Size() == key.len) {
 				return InsertToLeaf(*leaf, row_id);
 			}
@@ -313,9 +469,9 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		Node *new_node = new Node4();
 		new_node->prefix = Prefix(key, depth, new_prefix_length);
 		auto key_byte = node->prefix.Reduce(new_prefix_length);
-		Node4::Insert(new_node, key_byte, node);
+		Node4::InsertChild(new_node, key_byte, node);
 		Node *leaf_node = new Leaf(*value, depth + new_prefix_length + 1, row_id);
-		Node4::Insert(new_node, key[depth + new_prefix_length], leaf_node);
+		Node4::InsertChild(new_node, key[depth + new_prefix_length], leaf_node);
 		node = new_node;
 		return true;
 	}
@@ -329,10 +485,10 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 			new_node->prefix = Prefix(key, depth, mismatch_pos);
 			// Break up prefix
 			auto key_byte = node->prefix.Reduce(mismatch_pos);
-			Node4::Insert(new_node, key_byte, node);
+			Node4::InsertChild(new_node, key_byte, node);
 
 			Node *leaf_node = new Leaf(*value, depth + mismatch_pos + 1, row_id);
-			Node4::Insert(new_node, key[depth + mismatch_pos], leaf_node);
+			Node4::InsertChild(new_node, key[depth + mismatch_pos], leaf_node);
 			node = new_node;
 			return true;
 		}
@@ -349,7 +505,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		return insertion_result;
 	}
 	Node *new_node = new Leaf(*value, depth + 1, row_id);
-	Node::InsertLeaf(node, key[depth], new_node);
+	Node::InsertChild(node, key[depth], new_node);
 	return true;
 }
 
@@ -423,7 +579,7 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 			leaf->Remove(row_id);
 			if (leaf->count == 0) {
 				// Leaf is empty, delete leaf, decrement node counter and maybe shrink node
-				Node::Erase(node, pos, *this);
+				Node::EraseChild(node, pos, *this);
 			}
 		} else {
 			// Recurse
@@ -717,12 +873,29 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Serialization
+//===--------------------------------------------------------------------===//
 BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
 	if (tree) {
 		return tree->Serialize(*this, writer);
 	}
 	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
+}
+
+//===--------------------------------------------------------------------===//
+// Merge ARTs
+//===--------------------------------------------------------------------===//
+void ART::Merge(ART *l_art, ART *r_art) {
+
+	if (!l_art->tree) {
+		l_art->tree = r_art->tree;
+		r_art->tree = nullptr;
+		return;
+	}
+
+	Node::MergeARTs(l_art, r_art);
 }
 
 } // namespace duckdb

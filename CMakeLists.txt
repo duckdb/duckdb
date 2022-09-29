@@ -141,8 +141,18 @@ elseif(${ENABLE_SANITIZER})
 endif()
 
 
-if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-  set(DISABLE_VPTR_SANITIZER TRUE)
+if (${DISABLE_VPTR_SANITIZER})
+else()
+  if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_GREATER 14.0)
+      message(
+        WARNING
+          "Not disabling vptr sanitizer on M1 Macbook - set DISABLE_VPTR_SANITIZER manually if you run into issues with false positives in the sanitizer"
+      )
+    else()
+    set(DISABLE_VPTR_SANITIZER TRUE)
+    endif()
+  endif()
 endif()
 
 if(${ENABLE_UBSAN})
@@ -246,6 +256,7 @@ option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
 option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
 option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
 option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
+option(BUILD_INET_EXTENSION "Build the inet extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -375,6 +386,8 @@ set(OS_ARCH "amd64")
 string(REGEX MATCH "(arm64|aarch64)" IS_ARM "${CMAKE_SYSTEM_PROCESSOR}")
 if(IS_ARM)
   set(OS_ARCH "arm64")
+elseif(FORCE_32_BIT)
+  set(OS_ARCH "i386")
 endif()
 
 if(APPLE)
@@ -540,6 +553,11 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/sqlsmith/include)
     add_definitions(-DBUILD_SQLSMITH_EXTENSION=${BUILD_SQLSMITH_EXTENSION})
   endif()
+
+  if(${BUILD_INET_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/inet/include)
+    add_definitions(-DBUILD_INET_EXTENSION=${BUILD_INET_EXTENSION})
+  endif()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -581,6 +599,10 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_SQLSMITH_EXTENSION})
     add_dependencies(${LIBRARY} sqlsmith_extension)
+  endif()
+
+  if(${BUILD_INET_EXTENSION})
+    add_dependencies(${LIBRARY} inet_extension)
   endif()
 
 endfunction()
@@ -629,6 +651,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_SQLSMITH_EXTENSION})
     target_link_libraries(${LIBRARY} sqlsmith_extension)
+  endif()
+
+  if(${BUILD_INET_EXTENSION})
+    target_link_libraries(${LIBRARY} inet_extension)
   endif()
 endfunction()
 
@@ -682,7 +708,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY IGNORE_WARNING
     elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
       set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
       # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip -Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version)
+      set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_replacement_open_pre, -Wl,-exported_symbol,_${NAME}_replacement_open_post")
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
     else()
       error("EXTENSION static build is only intended for Linux and Windows on MVSC")
     endif()
@@ -798,8 +825,13 @@ endif()
 endif()
 
 # build out-of-tree extensions on demand
-if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
-  # the build path seems to get ignored on windows in just the right way. no idea why.
-  get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
-  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
+if(NOT "${EXTERNAL_EXTENSION_DIRECTORIES}" STREQUAL "")
+  separate_arguments(EXTERNAL_EXTENSION_DIRECTORIES)
+
+  foreach(EXTERNAL_EXTENSION_DIRECTORY IN LISTS EXTERNAL_EXTENSION_DIRECTORIES)
+
+    # the build path seems to get ignored on windows in just the right way. no idea why.
+    get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
+    add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
+  endforeach()
 endif()
