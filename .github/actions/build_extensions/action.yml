@@ -8,7 +8,10 @@ inputs:
 
   # Deploy config
   deploy_as:
-    description: 'Binary name for deploy step'
+    description: 'Binary architecture name for deploy step'
+    default: ''
+  deploy_version:
+    description: 'Version tag or commit short hash for deploy step'
     default: ''
   s3_id:
     description: 'S3 key ID'
@@ -128,7 +131,9 @@ runs:
         AWS_DEFAULT_REGION: us-east-1
       run: |
         if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
+          if [[ ! -z "${{ inputs.deploy_version }}" ]]
+            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
+          elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
             ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ ]] ; then
             ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`

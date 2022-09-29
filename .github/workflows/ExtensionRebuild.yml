@@ -11,11 +11,11 @@ on:
         required: true 
         type: string
       extension_ref:
-        description: 'Extension version (e.g. a commit hash or a tag)'
+        description: 'Extension version (commit hash)'
         required: true 
         type: string
       duckdb_ref:
-        description: 'DuckDB ref (e.g. a commit hash or a tag)'
+        description: 'DuckDB version (short commit hash or vX.Y.Z tag)'
         required: true 
         type: string
 
@@ -55,6 +55,7 @@ jobs:
         excel: 0
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
+        deploy_version: ${{ inputs.duckdb_ref }}
         static_link_build: 1
         out_of_tree_ext: 1
         run_tests: 0
@@ -109,20 +110,9 @@ jobs:
       - name: Deploy
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            pip install awscli
-            ./scripts/extension-upload.sh osx_amd64 ${{ github.ref_name }}
-            ./scripts/extension-upload.sh osx_arm64 ${{ github.ref_name }}
-            ./scripts/extension-upload-test.sh
-          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            pip install awscli
-            ./scripts/extension-upload.sh osx_amd64 `git log -1 --format=%h`
-            ./scripts/extension-upload.sh osx_arm64 `git log -1 --format=%h`
-            ./scripts/extension-upload-test.sh
-          else
-            ./scripts/extension-upload-test.sh local
-          fi
-
+          pip install awscli
+          ./scripts/extension-upload.sh osx_amd64 ${{ inputs.duckdb_ref }}
+          ./scripts/extension-upload.sh osx_arm64 ${{ inputs.duckdb_ref }}
 
   win-extensions-64-rebuild:
    name: Windows Extensions (64-bit)
@@ -154,6 +144,7 @@ jobs:
          json: 0
          excel: 0
          deploy_as: windows_amd64
+         deploy_version: ${{ inputs.duckdb_ref }}
          run_tests: 0
          treat_warn_as_error: 0
          static_link_build: 1
@@ -208,6 +199,7 @@ jobs:
         excel: 0
         run_tests: 0
         deploy_as: linux_amd64_gcc4
+        deploy_version: ${{ inputs.duckdb_ref }}
         s3_id: ${{ secrets.S3_ID }}
     #    s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
