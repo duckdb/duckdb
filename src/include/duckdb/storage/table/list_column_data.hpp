@@ -18,6 +18,7 @@ class ListColumnData : public ColumnData {
 public:
 	ListColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
 	               ColumnData *parent = nullptr);
+	ListColumnData(ColumnData &original, idx_t start_row, ColumnData *parent = nullptr);
 
 	//! The child-column of the list
 	unique_ptr<ColumnData> child_column;

@@ -21,6 +21,17 @@ ColumnData::ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row,
     : info(info), column_index(column_index), start(start_row), type(move(type)), parent(parent) {
 }
 
+ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
+    : info(other.info), column_index(other.column_index), start(start), type(move(other.type)), parent(parent),
+      updates(move(other.updates)) {
+	idx_t offset = 0;
+	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->next.get()) {
+		auto &other = (ColumnSegment &)*segment;
+		this->data.AppendSegment(ColumnSegment::CreateSegment(other, start + offset));
+		offset += segment->count;
+	}
+}
+
 ColumnData::~ColumnData() {
 }
 
@@ -455,10 +466,6 @@ void ColumnData::Verify(RowGroup &parent) {
 			}
 			root = root->next.get();
 		}
-	} else {
-		if (type.InternalType() != PhysicalType::STRUCT) {
-			D_ASSERT(parent.count == 0);
-		}
 	}
 #endif
 }
@@ -479,6 +486,17 @@ static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t s
 shared_ptr<ColumnData> ColumnData::CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
                                                 const LogicalType &type, ColumnData *parent) {
 	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(info, column_index, start_row, type, parent);
+}
+
+shared_ptr<ColumnData> ColumnData::CreateColumn(ColumnData &other, idx_t start_row, ColumnData *parent) {
+	if (other.type.InternalType() == PhysicalType::STRUCT) {
+		return make_shared<StructColumnData>(other, start_row, parent);
+	} else if (other.type.InternalType() == PhysicalType::LIST) {
+		return make_shared<ListColumnData>(other, start_row, parent);
+	} else if (other.type.id() == LogicalTypeId::VALIDITY) {
+		return make_shared<ValidityColumnData>(other, start_row, parent);
+	}
+	return make_shared<StandardColumnData>(other, start_row, parent);
 }
 
 unique_ptr<ColumnData> ColumnData::CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,

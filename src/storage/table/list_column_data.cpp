@@ -13,6 +13,11 @@ ListColumnData::ListColumnData(DataTableInfo &info, idx_t column_index, idx_t st
 	child_column = ColumnData::CreateColumnUnique(info, 1, start_row, child_type, this);
 }
 
+ListColumnData::ListColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
+    : ColumnData(original, start_row, parent), validity(((ListColumnData &)original).validity, start_row, this) {
+	throw InternalException("FIXME: ListColumnData constructor");
+}
+
 bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	// table filters are not supported yet for list columns
 	return false;

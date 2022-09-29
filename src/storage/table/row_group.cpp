@@ -49,6 +49,15 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector
 	Verify();
 }
 
+RowGroup::RowGroup(RowGroup &row_group, idx_t start)
+    : SegmentBase(start, row_group.count), db(row_group.db), table_info(row_group.table_info),
+      version_info(move(row_group.version_info)), stats(move(row_group.stats)) {
+	for (auto &column : row_group.columns) {
+		this->columns.push_back(ColumnData::CreateColumn(*column, start));
+	}
+	Verify();
+}
+
 RowGroup::~RowGroup() {
 }
 

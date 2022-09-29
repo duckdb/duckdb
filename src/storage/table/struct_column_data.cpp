@@ -19,6 +19,11 @@ StructColumnData::StructColumnData(DataTableInfo &info, idx_t column_index, idx_
 	}
 }
 
+StructColumnData::StructColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
+    : ColumnData(original, start_row, parent), validity(((StructColumnData &)original).validity, start_row, this) {
+	throw InternalException("FIXME: StructColumnData constructor");
+}
+
 bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	// table filters are not supported yet for struct columns
 	return false;

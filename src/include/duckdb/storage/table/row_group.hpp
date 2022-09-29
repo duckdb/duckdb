@@ -43,6 +43,7 @@ public:
 	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count);
 	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector<LogicalType> &types,
 	         RowGroupPointer &pointer);
+	RowGroup(RowGroup &row_group, idx_t start);
 	~RowGroup();
 
 private:
