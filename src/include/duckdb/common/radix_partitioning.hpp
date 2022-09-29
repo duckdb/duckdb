@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/types/partitioned_column_data.hpp"
 
 namespace duckdb {
 
@@ -45,14 +46,29 @@ public:
 		return (idx_t)1 << radix_bits;
 	}
 
-	//! Partition the data in block_collection/string_heap to multiple partitions
-	static void Partition(BufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
-	                      RowDataCollection &block_collection, RowDataCollection &string_heap,
-	                      vector<unique_ptr<RowDataCollection>> &partition_block_collections,
-	                      vector<unique_ptr<RowDataCollection>> &partition_string_heaps, idx_t radix_bits);
 	//! Select using a cutoff on the radix bits of the hash
 	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
 	                    SelectionVector *true_sel, SelectionVector *false_sel);
+
+	//! Partition the data in block_collection/string_heap to multiple partitions
+	static void PartitionRowData(BufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
+	                             RowDataCollection &block_collection, RowDataCollection &string_heap,
+	                             vector<unique_ptr<RowDataCollection>> &partition_block_collections,
+	                             vector<unique_ptr<RowDataCollection>> &partition_string_heaps, idx_t radix_bits);
+};
+
+class RadixPartitionedColumnData : public PartitionedColumnData {
+public:
+	RadixPartitionedColumnData(ClientContext &context, vector<LogicalType> types, idx_t radix_bits, idx_t hash_col_idx);
+
+	void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) override;
+	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
+
+private:
+	//! The number of radix bits
+	const idx_t radix_bits;
+	//! The index of the column holding the hashes
+	const idx_t hash_col_idx;
 };
 
 } // namespace duckdb

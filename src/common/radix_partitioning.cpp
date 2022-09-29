@@ -1,6 +1,7 @@
 #include "duckdb/common/radix_partitioning.hpp"
 
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types/partitioned_column_data.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -95,6 +96,32 @@ RETURN_TYPE DoubleRadixBitsSwitch1(idx_t radix_bits_1, idx_t radix_bits_2, ARGS 
 	}
 }
 
+template <idx_t radix_bits>
+struct RadixLessThan {
+	static inline bool Operation(hash_t hash, hash_t cutoff) {
+		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
+		return CONSTANTS::ApplyMask(hash) < cutoff;
+	}
+};
+
+struct SelectFunctor {
+	template <idx_t radix_bits>
+	static idx_t Operation(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t cutoff,
+	                       SelectionVector *true_sel, SelectionVector *false_sel) {
+		Vector cutoff_vector(Value::HASH(cutoff));
+		return BinaryExecutor::Select<hash_t, hash_t, RadixLessThan<radix_bits>>(hashes, cutoff_vector, sel, count,
+		                                                                         true_sel, false_sel);
+	}
+};
+
+idx_t RadixPartitioning::Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
+                                SelectionVector *true_sel, SelectionVector *false_sel) {
+	return RadixBitsSwitch<SelectFunctor, idx_t>(radix_bits, hashes, sel, count, cutoff, true_sel, false_sel);
+}
+
+//===--------------------------------------------------------------------===//
+// Row Data Partitioning
+//===--------------------------------------------------------------------===//
 template <idx_t radix_bits>
 static void InitPartitions(BufferManager &buffer_manager, vector<unique_ptr<RowDataCollection>> &partition_collections,
                            RowDataBlock *partition_blocks[], vector<BufferHandle> &partition_handles,
@@ -369,35 +396,56 @@ struct PartitionFunctor {
 	}
 };
 
-void RadixPartitioning::Partition(BufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
-                                  RowDataCollection &block_collection, RowDataCollection &string_heap,
-                                  vector<unique_ptr<RowDataCollection>> &partition_block_collections,
-                                  vector<unique_ptr<RowDataCollection>> &partition_string_heaps, idx_t radix_bits) {
+void RadixPartitioning::PartitionRowData(BufferManager &buffer_manager, const RowLayout &layout,
+                                         const idx_t hash_offset, RowDataCollection &block_collection,
+                                         RowDataCollection &string_heap,
+                                         vector<unique_ptr<RowDataCollection>> &partition_block_collections,
+                                         vector<unique_ptr<RowDataCollection>> &partition_string_heaps,
+                                         idx_t radix_bits) {
 	return RadixBitsSwitch<PartitionFunctor, void>(radix_bits, buffer_manager, layout, hash_offset, block_collection,
 	                                               string_heap, partition_block_collections, partition_string_heaps);
 }
 
-template <idx_t radix_bits>
-struct RadixLessThan {
-	static inline bool Operation(hash_t hash, hash_t cutoff) {
-		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
-		return CONSTANTS::ApplyMask(hash) < cutoff;
+//===--------------------------------------------------------------------===//
+// Column Data Partitioning
+//===--------------------------------------------------------------------===//
+RadixPartitionedColumnData::RadixPartitionedColumnData(ClientContext &context_p, vector<LogicalType> types_p,
+                                                       idx_t radix_bits_p, idx_t hash_col_idx_p)
+    : PartitionedColumnData(context_p, move(types_p)), radix_bits(radix_bits_p), hash_col_idx(hash_col_idx_p) {
+	D_ASSERT(hash_col_idx < types.size());
+	// We know the number of partitions beforehand, so we can just create them
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	partition_allocators.reserve(num_partitions);
+	for (idx_t i = 0; i < num_partitions; i++) {
+		partition_allocators.emplace_back(make_shared<ColumnDataAllocator>(BufferManager::GetBufferManager(context)));
 	}
-};
+}
 
-struct SelectFunctor {
+void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) {
+	// We know the number of partitions beforehand, so we can just initialize them
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	state.partition_buffers.reserve(num_partitions);
+	state.partitions.reserve(num_partitions);
+	for (idx_t i = 0; i < num_partitions; i++) {
+		state.partition_buffers.emplace_back(CreateAppendPartitionBuffer());
+		state.partitions.emplace_back(CreateAppendPartition(i));
+	}
+}
+
+struct ComputePartitionIndicesFunctor {
 	template <idx_t radix_bits>
-	static idx_t Operation(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t cutoff,
-	                       SelectionVector *true_sel, SelectionVector *false_sel) {
-		Vector cutoff_vector(Value::HASH(cutoff));
-		return BinaryExecutor::Select<hash_t, hash_t, RadixLessThan<radix_bits>>(hashes, cutoff_vector, sel, count,
-		                                                                         true_sel, false_sel);
+	static void Operation(Vector &hashes, Vector &partition_indices, idx_t count) {
+		UnaryExecutor::Execute<hash_t, hash_t>(hashes, partition_indices, count, [&](hash_t hash) {
+			using CONSTANTS = RadixPartitioningConstants<radix_bits>;
+			return CONSTANTS::ApplyMask(hash);
+		});
 	}
 };
 
-idx_t RadixPartitioning::Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
-                                SelectionVector *true_sel, SelectionVector *false_sel) {
-	return RadixBitsSwitch<SelectFunctor, idx_t>(radix_bits, hashes, sel, count, cutoff, true_sel, false_sel);
+void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) {
+
+	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, input.data[hash_col_idx], state.partition_indices,
+	                                                      input.size());
 }
 
 } // namespace duckdb

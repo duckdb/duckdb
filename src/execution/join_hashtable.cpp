@@ -1064,9 +1064,9 @@ void JoinHashTable::Partition(JoinHashTable &global_ht) {
 
 	// Swizzle and Partition
 	SwizzleBlocks();
-	RadixPartitioning::Partition(global_ht.buffer_manager, global_ht.layout, global_ht.pointer_offset,
-	                             *swizzled_block_collection, *swizzled_string_heap, partition_block_collections,
-	                             partition_string_heaps, global_ht.radix_bits);
+	RadixPartitioning::PartitionRowData(global_ht.buffer_manager, global_ht.layout, global_ht.pointer_offset,
+	                                    *swizzled_block_collection, *swizzled_string_heap, partition_block_collections,
+	                                    partition_string_heaps, global_ht.radix_bits);
 
 	// Add to global HT
 	global_ht.Merge(*this);
