@@ -8,7 +8,8 @@ add_subdirectory(dsdgen)
 
 add_library(tpcds_extension STATIC tpcds-extension.cpp ${DSDGEN_OBJECT_FILES})
 set(PARAMETERS "-warnings")
-build_loadable_extension(tpcds ${PARAMETERS} tpcds-extension.cpp ${DSDGEN_OBJECT_FILES})
+build_loadable_extension(tpcds ${PARAMETERS} tpcds-extension.cpp
+                         ${DSDGEN_OBJECT_FILES})
 
 install(
   TARGETS tpcds_extension

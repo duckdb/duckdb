@@ -42,7 +42,7 @@ set(FTS_SOURCES
 
 add_library(fts_extension STATIC ${FTS_SOURCES})
 set(PARAMETERS "-warnings")
-build_loadable_extension(fts  ${PARAMETERS} ${FTS_SOURCES})
+build_loadable_extension(fts ${PARAMETERS} ${FTS_SOURCES})
 
 install(
   TARGETS fts_extension
