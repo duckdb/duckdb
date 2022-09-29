@@ -551,6 +551,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 }
 
 void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint) {
+	if (total_rows == 0) {
+		return;
+	}
 	// scan the original table, check if there's any null value
 	auto &not_null_constraint = (BoundNotNullConstraint &)constraint;
 	vector<LogicalType> scan_types;

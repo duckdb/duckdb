@@ -216,7 +216,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 
 	TableAppendState append_state;
 	table.AppendLock(append_state);
-	if (append_state.row_start == 0 && storage.indexes.Empty()) {
+	if (append_state.row_start == 0 && storage.table.info->indexes.Empty()) {
 		// table is currently empty: move over the storage directly
 		table.MergeStorage(*storage.row_groups, storage.indexes, storage.stats);
 	} else {

@@ -51,8 +51,15 @@ const LogicalType &ColumnData::RootType() const {
 }
 
 idx_t ColumnData::GetMaxEntry() {
+	auto first_segment = data.GetRootSegment();
 	auto last_segment = data.GetLastSegment();
-	return last_segment ? last_segment->start + last_segment->count : start;
+	if (!first_segment) {
+		D_ASSERT(!last_segment);
+		return 0;
+	} else {
+		D_ASSERT(last_segment->start >= first_segment->start);
+		return last_segment->start + last_segment->count - first_segment->start;
+	}
 }
 
 void ColumnData::InitializeScan(ColumnScanState &state) {

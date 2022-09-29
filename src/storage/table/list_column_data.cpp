@@ -113,7 +113,8 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
 		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT ||
-		         state.child_states[1].row_index + child_scan_count <= child_column->GetMaxEntry());
+		         state.child_states[1].row_index + child_scan_count <=
+		             child_column->start + child_column->GetMaxEntry());
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
 	}
 
