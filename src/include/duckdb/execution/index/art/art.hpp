@@ -84,7 +84,7 @@ public:
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert data into the index.
-	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids, bool skip_remove) override;
 
 	//! Construct ARTs from sorted chunks and merge them.
 	void ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;

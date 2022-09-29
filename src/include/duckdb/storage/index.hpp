@@ -79,7 +79,7 @@ public:
 	void Delete(DataChunk &entries, Vector &row_identifiers);
 
 	//! Insert data into the index. Does not lock the index.
-	virtual bool Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
+	virtual bool Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers, bool skip_remove) = 0;
 	//! Construct an index from sorted chunks of keys.
 	virtual void ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) = 0;
 

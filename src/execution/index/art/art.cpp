@@ -372,7 +372,7 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 	D_ASSERT(success);
 }
 
-bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
+bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, bool skip_remove) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
 
@@ -393,6 +393,9 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 		row_t row_id = row_identifiers[i];
 		if (!Insert(tree, keys[i], 0, row_id)) {
+			if (skip_remove) {
+				return false;
+			}
 			// failed to insert because of constraint violation
 			failed_index = i;
 			break;
@@ -421,7 +424,7 @@ bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifi
 	ExecuteExpressions(appended_data, expression_result);
 
 	// now insert into the index
-	return Insert(lock, expression_result, row_identifiers);
+	return Insert(lock, expression_result, row_identifiers, false);
 }
 
 void ART::VerifyAppend(DataChunk &chunk) {
