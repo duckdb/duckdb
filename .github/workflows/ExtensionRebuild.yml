@@ -187,7 +187,9 @@ jobs:
 
     - name: Checkout specific DuckDB version
       shell: bash
-      run: git checkout ${{ inputs.duckdb_ref }}
+      run: |
+        git config --global --add safe.directory .
+        git checkout ${{ inputs.duckdb_ref }}
 
     - name: Override extensions.csv
       shell: bash
