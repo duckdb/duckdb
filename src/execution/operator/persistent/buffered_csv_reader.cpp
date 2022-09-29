@@ -1992,9 +1992,9 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
 		idx_t insert_col_idx;
-		if(union_by_name){
+		if (union_by_name) {
 			insert_col_idx = col_names_map[col_names[col_idx]];
-		}else{
+		} else {
 			insert_col_idx = col_idx;
 		}
 

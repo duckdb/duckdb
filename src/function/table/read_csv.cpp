@@ -98,16 +98,17 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			auto &col_names_map = reader->col_names_map;
 			D_ASSERT(col_names.size() == sql_types.size());
 
-			for (idx_t col = 0; col < col_names.size(); ++col) {  
+			for (idx_t col = 0; col < col_names.size(); ++col) {
 				auto union_find = union_names_map.find(col_names[col]);
 
-				if(union_find != union_names_map.end()){
-					//given same name , union_col's type must compatible with col's type
+				if (union_find != union_names_map.end()) {
+					// given same name , union_col's type must compatible with col's type
 					LogicalType compatible_type;
-					compatible_type = LogicalType::MaxLogicalType(options.union_col_types[union_find->second] , sql_types[col]);
+					compatible_type =
+					    LogicalType::MaxLogicalType(options.union_col_types[union_find->second], sql_types[col]);
 					options.union_col_types[union_find->second] = compatible_type;
 					col_names_map[col_names[col]] = union_find->second;
-				}else{
+				} else {
 					union_names_map[col_names[col]] = union_names_index;
 					col_names_map[col_names[col]] = union_names_index;
 					union_names_index++;
