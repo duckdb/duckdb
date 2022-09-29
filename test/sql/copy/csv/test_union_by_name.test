@@ -30,9 +30,9 @@ statement ok
 COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (HEADER 1, DELIMITER ',');
 
 statement error
-SELECT * FROM '__TEST_DIR__/ubn*.csv';
+SELECT * FROM read_csv_auto('__TEST_DIR__/ubn*.csv');
 
-query II
+query III
 SELECT * FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE);
 ----
 1	NULL	NULL
@@ -41,3 +41,62 @@ SELECT * FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE);
 5	6	NULL
 100	NULL	101
 102	NULL	103
+
+# Test timestamp type
+statement error
+SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn*.csv')
+
+query IIIII
+SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+----
+1	2	3	NULL	NULL
+3	4	5	NULL	NULL
+4	5	6	NULL	NULL
+test	88	NULL	2020-12-30 01:25:58.745232+01	NULL
+8cb123cb8	90	NULL	2020-12-30 02:25:58.745232+01	NULL
+34fd321	91	NULL	2020-12-30 03:25:58.745232+01	NULL
+fg5391jn4	92	NULL	2020-12-30 04:25:58.745232+01	NULL
+NULL	NULL	3	2003-06-30 12:03:10	6
+NULL	NULL	5	2003-06-30 12:03:10	6
+NULL	NULL	6	2003-06-30 12:03:10	6
+NULL	NULL	100	Monday	NULL
+NULL	NULL	200	Sunday	NULL
+NULL	NULL	300	Friday	NULL
+
+# Test glob pattern [12] and union_by_name with filename options
+query IIIII
+SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
+----
+1	2	3	NULL	data/csv/union-by-name/ubn1.csv
+3	4	5	NULL	data/csv/union-by-name/ubn1.csv
+4	5	6	NULL	data/csv/union-by-name/ubn1.csv
+test	88	NULL	2020-12-30 00:25:58.745232	data/csv/union-by-name/ubn2.csv
+8cb123cb8	90	NULL	2020-12-30 01:25:58.745232	data/csv/union-by-name/ubn2.csv
+34fd321	91	NULL	2020-12-30 02:25:58.745232	data/csv/union-by-name/ubn2.csv
+fg5391jn4	92	NULL	2020-12-30 03:25:58.745232	data/csv/union-by-name/ubn2.csv
+
+# Test glob pattern [!1-2] and union_by_name with filename options
+query IIII
+SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
+----
+6	3	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+6	5	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+6	6	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+NULL	100	Monday	data/csv/union-by-name/ubn4.csv
+NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
+NULL	300	Friday	data/csv/union-by-name/ubn4.csv
+
+# Test hive_partition with union_by_name 
+statement error
+SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE)
+
+query IIII
+SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
+----
+1	value1	aaa	a
+2	value2	NULL	b
+
+# Test hive_partition with union_by_name 
+statement error
+SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
+
