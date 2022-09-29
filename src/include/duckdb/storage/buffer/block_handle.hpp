@@ -14,6 +14,7 @@
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
+class BlockManager;
 class BufferHandle;
 class BufferManager;
 class DatabaseInstance;

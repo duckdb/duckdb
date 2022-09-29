@@ -7,6 +7,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/config.hpp"
 
 #include <algorithm>

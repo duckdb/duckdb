@@ -12,6 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 class BlockHandle;
