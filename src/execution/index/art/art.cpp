@@ -368,8 +368,9 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 	// NOTE: currently this code is only used for index creation, so we can assume that there are no
 	// duplicate violations between the existing index and the new data,
 	// so we do not need to revert any changes
-	auto success = this->MergeIndexes(lock, temp_art.get());
-	D_ASSERT(success);
+	if (!this->MergeIndexes(lock, temp_art.get())) {
+		throw ConstraintException("Data contains duplicates on indexed column(s)");
+	}
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
