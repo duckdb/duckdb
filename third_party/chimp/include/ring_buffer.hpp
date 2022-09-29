@@ -34,6 +34,13 @@ public:
 		buffer[index % RING_SIZE] = value;
 		indices[Key(value)] = index;
 	}
+	template <bool FIRST = false>
+	void InsertScan(uint64_t value) {
+		if (!FIRST) {
+			index++;
+		}
+		buffer[index % RING_SIZE] = value;
+	}
 	inline const uint64_t& Top() const {
 		return buffer[index % RING_SIZE];
 	}

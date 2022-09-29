@@ -278,7 +278,7 @@ public:
 
 	static inline RETURN_TYPE LoadFirst(Chimp128DecompressionState& state) {
 		RETURN_TYPE result = state.input.template ReadValue<RETURN_TYPE, sizeof(RETURN_TYPE) * __CHAR_BIT__>();
-		state.ring_buffer.Insert<true>(result);
+		state.ring_buffer.InsertScan<true>(result);
 		state.first = false;
 		state.reference_value = result;
 		return result;
@@ -294,14 +294,13 @@ public:
 		//flag_count[flag]++;
 		//printf("FLAG[%u] - total_count: %llu\n", (uint32_t)flag, (uint64_t)flag_count[flag]);
 
+		RETURN_TYPE result;
 		switch (flag) {
 		case VALUE_IDENTICAL: {
 			//! Value is identical to previous value
 			auto index = state.input.template ReadValue<uint8_t, 7>();
-			RETURN_TYPE result = state.ring_buffer.Value(index);
-			state.reference_value = result;
-			state.ring_buffer.Insert(result);
-			return result;
+			result = state.ring_buffer.Value(index);
+			break;
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
 			const UnpackedData &unpacked = unpacked_data[unpacked_index++];
@@ -309,7 +308,6 @@ public:
 			//UnpackPackedData(temp, unpacked);
 			state.leading_zeros = LEADING_REPRESENTATION[unpacked.leading_zero];
 			state.trailing_zeros = BIT_SIZE - unpacked.significant_bits - state.leading_zeros;
-			const auto bits_to_read = BIT_SIZE - state.leading_zeros - state.trailing_zeros;
 			//static thread_local uint64_t total_bitcount_read = 0;
 			//static thread_local uint64_t bits_to_read_count[65] = {0};
 			//static thread_local uint64_t total_read_count = 0;
@@ -318,32 +316,28 @@ public:
 			//total_read_count++;
 			//printf("BITS_READ[%u] - count: %llu\n", (uint32_t)bits_to_read, bits_to_read_count[bits_to_read]);
 			//printf("[%llu] - TOTAL BITS READ: %llu\n", total_read_count, total_bitcount_read);
-			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(bits_to_read);
+			result = state.input.template ReadValue<uint64_t>(unpacked.significant_bits);
 			result <<= state.trailing_zeros;
 			result ^= state.ring_buffer.Value(unpacked.index);
-			state.reference_value = result;
-			state.ring_buffer.Insert(result);
-			return result;
+			break;
 		}
 		case LEADING_ZERO_EQUALITY: {
-			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.leading_zeros);
+			result = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.leading_zeros);
 			result ^= state.reference_value;
-			state.reference_value = result;
-			state.ring_buffer.Insert(result);
-			return result;
+			break;
 		}
 		case LEADING_ZERO_LOAD: {
-			const auto leading_zero = leading_zeros[leading_zero_index++];
-			RETURN_TYPE result = state.input.template ReadValue<uint64_t>(BIT_SIZE - leading_zero);
+			state.leading_zeros = leading_zeros[leading_zero_index++];
+			result = state.input.template ReadValue<uint64_t>(BIT_SIZE - state.leading_zeros);
 			result ^= state.reference_value;
-			state.reference_value = result;
-			state.ring_buffer.Insert(result);
-			state.leading_zeros = leading_zero;
-			return result;
+			break;
 		}
 		default:
 			throw std::runtime_error("eek");
 		}
+		state.reference_value = result;
+		state.ring_buffer.InsertScan(result);
+		return result;
 	}
 };
 
