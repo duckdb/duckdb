@@ -212,21 +212,6 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 	if (bind_data.options.union_by_name) {
 		data.csv_reader->SetNullUnionCols(output, bind_data.options.union_col_names);
-
-		if (bind_data.options.include_file_name) {
-			Vector filename_col(LogicalType::VARCHAR);
-			filename_col.Flatten(output.size());
-			output.data.push_back(move(filename_col));
-		}
-
-		if (bind_data.options.include_parsed_hive_partitions) {
-			auto partitions = HivePartitioning::Parse(bind_data.options.file_path);
-			for (idx_t p_idx=0; p_idx<partitions.size(); ++p_idx) {
-				Vector hive_col(LogicalType::VARCHAR);
-				hive_col.Flatten(output.size());
-				output.data.push_back(move(hive_col));
-			}
-		}
 	}
 	if (bind_data.options.include_file_name) {
 		auto &col = output.data[bind_data.filename_col_idx];
