@@ -17,6 +17,7 @@
 #include "ring_buffer.hpp"
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/likely.hpp"
+#include "packed_data.hpp"
 
 //#include "byte_writer.hpp"
 //#include "byte_reader.hpp"
@@ -257,21 +258,12 @@ public:
 	static constexpr uint8_t INITIAL_FILL = INDEX_BITS_SIZE + LEADING_BITS_SIZE + SIGNIFICANT_BITS_SIZE;
 	static constexpr uint8_t BIT_SIZE = sizeof(uint64_t) * 8;
 
-	static constexpr uint8_t INDEX_MASK = ((uint8_t)1 << INDEX_BITS_SIZE) - 1;
-	static constexpr uint8_t LEADING_MASK = ((uint8_t)1 << LEADING_BITS_SIZE) - 1;
-	static constexpr uint8_t SIGNIFICANT_MASK = ((uint8_t)1 << SIGNIFICANT_BITS_SIZE) - 1;
-
-	static constexpr uint8_t INDEX_SHIFT_AMOUNT = INITIAL_FILL - INDEX_BITS_SIZE;
-	static constexpr uint8_t LEADING_SHIFT_AMOUNT = INDEX_SHIFT_AMOUNT - LEADING_BITS_SIZE;
-
 	//|----------------|	//! INITIAL_FILL(16) bits
 	// IIIIIII				//! Index (7 bits, shifted by 9)
 	//        LLL			//! LeadingZeros (3 bits, shifted by 6)
 	//           SSSSSS 	//! SignificantBits (6 bits)
 	static inline void UnpackPackedData(uint16_t packed_data, uint16_t& index, uint8_t& leading_zeros, uint16_t& significant_bits) {
-		index = packed_data >> INDEX_SHIFT_AMOUNT & INDEX_MASK;
-		leading_zeros = packed_data >> LEADING_SHIFT_AMOUNT & LEADING_MASK;
-		significant_bits = packed_data & SIGNIFICANT_MASK;
+		return PackedData::Unpack(packed_data, index, leading_zeros, significant_bits);
 	}
 
 	static inline RETURN_TYPE Load(uint8_t flag, uint8_t leading_zeros[], uint32_t &leading_zero_index, Chimp128DecompressionState& state) {
