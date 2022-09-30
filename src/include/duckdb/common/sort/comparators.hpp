@@ -21,7 +21,7 @@ using ValidityBytes = RowLayout::ValidityBytes;
 struct Comparators {
 public:
 	//! Whether a tie between two blobs can be broken
-	static bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout);
+	static bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t &row_ptr, const SortLayout &sort_layout);
 	//! Compares the tuples that a being read from in the 'left' and 'right blocks during merge sort
 	//! (only in case we cannot simply 'memcmp' - if there are blob columns)
 	static int CompareTuple(const SBScanState &left, const SBScanState &right, const data_ptr_t &l_ptr,

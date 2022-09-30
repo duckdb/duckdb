@@ -34,7 +34,8 @@ public:
 public:
 	template <class T, class BASE>
 	static string ToString(const T &entry) {
-		return entry.input->ToString() + " BETWEEN " + entry.lower->ToString() + " AND " + entry.upper->ToString();
+		return "(" + entry.input->ToString() + " BETWEEN " + entry.lower->ToString() + " AND " +
+		       entry.upper->ToString() + ")";
 	}
 };
 } // namespace duckdb
