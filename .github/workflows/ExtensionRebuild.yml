@@ -54,7 +54,6 @@ jobs:
         json: 0
         excel: 0
         build_dir: duckdb-old
-        post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         deploy_version: ${{ inputs.duckdb_ref }}
         run_tests: 0
