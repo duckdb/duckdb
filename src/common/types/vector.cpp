@@ -694,9 +694,9 @@ void Vector::Flatten(idx_t count) {
 		// ToUnifiedFormat uses flatten
 		idx_t total_count = FSSTVector::GetCount(*this);
 		// create vector to decompress into
-		Vector other(GetType(), count);
+		Vector other(GetType(), total_count);
 		// now copy the data of this vector to the other vector, decompressing the strings in the process
-		VectorOperations::Copy(*this, other, count, 0, 0);
+		VectorOperations::Copy(*this, other, total_count, 0, 0);
 		// create a reference to the data in the other vector
 		this->Reference(other);
 		break;
