@@ -31,6 +31,7 @@ class DataTable;
 class RowGroup;
 class StorageManager;
 class TableCatalogEntry;
+class TableIoManager;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
@@ -61,7 +62,7 @@ struct DataTableInfo {
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(DatabaseInstance &db, const string &schema, const string &table,
+	DataTable(DatabaseInstance &db, shared_ptr<TableIoManager> table_io_manager, const string &schema, const string &table,
 	          vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
@@ -79,6 +80,7 @@ public:
 
 	//! A reference to the database instance
 	DatabaseInstance &db;
+	shared_ptr<TableIoManager> table_io_manager;
 
 public:
 	//! Returns a list of types of the table

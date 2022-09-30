@@ -22,13 +22,13 @@
 
 namespace duckdb {
 
-DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &table,
+DataTable::DataTable(DatabaseInstance &db, shared_ptr<TableIoManager> table_io_manager_p, const string &schema, const string &table,
                      vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data)
     : info(make_shared<DataTableInfo>(db, schema, table)), column_definitions(move(column_definitions_p)), db(db),
-      is_root(true) {
+      table_io_manager(move(table_io_manager_p)), is_root(true) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
-	this->row_groups = make_shared<RowGroupCollection>(info, types, 0);
+	this->row_groups = make_shared<RowGroupCollection>(info, table_io_manager->GetBlockManagerForRowData(), types, 0);
 	if (data && !data->row_groups.empty()) {
 		this->row_groups->Initialize(*data);
 		stats.Initialize(types, *data);
@@ -43,7 +43,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
-    : info(parent.info), db(parent.db), is_root(true) {
+    : info(parent.info), db(parent.db), table_io_manager(parent.table_io_manager), is_root(true) {
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
@@ -69,7 +69,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : info(parent.info), db(parent.db), is_root(true) {
+    : info(parent.info), db(parent.db), table_io_manager(parent.table_io_manager), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
@@ -118,7 +118,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 // Alter column to add new constraint
 DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint)
-    : info(parent.info), db(parent.db), row_groups(parent.row_groups), is_root(true) {
+    : info(parent.info), db(parent.db), table_io_manager(parent.table_io_manager), row_groups(parent.row_groups), is_root(true) {
 
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	for (auto &column_def : parent.column_definitions) {
@@ -138,7 +138,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      const vector<column_t> &bound_columns, Expression &cast_expr)
-    : info(parent.info), db(parent.db), is_root(true) {
+    : info(parent.info), db(parent.db), table_io_manager(parent.table_io_manager), is_root(true) {
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
 	for (auto &column_def : parent.column_definitions) {
@@ -900,38 +900,16 @@ void DataTable::Checkpoint(TableDataWriter &writer) {
 		global_stats.push_back(stats.CopyStats(i));
 	}
 
-	vector<RowGroupPointer> row_group_pointers;
-	row_groups->Checkpoint(writer, row_group_pointers, global_stats);
+	row_groups->Checkpoint(writer, global_stats);
 
-	// store the current position in the metadata writer
-	// this is where the row groups for this table start
-	auto &data_writer = writer.GetTableWriter();
-	auto pointer = data_writer.GetBlockPointer();
-
-	for (auto &stats : global_stats) {
-		stats->Serialize(data_writer);
-	}
-	// now start writing the row group pointers to disk
-	data_writer.Write<uint64_t>(row_group_pointers.size());
-	for (auto &row_group_pointer : row_group_pointers) {
-		RowGroup::Serialize(row_group_pointer, data_writer);
-	}
-	// Now we serialize indexes in the tabledata_writer
-	auto blocks_info = info->indexes.SerializeIndexes(data_writer);
-
-	// metadata writing time
-	auto &metadata_writer = writer.GetMetaWriter();
-
-	// write the block pointer for the table info
-	metadata_writer.Write<block_id_t>(pointer.block_id);
-	metadata_writer.Write<uint64_t>(pointer.offset);
-
-	// Write-off block ids and offsets of indexes
-	metadata_writer.Write<idx_t>(blocks_info.size());
-	for (auto &block_info : blocks_info) {
-		metadata_writer.Write<idx_t>(block_info.block_id);
-		metadata_writer.Write<idx_t>(block_info.offset);
-	}
+	// The rowgroup payload data has been written. Now write:
+	//   column stats
+	//   row-group pointers
+	//   table pointer
+	//   index data
+	writer.FinalizeTable(
+		move(global_stats),
+		info.get());
 }
 
 void DataTable::CommitDropColumn(idx_t index) {

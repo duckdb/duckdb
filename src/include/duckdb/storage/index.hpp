@@ -21,6 +21,7 @@
 namespace duckdb {
 
 class ClientContext;
+class TableIoManager;
 class Transaction;
 
 struct IndexLock;
@@ -28,12 +29,14 @@ struct IndexLock;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
+	Index(IndexType type, TableIoManager &table_io_manager, const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
 	      IndexConstraintType constraint_type);
 	virtual ~Index() = default;
 
 	//! The type of the index
 	IndexType type;
+	//! Associated table io manager
+	TableIoManager &table_io_manager;
 	//! Column identifiers to extract from the base table
 	vector<column_t> column_ids;
 	//! unordered_set of column_ids used by the index

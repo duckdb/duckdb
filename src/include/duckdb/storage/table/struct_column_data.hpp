@@ -16,7 +16,7 @@ namespace duckdb {
 //! Struct column data represents a struct
 class StructColumnData : public ColumnData {
 public:
-	StructColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
+	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
 	                 ColumnData *parent = nullptr);
 
 	//! The sub-columns of the struct
@@ -51,8 +51,8 @@ public:
 
 	void CommitDropColumn() override;
 
-	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
 	                                             ColumnCheckpointInfo &checkpoint_info) override;
 
 	void DeserializeColumn(Deserializer &source) override;

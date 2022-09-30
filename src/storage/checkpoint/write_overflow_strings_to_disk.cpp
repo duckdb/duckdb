@@ -5,20 +5,18 @@
 
 namespace duckdb {
 
-WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(DatabaseInstance &db)
-    : db(db), block_id(INVALID_BLOCK), offset(0) {
+WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(BlockManager &block_manager)
+    : block_manager(block_manager), block_id(INVALID_BLOCK), offset(0) {
 }
 
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
-	auto &block_manager = BlockManager::GetBlockManager(db);
 	if (offset > 0) {
 		block_manager.Write(handle.GetFileBuffer(), block_id);
 	}
 }
 
 void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto &block_manager = BlockManager::GetBlockManager(db);
+	auto &buffer_manager = block_manager.buffer_manager;
 	if (!handle.IsValid()) {
 		handle = buffer_manager.Allocate(Storage::BLOCK_SIZE);
 	}
@@ -68,7 +66,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 }
 
 void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
-	auto &block_manager = BlockManager::GetBlockManager(db);
+	// QQ: How does this block ever get freed, if the checkpoint/table get overwritten?
 	if (block_id != INVALID_BLOCK) {
 		// there is an old block, write it first
 		block_manager.Write(handle.GetFileBuffer(), block_id);
