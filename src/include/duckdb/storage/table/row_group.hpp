@@ -157,6 +157,8 @@ private:
 
 struct VersionNode {
 	unique_ptr<ChunkInfo> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
+
+	void SetStart(idx_t start);
 };
 
 } // namespace duckdb

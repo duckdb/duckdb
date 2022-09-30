@@ -55,7 +55,20 @@ RowGroup::RowGroup(RowGroup &row_group, idx_t start)
 	for (auto &column : row_group.columns) {
 		this->columns.push_back(ColumnData::CreateColumn(*column, start));
 	}
+	if (version_info) {
+		version_info->SetStart(start);
+	}
 	Verify();
+}
+
+void VersionNode::SetStart(idx_t start) {
+	idx_t current_start = start;
+	for (idx_t i = 0; i < RowGroup::ROW_GROUP_VECTOR_COUNT; i++) {
+		if (info[i]) {
+			info[i]->start = current_start;
+		}
+		current_start += STANDARD_VECTOR_SIZE;
+	}
 }
 
 RowGroup::~RowGroup() {
