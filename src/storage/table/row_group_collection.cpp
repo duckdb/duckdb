@@ -279,7 +279,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
 
 void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
 	D_ASSERT(data.types == types);
-	auto index = row_start;
+	auto index = row_start + total_rows.load();
 	for (auto segment = data.row_groups->GetRootSegment(); segment; segment = segment->next.get()) {
 		auto &row_group = (RowGroup &)*segment;
 		auto new_group = make_unique<RowGroup>(row_group, index);
