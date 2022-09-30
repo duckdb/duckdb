@@ -34,13 +34,14 @@ jobs:
 
     - name: Checkout specific DuckDB version
       shell: bash
-      run: git checkout ${{ inputs.duckdb_ref }}
+      run: |
+        git clone https://github.com/duckdb/duckdb.git duckdb-old
+        git -C duckdb-old checkout ${{ inputs.duckdb_ref }}
 
     - name: Override extensions.csv
       shell: bash
       run: |
-        echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > extensions.csv
-        cat extensions.csv
+        echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -52,6 +53,7 @@ jobs:
         fts: 0
         json: 0
         excel: 0
+        build_dir: duckdb-old
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         deploy_version: ${{ inputs.duckdb_ref }}
@@ -80,13 +82,14 @@ jobs:
 
       - name: Checkout specific DuckDB version
         shell: bash
-        run: git checkout ${{ inputs.duckdb_ref }}
+        run: |
+          git clone https://github.com/duckdb/duckdb.git duckdb-old
+          git -C duckdb-old checkout ${{ inputs.duckdb_ref }}
 
       - name: Override extensions.csv
         shell: bash
         run: |
-          echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > extensions.csv
-          cat extensions.csv
+          echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
 
       - uses: actions/setup-python@v2
         with:
@@ -103,6 +106,7 @@ jobs:
           json: 0
           excel: 0
           treat_warn_as_error: 0
+          build_dir: duckdb-old
           post_install: rm build/release/src/libduckdb*
           run_tests: 0
           out_of_tree_ext: 1
@@ -113,6 +117,7 @@ jobs:
         shell: bash
         run: |
           pip install awscli
+          cd duckdb-old
           ./scripts/extension-upload.sh osx_amd64 ${{ inputs.duckdb_ref }}
           ./scripts/extension-upload.sh osx_arm64 ${{ inputs.duckdb_ref }}
 
@@ -126,13 +131,14 @@ jobs:
 
      - name: Checkout specific DuckDB version
        shell: bash
-       run: git checkout ${{ inputs.duckdb_ref }}
+       run: |
+         git clone https://github.com/duckdb/duckdb.git duckdb-old
+         git -C duckdb-old checkout ${{ inputs.duckdb_ref }}
 
      - name: Override extensions.csv
        shell: bash
        run: |
-         echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > extensions.csv
-         cat extensions.csv
+         echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
 
      - uses: actions/setup-python@v2
        with:
@@ -152,6 +158,7 @@ jobs:
          deploy_version: ${{ inputs.duckdb_ref }}
          run_tests: 0
          treat_warn_as_error: 0
+         build_dir: duckdb-old
          static_link_build: 1
          out_of_tree_ext: 1
          s3_id: ${{ secrets.S3_ID }}
@@ -188,14 +195,13 @@ jobs:
     - name: Checkout specific DuckDB version
       shell: bash
       run: |
-        git config --global --add safe.directory /__w/duckdb/duckdb
-        git checkout ${{ inputs.duckdb_ref }}
+        git clone https://github.com/duckdb/duckdb.git duckdb-old
+        git -C duckdb-old checkout ${{ inputs.duckdb_ref }}
 
     - name: Override extensions.csv
       shell: bash
       run: |
-        echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > extensions.csv
-        cat extensions.csv
+        echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -208,6 +214,7 @@ jobs:
         json: 0
         excel: 0
         run_tests: 0
+        build_dir: duckdb-old
         deploy_as: linux_amd64_gcc4
         deploy_version: ${{ inputs.duckdb_ref }}
         s3_id: ${{ secrets.S3_ID }}

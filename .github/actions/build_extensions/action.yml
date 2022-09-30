@@ -30,6 +30,9 @@ inputs:
   static_link_build:
     description: 'Links duckdb statically to the built extensions'
     default: 0
+  build_dir:
+    description: 'DuckDB source directory to run the build in'
+    default: '.'
   openssl_path:
     description: 'Directory of OpenSSL installation'
     default: '/usr/local/ssl'
@@ -102,6 +105,7 @@ runs:
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || '' }}
 
       run: |
+        cd  ${{ inputs.build_dir}}
         ls -al
         pwd
         echo "$USER"
@@ -112,6 +116,7 @@ runs:
       if: ${{ inputs.out_of_tree_ext != 0 }}
       shell: bash
       run: |
+        cd  ${{ inputs.build_dir}}
         mkdir -p build/release/extension/out_of_tree
         ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py ${{ inputs.aarch64_cross_compile == 1 && '--aarch64-cc' || '' }}
 
@@ -119,6 +124,7 @@ runs:
       if: ${{ inputs.post_install != '' }}
       shell: bash
       run: |
+        cd  ${{ inputs.build_dir}}
         ${{ inputs.post_install }}
 
     - name: Deploy
@@ -130,6 +136,7 @@ runs:
         DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
+        cd  ${{ inputs.build_dir}}
         if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           if [[ ! -z "${{ inputs.deploy_version }}" ]] ; then
             ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
@@ -148,6 +155,7 @@ runs:
         AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
+        cd  ${{ inputs.build_dir}}
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           ./scripts/extension-upload-test.sh
         else
