@@ -68,6 +68,10 @@ if '--extended' in sys.argv:
         "duckdb/common/arrow/arrow_wrapper.hpp",
         "duckdb/common/hive_partitioning.hpp",
         "duckdb/planner/operator/logical_get.hpp",
+        "duckdb/common/arrow/result_arrow_wrapper.hpp",
+        "duckdb/common/serializer/buffered_deserializer.hpp",
+        "duckdb/common/arrow/arrow_converter.hpp",
+        "duckdb/parser/statement/logical_plan_statement.hpp",
         "duckdb/common/compressed_file_system.hpp"]]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
