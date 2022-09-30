@@ -418,7 +418,11 @@ RadixPartitionedColumnData::RadixPartitionedColumnData(ClientContext &context_p,
 	partition_allocators.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
 		partition_allocators.emplace_back(make_shared<ColumnDataAllocator>(BufferManager::GetBufferManager(context)));
+		partition_allocators.back()->MakeShared();
 	}
+}
+
+RadixPartitionedColumnData::~RadixPartitionedColumnData() {
 }
 
 void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) {

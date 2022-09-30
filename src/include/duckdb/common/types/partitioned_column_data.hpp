@@ -30,7 +30,7 @@ struct PartitionedColumnDataAppendState {
 class PartitionedColumnData {
 public:
 	PartitionedColumnData(ClientContext &context, vector<LogicalType> types);
-	~PartitionedColumnData();
+	virtual ~PartitionedColumnData();
 
 public:
 	//! The types of columns in the PartitionedColumnData
@@ -45,6 +45,10 @@ public:
 	idx_t NumberOfPartitions() const {
 		return partition_allocators.size();
 	}
+	//! The partitions in this PartitionedColumnData
+	vector<unique_ptr<ColumnDataCollection>> &GetPartitions() {
+		return partitions;
+	}
 
 public:
 	//! Initializes a local state for parallel partitioning that can be merged into this PartitionedColumnData
@@ -53,7 +57,7 @@ public:
 	//! Appends a DataChunk to the PartitionedColumnDataAppendState
 	virtual void Append(PartitionedColumnDataAppendState &state, DataChunk &input);
 
-	//! Appends a local state into this PartitionedColumnData
+	//! Appends a local state into this PartitionedColumnData TODO: rename this
 	void AppendLocalState(PartitionedColumnDataAppendState &state);
 
 private:

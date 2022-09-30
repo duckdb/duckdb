@@ -1,6 +1,7 @@
 #include "duckdb/common/types/column_data_allocator.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+
 #include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -41,7 +42,8 @@ void ColumnDataAllocator::AllocateBlock() {
 	blocks.push_back(move(data));
 }
 
-void ColumnDataAllocator::AllocateDataInternal(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state) {
+void ColumnDataAllocator::AllocateDataInternal(idx_t size, uint32_t &block_id, uint32_t &offset,
+                                               ChunkManagementState *chunk_state) {
 	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
 		// in-memory allocator
 		auto allocated = alloc.allocator->Allocate(size);

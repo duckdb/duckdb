@@ -12,6 +12,7 @@ namespace duckdb {
 
 using ValidityBytes = JoinHashTable::ValidityBytes;
 using ScanStructure = JoinHashTable::ScanStructure;
+using ProbeSpill = JoinHashTable::ProbeSpill;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
@@ -1144,10 +1145,8 @@ static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &keys, DataChunk 
 	spill_chunk.data[spill_col_idx].Reference(hashes);
 }
 
-unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChunk &payload,
-                                                       ColumnDataCollection &spill_collection,
-                                                       ColumnDataAppendState &spill_append_state,
-                                                       DataChunk &spill_chunk) {
+unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChunk &payload, ProbeSpill &probe_spill,
+                                                       idx_t thread_idx, DataChunk &spill_chunk) {
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
 	Hash(keys, *FlatVector::IncrementalSelectionVector(), keys.size(), hashes);
@@ -1165,7 +1164,7 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChun
 	CreateSpillChunk(spill_chunk, keys, payload, hashes);
 	spill_chunk.Slice(false_sel, false_count);
 	spill_chunk.Verify();
-	spill_collection.Append(spill_append_state, spill_chunk);
+	probe_spill.Append(spill_chunk, thread_idx);
 
 	// slice the stuff we CAN probe right now
 	hashes.Slice(true_sel, true_count);
@@ -1185,6 +1184,74 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChun
 	ss->InitializeSelectionVector(current_sel);
 
 	return ss;
+}
+
+ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types)
+    : context(context), probe_types(probe_types) {
+	if (ht.total_count - ht.Count() <= ht.tuples_per_round) {
+		// No need to partition as we will only have one more probe round
+		partitioned = false;
+	} else {
+		// More than one probe round to go, so we need to partition
+		partitioned = true;
+		partitioned_data =
+		    make_unique<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
+	}
+}
+
+idx_t ProbeSpill::RegisterThread() {
+	lock_guard<mutex> guard(lock);
+	if (partitioned) {
+		idx_t thread_idx = partition_append_states.size();
+		partition_append_states.emplace_back();
+		partitioned_data->InitializeAppendState(partition_append_states.back());
+		return thread_idx;
+	} else {
+		idx_t thread_idx = local_spill_collections.size();
+		local_spill_collections.emplace_back(make_unique<ColumnDataCollection>(context, probe_types));
+		spill_append_states.emplace_back();
+		local_spill_collections.back()->InitializeAppend(spill_append_states.back());
+		return thread_idx;
+	}
+}
+
+void ProbeSpill::Append(DataChunk &chunk, idx_t thread_idx) {
+	if (partitioned) {
+		partitioned_data->Append(partition_append_states[thread_idx], chunk);
+	} else {
+		local_spill_collections[thread_idx]->Append(spill_append_states[thread_idx], chunk);
+	}
+}
+
+void ProbeSpill::Finalize() {
+	if (partitioned) {
+		for (auto &append_state : partition_append_states) {
+			partitioned_data->AppendLocalState(append_state);
+		}
+		partition_append_states.clear();
+	} else {
+		global_spill_collection = move(local_spill_collections[0]);
+		for (idx_t i = 1; i < local_spill_collections.size(); i++) {
+			global_spill_collection->Combine(*local_spill_collections[i]);
+		}
+		local_spill_collections.clear();
+		spill_append_states.clear();
+	}
+}
+
+unique_ptr<ColumnDataCollection> ProbeSpill::GetNextProbeCollection(JoinHashTable &ht) {
+	if (partitioned) {
+		auto &partitions = partitioned_data->GetPartitions();
+		auto merged_partitions = move(partitions[ht.partition_start]);
+		for (idx_t p_idx = ht.partition_start + 1; p_idx < ht.partition_end; p_idx++) {
+			auto &partition = partitions[p_idx];
+			merged_partitions->Combine(*partition);
+			partition.reset();
+		}
+		return merged_partitions;
+	} else {
+		return move(global_spill_collection);
+	}
 }
 
 } // namespace duckdb

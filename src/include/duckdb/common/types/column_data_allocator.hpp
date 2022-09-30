@@ -37,6 +37,9 @@ public:
 	ColumnDataAllocatorType GetType() {
 		return type;
 	}
+	void MakeShared() {
+		shared = true;
+	}
 
 public:
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
@@ -67,7 +70,7 @@ private:
 	//! The set of allocated data
 	vector<AllocatedData> allocated_data;
 	//! Whether this ColumnDataAllocator is shared across ColumnDataCollections that allocate in parallel
-	bool shared;
+	bool shared = false;
 	//! Lock used in case this ColumnDataAllocator is shared across threads
 	mutex lock;
 };

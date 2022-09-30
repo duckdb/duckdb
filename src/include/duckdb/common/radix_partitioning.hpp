@@ -60,6 +60,7 @@ public:
 class RadixPartitionedColumnData : public PartitionedColumnData {
 public:
 	RadixPartitionedColumnData(ClientContext &context, vector<LogicalType> types, idx_t radix_bits, idx_t hash_col_idx);
+	~RadixPartitionedColumnData() override;
 
 	void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) override;
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;

@@ -241,6 +241,38 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
+	struct ProbeSpill {
+	public:
+		ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types);
+
+		//! Create an append state for a new thread and assign an index
+		idx_t RegisterThread();
+		//! Append a chunk to this ProbeSpill
+		void Append(DataChunk &chunk, idx_t thread_idx);
+		//! Finalize by merging the thread-local accumulated data
+		void Finalize();
+
+		//! Get the probe collection for the next probe round
+		unique_ptr<ColumnDataCollection> GetNextProbeCollection(JoinHashTable &ht);
+
+	private:
+		mutex lock;
+		ClientContext &context;
+
+		//! The types of the probe DataChunks
+		const vector<LogicalType> &probe_types;
+		//! Whether the probe data is partitioned
+		bool partitioned;
+
+		//! The partitioned probe data (if partitioned) and append states
+		unique_ptr<PartitionedColumnData> partitioned_data;
+		vector<PartitionedColumnDataAppendState> partition_append_states;
+		//! The probe data (if not partitioned) and append states
+		unique_ptr<ColumnDataCollection> global_spill_collection;
+		vector<unique_ptr<ColumnDataCollection>> local_spill_collections;
+		vector<ColumnDataAppendState> spill_append_states;
+	};
+
 	//! Whether we are doing an external hash join
 	bool external;
 	//! The current number of radix bits used to partition
@@ -281,8 +313,8 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize();
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, DataChunk &payload, ColumnDataCollection &spill_collection,
-	                                        ColumnDataAppendState &spill_append_state, DataChunk &spill_chunk);
+	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, DataChunk &payload, ProbeSpill &probe_spill,
+	                                        idx_t thread_idx, DataChunk &spill_chunk);
 
 private:
 	//! First and last partition of the current partitioned round
