@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(description='Builds out-of-tree extensions for 
 
 parser.add_argument('--extensions', action='store',
                     help='CSV file with DuckDB extensions to build', default="extensions.csv")
-
+parser.add_argument('--aarch64-cc', help='Enables Linux aarch64 crosscompile build', action='store_true')
 
 args = parser.parse_args()
 
@@ -51,6 +51,7 @@ for row in reader:
 
 basedir = os.getcwd()
 
+clonedirs = []
 for task in tasks:
     print(task)
     if (os.name == 'nt' and  task['build_on_windows'] == 'true') or os.name != 'nt':
@@ -60,7 +61,12 @@ for task in tasks:
         os.chdir(clonedir)
         exec('git checkout %s' % (task['commit']))
         os.chdir(basedir)
-        os.environ['BUILD_OUT_OF_TREE_EXTENSION'] = clonedir
         print(f"Building extension \"{task['name']}\" from URL \"{task['url']}\" at commit \"{task['commit']}\" at clonedir \"{clonedir}\"")
-        exec('make')
+        clonedirs.append(clonedir)
+
+os.environ['BUILD_OUT_OF_TREE_EXTENSION'] = ';'.join(clonedirs)
+if (args.aarch64_cc):
+    os.environ['CC'] = "aarch64-linux-gnu-gcc"
+    os.environ['CXX'] = "aarch64-linux-gnu-g++"
+exec('make')
 print("done")

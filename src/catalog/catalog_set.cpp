@@ -192,8 +192,6 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 			}
 		}
 	}
-	//! Check the dependency manager to verify that there are no conflicting dependencies with this alter
-	catalog.dependency_manager->AlterObject(context, entry, value.get());
 
 	if (value->name != original_name) {
 		// Do PutMapping and DeleteMapping after dependency check
@@ -211,9 +209,17 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	alter_info->Serialize(serializer);
 	BinaryData serialized_alter = serializer.GetData();
 
+	auto new_entry = value.get();
+
 	// push the old entry in the undo buffer for this transaction
 	transaction.PushCatalogEntry(value->child.get(), serialized_alter.data.get(), serialized_alter.size);
 	entries[entry_index] = move(value);
+
+	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
+	// Note that we do this AFTER the new entry has been entirely set up in the catalog set
+	// that is because in case the alter fails because of a dependency conflict, we need to be able to cleanly roll back
+	// to the old entry.
+	catalog.dependency_manager->AlterObject(context, entry, new_entry);
 
 	return true;
 }

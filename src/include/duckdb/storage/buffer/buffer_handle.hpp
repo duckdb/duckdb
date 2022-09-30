@@ -33,12 +33,14 @@ public:
 	DUCKDB_API data_ptr_t Ptr() const;
 	//! Returns a pointer to the buffer data. Handle must be valid.
 	DUCKDB_API data_ptr_t Ptr();
-	//! Gets the block id of the underlying block. Handle must be valid.
-	DUCKDB_API block_id_t GetBlockId() const;
 	//! Gets the underlying file buffer. Handle must be valid.
 	DUCKDB_API FileBuffer &GetFileBuffer();
 	//! Destroys the buffer handle
 	DUCKDB_API void Destroy();
+
+	const shared_ptr<BlockHandle> &GetBlockHandle() const {
+		return handle;
+	}
 
 private:
 	//! The block handle

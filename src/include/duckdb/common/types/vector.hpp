@@ -123,7 +123,7 @@ public:
 	DUCKDB_API void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data);
 
 	//! Turn the vector into a sequence vector
-	DUCKDB_API void Sequence(int64_t start, int64_t increment);
+	DUCKDB_API void Sequence(int64_t start, int64_t increment, idx_t count);
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
@@ -355,17 +355,29 @@ struct StringVector {
 	DUCKDB_API static void AddHeapReference(Vector &vector, Vector &other);
 };
 
+struct MapVector {
+	DUCKDB_API static const Vector &GetKeys(const Vector &vector);
+	DUCKDB_API static const Vector &GetValues(const Vector &vector);
+	DUCKDB_API static Vector &GetKeys(Vector &vector);
+	DUCKDB_API static Vector &GetValues(Vector &vector);
+};
+
 struct StructVector {
 	DUCKDB_API static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
 	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
 };
 
 struct SequenceVector {
-	static void GetSequence(const Vector &vector, int64_t &start, int64_t &increment) {
+	static void GetSequence(const Vector &vector, int64_t &start, int64_t &increment, int64_t &sequence_count) {
 		D_ASSERT(vector.GetVectorType() == VectorType::SEQUENCE_VECTOR);
 		auto data = (int64_t *)vector.buffer->GetData();
 		start = data[0];
 		increment = data[1];
+		sequence_count = data[2];
+	}
+	static void GetSequence(const Vector &vector, int64_t &start, int64_t &increment) {
+		int64_t sequence_count;
+		GetSequence(vector, start, increment, sequence_count);
 	}
 };
 

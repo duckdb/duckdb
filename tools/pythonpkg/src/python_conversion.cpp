@@ -201,7 +201,7 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele) {
 	return true;
 }
 
-PythonObjectType GetObjectType(py::handle &ele) {
+PythonObjectType GetPythonObjectType(py::handle &ele) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 	if (ele.is_none()) {
@@ -244,9 +244,7 @@ PythonObjectType GetObjectType(py::handle &ele) {
 }
 
 Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool nan_as_null) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-
-	auto object_type = GetObjectType(ele);
+	auto object_type = GetPythonObjectType(ele);
 
 	switch (object_type) {
 	case PythonObjectType::None:

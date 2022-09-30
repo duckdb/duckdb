@@ -1,0 +1,294 @@
+# name: test/parquet/test_parquet_reader_compression.test
+# description: Test Parquet Reader with files on data/parquet-testing/compression
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_NONE.parquet') limit 50
+----
+0	20	{'string': foo, 'int': 22}	[]
+1	6	{'string': baz, 'int': 10}	NULL
+2	23	{'string': bar, 'int': NULL}	NULL
+3	9	{'string': baz, 'int': 12}	[25, 7, 5, 22, 24, 18, 30, 7, 19, 7, 17, 11, 30, 40, 30]
+4	6	{'string': foo, 'int': 41}	NULL
+5	23	NULL	[5, 22, 17, 7, 9, 37, 28, 37, 26, 30, 38, 40, 2]
+6	19	{'string': foo, 'int': NULL}	[NULL, 25, 21]
+7	20	{'string': baz, 'int': 10}	[35, 32, 11, 26, 27, 4, 1, 13, 31, 2, 32, 38, 16, 0, 29, 23, 32, 7, 17]
+8	29	{'string': baz, 'int': 35}	NULL
+9	11	NULL	[14, 0, NULL, 29, 23, 14, 13, 13, 15, 26, 29, 32, 5, 13, 32, 29, 38]
+10	25	{'string': baz, 'int': 23}	[5, 20, 9, 18, 32, 6, 21, 18, 1, 32, 34, 17, 3, 26, NULL, 1, 16, 9, 41]
+11	9	NULL	[]
+12	17	{'string': bar, 'int': 25}	[8, 37, NULL, 34, 1, 5, 9, 40, 1, 28, 27, 14, 28, 0, 14, 33, 1, 26, 18]
+13	17	{'string': foo, 'int': 20}	[38, 7, 40, 18, 26]
+14	6	NULL	[16, 31, 9, 30, 36, 24, 29, 20, 20, 20, 17, 37, 4, 41, 25, 12, 21, 24]
+15	5	{'string': bar, 'int': NULL}	[38, 35, 41, 4, 34, NULL, 37, 12, 21, 31, 16, 13, 20, 36, 22, 19, 35]
+16	6	{'string': bar, 'int': 25}	[3]
+17	20	{'string': bar, 'int': 35}	[6, 11, 25, 14, 38, 19, 9, 21, 12, 41, 36, 31]
+18	18	{'string': NULL, 'int': 19}	[28]
+19	28	NULL	[0, 41, 26, 27, 23, 40]
+20	21	{'string': bar, 'int': 3}	[15, 35, 40, 29, 37, 8, 4, 9, 6, 37, 16, 14, 32, 29, NULL, 18, 1]
+21	7	{'string': NULL, 'int': 36}	[19]
+22	27	NULL	[3, 0, 15, 35, 6, 13, 24, 14, 7, 3, 32]
+23	28	{'string': NULL, 'int': NULL}	[26, 17, 33, 17, 21, 34, 20, 25, 33, 21, 4, 1, 23, 9, 32]
+24	21	{'string': foo, 'int': 12}	[19, 15, 36, 37, 1, 19, 21, 4, 40, NULL, NULL, 19, 4]
+25	20	{'string': foo, 'int': NULL}	NULL
+26	3	{'string': NULL, 'int': 15}	[32, 31, 3, 26, 34, 1, 6, 29, 5, 22, 11, 1, 18]
+27	2	{'string': foo, 'int': 25}	[19]
+28	7	{'string': foo, 'int': 34}	[20, 1, 18, 20, 1, 3, 25, 2, 31, 22, NULL, 40, 23, 32, 40, 10]
+29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_NONE.parquet') limit 50
+----
+0	20	{'string': foo, 'int': 22}	[]
+1	6	{'string': baz, 'int': 10}	NULL
+2	23	{'string': bar, 'int': NULL}	NULL
+3	9	{'string': baz, 'int': 12}	[25, 7, 5, 22, 24, 18, 30, 7, 19, 7, 17, 11, 30, 40, 30]
+4	6	{'string': foo, 'int': 41}	NULL
+5	23	NULL	[5, 22, 17, 7, 9, 37, 28, 37, 26, 30, 38, 40, 2]
+6	19	{'string': foo, 'int': NULL}	[NULL, 25, 21]
+7	20	{'string': baz, 'int': 10}	[35, 32, 11, 26, 27, 4, 1, 13, 31, 2, 32, 38, 16, 0, 29, 23, 32, 7, 17]
+8	29	{'string': baz, 'int': 35}	NULL
+9	11	NULL	[14, 0, NULL, 29, 23, 14, 13, 13, 15, 26, 29, 32, 5, 13, 32, 29, 38]
+10	25	{'string': baz, 'int': 23}	[5, 20, 9, 18, 32, 6, 21, 18, 1, 32, 34, 17, 3, 26, NULL, 1, 16, 9, 41]
+11	9	NULL	[]
+12	17	{'string': bar, 'int': 25}	[8, 37, NULL, 34, 1, 5, 9, 40, 1, 28, 27, 14, 28, 0, 14, 33, 1, 26, 18]
+13	17	{'string': foo, 'int': 20}	[38, 7, 40, 18, 26]
+14	6	NULL	[16, 31, 9, 30, 36, 24, 29, 20, 20, 20, 17, 37, 4, 41, 25, 12, 21, 24]
+15	5	{'string': bar, 'int': NULL}	[38, 35, 41, 4, 34, NULL, 37, 12, 21, 31, 16, 13, 20, 36, 22, 19, 35]
+16	6	{'string': bar, 'int': 25}	[3]
+17	20	{'string': bar, 'int': 35}	[6, 11, 25, 14, 38, 19, 9, 21, 12, 41, 36, 31]
+18	18	{'string': NULL, 'int': 19}	[28]
+19	28	NULL	[0, 41, 26, 27, 23, 40]
+20	21	{'string': bar, 'int': 3}	[15, 35, 40, 29, 37, 8, 4, 9, 6, 37, 16, 14, 32, 29, NULL, 18, 1]
+21	7	{'string': NULL, 'int': 36}	[19]
+22	27	NULL	[3, 0, 15, 35, 6, 13, 24, 14, 7, 3, 32]
+23	28	{'string': NULL, 'int': NULL}	[26, 17, 33, 17, 21, 34, 20, 25, 33, 21, 4, 1, 23, 9, 32]
+24	21	{'string': foo, 'int': 12}	[19, 15, 36, 37, 1, 19, 21, 4, 40, NULL, NULL, 19, 4]
+25	20	{'string': foo, 'int': NULL}	NULL
+26	3	{'string': NULL, 'int': 15}	[32, 31, 3, 26, 34, 1, 6, 29, 5, 22, 11, 1, 18]
+27	2	{'string': foo, 'int': 25}	[19]
+28	7	{'string': foo, 'int': 34}	[20, 1, 18, 20, 1, 3, 25, 2, 31, 22, NULL, 40, 23, 32, 40, 10]
+29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_SNAPPY.parquet') limit 50
+----
+0	20	{'string': foo, 'int': 22}	[]
+1	6	{'string': baz, 'int': 10}	NULL
+2	23	{'string': bar, 'int': NULL}	NULL
+3	9	{'string': baz, 'int': 12}	[25, 7, 5, 22, 24, 18, 30, 7, 19, 7, 17, 11, 30, 40, 30]
+4	6	{'string': foo, 'int': 41}	NULL
+5	23	NULL	[5, 22, 17, 7, 9, 37, 28, 37, 26, 30, 38, 40, 2]
+6	19	{'string': foo, 'int': NULL}	[NULL, 25, 21]
+7	20	{'string': baz, 'int': 10}	[35, 32, 11, 26, 27, 4, 1, 13, 31, 2, 32, 38, 16, 0, 29, 23, 32, 7, 17]
+8	29	{'string': baz, 'int': 35}	NULL
+9	11	NULL	[14, 0, NULL, 29, 23, 14, 13, 13, 15, 26, 29, 32, 5, 13, 32, 29, 38]
+10	25	{'string': baz, 'int': 23}	[5, 20, 9, 18, 32, 6, 21, 18, 1, 32, 34, 17, 3, 26, NULL, 1, 16, 9, 41]
+11	9	NULL	[]
+12	17	{'string': bar, 'int': 25}	[8, 37, NULL, 34, 1, 5, 9, 40, 1, 28, 27, 14, 28, 0, 14, 33, 1, 26, 18]
+13	17	{'string': foo, 'int': 20}	[38, 7, 40, 18, 26]
+14	6	NULL	[16, 31, 9, 30, 36, 24, 29, 20, 20, 20, 17, 37, 4, 41, 25, 12, 21, 24]
+15	5	{'string': bar, 'int': NULL}	[38, 35, 41, 4, 34, NULL, 37, 12, 21, 31, 16, 13, 20, 36, 22, 19, 35]
+16	6	{'string': bar, 'int': 25}	[3]
+17	20	{'string': bar, 'int': 35}	[6, 11, 25, 14, 38, 19, 9, 21, 12, 41, 36, 31]
+18	18	{'string': NULL, 'int': 19}	[28]
+19	28	NULL	[0, 41, 26, 27, 23, 40]
+20	21	{'string': bar, 'int': 3}	[15, 35, 40, 29, 37, 8, 4, 9, 6, 37, 16, 14, 32, 29, NULL, 18, 1]
+21	7	{'string': NULL, 'int': 36}	[19]
+22	27	NULL	[3, 0, 15, 35, 6, 13, 24, 14, 7, 3, 32]
+23	28	{'string': NULL, 'int': NULL}	[26, 17, 33, 17, 21, 34, 20, 25, 33, 21, 4, 1, 23, 9, 32]
+24	21	{'string': foo, 'int': 12}	[19, 15, 36, 37, 1, 19, 21, 4, 40, NULL, NULL, 19, 4]
+25	20	{'string': foo, 'int': NULL}	NULL
+26	3	{'string': NULL, 'int': 15}	[32, 31, 3, 26, 34, 1, 6, 29, 5, 22, 11, 1, 18]
+27	2	{'string': foo, 'int': 25}	[19]
+28	7	{'string': foo, 'int': 34}	[20, 1, 18, 20, 1, 3, 25, 2, 31, 22, NULL, 40, 23, 32, 40, 10]
+29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_SNAPPY.parquet') limit 50
+----
+0	20	{'string': foo, 'int': 22}	[]
+1	6	{'string': baz, 'int': 10}	NULL
+2	23	{'string': bar, 'int': NULL}	NULL
+3	9	{'string': baz, 'int': 12}	[25, 7, 5, 22, 24, 18, 30, 7, 19, 7, 17, 11, 30, 40, 30]
+4	6	{'string': foo, 'int': 41}	NULL
+5	23	NULL	[5, 22, 17, 7, 9, 37, 28, 37, 26, 30, 38, 40, 2]
+6	19	{'string': foo, 'int': NULL}	[NULL, 25, 21]
+7	20	{'string': baz, 'int': 10}	[35, 32, 11, 26, 27, 4, 1, 13, 31, 2, 32, 38, 16, 0, 29, 23, 32, 7, 17]
+8	29	{'string': baz, 'int': 35}	NULL
+9	11	NULL	[14, 0, NULL, 29, 23, 14, 13, 13, 15, 26, 29, 32, 5, 13, 32, 29, 38]
+10	25	{'string': baz, 'int': 23}	[5, 20, 9, 18, 32, 6, 21, 18, 1, 32, 34, 17, 3, 26, NULL, 1, 16, 9, 41]
+11	9	NULL	[]
+12	17	{'string': bar, 'int': 25}	[8, 37, NULL, 34, 1, 5, 9, 40, 1, 28, 27, 14, 28, 0, 14, 33, 1, 26, 18]
+13	17	{'string': foo, 'int': 20}	[38, 7, 40, 18, 26]
+14	6	NULL	[16, 31, 9, 30, 36, 24, 29, 20, 20, 20, 17, 37, 4, 41, 25, 12, 21, 24]
+15	5	{'string': bar, 'int': NULL}	[38, 35, 41, 4, 34, NULL, 37, 12, 21, 31, 16, 13, 20, 36, 22, 19, 35]
+16	6	{'string': bar, 'int': 25}	[3]
+17	20	{'string': bar, 'int': 35}	[6, 11, 25, 14, 38, 19, 9, 21, 12, 41, 36, 31]
+18	18	{'string': NULL, 'int': 19}	[28]
+19	28	NULL	[0, 41, 26, 27, 23, 40]
+20	21	{'string': bar, 'int': 3}	[15, 35, 40, 29, 37, 8, 4, 9, 6, 37, 16, 14, 32, 29, NULL, 18, 1]
+21	7	{'string': NULL, 'int': 36}	[19]
+22	27	NULL	[3, 0, 15, 35, 6, 13, 24, 14, 7, 3, 32]
+23	28	{'string': NULL, 'int': NULL}	[26, 17, 33, 17, 21, 34, 20, 25, 33, 21, 4, 1, 23, 9, 32]
+24	21	{'string': foo, 'int': 12}	[19, 15, 36, 37, 1, 19, 21, 4, 40, NULL, NULL, 19, 4]
+25	20	{'string': foo, 'int': NULL}	NULL
+26	3	{'string': NULL, 'int': 15}	[32, 31, 3, 26, 34, 1, 6, 29, 5, 22, 11, 1, 18]
+27	2	{'string': foo, 'int': 25}	[19]
+28	7	{'string': foo, 'int': 34}	[20, 1, 18, 20, 1, 3, 25, 2, 31, 22, NULL, 40, 23, 32, 40, 10]
+29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_GZIP.parquet') limit 50
+----
+0	20	{'string': foo, 'int': 22}	[]
+1	6	{'string': baz, 'int': 10}	NULL
+2	23	{'string': bar, 'int': NULL}	NULL
+3	9	{'string': baz, 'int': 12}	[25, 7, 5, 22, 24, 18, 30, 7, 19, 7, 17, 11, 30, 40, 30]
+4	6	{'string': foo, 'int': 41}	NULL
+5	23	NULL	[5, 22, 17, 7, 9, 37, 28, 37, 26, 30, 38, 40, 2]
+6	19	{'string': foo, 'int': NULL}	[NULL, 25, 21]
+7	20	{'string': baz, 'int': 10}	[35, 32, 11, 26, 27, 4, 1, 13, 31, 2, 32, 38, 16, 0, 29, 23, 32, 7, 17]
+8	29	{'string': baz, 'int': 35}	NULL
+9	11	NULL	[14, 0, NULL, 29, 23, 14, 13, 13, 15, 26, 29, 32, 5, 13, 32, 29, 38]
+10	25	{'string': baz, 'int': 23}	[5, 20, 9, 18, 32, 6, 21, 18, 1, 32, 34, 17, 3, 26, NULL, 1, 16, 9, 41]
+11	9	NULL	[]
+12	17	{'string': bar, 'int': 25}	[8, 37, NULL, 34, 1, 5, 9, 40, 1, 28, 27, 14, 28, 0, 14, 33, 1, 26, 18]
+13	17	{'string': foo, 'int': 20}	[38, 7, 40, 18, 26]
+14	6	NULL	[16, 31, 9, 30, 36, 24, 29, 20, 20, 20, 17, 37, 4, 41, 25, 12, 21, 24]
+15	5	{'string': bar, 'int': NULL}	[38, 35, 41, 4, 34, NULL, 37, 12, 21, 31, 16, 13, 20, 36, 22, 19, 35]
+16	6	{'string': bar, 'int': 25}	[3]
+17	20	{'string': bar, 'int': 35}	[6, 11, 25, 14, 38, 19, 9, 21, 12, 41, 36, 31]
+18	18	{'string': NULL, 'int': 19}	[28]
+19	28	NULL	[0, 41, 26, 27, 23, 40]
+20	21	{'string': bar, 'int': 3}	[15, 35, 40, 29, 37, 8, 4, 9, 6, 37, 16, 14, 32, 29, NULL, 18, 1]
+21	7	{'string': NULL, 'int': 36}	[19]
+22	27	NULL	[3, 0, 15, 35, 6, 13, 24, 14, 7, 3, 32]
+23	28	{'string': NULL, 'int': NULL}	[26, 17, 33, 17, 21, 34, 20, 25, 33, 21, 4, 1, 23, 9, 32]
+24	21	{'string': foo, 'int': 12}	[19, 15, 36, 37, 1, 19, 21, 4, 40, NULL, NULL, 19, 4]
+25	20	{'string': foo, 'int': NULL}	NULL
+26	3	{'string': NULL, 'int': 15}	[32, 31, 3, 26, 34, 1, 6, 29, 5, 22, 11, 1, 18]
+27	2	{'string': foo, 'int': 25}	[19]
+28	7	{'string': foo, 'int': 34}	[20, 1, 18, 20, 1, 3, 25, 2, 31, 22, NULL, 40, 23, 32, 40, 10]
+29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_GZIP.parquet') limit 50
+----
+0	20	{'string': foo, 'int': 22}	[]
+1	6	{'string': baz, 'int': 10}	NULL
+2	23	{'string': bar, 'int': NULL}	NULL
+3	9	{'string': baz, 'int': 12}	[25, 7, 5, 22, 24, 18, 30, 7, 19, 7, 17, 11, 30, 40, 30]
+4	6	{'string': foo, 'int': 41}	NULL
+5	23	NULL	[5, 22, 17, 7, 9, 37, 28, 37, 26, 30, 38, 40, 2]
+6	19	{'string': foo, 'int': NULL}	[NULL, 25, 21]
+7	20	{'string': baz, 'int': 10}	[35, 32, 11, 26, 27, 4, 1, 13, 31, 2, 32, 38, 16, 0, 29, 23, 32, 7, 17]
+8	29	{'string': baz, 'int': 35}	NULL
+9	11	NULL	[14, 0, NULL, 29, 23, 14, 13, 13, 15, 26, 29, 32, 5, 13, 32, 29, 38]
+10	25	{'string': baz, 'int': 23}	[5, 20, 9, 18, 32, 6, 21, 18, 1, 32, 34, 17, 3, 26, NULL, 1, 16, 9, 41]
+11	9	NULL	[]
+12	17	{'string': bar, 'int': 25}	[8, 37, NULL, 34, 1, 5, 9, 40, 1, 28, 27, 14, 28, 0, 14, 33, 1, 26, 18]
+13	17	{'string': foo, 'int': 20}	[38, 7, 40, 18, 26]
+14	6	NULL	[16, 31, 9, 30, 36, 24, 29, 20, 20, 20, 17, 37, 4, 41, 25, 12, 21, 24]
+15	5	{'string': bar, 'int': NULL}	[38, 35, 41, 4, 34, NULL, 37, 12, 21, 31, 16, 13, 20, 36, 22, 19, 35]
+16	6	{'string': bar, 'int': 25}	[3]
+17	20	{'string': bar, 'int': 35}	[6, 11, 25, 14, 38, 19, 9, 21, 12, 41, 36, 31]
+18	18	{'string': NULL, 'int': 19}	[28]
+19	28	NULL	[0, 41, 26, 27, 23, 40]
+20	21	{'string': bar, 'int': 3}	[15, 35, 40, 29, 37, 8, 4, 9, 6, 37, 16, 14, 32, 29, NULL, 18, 1]
+21	7	{'string': NULL, 'int': 36}	[19]
+22	27	NULL	[3, 0, 15, 35, 6, 13, 24, 14, 7, 3, 32]
+23	28	{'string': NULL, 'int': NULL}	[26, 17, 33, 17, 21, 34, 20, 25, 33, 21, 4, 1, 23, 9, 32]
+24	21	{'string': foo, 'int': 12}	[19, 15, 36, 37, 1, 19, 21, 4, 40, NULL, NULL, 19, 4]
+25	20	{'string': foo, 'int': NULL}	NULL
+26	3	{'string': NULL, 'int': 15}	[32, 31, 3, 26, 34, 1, 6, 29, 5, 22, 11, 1, 18]
+27	2	{'string': foo, 'int': 25}	[19]
+28	7	{'string': foo, 'int': 34}	[20, 1, 18, 20, 1, 3, 25, 2, 31, 22, NULL, 40, 23, 32, 40, 10]
+29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
+
+# Unsupported formats
+statement error
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_BROTLI.parquet') limit 50
+
+statement error
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_BROTLI.parquet') limit 50
+
+statement error
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_LZ4.parquet') limit 50
+
+statement error
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_LZ4.parquet') limit 50
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_ZSTD.parquet') limit 50
+----
+0	20	{'string': foo, 'int': 22}	[]
+1	6	{'string': baz, 'int': 10}	NULL
+2	23	{'string': bar, 'int': NULL}	NULL
+3	9	{'string': baz, 'int': 12}	[25, 7, 5, 22, 24, 18, 30, 7, 19, 7, 17, 11, 30, 40, 30]
+4	6	{'string': foo, 'int': 41}	NULL
+5	23	NULL	[5, 22, 17, 7, 9, 37, 28, 37, 26, 30, 38, 40, 2]
+6	19	{'string': foo, 'int': NULL}	[NULL, 25, 21]
+7	20	{'string': baz, 'int': 10}	[35, 32, 11, 26, 27, 4, 1, 13, 31, 2, 32, 38, 16, 0, 29, 23, 32, 7, 17]
+8	29	{'string': baz, 'int': 35}	NULL
+9	11	NULL	[14, 0, NULL, 29, 23, 14, 13, 13, 15, 26, 29, 32, 5, 13, 32, 29, 38]
+10	25	{'string': baz, 'int': 23}	[5, 20, 9, 18, 32, 6, 21, 18, 1, 32, 34, 17, 3, 26, NULL, 1, 16, 9, 41]
+11	9	NULL	[]
+12	17	{'string': bar, 'int': 25}	[8, 37, NULL, 34, 1, 5, 9, 40, 1, 28, 27, 14, 28, 0, 14, 33, 1, 26, 18]
+13	17	{'string': foo, 'int': 20}	[38, 7, 40, 18, 26]
+14	6	NULL	[16, 31, 9, 30, 36, 24, 29, 20, 20, 20, 17, 37, 4, 41, 25, 12, 21, 24]
+15	5	{'string': bar, 'int': NULL}	[38, 35, 41, 4, 34, NULL, 37, 12, 21, 31, 16, 13, 20, 36, 22, 19, 35]
+16	6	{'string': bar, 'int': 25}	[3]
+17	20	{'string': bar, 'int': 35}	[6, 11, 25, 14, 38, 19, 9, 21, 12, 41, 36, 31]
+18	18	{'string': NULL, 'int': 19}	[28]
+19	28	NULL	[0, 41, 26, 27, 23, 40]
+20	21	{'string': bar, 'int': 3}	[15, 35, 40, 29, 37, 8, 4, 9, 6, 37, 16, 14, 32, 29, NULL, 18, 1]
+21	7	{'string': NULL, 'int': 36}	[19]
+22	27	NULL	[3, 0, 15, 35, 6, 13, 24, 14, 7, 3, 32]
+23	28	{'string': NULL, 'int': NULL}	[26, 17, 33, 17, 21, 34, 20, 25, 33, 21, 4, 1, 23, 9, 32]
+24	21	{'string': foo, 'int': 12}	[19, 15, 36, 37, 1, 19, 21, 4, 40, NULL, NULL, 19, 4]
+25	20	{'string': foo, 'int': NULL}	NULL
+26	3	{'string': NULL, 'int': 15}	[32, 31, 3, 26, 34, 1, 6, 29, 5, 22, 11, 1, 18]
+27	2	{'string': foo, 'int': 25}	[19]
+28	7	{'string': foo, 'int': 34}	[20, 1, 18, 20, 1, 3, 25, 2, 31, 22, NULL, 40, 23, 32, 40, 10]
+29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_ZSTD.parquet') limit 50
+----
+0	20	{'string': foo, 'int': 22}	[]
+1	6	{'string': baz, 'int': 10}	NULL
+2	23	{'string': bar, 'int': NULL}	NULL
+3	9	{'string': baz, 'int': 12}	[25, 7, 5, 22, 24, 18, 30, 7, 19, 7, 17, 11, 30, 40, 30]
+4	6	{'string': foo, 'int': 41}	NULL
+5	23	NULL	[5, 22, 17, 7, 9, 37, 28, 37, 26, 30, 38, 40, 2]
+6	19	{'string': foo, 'int': NULL}	[NULL, 25, 21]
+7	20	{'string': baz, 'int': 10}	[35, 32, 11, 26, 27, 4, 1, 13, 31, 2, 32, 38, 16, 0, 29, 23, 32, 7, 17]
+8	29	{'string': baz, 'int': 35}	NULL
+9	11	NULL	[14, 0, NULL, 29, 23, 14, 13, 13, 15, 26, 29, 32, 5, 13, 32, 29, 38]
+10	25	{'string': baz, 'int': 23}	[5, 20, 9, 18, 32, 6, 21, 18, 1, 32, 34, 17, 3, 26, NULL, 1, 16, 9, 41]
+11	9	NULL	[]
+12	17	{'string': bar, 'int': 25}	[8, 37, NULL, 34, 1, 5, 9, 40, 1, 28, 27, 14, 28, 0, 14, 33, 1, 26, 18]
+13	17	{'string': foo, 'int': 20}	[38, 7, 40, 18, 26]
+14	6	NULL	[16, 31, 9, 30, 36, 24, 29, 20, 20, 20, 17, 37, 4, 41, 25, 12, 21, 24]
+15	5	{'string': bar, 'int': NULL}	[38, 35, 41, 4, 34, NULL, 37, 12, 21, 31, 16, 13, 20, 36, 22, 19, 35]
+16	6	{'string': bar, 'int': 25}	[3]
+17	20	{'string': bar, 'int': 35}	[6, 11, 25, 14, 38, 19, 9, 21, 12, 41, 36, 31]
+18	18	{'string': NULL, 'int': 19}	[28]
+19	28	NULL	[0, 41, 26, 27, 23, 40]
+20	21	{'string': bar, 'int': 3}	[15, 35, 40, 29, 37, 8, 4, 9, 6, 37, 16, 14, 32, 29, NULL, 18, 1]
+21	7	{'string': NULL, 'int': 36}	[19]
+22	27	NULL	[3, 0, 15, 35, 6, 13, 24, 14, 7, 3, 32]
+23	28	{'string': NULL, 'int': NULL}	[26, 17, 33, 17, 21, 34, 20, 25, 33, 21, 4, 1, 23, 9, 32]
+24	21	{'string': foo, 'int': 12}	[19, 15, 36, 37, 1, 19, 21, 4, 40, NULL, NULL, 19, 4]
+25	20	{'string': foo, 'int': NULL}	NULL
+26	3	{'string': NULL, 'int': 15}	[32, 31, 3, 26, 34, 1, 6, 29, 5, 22, 11, 1, 18]
+27	2	{'string': foo, 'int': 25}	[19]
+28	7	{'string': foo, 'int': 34}	[20, 1, 18, 20, 1, 3, 25, 2, 31, 22, NULL, 40, 23, 32, 40, 10]
+29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
+

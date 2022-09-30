@@ -151,7 +151,7 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 	for (idx_t idx = 0; idx < state.column_ids.size(); idx++) {
 		auto col_idx = state.column_ids[idx];
 		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
-			output.data[idx].Sequence(state.start, this_count);
+			output.data[idx].Sequence(state.start, 1, this_count);
 		} else {
 			VectorConversion::NumpyToDuckDB(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col,
 			                                this_count, state.start, output.data[idx]);

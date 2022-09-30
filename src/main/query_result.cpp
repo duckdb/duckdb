@@ -140,6 +140,7 @@ string QueryResult::HeaderToString() {
 	result += "\n";
 	return result;
 }
+
 string QueryResult::GetConfigTimezone(QueryResult &query_result) {
 	return query_result.client_properties.timezone;
 }

@@ -66,6 +66,10 @@
 #include "sqlsmith-extension.hpp"
 #endif
 
+#if defined(BUILD_INET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+#include "inet-extension.hpp"
+#endif
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -81,6 +85,7 @@ static DefaultExtension internal_extensions[] = {
     {"json", "Adds support for JSON operations", JSON_STATICALLY_LOADED},
     {"sqlite_scanner", "Adds support for reading SQLite database files", false},
     {"postgres_scanner", "Adds support for reading from a Postgres database", false},
+    {"inet", "Adds support for IP-related data types and functions", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -99,8 +104,8 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 // Load Statically Compiled Extension
 //===--------------------------------------------------------------------===//
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet", "icu",        "tpch", "tpcds", "fts",
-	                                  "httpfs",  "visualizer", "json", "excel", "sqlsmith"};
+	unordered_set<string> extensions {"parquet",    "icu",  "tpch",  "tpcds",    "fts", "httpfs",
+	                                  "visualizer", "json", "excel", "sqlsmith", "inet"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -193,6 +198,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	} else if (extension == "sqlsmith") {
 #if defined(BUILD_SQLSMITH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<SQLSmithExtension>();
+#else
+		// excel extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "inet") {
+#if defined(BUILD_INET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+		db.LoadExtension<INETExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;

@@ -45,6 +45,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSeg
       segment_type(segment_type), function(function_p), stats(type, move(statistics)), block_id(block_id_p),
       offset(offset_p) {
 	D_ASSERT(function);
+	auto &block_manager = BlockManager::GetBlockManager(db);
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified
@@ -56,7 +57,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSeg
 		}
 	} else {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
-		this->block = buffer_manager.RegisterBlock(block_id);
+		this->block = block_manager.RegisterBlock(block_id);
 	}
 	if (function->init_segment) {
 		segment_state = function->init_segment(*this, block_id);
@@ -150,12 +151,11 @@ void ColumnSegment::ConvertToPersistent(block_id_t block_id_p) {
 		block.reset();
 	} else {
 		// non-constant block: write the block to disk
-		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		auto &block_manager = BlockManager::GetBlockManager(db);
 
 		// the data for the block already exists in-memory of our block
 		// instead of copying the data we alter some metadata so the buffer points to an on-disk block
-		block = buffer_manager.ConvertToPersistent(block_manager, block_id, move(block));
+		block = block_manager.ConvertToPersistent(block_id, move(block));
 	}
 
 	segment_state.reset();

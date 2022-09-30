@@ -1,0 +1,62 @@
+# name: test/sql/inet/test_inet_type.test
+# description: Test inet type
+# group: [inet]
+
+require inet
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT '127.0.0.1'::INET::VARCHAR
+----
+127.0.0.1
+
+query I
+SELECT '127.0.0.1/17'::INET::VARCHAR
+----
+127.0.0.1/17
+
+query I
+SELECT '127.0.0.1'::INET
+----
+127.0.0.1
+
+query I
+select '127.000.0000.1'::inet;
+----
+127.0.0.1
+
+query II
+SELECT INET '0.0.0.0/0', INET '255.255.255.255/31'
+----
+0.0.0.0/0	255.255.255.255/31
+
+query I
+SELECT typeof('127.0.0.1/17'::INET)
+----
+inet
+
+statement error
+select '127'::inet;
+
+statement error
+select '127..1'::inet;
+
+statement error
+SELECT '256.0.0.1'::INET::VARCHAR
+
+statement error
+SELECT '-1.0.0.1'::INET::VARCHAR
+
+statement error
+SELECT '127..0.1'::INET::VARCHAR
+
+statement error
+SELECT '127.0.0.1/33'::INET::VARCHAR
+
+statement error
+SELECT '127.0.0.1/333'::INET::VARCHAR
+
+statement error
+SELECT '127.0.0.1/33333333333333333333'::INET::VARCHAR

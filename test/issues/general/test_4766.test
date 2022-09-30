@@ -1,0 +1,59 @@
+# name: test/issues/general/test_4766.test
+# description: Issue 4766: Incorrect results in Query..
+# group: [general]
+
+statement ok
+create table test as
+with cte1 as (
+    select '01234567890' s
+    from range(10)
+), cte2 as (
+    select '012345678901' s
+    from range(10)
+), cte3 as (
+    select NULL
+    from range(10)
+)
+select *
+from (
+    select * from cte1
+    union all
+    select * from cte2
+    union all
+    select * from cte3
+)
+order by random();
+
+query T
+select * from test order by s
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+01234567890
+01234567890
+01234567890
+01234567890
+01234567890
+01234567890
+01234567890
+01234567890
+01234567890
+01234567890
+012345678901
+012345678901
+012345678901
+012345678901
+012345678901
+012345678901
+012345678901
+012345678901
+012345678901
+012345678901

@@ -124,7 +124,7 @@ FROM (
 	FROM quantile
 ) tbl;
 ----
-[True, True, True]
+[true, true, true]
 
 query I
 SELECT [
@@ -138,7 +138,7 @@ FROM (
 	FROM quantile
 ) tbl;
 ----
-[True, True, True]
+[true, true, true]
 
 # Errors
 statement error

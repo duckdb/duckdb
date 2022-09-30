@@ -13,7 +13,7 @@ project(DuckDBJDummy NONE)
 file(GLOB JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
 file(GLOB JAVA_TEST_FILES src/test/java/org/duckdb/test/*.java)
 
-set(CMAKE_JAVA_COMPILE_FLAGS -source 1.7 -target 1.7 -encoding utf-8)
+set(CMAKE_JAVA_COMPILE_FLAGS -source 1.8 -target 1.8 -encoding utf-8)
 
 add_jar(duckdb_jdbc ${JAVA_SRC_FILES} ${JAVA_TEST_FILES}
         META-INF/services/java.sql.Driver GENERATE_NATIVE_HEADERS duckdb-native)

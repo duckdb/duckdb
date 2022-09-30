@@ -33,6 +33,7 @@ class ParquetReader;
 using duckdb_apache::thrift::protocol::TProtocol;
 
 using duckdb_parquet::format::ColumnChunk;
+using duckdb_parquet::format::CompressionCodec;
 using duckdb_parquet::format::FieldRepetitionType;
 using duckdb_parquet::format::PageHeader;
 using duckdb_parquet::format::SchemaElement;
@@ -109,9 +110,10 @@ protected:
 
 private:
 	void PrepareRead(parquet_filter_t &filter);
-	void PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size);
+	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
+	void DecompressInternal(CompressionCodec::type codec, const char *src, idx_t src_size, char *dst, idx_t dst_size);
 
 	const duckdb_parquet::format::ColumnChunk *chunk = nullptr;
 

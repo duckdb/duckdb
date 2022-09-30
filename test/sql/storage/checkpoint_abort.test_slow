@@ -46,11 +46,6 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 statement error
 CHECKPOINT;
 
-query III
-SELECT MIN(i), MAX(i), COUNT(*) FROM integers
-----
-1	200000	200000
-
 restart
 
 # verify that the change was correctly loaded from disk
