@@ -68,7 +68,7 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	ColumnScanState child_state;
 	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(child_state, child_offset);
+		child_column->InitializeScanWithOffset(child_state, start + child_offset);
 	}
 	state.child_states.push_back(move(child_state));
 }
