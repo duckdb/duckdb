@@ -46,6 +46,7 @@ public:
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
 
 private:
+	void AllocateDataInternal(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
 	void AllocateBlock();
 	BufferHandle Pin(uint32_t block_id);
 
@@ -65,6 +66,10 @@ private:
 	vector<BlockMetaData> blocks;
 	//! The set of allocated data
 	vector<AllocatedData> allocated_data;
+	//! Whether this ColumnDataAllocator is shared across ColumnDataCollections that allocate in parallel
+	bool shared;
+	//! Lock used in case this ColumnDataAllocator is shared across threads
+	mutex lock;
 };
 
 } // namespace duckdb

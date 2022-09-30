@@ -30,8 +30,8 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 	for (auto &pc : partition_counts) {
 		const auto &partition_index = pc.first;
 		const auto &partition_count = pc.second;
-
 		auto &partition_buffer = *state.partition_buffers[partition_index];
+
 		if (partition_buffer.size() + partition_count > STANDARD_VECTOR_SIZE) {
 			// Next batch won't fit in the buffer, flush it to the partition
 			state.partitions[partition_index]->Append(partition_buffer);

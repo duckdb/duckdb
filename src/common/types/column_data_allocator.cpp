@@ -41,8 +41,7 @@ void ColumnDataAllocator::AllocateBlock() {
 	blocks.push_back(move(data));
 }
 
-void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset,
-                                       ChunkManagementState *chunk_state) {
+void ColumnDataAllocator::AllocateDataInternal(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state) {
 	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
 		// in-memory allocator
 		auto allocated = alloc.allocator->Allocate(size);
@@ -72,6 +71,16 @@ void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t 
 	block_id = blocks.size() - 1;
 	offset = block.size;
 	block.size += size;
+}
+
+void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset,
+                                       ChunkManagementState *chunk_state) {
+	if (shared) {
+		lock_guard<mutex> guard(lock);
+		AllocateDataInternal(size, block_id, offset, chunk_state);
+	} else {
+		AllocateDataInternal(size, block_id, offset, chunk_state);
+	}
 }
 
 void ColumnDataAllocator::Initialize(ColumnDataAllocator &other) {
