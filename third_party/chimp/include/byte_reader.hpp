@@ -67,6 +67,11 @@ public:
 		return result;
 	}
 
+	template <class T, uint8_t SIZE>
+	T ReadValue() {
+		return ReadValue<T>(SIZE);
+	}
+
 	template <class T> 
 	T ReadValue(const uint8_t &size) {
 		T result = 0;

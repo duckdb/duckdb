@@ -19,11 +19,11 @@
 #include "duckdb/common/likely.hpp"
 #include "packed_data.hpp"
 
-//#include "byte_writer.hpp"
-//#include "byte_reader.hpp"
+#include "byte_writer.hpp"
+#include "byte_reader.hpp"
 
-#include "bit_reader_optimized.hpp"
-#include "output_bit_stream.hpp"
+//#include "bit_reader_optimized.hpp"
+//#include "output_bit_stream.hpp"
 
 namespace duckdb_chimp {
 
@@ -62,7 +62,7 @@ struct Chimp128CompressionState {
 		packed_data_buffer.Reset();
 	}
 
-	OutputBitStream<EMPTY>					output; //The stream to write to
+	ByteWriter<EMPTY>					output; //The stream to write to
 	LeadingZeroBuffer<EMPTY>				leading_zero_buffer;
 	FlagBuffer<EMPTY>						flag_buffer;
 	PackedDataBuffer<EMPTY>					packed_data_buffer;
@@ -240,7 +240,7 @@ public:
 		return trailing_zeros;
 	}
 
-	BitReader 					input;
+	ByteReader 					input;
 	//LeadingZeroBuffer<false>	leading_zero_buffer;
 	//FlagBuffer<false>			flag_buffer;
 	uint8_t 					leading_zeros;
