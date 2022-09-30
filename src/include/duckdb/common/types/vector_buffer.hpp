@@ -25,7 +25,7 @@ enum class VectorBufferType : uint8_t {
 	DICTIONARY_BUFFER,   // dictionary buffer, holds a selection vector
 	VECTOR_CHILD_BUFFER, // vector child buffer: holds another vector
 	STRING_BUFFER,       // string buffer, holds a string heap
-	FSST_BUFFER,         // fsst compressed string buffer, holds a string heap and an fsst symbol table
+	FSST_BUFFER,         // fsst compressed string buffer, holds a string heap, fsst symbol table and a string count
 	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
@@ -171,9 +171,15 @@ public:
 	void *GetDecoder() {
 		return duckdb_fsst_decoder.get();
 	}
-
+	void SetCount(idx_t count) {
+		total_string_count = count;
+	}
+	idx_t GetCount() {
+		return total_string_count;
+	}
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
+	idx_t total_string_count = 0;
 };
 
 class VectorStructBuffer : public VectorBuffer {

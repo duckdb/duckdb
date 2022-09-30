@@ -690,6 +690,9 @@ void Vector::Flatten(idx_t count) {
 		// already a flat vector
 		break;
 	case VectorType::FSST_VECTOR: {
+		// Even though count may only be a part of the vector, we need to flatten the whole thing due to the way
+		// ToUnifiedFormat uses flatten
+		idx_t total_count = FSSTVector::GetCount(*this);
 		// create vector to decompress into
 		Vector other(GetType(), count);
 		// now copy the data of this vector to the other vector, decompressing the strings in the process
@@ -1441,6 +1444,30 @@ void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_d
 
 	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
 	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder);
+}
+
+void FSSTVector::SetCount(Vector &vector, idx_t count) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+
+	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	fsst_string_buffer.SetCount(count);
+}
+
+idx_t FSSTVector::GetCount(Vector &vector) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+
+	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	return fsst_string_buffer.GetCount();
 }
 
 void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offset, idx_t dst_offset, idx_t copy_count,

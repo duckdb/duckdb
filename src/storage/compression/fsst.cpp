@@ -586,6 +586,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 			result_data[i] = UncompressedStringStorage::FetchStringFromDict(
 			    segment, dict, result, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values],
 			    string_length);
+			FSSTVector::SetCount(result, scan_count);
 		}
 	} else {
 		// Just decompress
