@@ -15,7 +15,6 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
     : table(table), allocator(Allocator::Get(table.db)), deleted_rows(0) {
 	auto types = table.GetTypes();
 	row_groups = make_shared<RowGroupCollection>(table.info, types, MAX_ROW_ID, 0);
-	row_groups->InitializeEmpty();
 	stats.InitializeEmpty(types);
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);

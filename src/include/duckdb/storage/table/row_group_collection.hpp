@@ -29,7 +29,6 @@ public:
 	Allocator &GetAllocator() const;
 
 	void Initialize(PersistentTableData &data);
-	void InitializeEmpty();
 
 	bool IsEmpty() const;
 

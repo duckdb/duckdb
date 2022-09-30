@@ -41,10 +41,6 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	}
 }
 
-void RowGroupCollection::InitializeEmpty() {
-	//	AppendRowGroup(row_start);
-}
-
 void RowGroupCollection::AppendRowGroup(idx_t start_row) {
 	D_ASSERT(start_row >= row_start);
 	auto new_row_group = make_unique<RowGroup>(info->db, *info, start_row, 0);

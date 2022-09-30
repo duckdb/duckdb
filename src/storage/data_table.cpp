@@ -36,7 +36,6 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 	if (stats.Empty()) {
 		D_ASSERT(row_groups->GetTotalRows() == 0);
 
-		row_groups->InitializeEmpty();
 		stats.InitializeEmpty(types);
 	}
 	row_groups->Verify();
