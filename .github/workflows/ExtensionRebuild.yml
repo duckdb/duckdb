@@ -41,7 +41,7 @@ jobs:
     - name: Override extensions.csv
       shell: bash
       run: |
-        echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
+        echo -e 'name,url,commit,build_on_windows\n${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -89,7 +89,7 @@ jobs:
       - name: Override extensions.csv
         shell: bash
         run: |
-          echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
+          echo -e 'name,url,commit,build_on_windows\n${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
 
       - uses: actions/setup-python@v2
         with:
@@ -138,7 +138,7 @@ jobs:
      - name: Override extensions.csv
        shell: bash
        run: |
-         echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
+         echo -e 'name,url,commit,build_on_windows\n${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
 
      - uses: actions/setup-python@v2
        with:
@@ -201,7 +201,7 @@ jobs:
     - name: Override extensions.csv
       shell: bash
       run: |
-        echo '${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
+        echo -e 'name,url,commit,build_on_windows\n${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/extensions.csv
 
     - uses: ./.github/actions/build_extensions
       with:
