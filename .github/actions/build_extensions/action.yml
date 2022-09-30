@@ -29,7 +29,7 @@ inputs:
     default: 0
   static_link_build:
     description: 'Links duckdb statically to the built extensions'
-    default: 0
+    default: 1
   build_dir:
     description: 'DuckDB source directory to run the build in'
     default: '.'
