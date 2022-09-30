@@ -20,7 +20,7 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
-                                     vector<column_t> column_ids_p, vector<column_t> projection_ids_p,
+                                     vector<column_t> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
                                      idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types), estimated_cardinality),
@@ -33,7 +33,7 @@ class TableScanGlobalSourceState : public GlobalSourceState {
 public:
 	TableScanGlobalSourceState(ClientContext &context, const PhysicalTableScan &op) {
 		if (op.function.init_global) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.table_filters.get());
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, op.table_filters.get());
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
 				max_threads = global_state->MaxThreads();
@@ -56,24 +56,12 @@ public:
 	TableScanLocalSourceState(ExecutionContext &context, TableScanGlobalSourceState &gstate,
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.table_filters.get());
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, op.table_filters.get());
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
-		}
-		if (op.CanRemoveFilterColumns()) {
-			vector<LogicalType> types;
-			for (auto col_id : op.column_ids) {
-				if (col_id == COLUMN_IDENTIFIER_ROW_ID) {
-					types.emplace_back(LogicalType::ROW_TYPE);
-				} else {
-					types.push_back(op.returned_types[col_id]);
-				}
-			}
-			table_function_chunk.Initialize(Allocator::Get(context.client), types);
 		}
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
-	DataChunk table_function_chunk;
 };
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
@@ -91,15 +79,8 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 	auto &gstate = (TableScanGlobalSourceState &)gstate_p;
 	auto &state = (TableScanLocalSourceState &)lstate;
 
-	if (CanRemoveFilterColumns()) {
-		TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get(), &projection_ids,
-		                        &state.table_function_chunk);
-		state.table_function_chunk.Reset();
-		function.function(context.client, data, chunk);
-	} else {
-		TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
-		function.function(context.client, data, chunk);
-	}
+	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	function.function(context.client, data, chunk);
 }
 
 double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {

@@ -66,6 +66,8 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 	idx_t file_index;
 	vector<column_t> column_ids;
 	TableFilterSet *table_filters;
+	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
+	DataChunk all_columns;
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
@@ -76,8 +78,15 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t row_group_index;
 	idx_t max_threads;
 
+	vector<idx_t> projection_ids;
+	vector<LogicalType> scanned_types;
+
 	idx_t MaxThreads() const override {
 		return max_threads;
+	}
+
+	bool CanRemoveFilterColumns() const {
+		return !projection_ids.empty();
 	}
 };
 
@@ -129,6 +138,7 @@ public:
 
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
+		table_function.filter_prune = true;
 		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
 		set.AddFunction(table_function);
 		table_function.arguments = {LogicalType::LIST(LogicalType::VARCHAR)};
@@ -350,6 +360,9 @@ public:
 		result->is_parallel = true;
 		result->batch_index = 0;
 		result->table_filters = input.filters;
+		if (input.CanRemoveFilterColumns()) {
+			result->all_columns.Initialize(context.client, gstate.scanned_types);
+		}
 		if (!ParquetParallelStateNext(context.client, bind_data, *result, gstate)) {
 			return nullptr;
 		}
@@ -378,6 +391,17 @@ public:
 		result->file_index = 0;
 		result->batch_index = 0;
 		result->max_threads = ParquetScanMaxThreads(context, input.bind_data);
+		if (input.CanRemoveFilterColumns()) {
+			result->projection_ids = input.projection_ids;
+			const auto table_types = bind_data.types;
+			for (const auto &col_idx : input.column_ids) {
+				if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+					result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+				} else {
+					result->scanned_types.push_back(table_types[col_idx]);
+				}
+			}
+		}
 		return move(result);
 	}
 
@@ -417,9 +441,10 @@ public:
 		auto &bind_data = (ParquetReadBindData &)*data_p.bind_data;
 
 		do {
-			if (data_p.CanRemoveFilterColumns()) {
-				data.reader->Scan(data.scan_state, *data_p.pre_projection_chunk);
-				data_p.RemoveFilterColumns(output);
+			if (gstate.CanRemoveFilterColumns()) {
+				data.all_columns.Reset();
+				data.reader->Scan(data.scan_state, data.all_columns);
+				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
 			} else {
 				data.reader->Scan(data.scan_state, output);
 			}

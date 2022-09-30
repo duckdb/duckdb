@@ -216,7 +216,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			auto &get = (LogicalGet &)op;
 
 			// Create "selection vector" of all column ids
-			vector<column_t> proj_sel;
+			vector<idx_t> proj_sel;
 			for (idx_t col_idx = 0; col_idx < get.column_ids.size(); col_idx++) {
 				proj_sel.push_back(col_idx);
 			}
@@ -255,14 +255,16 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 			get.column_ids = move(column_ids);
 
-			// Now set the projection cols by matching the "selection vector" that excludes filter columns
-			// with the "selection vector" that includes filter columns
-			idx_t col_idx = 0;
-			for (auto proj_sel_idx : proj_sel) {
-				for (; col_idx < col_sel.size(); col_idx++) {
-					if (proj_sel_idx == col_sel[col_idx]) {
-						get.projection_ids.push_back(col_idx);
-						break;
+			if (get.function.filter_prune) {
+				// Now set the projection cols by matching the "selection vector" that excludes filter columns
+				// with the "selection vector" that includes filter columns
+				idx_t col_idx = 0;
+				for (auto proj_sel_idx : proj_sel) {
+					for (; col_idx < col_sel.size(); col_idx++) {
+						if (proj_sel_idx == col_sel[col_idx]) {
+							get.projection_ids.push_back(col_idx);
+							break;
+						}
 					}
 				}
 			}

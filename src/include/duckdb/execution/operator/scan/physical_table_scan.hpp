@@ -24,7 +24,7 @@ public:
 	                  idx_t estimated_cardinality);
 	//! Table scan that immediately projects out filter columns that are unused in the remainder of the query plan
 	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
-	                  vector<LogicalType> returned_types, vector<column_t> column_ids, vector<column_t> projection_ids,
+	                  vector<LogicalType> returned_types, vector<column_t> column_ids, vector<idx_t> projection_ids,
 	                  vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality);
 
 	//! The table function
@@ -36,22 +36,11 @@ public:
 	//! The column ids used within the table function
 	vector<column_t> column_ids;
 	//! The projected-out column ids
-	vector<column_t> projection_ids;
+	vector<idx_t> projection_ids;
 	//! The names of the columns
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
-
-	//! Whether we can remove filter columns immediately
-	bool CanRemoveFilterColumns() const {
-		if (projection_ids.empty()) {
-			return false;
-		} else if (projection_ids.size() == column_ids.size()) {
-			return false;
-		} else {
-			return true;
-		}
-	}
 
 public:
 	string GetName() const override;
