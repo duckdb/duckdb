@@ -177,6 +177,7 @@ public:
 	idx_t GetCount() {
 		return total_string_count;
 	}
+
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
 	idx_t total_string_count = 0;
