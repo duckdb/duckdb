@@ -274,12 +274,13 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 	D_ASSERT(block != INVALID_BLOCK);
 	D_ASSERT(offset < Storage::BLOCK_SIZE);
 
+	auto &block_manager = BlockManager::GetBlockManager(segment.db);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto &state = (UncompressedStringSegmentState &)*segment.GetSegmentState();
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk
 		// pin the initial handle and read the length
-		auto block_handle = buffer_manager.RegisterBlock(block);
+		auto block_handle = block_manager.RegisterBlock(block);
 		auto handle = buffer_manager.Pin(block_handle);
 
 		// read header
@@ -309,7 +310,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 				if (remaining > 0) {
 					// read the next block
 					block_id_t next_block = Load<block_id_t>(handle.Ptr() + offset);
-					block_handle = buffer_manager.RegisterBlock(next_block);
+					block_handle = block_manager.RegisterBlock(next_block);
 					handle = buffer_manager.Pin(block_handle);
 					offset = 0;
 				}

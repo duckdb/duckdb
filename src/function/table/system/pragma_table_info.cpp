@@ -135,12 +135,12 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
-		auto type = view->types[index];
-		auto &name = view->aliases[index];
+		auto type = view->types[i];
+		auto &name = view->aliases[i];
 		// return values:
 		// "cid", PhysicalType::INT32
 
-		output.SetValue(0, index, Value::INTEGER((int32_t)index));
+		output.SetValue(0, index, Value::INTEGER((int32_t)i));
 		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(name));
 		// "type", PhysicalType::VARCHAR

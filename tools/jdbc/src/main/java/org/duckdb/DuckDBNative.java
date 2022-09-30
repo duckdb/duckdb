@@ -83,8 +83,6 @@ public class DuckDBNative {
 	// returns stmt_ref result reference object
 	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, byte[] query) throws SQLException;
 
-	protected static native String duckdb_jdbc_prepare_type(ByteBuffer stmt_ref) throws SQLException;
-
 	protected static native void duckdb_jdbc_release(ByteBuffer stmt_ref);
 
 	protected static native DuckDBResultSetMetaData duckdb_jdbc_meta(ByteBuffer stmt_ref) throws SQLException;
