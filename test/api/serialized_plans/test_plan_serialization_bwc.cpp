@@ -33,7 +33,7 @@ TEST_CASE("Generate serialized plans file", "[.]") {
 		// run when "*" is used - which we do to run slow tests. To avoid re-generating the bin file
 		// we require an env variable to be explicitly set.
 		INFO("set `GEN_PLAN_STORAGE` as an environment variable to generate the serialized file");
-		return ;
+		return;
 	}
 	DuckDB db;
 	Connection con(db);
