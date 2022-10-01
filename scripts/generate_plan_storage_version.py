@@ -1,13 +1,13 @@
-# this script re-generates the binary file used for Test serialize_tpch_into_file
+# this script re-generates the binary file used for Test deserialized plans from file
 # before running this script, increment the version number in src/planner/logical_operator.cpp and
-# recompile (BUILD_TPCH=1 make debug)
+# recompile (make debug)
 
 import os
 import subprocess
 from python_helpers import open_utf8
 
 shell_proc = os.path.join('build', 'debug', 'test', 'unittest')
-gen_binary_file = os.path.join('test', 'api', 'serialized_tpch_queries.binary')
+gen_binary_file = os.path.join('test', 'api', 'serialized_plans', 'serialized_plans.binary')
 
 def try_remove_file(fname):
 	try:
@@ -19,7 +19,9 @@ try_remove_file(gen_binary_file)
 
 def run_test(test):
 	print(test)
-	res = subprocess.run([shell_proc, test ], capture_output=True)
+	env = os.environ.copy()
+	env["GEN_PLAN_STORAGE"] = "1"
+	res = subprocess.run([shell_proc, test ], capture_output=True, env = env)
 	stdout = res.stdout.decode('utf8').strip()
 	stderr = res.stderr.decode('utf8').strip()
 	if res.returncode != 0:
@@ -29,4 +31,4 @@ def run_test(test):
 		print("----STDERR----")
 		print(stderr)
 
-run_test("Generate serialized TPCH file")
+run_test("Generate serialized plans file")
