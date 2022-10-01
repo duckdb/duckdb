@@ -38,6 +38,10 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	                                  INVALID_BLOCK, 0);
 }
 
+unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx_t start) {
+	return make_unique<ColumnSegment>(other, start);
+}
+
 ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSegmentType segment_type, idx_t start,
                              idx_t count, CompressionFunction *function_p, unique_ptr<BaseStatistics> statistics,
                              block_id_t block_id_p, idx_t offset_p)
@@ -62,6 +66,12 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSeg
 	if (function->init_segment) {
 		segment_state = function->init_segment(*this, block_id);
 	}
+}
+
+ColumnSegment::ColumnSegment(ColumnSegment &other, idx_t start)
+    : SegmentBase(start, other.count), db(other.db), type(move(other.type)), type_size(other.type_size),
+      segment_type(other.segment_type), function(other.function), stats(move(other.stats)), block(move(other.block)),
+      block_id(other.block_id), offset(other.offset), segment_state(move(other.segment_state)) {
 }
 
 ColumnSegment::~ColumnSegment() {

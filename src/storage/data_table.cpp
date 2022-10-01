@@ -36,7 +36,6 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 	if (stats.Empty()) {
 		D_ASSERT(row_groups->GetTotalRows() == 0);
 
-		row_groups->InitializeEmpty();
 		stats.InitializeEmpty(types);
 	}
 	row_groups->Verify();
@@ -492,11 +491,18 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	transaction.storage.Append(this, chunk);
 }
 
-void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
-	// obtain the append lock for this table
+void DataTable::AppendLock(TableAppendState &state) {
 	state.append_lock = unique_lock<mutex>(append_lock);
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
+	}
+	state.row_start = row_groups->GetTotalRows();
+}
+
+void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
+	// obtain the append lock for this table
+	if (!state.append_lock) {
+		throw InternalException("DataTable::AppendLock should be called before DataTable::InitializeAppend");
 	}
 	row_groups->InitializeAppend(transaction, state, append_count);
 }
@@ -546,6 +552,15 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 		function(chunk);
 		chunk.Reset();
 		current_row = end_row;
+	}
+}
+
+void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &indexes, TableStatistics &other_stats) {
+	row_groups->MergeStorage(data);
+	stats.MergeStats(other_stats);
+	row_groups->Verify();
+	if (!indexes.Empty()) {
+		throw InternalException("FIXME: merge indexes");
 	}
 }
 

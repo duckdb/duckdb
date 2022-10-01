@@ -18,6 +18,7 @@ class StandardColumnData : public ColumnData {
 public:
 	StandardColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
 	                   ColumnData *parent = nullptr);
+	StandardColumnData(ColumnData &original, idx_t start_row, ColumnData *parent = nullptr);
 
 	//! The validity column data
 	ValidityColumnData validity;

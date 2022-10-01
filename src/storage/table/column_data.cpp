@@ -21,6 +21,17 @@ ColumnData::ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row,
     : info(info), column_index(column_index), start(start_row), type(move(type)), parent(parent) {
 }
 
+ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
+    : info(other.info), column_index(other.column_index), start(start), type(move(other.type)), parent(parent),
+      updates(move(other.updates)) {
+	idx_t offset = 0;
+	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->next.get()) {
+		auto &other = (ColumnSegment &)*segment;
+		this->data.AppendSegment(ColumnSegment::CreateSegment(other, start + offset));
+		offset += segment->count;
+	}
+}
+
 ColumnData::~ColumnData() {
 }
 
@@ -40,8 +51,15 @@ const LogicalType &ColumnData::RootType() const {
 }
 
 idx_t ColumnData::GetMaxEntry() {
+	auto first_segment = data.GetRootSegment();
 	auto last_segment = data.GetLastSegment();
-	return last_segment ? last_segment->start + last_segment->count : start;
+	if (!first_segment) {
+		D_ASSERT(!last_segment);
+		return 0;
+	} else {
+		D_ASSERT(last_segment->start >= first_segment->start);
+		return last_segment->start + last_segment->count - first_segment->start;
+	}
 }
 
 void ColumnData::InitializeScan(ColumnScanState &state) {
@@ -455,10 +473,6 @@ void ColumnData::Verify(RowGroup &parent) {
 			}
 			root = root->next.get();
 		}
-	} else {
-		if (type.InternalType() != PhysicalType::STRUCT) {
-			D_ASSERT(parent.count == 0);
-		}
 	}
 #endif
 }
@@ -476,14 +490,34 @@ static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t s
 	return OP::template Create<StandardColumnData>(info, column_index, start_row, type, parent);
 }
 
+template <class RET, class OP>
+static RET CreateColumnInternal(ColumnData &other, idx_t start_row, ColumnData *parent) {
+	if (other.type.InternalType() == PhysicalType::STRUCT) {
+		return OP::template Create<StructColumnData>(other, start_row, parent);
+	} else if (other.type.InternalType() == PhysicalType::LIST) {
+		return OP::template Create<ListColumnData>(other, start_row, parent);
+	} else if (other.type.id() == LogicalTypeId::VALIDITY) {
+		return OP::template Create<ValidityColumnData>(other, start_row, parent);
+	}
+	return OP::template Create<StandardColumnData>(other, start_row, parent);
+}
+
 shared_ptr<ColumnData> ColumnData::CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
                                                 const LogicalType &type, ColumnData *parent) {
 	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(info, column_index, start_row, type, parent);
 }
 
+shared_ptr<ColumnData> ColumnData::CreateColumn(ColumnData &other, idx_t start_row, ColumnData *parent) {
+	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(other, start_row, parent);
+}
+
 unique_ptr<ColumnData> ColumnData::CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,
                                                       const LogicalType &type, ColumnData *parent) {
 	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(info, column_index, start_row, type, parent);
+}
+
+unique_ptr<ColumnData> ColumnData::CreateColumnUnique(ColumnData &other, idx_t start_row, ColumnData *parent) {
+	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(other, start_row, parent);
 }
 
 } // namespace duckdb

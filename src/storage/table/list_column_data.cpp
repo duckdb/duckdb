@@ -13,6 +13,12 @@ ListColumnData::ListColumnData(DataTableInfo &info, idx_t column_index, idx_t st
 	child_column = ColumnData::CreateColumnUnique(info, 1, start_row, child_type, this);
 }
 
+ListColumnData::ListColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
+    : ColumnData(original, start_row, parent), validity(((ListColumnData &)original).validity, start_row, this) {
+	auto &list_data = (ListColumnData &)original;
+	child_column = ColumnData::CreateColumnUnique(*list_data.child_column, start_row, this);
+}
+
 bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	// table filters are not supported yet for list columns
 	return false;
@@ -62,7 +68,7 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	ColumnScanState child_state;
 	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(child_state, child_offset);
+		child_column->InitializeScanWithOffset(child_state, start + child_offset);
 	}
 	state.child_states.push_back(move(child_state));
 }
@@ -107,7 +113,8 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
 		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT ||
-		         state.child_states[1].row_index + child_scan_count <= child_column->GetMaxEntry());
+		         state.child_states[1].row_index + child_scan_count <=
+		             child_column->start + child_column->GetMaxEntry());
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
 	}
 
@@ -296,9 +303,9 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 		auto &child_type = ListType::GetChildType(result.GetType());
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
-		child_column->InitializeScanWithOffset(*child_state, original_offset);
+		child_column->InitializeScanWithOffset(*child_state, start + original_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
-		         child_state->row_index + child_scan_count <= child_column->GetMaxEntry());
+		         child_state->row_index + child_scan_count - this->start <= child_column->GetMaxEntry());
 		child_column->ScanCount(*child_state, child_scan, child_scan_count);
 
 		ListVector::Append(result, child_scan, child_scan_count);

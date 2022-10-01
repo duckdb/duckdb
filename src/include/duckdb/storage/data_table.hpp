@@ -123,6 +123,8 @@ public:
 	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
+	//! Fetches an append lock
+	void AppendLock(TableAppendState &state);
 	//! Begin appending structs to this table, obtaining necessary locks, etc
 	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
 	//! Append a chunk to the table using the AppendState obtained from BeginAppend
@@ -137,6 +139,9 @@ public:
 	void RevertAppendInternal(idx_t start_row, idx_t count);
 
 	void ScanTableSegment(idx_t start_row, idx_t count, const std::function<void(DataChunk &chunk)> &function);
+
+	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
+	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes, TableStatistics &stats);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded

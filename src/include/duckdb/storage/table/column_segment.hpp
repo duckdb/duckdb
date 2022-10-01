@@ -59,6 +59,7 @@ public:
 	                                                         CompressionType compression_type,
 	                                                         unique_ptr<BaseStatistics> statistics);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start);
+	static unique_ptr<ColumnSegment> CreateSegment(ColumnSegment &other, idx_t start);
 
 public:
 	void InitializeScan(ColumnScanState &state);
@@ -114,6 +115,7 @@ public:
 	ColumnSegment(DatabaseInstance &db, LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
 	              CompressionFunction *function, unique_ptr<BaseStatistics> statistics, block_id_t block_id,
 	              idx_t offset);
+	ColumnSegment(ColumnSegment &other, idx_t start);
 
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);
