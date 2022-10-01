@@ -305,7 +305,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 		// seek the scan towards the specified position and read [length] entries
 		child_column->InitializeScanWithOffset(*child_state, start + original_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
-		         child_state->row_index + child_scan_count <= child_column->GetMaxEntry());
+		         child_state->row_index + child_scan_count - this->start <= child_column->GetMaxEntry());
 		child_column->ScanCount(*child_state, child_scan, child_scan_count);
 
 		ListVector::Append(result, child_scan, child_scan_count);
