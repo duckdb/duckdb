@@ -33,7 +33,9 @@ statement error
 SELECT * FROM read_csv_auto('__TEST_DIR__/ubn*.csv');
 
 query III
-SELECT * FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE) ORDER BY a;
+SELECT a, b, c
+FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE)
+ORDER BY a
 ----
 1	NULL	NULL
 2	NULL	NULL
@@ -47,7 +49,9 @@ statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn*.csv')
 
 query IIIII
-SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE) ORDER BY a
+SELECT  a, b, c, ts, k  
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE) 
+ORDER BY a
 ----
 NULL	NULL	3	2003-06-30 12:03:10	6
 NULL	NULL	5	2003-06-30 12:03:10	6
@@ -65,7 +69,9 @@ test	88	NULL	2020-12-30 01:25:58.745232+01	NULL
 
 # Test glob pattern [12] and union_by_name with filename options
 query IIIII
-SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE) ORDER BY a
+SELECT a, b, c, ts, filename 
+FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
+ORDER BY a
 ----
 1	2	3	NULL	data/csv/union-by-name/ubn1.csv
 3	4	5	NULL	data/csv/union-by-name/ubn1.csv
@@ -77,7 +83,9 @@ test	88	NULL	2020-12-30 00:25:58.745232	data/csv/union-by-name/ubn2.csv
 
 # Test glob pattern [!1-2] and union_by_name with filename options
 query IIII
-SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE) ORDER BY k
+SELECT k, c, ts, filename 
+FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE) 
+ORDER BY k
 ----
 NULL	100	Monday	data/csv/union-by-name/ubn4.csv
 NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
@@ -91,7 +99,9 @@ statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE)
 
 query IIII
-SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE) ORDER BY id;
+SELECT id, value, a, part
+FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
+ORDER BY id
 ----
 1	value1	aaa	a
 2	value2	NULL	b
