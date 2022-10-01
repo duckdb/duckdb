@@ -69,7 +69,7 @@ test	88	NULL	2020-12-30 01:25:58.745232+01	NULL
 
 # Test glob pattern [12] and union_by_name with filename options
 query IIIII
-SELECT a, b, c, ts, filename 
+SELECT a, b, c, ts, replace(filename, '\', '/')
 FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
 ORDER BY a
 ----
@@ -83,7 +83,7 @@ test	88	NULL	2020-12-30 00:25:58.745232	data/csv/union-by-name/ubn2.csv
 
 # Test glob pattern [!1-2] and union_by_name with filename options
 query IIII
-SELECT k, c, ts, filename 
+SELECT k, c, ts, replace(filename, '\', '/')
 FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE) 
 ORDER BY k
 ----
