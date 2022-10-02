@@ -35,7 +35,7 @@ void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 
 	block_manager.MarkBlockAsModified(id);
-	block = buffer_manager.RegisterBlock(id);
+	block = block_manager.RegisterBlock(id);
 	handle = buffer_manager.Pin(block);
 
 	next_block = Load<block_id_t>(handle.Ptr());

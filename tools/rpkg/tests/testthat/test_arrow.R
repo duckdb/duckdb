@@ -41,6 +41,7 @@ example_data <- dplyr::tibble(
 test_that("to_duckdb", {
   ds <- InMemoryDataset$create(example_data)
   con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
 
   dbExecute(con, "PRAGMA threads=1")
   expect_equal(
