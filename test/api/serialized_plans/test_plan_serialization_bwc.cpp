@@ -77,15 +77,12 @@ TEST_CASE("Test deserialized plans from file", "[.][serialization]") {
 		Planner planner(*con.context);
 		planner.CreatePlan(move(p.statements[0]));
 		auto expected_plan = move(planner.plan);
-
-		PlanDeserializationState state(*con.context);
-		auto deserialized_plan = LogicalOperator::Deserialize(deserializer, state);
-		REQUIRE(deserialized_plan->ToString() == expected_plan->ToString());
-
 		expected_plan->ResolveOperatorTypes();
 		auto expected_results = con.context->Query(make_unique<LogicalPlanStatement>(move(expected_plan)), false);
 		REQUIRE_NO_FAIL(*expected_results);
 
+		PlanDeserializationState state(*con.context);
+		auto deserialized_plan = LogicalOperator::Deserialize(deserializer, state);
 		deserialized_plan->ResolveOperatorTypes();
 		auto deserialized_results =
 		    con.context->Query(make_unique<LogicalPlanStatement>(move(deserialized_plan)), false);
