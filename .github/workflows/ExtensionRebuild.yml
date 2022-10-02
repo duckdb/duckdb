@@ -54,11 +54,8 @@ jobs:
         json: 0
         excel: 0
         build_dir: duckdb-old
-        post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         deploy_version: ${{ inputs.duckdb_ref }}
-        static_link_build: 1
-        out_of_tree_ext: 1
         run_tests: 0
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
@@ -109,8 +106,6 @@ jobs:
           build_dir: duckdb-old
           post_install: rm build/release/src/libduckdb*
           run_tests: 0
-          out_of_tree_ext: 1
-          static_link_build: 1
           osx_universal: 1
 
       - name: Deploy
@@ -159,8 +154,6 @@ jobs:
          run_tests: 0
          treat_warn_as_error: 0
          build_dir: duckdb-old
-         static_link_build: 1
-         out_of_tree_ext: 1
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
@@ -220,5 +213,4 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-        static_link_build: 1
         treat_warn_as_error: 0
