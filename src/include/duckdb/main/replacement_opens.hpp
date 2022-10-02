@@ -1,20 +1,20 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table_statistics.hpp
+// duckdb/main/extension_helper.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/function/replacement_open.hpp"
 
 namespace duckdb {
 
-struct TableStatistics {
-	idx_t estimated_cardinality;
+class ExtensionPrefixReplacementOpen : public ReplacementOpen {
+public:
+	ExtensionPrefixReplacementOpen();
 };
 
 } // namespace duckdb

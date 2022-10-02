@@ -708,7 +708,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY IGNORE_WARNING
     elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
       set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
       # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip -Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version)
+      set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_replacement_open_*")
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
     else()
       error("EXTENSION static build is only intended for Linux and Windows on MVSC")
     endif()
@@ -824,8 +825,13 @@ endif()
 endif()
 
 # build out-of-tree extensions on demand
-if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
-  # the build path seems to get ignored on windows in just the right way. no idea why.
-  get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
-  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
+if(NOT "${EXTERNAL_EXTENSION_DIRECTORIES}" STREQUAL "")
+  separate_arguments(EXTERNAL_EXTENSION_DIRECTORIES)
+
+  foreach(EXTERNAL_EXTENSION_DIRECTORY IN LISTS EXTERNAL_EXTENSION_DIRECTORIES)
+
+    # the build path seems to get ignored on windows in just the right way. no idea why.
+    get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
+    add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
+  endforeach()
 endif()

@@ -72,7 +72,22 @@ public class TestDuckDBJDBC {
 	}
 
 	private static void fail() throws Exception {
-		assertTrue(false);
+		fail(null);
+	}
+
+	private static void fail(String s) throws Exception {
+		throw new Exception(s);
+	}
+
+	private static <T extends Throwable> String assertThrows(Thrower thrower, Class<T> exception) throws Exception {
+		try {
+			thrower.run();
+			fail("Expected to throw " + exception.getName());
+			return null;
+		} catch (Throwable e) {
+			assertEquals(e.getClass(), exception);
+			return e.getMessage();
+		}
 	}
 
 	static {
@@ -2249,7 +2264,7 @@ public class TestDuckDBJDBC {
 	}
 
 	/**
-	 * @see GH3906
+	 * @see {https://github.com/duckdb/duckdb/issues/3906}
 	 */
 	public static void test_cached_row_set() throws Exception {
 		CachedRowSet rowSet = RowSetProvider.newFactory().createCachedRowSet();
@@ -2267,14 +2282,25 @@ public class TestDuckDBJDBC {
 		try (Statement stmt = conn.createStatement()) {
 			ResultSet rs = stmt.executeQuery("select [1, 5]::JSON");
 			rs.next();
+			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
 			JsonNode jsonNode = (JsonNode) rs.getObject(1);
 			assertTrue(jsonNode.isArray());
 			assertEquals(jsonNode.toString(), "[1, 5]");
 		}
 
 		try (Statement stmt = conn.createStatement()) {
-			ResultSet rs = stmt.executeQuery("select \'hello\'::JSON");
+			ResultSet rs = stmt.executeQuery("select {'key': 'value'}::JSON");
 			rs.next();
+			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
+			JsonNode jsonNode = (JsonNode) rs.getObject(1);
+			assertTrue(jsonNode.isObject());
+			assertEquals(jsonNode.toString(), "{'key': value}"); // this isn't valid json output, must load json extension for that
+		}
+
+		try (Statement stmt = conn.createStatement()) {
+			ResultSet rs = stmt.executeQuery("select 'hello'::JSON");
+			rs.next();
+			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
 			JsonNode jsonNode = (JsonNode) rs.getObject(1);
 			assertTrue(jsonNode.isString());
 			assertEquals(jsonNode.toString(), "hello");
@@ -2309,6 +2335,58 @@ public class TestDuckDBJDBC {
 
 		rs.next();
 		assertEquals(rs.getString(1), "INTEGER");
+	}
+	
+	public static void test_config() throws Exception {
+		String memory_limit = "memory_limit";
+		String threads = "threads";
+
+		Properties info = new Properties();
+		info.put(memory_limit, "500MB");
+		info.put(threads, "5");
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:", info);
+
+		assertEquals("500.0MB", getSetting(conn, memory_limit));
+		assertEquals("5", getSetting(conn, threads));
+	}
+
+	public static void test_invalid_config() throws Exception {
+		Properties info = new Properties();
+		info.put("invalid config name", "true");
+
+		String message = assertThrows(
+				() -> DriverManager.getConnection("jdbc:duckdb:", info),
+				SQLException.class
+		);
+
+		assertEquals(message, "Catalog Error: unrecognized configuration parameter \"invalid config name\"\n\nDid you mean: \"enable_profiling\"");
+	}
+
+	private static String getSetting(Connection conn, String settingName) throws Exception {
+		try (PreparedStatement stmt = conn.prepareStatement("select value from duckdb_settings() where name = ?")) {
+			stmt.setString(1, settingName);
+			ResultSet rs = stmt.executeQuery();
+			rs.next();
+
+			return rs.getString(1);
+		}
+	}
+
+	public static void test_describe() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+
+		try (Statement stmt = conn.createStatement()) {
+			stmt.execute("CREATE TABLE TEST (COL INT DEFAULT 42)");
+
+			ResultSet rs = stmt.executeQuery("DESCRIBE SELECT * FROM TEST");
+			rs.next();
+			assertEquals(rs.getString("column_name"), "COL");
+			assertEquals(rs.getString("column_type"), "INTEGER");
+			assertEquals(rs.getString("null"), "YES");
+			assertNull(rs.getString("key"));
+			assertNull(rs.getString("default"));
+			assertNull(rs.getString("extra"));
+		}
 	}
 
 	public static void main(String[] args) throws Exception {

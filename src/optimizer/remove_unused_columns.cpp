@@ -12,6 +12,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
@@ -156,6 +157,23 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 		// for INTERSECT/EXCEPT operations we can't remove anything, just recursively visit the children
+		for (auto &child : op.children) {
+			RemoveUnusedColumns remove(binder, context, true);
+			remove.VisitOperator(*child);
+		}
+		return;
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		if (!everything_referenced) {
+			auto &order = (LogicalOrder &)op;
+			D_ASSERT(order.projections.empty()); // should not yet be set
+			const auto all_bindings = order.GetColumnBindings();
+
+			for (idx_t col_idx = 0; col_idx < all_bindings.size(); col_idx++) {
+				if (column_references.find(all_bindings[col_idx]) != column_references.end()) {
+					order.projections.push_back(col_idx);
+				}
+			}
+		}
 		for (auto &child : op.children) {
 			RemoveUnusedColumns remove(binder, context, true);
 			remove.VisitOperator(*child);

@@ -38,17 +38,11 @@ data_ptr_t BufferHandle::Ptr() {
 	return node->buffer;
 }
 
-block_id_t BufferHandle::GetBlockId() const {
-	D_ASSERT(handle);
-	return handle->BlockId();
-}
-
 void BufferHandle::Destroy() {
 	if (!handle || !IsValid()) {
 		return;
 	}
-	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
-	buffer_manager.Unpin(handle);
+	handle->block_manager.buffer_manager.Unpin(handle);
 	handle.reset();
 	node = nullptr;
 }

@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/art/node4.hpp"
+
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
@@ -7,10 +8,6 @@ namespace duckdb {
 
 Node4::Node4() : Node(NodeType::N4) {
 	memset(key, 0, sizeof(key));
-}
-
-void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
-	children[pos] = node;
 }
 
 idx_t Node4::GetChildPos(uint8_t k) {
@@ -53,10 +50,14 @@ Node *Node4::GetChild(ART &art, idx_t pos) {
 	return children[pos].Unswizzle(art);
 }
 
-void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
+void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[pos] = node;
+}
+
+void Node4::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 	Node4 *n = (Node4 *)node;
 
-	// Insert leaf into inner node
+	// Insert new child node into node
 	if (node->count < 4) {
 		// Insert element
 		idx_t pos = 0;
@@ -82,14 +83,14 @@ void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 			new_node->children[i] = n->children[i];
 			n->children[i] = nullptr;
 		}
-		// Delete old node and replace it with new node
+		// Delete old node and replace it with new Node16
 		delete node;
 		node = new_node;
-		Node16::Insert(node, key_byte, new_child);
+		Node16::InsertChild(node, key_byte, new_child);
 	}
 }
 
-void Node4::Erase(Node *&node, int pos, ART &art) {
+void Node4::EraseChild(Node *&node, int pos, ART &art) {
 	Node4 *n = (Node4 *)node;
 	D_ASSERT(pos < n->count);
 	// erase the child and decrease the count
@@ -114,6 +115,21 @@ void Node4::Erase(Node *&node, int pos, ART &art) {
 		delete node;
 		node = child_ref;
 	}
+}
+
+void Node4::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
+
+	Node4 *r_n = (Node4 *)info.r_node;
+
+	for (idx_t i = 0; i < info.r_node->count; i++) {
+
+		auto l_child_pos = info.l_node->GetChildPos(r_n->key[i]);
+		Node::MergeAtByte(info, depth, l_child_pos, i, r_n->key[i], l_parent, l_pos);
+	}
+}
+
+idx_t Node4::GetSize() {
+	return 4;
 }
 
 } // namespace duckdb

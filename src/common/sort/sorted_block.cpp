@@ -220,7 +220,7 @@ void SBScanState::PinRadix(idx_t block_idx_to) {
 	auto &radix_sorting_data = sb->radix_sorting_data;
 	D_ASSERT(block_idx_to < radix_sorting_data.size());
 	auto &block = radix_sorting_data[block_idx_to];
-	if (!radix_handle.IsValid() || radix_handle.GetBlockId() != block->block->BlockId()) {
+	if (!radix_handle.IsValid() || radix_handle.GetBlockHandle() != block->block) {
 		radix_handle = buffer_manager.Pin(block->block);
 	}
 }
@@ -231,14 +231,14 @@ void SBScanState::PinData(SortedData &sd) {
 	auto &heap_handle = sd.type == SortedDataType::BLOB ? blob_sorting_heap_handle : payload_heap_handle;
 
 	auto &data_block = sd.data_blocks[block_idx];
-	if (!data_handle.IsValid() || data_handle.GetBlockId() != data_block->block->BlockId()) {
+	if (!data_handle.IsValid() || data_handle.GetBlockHandle() != data_block->block) {
 		data_handle = buffer_manager.Pin(data_block->block);
 	}
 	if (sd.layout.AllConstant() || !state.external) {
 		return;
 	}
 	auto &heap_block = sd.heap_blocks[block_idx];
-	if (!heap_handle.IsValid() || heap_handle.GetBlockId() != heap_block->block->BlockId()) {
+	if (!heap_handle.IsValid() || heap_handle.GetBlockHandle() != heap_block->block) {
 		heap_handle = buffer_manager.Pin(heap_block->block);
 	}
 }
@@ -250,7 +250,7 @@ data_ptr_t SBScanState::RadixPtr() const {
 data_ptr_t SBScanState::DataPtr(SortedData &sd) const {
 	auto &data_handle = sd.type == SortedDataType::BLOB ? blob_sorting_data_handle : payload_data_handle;
 	D_ASSERT(sd.data_blocks[block_idx]->block->Readers() != 0 &&
-	         data_handle.GetBlockId() == sd.data_blocks[block_idx]->block->BlockId());
+	         data_handle.GetBlockHandle() == sd.data_blocks[block_idx]->block);
 	return data_handle.Ptr() + entry_idx * sd.layout.GetRowWidth();
 }
 
@@ -262,7 +262,7 @@ data_ptr_t SBScanState::BaseHeapPtr(SortedData &sd) const {
 	auto &heap_handle = sd.type == SortedDataType::BLOB ? blob_sorting_heap_handle : payload_heap_handle;
 	D_ASSERT(!sd.layout.AllConstant() && state.external);
 	D_ASSERT(sd.heap_blocks[block_idx]->block->Readers() != 0 &&
-	         heap_handle.GetBlockId() == sd.heap_blocks[block_idx]->block->BlockId());
+	         heap_handle.GetBlockHandle() == sd.heap_blocks[block_idx]->block);
 	return heap_handle.Ptr();
 }
 
