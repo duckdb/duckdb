@@ -112,85 +112,102 @@ static BoundCastInfo VectorStringCastNumericSwitch(BindCastInput &input, const L
 	}
 }
 
-bool VectorStringCastList(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
-
-	printf("Source %d\n", source.GetType().id()); // VARCHAR
-	printf("Result %d\n", result.GetType().id()); // always LIST
-	printf("Count %d\n", count);
+	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	auto source_data = FlatVector::GetData<string_t>(source);
-	// for ( idx_t i = 0; i < count; i++ ) {
-	// 	printf("Source data %d: %s\n", i, source_data[i].GetString().c_str());
-	// }
+
+	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
+	varchar_list.SetVectorType(source.GetVectorType());
+	ListVector::Reserve(varchar_list, 10); // TODO hardcoded now, needs to have exact count of parts
+
+    result.SetVectorType(source.GetVectorType());
+
+    auto list_data = ListVector::GetData(varchar_list);
+    // list_data contains for each row an offset and length that reference indexes of the child vector
+
+    auto list_data_result = ListVector::GetData(result);
+    // list_data contains for each row an offset and length that reference indexes of the child vector
+
+    auto &child = ListVector::GetEntry(varchar_list);
+	// Child contains the actual raw values in the varchar_list ListVector
+	auto child_data = FlatVector::GetData<string_t>(child);
+
+	//	auto &validity = FlatVector::Validity(result); // TODO
+
+	idx_t total = 0;
+	for (idx_t i = 0; i < count; i++) { // loop over source strings
+		auto parts = VectorSplitStringifiedList(source_data[i].GetString()).parts;
+		//SplitWithStateMachine(source_data[i].GetString(), parts);
+
+		list_data[i].offset = total;        // offset (start of list in child vector) is current total count
+		list_data[i].length = parts.size(); // length is the amount of parts coming from this string
+		list_data_result[i].offset = total;
+		list_data_result[i].length = parts.size();
+
+		idx_t child_start = total;
+		for (string part : parts) {
+			child_data[child_start] = string_t(part); // TODO convert string to string_t?
+			child_start++;
+		}
+		total += parts.size();
+		D_ASSERT(child_start == total);
+	}
+	ListVector::SetListSize(varchar_list, total); // sets child size
+	ListVector::SetListSize(result, total);
+
+	auto &result_child = ListVector::GetEntry(result);
+
+	auto &cast_data = (ListBoundCastData &)*parameters.cast_data;
+    CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data.get());
+	return cast_data.child_cast_info.function(child, result_child, total, child_parameters);
+}
+
+bool StringToStringList(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
+	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+
+	auto source_data = FlatVector::GetData<string_t>(source);
 
 	auto &child = ListVector::GetEntry(result);
-	// Child contains the actual raw values in the result ListVector
-	auto child_type = child.GetType().id();
-	printf("Child type %d\n", child_type);
+
+	auto child_data = FlatVector::GetData<string_t>(child);
 
 	auto list_data = ListVector::GetData(result);
 	// list_data contains for each row an offset and length that reference indexes of the child vector
 
-	/**
-	 * source (3 rows with a string in each row)
-	 *   "1,12"
-	 *   "33"
-	 *   "40,50,60"
-	 * 
-	 * child (raw data of the lists)
-	 * 1
-	 * 12
-	 * 33
-	 * 40
-	 * 50
-	 * 60
-	 * 
-	 * list_data ( 3 rows with references to indexes of child) (offset = start_index of data, length = amount of values in list)
-	 *  { offset 0, length 2}
-	 *  { offset 2, length 1}
-	 *  { offset 3, length 3}
-	 *  
-	 * 	result (3 rows with a list in each row)
-	 *   ['1','12']
-	 *   ['33']
-	 *   ['40', '50', '60']
-	 * */
-
-
 	auto &validity = FlatVector::Validity(result); // TODO
 
-	int total = 0; // counter for child vector
+	idx_t total = 0;                    // counter for child vector
 	for (idx_t i = 0; i < count; i++) { // loop over source strings
-		// split each string
-		auto parts = StringUtil::Split(source_data[i].GetString(), ","); // very basic comma split as first test
+//		vector<string> parts;
+//		SplitWithStateMachine(source_data[i].GetString(), parts);
+        auto parts = VectorSplitStringifiedList(source_data[i].GetString()).parts;
+		list_data[i].offset = total;
+		list_data[i].length = parts.size();
 
-		list_data[i].offset = total;  // offset (start of list in child vector) is current total count
-		list_data[i].length = parts.size(); // length is the amount of parts coming from this string
-
-		for (string part: parts) {
-			// cast part to child_type ?
-			//auto cast_value = Value(part).DefaultCastAs(child_type);
-
-			// SetValue already calls casting to correct type
-			child.SetValue(total, part); // store the value in the result's child vector (where the actual data is stored)
-
-			// copied from src/common/value.cpp:1486
-			// Vector input(part);
-			// Vector result(child_type);
-			// if (!VectorOperations::TryCast(set, input, result, 1, error_message, strict)) {
-			// 	return false;
-			// }
-			// auto cast_value = result.GetValue(0);
-
-			total++;
+		idx_t child_start = total;
+		for (string part : parts) {
+			child_data[child_start] = part;
+			child_start++;
 		}
+		total += parts.size();
+		D_ASSERT(child_start == total);
 	}
 	ListVector::SetListSize(result, total);
-
 	return true;
 }
 
+BoundCastInfo StringToListCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	if (target == LogicalType::LIST(LogicalType::VARCHAR)) { // TODO look into alternative ways to check this
+		return BoundCastInfo(&StringToStringList);
+	}
+
+	return BoundCastInfo(&StringListCast,
+	                     BindListToListCast(input, LogicalType::LIST(LogicalType::VARCHAR), target));
+    // second argument allows for a secondary casting function to be passed in the CastParameters
+}
 
 BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const LogicalType &source,
                                              const LogicalType &target) {
@@ -223,7 +240,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::JSON:
 		return &DefaultCasts::ReinterpretCast;
 	case LogicalTypeId::LIST: // my case
-		return BoundCastInfo(&VectorStringCastList);
+		return StringToListCast(input, source, target);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
 	}

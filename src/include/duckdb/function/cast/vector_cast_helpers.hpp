@@ -197,4 +197,16 @@ struct VectorCastHelpers {
 	}
 };
 
+struct VectorSplitStringifiedList {
+    VectorSplitStringifiedList(string input);
+
+    string input;
+    vector<string> parts;
+    enum ParserState { INITIAL, BRACKETS };
+
+private:
+    void Split();
+};
+
+
 } // namespace duckdb
