@@ -13,8 +13,8 @@ SubqueryExpression::SubqueryExpression()
 string SubqueryExpression::ToString() const {
 	switch (subquery_type) {
 	case SubqueryType::ANY:
-		return child->ToString() + " " + ExpressionTypeToOperator(comparison_type) + " ANY(" + subquery->ToString() +
-		       ")";
+		return "(" + child->ToString() + " " + ExpressionTypeToOperator(comparison_type) + " ANY(" +
+		       subquery->ToString() + "))";
 	case SubqueryType::EXISTS:
 		return "EXISTS(" + subquery->ToString() + ")";
 	case SubqueryType::NOT_EXISTS:

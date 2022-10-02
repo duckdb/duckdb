@@ -17,6 +17,8 @@ namespace duckdb {
 //! InMemoryBlockManager is an implementation for a BlockManager
 class InMemoryBlockManager : public BlockManager {
 public:
+	using BlockManager::BlockManager;
+
 	// LCOV_EXCL_START
 	void StartCheckpoint() override {
 		throw InternalException("Cannot perform IO in in-memory database!");

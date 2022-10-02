@@ -72,7 +72,7 @@ public:
 					return function_name + "(" + entry.children[0]->ToString() + ")";
 				}
 			} else if (entry.children.size() == 2) {
-				return StringUtil::Format("(%s) %s (%s)", entry.children[0]->ToString(), function_name,
+				return StringUtil::Format("(%s %s %s)", entry.children[0]->ToString(), function_name,
 				                          entry.children[1]->ToString());
 			}
 		}

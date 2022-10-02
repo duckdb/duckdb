@@ -15,7 +15,6 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
     : table(table), allocator(Allocator::Get(table.db)), deleted_rows(0) {
 	auto types = table.GetTypes();
 	row_groups = make_shared<RowGroupCollection>(table.info, types, MAX_ROW_ID, 0);
-	row_groups->InitializeEmpty();
 	stats.InitializeEmpty(types);
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
@@ -206,44 +205,51 @@ bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
+	auto storage_entry = move(table_storage[&table]);
+	table_storage[&table].reset();
+
 	if (storage.row_groups->GetTotalRows() <= storage.deleted_rows) {
 		return;
 	}
 	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
-	TableAppendState append_state;
-	table.InitializeAppend(transaction, append_state, append_count);
 
-	bool constraint_violated = false;
-	ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
-		// append this chunk to the indexes of the table
-		if (!table.AppendToIndexes(chunk, append_state.current_row)) {
-			constraint_violated = true;
-			return false;
-		}
-		// append to base table
-		table.Append(transaction, chunk, append_state);
-		return true;
-	});
-	if (constraint_violated) {
-		// need to revert the append
-		row_t current_row = append_state.row_start;
-		// remove the data from the indexes, if there are any indexes
+	TableAppendState append_state;
+	table.AppendLock(append_state);
+	if (append_state.row_start == 0 && storage.table.info->indexes.Empty() && storage.deleted_rows == 0) {
+		// table is currently empty: move over the storage directly
+		table.MergeStorage(*storage.row_groups, storage.indexes, storage.stats);
+	} else {
+		bool constraint_violated = false;
+		table.InitializeAppend(transaction, append_state, append_count);
 		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			table.RemoveFromIndexes(append_state, chunk, current_row);
-
-			current_row += chunk.size();
-			if (current_row >= append_state.current_row) {
-				// finished deleting all rows from the index: abort now
+			if (!table.AppendToIndexes(chunk, append_state.current_row)) {
+				constraint_violated = true;
 				return false;
 			}
+			// append to base table
+			table.Append(transaction, chunk, append_state);
 			return true;
 		});
-		table.RevertAppendInternal(append_state.row_start, append_count);
-		table_storage[&table].reset();
-		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+		if (constraint_violated) {
+			// need to revert the append
+			row_t current_row = append_state.row_start;
+			// remove the data from the indexes, if there are any indexes
+			ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
+				// append this chunk to the indexes of the table
+				table.RemoveFromIndexes(append_state, chunk, current_row);
+
+				current_row += chunk.size();
+				if (current_row >= append_state.current_row) {
+					// finished deleting all rows from the index: abort now
+					return false;
+				}
+				return true;
+			});
+			table.RevertAppendInternal(append_state.row_start, append_count);
+			throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+		}
 	}
-	table_storage[&table].reset();
 	transaction.PushAppend(&table, append_state.row_start, append_count);
 }
 

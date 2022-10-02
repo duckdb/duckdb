@@ -49,6 +49,28 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector
 	Verify();
 }
 
+RowGroup::RowGroup(RowGroup &row_group, idx_t start)
+    : SegmentBase(start, row_group.count), db(row_group.db), table_info(row_group.table_info),
+      version_info(move(row_group.version_info)), stats(move(row_group.stats)) {
+	for (auto &column : row_group.columns) {
+		this->columns.push_back(ColumnData::CreateColumn(*column, start));
+	}
+	if (version_info) {
+		version_info->SetStart(start);
+	}
+	Verify();
+}
+
+void VersionNode::SetStart(idx_t start) {
+	idx_t current_start = start;
+	for (idx_t i = 0; i < RowGroup::ROW_GROUP_VECTOR_COUNT; i++) {
+		if (info[i]) {
+			info[i]->start = current_start;
+		}
+		current_start += STANDARD_VECTOR_SIZE;
+	}
+}
+
 RowGroup::~RowGroup() {
 }
 

@@ -56,7 +56,6 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	bool any_failed = original->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
 		return RunStatementInternal(lock, q, move(s), false, false);
 	});
-
 	// Execute the verifiers
 	for (auto &verifier : statement_verifiers) {
 		bool failed = verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
@@ -76,11 +75,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		}
 	} else {
 		if (db->IsInvalidated()) {
-			for (auto &verifier : statement_verifiers) {
-				if (verifier->materialized_result->HasError()) {
-					return verifier->materialized_result->GetErrorObject();
-				}
-			}
+			return original->materialized_result->GetErrorObject();
 		}
 	}
 
