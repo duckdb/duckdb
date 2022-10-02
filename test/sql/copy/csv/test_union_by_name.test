@@ -51,7 +51,7 @@ SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn*.csv')
 query IIIII
 SELECT  a, b, c, ts, k  
 FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE) 
-ORDER BY a
+ORDER BY a, c, ts
 ----
 NULL	NULL	3	2003-06-30 12:03:10	6
 NULL	NULL	5	2003-06-30 12:03:10	6
@@ -71,7 +71,7 @@ test	88	NULL	2020-12-30 01:25:58.745232+01	NULL
 query IIIII
 SELECT a, b, c, ts, replace(filename, '\', '/')
 FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
-ORDER BY a
+ORDER BY a, c, ts
 ----
 1	2	3	NULL	data/csv/union-by-name/ubn1.csv
 3	4	5	NULL	data/csv/union-by-name/ubn1.csv
@@ -85,14 +85,14 @@ test	88	NULL	2020-12-30 00:25:58.745232	data/csv/union-by-name/ubn2.csv
 query IIII
 SELECT k, c, ts, replace(filename, '\', '/')
 FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE) 
-ORDER BY k
+ORDER BY c
 ----
-NULL	100	Monday	data/csv/union-by-name/ubn4.csv
-NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
-NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 6	3	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
 6	5	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
 6	6	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+NULL	100	Monday	data/csv/union-by-name/ubn4.csv
+NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
+NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 
 # Test hive_partition with union_by_name 
 statement error
