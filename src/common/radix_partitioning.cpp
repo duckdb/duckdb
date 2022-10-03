@@ -302,7 +302,7 @@ struct PartitionFunctor {
 	static inline void FlushTempBuf(data_ptr_t &data_ptr, const idx_t &row_width, uint32_t &block_count,
 	                                const data_ptr_t &tmp_buf, uint32_t &pos, const idx_t count) {
 		pos -= count;
-		memcpy(data_ptr, tmp_buf + pos * row_width, count * row_width);
+		FastMemcpy(data_ptr, tmp_buf + pos * row_width, count * row_width);
 		data_ptr += count * row_width;
 		block_count += count;
 	}

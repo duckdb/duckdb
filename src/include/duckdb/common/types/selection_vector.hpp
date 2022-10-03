@@ -56,9 +56,9 @@ public:
 		selection_data = move(data);
 		sel_vector = selection_data->owned_data.get();
 	}
-	void Initialize(const SelectionVector &other, idx_t offset = 0) {
+	void Initialize(const SelectionVector &other) {
 		selection_data = other.selection_data;
-		sel_vector = other.sel_vector + offset;
+		sel_vector = other.sel_vector;
 	}
 
 	inline void set_index(idx_t idx, idx_t loc) {

@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/types/column_data_allocator.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -112,6 +112,8 @@ public:
 	idx_t ChunkCount() const;
 	void FetchChunk(idx_t chunk_idx, DataChunk &result);
 	void FetchChunk(idx_t chunk_idx, DataChunk &result, const vector<column_t> &column_ids);
+	void FetchChunk(ChunkManagementState &state, idx_t chunk_idx, DataChunk &result,
+	                const vector<column_t> &column_ids);
 
 	void Verify();
 

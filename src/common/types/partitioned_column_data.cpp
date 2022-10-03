@@ -74,7 +74,7 @@ void PartitionedColumnData::AppendChunk(PartitionedColumnDataAppendState &state,
 		}
 
 		// Create a selection vector for this partition using the offset into the single selection vector
-		partition_sel.Initialize(all_partitions_sel, partition_offset);
+		partition_sel.Initialize(all_partitions_sel.data() + partition_offset);
 
 		// Append the input chunk to the partition buffer using the selection vector
 		partition_buffer.Append(input, false, &partition_sel, partition_length);
