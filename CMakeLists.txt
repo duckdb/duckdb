@@ -685,7 +685,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
 
   # parse parameters
   string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
-  string(FIND "${PARAMETERS}" "-replacement-open" REPLACEMENT_OPEN)
 
 
   add_library(${TARGET_NAME} SHARED ${FILES})
