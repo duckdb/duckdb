@@ -15,7 +15,8 @@ parser.add_argument('--validate', action=argparse.BooleanOptionalAction,
 args = parser.parse_args()
 
 functions = {}
-reader = csv.reader(open(os.path.join("..",'extensions.csv')))
+ext_dir = os.path.join('..', '.github', 'config', 'extensions.csv')
+reader = csv.reader(open(ext_dir))
 # This skips the first row (i.e., the header) of the CSV file.
 next(reader)
 
