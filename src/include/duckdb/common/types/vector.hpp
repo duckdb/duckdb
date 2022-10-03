@@ -40,6 +40,7 @@ class Vector {
 	friend struct ListVector;
 	friend struct StringVector;
 	friend struct StructVector;
+	friend struct UnionVector;
 	friend struct SequenceVector;
 
 	friend class DataChunk;
@@ -365,6 +366,31 @@ struct MapVector {
 struct StructVector {
 	DUCKDB_API static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
 	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
+};
+
+struct UnionVector {
+	static inline union_tag_t *GetTags(Vector &v) {
+		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &child = DictionaryVector::Child(v);
+			return GetTags(child);
+		}
+		// the tag vector is always the first struct child.
+		auto &entries = StructVector::GetEntries(v);
+		return FlatVector::GetData<union_tag_t>(*entries[0]);
+	}
+
+	static inline const union_tag_t *GetTags(const Vector &v) {
+		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &child = DictionaryVector::Child(v);
+			return GetTags(child);
+		}
+		// the tag vector is always the first struct child.
+		auto &entries = StructVector::GetEntries(v);
+		return FlatVector::GetData<union_tag_t>(*entries[0]);
+	}
+
+	DUCKDB_API static const Vector &GetMember(const Vector &vector, idx_t index);
+	DUCKDB_API static Vector &GetMember(Vector &vector, idx_t index);
 };
 
 struct SequenceVector {

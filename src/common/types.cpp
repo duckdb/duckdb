@@ -108,6 +108,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
 	case LogicalTypeId::MAP:
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::STRUCT:
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
@@ -209,7 +210,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,     LogicalType::USMALLINT,
 	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,         LogicalTypeId::LIST,
 	    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,
-	    LogicalType::UUID,     LogicalType::JSON};
+	    LogicalTypeId::UNION,  LogicalType::UUID,      LogicalType::JSON};
 	return types;
 }
 
@@ -393,6 +394,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "LAMBDA";
 	case LogicalTypeId::INVALID:
 		return "INVALID";
+	case LogicalTypeId::UNION:
+		return "UNION";
 	case LogicalTypeId::UNKNOWN:
 		return "UNKNOWN";
 	case LogicalTypeId::ENUM:
@@ -447,6 +450,21 @@ string LogicalType::ToString() const {
 		}
 		return "MAP(" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
 		       ListType::GetChildType(child_types[1].second).ToString() + ")";
+	}
+	case LogicalTypeId::UNION: {
+		if (!type_info_) {
+			return "UNION";
+		}
+		string ret = "UNION(";
+		size_t count = UnionType::GetMemberCount(*this);
+		for (size_t i = 0; i < count; i++) {
+			ret += UnionType::GetMemberType(*this, i).ToString();
+			if (i < count - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ")";
+		return ret;
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (!type_info_) {
@@ -727,7 +745,9 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 		return LogicalType::LIST(move(new_child));
 	}
-	if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::MAP) {
+	if (type_id == LogicalTypeId::STRUCT 
+		|| type_id == LogicalTypeId::MAP 
+		|| type_id == LogicalTypeId::UNION) {
 		// struct: perform recursively
 		auto &left_child_types = StructType::GetChildTypes(left);
 		auto &right_child_types = StructType::GetChildTypes(right);
@@ -1123,7 +1143,10 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 }
 
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP);
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT 
+	|| type.id() == LogicalTypeId::MAP 
+	|| type.id() == LogicalTypeId::UNION);
+	
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((StructTypeInfo &)*info).child_types;
@@ -1178,6 +1201,42 @@ const LogicalType &MapType::KeyType(const LogicalType &type) {
 const LogicalType &MapType::ValueType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
 	return ListType::GetChildType(StructType::GetChildTypes(type)[1].second);
+}
+
+
+//===--------------------------------------------------------------------===//
+// Union Type
+//===--------------------------------------------------------------------===//
+
+LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
+	// union types always have a hidden "tag" field in front
+	members.insert(members.begin(), {"", LogicalType::TINYINT});
+	auto info = make_shared<StructTypeInfo>(move(members));
+	return LogicalType(LogicalTypeId::UNION, move(info));
+}
+
+const LogicalType &UnionType::GetMemberType(const LogicalType &type, idx_t index) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(index < child_types.size());
+	// skip the "tag" field
+	return child_types[index + 1].second;
+}
+
+const string &UnionType::GetMemberName(const LogicalType &type, idx_t index) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(index < child_types.size());
+	// skip the "tag" field
+	return child_types[index + 1].first;
+}
+
+idx_t UnionType::GetMemberCount(const LogicalType &type) {
+	// dont count the "tag" field
+	return StructType::GetChildTypes(type).size() - 1;
+}
+const child_list_t<LogicalType> UnionType::GetMemberTypes(const LogicalType &type) {
+	auto child_types = StructType::GetChildTypes(type);
+	child_types.erase(child_types.begin());
+	return child_types;
 }
 
 //===--------------------------------------------------------------------===//

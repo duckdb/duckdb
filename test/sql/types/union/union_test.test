@@ -1,0 +1,39 @@
+# name: test/sql/types/union/union_test.test
+# description: Test union type
+# group: [union]
+
+statement ok
+CREATE TABLE tbl(u UNION(i INTEGER, f FLOAT));
+
+statement ok
+INSERT INTO tbl VALUES (1::INTEGER);
+
+query I
+SELECT * from tbl;
+----
+1
+
+statement ok
+INSERT INTO tbl VALUES (2.0::FLOAT);
+
+query I 
+SELECT * FROM tbl;
+----
+1
+2.0
+
+query I
+SELECT u.i FROM tbl;
+----
+1
+NULL
+
+
+query I
+SELECT union_tag(u) FROM tbl;
+----
+i
+f
+
+statement ok
+INSERT INTO tbl SELECT i from range(10) tbl(i);

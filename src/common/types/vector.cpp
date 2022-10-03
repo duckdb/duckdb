@@ -525,6 +525,12 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		Value value = child_entries[1]->GetValue(index);
 		return Value::MAP(move(key), move(value));
 	}
+	case LogicalTypeId::UNION: {
+		auto tag = UnionVector::GetTags(*vector)[index]; // ((union_tag_t *)data)[index];
+		auto value =  UnionVector::GetMember(*vector, tag).GetValue(index);
+		auto members = UnionType::GetMemberTypes(type);
+		return Value::UNION(members, tag, move(value));
+	}
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
 		auto &child_entries = StructVector::GetEntries(*vector);
@@ -1368,7 +1374,10 @@ const Vector &MapVector::GetValues(const Vector &vector) {
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT 
+	|| vector.GetType().id() == LogicalTypeId::MAP
+	|| vector.GetType().id() == LogicalTypeId::UNION);
+	
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
 		return StructVector::GetEntries(child);
@@ -1578,6 +1587,19 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 void ListVector::PushBack(Vector &target, const Value &insert) {
 	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
 	target_buffer.PushBack(insert);
+}
+
+
+const Vector &UnionVector::GetMember(const Vector &vector, idx_t index){
+	D_ASSERT(index < UnionType::GetMemberCount(vector.GetType()));
+	auto &entries = StructVector::GetEntries(vector);
+	return *entries[index + 1]; // skip the "tag" entry
+}
+
+Vector &UnionVector::GetMember(Vector &vector, idx_t index) {
+	D_ASSERT(index < UnionType::GetMemberCount(vector.GetType()));
+	auto &entries = StructVector::GetEntries(vector);
+	return *entries[index + 1]; // skip the "tag" entry
 }
 
 } // namespace duckdb

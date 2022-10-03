@@ -1282,6 +1282,12 @@ Typename:	SimpleTypename opt_array_bounds
                $$->typmods = $3;
                $$->location = @1;
 			}
+			| UNION '(' colid_type_list ')' opt_array_bounds {
+			   $$ = SystemTypeName("union");
+			   $$->arrayBounds = $5;
+			   $$->typmods = $3;
+			   $$->location = @1;
+			}
 		;
 
 opt_array_bounds:

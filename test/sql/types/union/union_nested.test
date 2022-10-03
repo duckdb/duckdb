@@ -1,0 +1,9 @@
+# name: test/sql/types/union/union_nested.test
+# description: Test union type
+# group: [union]
+
+statement ok
+CREATE TABLE tbl(a UNION(a INT, b UNION(c INT, d INT)));
+
+statement ok
+INSERT INTO tbl VALUES (1::INTEGER);

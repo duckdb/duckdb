@@ -82,6 +82,18 @@ struct MapExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct UnionValueFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct UnionExtractFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct UnionTagFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ListExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

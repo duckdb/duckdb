@@ -1,0 +1,90 @@
+# name: test/sql/types/union/union_ambiguous.test
+# description: Test union types with ambiguous members
+# group: [union]
+
+# disallow members with same name
+statement error
+CREATE TABLE tbl(a UNION(b INT, b INT));
+
+# allow members with same type
+statement ok
+CREATE TABLE tbl(a UNION(b INT, c INT));
+
+# disallow inserting ambiguous values
+statement error
+INSERT INTO tbl VALUES (1), (2), (3);
+
+# allow inserting explicitly tagged values using single member structs
+statement ok
+INSERT INTO tbl VALUES ({'b': 1}), ({'c': 2}), ({'b': 3});
+
+# when using explicit tags, all the tags must be present
+statement error
+INSERT INTO tbl VALUES ({'b': 3}), ({'a': 4}), ({'b': 5});
+
+query I
+SELECT a.b FROM tbl
+----
+1
+NULL
+3
+
+query I
+SELECT a.c FROM tbl
+----
+NULL
+2
+NULL
+
+query I
+SELECT a FROM tbl
+----
+1
+2
+3
+
+# ensure the above works with struct members as well
+statement ok
+CREATE TABLE tbl2(a UNION(b STRUCT(foo VARCHAR), c STRUCT(foo VARCHAR)));
+
+statement error
+INSERT INTO tbl2 VALUES ({'foo': 'bar'}), ({'foo': 'baz'});
+
+statement error
+INSERT INTO tbl2 VALUES ({'b': {'foo': 'bar'}}), ({'c': {'foo': 'baz'}}), ({'d': {'foo': 'qux'}});
+
+statement ok
+INSERT INTO tbl2 VALUES ({'b': {'foo': 'bar'}}), ({'c': {'foo': 'baz'}});
+
+query I
+SELECT a.b.foo FROM tbl2
+----
+bar
+NULL
+
+query I
+SELECT a.c.foo FROM tbl2
+----
+NULL
+baz
+
+query I
+SELECT a FROM tbl2
+----
+{'foo': bar}
+{'foo': baz}
+
+# advanced case
+statement ok
+CREATE TABLE tbl3(a UNION(b INT, c STRUCT(b INT)));
+
+statement ok
+INSERT INTO tbl3 VALUES (1), ({'b': 2}), ({'c': {'b': 3}});
+
+# TODO: do we always allow explict tags (like this?) or only when there is ambiguity?
+query I
+SELECT a FROM tbl3
+----
+1
+2
+{'b': 3}

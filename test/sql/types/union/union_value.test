@@ -1,0 +1,44 @@
+# name: test/sql/types/union/union_value.test
+# description: Test union_value function
+# group: [xxxx]
+
+statement ok
+CREATE TABLE tbl(u UNION(num INTEGER, str STRING));
+
+statement ok
+INSERT INTO tbl VALUES (UNION_VALUE(num := 1));
+
+
+
+# union_value must take exactly one argument
+statement error
+INSERT INTO tbl VALUES (union_value());
+
+statement error
+INSERT INTO tbl VALEUS (union_value(num := 1, other := 2))
+
+# unions can only be cast to eachother if their member sets overlap
+statement error
+INSERT INTO tbl VALUES (union_value(key := 1))
+
+statement ok
+INSERT INTO tbl VALUES (union_value(num := 1)), (1), (union_value(str := 'hello')), (2), ('world');
+
+
+statement ok
+INSERT INTO tbl SELECT 
+    union_value(num := 1)::UNION(num INTEGER, str STRING) 
+UNION ALL SELECT 
+    union_value(str := 'hello')::UNION(num INTEGER, str STRING) 
+
+
+query I
+SELECT CASE WHEN union_tag(u) = 'num' THEN u ELSE NULL END AS num FROM tbl;
+----
+1
+1
+NULL
+1
+NULL
+1
+NULL
