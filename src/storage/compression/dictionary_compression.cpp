@@ -263,7 +263,7 @@ public:
 
 		// calculate sizes
 		auto compressed_selection_buffer_size =
-		    BitpackingPrimitives::GetRequiredSize<sel_t>(current_segment->count, current_width);
+		    BitpackingPrimitives::GetRequiredSize(current_segment->count, current_width);
 		auto index_buffer_size = index_buffer.size() * sizeof(uint32_t);
 		auto total_size = DictionaryCompressionStorage::DICTIONARY_HEADER_SIZE + compressed_selection_buffer_size +
 		                  index_buffer_size + current_dictionary.size;
@@ -582,7 +582,7 @@ bool DictionaryCompressionStorage::HasEnoughSpace(idx_t current_count, idx_t ind
 idx_t DictionaryCompressionStorage::RequiredSpace(idx_t current_count, idx_t index_count, idx_t dict_size,
                                                   bitpacking_width_t packing_width) {
 	idx_t base_space = DICTIONARY_HEADER_SIZE + dict_size;
-	idx_t string_number_space = BitpackingPrimitives::GetRequiredSize<sel_t>(current_count, packing_width);
+	idx_t string_number_space = BitpackingPrimitives::GetRequiredSize(current_count, packing_width);
 	idx_t index_space = index_count * sizeof(uint32_t);
 
 	idx_t used_space = base_space + index_space + string_number_space;

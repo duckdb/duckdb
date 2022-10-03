@@ -1,0 +1,20 @@
+# name: benchmark/micro/compression/fsst/fsst_late_decompression.benchmark
+# description: Using a filter on another column to make use of late decompression
+# group: [fsst]
+
+name fsst late decompression benefit
+group fsst
+storage persistent
+
+load
+DROP TABLE IF EXISTS test;
+PRAGMA force_compression='fsst';
+CREATE TABLE test AS SELECT i as id, (100 + (i%2))::VARCHAR AS value FROM range(0, 50000000) tbl(i);
+checkpoint;
+SET enable_fsst_vectors=false;
+
+run
+select avg(value::INT) from test where id%10=0;
+
+result I
+100.500000

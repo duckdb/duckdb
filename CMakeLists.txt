@@ -402,6 +402,7 @@ endif()
 
 
 include_directories(src/include)
+include_directories(third_party/fsst)
 include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/fastpforlib)

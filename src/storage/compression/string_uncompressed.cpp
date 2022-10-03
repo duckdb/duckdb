@@ -1,6 +1,7 @@
 #include "duckdb/storage/string_uncompressed.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+
 #include "duckdb/common/pair.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "miniz_wrapper.hpp"
 
 namespace duckdb {
@@ -140,6 +141,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+
 unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment,
                                                                                 block_id_t block_id) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
