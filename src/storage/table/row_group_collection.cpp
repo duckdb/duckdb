@@ -330,15 +330,16 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 		auto row_group = (RowGroup *)row_groups->GetSegment(ids[pos]);
 		row_t base_id =
 		    row_group->start + ((ids[pos] - row_group->start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
+		row_t max_id = MinValue<row_t>(base_id + STANDARD_VECTOR_SIZE, row_group->start + row_group->count);
 		for (pos++; pos < updates.size(); pos++) {
 			D_ASSERT(ids[pos] >= 0);
-			// check if this id still belongs to this vector
+			// check if this id still belongs to this vector in this row group
 			if (ids[pos] < base_id) {
 				// id is before vector start -> it does not
 				break;
 			}
-			if (ids[pos] >= base_id + STANDARD_VECTOR_SIZE) {
-				// id is after vector end -> it does not
+			if (ids[pos] >= max_id) {
+				// id is after the maximum id in this vector -> it does not
 				break;
 			}
 		}
