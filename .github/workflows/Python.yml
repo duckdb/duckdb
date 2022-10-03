@@ -130,7 +130,6 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-        static_link_build: 1
         treat_warn_as_error: 0
 
     - uses: actions/upload-artifact@v2

@@ -41,10 +41,6 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	}
 }
 
-void RowGroupCollection::InitializeEmpty() {
-	AppendRowGroup(row_start);
-}
-
 void RowGroupCollection::AppendRowGroup(idx_t start_row) {
 	D_ASSERT(start_row >= row_start);
 	auto new_row_group = make_unique<RowGroup>(info->db, *info, start_row, 0);
@@ -54,7 +50,10 @@ void RowGroupCollection::AppendRowGroup(idx_t start_row) {
 
 void RowGroupCollection::Verify() {
 #ifdef DEBUG
-	D_ASSERT(row_groups->GetRootSegment() != nullptr);
+	for (auto segment = row_groups->GetRootSegment(); segment; segment = segment->next.get()) {
+		auto &row_group = (RowGroup &)*segment;
+		row_group.Verify();
+	}
 #endif
 }
 
@@ -64,6 +63,7 @@ void RowGroupCollection::Verify() {
 void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector<column_t> &column_ids,
                                         TableFilterSet *table_filters) {
 	auto row_group = (RowGroup *)row_groups->GetRootSegment();
+	D_ASSERT(row_group);
 	state.max_row = row_start + total_rows;
 	while (row_group && !row_group->InitializeScan(state.row_group_state)) {
 		row_group = (RowGroup *)row_group->next.get();
@@ -77,6 +77,7 @@ void RowGroupCollection::InitializeCreateIndexScan(CreateIndexScanState &state) 
 void RowGroupCollection::InitializeScanWithOffset(CollectionScanState &state, const vector<column_t> &column_ids,
                                                   idx_t start_row, idx_t end_row) {
 	auto row_group = (RowGroup *)row_groups->GetSegment(start_row);
+	D_ASSERT(row_group);
 	state.max_row = end_row;
 	idx_t start_vector = (start_row - row_group->start) / STANDARD_VECTOR_SIZE;
 	if (!row_group->InitializeScanWithOffset(state.row_group_state, start_vector)) {
@@ -154,6 +155,10 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+bool RowGroupCollection::IsEmpty() const {
+	return row_groups->GetRootSegment() == nullptr;
+}
+
 void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count) {
 	state.remaining_append_count = append_count;
 	state.row_start = total_rows;
@@ -161,6 +166,10 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 
 	// start writing to the row_groups
 	lock_guard<mutex> row_group_lock(row_groups->node_lock);
+	if (IsEmpty()) {
+		// empty row group collection: empty first row group
+		AppendRowGroup(row_start);
+	}
 	auto last_row_group = (RowGroup *)row_groups->GetLastSegment();
 	D_ASSERT(this->row_start + total_rows == last_row_group->start + last_row_group->count);
 	last_row_group->InitializeAppend(transaction, state.row_group_append_state, state.remaining_append_count);
@@ -225,6 +234,7 @@ void RowGroupCollection::Append(TransactionData transaction, DataChunk &chunk, T
 
 void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
 	auto row_group = (RowGroup *)row_groups->GetSegment(row_start);
+	D_ASSERT(row_group);
 	idx_t current_row = row_start;
 	idx_t remaining = count;
 	while (true) {
@@ -265,6 +275,18 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
 	}
 	info.next = nullptr;
 	info.RevertAppend(start_row);
+}
+
+void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
+	D_ASSERT(data.types == types);
+	auto index = row_start;
+	for (auto segment = data.row_groups->GetRootSegment(); segment; segment = segment->next.get()) {
+		auto &row_group = (RowGroup &)*segment;
+		auto new_group = make_unique<RowGroup>(row_group, index);
+		index += new_group->count;
+		row_groups->AppendSegment(move(new_group));
+	}
+	total_rows += data.total_rows.load();
 }
 
 //===--------------------------------------------------------------------===//
@@ -525,6 +547,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 }
 
 void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint) {
+	if (total_rows == 0) {
+		return;
+	}
 	// scan the original table, check if there's any null value
 	auto &not_null_constraint = (BoundNotNullConstraint &)constraint;
 	vector<LogicalType> scan_types;
