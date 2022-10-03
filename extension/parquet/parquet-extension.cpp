@@ -395,7 +395,7 @@ public:
 			result->projection_ids = input.projection_ids;
 			const auto table_types = bind_data.types;
 			for (const auto &col_idx : input.column_ids) {
-				if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				if (IsRowIdColumnId(col_idx)) {
 					result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 				} else {
 					result->scanned_types.push_back(table_types[col_idx]);
