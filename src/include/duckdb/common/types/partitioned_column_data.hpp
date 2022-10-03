@@ -18,17 +18,20 @@ class PartitionedColumnData;
 
 //! Local state for partioning in parallel
 struct PartitionedColumnDataAppendState {
+public:
 	explicit PartitionedColumnDataAppendState() : partition_indices(LogicalType::UBIGINT) {
 	}
 
-	// Implicit copying is not allowed
-	PartitionedColumnDataAppendState(const PartitionedColumnDataAppendState &) = delete;
-
+public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
 
 	vector<unique_ptr<DataChunk>> partition_buffers;
 	vector<unique_ptr<ColumnDataCollection>> partitions;
+
+private:
+	//! Implicit copying is not allowed
+	PartitionedColumnDataAppendState(const PartitionedColumnDataAppendState &) = delete;
 };
 
 //! PartitionedColumnData represents partitioned columnar data, which serves as an interface for different flavors of
@@ -61,10 +64,10 @@ public:
 	void InitializeAppendState(PartitionedColumnDataAppendState &state);
 
 	//! Appends a DataChunk to the PartitionedColumnDataAppendState
-	virtual void Append(PartitionedColumnDataAppendState &state, DataChunk &input);
+	virtual void AppendChunk(PartitionedColumnDataAppendState &state, DataChunk &input);
 
-	//! Appends a local state into this PartitionedColumnData TODO: rename this
-	void AppendLocalState(PartitionedColumnDataAppendState &state);
+	//! Combine a local state into this PartitionedColumnData
+	void CombineLocalState(PartitionedColumnDataAppendState &state);
 
 private:
 	//===--------------------------------------------------------------------===//

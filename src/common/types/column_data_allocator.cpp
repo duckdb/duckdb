@@ -112,7 +112,7 @@ Allocator &ColumnDataAllocator::GetAllocator() {
 	                                                            : alloc.buffer_manager->GetBufferAllocator();
 }
 
-void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, ChunkMetaData &chunk) {
+void ColumnDataAllocator::InitializeChunkStateInternal(ChunkManagementState &state, ChunkMetaData &chunk) {
 	if (type != ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
 		// nothing to pin
 		return;
@@ -139,6 +139,15 @@ void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, Chun
 			continue;
 		}
 		state.handles[block_id] = Pin(block_id);
+	}
+}
+
+void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, ChunkMetaData &chunk) {
+	if (shared) {
+		lock_guard<mutex> guard(lock);
+		InitializeChunkStateInternal(state, chunk);
+	} else {
+		InitializeChunkStateInternal(state, chunk);
 	}
 }
 

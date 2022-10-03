@@ -270,7 +270,7 @@ public:
 		//! The probe data (if not partitioned) and append states
 		unique_ptr<ColumnDataCollection> global_spill_collection;
 		vector<unique_ptr<ColumnDataCollection>> local_spill_collections;
-		vector<ColumnDataAppendState> spill_append_states;
+		vector<unique_ptr<ColumnDataAppendState>> spill_append_states;
 	};
 
 	//! Whether we are doing an external hash join

@@ -1210,24 +1210,24 @@ idx_t ProbeSpill::RegisterThread() {
 	} else {
 		idx_t thread_idx = local_spill_collections.size();
 		local_spill_collections.emplace_back(make_unique<ColumnDataCollection>(context, probe_types));
-		spill_append_states.emplace_back();
-		local_spill_collections.back()->InitializeAppend(spill_append_states.back());
+		spill_append_states.emplace_back(make_unique<ColumnDataAppendState>());
+		local_spill_collections.back()->InitializeAppend(*spill_append_states.back());
 		return thread_idx;
 	}
 }
 
 void ProbeSpill::Append(DataChunk &chunk, idx_t thread_idx) {
 	if (partitioned) {
-		partitioned_data->Append(*partition_append_states[thread_idx], chunk);
+		partitioned_data->AppendChunk(*partition_append_states[thread_idx], chunk);
 	} else {
-		local_spill_collections[thread_idx]->Append(spill_append_states[thread_idx], chunk);
+		local_spill_collections[thread_idx]->Append(*spill_append_states[thread_idx], chunk);
 	}
 }
 
 void ProbeSpill::Finalize() {
 	if (partitioned) {
 		for (auto &append_state : partition_append_states) {
-			partitioned_data->AppendLocalState(*append_state);
+			partitioned_data->CombineLocalState(*append_state);
 		}
 		partition_append_states.clear();
 	} else {
