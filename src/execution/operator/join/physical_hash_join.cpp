@@ -668,6 +668,8 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 
 void HashJoinGlobalSourceState::PrepareProbe(HashJoinGlobalSinkState &sink) {
 	probe_collection = sink.probe_spill->GetNextProbeCollection(*sink.hash_table);
+	D_ASSERT(probe_collection);
+
 	probe_collection->InitializeScan(probe_global_scan);
 	probe_chunk_count = probe_collection->ChunkCount();
 	probe_chunk_done = 0;
@@ -678,6 +680,16 @@ void HashJoinGlobalSourceState::PrepareProbe(HashJoinGlobalSinkState &sink) {
 	}
 
 	global_stage = HashJoinSourceStage::PROBE;
+	if (probe_chunk_count > 0) {
+		return;
+	}
+
+	// Empty probe collection, go straight into the next stage
+	if (IsRightOuterJoin(join_type)) {
+		global_stage = HashJoinSourceStage::SCAN_HT;
+	} else {
+		PrepareBuild(sink);
+	}
 }
 
 bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJoinLocalSourceState &lstate) {

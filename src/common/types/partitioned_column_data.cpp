@@ -38,6 +38,12 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 			partition_buffer.Reset();
 		}
 
+		if (partition_count == input.size()) {
+			// Whole chunk is a single partition
+			partition_buffer.Append(input);
+			return;
+		}
+
 		// Create a selection vector for this partition
 		idx_t sel_idx = 0;
 		for (idx_t i = 0; i < count; i++) {

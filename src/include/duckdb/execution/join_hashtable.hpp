@@ -266,7 +266,7 @@ public:
 
 		//! The partitioned probe data (if partitioned) and append states
 		unique_ptr<PartitionedColumnData> partitioned_data;
-		vector<PartitionedColumnDataAppendState> partition_append_states;
+		vector<unique_ptr<PartitionedColumnDataAppendState>> partition_append_states;
 		//! The probe data (if not partitioned) and append states
 		unique_ptr<ColumnDataCollection> global_spill_collection;
 		vector<unique_ptr<ColumnDataCollection>> local_spill_collections;

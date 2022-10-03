@@ -1160,8 +1160,9 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChun
 	                                            radix_bits, partition_end, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
-	// slice the stuff we CAN'T probe right now and append to spill collection
 	CreateSpillChunk(spill_chunk, keys, payload, hashes);
+
+	// can't probe these values right now, append to spill
 	spill_chunk.Slice(false_sel, false_count);
 	spill_chunk.Verify();
 	probe_spill.Append(spill_chunk, thread_idx);
@@ -1203,8 +1204,8 @@ idx_t ProbeSpill::RegisterThread() {
 	lock_guard<mutex> guard(lock);
 	if (partitioned) {
 		idx_t thread_idx = partition_append_states.size();
-		partition_append_states.emplace_back();
-		partitioned_data->InitializeAppendState(partition_append_states.back());
+		partition_append_states.emplace_back(make_unique<PartitionedColumnDataAppendState>());
+		partitioned_data->InitializeAppendState(*partition_append_states.back());
 		return thread_idx;
 	} else {
 		idx_t thread_idx = local_spill_collections.size();
@@ -1217,7 +1218,7 @@ idx_t ProbeSpill::RegisterThread() {
 
 void ProbeSpill::Append(DataChunk &chunk, idx_t thread_idx) {
 	if (partitioned) {
-		partitioned_data->Append(partition_append_states[thread_idx], chunk);
+		partitioned_data->Append(*partition_append_states[thread_idx], chunk);
 	} else {
 		local_spill_collections[thread_idx]->Append(spill_append_states[thread_idx], chunk);
 	}
@@ -1226,7 +1227,7 @@ void ProbeSpill::Append(DataChunk &chunk, idx_t thread_idx) {
 void ProbeSpill::Finalize() {
 	if (partitioned) {
 		for (auto &append_state : partition_append_states) {
-			partitioned_data->AppendLocalState(append_state);
+			partitioned_data->AppendLocalState(*append_state);
 		}
 		partition_append_states.clear();
 	} else {
@@ -1242,6 +1243,9 @@ void ProbeSpill::Finalize() {
 unique_ptr<ColumnDataCollection> ProbeSpill::GetNextProbeCollection(JoinHashTable &ht) {
 	if (partitioned) {
 		auto &partitions = partitioned_data->GetPartitions();
+		if (ht.partition_start == partitions.size()) {
+			return nullptr;
+		}
 		auto merged_partitions = move(partitions[ht.partition_start]);
 		for (idx_t p_idx = ht.partition_start + 1; p_idx < ht.partition_end; p_idx++) {
 			auto &partition = partitions[p_idx];
@@ -1250,7 +1254,9 @@ unique_ptr<ColumnDataCollection> ProbeSpill::GetNextProbeCollection(JoinHashTabl
 		}
 		return merged_partitions;
 	} else {
-		return move(global_spill_collection);
+		auto result = move(global_spill_collection);
+		global_spill_collection = nullptr;
+		return result;
 	}
 }
 

@@ -18,7 +18,13 @@ class PartitionedColumnData;
 
 //! Local state for partioning in parallel
 struct PartitionedColumnDataAppendState {
-	Vector partition_indices = Vector(LogicalType::UBIGINT);
+	explicit PartitionedColumnDataAppendState() : partition_indices(LogicalType::UBIGINT) {
+	}
+
+	// Implicit copying is not allowed
+	PartitionedColumnDataAppendState(const PartitionedColumnDataAppendState &) = delete;
+
+	Vector partition_indices;
 	SelectionVector partition_sel;
 
 	vector<unique_ptr<DataChunk>> partition_buffers;

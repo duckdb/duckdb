@@ -447,7 +447,8 @@ struct ComputePartitionIndicesFunctor {
 };
 
 void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) {
-
+	D_ASSERT(state.partitions.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
+	D_ASSERT(state.partition_buffers.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, input.data[hash_col_idx], state.partition_indices,
 	                                                      input.size());
 }
