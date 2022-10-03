@@ -34,6 +34,7 @@ public:
 	void InitializeAlterType(TableStatistics &parent, idx_t changed_idx, const LogicalType &new_type);
 	void InitializeAddConstraint(TableStatistics &parent);
 
+	void MergeStats(TableStatistics &other);
 	void MergeStats(idx_t i, BaseStatistics &stats);
 	void MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats);
 

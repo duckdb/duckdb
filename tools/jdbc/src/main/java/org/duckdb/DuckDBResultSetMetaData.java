@@ -89,15 +89,18 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.INTEGER;
 		case BIGINT:
 			return Types.BIGINT;
+		case LIST:
+			return Types.ARRAY;
+		case ENUM:
 		case HUGEINT:
-			return Types.JAVA_OBJECT;
 		case UTINYINT:
-			return Types.JAVA_OBJECT;
 		case USMALLINT:
-			return Types.JAVA_OBJECT;
+		case STRUCT:
+		case UUID:
+		case JSON:
 		case UINTEGER:
-			return Types.JAVA_OBJECT;
 		case UBIGINT:
+		case INTERVAL:
 			return Types.JAVA_OBJECT;
 		case FLOAT:
 			return Types.FLOAT;
@@ -118,13 +121,10 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.TIMESTAMP;
 		case TIMESTAMP_WITH_TIME_ZONE:
 			return Types.TIMESTAMP_WITH_TIMEZONE;
-		case INTERVAL:
-			return Types.JAVA_OBJECT;
 		case BLOB:
 			return Types.BLOB;
-
 		default:
-			throw new SQLException("Unsupported type " + type.toString());
+			throw new SQLException("Unsupported type " + type);
 		}
 	}
 

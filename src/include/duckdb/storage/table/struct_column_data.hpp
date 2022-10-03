@@ -18,6 +18,7 @@ class StructColumnData : public ColumnData {
 public:
 	StructColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
 	                 ColumnData *parent = nullptr);
+	StructColumnData(ColumnData &original, idx_t start_row, ColumnData *parent = nullptr);
 
 	//! The sub-columns of the struct
 	vector<unique_ptr<ColumnData>> sub_columns;
