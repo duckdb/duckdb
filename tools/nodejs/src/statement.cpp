@@ -584,12 +584,16 @@ struct GetNextArrowIpcTask : public Task {
 		D_ASSERT(chunk->size() == 1 && chunk->ColumnCount() == 1);
 		D_ASSERT(chunk->data[0].GetType() == duckdb::LogicalType::BLOB);
 
-		// TODO: can we also remove this copy? Yes we can by returning a wrapper that holds the reference to the chunk
 		duckdb::string_t blob = *(duckdb::string_t*)(chunk->data[0].GetData());
-		auto buf = Napi::ArrayBuffer::New(env, blob.GetSize());
-		memcpy(buf.Data(), (const void *) blob.GetDataUnsafe(), blob.GetSize());
 
-		deferred.Resolve(buf);
+		// Transfer ownership and Construct ArrayBuffer
+		auto data_chunk_ptr = new std::unique_ptr<duckdb::DataChunk>();
+		*data_chunk_ptr = std::move(chunk);
+		auto deleter = [](Napi::Env, void* finalizeData, void* hint){ delete static_cast<std::unique_ptr<duckdb::DataChunk>*>(hint);};
+		auto array_buffer = Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(), deleter,
+		                                           data_chunk_ptr);
+
+		deferred.Resolve(array_buffer);
 	}
 
 	Napi::Promise::Deferred deferred;
