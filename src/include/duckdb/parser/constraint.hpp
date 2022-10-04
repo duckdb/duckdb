@@ -44,7 +44,7 @@ struct ForeignKeyInfo {
 	//! The set of main key table's column's index
 	vector<storage_t> pk_keys;
 	//! The set of foreign key table's column's index
-	vector<idx_t> fk_keys;
+	vector<storage_t> fk_keys;
 };
 
 //! Constraint is the base class of any type of table constraint.

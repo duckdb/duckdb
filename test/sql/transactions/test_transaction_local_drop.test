@@ -1,0 +1,36 @@
+# name: test/sql/transactions/test_transaction_local_drop.test
+# description: Test DROP COLUMN on transaction local data
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+# perform different operations on the same data within one transaction
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3)
+
+statement ok
+ALTER TABLE integers DROP COLUMN j
+
+query I
+SELECT * FROM integers ORDER BY 1
+----
+1
+2
+3
+
+statement ok
+COMMIT
+
+query I
+SELECT * FROM integers ORDER BY 1
+----
+1
+2
+3

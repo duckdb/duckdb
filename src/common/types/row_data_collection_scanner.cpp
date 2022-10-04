@@ -127,7 +127,7 @@ void RowDataCollectionScanner::ScanState::PinData() {
 	auto &rows = scanner.rows;
 	D_ASSERT(block_idx < rows.blocks.size());
 	auto &data_block = rows.blocks[block_idx];
-	if (!data_handle.IsValid() || data_handle.GetBlockId() != data_block->block->BlockId()) {
+	if (!data_handle.IsValid() || data_handle.GetBlockHandle() != data_block->block) {
 		data_handle = rows.buffer_manager.Pin(data_block->block);
 	}
 	if (scanner.layout.AllConstant() || !scanner.external) {
@@ -137,7 +137,7 @@ void RowDataCollectionScanner::ScanState::PinData() {
 	auto &heap = scanner.heap;
 	D_ASSERT(block_idx < heap.blocks.size());
 	auto &heap_block = heap.blocks[block_idx];
-	if (!heap_handle.IsValid() || heap_handle.GetBlockId() != heap_block->block->BlockId()) {
+	if (!heap_handle.IsValid() || heap_handle.GetBlockHandle() != heap_block->block) {
 		heap_handle = heap.buffer_manager.Pin(heap_block->block);
 	}
 }

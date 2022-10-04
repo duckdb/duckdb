@@ -491,21 +491,23 @@ public:
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                         vector<unique_ptr<Expression>> &filters) {
 		auto data = (ParquetReadBindData *)bind_data_p;
-		auto initial_filename = data->files[0];
+		if (!data->files.empty()) {
+			auto initial_filename = data->files[0];
 
-		if (data->parquet_options.hive_partitioning || data->parquet_options.filename) {
-			unordered_map<string, column_t> column_map;
-			for (idx_t i = 0; i < get.column_ids.size(); i++) {
-				column_map.insert({get.names[get.column_ids[i]], i});
-			}
+			if (data->parquet_options.hive_partitioning || data->parquet_options.filename) {
+				unordered_map<string, column_t> column_map;
+				for (idx_t i = 0; i < get.column_ids.size(); i++) {
+					column_map.insert({get.names[get.column_ids[i]], i});
+				}
 
-			HivePartitioning::ApplyFiltersToFileList(data->files, filters, column_map, get.table_index,
-			                                         data->parquet_options.hive_partitioning,
-			                                         data->parquet_options.filename);
+				HivePartitioning::ApplyFiltersToFileList(data->files, filters, column_map, get.table_index,
+				                                         data->parquet_options.hive_partitioning,
+				                                         data->parquet_options.filename);
 
-			if (data->files.empty() || initial_filename != data->files[0]) {
-				// Remove initial reader in case the first file gets filtered out
-				data->initial_reader.reset();
+				if (data->files.empty() || initial_filename != data->files[0]) {
+					// Remove initial reader in case the first file gets filtered out
+					data->initial_reader.reset();
+				}
 			}
 		}
 	}
@@ -595,7 +597,8 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 
 unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
                                                     ReplacementScanData *data) {
-	if (!StringUtil::EndsWith(StringUtil::Lower(table_name), ".parquet")) {
+	auto lower_name = StringUtil::Lower(table_name);
+	if (!StringUtil::EndsWith(lower_name, ".parquet") && !StringUtil::Contains(lower_name, ".parquet?")) {
 		return nullptr;
 	}
 	auto table_function = make_unique<TableFunctionRef>();

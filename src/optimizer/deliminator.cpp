@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/deliminator.hpp"
 
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -35,7 +36,15 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 			    cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 				continue;
 			}
-			auto &colref = (BoundColumnRefExpression &)*cond.right;
+			Expression *rhs = cond.right.get();
+			while (rhs->type == ExpressionType::OPERATOR_CAST) {
+				auto &cast = (BoundCastExpression &)*rhs;
+				rhs = cast.child.get();
+			}
+			if (rhs->type != ExpressionType::BOUND_COLUMN_REF) {
+				throw InternalException("Erorr in deliminator: expected a bound column reference");
+			}
+			auto &colref = (BoundColumnRefExpression &)*rhs;
 			if (projection_map.find(colref.binding) != projection_map.end()) {
 				// value on the right is a projection of removed DelimGet
 				for (idx_t i = 0; i < decs->size(); i++) {

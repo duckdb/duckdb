@@ -210,6 +210,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["skip"] = LogicalType::BIGINT;
 	table_function.named_parameters["max_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
+	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -359,7 +360,8 @@ unique_ptr<TableFunctionRef> ReadCSVReplacement(ClientContext &context, const st
 	} else if (StringUtil::EndsWith(lower_name, ".zst")) {
 		lower_name = lower_name.substr(0, lower_name.size() - 4);
 	}
-	if (!StringUtil::EndsWith(lower_name, ".csv") && !StringUtil::EndsWith(lower_name, ".tsv")) {
+	if (!StringUtil::EndsWith(lower_name, ".csv") && !StringUtil::Contains(lower_name, ".csv?") &&
+	    !StringUtil::EndsWith(lower_name, ".tsv") && !StringUtil::Contains(lower_name, ".tsv?")) {
 		return nullptr;
 	}
 	auto table_function = make_unique<TableFunctionRef>();

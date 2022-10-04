@@ -36,6 +36,7 @@ public:
 
 		// Other
 		functions.push_back(GetArrayLengthFunction());
+		functions.push_back(GetContainsFunction());
 		functions.push_back(GetTypeFunction());
 		functions.push_back(GetValidFunction());
 
@@ -58,6 +59,7 @@ private:
 	static CreateScalarFunctionInfo GetTransformStrictFunction();
 
 	static CreateScalarFunctionInfo GetArrayLengthFunction();
+	static CreateScalarFunctionInfo GetContainsFunction();
 	static CreateScalarFunctionInfo GetTypeFunction();
 	static CreateScalarFunctionInfo GetValidFunction();
 

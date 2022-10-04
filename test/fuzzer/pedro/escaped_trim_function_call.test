@@ -1,0 +1,12 @@
+# name: test/fuzzer/pedro/escaped_trim_function_call.test
+# description: Issue #4586: Escaped trim function call
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SELECT "trim"(1);
+
+statement ok
+SELECT trim(1);

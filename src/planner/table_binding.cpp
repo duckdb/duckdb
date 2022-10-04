@@ -8,7 +8,6 @@
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
@@ -84,9 +83,10 @@ StandardEntry *EntryBinding::GetStandardEntry() {
 	return &this->entry;
 }
 
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, LogicalGet &get,
-                           idx_t index, bool add_row_id)
-    : Binding(BindingType::TABLE, alias, move(types_p), move(names_p), index), get(get) {
+TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
+                           vector<column_t> &bound_column_ids, StandardEntry *entry, idx_t index, bool add_row_id)
+    : Binding(BindingType::TABLE, alias, move(types_p), move(names_p), index), bound_column_ids(bound_column_ids),
+      entry(entry) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
 			name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
@@ -153,7 +153,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		}
 	}
 
-	auto &column_ids = get.column_ids;
+	auto &column_ids = bound_column_ids;
 	// check if the entry already exists in the column list for the table
 	ColumnBinding binding;
 
@@ -173,7 +173,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 }
 
 StandardEntry *TableBinding::GetStandardEntry() {
-	return get.GetTable();
+	return entry;
 }
 
 string TableBinding::ColumnNotFoundError(const string &column_name) const {

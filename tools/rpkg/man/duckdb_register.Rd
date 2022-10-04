@@ -5,7 +5,7 @@
 \alias{duckdb_unregister}
 \title{Register a data frame as a virtual table}
 \usage{
-duckdb_register(conn, name, df)
+duckdb_register(conn, name, df, overwrite = FALSE)
 
 duckdb_unregister(conn, name)
 }
@@ -15,6 +15,8 @@ duckdb_unregister(conn, name)
 \item{name}{The name for the virtual table that is registered or unregistered}
 
 \item{df}{A \code{data.frame} with the data for the virtual table}
+
+\item{overwrite}{Should an existing registration be overwritten?}
 }
 \value{
 These functions are called for their side effect.

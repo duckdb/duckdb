@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/art/iterator.hpp"
+
 #include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {

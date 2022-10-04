@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
@@ -22,7 +23,6 @@
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
 
 namespace duckdb {
@@ -87,11 +87,17 @@ public:
 	//! Insert data into the index.
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
+	//! Construct ARTs from sorted chunks and merge them.
+	void ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
+
 	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
 	//! Search Equal used for Joins that do not need to fetch data
 	void SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size);
 	//! Serialized the ART
 	BlockPointer Serialize(duckdb::MetaBlockWriter &writer) override;
+
+	//! Merge two ARTs
+	static void Merge(ART *l_art, ART *r_art);
 
 private:
 	//! Insert a row id into a leaf node

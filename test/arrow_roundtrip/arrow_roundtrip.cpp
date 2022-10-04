@@ -134,7 +134,6 @@ void RunArrowComparison(Connection &con, const string &query, bool big_result = 
 	params.push_back(Value::POINTER((uintptr_t)&factory));
 	params.push_back(Value::POINTER((uintptr_t)&ArrowRoundtripFactory::CreateStream));
 	params.push_back(Value::POINTER((uintptr_t)&ArrowRoundtripFactory::GetSchema));
-	params.push_back(Value::UBIGINT(1000000));
 
 	// run the arrow scan over the result
 	auto arrow_result = con.TableFunction("arrow_scan", params)->Execute();

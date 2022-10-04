@@ -15,13 +15,13 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 query II
 EXPLAIN SELECT i=3 FROM integers WHERE i BETWEEN 0 AND 2
 ----
-logical_opt	<!REGEX>:.*i = 3.*
+logical_opt	<!REGEX>:.*\(i = 3\).*
 
 # filter is in range: need to execute it
 query II
 EXPLAIN SELECT i=1 FROM integers WHERE i BETWEEN 0 AND 2
 ----
-logical_opt	<REGEX>:.*i = 1.*
+logical_opt	<REGEX>:.*\(i = 1\).*
 
 # between where lhs is bigger than rhs: we can prune this entirely
 query II
@@ -50,12 +50,12 @@ SELECT * FROM integers WHERE i BETWEEN 3 AND 2;
 query II
 EXPLAIN SELECT i=3 FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2
 ----
-logical_opt	<!REGEX>:.*i = 3.*
+logical_opt	<!REGEX>:.*\(i = 3\).*
 
 query II
 EXPLAIN SELECT i=1 FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2
 ----
-logical_opt	<REGEX>:.*i = 1.*
+logical_opt	<REGEX>:.*\(i = 1\).*
 
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 3 AND 2
@@ -72,13 +72,13 @@ logical_opt	<!REGEX>:.*FILTER.*
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2;
 ----
-logical_opt	<REGEX>:.*i <= 2.*
+logical_opt	<REGEX>:.*\(i <= 2\).*
 
 # upper clause is always true: between should be converted into i >= 2
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 2 AND 10;
 ----
-logical_opt	<REGEX>:.*i >= 2.*
+logical_opt	<REGEX>:.*\(i >= 2\).*
 
 # between is always false
 query II
@@ -89,7 +89,7 @@ logical_opt	<REGEX>:.*EMPTY_RESULT.*
 query II
 EXPLAIN SELECT i BETWEEN -1 AND 0 FROM (SELECT * FROM integers LIMIT 10) integers(i);
 ----
-logical_opt	<REGEX>:.*False.*
+logical_opt	<REGEX>:.*false.*
 
 # verify the results
 query I

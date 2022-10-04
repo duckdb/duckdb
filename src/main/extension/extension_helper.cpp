@@ -66,6 +66,10 @@
 #include "sqlsmith-extension.hpp"
 #endif
 
+#if defined(BUILD_INET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+#include "inet-extension.hpp"
+#endif
+
 #if defined(BUILD_ARROW_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "arrow-extension.hpp"
 #endif
@@ -85,6 +89,7 @@ static DefaultExtension internal_extensions[] = {
     {"json", "Adds support for JSON operations", JSON_STATICALLY_LOADED},
     {"sqlite_scanner", "Adds support for reading SQLite database files", false},
     {"postgres_scanner", "Adds support for reading from a Postgres database", false},
+    {"inet", "Adds support for IP-related data types and functions", false},
     {"arrow", "Adds Apache Arrow dependency", false},
     {nullptr, nullptr, false}};
 
@@ -104,8 +109,8 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 // Load Statically Compiled Extension
 //===--------------------------------------------------------------------===//
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet", "icu",        "tpch", "tpcds", "fts",
-	                                  "httpfs",  "visualizer", "json", "excel", "sqlsmith", "arrow"};
+	unordered_set<string> extensions {"parquet",    "icu",  "tpch",  "tpcds",    "fts", "httpfs",
+	                                  "visualizer", "json", "excel", "sqlsmith", "inet", "arrow"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -202,11 +207,18 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
+	} else if (extension == "inet") {
+#if defined(BUILD_INET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+		db.LoadExtension<INETExtension>();
+#else
+		// inet extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
 	} else if (extension == "arrow") {
 #if defined(BUILD_ARROW_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<ArrowExtension>();
 #else
-		// excel extension required but not build: skip this test
+		// arrow extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else {

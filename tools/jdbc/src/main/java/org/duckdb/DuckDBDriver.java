@@ -25,15 +25,15 @@ public class DuckDBDriver implements java.sql.Driver {
 			return null;
 		}
 		boolean read_only = false;
-		if (info != null) {
-			String prop_val = info.getProperty(DUCKDB_READONLY_PROPERTY);
-			if (prop_val != null) {
-				String prop_clean = prop_val.trim().toLowerCase();
-				read_only = prop_clean.equals("1") || prop_clean.equals("true") || prop_clean.equals("yes");
-			}
+		if (info == null) {
+			info = new Properties();
 		}
-		DuckDBDatabase db = new DuckDBDatabase(url, read_only);
-		return new DuckDBConnection(db);
+		String prop_val = (String) info.remove(DUCKDB_READONLY_PROPERTY);
+		if (prop_val != null) {
+			String prop_clean = prop_val.trim().toLowerCase();
+			read_only = prop_clean.equals("1") || prop_clean.equals("true") || prop_clean.equals("yes");
+		}
+		return new DuckDBConnection(new DuckDBDatabase(url, read_only, info));
 	}
 
 	public boolean acceptsURL(String url) throws SQLException {

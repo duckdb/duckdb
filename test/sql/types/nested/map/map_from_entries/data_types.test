@@ -129,7 +129,7 @@ create table boolean_key as select MAP_FROM_ENTRIES(ARRAY[(True, 'x'), (False, '
 query I
 select * from boolean_key;
 ----
-{True=x, False=y}
+{true=x, false=y}
 
 query I
 select col[True] from boolean_key;

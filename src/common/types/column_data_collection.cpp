@@ -42,6 +42,14 @@ struct ColumnDataMetaData {
 	}
 };
 
+//! Explicitly initialized without types
+ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
+	types.clear();
+	count = 0;
+	this->finished_append = false;
+	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+}
+
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
 	Initialize(move(types_p));
 	allocator = make_shared<ColumnDataAllocator>(allocator_p);
@@ -794,7 +802,7 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 		for (idx_t c = 0; c < left.ColumnCount(); c++) {
 			auto lvalue = left_rows.GetValue(c, r);
 			auto rvalue = left_rows.GetValue(c, r);
-			if (!Value::ValuesAreEqual(lvalue, rvalue)) {
+			if (!Value::DefaultValuesAreEqual(lvalue, rvalue)) {
 				error_message =
 				    StringUtil::Format("%s <> %s (row: %lld, col: %lld)\n", lvalue.ToString(), rvalue.ToString(), r, c);
 				return false;
