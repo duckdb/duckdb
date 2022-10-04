@@ -44,6 +44,10 @@ public:
 		return (bits_written >> 3) + ((bits_written & 7) != 0);
 	}
 	
+	size_t BitsWritten() const {
+		return bits_written;
+	}
+
 	void Flush() {
 		if (free_bits != INTERNAL_TYPE_BITSIZE) {
 			//the bit buffer is empty, nothing to write

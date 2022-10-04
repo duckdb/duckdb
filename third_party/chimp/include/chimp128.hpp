@@ -62,6 +62,10 @@ struct Chimp128CompressionState {
 		packed_data_buffer.Reset();
 	}
 
+	uint64_t BitsWritten() const {
+		return output.BitsWritten() + leading_zero_buffer.BitsWritten() + flag_buffer.BitsWritten() + (packed_data_buffer.index * 16);
+	}
+
 	OutputBitStream<EMPTY>					output; //The stream to write to
 	LeadingZeroBuffer<EMPTY>				leading_zero_buffer;
 	FlagBuffer<EMPTY>						flag_buffer;
@@ -128,9 +132,10 @@ public:
 		uint8_t previous_index;
 		uint32_t trailing_zeros = 0;
 		bool trailing_zeros_exceed_threshold = false;
+		const uint64_t reference_index = state.ring_buffer.IndexOf(key);
 
 		//! Find the reference value to use when compressing the current value
-		if (((int64_t)state.ring_buffer.Size() - (int64_t)key) < (int64_t)RingBuffer::RING_SIZE) {
+		if (((int64_t)state.ring_buffer.Size() - (int64_t)reference_index) < (int64_t)RingBuffer::RING_SIZE) {
 			auto current_index = state.ring_buffer.IndexOf(key);
 			if (current_index > state.ring_buffer.Size()) {
 				current_index = 0;
@@ -152,7 +157,6 @@ public:
 			previous_index = state.ring_buffer.Size() % RingBuffer::RING_SIZE;
 			xor_result = (uint64_t)in ^ state.ring_buffer.Value(previous_index);
 		}
-
 
 		//! Compress the value
 		if (xor_result == 0) {
@@ -194,7 +198,6 @@ public:
 				state.SetLeadingZeros(leading_zeros);
 			}
 		}
-		// Byte-align every value we write to the output
 		state.ring_buffer.Insert(in);
 	}
 };

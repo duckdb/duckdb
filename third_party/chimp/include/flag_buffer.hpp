@@ -48,6 +48,10 @@ public:
 	}
 	#endif
 
+	uint64_t BitsWritten() const {
+		return counter * 2;
+	}
+
 	void Insert(const uint8_t &value) {
 		if (!EMPTY) {
 			if ((counter & 3) == 0) {

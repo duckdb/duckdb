@@ -66,10 +66,13 @@ public:
 		this->counter = 0;
 	}
 	void Flush() {
-		//THIS NEEDS TO FLUSH THE 'CURRENT' TO THE BLOCK... DUHHHH
 		if ((counter & 7) != 0) {
 			FlushBuffer();
 		}
+	}
+
+	uint64_t BitsWritten() const {
+		return counter * 3;
 	}
 
 	//Reset the counter, but don't replace the buffer

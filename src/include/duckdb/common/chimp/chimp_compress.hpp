@@ -111,6 +111,10 @@ public:
 		return state.chimp_state.output.BytesWritten();
 	}
 
+	idx_t RemainingSpace() const {
+		return metadata_ptr - (handle.Ptr() + UsedSpace());
+	}
+
 	idx_t CurrentGroupMetadataSize() const {
 		idx_t metadata_size = 0;
 
@@ -122,8 +126,15 @@ public:
 
 	// The current segment has enough space to fit this new value
 	bool HasEnoughSpace() {
+		auto space_used = AlignValue(UsedSpace() + RequiredSpace()) + metadata_byte_size + CurrentGroupMetadataSize();
+		// if (space_used + 50 >= Storage::BLOCK_SIZE / 2) {
+		//	return false;
+		// }
 		if (handle.Ptr() + ChimpPrimitives::HEADER_SIZE + AlignValue(UsedSpace() + RequiredSpace()) >=
 		    (metadata_ptr - CurrentGroupMetadataSize())) {
+			// printf("Header_size(4) + UsedSpace(%llu) + RequiredSpace(%llu) = %llu | MetadataSize = %llu |
+			// CurrentGroupMetadataSize = %llu\n", 	UsedSpace(), RequiredSpace(), ChimpPrimitives::HEADER_SIZE +
+			//AlignValue(UsedSpace() + RequiredSpace()), 	RemainingSpace(), CurrentGroupMetadataSize());
 			return false;
 		}
 		return true;
@@ -190,8 +201,7 @@ public:
 		// Store the leading zeros (8 per 3 bytes) for this group
 		memcpy((void *)metadata_ptr, (void *)leading_zero_blocks, bytes_used_by_leading_zero_blocks);
 
-		// FIXME: This is max 256, which BARELY doesn't fit into a single byte
-		// instead we could use 0 to denote 256, saving an extra byte every (CHIMP_SEQUENCE_SIZE)1024 values
+		//! This is max 1024, because it's the amount of flags there are, not the amount of bytes that takes up
 		const uint16_t flag_bytes = state.chimp_state.flag_buffer.BytesUsed();
 		const uint16_t flag_count = state.chimp_state.flag_buffer.FlagCount();
 		metadata_ptr -= sizeof(uint16_t);
@@ -249,7 +259,6 @@ public:
 		// Store the offset of the metadata of the first group (which is at the highest address).
 		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
-
 		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);
 	}
 
