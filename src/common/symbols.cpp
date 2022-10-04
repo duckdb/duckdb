@@ -35,6 +35,8 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column_data_allocator.hpp"
 
 using namespace duckdb;
 
@@ -84,6 +86,9 @@ template class std::shared_ptr<Pipeline>;
 template class std::weak_ptr<Pipeline>;
 template class std::unique_ptr<RowGroup>;
 template class std::shared_ptr<RowGroupCollection>;
+template class std::unique_ptr<ColumnDataCollection>;
+template class std::shared_ptr<ColumnDataAllocator>;
+template class std::unique_ptr<PartitionedColumnData>;
 template class std::shared_ptr<PreparedStatementData>;
 template class std::unique_ptr<VacuumInfo>;
 
@@ -127,6 +132,7 @@ template class std::unique_ptr<Vector[]>;
 template class std::unique_ptr<DataChunk>;
 template class std::unique_ptr<JoinHashTable>;
 template class std::unique_ptr<JoinHashTable::ScanStructure>;
+template class std::unique_ptr<JoinHashTable::ProbeSpill>;
 template class std::unique_ptr<data_ptr_t[]>;
 template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;
@@ -172,6 +178,8 @@ INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Pipeline>>)
 template class std::vector<std::vector<Expression *>>;
 template class std::vector<LogicalType>;
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinHashTable>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<ColumnDataCollection>>)
+INSTANTIATE_VECTOR(std::vector<std::shared_ptr<ColumnDataAllocator>>)
 
 #if !defined(__clang__)
 template struct std::atomic<uint64_t>;

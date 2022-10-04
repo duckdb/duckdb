@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types/column_data_collection_segment.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/types/row_data_collection_scanner.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -58,7 +59,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 	entry_size = layout.GetRowWidth();
 
 	// compute the per-block capacity of this HT
-	idx_t block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
+	idx_t block_capacity = Storage::BLOCK_SIZE / entry_size;
 	block_collection = make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size);
 	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	swizzled_block_collection = block_collection->CloneEmpty();
@@ -1198,6 +1199,10 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
 		partitioned_data =
 		    make_unique<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
 	}
+	column_ids.reserve(probe_types.size());
+	for (column_t column_id = 0; column_id < probe_types.size(); column_id++) {
+		column_ids.emplace_back(column_id);
+	}
 }
 
 idx_t ProbeSpill::RegisterThread() {
@@ -1240,24 +1245,46 @@ void ProbeSpill::Finalize() {
 	}
 }
 
-unique_ptr<ColumnDataCollection> ProbeSpill::GetNextProbeCollection(JoinHashTable &ht) {
+void ProbeSpill::PrepareNextProbeCollection(JoinHashTable &ht) {
+	// Reset previous probe collection
+	current_probe_collection = nullptr;
+	chunk_references.clear();
 	if (partitioned) {
 		auto &partitions = partitioned_data->GetPartitions();
 		if (ht.partition_start == partitions.size()) {
-			return nullptr;
+			return;
 		}
-		auto merged_partitions = move(partitions[ht.partition_start]);
-		for (idx_t p_idx = ht.partition_start + 1; p_idx < ht.partition_end; p_idx++) {
-			auto &partition = partitions[p_idx];
-			merged_partitions->Combine(*partition);
-			partition.reset();
+
+		// Pre-allocate
+		idx_t chunks = 0;
+		for (idx_t p_idx = ht.partition_start; p_idx < ht.partition_end; p_idx++) {
+			chunks += partitions[p_idx]->ChunkCount();
 		}
-		return merged_partitions;
+		chunk_references.reserve(chunks);
+
+		// Get sorted chunk references per partition
+		for (idx_t p_idx = ht.partition_start; p_idx < ht.partition_end; p_idx++) {
+			auto partition_chunk_references = partitions[p_idx]->GetChunkReferences(true);
+			chunk_references.insert(chunk_references.end(), partition_chunk_references.begin(),
+			                        partition_chunk_references.end());
+		}
+
+		// TODO: maybe deal with partition collections?
 	} else {
-		auto result = move(global_spill_collection);
-		global_spill_collection = nullptr;
-		return result;
+		current_probe_collection = move(global_spill_collection);
+		chunk_references = global_spill_collection->GetChunkReferences(false);
 	}
+}
+
+void ProbeSpill::ScanChunk(ChunkManagementState &state, idx_t chunk_idx, DataChunk &chunk) {
+	auto &chunk_ref = chunk_references[chunk_idx];
+	auto &segment = *chunk_ref.first;
+	auto &idx_within_segment = chunk_ref.second;
+
+	state.handles.clear();
+	chunk.Reset();
+	segment.FetchChunk(state, idx_within_segment, chunk, column_ids);
+	chunk.Verify();
 }
 
 } // namespace duckdb

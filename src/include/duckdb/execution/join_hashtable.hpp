@@ -253,7 +253,13 @@ public:
 		void Finalize();
 
 		//! Get the probe collection for the next probe round
-		unique_ptr<ColumnDataCollection> GetNextProbeCollection(JoinHashTable &ht);
+		void PrepareNextProbeCollection(JoinHashTable &ht);
+		//! Number of chunks in the current probe collection
+		idx_t ChunkCount() const {
+			return chunk_references.size();
+		}
+		//! Scans the chunk with the given index
+		void ScanChunk(ChunkManagementState &state, idx_t chunk_idx, DataChunk &chunk);
 
 	private:
 		mutex lock;
@@ -261,16 +267,24 @@ public:
 
 		//! The types of the probe DataChunks
 		const vector<LogicalType> &probe_types;
+		//! The column ids
+		vector<column_t> column_ids;
 		//! Whether the probe data is partitioned
 		bool partitioned;
 
 		//! The partitioned probe data (if partitioned) and append states
 		unique_ptr<PartitionedColumnData> partitioned_data;
 		vector<unique_ptr<PartitionedColumnDataAppendState>> partition_append_states;
+
 		//! The probe data (if not partitioned) and append states
 		unique_ptr<ColumnDataCollection> global_spill_collection;
 		vector<unique_ptr<ColumnDataCollection>> local_spill_collections;
 		vector<unique_ptr<ColumnDataAppendState>> spill_append_states;
+
+		//! The probe collection currently being read
+		unique_ptr<ColumnDataCollection> current_probe_collection;
+		//! The references (in order) to the chunks of the current probe collection
+		vector<pair<ColumnDataCollectionSegment *, idx_t>> chunk_references;
 	};
 
 	//! Whether we are doing an external hash join

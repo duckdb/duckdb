@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/column_data_collection_iterators.hpp"
 
 namespace duckdb {
@@ -135,6 +136,9 @@ public:
 	//! Scans at the indices (obtained from NextScanIndex)
 	void ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result,
 	                 idx_t chunk_index, idx_t segment_index, idx_t row_index) const;
+
+	//! Get a vector of references to every chunk (segment, index in segment), and optionally sort by block id
+	vector<pair<ColumnDataCollectionSegment *, idx_t>> GetChunkReferences(bool sort);
 
 private:
 	//! Initialize the column data collection

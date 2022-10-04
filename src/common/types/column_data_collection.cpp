@@ -812,4 +812,30 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 	return true;
 }
 
+vector<pair<ColumnDataCollectionSegment *, idx_t>> ColumnDataCollection::GetChunkReferences(bool sort) {
+	// Create a vector containing a reference to every chunk
+	vector<pair<ColumnDataCollectionSegment *, idx_t>> result;
+	result.reserve(ChunkCount());
+	for (auto &segment : segments) {
+		for (idx_t chunk_index = 0; chunk_index < segment->chunk_data.size(); chunk_index++) {
+			result.emplace_back(segment.get(), chunk_index);
+		}
+	}
+
+	if (sort) {
+		// Sort them by lowest block id
+		std::sort(result.begin(), result.end(),
+		          [](const pair<ColumnDataCollectionSegment *, idx_t> &lhs,
+		             const pair<ColumnDataCollectionSegment *, idx_t> &rhs) -> bool {
+			          const auto &lhs_block_ids = lhs.first->chunk_data[lhs.second].block_ids;
+			          const auto &rhs_block_ids = rhs.first->chunk_data[rhs.second].block_ids;
+			          const uint32_t lhs_min_block_id = *std::min_element(lhs_block_ids.begin(), lhs_block_ids.end());
+			          const uint32_t rhs_min_block_id = *std::min_element(rhs_block_ids.begin(), rhs_block_ids.end());
+			          return lhs_min_block_id < rhs_min_block_id;
+		          });
+	}
+
+	return result;
+}
+
 } // namespace duckdb

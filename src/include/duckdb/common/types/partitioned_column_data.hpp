@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/column_data_allocator.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 
