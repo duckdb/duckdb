@@ -55,10 +55,10 @@ public:
 	}
 
 	inline void Insert(uint16_t packed_data) {
-		if (EMPTY) {
-			return;
+		if (!EMPTY) {
+			buffer[index] = packed_data;
 		}
-		buffer[index++] = packed_data;
+		index++;
 	}
 
 	size_t		index;

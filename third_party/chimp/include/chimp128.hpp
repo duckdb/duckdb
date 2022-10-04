@@ -175,8 +175,6 @@ public:
 				state.flag_buffer.Insert(TRAILING_EXCEEDS_THRESHOLD);
 				//! write (64 - [0|8|12|16|18|20|22|24] - [14+])(26-50 bits) and 18 bits
 				uint32_t significant_bits = BIT_SIZE - leading_zeros - trailing_zeros;
-				//! FIXME: it feels like this would produce '11', indicating LEADING_ZERO_LOAD
-				//! Instead of indicating TRAILING_EXCEEDS_THRESHOLD '01'
 				auto result = 512U * (RingBuffer::RING_SIZE + previous_index) + BIT_SIZE * LEADING_REPRESENTATION[leading_zeros] + significant_bits;
 				state.packed_data_buffer.Insert(result & 0xFFFF);
 				//state.output.template WriteValue<uint16_t, 16>((uint16_t)(result & 0xFFFF));

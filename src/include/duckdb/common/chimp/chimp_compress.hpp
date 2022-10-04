@@ -134,7 +134,7 @@ public:
 		    (metadata_ptr - CurrentGroupMetadataSize())) {
 			// printf("Header_size(4) + UsedSpace(%llu) + RequiredSpace(%llu) = %llu | MetadataSize = %llu |
 			// CurrentGroupMetadataSize = %llu\n", 	UsedSpace(), RequiredSpace(), ChimpPrimitives::HEADER_SIZE +
-			//AlignValue(UsedSpace() + RequiredSpace()), 	RemainingSpace(), CurrentGroupMetadataSize());
+			// AlignValue(UsedSpace() + RequiredSpace()), 	RemainingSpace(), CurrentGroupMetadataSize());
 			return false;
 		}
 		return true;
@@ -256,6 +256,8 @@ public:
 #ifdef DEBUG
 		D_ASSERT(verify_bytes == *(uint32_t *)(dataptr + metadata_offset));
 #endif
+		idx_t count = current_segment->count;
+		printf("TOTAL_BYTES: %llu | COUNT: %llu\n", total_segment_size, count);
 		// Store the offset of the metadata of the first group (which is at the highest address).
 		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
