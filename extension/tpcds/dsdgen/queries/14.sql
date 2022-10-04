@@ -54,8 +54,8 @@ SELECT channel,
        i_brand_id,
        i_class_id,
        i_category_id,
-       sum(sales),
-       sum(number_sales)
+       sum(sales) AS sum_sales,
+       sum(number_sales) AS sum_number_sales
 FROM
   (SELECT 'store' channel,
                   i_brand_id,

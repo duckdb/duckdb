@@ -31,14 +31,14 @@ FROM
         AND d_month_seq BETWEEN 1200 AND 1200+11
       GROUP BY rollup(i_category, i_class, i_brand, i_product_name, d_year, d_qoy, d_moy,s_store_id))dw1) dw2
 WHERE rk <= 100
-ORDER BY i_category,
-         i_class,
-         i_brand,
-         i_product_name,
-         d_year,
-         d_qoy,
-         d_moy,
-         s_store_id,
-         sumsales,
-         rk
+ORDER BY i_category NULLS FIRST,
+         i_class NULLS FIRST,
+         i_brand NULLS FIRST,
+         i_product_name NULLS FIRST,
+         d_year NULLS FIRST,
+         d_qoy NULLS FIRST,
+         d_moy NULLS FIRST,
+         s_store_id NULLS FIRST,
+         sumsales NULLS FIRST,
+         rk NULLS FIRST
 LIMIT 100;
