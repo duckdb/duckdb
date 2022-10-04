@@ -26,6 +26,8 @@ struct BoundGroupInformation {
 //! The SELECT binder is responsible for binding an expression within the SELECT clause of a SQL statement
 class SelectBinder : public ExpressionBinder {
 public:
+	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
+	             case_insensitive_map_t<idx_t> alias_map);
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
 	bool BoundAggregates() {
@@ -49,8 +51,10 @@ protected:
 
 	BoundSelectNode &node;
 	BoundGroupInformation &info;
+	case_insensitive_map_t<idx_t> alias_map;
 
 protected:
+	BindResult BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth);
 	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
 	BindResult BindWindow(WindowExpression &expr, idx_t depth);
 
