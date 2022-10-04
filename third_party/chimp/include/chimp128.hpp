@@ -22,7 +22,7 @@
 //#include "byte_writer.hpp"
 //#include "byte_reader.hpp"
 
-#include "bit_reader_optimized.hpp"
+#include "bit_reader.hpp"
 #include "output_bit_stream.hpp"
 
 namespace duckdb_chimp {
