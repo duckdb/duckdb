@@ -23,11 +23,15 @@ struct ReplacementFunctionInfo
 end
 
 function _replacement_scan_function(handle::duckdb_replacement_scan_info, table_name::Ptr{UInt8}, data::Ptr{Cvoid})
-    func::ReplacementFunction = unsafe_pointer_to_objref(data)
-    tname = unsafe_string(table_name)
-    info = ReplacementFunctionInfo(handle, func, tname)
-    func.replacement_func(info)
-    return
+    try
+        func::ReplacementFunction = unsafe_pointer_to_objref(data)
+        tname = unsafe_string(table_name)
+        info = ReplacementFunctionInfo(handle, func, tname)
+        func.replacement_func(info)
+    catch
+        duckdb_replacement_scan_set_error(handle, get_exception_info())
+        return
+    end
 end
 
 function getdb(info::ReplacementFunctionInfo)

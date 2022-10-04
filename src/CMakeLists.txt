@@ -62,6 +62,7 @@ else()
 
   set(DUCKDB_LINK_LIBS
       ${DUCKDB_SYSTEM_LIBS}
+      duckdb_fsst
       duckdb_fmt
       duckdb_pg_query
       duckdb_re2

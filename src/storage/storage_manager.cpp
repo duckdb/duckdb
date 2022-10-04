@@ -76,7 +76,7 @@ void StorageManager::Initialize() {
 		// create or load the database from disk, if not in-memory mode
 		LoadDatabase();
 	} else {
-		block_manager = make_unique<InMemoryBlockManager>();
+		block_manager = make_unique<InMemoryBlockManager>(*buffer_manager);
 	}
 }
 

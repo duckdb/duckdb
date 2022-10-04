@@ -38,6 +38,10 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	                                  INVALID_BLOCK, 0);
 }
 
+unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx_t start) {
+	return make_unique<ColumnSegment>(other, start);
+}
+
 ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSegmentType segment_type, idx_t start,
                              idx_t count, CompressionFunction *function_p, unique_ptr<BaseStatistics> statistics,
                              block_id_t block_id_p, idx_t offset_p)
@@ -45,6 +49,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSeg
       segment_type(segment_type), function(function_p), stats(type, move(statistics)), block_id(block_id_p),
       offset(offset_p) {
 	D_ASSERT(function);
+	auto &block_manager = BlockManager::GetBlockManager(db);
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified
@@ -56,11 +61,17 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSeg
 		}
 	} else {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
-		this->block = buffer_manager.RegisterBlock(block_id);
+		this->block = block_manager.RegisterBlock(block_id);
 	}
 	if (function->init_segment) {
 		segment_state = function->init_segment(*this, block_id);
 	}
+}
+
+ColumnSegment::ColumnSegment(ColumnSegment &other, idx_t start)
+    : SegmentBase(start, other.count), db(other.db), type(move(other.type)), type_size(other.type_size),
+      segment_type(other.segment_type), function(other.function), stats(move(other.stats)), block(move(other.block)),
+      block_id(other.block_id), offset(other.offset), segment_state(move(other.segment_state)) {
 }
 
 ColumnSegment::~ColumnSegment() {
@@ -150,12 +161,11 @@ void ColumnSegment::ConvertToPersistent(block_id_t block_id_p) {
 		block.reset();
 	} else {
 		// non-constant block: write the block to disk
-		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		auto &block_manager = BlockManager::GetBlockManager(db);
 
 		// the data for the block already exists in-memory of our block
 		// instead of copying the data we alter some metadata so the buffer points to an on-disk block
-		block = buffer_manager.ConvertToPersistent(block_manager, block_id, move(block));
+		block = block_manager.ConvertToPersistent(block_id, move(block));
 	}
 
 	segment_state.reset();

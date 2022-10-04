@@ -29,7 +29,8 @@ public:
 	Allocator &GetAllocator() const;
 
 	void Initialize(PersistentTableData &data);
-	void InitializeEmpty();
+
+	bool IsEmpty() const;
 
 	void AppendRowGroup(idx_t start_row);
 	void Verify();
@@ -50,6 +51,8 @@ public:
 	void Append(TransactionData transaction, DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row, idx_t count);
+
+	void MergeStorage(RowGroupCollection &data);
 
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 

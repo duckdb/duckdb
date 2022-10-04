@@ -60,3 +60,22 @@ TEST_CASE("Test replacement scans in C API", "[capi]") {
 	// not a number
 	REQUIRE_FAIL(tester.Query("SELECT * FROM nonexistant"));
 }
+
+void error_replacement_scan(duckdb_replacement_scan_info info, const char *table_name, void *data) {
+	duckdb_replacement_scan_set_error(NULL, NULL);
+	duckdb_replacement_scan_set_error(info, NULL);
+	duckdb_replacement_scan_set_error(info, "error in replacement scan");
+}
+
+TEST_CASE("Test error replacement scan", "[capi]") {
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	duckdb_add_replacement_scan(tester.database, error_replacement_scan, NULL, NULL);
+
+	// error
+	REQUIRE_FAIL(tester.Query("SELECT * FROM nonexistant"));
+}

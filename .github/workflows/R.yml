@@ -41,7 +41,6 @@ jobs:
     - uses: ./.github/actions/build_extensions
       with:
         run_tests: 0
-        static_link_build: 1
 
     - uses: actions/upload-artifact@v2
       with:

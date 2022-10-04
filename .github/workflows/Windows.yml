@@ -237,8 +237,6 @@ jobs:
          deploy_as: windows_amd64
          post_install: choco uninstall openssl -y --force
          treat_warn_as_error: 0
-         static_link_build: 1
-         out_of_tree_ext: 1
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}

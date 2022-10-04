@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import java.util.Objects;
+
 /**
  * Basic wrapper for the JSON type - modelled after the jackson databind JsonNode
  */
@@ -15,10 +17,10 @@ public class JsonNode {
         return source.charAt(0) == '{';
     }
     public boolean isBoolean() {
-        return source == "true" || source == "false";
+        return "true".equals(source) || "false".equals(source);
     }
     public boolean isNull() {
-        return source == "null";
+        return "null".equals(source);
     }
     public boolean isNumber() {
         return Character.isDigit(source.charAt(0));
@@ -28,5 +30,18 @@ public class JsonNode {
     }
     public String toString() {
         return source;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof JsonNode)) return false;
+        JsonNode jsonNode = (JsonNode) o;
+        return Objects.equals(source, jsonNode.source);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(source);
     }
 }
