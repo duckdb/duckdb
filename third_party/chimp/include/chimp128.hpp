@@ -70,23 +70,9 @@ struct Chimp128CompressionState {
 	LeadingZeroBuffer<EMPTY>				leading_zero_buffer;
 	FlagBuffer<EMPTY>						flag_buffer;
 	PackedDataBuffer<EMPTY>					packed_data_buffer;
-	RingBuffer								ring_buffer; //! The ring buffer that holds the previous values
+	RingBuffer<CHIMP_TYPE>					ring_buffer; //! The ring buffer that holds the previous values
 	uint8_t									previous_leading_zeros; //! The leading zeros of the reference value
 	bool									first = true;
-};
-
-template <class T>
-struct ThresholdValue {
-};
-
-template <>
-struct ThresholdValue<uint64_t> {
-	static constexpr uint8_t value = 6;
-};
-
-template <>
-struct ThresholdValue<uint32_t> {
-	static constexpr uint8_t value = 5;
 };
 
 template <class CHIMP_TYPE, bool EMPTY>
@@ -95,15 +81,12 @@ public:
 	using State = Chimp128CompressionState<CHIMP_TYPE, EMPTY>;
 	static constexpr uint8_t FLAG_MASK = (1 << 2) - 1;
 
-	//this.previousValuesLog2 =  (int)(Math.log(previousValues) / Math.log(2));
-	//! With 'previous_values' set to 128 this resolves to 7
 	//! The amount of bits needed to store an index between 0-127
 	static constexpr uint8_t INDEX_BITS_SIZE = 7;
 	static constexpr uint8_t FLAG_BITS_SIZE = 2;
 	static constexpr uint8_t BIT_SIZE = sizeof(CHIMP_TYPE) * 8;
 
-	//this.threshold = 6 + previousValuesLog2;
-	static constexpr uint8_t TRAILING_ZERO_THRESHOLD = ThresholdValue<CHIMP_TYPE>::value + INDEX_BITS_SIZE;
+	static constexpr uint8_t TRAILING_ZERO_THRESHOLD = SignificantBits<CHIMP_TYPE>::size + INDEX_BITS_SIZE;
 
 	static void Store(CHIMP_TYPE in, State& state) {
 		if (state.first) {
@@ -147,26 +130,26 @@ public:
 		const CHIMP_TYPE reference_index = state.ring_buffer.IndexOf(key);
 
 		//! Find the reference value to use when compressing the current value
-		if (((int64_t)state.ring_buffer.Size() - (int64_t)reference_index) < (int64_t)RingBuffer::RING_SIZE) {
+		if (((int64_t)state.ring_buffer.Size() - (int64_t)reference_index) < (int64_t)BUFFER_SIZE) {
 			auto current_index = state.ring_buffer.IndexOf(key);
 			if (current_index > state.ring_buffer.Size()) {
 				current_index = 0;
 			}
-			auto reference_value = state.ring_buffer.Value(current_index % RingBuffer::RING_SIZE);
+			auto reference_value = state.ring_buffer.Value(current_index % BUFFER_SIZE);
 			CHIMP_TYPE tempxor_result = (CHIMP_TYPE)in ^ reference_value;
 			trailing_zeros = CountZeros<CHIMP_TYPE>::Trailing(tempxor_result);
 			trailing_zeros_exceed_threshold = trailing_zeros > TRAILING_ZERO_THRESHOLD;
 			if (trailing_zeros_exceed_threshold) {
-				previous_index = current_index % RingBuffer::RING_SIZE;
+				previous_index = current_index % BUFFER_SIZE;
 				xor_result = tempxor_result;
 			}
 			else {
-				previous_index = state.ring_buffer.Size() % RingBuffer::RING_SIZE;
+				previous_index = state.ring_buffer.Size() % BUFFER_SIZE;
 				xor_result = (CHIMP_TYPE)in ^ state.ring_buffer.Value(previous_index);
 			}
 		}
 		else {
-			previous_index = state.ring_buffer.Size() % RingBuffer::RING_SIZE;
+			previous_index = state.ring_buffer.Size() % BUFFER_SIZE;
 			xor_result = (CHIMP_TYPE)in ^ state.ring_buffer.Value(previous_index);
 		}
 
@@ -255,12 +238,10 @@ public:
 	}
 
 	BitReader 					input;
-	//LeadingZeroBuffer<false>	leading_zero_buffer;
-	//FlagBuffer<false>			flag_buffer;
 	uint8_t 					leading_zeros;
 	uint8_t 					trailing_zeros;
 	CHIMP_TYPE 					reference_value = 0;
-	RingBuffer					ring_buffer;
+	RingBuffer<CHIMP_TYPE>		ring_buffer;
 
 	bool first;
 };
@@ -270,7 +251,6 @@ struct Chimp128Decompression {
 public:
 	using DecompressState = Chimp128DecompressionState<CHIMP_TYPE>;
 
-	//! Index value is between 1 and 127, so it's saved in 7 bits at most
 	static constexpr uint8_t INDEX_BITS_SIZE = 7;
 	static constexpr uint8_t LEADING_BITS_SIZE = 3;
 	static constexpr uint8_t SIGNIFICANT_BITS_SIZE = 6;

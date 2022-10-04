@@ -9,16 +9,18 @@
 #pragma once
 
 #include <cstring>
+#include "chimp_utils.hpp"
 
 namespace duckdb_chimp {
 
+template <class CHIMP_TYPE>
 class RingBuffer {
 public:
-	static constexpr uint8_t RING_SIZE = 128;
-	static constexpr uint64_t LEAST_SIGNIFICANT_BIT_MASK = ((uint64_t)1 << (6 + 7 + 1)) - 1;
-	//this.indices = new int[(int) Math.pow(2, threshold + 1)];
-	//! Since threshold is now always set to (6 + 7), we can hardcode this to
-	static constexpr uint16_t INDICES_SIZE = 1 << (6 + 7 + 1); //16384
+	static constexpr uint8_t RING_SIZE = BUFFER_SIZE;
+	static constexpr uint64_t LEAST_SIGNIFICANT_BIT_COUNT = SignificantBits<CHIMP_TYPE>::size + 7 + 1;
+	static constexpr uint64_t LEAST_SIGNIFICANT_BIT_MASK = (1 << LEAST_SIGNIFICANT_BIT_COUNT) - 1;
+	static constexpr uint16_t INDICES_SIZE = 1 << LEAST_SIGNIFICANT_BIT_COUNT; //16384
+
 public:
 	void Reset() {
 		index = 0;

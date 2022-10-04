@@ -50,6 +50,26 @@ static inline int __builtin_clzll(unsigned long long mask) {
 }
 #endif
 
+static constexpr uint8_t BUFFER_SIZE = 128;
+
+template <class T>
+struct SignificantBits {
+};
+
+template <>
+struct SignificantBits<uint64_t> {
+	static constexpr uint8_t size = 6;
+	static constexpr uint8_t mask = ((uint8_t)1 << size) - 1;
+};
+
+template <>
+struct SignificantBits<uint32_t> {
+	static constexpr uint8_t size = 5;
+	static constexpr uint8_t mask = ((uint8_t)1 << size) - 1;
+};
+
+// COUNT ZEROS
+
 template <class T>
 struct CountZeros {
 };

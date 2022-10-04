@@ -1,22 +1,8 @@
 #pragma once
 
+#include "chimp_utils.hpp"
+
 namespace duckdb_chimp {
-
-template <class T>
-struct SignificantBits {
-};
-
-template <>
-struct SignificantBits<uint64_t> {
-	static constexpr uint8_t size = 6;
-	static constexpr uint8_t mask = ((uint8_t)1 << size) - 1;
-};
-
-template <>
-struct SignificantBits<uint32_t> {
-	static constexpr uint8_t size = 5;
-	static constexpr uint8_t mask = ((uint8_t)1 << size) - 1;
-};
 
 static constexpr uint8_t INDEX_BITS_SIZE = 7;
 static constexpr uint8_t LEADING_BITS_SIZE = 3;
@@ -63,7 +49,7 @@ public:
 		static constexpr uint8_t BIT_SIZE = (sizeof(CHIMP_TYPE) * 8);
 
 		uint16_t result = 0;
-		result += ((uint32_t)BIT_SIZE * 8) * (RingBuffer::RING_SIZE + index);
+		result += ((uint32_t)BIT_SIZE * 8) * (BUFFER_SIZE + index);
 		result += BIT_SIZE * LEADING_REPRESENTATION[leading_zero];
 		if (BIT_SIZE == 32) {
 			// Shift the result by 1 to occupy the 16th bit
