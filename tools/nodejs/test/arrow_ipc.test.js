@@ -3,8 +3,8 @@ var assert = require('assert');
 var arrow = require('apache-arrow')
 const { performance } = require('perf_hooks');
 
-// const build = 'debug';
-const build = 'release';
+const build = 'debug';
+// const build = 'release';
 const extension_path = `../../build/${build}/extension/arrow/arrow.duckdb_extension`;
 
 describe.only('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
@@ -25,6 +25,45 @@ describe.only('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
         });
     });
 
+    // TODO: this test should be done with a sanitizer instead of spraying memory
+    it.only('test gc', async () => {
+        // Now we fetch the ipc stream object and construct the RecordBatchReader
+        const result = await conn.arrowIPCStream('SELECT * FROM range(1001, 2001) tbl(i)');
+
+        // Materialize returned iterator into list of Uint8Arrays containing the ipc stream
+        let ipc_buffers = await result.toArray();
+
+        // Now to scan the buffer, we first need to register it
+        db.register_buffer("ipc_table", ipc_buffers);
+
+        // Delete JS reference to arrays
+        ipc_buffers = 0;
+
+        // Run GC to ensure file is deleted
+        if (global.gc) {
+            global.gc();
+        } else {
+            assert(false, "This test requires node to be run with --expose-gc");
+        }
+
+        // Spray memory overwriting old buffer
+        let spray_results = [];
+        for (let i = 0; i < 3000; i++) {
+            // Now we fetch the ipc stream object and construct the RecordBatchReader
+            const resultinner = await conn.arrowIPCStream('SELECT * FROM range(2001, 3001) tbl(i)');
+            // Materialize returned iterator into list of Uint8Arrays containing the ipc stream
+            spray_results.push(await resultinner.toArray());
+        }
+
+        // Now we can query the ipc buffer using DuckDB by providing an object with an alias and the materialized ipc buffers
+        db.all(`SELECT avg(i) as average, count(1) as total FROM ipc_table;`, function(err, result) {
+            if (err) {
+                throw err;
+            }
+            assert.deepEqual(result, [{average: 1500.5, total:1000}]);
+        });
+    });
+
     it('Simple int column', async () => {
         // Now we fetch the ipc stream object and construct the RecordBatchReader
         const result = await conn.arrowIPCStream('SELECT * FROM range(1001, 2001) tbl(i)');
@@ -37,8 +76,11 @@ describe.only('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
         // const table = arrow.tableFromIPC(reader);
         // console.log(table.toArray());
 
+        // Now to scan the buffer, we first need to register it
+        db.register_buffer("ipc_table", ipc_buffers, true);
+
         // Now we can query the ipc buffer using DuckDB by providing an object with an alias and the materialized ipc buffers
-        db.scanArrowIpc(`SELECT avg(i) as average, count(1) as total FROM ipc_table;`, { ipc_table: ipc_buffers }, function(err, result) {
+        db.all(`SELECT avg(i) as average, count(1) as total FROM ipc_table;`, function(err, result) {
             if (err) {
                 throw err;
             }
@@ -55,17 +97,11 @@ describe.only('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
         const result2 = await conn.arrowIPCStream('SELECT * FROM range(1999, 3000) tbl(i)');
         const ipc_buffers2 = await result2.toArray();
 
-        // Construct the materialized tables object for scanning with DuckDB
-        const ipc_tables = {
-            table1: ipc_buffers1,
-            table2: ipc_buffers2
-        };
+        // Register buffers for scanning from DuckDB
+        db.register_buffer("table1", ipc_buffers1, true);
+        db.register_buffer("table2", ipc_buffers2, true);
 
-        // NOTE: currently this query does a slightly hacky find+replace of the keys of the ipc_tables JS object in
-        //       the query string. This means that those strings can only occur as the table name and joins require an
-        //       alias for now.
-        // TODO: fix this by switching to replacement scans
-        db.scanArrowIpc(`SELECT * FROM table1 as t1 JOIN table2 as t2 ON t1.i=t2.i;`, ipc_tables, function(err, result) {
+        db.all(`SELECT * FROM table1 JOIN table2 ON table1.i=table2.i;`, function(err, result) {
             if (err) {
                 throw err;
             }
@@ -158,8 +194,12 @@ describe('[Benchmark] TPC-H lineitem.parquet', () => {
 
         const query = sql.replace("lineitem", "my_arrow_ipc_stream");
         const startTimeQuery = performance.now()
+
+        // Register the ipc buffers as table in duckdb
+        db.register_buffer("my_arrow_ipc_stream", ipc_buffers);
+
         await new Promise((resolve, reject) => {
-            db.scanArrowIpc(query, {"my_arrow_ipc_stream" : ipc_buffers} , function (err, result) {
+            db.all(query, function (err, result) {
                 if (err) {
                     reject(err)
                 }
@@ -253,8 +293,12 @@ describe('Validate with TPCH lineitem SF0.01', () => {
 
             // Now re-run query on Arrow IPC stream
             const reader = await arrow.RecordBatchReader.from(ipc_buffers);
+
+            // Register the ipc buffers as table in duckdb, using force to override the previously registered buffers
+            db.register_buffer("table_name", ipc_buffers, true);
+
             await new Promise((resolve, reject) => {
-                db.scanArrowIpc(query, { table_name: ipc_buffers }, function (err, result) {
+                db.all(query, function (err, result) {
                     if (err) {
                         reject(err)
                     }

@@ -67,46 +67,11 @@ Statement::Statement(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Statemen
 	connection_ref = Napi::ObjectWrap<Connection>::Unwrap(info[0].As<Napi::Object>());
 	connection_ref->Ref();
 
-	// TODO: This should be info[1] right? Is not used anyways i think
+	sql = info[1].As<Napi::String>();
+
 	Napi::Function callback;
 	if (info.Length() > 1 && info[2].IsFunction()) {
 		callback = info[2].As<Napi::Function>();
-	}
-
-	// TODO we should do this using replacement scans probably? or at least define a macro? or maybe add a view
-	if (info.Length() > 2 && info[2].IsObject()) {
-
-		sql = info[1].As<Napi::String>().Utf8Value();
-
-		auto ipc_tables_object = info[2].As<Napi::Object>();
-		auto property_names = ipc_tables_object.GetPropertyNames().As<Napi::Array>();
-
-		for (uint64_t table_idx = 0; table_idx < property_names.Length(); table_idx++)
-		{
-			auto name = property_names.Get(table_idx).As<Napi::String>().ToString().Utf8Value();
-			auto ipc_buffer_array = ipc_tables_object.Get(name).As<Napi::Array>();
-
-			std::string table_scan_str = "scan_arrow_ipc([";
-			for (uint64_t ipc_idx = 0; ipc_idx < ipc_buffer_array.Length(); ipc_idx++) {
-				table_scan_str += "{";
-				Napi::Value v = ipc_buffer_array[ipc_idx];
-				if (!v.IsObject()) {
-					throw std::runtime_error("Expected Object");
-				}
-				Napi::Uint8Array arr = v.As<Napi::Uint8Array>();
-				auto raw_ptr = reinterpret_cast<uint64_t>(arr.ArrayBuffer().Data());
-				auto length = (uint64_t)arr.ElementLength();
-
-				table_scan_str += "'ptr': " + std::to_string(raw_ptr) + "::UBIGINT, ";
-				table_scan_str += "'size': " + std::to_string(length) + "},";
-			}
-			table_scan_str += "])";
-
-			// Find replace our ipc table alias with the table function
-			sql = std::regex_replace(sql, std::regex(name), table_scan_str);
-		}
-	} else {
-		sql = info[1].As<Napi::String>();
 	}
 
 	// TODO we can have parameters here as well. Forward if that is the case.

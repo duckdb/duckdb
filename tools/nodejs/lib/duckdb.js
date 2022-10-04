@@ -116,17 +116,6 @@ Connection.prototype.run = function (sql) {
  * @param callback
  * @return {void}
  */
-Connection.prototype.scanArrowIpc = function (sql, ipc_buffers) {
-    var statement = new Statement(this, sql, ipc_buffers);
-    return statement.all.apply(statement, [arguments[0], arguments[2]]);
-}
-
-/**
- * @arg sql
- * @param {...*} params
- * @param callback
- * @return {void}
- */
 Connection.prototype.all = function (sql) {
     var statement = new Statement(this, sql);
     return statement.all.apply(statement, arguments);
@@ -390,6 +379,28 @@ var default_connection = function (o) {
     return o.default_connection;
 }
 
+/**
+ * Register a Buffer
+ *
+ * @method
+ * @arg name
+ * @arg array
+ * @arg force
+ * @param callback
+ * @return {void}
+ */
+Connection.prototype.register_buffer;
+
+/**
+ * Unregister a Buffer
+ *
+ * @method
+ * @arg name
+ * @param callback
+ * @return {void}
+ */
+Connection.prototype.unregister_buffer;
+
 
 /**
  * Closes database instance
@@ -561,8 +572,33 @@ Database.prototype.register_udf = function () {
  * @arg name
  * @return {this}
  */
-Database.prototype.unregister_udf = function () {
+Database.prototype.unregister_buffer = function () {
     default_connection(this).unregister_udf.apply(this.default_connection, arguments);
+    return this;
+}
+
+
+/**
+ * Register a Buffer
+ *
+ * Convenience method for Connection#unregister_udf
+ * @arg name
+ * @return {this}
+ */
+Database.prototype.register_buffer = function () {
+    default_connection(this).register_buffer.apply(this.default_connection, arguments);
+    return this;
+}
+
+/**
+ * Unregister a Buffer
+ *
+ * Convenience method for Connection#unregister_udf
+ * @arg name
+ * @return {this}
+ */
+Database.prototype.unregister_buffer = function () {
+    default_connection(this).unregister_buffer.apply(this.default_connection, arguments);
     return this;
 }
 

@@ -116,6 +116,8 @@ public:
 	Napi::Value Exec(const Napi::CallbackInfo &info);
 	Napi::Value RegisterUdf(const Napi::CallbackInfo &info);
 	Napi::Value UnregisterUdf(const Napi::CallbackInfo &info);
+	Napi::Value RegisterBuffer(const Napi::CallbackInfo &info);
+	Napi::Value UnRegisterBuffer(const Napi::CallbackInfo &info);
 
 	static bool HasInstance(Napi::Value val) {
 		Napi::Env env = val.Env();
@@ -132,6 +134,7 @@ public:
 	std::unique_ptr<duckdb::Connection> connection;
 	Database *database_ref;
 	std::unordered_map<std::string, duckdb_node_udf_function_t> udfs;
+	std::unordered_map<std::string, std::vector<std::pair<uint64_t, uint64_t>>> buffers;
 };
 
 struct StatementParam;
