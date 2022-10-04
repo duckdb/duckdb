@@ -13,6 +13,10 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/fsst.hpp"
+#include "fsst.h"
 
 #include <cstring> // strlen() on Solaris
 
@@ -167,6 +171,12 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		}
 		return;
 	}
+
+	if (GetVectorType() == VectorType::FSST_VECTOR) {
+		Flatten(sel, count);
+		return;
+	}
+
 	Vector child_vector(*this);
 	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
@@ -404,7 +414,10 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		case VectorType::FLAT_VECTOR:
 			finished = true;
 			break;
-			// dictionary: apply dictionary and forward to child
+		case VectorType::FSST_VECTOR:
+			finished = true;
+			break;
+		// dictionary: apply dictionary and forward to child
 		case VectorType::DICTIONARY_VECTOR: {
 			auto &sel_vector = DictionaryVector::SelVector(*vector);
 			auto &child = DictionaryVector::Child(*vector);
@@ -428,6 +441,18 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	if (!validity.RowIsValid(index)) {
 		return Value(vector->GetType());
 	}
+
+	if (vector->GetVectorType() == VectorType::FSST_VECTOR) {
+		if (vector->GetType().InternalType() != PhysicalType::VARCHAR) {
+			throw InternalException("FSST Vector with non-string datatype found!");
+		}
+		auto str_compressed = ((string_t *)data)[index];
+		Value result =
+		    FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
+		                                    (unsigned char *)str_compressed.GetDataUnsafe(), str_compressed.GetSize());
+		return result;
+	}
+
 	switch (vector->GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		return Value::BOOLEAN(((bool *)data)[index]);
@@ -570,6 +595,8 @@ string VectorTypeToString(VectorType type) {
 	switch (type) {
 	case VectorType::FLAT_VECTOR:
 		return "FLAT";
+	case VectorType::FSST_VECTOR:
+		return "FSST";
 	case VectorType::SEQUENCE_VECTOR:
 		return "SEQUENCE";
 	case VectorType::DICTIONARY_VECTOR:
@@ -591,6 +618,15 @@ string Vector::ToString(idx_t count) const {
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 		break;
+	case VectorType::FSST_VECTOR: {
+		for (idx_t i = 0; i < count; i++) {
+			string_t compressed_string = ((string_t *)data)[i];
+			Value val = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*this)),
+			                                            (unsigned char *)compressed_string.GetDataUnsafe(),
+			                                            compressed_string.GetSize());
+			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
+		}
+	} break;
 	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
 		break;
@@ -653,6 +689,18 @@ void Vector::Flatten(idx_t count) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
+	case VectorType::FSST_VECTOR: {
+		// Even though count may only be a part of the vector, we need to flatten the whole thing due to the way
+		// ToUnifiedFormat uses flatten
+		idx_t total_count = FSSTVector::GetCount(*this);
+		// create vector to decompress into
+		Vector other(GetType(), total_count);
+		// now copy the data of this vector to the other vector, decompressing the strings in the process
+		VectorOperations::Copy(*this, other, total_count, 0, 0);
+		// create a reference to the data in the other vector
+		this->Reference(other);
+		break;
+	}
 	case VectorType::DICTIONARY_VECTOR: {
 		// create a new flat vector of this type
 		Vector other(GetType(), count);
@@ -762,6 +810,15 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
+	case VectorType::FSST_VECTOR: {
+		// create a new flat vector of this type
+		Vector other(GetType());
+		// copy the data of this vector to the other vector, removing compression and selection vector in the process
+		VectorOperations::Copy(*this, other, sel, count, 0, 0);
+		// create a reference to the data in the other vector
+		this->Reference(other);
+		break;
+	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
@@ -1347,6 +1404,91 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 		return;
 	}
 	StringVector::AddBuffer(vector, other.auxiliary);
+}
+
+string_t FSSTVector::AddCompressedString(Vector &vector, const char *data, idx_t len) {
+	return FSSTVector::AddCompressedString(vector, string_t(data, len));
+}
+
+string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+	if (data.IsInlined()) {
+		// string will be inlined: no need to store in string heap
+		return data;
+	}
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	return fsst_string_buffer.AddBlob(data);
+}
+
+void *FSSTVector::GetDecoder(const Vector &vector) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+	if (!vector.auxiliary) {
+		throw InternalException("GetDecoder called on FSST Vector without registered buffer");
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	return (duckdb_fsst_decoder_t *)fsst_string_buffer.GetDecoder();
+}
+
+void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+
+	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder);
+}
+
+void FSSTVector::SetCount(Vector &vector, idx_t count) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+
+	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	fsst_string_buffer.SetCount(count);
+}
+
+idx_t FSSTVector::GetCount(Vector &vector) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+
+	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	return fsst_string_buffer.GetCount();
+}
+
+void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offset, idx_t dst_offset, idx_t copy_count,
+                                  const SelectionVector *sel) {
+	D_ASSERT(src.GetVectorType() == VectorType::FSST_VECTOR);
+	D_ASSERT(dst.GetVectorType() == VectorType::FLAT_VECTOR);
+	auto dst_mask = FlatVector::Validity(dst);
+	auto ldata = FSSTVector::GetCompressedData<string_t>(src);
+	auto tdata = FlatVector::GetData<string_t>(dst);
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = sel->get_index(src_offset + i);
+		auto target_idx = dst_offset + i;
+		string_t compressed_string = ldata[source_idx];
+		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
+			tdata[target_idx] = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(src), dst,
+			                                                    (unsigned char *)compressed_string.GetDataUnsafe(),
+			                                                    compressed_string.GetSize());
+		} else {
+			tdata[target_idx] = string_t(nullptr, 0);
+		}
+	}
 }
 
 Vector &MapVector::GetKeys(Vector &vector) {

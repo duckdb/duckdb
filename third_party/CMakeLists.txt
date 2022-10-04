@@ -10,6 +10,7 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(hyperloglog)
   add_subdirectory(fastpforlib)
   add_subdirectory(mbedtls)
+  add_subdirectory(fsst)
 endif()
 
 if(NOT WIN32

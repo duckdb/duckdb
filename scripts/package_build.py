@@ -10,6 +10,7 @@ excluded_objects = ['utf8proc_data.cpp']
 def third_party_includes():
     includes = []
     includes += [os.path.join('third_party', 'fmt', 'include')]
+    includes += [os.path.join('third_party', 'fsst')]
     includes += [os.path.join('third_party', 're2')]
     includes += [os.path.join('third_party', 'miniz')]
     includes += [os.path.join('third_party', 'utf8proc', 'include')]
@@ -33,6 +34,7 @@ def third_party_includes():
 def third_party_sources():
     sources = []
     sources += [os.path.join('third_party', 'fmt')]
+    sources += [os.path.join('third_party', 'fsst')]
     sources += [os.path.join('third_party', 'miniz')]
     sources += [os.path.join('third_party', 're2')]
     sources += [os.path.join('third_party', 'hyperloglog')]

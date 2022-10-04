@@ -1,8 +1,8 @@
-# name: benchmark/micro/compression/dictionary/dictionary_store_tpch_sf1.benchmark
+# name: benchmark/micro/compression/store_tpch_sf1.benchmark
 # description: Generating and storing a tpc-h sf1 database using default compression
-# group: [dictionary]
+# group: [compression]
 
-name Dictionary Compression Write
+name TPC-H Write benchmark
 group aggregate
 storage persistent
 require_reinit

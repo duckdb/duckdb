@@ -1777,6 +1777,14 @@ Adds a parameter to the replacement scan function.
 */
 DUCKDB_API void duckdb_replacement_scan_add_parameter(duckdb_replacement_scan_info info, duckdb_value parameter);
 
+/*!
+Report that an error has occurred while executing the replacement scan.
+
+* info: The info object
+* error: The error message
+*/
+DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info info, const char *error);
+
 //===--------------------------------------------------------------------===//
 // Appender
 //===--------------------------------------------------------------------===//

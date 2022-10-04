@@ -1,23 +1,28 @@
-# name: test/sql/storage/compression/dictionary/dictionary_lists.test_coverage
-# description: Test storage with dictionary compression  inside lists
-# group: [dictionary]
+# name: test/sql/storage/compression/string/lists.test_coverage
+# description: Test storage with string compression inside lists
+# group: [string]
 
 # load the DB from disk
-load __TEST_DIR__/test_rle.db
+load __TEST_DIR__/test_string_compression.db
+
+foreach compression fsst dictionary
+
+foreach enable_fsst_vector true false
 
 statement ok
-PRAGMA force_compression = 'dictionary'
+SET enable_fsst_vectors='${enable_fsst_vector}'
+
+statement ok
+pragma threads=1
+
+statement ok
+PRAGMA force_compression='${compression}'
 
 statement ok
 CREATE TABLE test (id INTEGER, l VARCHAR[]);
 
 statement ok
 INSERT INTO test SELECT i, case when (i/1000)%2=0 then [1::VARCHAR, 1::VARCHAR, 1::VARCHAR] else [2::VARCHAR, 2::VARCHAR] end FROM range(200000) tbl(i)
-
-query I
-SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
-----
-Dictionary
 
 # full unnest
 query II
@@ -54,3 +59,23 @@ query II
 SELECT COUNT(*), SUM(i::INT) FROM (SELECT UNNEST(list) FROM test_large_list) tbl(i)
 ----
 100000	-4999950000
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_large_list') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+statement ok
+DROP TABLE test_large_list
+
+statement ok
+DROP TABLE test
+
+endloop
+
+endloop

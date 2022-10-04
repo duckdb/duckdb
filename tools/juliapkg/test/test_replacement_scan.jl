@@ -56,3 +56,17 @@ end
 
     DBInterface.close!(con)
 end
+
+function ErrorReplacementScan(info)
+    throw("replacement scan eek")
+end
+
+@testset "Test error replacement scans" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    DuckDB.add_replacement_scan!(con, ErrorReplacementScan, nothing)
+
+    @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM nonexistant")
+
+    DBInterface.close!(con)
+end
