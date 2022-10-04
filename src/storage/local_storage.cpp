@@ -205,6 +205,9 @@ bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
+	// bulk append threshold: a full row group
+	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE;
+
 	auto storage_entry = move(table_storage[&table]);
 	table_storage[&table].reset();
 
@@ -215,8 +218,10 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 
 	TableAppendState append_state;
 	table.AppendLock(append_state);
-	if (append_state.row_start == 0 && storage.table.info->indexes.Empty() && storage.deleted_rows == 0) {
-		// table is currently empty: move over the storage directly
+	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
+	    storage.table.info->indexes.Empty() && storage.deleted_rows == 0) {
+		// table is currently empty OR we are bulk appending to a table with existing storage: move over the storage
+		// directly
 		table.MergeStorage(*storage.row_groups, storage.indexes, storage.stats);
 	} else {
 		bool constraint_violated = false;

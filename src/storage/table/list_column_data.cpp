@@ -139,6 +139,9 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	auto &first_entry = data[0];
 	auto &last_entry = data[scan_count - 1];
 	idx_t child_scan_count = last_entry.offset + last_entry.length - first_entry.offset;
+	if (child_scan_count == 0) {
+		return;
+	}
 
 	// skip the child state forward by the child_scan_count
 	child_column->Skip(state.child_states[1], child_scan_count);
