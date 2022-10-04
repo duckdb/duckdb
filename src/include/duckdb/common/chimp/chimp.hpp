@@ -47,11 +47,13 @@ public:
 template <class T, bool EMPTY>
 struct ChimpState {
 public:
+	using CHIMP_TYPE = typename ChimpType<T>::type;
+
 	ChimpState(void *state_p = nullptr) : data_ptr(state_p), chimp_state() {
 	}
 	//! The Compress/Analyze State
 	void *data_ptr;
-	duckdb_chimp::Chimp128CompressionState<EMPTY> chimp_state;
+	duckdb_chimp::Chimp128CompressionState<CHIMP_TYPE, EMPTY> chimp_state;
 
 public:
 	void AssignDataBuffer(uint8_t *data_out) {

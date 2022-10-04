@@ -21,10 +21,23 @@ namespace duckdb {
 
 template <class T>
 CompressionFunction GetChimpFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_CHIMP, data_type, ChimpInitAnalyze<T>, ChimpAnalyze<T>,
-	                           ChimpFinalAnalyze<T>, ChimpInitCompression<T>, ChimpCompress<T>,
-	                           ChimpFinalizeCompress<T>, ChimpInitScan<T>, ChimpScan<T>, ChimpScanPartial<T>,
-	                           ChimpFetchRow<T>, ChimpSkip<T>);
+	throw NotImplementedException("GetChimpFunction not implemented for the given datatype");
+}
+
+template <>
+CompressionFunction GetChimpFunction<float>(PhysicalType data_type) {
+	return CompressionFunction(CompressionType::COMPRESSION_CHIMP, data_type, ChimpInitAnalyze<float>,
+	                           ChimpAnalyze<float>, ChimpFinalAnalyze<float>, ChimpInitCompression<float>,
+	                           ChimpCompress<float>, ChimpFinalizeCompress<float>, ChimpInitScan<float>,
+	                           ChimpScan<float>, ChimpScanPartial<float>, ChimpFetchRow<float>, ChimpSkip<float>);
+}
+
+template <>
+CompressionFunction GetChimpFunction<double>(PhysicalType data_type) {
+	return CompressionFunction(CompressionType::COMPRESSION_CHIMP, data_type, ChimpInitAnalyze<double>,
+	                           ChimpAnalyze<double>, ChimpFinalAnalyze<double>, ChimpInitCompression<double>,
+	                           ChimpCompress<double>, ChimpFinalizeCompress<double>, ChimpInitScan<double>,
+	                           ChimpScan<double>, ChimpScanPartial<double>, ChimpFetchRow<double>, ChimpSkip<double>);
 }
 
 CompressionFunction ChimpCompressionFun::GetFunction(PhysicalType type) {

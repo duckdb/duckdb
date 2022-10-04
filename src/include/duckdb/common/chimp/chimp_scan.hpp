@@ -71,9 +71,10 @@ public:
 		return count;
 	}
 
+	template <class CHIMP_TYPE>
 	void LoadPackedData(uint16_t *packed_data, idx_t packed_data_block_count) {
 		for (idx_t i = 0; i < packed_data_block_count; i++) {
-			duckdb_chimp::PackedDataUtils::Unpack(packed_data[i], unpacked_data_blocks[i]);
+			duckdb_chimp::PackedDataUtils<CHIMP_TYPE>::Unpack(packed_data[i], unpacked_data_blocks[i]);
 		}
 		unpacked_index = 0;
 	}
@@ -94,6 +95,8 @@ private:
 template <class T>
 struct ChimpScanState : public SegmentScanState {
 public:
+	using CHIMP_TYPE = typename ChimpType<T>::type;
+
 	explicit ChimpScanState(ColumnSegment &segment) : segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
@@ -108,7 +111,7 @@ public:
 		LoadGroup();
 	}
 
-	duckdb_chimp::Chimp128DecompressionState chimp_state;
+	duckdb_chimp::Chimp128DecompressionState<CHIMP_TYPE> chimp_state;
 	BufferHandle handle;
 	data_ptr_t metadata_ptr;
 	idx_t total_value_count = 0;
@@ -194,7 +197,7 @@ public:
 			// Align on a two-byte boundary
 			metadata_ptr--;
 		}
-		group_state.LoadPackedData((uint16_t *)metadata_ptr, packed_data_block_count);
+		group_state.LoadPackedData<CHIMP_TYPE>((uint16_t *)metadata_ptr, packed_data_block_count);
 	}
 
 public:

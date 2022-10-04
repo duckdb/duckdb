@@ -50,6 +50,30 @@ static inline int __builtin_clzll(unsigned long long mask) {
 }
 #endif
 
+template <class T>
+struct CountZeros {
+};
+
+template<>
+struct CountZeros<uint32_t> {
+	inline static int Leading(uint32_t value) {
+		return __builtin_clz(value);
+	}
+	inline static int Trailing(uint32_t value) {
+		return __builtin_ctz(value);
+	}
+};
+
+template<>
+struct CountZeros<uint64_t> {
+	inline static int Leading(uint64_t value) {
+		return __builtin_clzll(value);
+	}
+	inline static int Trailing(uint64_t value) {
+		return __builtin_ctzll(value);
+	}
+};
+
 struct ChimpCompressionConstants {
 
 	static constexpr uint8_t LEADING_ROUND[] = {

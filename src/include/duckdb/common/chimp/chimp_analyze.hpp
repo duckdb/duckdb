@@ -15,10 +15,11 @@ namespace duckdb {
 
 struct EmptyChimpWriter;
 
-// TODO: overhaul this to use bytes, and measure the cost of the new group header
 template <class T>
 struct ChimpAnalyzeState : public AnalyzeState {
 public:
+	using CHIMP_TYPE = typename ChimpType<T>::type;
+
 	ChimpAnalyzeState() : state((void *)this) {
 		state.AssignDataBuffer(nullptr);
 	}
@@ -29,14 +30,14 @@ public:
 	//! Keep track of when a segment would end, to accurately simulate Reset()s in compress step
 
 public:
-	void WriteValue(uint64_t value, bool is_valid) {
+	void WriteValue(CHIMP_TYPE value, bool is_valid) {
 		if (!is_valid) {
 			return;
 		}
 		if (!HasEnoughSpace()) {
 			StartNewSegment();
 		}
-		duckdb_chimp::Chimp128Compression<true>::Store(value, state.chimp_state);
+		duckdb_chimp::Chimp128Compression<CHIMP_TYPE, true>::Store(value, state.chimp_state);
 		group_idx++;
 		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
 			StartNewGroup();
@@ -102,10 +103,13 @@ public:
 };
 
 struct EmptyChimpWriter {
+
 	template <class VALUE_TYPE>
 	static void Operation(VALUE_TYPE uncompressed_value, bool is_valid, void *state_p) {
+		using CHIMP_TYPE = typename ChimpType<VALUE_TYPE>::type;
+
 		auto state_wrapper = (ChimpAnalyzeState<VALUE_TYPE> *)state_p;
-		state_wrapper->WriteValue(*(typename ChimpType<VALUE_TYPE>::type *)(&uncompressed_value), is_valid);
+		state_wrapper->WriteValue(*(CHIMP_TYPE *)(&uncompressed_value), is_valid);
 	}
 };
 
@@ -134,7 +138,7 @@ idx_t ChimpFinalAnalyze(AnalyzeState &state) {
 	// Finish the last "segment"
 	chimp_state.StartNewSegment();
 	const auto final_analyze_size = chimp_state.TotalUsedBytes();
-	printf("FINAL_ANALYZE_SIZE: %llu\n", final_analyze_size);
+	// printf("FINAL_ANALYZE_SIZE: %llu\n", final_analyze_size);
 	return final_analyze_size;
 }
 

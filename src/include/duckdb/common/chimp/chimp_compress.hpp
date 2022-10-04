@@ -31,6 +31,8 @@ namespace duckdb {
 template <class T>
 struct ChimpCompressionState : public CompressionState {
 public:
+	using CHIMP_TYPE = typename ChimpType<T>::type;
+
 	struct ChimpWriter {
 
 		template <class VALUE_TYPE>
@@ -49,7 +51,7 @@ public:
 				NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
 			}
 
-			state_wrapper->WriteValue(*(typename ChimpType<VALUE_TYPE>::type *)(&value), is_valid);
+			state_wrapper->WriteValue(*(CHIMP_TYPE *)(&value), is_valid);
 		}
 	};
 
@@ -167,12 +169,12 @@ public:
 		}
 	}
 
-	void WriteValue(uint64_t value, bool is_valid) {
+	void WriteValue(CHIMP_TYPE value, bool is_valid) {
 		current_segment->count++;
 		if (!is_valid) {
 			return;
 		}
-		duckdb_chimp::Chimp128Compression<false>::Store(value, state.chimp_state);
+		duckdb_chimp::Chimp128Compression<CHIMP_TYPE, false>::Store(value, state.chimp_state);
 		group_idx++;
 		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
 			FlushGroup();
@@ -256,9 +258,9 @@ public:
 #ifdef DEBUG
 		D_ASSERT(verify_bytes == *(uint32_t *)(dataptr + metadata_offset));
 #endif
-		idx_t count = current_segment->count;
-		printf("TOTAL_BYTES: %llu | COUNT: %llu\n", total_segment_size, count);
-		// Store the offset of the metadata of the first group (which is at the highest address).
+		// idx_t count = current_segment->count;
+		// printf("TOTAL_BYTES: %llu | COUNT: %llu\n", total_segment_size, count);
+		//  Store the offset of the metadata of the first group (which is at the highest address).
 		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
 		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);
