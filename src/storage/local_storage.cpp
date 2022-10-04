@@ -205,7 +205,8 @@ bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
-	static constexpr const idx_t MERGE_THRESHOLD = 1; // RowGroup::ROW_GROUP_SIZE;
+	// bulk append threshold: a full row group
+	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE;
 
 	auto storage_entry = move(table_storage[&table]);
 	table_storage[&table].reset();
