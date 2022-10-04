@@ -38,6 +38,8 @@ class ColumnData {
 
 public:
 	ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent);
+	ColumnData(ColumnData &other, idx_t start, ColumnData *parent);
+
 	virtual ~ColumnData();
 
 	//! Table info for the column
@@ -119,8 +121,10 @@ public:
 
 	static shared_ptr<ColumnData> CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                                           const LogicalType &type, ColumnData *parent = nullptr);
+	static shared_ptr<ColumnData> CreateColumn(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
 	static unique_ptr<ColumnData> CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                                                 const LogicalType &type, ColumnData *parent = nullptr);
+	static unique_ptr<ColumnData> CreateColumnUnique(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
 
 protected:
 	//! Append a transient segment

@@ -52,8 +52,8 @@ if(NOT CLANG_TIDY)
 endif()
 
 add_library(parquet_extension STATIC ${PARQUET_EXTENSION_FILES})
-set(INGORE_WARNINGS OFF)
-build_loadable_extension(parquet ${PARQUET_EXTENSION_FILES} ${IGNORE_WARNINGS})
+set(PARAMETERS "-warnings")
+build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})
 
 install(
   TARGETS parquet_extension
