@@ -29,6 +29,7 @@ public:
 
 	vector<unique_ptr<DataChunk>> partition_buffers;
 	vector<unique_ptr<ColumnDataCollection>> partitions;
+	vector<ColumnDataAppendState> partition_append_states;
 
 private:
 	//! Implicit copying is not allowed

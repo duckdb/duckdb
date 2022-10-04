@@ -50,7 +50,6 @@ public:
 
 private:
 	void AllocateDataInternal(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
-	void InitializeChunkStateInternal(ChunkManagementState &state, ChunkMetaData &meta_data);
 	void AllocateBlock();
 	BufferHandle Pin(uint32_t block_id);
 

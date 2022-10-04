@@ -430,9 +430,12 @@ void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumn
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	state.partition_buffers.reserve(num_partitions);
 	state.partitions.reserve(num_partitions);
+	state.partition_append_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
 		state.partition_buffers.emplace_back(CreateAppendPartitionBuffer());
 		state.partitions.emplace_back(CreateAppendPartition(i));
+		state.partition_append_states.emplace_back();
+		state.partitions.back()->InitializeAppend(state.partition_append_states.back());
 	}
 }
 

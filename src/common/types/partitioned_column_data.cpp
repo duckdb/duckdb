@@ -20,7 +20,7 @@ void PartitionedColumnData::AppendChunk(PartitionedColumnDataAppendState &state,
 
 	// Compute the counts per partition
 	const auto count = input.size();
-	map<idx_t, list_entry_t> partition_entries;
+	unordered_map<idx_t, list_entry_t> partition_entries;
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &partition_index = partition_indices[i];
@@ -69,7 +69,8 @@ void PartitionedColumnData::AppendChunk(PartitionedColumnDataAppendState &state,
 		if (partition_buffer.size() + partition_length > STANDARD_VECTOR_SIZE) {
 			// Next batch won't fit in the buffer, flush it to the partition
 			auto &partition = *state.partitions[partition_index];
-			partition.Append(partition_buffer);
+			auto &partition_append_state = state.partition_append_states[partition_index];
+			partition.Append(partition_append_state, partition_buffer);
 			partition_buffer.Reset();
 		}
 
