@@ -87,10 +87,6 @@ struct BufferedCSVReaderOptions {
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! The column names of the columns to read/write
 	vector<string> names;
-	//! The header names of all csv files (option union_by_name)
-	vector<string> union_col_names;
-	//! The type of all csv files (option union_by_name)
-	vector<LogicalType> union_col_types;
 
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
@@ -181,6 +177,12 @@ public:
 	vector<LogicalType> sql_types;
 	vector<string> col_names;
 	case_insensitive_map_t<idx_t> col_names_map;
+
+	//! remap parse_chunk col to insert_chunk col, because when
+	//! union_by_name option on insert_chunk may have more cols
+	vector<idx_t> insert_cols_idx;
+	vector<idx_t> insert_nulls_idx;
+
 	unique_ptr<CSVFileHandle> file_handle;
 
 	unique_ptr<char[]> buffer;
@@ -216,7 +218,7 @@ public:
 	idx_t GetFileSize();
 
 	//! Adds some cols to fill the insert_chunk miss union name match
-	void SetNullUnionCols(DataChunk &insert_chunk, vector<string> &union_names);
+	void SetNullUnionCols(DataChunk &insert_chunk);
 
 private:
 	//! Initialize Parser

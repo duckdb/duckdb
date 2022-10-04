@@ -1971,12 +1971,10 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	return false;
 }
 
-void BufferedCSVReader::SetNullUnionCols(DataChunk &insert_chunk, vector<string> &union_col_names) {
-	for (idx_t col = 0; col < union_col_names.size(); ++col) {
-		if (col_names_map.find(union_col_names[col]) == col_names_map.end()) {
-			insert_chunk.data[col].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(insert_chunk.data[col], true);
-		}
+void BufferedCSVReader::SetNullUnionCols(DataChunk &insert_chunk) {
+	for (idx_t col = 0; col < insert_nulls_idx.size(); ++col) {
+		insert_chunk.data[insert_nulls_idx[col]].SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(insert_chunk.data[insert_nulls_idx[col]], true);
 	}
 }
 
@@ -1986,18 +1984,10 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	}
 
 	bool conversion_error_ignored = false;
-	const bool union_by_name = options.union_by_name;
 
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
-		idx_t insert_col_idx;
-		if (union_by_name) {
-			insert_col_idx = col_names_map[col_names[col_idx]];
-		} else {
-			insert_col_idx = col_idx;
-		}
-
 		if (sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
@@ -2018,22 +2008,25 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					}
 				}
 			}
-			insert_chunk.data[insert_col_idx].Reference(parse_chunk.data[col_idx]);
+			insert_chunk.data[insert_cols_idx[col_idx]].Reference(parse_chunk.data[col_idx]);
 		} else {
 			string error_message;
 			bool success;
 			if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_col_idx],
-				                            parse_chunk.size(), error_message);
+				success =
+				    TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_cols_idx[col_idx]],
+				                      parse_chunk.size(), error_message);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
 			           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_col_idx],
-				                                 parse_chunk.size(), error_message);
+				success = TryCastTimestampVector(options, parse_chunk.data[col_idx],
+				                                 insert_chunk.data[insert_cols_idx[col_idx]], parse_chunk.size(),
+				                                 error_message);
 			} else {
 				// target type is not varchar: perform a cast
-				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx], insert_chunk.data[insert_col_idx],
+				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx],
+				                                           insert_chunk.data[insert_cols_idx[col_idx]],
 				                                           parse_chunk.size(), &error_message);
 			}
 			if (success) {
