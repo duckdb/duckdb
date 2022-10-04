@@ -15,7 +15,7 @@ struct SignificantBits<uint64_t> {
 template <>
 struct SignificantBits<uint32_t> {
 	static constexpr uint8_t size = 5;
-	static constexpr uint8_t mask = (((uint8_t)1 << size) - 1) << 1;
+	static constexpr uint8_t mask = ((uint8_t)1 << size) - 1;
 };
 
 static constexpr uint8_t INDEX_BITS_SIZE = 7;
@@ -65,11 +65,11 @@ public:
 		uint16_t result = 0;
 		result += ((uint32_t)BIT_SIZE * 8) * (RingBuffer::RING_SIZE + index);
 		result += BIT_SIZE * LEADING_REPRESENTATION[leading_zero];
-		result += significant_bits;
 		if (BIT_SIZE == 32) {
 			// Shift the result by 1 to occupy the 16th bit
 			result <<= 1;
 		}
+		result += significant_bits;
 
 		return result;
 	}
