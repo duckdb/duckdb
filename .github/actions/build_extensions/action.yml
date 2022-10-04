@@ -118,7 +118,7 @@ runs:
       run: |
         cd  ${{ inputs.build_dir}}
         mkdir -p build/release/extension/out_of_tree
-        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py ${{ inputs.aarch64_cross_compile == 1 && '--aarch64-cc' || '' }}
+        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py ${{ inputs.aarch64_cross_compile == 1 && '--aarch64-cc' || '' }} --github-ref=$GITHUB_REF
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
