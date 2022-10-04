@@ -608,6 +608,10 @@ function(add_extension_dependencies LIBRARY)
     add_dependencies(${LIBRARY} sqlsmith_extension)
   endif()
 
+  if(${BUILD_ARROW_EXTENSION})
+    add_dependencies(${LIBRARY} arrow_extension)
+  endif()
+
 endfunction()
 
 function(link_extension_libraries LIBRARY)
@@ -654,6 +658,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_SQLSMITH_EXTENSION})
     target_link_libraries(${LIBRARY} sqlsmith_extension)
+  endif()
+
+  if(${BUILD_ARROW_EXTENSION})
+    target_link_libraries(${LIBRARY} arrow_extension)
   endif()
 endfunction()
 

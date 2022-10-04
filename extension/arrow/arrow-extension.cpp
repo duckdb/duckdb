@@ -59,7 +59,6 @@ public:
 		scan_arrow_ipc_func.cardinality = ArrowTableFunction::ArrowScanCardinality;
 		scan_arrow_ipc_func.projection_pushdown = true;
 		scan_arrow_ipc_func.filter_pushdown = false;
-		scan_arrow_ipc_func.table_scan_progress = ArrowTableFunction::ArrowProgress;
 
 		return scan_arrow_ipc_func;
 	}
@@ -96,9 +95,10 @@ private:
 		auto stream_factory_ptr = (uintptr_t)&stream_decoder->buffer();
 		auto stream_factory_produce = (stream_factory_produce_t)&ArrowIPCStreamBufferReader::CreateStream;
 		auto stream_factory_get_schema = (stream_factory_get_schema_t)&ArrowIPCStreamBufferReader::GetSchema;
-		auto rows_per_thread = 1000000;
+//		auto rows_per_thread = 1000000;
 
-		auto res = make_unique<ArrowIPCScanFunctionData>(rows_per_thread, stream_factory_produce, stream_factory_ptr);
+		// TODO: Can no longer set this limit?
+		auto res = make_unique<ArrowIPCScanFunctionData>(stream_factory_produce, stream_factory_ptr);
 
 		// TODO Everything below this is identical to the bind in duckdb/src/function/table/arrow.cpp
 
