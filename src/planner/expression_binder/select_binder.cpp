@@ -19,7 +19,7 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
 }
 
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
-    : SelectBinder(binder, context, node, info, {}) {
+    : SelectBinder(binder, context, node, info, case_insensitive_map_t<idx_t>()) {
 }
 
 BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
