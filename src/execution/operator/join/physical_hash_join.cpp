@@ -522,7 +522,7 @@ public:
 	HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context);
 
 	//! Initialize this source state using the info in the sink
-	void Initialize(HashJoinGlobalSinkState &sink);
+	void Initialize(ClientContext &context, HashJoinGlobalSinkState &sink);
 	//! Prepare the next build/probe stage for external hash join (must hold lock)
 	void PrepareBuild(HashJoinGlobalSinkState &sink);
 	void PrepareProbe(HashJoinGlobalSinkState &sink);
@@ -534,8 +534,7 @@ public:
 	}
 
 public:
-	//! The JoinType of the PhysicalHashJoin
-	JoinType join_type;
+	const PhysicalHashJoin &op;
 
 	//! For synchronizing the external hash join
 	atomic<bool> initialized;
@@ -617,12 +616,12 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 }
 
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context)
-    : join_type(op.join_type), initialized(false), global_stage(HashJoinSourceStage::INIT),
-      lock(probe_global_scan.lock), probe_count(op.children[0]->estimated_cardinality),
+    : op(op), initialized(false), global_stage(HashJoinSourceStage::INIT), lock(probe_global_scan.lock),
+      probe_count(op.children[0]->estimated_cardinality),
       parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120) {
 }
 
-void HashJoinGlobalSourceState::Initialize(HashJoinGlobalSinkState &sink) {
+void HashJoinGlobalSourceState::Initialize(ClientContext &context, HashJoinGlobalSinkState &sink) {
 	if (initialized) {
 		return;
 	}
@@ -633,9 +632,9 @@ void HashJoinGlobalSourceState::Initialize(HashJoinGlobalSinkState &sink) {
 	}
 	full_outer_scan.total = sink.hash_table->Count();
 
-	auto block_capacity = sink.hash_table->GetBlockCollection().block_capacity;
-	build_blocks_per_thread =
-	    MaxValue<idx_t>(idx_t(parallel_scan_chunk_count * STANDARD_VECTOR_SIZE) / block_capacity, 1);
+	idx_t num_blocks = sink.hash_table->GetBlockCollection().blocks.size();
+	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	build_blocks_per_thread = MaxValue<idx_t>((num_blocks + num_threads - 1) / num_threads, 1);
 
 	// Finalize the probe spill too
 	sink.probe_spill->Finalize();
@@ -669,7 +668,7 @@ void HashJoinGlobalSourceState::PrepareProbe(HashJoinGlobalSinkState &sink) {
 	probe_chunk_count = sink.probe_spill->ChunkCount();
 	probe_chunk_done = 0;
 
-	if (IsRightOuterJoin(join_type)) {
+	if (IsRightOuterJoin(op.join_type)) {
 		full_outer_scan.Reset();
 		full_outer_scan.total = sink.hash_table->Count();
 	}
@@ -680,7 +679,7 @@ void HashJoinGlobalSourceState::PrepareProbe(HashJoinGlobalSinkState &sink) {
 	}
 
 	// Empty probe collection, go straight into the next stage
-	if (IsRightOuterJoin(join_type)) {
+	if (IsRightOuterJoin(op.join_type)) {
 		global_stage = HashJoinSourceStage::SCAN_HT;
 	} else {
 		PrepareBuild(sink);
@@ -798,7 +797,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 			scan_structure = nullptr;
 			lock_guard<mutex> lock(gstate.lock);
 			if (++gstate.probe_chunk_done == gstate.probe_chunk_count) {
-				if (IsRightOuterJoin(gstate.join_type)) {
+				if (IsRightOuterJoin(gstate.op.join_type)) {
 					gstate.global_stage = HashJoinSourceStage::SCAN_HT;
 				} else {
 					gstate.PrepareBuild(sink);
@@ -871,10 +870,9 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	D_ASSERT(can_go_external);
 	// TODO: scan and consume CDC's
 	//  String handling in CDC's
-	//  sorting CDC blocks by block ID
 
 	if (gstate.global_stage == HashJoinSourceStage::INIT) {
-		gstate.Initialize(sink);
+		gstate.Initialize(context.client, sink);
 
 		lock_guard<mutex> lock(gstate.lock);
 		if (gstate.global_stage == HashJoinSourceStage::INIT) {

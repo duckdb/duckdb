@@ -1269,10 +1269,10 @@ void ProbeSpill::PrepareNextProbeCollection(JoinHashTable &ht) {
 			                        partition_chunk_references.end());
 		}
 
-		// TODO: maybe deal with partition collections?
+		// TODO: what to do with partition collections?
 	} else {
 		current_probe_collection = move(global_spill_collection);
-		chunk_references = global_spill_collection->GetChunkReferences(false);
+		chunk_references = current_probe_collection->GetChunkReferences(false);
 	}
 }
 

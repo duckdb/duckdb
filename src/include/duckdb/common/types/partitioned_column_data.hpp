@@ -26,6 +26,7 @@ public:
 public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
+	DataChunk slice_chunk;
 
 	vector<unique_ptr<DataChunk>> partition_buffers;
 	vector<unique_ptr<ColumnDataCollection>> partitions;
