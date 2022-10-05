@@ -97,7 +97,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			auto reader = make_unique<BufferedCSVReader>(context, options);
 			auto &col_names = reader->col_names;
 			auto &sql_types = reader->sql_types;
-			auto &col_names_map = reader->col_names_map;
 			D_ASSERT(col_names.size() == sql_types.size());
 
 			for (idx_t col = 0; col < col_names.size(); ++col) {
@@ -108,17 +107,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 					LogicalType compatible_type;
 					compatible_type = LogicalType::MaxLogicalType(union_col_types[union_find->second], sql_types[col]);
 					union_col_types[union_find->second] = compatible_type;
-					col_names_map[col_names[col]] = union_find->second;
 				} else {
 					union_names_map[col_names[col]] = union_names_index;
-					col_names_map[col_names[col]] = union_names_index;
 					union_names_index++;
 
 					union_col_names.emplace_back(col_names[col]);
 					union_col_types.emplace_back(sql_types[col]);
 				}
 			}
-			D_ASSERT(col_names_map.size() == col_names.size());
 			result->union_readers.push_back(move(reader));
 		}
 

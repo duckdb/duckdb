@@ -176,7 +176,6 @@ public:
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
 	vector<string> col_names;
-	case_insensitive_map_t<idx_t> col_names_map;
 
 	//! remap parse_chunk col to insert_chunk col, because when
 	//! union_by_name option on insert_chunk may have more cols
