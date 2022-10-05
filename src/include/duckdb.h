@@ -308,7 +308,6 @@ Usually used for developing C extensions that must return this for a compatibili
 */
 DUCKDB_API const char *duckdb_library_version();
 
-
 //===--------------------------------------------------------------------===//
 // Configuration
 //===--------------------------------------------------------------------===//
