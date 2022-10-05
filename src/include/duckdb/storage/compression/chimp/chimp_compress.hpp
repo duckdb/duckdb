@@ -128,15 +128,8 @@ public:
 
 	// The current segment has enough space to fit this new value
 	bool HasEnoughSpace() {
-		auto space_used = AlignValue(UsedSpace() + RequiredSpace()) + metadata_byte_size + CurrentGroupMetadataSize();
-		// if (space_used + 50 >= Storage::BLOCK_SIZE / 2) {
-		//	return false;
-		// }
 		if (handle.Ptr() + ChimpPrimitives::HEADER_SIZE + AlignValue(UsedSpace() + RequiredSpace()) >=
 		    (metadata_ptr - CurrentGroupMetadataSize())) {
-			// printf("Header_size(4) + UsedSpace(%llu) + RequiredSpace(%llu) = %llu | MetadataSize = %llu |
-			// CurrentGroupMetadataSize = %llu\n", 	UsedSpace(), RequiredSpace(), ChimpPrimitives::HEADER_SIZE +
-			// AlignValue(UsedSpace() + RequiredSpace()), 	RemainingSpace(), CurrentGroupMetadataSize());
 			return false;
 		}
 		return true;

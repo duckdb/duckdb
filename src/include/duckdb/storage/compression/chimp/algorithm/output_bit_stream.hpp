@@ -97,20 +97,20 @@ public:
 		}
 		if (sizeof(T) * 8 > 32) {
 			if (i == 64)
-				WriteToStream((INTERNAL_TYPE)(value >> 56));
+				WriteToStream((value >> 56) & 0xFF);
 			if (i > 55)
-				WriteToStream((INTERNAL_TYPE)(value >> 48));
+				WriteToStream((value >> 48) & 0xFF);
 			if (i > 47)
-				WriteToStream((INTERNAL_TYPE)(value >> 40));
+				WriteToStream((value >> 40) & 0xFF);
 			if (i > 39)
-				WriteToStream((INTERNAL_TYPE)(value >> 32));
+				WriteToStream((value >> 32) & 0xFF);
 		}
 		if (i > 31)
-			WriteToStream((INTERNAL_TYPE)(value >> 24));
+			WriteToStream((value >> 24) & 0xFF);
 		if (i > 23)
-			WriteToStream((INTERNAL_TYPE)(value >> 16));
+			WriteToStream((value >> 16) & 0xFF);
 		if (i > 15)
-			WriteToStream((INTERNAL_TYPE)(value >> 8));
+			WriteToStream((value >> 8) & 0xFF);
 		if (i > 7)
 			WriteToStream(value);
 	}
@@ -143,20 +143,20 @@ public:
 		}
 		if (sizeof(T) * 8 > 32) {
 			if (i == 64)
-				WriteToStream((INTERNAL_TYPE)(value >> 56));
+				WriteToStream((value >> 56) & 0xFF);
 			if (i > 55)
-				WriteToStream((INTERNAL_TYPE)(value >> 48));
+				WriteToStream((value >> 48) & 0xFF);
 			if (i > 47)
-				WriteToStream((INTERNAL_TYPE)(value >> 40));
+				WriteToStream((value >> 40) & 0xFF);
 			if (i > 39)
-				WriteToStream((INTERNAL_TYPE)(value >> 32));
+				WriteToStream((value >> 32) & 0xFF);
 		}
 		if (i > 31)
-			WriteToStream((INTERNAL_TYPE)(value >> 24));
+			WriteToStream((value >> 24) & 0xFF);
 		if (i > 23)
-			WriteToStream((INTERNAL_TYPE)(value >> 16));
+			WriteToStream((value >> 16) & 0xFF);
 		if (i > 15)
-			WriteToStream((INTERNAL_TYPE)(value >> 8));
+			WriteToStream((value >> 8) & 0xFF);
 		if (i > 7)
 			WriteToStream(value);
 	}
