@@ -35,9 +35,6 @@ public:
 	static constexpr uint8_t INTERNAL_TYPE_BITSIZE = sizeof(INTERNAL_TYPE) * 8;
 
 	size_t BytesWritten() const {
-		if (EMPTY) {
-			return (bits_written >> 3) + ((bits_written & 7) != 0);
-		}
 		return (bits_written >> 3) + ((bits_written & 7) != 0);
 	}
 
@@ -46,10 +43,11 @@ public:
 	}
 
 	void Flush() {
-		if (free_bits != INTERNAL_TYPE_BITSIZE) {
+		if (free_bits == INTERNAL_TYPE_BITSIZE) {
 			// the bit buffer is empty, nothing to write
-			WriteToStream();
+			return;
 		}
+		WriteToStream();
 	}
 
 	void SetStream(uint8_t *output_stream) {
@@ -68,9 +66,40 @@ public:
 		return (stream_index * INTERNAL_TYPE_BITSIZE) + (INTERNAL_TYPE_BITSIZE - free_bits);
 	}
 
+	template <class T>
+	void WriteRemainder(T value, uint8_t i) {
+		if (i > 31)
+			WriteToStream((value >> 24) & 0xFF);
+		if (i > 23)
+			WriteToStream((value >> 16) & 0xFF);
+		if (i > 15)
+			WriteToStream((value >> 8) & 0xFF);
+		if (i > 7)
+			WriteToStream(value);
+	}
+
+	template <>
+	void WriteRemainder<uint64_t>(uint64_t value, uint8_t i) {
+		if (i == 64)
+			WriteToStream((value >> 56) & 0xFF);
+		if (i > 55)
+			WriteToStream((value >> 48) & 0xFF);
+		if (i > 47)
+			WriteToStream((value >> 40) & 0xFF);
+		if (i > 39)
+			WriteToStream((value >> 32) & 0xFF);
+		if (i > 31)
+			WriteToStream((value >> 24) & 0xFF);
+		if (i > 23)
+			WriteToStream((value >> 16) & 0xFF);
+		if (i > 15)
+			WriteToStream((value >> 8) & 0xFF);
+		if (i > 7)
+			WriteToStream(value);
+	}
+
 	template <class T, uint8_t VALUE_SIZE>
 	void WriteValue(T value) {
-		// std::cout << "WRITE: " << (uint64_t)value << " | SIZE: " << (uint64_t)VALUE_SIZE << std::endl;
 		bits_written += VALUE_SIZE;
 		if (EMPTY) {
 			return;
@@ -95,32 +124,15 @@ public:
 			WriteInCurrent((INTERNAL_TYPE)value, queue);
 			value >>= queue;
 		}
-		if (sizeof(T) * 8 > 32) {
-			if (i == 64)
-				WriteToStream((value >> 56) & 0xFF);
-			if (i > 55)
-				WriteToStream((value >> 48) & 0xFF);
-			if (i > 47)
-				WriteToStream((value >> 40) & 0xFF);
-			if (i > 39)
-				WriteToStream((value >> 32) & 0xFF);
-		}
-		if (i > 31)
-			WriteToStream((value >> 24) & 0xFF);
-		if (i > 23)
-			WriteToStream((value >> 16) & 0xFF);
-		if (i > 15)
-			WriteToStream((value >> 8) & 0xFF);
-		if (i > 7)
-			WriteToStream(value);
+		WriteRemainder(value, i);
 	}
+
 	template <class T>
 	void WriteValue(T value, const uint8_t &value_size) {
 		bits_written += value_size;
 		if (EMPTY) {
 			return;
 		}
-		// std::cout << "WRITE: " << (uint64_t)value << " | SIZE: " << (uint64_t)value_size << std::endl;
 		if (FitsInCurrent(value_size)) {
 			//! If we can write the entire value in one go
 			WriteInCurrent((INTERNAL_TYPE)value, value_size);
@@ -141,24 +153,7 @@ public:
 			WriteInCurrent((INTERNAL_TYPE)value, queue);
 			value >>= queue;
 		}
-		if (sizeof(T) * 8 > 32) {
-			if (i == 64)
-				WriteToStream((value >> 56) & 0xFF);
-			if (i > 55)
-				WriteToStream((value >> 48) & 0xFF);
-			if (i > 47)
-				WriteToStream((value >> 40) & 0xFF);
-			if (i > 39)
-				WriteToStream((value >> 32) & 0xFF);
-		}
-		if (i > 31)
-			WriteToStream((value >> 24) & 0xFF);
-		if (i > 23)
-			WriteToStream((value >> 16) & 0xFF);
-		if (i > 15)
-			WriteToStream((value >> 8) & 0xFF);
-		if (i > 7)
-			WriteToStream(value);
+		WriteRemainder(value, i);
 	}
 
 private:
