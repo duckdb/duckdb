@@ -1,16 +1,16 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/chimp/chimp_compress.hpp
+// duckdb/storage/compression/chimp/chimp_compress.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/chimp/chimp.hpp"
+#include "duckdb/storage/compression/chimp/chimp.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/common/chimp/chimp_analyze.hpp"
+#include "duckdb/storage/compression/chimp/chimp_analyze.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"

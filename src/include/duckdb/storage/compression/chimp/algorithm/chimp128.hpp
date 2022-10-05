@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/compression/chimp/chimp128.hpp
+// duckdb/storage/compression/chimp/algorithm/chimp128.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,19 +11,19 @@
 #include <limits>
 #include <stddef.h>
 #include <stdint.h>
-#include "chimp_utils.hpp"
-#include "leading_zero_buffer.hpp"
-#include "flag_buffer.hpp"
-#include "ring_buffer.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/flag_buffer.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/ring_buffer.hpp"
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/likely.hpp"
-#include "packed_data.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/packed_data.hpp"
 
 //#include "byte_writer.hpp"
 //#include "byte_reader.hpp"
 
-#include "bit_reader.hpp"
-#include "output_bit_stream.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/bit_reader.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/output_bit_stream.hpp"
 
 namespace duckdb_chimp {
 

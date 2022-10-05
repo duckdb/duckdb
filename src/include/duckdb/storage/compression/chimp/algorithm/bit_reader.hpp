@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/compression/chimp/bit_reader.hpp
+// duckdb/storage/compression/algorithm/chimp/bit_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "bit_utils.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/bit_utils.hpp"
 #include <assert.h>
 #include <exception>
 #include <stdexcept>

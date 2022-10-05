@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/chimp/chimp_scan.hpp
+// duckdb/common/storage/compression/chimp/chimp_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/chimp/chimp.hpp"
+#include "duckdb/storage/compression/chimp/chimp.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
@@ -21,8 +21,8 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 
-#include "duckdb/storage/compression/chimp/flag_buffer.hpp"
-#include "duckdb/storage/compression/chimp/leading_zero_buffer.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/flag_buffer.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp"
 
 namespace duckdb {
 

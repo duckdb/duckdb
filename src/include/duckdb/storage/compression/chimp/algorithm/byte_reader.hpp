@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/compression/chimp/byte_reader.hpp
+// duckdb/storage/compression/chimp/algorithm/byte_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//

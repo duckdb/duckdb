@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/storage/compression/chimp/chimp128.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/chimp128.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"

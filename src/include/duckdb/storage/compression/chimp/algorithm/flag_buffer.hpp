@@ -9,9 +9,8 @@
 #pragma once
 
 #include <stdint.h>
-#include <iostream>
 #ifdef DEBUG
-#include <vector>
+#include "duckdb/common/vector.hpp"
 #endif
 
 namespace duckdb_chimp {
@@ -96,7 +95,7 @@ private:
 	uint32_t counter = 0;
 	uint8_t *buffer;
 #ifdef DEBUG
-	std::vector<uint8_t> flags;
+	vector<uint8_t> flags;
 #endif
 };
 

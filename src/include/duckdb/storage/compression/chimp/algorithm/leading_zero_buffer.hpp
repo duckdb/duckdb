@@ -11,12 +11,10 @@
 #include <stdint.h>
 #include <cstring>
 #ifdef DEBUG
-#include <vector>
+#include "duckdb/common/vector.hpp"
 #endif
 
 namespace duckdb_chimp {
-
-#define BLOCK_IDX ((counter >> 3) * (LEADING_ZERO_BLOCK_BIT_SIZE / 8))
 
 //! This class is in charge of storing the leading_zero_bits, which are of a fixed size
 //! These are packed together so that the rest of the data can be byte-aligned
@@ -80,11 +78,6 @@ public:
 	void Reset() {
 		this->counter = 0;
 		current = 0;
-// if (!EMPTY && buffer) {
-//	buffer[0] = 0;
-//	buffer[1] = 0;
-//	buffer[2] = 0;
-// }
 #ifdef DEBUG
 		flags.clear();
 #endif
@@ -97,11 +90,15 @@ public:
 	}
 #endif
 
+	inline BlockIndex() const {
+		return ((counter >> 3) * (LEADING_ZERO_BLOCK_BIT_SIZE / 8));
+	}
+
 	void FlushBuffer() {
 		if (EMPTY) {
 			return;
 		}
-		const auto buffer_idx = BLOCK_IDX;
+		const auto buffer_idx = BlockIndex();
 		std::memcpy((void *)(buffer + buffer_idx), (uint8_t *)&current, 3);
 #ifdef DEBUG
 		// Verify that the bits are copied correctly
@@ -134,8 +131,8 @@ public:
 		counter++;
 	}
 
-	__attribute__((no_sanitize("alignment"))) inline uint8_t Extract() {
-		const auto buffer_idx = BLOCK_IDX;
+	inline uint8_t Extract() {
+		const auto buffer_idx = BlockIndex();
 		auto const temp = Load<uint32_t>(buffer + buffer_idx);
 
 		const uint8_t result = (temp & leading_zero_masks[counter & 7]) >> leading_zero_shifts[counter & 7];
@@ -152,7 +149,7 @@ private:
 	uint32_t counter = 0; // block_index * 8
 	uint8_t *buffer;
 #ifdef DEBUG
-	std::vector<uint8_t> flags;
+	vector<uint8_t> flags;
 #endif
 };
 
