@@ -21,8 +21,8 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 
-#include "flag_buffer.hpp"
-#include "leading_zero_buffer.hpp"
+#include "duckdb/storage/compression/chimp/flag_buffer.hpp"
+#include "duckdb/storage/compression/chimp/leading_zero_buffer.hpp"
 
 namespace duckdb {
 
