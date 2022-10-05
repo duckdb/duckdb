@@ -301,6 +301,24 @@ Closes the specified connection and de-allocates all memory allocated for that c
 */
 DUCKDB_API void duckdb_disconnect(duckdb_connection *connection);
 
+/*!
+Returns the version of the linked DuckDB, with a version postfix for dev versions
+
+Usually used for developing C extensions that must return this for a compatibility check.
+*/
+DUCKDB_API const char *duckdb_library_version();
+
+/*!
+Records that an extension has been successfully loaded.
+
+Must be called manually for third-party extensions.
+
+* database: The database file to connect to.
+* extension: The name of the extension to mark as loaded.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_set_extension_loaded(duckdb_database *database, const char *extension_name);
+
 //===--------------------------------------------------------------------===//
 // Configuration
 //===--------------------------------------------------------------------===//

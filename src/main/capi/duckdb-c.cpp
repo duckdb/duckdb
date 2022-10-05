@@ -67,3 +67,16 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	auto result = conn->Query(query);
 	return duckdb_translate_result(move(result), out);
 }
+
+const char *duckdb_library_version() {
+	return DuckDB::LibraryVersion();
+}
+
+duckdb_state duckdb_set_extension_loaded(duckdb_database *database, const char *extension_name) {
+	if (!database) {
+		return DuckDBError;
+	}
+	auto wrapper = (DatabaseData *)database;
+
+	wrapper->database->SetExtensionLoaded(std::string(extension_name));
+}
