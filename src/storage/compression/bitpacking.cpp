@@ -264,7 +264,8 @@ public:
 		auto dataptr = handle.Ptr();
 
 		// Compact the segment by moving the metadata next to the data.
-		idx_t metadata_offset = AlignValue(data_ptr - dataptr);
+		idx_t metadata_offset = data_ptr - dataptr;
+		D_ASSERT(ValueIsAligned(metadata_offset));
 		idx_t metadata_size = dataptr + Storage::BLOCK_SIZE - metadata_ptr - 1;
 		idx_t total_segment_size = metadata_offset + metadata_size;
 		memmove(dataptr + metadata_offset, metadata_ptr + 1, metadata_size);
