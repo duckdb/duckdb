@@ -9,7 +9,7 @@
 #pragma once
 
 #include <cstring>
-#include "chimp_utils.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 
 namespace duckdb_chimp {
 
