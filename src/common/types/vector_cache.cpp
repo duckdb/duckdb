@@ -1,18 +1,19 @@
 #include "duckdb/common/types/vector_cache.hpp"
-#include "duckdb/common/types/vector.hpp"
+
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
 class VectorCacheBuffer : public VectorBuffer {
 public:
-	explicit VectorCacheBuffer(Allocator &allocator, const LogicalType &type_p)
-	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), type(type_p) {
+	explicit VectorCacheBuffer(Allocator &allocator, const LogicalType &type_p, idx_t capacity_p = STANDARD_VECTOR_SIZE)
+	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), type(type_p), capacity(capacity_p) {
 		auto internal_type = type.InternalType();
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// memory for the list offsets
-			owned_data = allocator.Allocate(STANDARD_VECTOR_SIZE * GetTypeIdSize(internal_type));
+			owned_data = allocator.Allocate(capacity * GetTypeIdSize(internal_type));
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type));
@@ -30,7 +31,7 @@ public:
 			break;
 		}
 		default:
-			owned_data = allocator.Allocate(STANDARD_VECTOR_SIZE * GetTypeIdSize(internal_type));
+			owned_data = allocator.Allocate(capacity * GetTypeIdSize(internal_type));
 			break;
 		}
 	}
@@ -48,7 +49,7 @@ public:
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through child
 			auto &list_buffer = (VectorListBuffer &)*result.auxiliary;
-			list_buffer.capacity = STANDARD_VECTOR_SIZE;
+			list_buffer.capacity = capacity;
 			list_buffer.size = 0;
 			list_buffer.SetAuxiliaryData(nullptr);
 
@@ -92,10 +93,12 @@ private:
 	vector<buffer_ptr<VectorBuffer>> child_caches;
 	//! Aux data for the vector (if any)
 	buffer_ptr<VectorBuffer> auxiliary;
+	//! Capacity of the vector
+	idx_t capacity;
 };
 
-VectorCache::VectorCache(Allocator &allocator, const LogicalType &type_p) {
-	buffer = make_unique<VectorCacheBuffer>(allocator, type_p);
+VectorCache::VectorCache(Allocator &allocator, const LogicalType &type_p, idx_t capacity_p) {
+	buffer = make_unique<VectorCacheBuffer>(allocator, type_p, capacity_p);
 }
 
 void VectorCache::ResetFromCache(Vector &result) const {

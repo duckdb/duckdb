@@ -1,9 +1,25 @@
 #include "duckdb/common/types/partitioned_column_data.hpp"
 
+#include "duckdb/common/radix_partitioning.hpp"
+
 namespace duckdb {
 
-PartitionedColumnData::PartitionedColumnData(ClientContext &context_p, vector<LogicalType> types_p)
-    : context(context_p), types(move(types_p)) {
+PartitionedColumnData::PartitionedColumnData(PartitionedColumnDataType type_p, ClientContext &context_p,
+                                             vector<LogicalType> types_p)
+    : type(type_p), context(context_p), types(move(types_p)), allocators(make_shared<PartitionAllocators>()) {
+}
+
+PartitionedColumnData::PartitionedColumnData(const PartitionedColumnData &other)
+    : type(other.type), context(other.context), types(other.types), allocators(other.allocators) {
+}
+
+unique_ptr<PartitionedColumnData> PartitionedColumnData::CreateShared() {
+	switch (type) {
+	case PartitionedColumnDataType::RADIX:
+		return make_unique<RadixPartitionedColumnData>((RadixPartitionedColumnData &)*this);
+	default:
+		throw NotImplementedException("CreateShared for this type of PartitionedColumnData");
+	}
 }
 
 PartitionedColumnData::~PartitionedColumnData() {
@@ -15,7 +31,7 @@ void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendSta
 	InitializeAppendStateInternal(state);
 }
 
-void PartitionedColumnData::AppendChunk(PartitionedColumnDataAppendState &state, DataChunk &input) {
+void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, DataChunk &input) {
 	// Compute partition indices and store them in state.partition_indices
 	ComputePartitionIndices(state, input);
 
@@ -36,7 +52,7 @@ void PartitionedColumnData::AppendChunk(PartitionedColumnDataAppendState &state,
 	// Early out: check if everything belongs to a single partition
 	if (partition_entries.size() == 1) {
 		const auto &partition_index = partition_entries.begin()->first;
-		auto &partition = *state.partitions[partition_index];
+		auto &partition = *partitions[partition_index];
 		auto &partition_append_state = state.partition_append_states[partition_index];
 		partition.Append(partition_append_state, input);
 		return;
@@ -64,7 +80,7 @@ void PartitionedColumnData::AppendChunk(PartitionedColumnDataAppendState &state,
 		const auto &partition_index = pc.first;
 
 		// Partition, buffer, and append state for this partition index
-		auto &partition = *state.partitions[partition_index];
+		auto &partition = *partitions[partition_index];
 		auto &partition_buffer = *state.partition_buffers[partition_index];
 		auto &partition_append_state = state.partition_append_states[partition_index];
 
@@ -76,7 +92,7 @@ void PartitionedColumnData::AppendChunk(PartitionedColumnDataAppendState &state,
 		// Create a selection vector for this partition using the offset into the single selection vector
 		partition_sel.Initialize(all_partitions_sel.data() + partition_offset);
 
-		if (partition_length >= 64) {
+		if (partition_length >= HalfBufferSize()) {
 			// Slice the input chunk using the selection vector
 			state.slice_chunk.Reset();
 			state.slice_chunk.Slice(input, partition_sel, partition_length);
@@ -87,37 +103,42 @@ void PartitionedColumnData::AppendChunk(PartitionedColumnDataAppendState &state,
 			// Append the input chunk to the partition buffer using the selection vector
 			partition_buffer.Append(input, false, &partition_sel, partition_length);
 
-			if (partition_buffer.size() >= 64) {
+			if (partition_buffer.size() >= HalfBufferSize()) {
 				// Next batch won't fit in the buffer, flush it to the partition
 				partition.Append(partition_append_state, partition_buffer);
-				partition_buffer.Reset(); // TODO: Reset sets the capacity back to STANDARD_VECTOR_SIZE
+				partition_buffer.Reset();
+				partition_buffer.SetCapacity(BufferSize());
 			}
 		}
 	}
 }
 
-void PartitionedColumnData::CombineLocalState(PartitionedColumnDataAppendState &state) {
-	// Flush any remaining data in the buffers
-	D_ASSERT(state.partition_buffers.size() == state.partitions.size());
-	for (idx_t i = 0; i < state.partitions.size(); i++) {
+void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &state) {
+	for (idx_t i = 0; i < partitions.size(); i++) {
 		auto &partition_buffer = *state.partition_buffers[i];
 		if (partition_buffer.size() > 0) {
-			state.partitions[i]->Append(partition_buffer);
+			partitions[i]->Append(partition_buffer);
 		}
 	}
+}
 
+void PartitionedColumnData::Combine(PartitionedColumnData &other) {
 	// Now combine the state's partitions into this
 	lock_guard<mutex> guard(lock);
-	D_ASSERT(state.partitions.size() == NumberOfPartitions());
 	if (partitions.empty()) {
 		// This is the first merge, we just copy them over
-		partitions = move(state.partitions);
+		partitions = move(other.partitions);
 	} else {
 		// Combine the append state's partitions into this PartitionedColumnData
 		for (idx_t i = 0; i < NumberOfPartitions(); i++) {
-			partitions[i]->Combine(*state.partitions[i]);
+			partitions[i]->Combine(*other.partitions[i]);
 		}
 	}
+}
+
+void PartitionedColumnData::CreateAllocator() {
+	allocators->allocators.emplace_back(make_shared<ColumnDataAllocator>(BufferManager::GetBufferManager(context)));
+	allocators->allocators.back()->MakeShared();
 }
 
 } // namespace duckdb

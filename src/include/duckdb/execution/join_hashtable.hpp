@@ -273,13 +273,14 @@ public:
 		bool partitioned;
 
 		//! The partitioned probe data (if partitioned) and append states
-		unique_ptr<PartitionedColumnData> partitioned_data;
-		vector<unique_ptr<PartitionedColumnDataAppendState>> partition_append_states;
+		unique_ptr<PartitionedColumnData> global_partitions;
+		vector<unique_ptr<PartitionedColumnData>> local_partitions;
+		vector<unique_ptr<PartitionedColumnDataAppendState>> local_partition_append_states;
 
 		//! The probe data (if not partitioned) and append states
 		unique_ptr<ColumnDataCollection> global_spill_collection;
 		vector<unique_ptr<ColumnDataCollection>> local_spill_collections;
-		vector<unique_ptr<ColumnDataAppendState>> spill_append_states;
+		vector<unique_ptr<ColumnDataAppendState>> local_spill_append_states;
 
 		//! The probe collection currently being read
 		unique_ptr<ColumnDataCollection> current_probe_collection;

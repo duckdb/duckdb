@@ -37,12 +37,12 @@ void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types) {
+void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity_p) {
 	D_ASSERT(data.empty());   // can only be initialized once
 	D_ASSERT(!types.empty()); // empty chunk not allowed
-	capacity = STANDARD_VECTOR_SIZE;
+	capacity = capacity_p;
 	for (idx_t i = 0; i < types.size(); i++) {
-		VectorCache cache(allocator, types[i]);
+		VectorCache cache(allocator, types[i], capacity);
 		data.emplace_back(cache);
 		vector_caches.push_back(move(cache));
 	}

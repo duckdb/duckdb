@@ -411,31 +411,39 @@ void RadixPartitioning::PartitionRowData(BufferManager &buffer_manager, const Ro
 //===--------------------------------------------------------------------===//
 RadixPartitionedColumnData::RadixPartitionedColumnData(ClientContext &context_p, vector<LogicalType> types_p,
                                                        idx_t radix_bits_p, idx_t hash_col_idx_p)
-    : PartitionedColumnData(context_p, move(types_p)), radix_bits(radix_bits_p), hash_col_idx(hash_col_idx_p) {
+    : PartitionedColumnData(PartitionedColumnDataType::RADIX, context_p, move(types_p)), radix_bits(radix_bits_p),
+      hash_col_idx(hash_col_idx_p) {
 	D_ASSERT(hash_col_idx < types.size());
+
 	// We know the number of partitions beforehand, so we can just create them
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-	partition_allocators.reserve(num_partitions);
+
+	allocators->allocators.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
-		partition_allocators.emplace_back(make_shared<ColumnDataAllocator>(BufferManager::GetBufferManager(context)));
-		partition_allocators.back()->MakeShared();
+		CreateAllocator();
+	}
+	D_ASSERT(allocators->allocators.size() == num_partitions);
+}
+
+RadixPartitionedColumnData::RadixPartitionedColumnData(const RadixPartitionedColumnData &other)
+    : PartitionedColumnData(other), radix_bits(other.radix_bits), hash_col_idx(other.hash_col_idx) {
+	for (idx_t i = 0; i < RadixPartitioning::NumberOfPartitions(radix_bits); i++) {
+		partitions.emplace_back(CreateCollectionForPartition(i));
 	}
 }
 
 RadixPartitionedColumnData::~RadixPartitionedColumnData() {
 }
 
-void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) {
+void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const {
 	// We know the number of partitions beforehand, so we can just initialize them
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	state.partition_buffers.reserve(num_partitions);
-	state.partitions.reserve(num_partitions);
 	state.partition_append_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
-		state.partition_buffers.emplace_back(CreateAppendPartitionBuffer());
-		state.partitions.emplace_back(CreateAppendPartition(i));
 		state.partition_append_states.emplace_back();
-		state.partitions.back()->InitializeAppend(state.partition_append_states.back());
+		partitions[i]->InitializeAppend(state.partition_append_states[i]);
+		state.partition_buffers.emplace_back(CreateAppendPartitionBuffer());
 	}
 }
 
@@ -450,7 +458,7 @@ struct ComputePartitionIndicesFunctor {
 };
 
 void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) {
-	D_ASSERT(state.partitions.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
+	D_ASSERT(partitions.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
 	D_ASSERT(state.partition_buffers.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, input.data[hash_col_idx], state.partition_indices,
 	                                                      input.size());

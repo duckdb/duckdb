@@ -1045,7 +1045,7 @@ void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_pt
 	}
 
 	// TODO: crank up the number of partitions if we know we must partition the probe side
-	//  This speeds up probing significantly due to better cache locality
+	//  This speeds up probing significantly due to better cache localityp
 	// Set the number of radix bits (minimum 4, maximum 8)
 	for (; radix_bits < 8; radix_bits++) {
 		auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
@@ -1198,7 +1198,7 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
 	} else {
 		// More than one probe round to go, so we need to partition
 		partitioned = true;
-		partitioned_data =
+		global_partitions =
 		    make_unique<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
 	}
 	column_ids.reserve(probe_types.size());
@@ -1208,42 +1208,48 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
 }
 
 idx_t ProbeSpill::RegisterThread() {
+	idx_t thread_idx;
 	lock_guard<mutex> guard(lock);
 	if (partitioned) {
-		idx_t thread_idx = partition_append_states.size();
-		partition_append_states.emplace_back(make_unique<PartitionedColumnDataAppendState>());
-		partitioned_data->InitializeAppendState(*partition_append_states.back());
-		return thread_idx;
+		thread_idx = local_partition_append_states.size();
+		local_partitions.emplace_back(global_partitions->CreateShared());
+		local_partition_append_states.emplace_back(make_unique<PartitionedColumnDataAppendState>());
+		local_partitions.back()->InitializeAppendState(*local_partition_append_states.back());
 	} else {
-		idx_t thread_idx = local_spill_collections.size();
+		thread_idx = local_spill_collections.size();
 		local_spill_collections.emplace_back(make_unique<ColumnDataCollection>(context, probe_types));
-		spill_append_states.emplace_back(make_unique<ColumnDataAppendState>());
-		local_spill_collections.back()->InitializeAppend(*spill_append_states.back());
-		return thread_idx;
+		local_spill_append_states.emplace_back(make_unique<ColumnDataAppendState>());
+		local_spill_collections.back()->InitializeAppend(*local_spill_append_states.back());
 	}
+	return thread_idx;
 }
 
 void ProbeSpill::Append(DataChunk &chunk, idx_t thread_idx) {
 	if (partitioned) {
-		partitioned_data->AppendChunk(*partition_append_states[thread_idx], chunk);
+		local_partitions[thread_idx]->Append(*local_partition_append_states[thread_idx], chunk);
 	} else {
-		local_spill_collections[thread_idx]->Append(*spill_append_states[thread_idx], chunk);
+		local_spill_collections[thread_idx]->Append(*local_spill_append_states[thread_idx], chunk);
 	}
 }
 
 void ProbeSpill::Finalize() {
 	if (partitioned) {
-		for (auto &append_state : partition_append_states) {
-			partitioned_data->CombineLocalState(*append_state);
+		D_ASSERT(local_partitions.size() == local_partition_append_states.size());
+		for (idx_t i = 0; i < local_partition_append_states.size(); i++) {
+			local_partitions[i]->FlushAppendState(*local_partition_append_states[i]);
 		}
-		partition_append_states.clear();
+		for (auto &local_partition : local_partitions) {
+			global_partitions->Combine(*local_partition);
+		}
+		local_partitions.clear();
+		local_spill_append_states.clear();
 	} else {
 		global_spill_collection = move(local_spill_collections[0]);
 		for (idx_t i = 1; i < local_spill_collections.size(); i++) {
 			global_spill_collection->Combine(*local_spill_collections[i]);
 		}
 		local_spill_collections.clear();
-		spill_append_states.clear();
+		local_spill_append_states.clear();
 	}
 }
 
@@ -1252,7 +1258,7 @@ void ProbeSpill::PrepareNextProbeCollection(JoinHashTable &ht) {
 	current_probe_collection = nullptr;
 	chunk_references.clear();
 	if (partitioned) {
-		auto &partitions = partitioned_data->GetPartitions();
+		auto &partitions = global_partitions->GetPartitions();
 		if (ht.partition_start == partitions.size()) {
 			return;
 		}

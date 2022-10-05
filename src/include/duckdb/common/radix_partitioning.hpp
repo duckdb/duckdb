@@ -60,9 +60,14 @@ public:
 class RadixPartitionedColumnData : public PartitionedColumnData {
 public:
 	RadixPartitionedColumnData(ClientContext &context, vector<LogicalType> types, idx_t radix_bits, idx_t hash_col_idx);
+	RadixPartitionedColumnData(const RadixPartitionedColumnData &other);
 	~RadixPartitionedColumnData() override;
 
-	void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) override;
+protected:
+	virtual idx_t BufferSize() const override {
+		return STANDARD_VECTOR_SIZE;
+	}
+	void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const override;
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
 
 private:
