@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 
 namespace duckdb {
 
@@ -254,11 +255,67 @@ struct ICUStrftime : public ICUDateFunc {
 		auto &catalog = Catalog::GetCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
+
+	static StrfTimeFormat varchar_format;
+
+	struct ICUBoundCastData : public BoundCastData {
+		explicit ICUBoundCastData(unique_ptr<FunctionData> info_p) : info(move(info_p)) {
+		}
+
+		unique_ptr<BoundCastData> Copy() const override {
+			return make_unique<ICUBoundCastData>(info->Copy());
+		}
+
+		unique_ptr<FunctionData> info;
+	};
+
+	static bool CastToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+		auto &cast_data = (ICUBoundCastData &)*parameters.cast_data;
+		auto info = (BindData *)cast_data.info.get();
+		CalendarPtr calendar(info->calendar->clone());
+		const auto tz_name = info->tz_setting.c_str();
+
+		UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
+		    source, result, count, [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
+			    if (Timestamp::IsFinite(input)) {
+				    return Operation(calendar.get(), input, tz_name, varchar_format, result);
+			    } else {
+				    mask.SetInvalid(idx);
+				    return string_t();
+			    }
+		    });
+		return true;
+	}
+
+	static BoundCastInfo BindCastToVarchar(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+		if (!input.context) {
+			throw InternalException("Missing context for TIMESTAMPTZ cast.");
+		}
+
+		auto cast_data = make_unique<ICUBoundCastData>(make_unique<BindData>(*input.context));
+
+		return BoundCastInfo(CastToVarchar, move(cast_data));
+	}
+
+	static void AddCasts(ClientContext &context) {
+		auto &config = DBConfig::GetConfig(context);
+		auto &casts = config.GetCastFunctions();
+
+		string_t spec("%Y-%m-%d %H:%M:%S.%f %Z");
+		ParseFormatSpecifier(spec, varchar_format);
+
+		casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR, BindCastToVarchar);
+	}
 };
+
+StrfTimeFormat ICUStrftime::varchar_format;
 
 void RegisterICUStrptimeFunctions(ClientContext &context) {
 	ICUStrptime::AddBinaryTimestampFunction("strptime", context);
 	ICUStrftime::AddBinaryTimestampFunction("strftime", context);
+
+	// Add string casts
+	ICUStrftime::AddCasts(context);
 }
 
 } // namespace duckdb
