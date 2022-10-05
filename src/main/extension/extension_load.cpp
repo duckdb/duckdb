@@ -132,6 +132,8 @@ void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
 		                            init_fun_name, res.filename, e.what());
 	}
+
+	DuckDB(DatabaseInstance::GetDatabase(context)).SetExtensionLoaded(extension);
 }
 
 unique_ptr<ReplacementOpenData> ExtensionHelper::ReplacementOpenPre(const string &extension, DBConfig &config) {

@@ -308,16 +308,6 @@ Usually used for developing C extensions that must return this for a compatibili
 */
 DUCKDB_API const char *duckdb_library_version();
 
-/*!
-Records that an extension has been successfully loaded.
-
-Must be called manually for third-party extensions.
-
-* database: The database file to connect to.
-* extension: The name of the extension to mark as loaded.
-* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-*/
-DUCKDB_API duckdb_state duckdb_set_extension_loaded(duckdb_database *database, const char *extension_name);
 
 //===--------------------------------------------------------------------===//
 // Configuration
