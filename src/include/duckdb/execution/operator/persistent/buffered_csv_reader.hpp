@@ -216,7 +216,7 @@ public:
 
 	idx_t GetFileSize();
 
-	//! Adds some cols to fill the insert_chunk miss union name match
+	//! Fill nulls into the cols that mismtach union names
 	void SetNullUnionCols(DataChunk &insert_chunk);
 
 private:

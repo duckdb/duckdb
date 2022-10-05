@@ -85,7 +85,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		D_ASSERT(return_types.size() == names.size());
 	}
 
-	// union_col_names will exclude filename hivepartition
+	// union_col_names will exclude filename and hivepartition
 	if (options.union_by_name) {
 		idx_t union_names_index = 0;
 		case_insensitive_map_t<idx_t> union_names_map;
