@@ -114,7 +114,7 @@ public:
 			WriteInCurrent((INTERNAL_TYPE)value, queue);
 			value >>= queue;
 		}
-		WriteRemainder(value, i);
+		WriteRemainder<T>(value, i);
 	}
 
 	template <class T>
@@ -143,7 +143,7 @@ public:
 			WriteInCurrent((INTERNAL_TYPE)value, queue);
 			value >>= queue;
 		}
-		WriteRemainder(value, i);
+		WriteRemainder<T>(value, i);
 	}
 
 private:
