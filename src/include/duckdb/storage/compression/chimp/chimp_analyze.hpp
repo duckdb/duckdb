@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/chimp/chimp.hpp"
+#include "duckdb/storage/compression/chimp/chimp.hpp"
 #include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {

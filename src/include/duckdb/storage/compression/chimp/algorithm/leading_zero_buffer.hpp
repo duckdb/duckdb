@@ -90,7 +90,7 @@ public:
 	}
 #endif
 
-	inline BlockIndex() const {
+	inline uint64_t BlockIndex() const {
 		return ((counter >> 3) * (LEADING_ZERO_BLOCK_BIT_SIZE / 8));
 	}
 

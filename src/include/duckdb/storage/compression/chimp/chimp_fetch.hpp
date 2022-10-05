@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/chimp/chimp.hpp"
-#include "duckdb/common/chimp/chimp_scan.hpp"
+#include "duckdb/storage/compression/chimp/chimp.hpp"
+#include "duckdb/storage/compression/chimp/chimp_scan.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
