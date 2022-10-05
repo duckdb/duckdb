@@ -224,6 +224,8 @@ private:
 	void Initialize(const vector<LogicalType> &requested_types);
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
+	//! Initializes the insert_chunk idx for mapping parse_chunk cols to insert_chunk cols
+	void InitInsertChunkIdx(idx_t num_cols);
 	//! Initializes the TextSearchShiftArrays for complex parser
 	void PrepareComplexParser();
 	//! Try to parse a single datachunk from the file. Throws an exception if anything goes wrong.

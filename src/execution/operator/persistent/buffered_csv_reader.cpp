@@ -537,6 +537,7 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		SkipRowsAndReadHeader(options.skip_rows, options.header);
 	}
 	InitParseChunk(sql_types.size());
+	InitInsertChunkIdx(sql_types.size());
 	// we only need reset support during the automatic CSV type detection
 	// since reset support might require caching (in the case of streams), we disable it for the remainder
 	file_handle->DisableReset();
@@ -679,6 +680,12 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 		// initialize the parse_chunk with a set of VARCHAR types
 		vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
 		parse_chunk.Initialize(allocator, varchar_types);
+	}
+}
+
+void BufferedCSVReader::InitInsertChunkIdx(idx_t num_cols) {
+	for (idx_t col = 0; col < num_cols; ++col) {
+		insert_cols_idx.push_back(col);
 	}
 }
 
@@ -1981,11 +1988,6 @@ void BufferedCSVReader::SetNullUnionCols(DataChunk &insert_chunk) {
 void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	if (parse_chunk.size() == 0) {
 		return;
-	}
-	if (insert_cols_idx.empty()){
-		for (idx_t col = 0; col < sql_types.size(); ++col){
-			insert_cols_idx.push_back(col);
-		}
 	}
 
 	bool conversion_error_ignored = false;

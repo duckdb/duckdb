@@ -124,7 +124,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 			for (idx_t col = 0; col < col_names.size(); ++col) {
 				idx_t remap_col = union_names_map[col_names[col]];
-				reader->insert_cols_idx.push_back(remap_col);
+				reader->insert_cols_idx[col] = remap_col;
 				is_null_cols[remap_col] = false;
 			}
 			for (idx_t col = 0; col < union_col_names.size(); ++col) {
