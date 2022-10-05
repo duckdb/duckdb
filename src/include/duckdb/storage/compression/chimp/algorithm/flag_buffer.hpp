@@ -95,7 +95,7 @@ private:
 	uint32_t counter = 0;
 	uint8_t *buffer;
 #ifdef DEBUG
-	vector<uint8_t> flags;
+	duckdb::vector<uint8_t> flags;
 #endif
 };
 
