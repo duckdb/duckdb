@@ -325,7 +325,7 @@ struct PartitionFunctor {
 	                                 RowDataCollection &string_heap, RowDataBlock &data_block,
 	                                 const data_ptr_t data_ptr, RowDataBlock &heap_block, BufferHandle &heap_handle) {
 		D_ASSERT(!layout.AllConstant());
-		D_ASSERT(heap_block.block->BlockId() == heap_handle.GetBlockId());
+		D_ASSERT(heap_block.block == heap_handle.GetBlockHandle());
 		D_ASSERT(data_block.count >= heap_block.count);
 		const auto count = data_block.count - heap_block.count;
 		if (count == 0) {

@@ -70,10 +70,10 @@ void append_date(append_info info, int64_t value) {
 }
 
 void append_decimal(append_info info, decimal_t *val) {
-	double dTemp = val->number;
-	for (int i = 0; i < val->precision; i++) {
-		dTemp /= 10.0;
-	}
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.Append<double>(dTemp);
+	auto &appender = append_info->appender;
+	auto &type = appender.GetTypes()[appender.CurrentColumn()];
+	D_ASSERT(type.id() == duckdb::LogicalTypeId::DECIMAL);
+	D_ASSERT(duckdb::DecimalType::GetScale(type) == val->precision);
+	appender.Append<int64_t>(val->number);
 }

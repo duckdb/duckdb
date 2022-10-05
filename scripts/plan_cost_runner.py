@@ -83,6 +83,10 @@ def print_diffs(diffs):
         print("Old cost:", old_cost)
         print("New cost:", new_cost)
 
+def cardinality_is_higher(card_a, card_b):
+    # card_a > card_b?
+    # add 20% threshold before we start caring
+    return card_a > (card_b + card_b / 5)
 
 def main():
     old, new, benchmark_dir = parse_args()
@@ -105,9 +109,9 @@ def main():
         old_cost = query_plan_cost(old, OLD_DB_NAME, query)
         new_cost = query_plan_cost(new, NEW_DB_NAME, query)
 
-        if new_cost < old_cost:
+        if cardinality_is_higher(old_cost, new_cost):
             improvements.append((query_name, old_cost, new_cost))
-        elif new_cost > old_cost:
+        elif cardinality_is_higher(new_cost, old_cost):
             regressions.append((query_name, old_cost, new_cost))
             
     exit_code = 0

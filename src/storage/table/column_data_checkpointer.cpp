@@ -134,6 +134,12 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 		//! Check if the method type is the forced method (if forced is used)
 		bool forced_method_found = compression_functions[i]->type == forced_method;
 		auto score = compression_functions[i]->final_analyze(*analyze_states[i]);
+
+		//! The finalize method can return this value from final_analyze to indicate it should not be used.
+		if (score == DConstants::INVALID_INDEX) {
+			continue;
+		}
+
 		if (score < best_score || forced_method_found) {
 			compression_idx = i;
 			best_score = score;

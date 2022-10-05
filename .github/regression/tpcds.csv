@@ -61,6 +61,7 @@ benchmark/tpcds/sf1/q60.benchmark
 benchmark/tpcds/sf1/q61.benchmark
 benchmark/tpcds/sf1/q62.benchmark
 benchmark/tpcds/sf1/q63.benchmark
+benchmark/tpcds/sf1/q64.benchmark
 benchmark/tpcds/sf1/q65.benchmark
 benchmark/tpcds/sf1/q66.benchmark
 benchmark/tpcds/sf1/q67.benchmark
@@ -68,6 +69,7 @@ benchmark/tpcds/sf1/q68.benchmark
 benchmark/tpcds/sf1/q69.benchmark
 benchmark/tpcds/sf1/q70.benchmark
 benchmark/tpcds/sf1/q71.benchmark
+benchmark/tpcds/sf1/q72.benchmark
 benchmark/tpcds/sf1/q73.benchmark
 benchmark/tpcds/sf1/q74.benchmark
 benchmark/tpcds/sf1/q75.benchmark

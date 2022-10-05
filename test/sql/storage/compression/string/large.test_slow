@@ -1,0 +1,57 @@
+# name: test/sql/storage/compression/string/large.test_slow
+# description: Test large storage with string compression (many row groups)
+# group: [string]
+
+# load the DB from disk
+load __TEST_DIR__/test_dictionary.db
+
+statement ok
+PRAGMA enable_verification
+
+foreach compression fsst dictionary
+
+foreach enable_fsst_vector true false
+
+statement ok
+SET enable_fsst_vectors='${enable_fsst_vector}'
+
+statement ok
+PRAGMA force_compression='${compression}'
+
+# simple dictionary compressed column with few values
+statement ok
+CREATE TABLE test (a VARCHAR);
+
+statement ok
+INSERT INTO test SELECT (i::VARCHAR) FROM range(0, 1000000) tbl(i);
+INSERT INTO test SELECT NULL FROM range(0, 1000000) tbl(i);
+INSERT INTO test SELECT (i::VARCHAR) FROM range(0, 1000000) tbl(i);
+INSERT INTO test SELECT ''::VARCHAR FROM range(0, 1000000) tbl(i);
+INSERT INTO test SELECT (i::VARCHAR) FROM range(0, 1000000) tbl(i);
+
+statement ok
+checkpoint
+
+query IIII
+SELECT SUM(a::INT), MIN(a::INT), MAX(a::INT), COUNT(*) FROM test where a NOT NULL and a != ''
+----
+1499998500000	0	999999	3000000
+
+restart
+
+query IIII
+SELECT SUM(a::INT), MIN(a::INT), MAX(a::INT), COUNT(*) FROM test where a NOT NULL and a != ''
+----
+1499998500000	0	999999	3000000
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+statement ok
+DROP TABLE test;
+
+endloop
+
+endloop

@@ -517,12 +517,11 @@ void CheckpointManager::FlushPartialSegments() {
 }
 
 void PartialBlock::FlushToDisk(DatabaseInstance &db) {
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto &block_manager = BlockManager::GetBlockManager(db);
 
 	// the data for the block might already exists in-memory of our block
 	// instead of copying the data we alter some metadata so the buffer points to an on-disk block
-	block = buffer_manager.ConvertToPersistent(block_manager, block_id, move(block));
+	block = block_manager.ConvertToPersistent(block_id, move(block));
 
 	// now set this block as the block for all segments
 	for (auto &seg : segments) {
