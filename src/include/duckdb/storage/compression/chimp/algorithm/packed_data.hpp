@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "chimp_utils.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 
 namespace duckdb_chimp {
 
@@ -43,15 +43,11 @@ public:
 		}
 	}
 	static inline uint16_t Pack(uint8_t index, uint8_t leading_zero, uint8_t significant_bits) {
-		static constexpr uint8_t LEADING_REPRESENTATION[] = {
-		    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7,
-		    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7};
-
 		static constexpr uint8_t BIT_SIZE = (sizeof(CHIMP_TYPE) * 8);
 
 		uint16_t result = 0;
 		result += ((uint32_t)BIT_SIZE * 8) * (BUFFER_SIZE + index);
-		result += BIT_SIZE * LEADING_REPRESENTATION[leading_zero];
+		result += BIT_SIZE * ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zero];
 		if (BIT_SIZE == 32) {
 			// Shift the result by 1 to occupy the 16th bit
 			result <<= 1;

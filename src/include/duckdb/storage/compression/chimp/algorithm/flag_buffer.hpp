@@ -15,21 +15,21 @@
 
 namespace duckdb_chimp {
 
-static constexpr uint8_t flag_masks[4] = {
-    192, // 0b1100 0000,
-    48,  // 0b0011 0000,
-    12,  // 0b0000 1100,
-    3,   // 0b0000 0011,
-};
-
-static constexpr uint8_t flag_shifts[4] = {6, 4, 2, 0};
-
 // This class is responsible for writing and reading the flag bits
 // Only the last group is potentially not 1024 (GROUP_SIZE) values in size
 // But we can determine from the count of the segment whether this is the case or not
 // So we can just read/write from left to right
 template <bool EMPTY>
 class FlagBuffer {
+	static constexpr uint8_t MASKS[4] = {
+	    192, // 0b1100 0000,
+	    48,  // 0b0011 0000,
+	    12,  // 0b0000 1100,
+	    3,   // 0b0000 0011,
+	};
+
+	static constexpr uint8_t SHIFTS[4] = {6, 4, 2, 0};
+
 public:
 	FlagBuffer() : counter(0), buffer(nullptr) {
 	}
@@ -48,7 +48,7 @@ public:
 
 #ifdef DEBUG
 	uint8_t ExtractValue(uint32_t value, uint8_t index) {
-		return (value & flag_masks[index]) >> flag_shifts[index];
+		return (value & MASKS[index]) >> SHIFTS[index];
 	}
 #endif
 
@@ -68,7 +68,7 @@ public:
 #ifdef DEBUG
 			flags.push_back(value);
 #endif
-			buffer[counter >> 2] |= ((value & 3) << flag_shifts[counter & 3]);
+			buffer[counter >> 2] |= ((value & 3) << SHIFTS[counter & 3]);
 #ifdef DEBUG
 			// Verify that the bits are serialized correctly
 			assert(flags[counter & 3] == ExtractValue(buffer[counter >> 2], counter & 3));
@@ -77,7 +77,7 @@ public:
 		counter++;
 	}
 	inline uint8_t Extract() {
-		const uint8_t result = (buffer[counter >> 2] & flag_masks[counter & 3]) >> flag_shifts[counter & 3];
+		const uint8_t result = (buffer[counter >> 2] & MASKS[counter & 3]) >> SHIFTS[counter & 3];
 		counter++;
 		return result;
 	}

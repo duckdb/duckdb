@@ -28,13 +28,13 @@ public:
 	static constexpr uint32_t LEADING_ZERO_BLOCK_BIT_SIZE = LEADING_ZERO_BLOCK_SIZE * LEADING_ZERO_BITS_SIZE;
 	static constexpr uint32_t MAX_LEADING_ZERO_BLOCKS = CHIMP_GROUP_SIZE / LEADING_ZERO_BLOCK_SIZE;
 	static constexpr uint32_t MAX_BITS_USED_BY_ZERO_BLOCKS = MAX_LEADING_ZERO_BLOCKS * LEADING_ZERO_BLOCK_BIT_SIZE;
-	static constexpr uint32_t MAX_BYTES_USED_BY_ZERO_BLOCKS = MAX_BITS_USED_BY_ZERO_BLOCKS / 8;
+	static constexpr uint32_t MAX_BYTES_USED_BY_ZERO_BLOCKS = MAX_BITS_USED_BY_ZERO_BLOCKS / __CHAR_BIT__;
 
 	// Add an extra byte to prevent heap buffer overflow on the last group, because we'll be addressing 4 bytes each
 	static constexpr uint32_t BUFFER_SIZE =
-	    MAX_BYTES_USED_BY_ZERO_BLOCKS + (sizeof(uint32_t) - (LEADING_ZERO_BLOCK_BIT_SIZE / 8));
+	    MAX_BYTES_USED_BY_ZERO_BLOCKS + (sizeof(uint32_t) - (LEADING_ZERO_BLOCK_BIT_SIZE / __CHAR_BIT__));
 
-	static constexpr uint32_t leading_zero_masks[8] = {
+	static constexpr uint32_t MASKS[8] = {
 	    7,        // 0b 00000000 00000000 00000000 00000111,
 	    56,       // 0b 00000000 00000000 00000000 00111000,
 	    448,      // 0b 00000000 00000000 00000001 11000000,
@@ -46,7 +46,7 @@ public:
 	};
 
 	// We're not using the last byte (the most significant) of the 4 bytes we're accessing
-	static constexpr uint8_t leading_zero_shifts[8] = {0, 3, 6, 9, 12, 15, 18, 21};
+	static constexpr uint8_t SHIFTS[8] = {0, 3, 6, 9, 12, 15, 18, 21};
 
 	template <typename T>
 	const T Load(const uint8_t *ptr) {
@@ -86,7 +86,7 @@ public:
 public:
 #ifdef DEBUG
 	uint8_t ExtractValue(uint32_t value, uint8_t index) {
-		return (value & leading_zero_masks[index]) >> leading_zero_shifts[index];
+		return (value & MASKS[index]) >> SHIFTS[index];
 	}
 #endif
 
@@ -117,7 +117,7 @@ public:
 #ifdef DEBUG
 			flags.push_back(value);
 #endif
-			current |= (value & 7) << leading_zero_shifts[counter & 7];
+			current |= (value & 7) << SHIFTS[counter & 7];
 #ifdef DEBUG
 			// Verify that the bits are serialized correctly
 			assert(flags[counter & 7] == ExtractValue(current, counter & 7));
@@ -135,7 +135,7 @@ public:
 		const auto buffer_idx = BlockIndex();
 		auto const temp = Load<uint32_t>(buffer + buffer_idx);
 
-		const uint8_t result = (temp & leading_zero_masks[counter & 7]) >> leading_zero_shifts[counter & 7];
+		const uint8_t result = (temp & MASKS[counter & 7]) >> SHIFTS[counter & 7];
 		counter++;
 		return result;
 	}

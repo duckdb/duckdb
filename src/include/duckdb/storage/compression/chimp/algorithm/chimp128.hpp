@@ -108,9 +108,6 @@ public:
 	}
 
 	static void CompressValue(CHIMP_TYPE in, State &state) {
-		static constexpr uint8_t LEADING_REPRESENTATION[] = {
-		    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7,
-		    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7};
 
 		auto key = state.ring_buffer.Key(in);
 		CHIMP_TYPE xor_result;
@@ -167,7 +164,7 @@ public:
 			} else {
 				state.flag_buffer.Insert(LEADING_ZERO_LOAD);
 				const int32_t significant_bits = BIT_SIZE - leading_zeros;
-				state.leading_zero_buffer.Insert(LEADING_REPRESENTATION[leading_zeros]);
+				state.leading_zero_buffer.Insert(ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros]);
 				state.output.template WriteValue<CHIMP_TYPE>(xor_result, significant_bits);
 				state.SetLeadingZeros(leading_zeros);
 			}
@@ -256,8 +253,6 @@ public:
 	static inline CHIMP_TYPE DecompressValue(uint8_t flag, uint8_t leading_zeros[], uint32_t &leading_zero_index,
 	                                         UnpackedData unpacked_data[], uint32_t &unpacked_index,
 	                                         DecompressState &state) {
-		static const constexpr uint8_t LEADING_REPRESENTATION[] = {0, 8, 12, 16, 18, 20, 22, 24};
-
 		CHIMP_TYPE result;
 		switch (flag) {
 		case VALUE_IDENTICAL: {
@@ -268,7 +263,7 @@ public:
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
 			const UnpackedData &unpacked = unpacked_data[unpacked_index++];
-			state.leading_zeros = LEADING_REPRESENTATION[unpacked.leading_zero];
+			state.leading_zeros = ChimpDecompressionConstants::LEADING_REPRESENTATION[unpacked.leading_zero];
 			state.trailing_zeros = BIT_SIZE - unpacked.significant_bits - state.leading_zeros;
 			result = state.input.template ReadValue<CHIMP_TYPE>(unpacked.significant_bits);
 			result <<= state.trailing_zeros;

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/compression/chimp/chimp.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
@@ -40,7 +41,6 @@ public:
 	idx_t RemainingInGroup() const {
 		return ChimpPrimitives::CHIMP_SEQUENCE_SIZE - index;
 	}
-	static constexpr uint8_t LEADING_REPRESENTATION[] = {0, 8, 12, 16, 18, 20, 22, 24};
 
 	void LoadFlags(uint8_t *packed_data, idx_t group_size) {
 		duckdb_chimp::FlagBuffer<false> flag_buffer;
@@ -56,7 +56,8 @@ public:
 		duckdb_chimp::LeadingZeroBuffer<false> leading_zero_buffer;
 		leading_zero_buffer.SetBuffer(packed_data);
 		for (idx_t i = 0; i < leading_zero_block_size; i++) {
-			leading_zeros[i] = LEADING_REPRESENTATION[leading_zero_buffer.Extract()];
+			leading_zeros[i] =
+			    duckdb_chimp::ChimpDecompressionConstants::LEADING_REPRESENTATION[leading_zero_buffer.Extract()];
 		}
 		max_leading_zeros_to_read = leading_zero_block_size;
 		leading_zero_index = 0;

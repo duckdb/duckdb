@@ -10,10 +10,9 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <assert.h>
-#include <iostream>
+#include "duckdb/common/assert.hpp"
 
-#include "bit_utils.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/bit_utils.hpp"
 
 namespace duckdb_chimp {
 
@@ -191,14 +190,14 @@ private:
 		free_bits = INTERNAL_TYPE_BITSIZE;
 	}
 	void DecreaseFreeBits(uint8_t value = 1) {
-		assert(free_bits >= value);
+		D_ASSERT(free_bits >= value);
 		free_bits -= value;
 		if (free_bits == 0) {
 			WriteToStream();
 		}
 	}
 	void WriteInCurrent(INTERNAL_TYPE value, uint8_t value_size) {
-		assert(INTERNAL_TYPE_BITSIZE >= value_size);
+		D_ASSERT(INTERNAL_TYPE_BITSIZE >= value_size);
 		const auto shift_amount = free_bits - value_size;
 		current |= (value & bitmask<INTERNAL_TYPE>(value_size)) << shift_amount;
 		DecreaseFreeBits(value_size);
@@ -206,7 +205,7 @@ private:
 
 	template <uint8_t VALUE_SIZE = INTERNAL_TYPE_BITSIZE>
 	void WriteInCurrent(INTERNAL_TYPE value) {
-		assert(INTERNAL_TYPE_BITSIZE >= VALUE_SIZE);
+		D_ASSERT(INTERNAL_TYPE_BITSIZE >= VALUE_SIZE);
 		const auto shift_amount = free_bits - VALUE_SIZE;
 		current |= (value & bitmask<INTERNAL_TYPE>(VALUE_SIZE)) << shift_amount;
 		DecreaseFreeBits(VALUE_SIZE);
