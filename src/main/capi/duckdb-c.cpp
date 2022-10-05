@@ -79,4 +79,6 @@ duckdb_state duckdb_set_extension_loaded(duckdb_database *database, const char *
 	auto wrapper = (DatabaseData *)database;
 
 	wrapper->database->SetExtensionLoaded(std::string(extension_name));
+
+	return DuckDBSuccess;
 }
