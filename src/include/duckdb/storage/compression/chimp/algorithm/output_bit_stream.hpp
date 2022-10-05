@@ -16,6 +16,45 @@
 
 namespace duckdb_chimp {
 
+template <bool EMPTY>
+class OutputBitStream;
+
+template <class T>
+struct RemainderWriter {
+	static inline void Write(uint8_t *stream, size_t &index, T value, uint8_t i) {
+		if (i > 31)
+			stream[index++] = ((value >> 24) & 0xFF);
+		if (i > 23)
+			stream[index++] = ((value >> 16) & 0xFF);
+		if (i > 15)
+			stream[index++] = ((value >> 8) & 0xFF);
+		if (i > 7)
+			stream[index++] = (value);
+	}
+};
+
+template <>
+struct RemainderWriter<uint64_t> {
+	static inline void Write(uint8_t *stream, size_t &index, uint64_t value, uint8_t i) {
+		if (i == 64)
+			stream[index++] = ((value >> 56) & 0xFF);
+		if (i > 55)
+			stream[index++] = ((value >> 48) & 0xFF);
+		if (i > 47)
+			stream[index++] = ((value >> 40) & 0xFF);
+		if (i > 39)
+			stream[index++] = ((value >> 32) & 0xFF);
+		if (i > 31)
+			stream[index++] = ((value >> 24) & 0xFF);
+		if (i > 23)
+			stream[index++] = ((value >> 16) & 0xFF);
+		if (i > 15)
+			stream[index++] = ((value >> 8) & 0xFF);
+		if (i > 7)
+			stream[index++] = (value);
+	}
+};
+
 // This class writes arbitrary amounts of bits to a stream
 // The way these bits are written is most-significant bit first
 // For example if 6 bits are given as:    0b0011 1111
@@ -66,38 +105,6 @@ public:
 		return (stream_index * INTERNAL_TYPE_BITSIZE) + (INTERNAL_TYPE_BITSIZE - free_bits);
 	}
 
-	template <class T>
-	void WriteRemainder(T value, uint8_t i) {
-		if (i > 31)
-			WriteToStream((value >> 24) & 0xFF);
-		if (i > 23)
-			WriteToStream((value >> 16) & 0xFF);
-		if (i > 15)
-			WriteToStream((value >> 8) & 0xFF);
-		if (i > 7)
-			WriteToStream(value);
-	}
-
-	template <>
-	void WriteRemainder<uint64_t>(uint64_t value, uint8_t i) {
-		if (i == 64)
-			WriteToStream((value >> 56) & 0xFF);
-		if (i > 55)
-			WriteToStream((value >> 48) & 0xFF);
-		if (i > 47)
-			WriteToStream((value >> 40) & 0xFF);
-		if (i > 39)
-			WriteToStream((value >> 32) & 0xFF);
-		if (i > 31)
-			WriteToStream((value >> 24) & 0xFF);
-		if (i > 23)
-			WriteToStream((value >> 16) & 0xFF);
-		if (i > 15)
-			WriteToStream((value >> 8) & 0xFF);
-		if (i > 7)
-			WriteToStream(value);
-	}
-
 	template <class T, uint8_t VALUE_SIZE>
 	void WriteValue(T value) {
 		bits_written += VALUE_SIZE;
@@ -124,7 +131,7 @@ public:
 			WriteInCurrent((INTERNAL_TYPE)value, queue);
 			value >>= queue;
 		}
-		WriteRemainder(value, i);
+		RemainderWriter<T>::Write(stream, stream_index, value, i);
 	}
 
 	template <class T>
@@ -153,7 +160,7 @@ public:
 			WriteInCurrent((INTERNAL_TYPE)value, queue);
 			value >>= queue;
 		}
-		WriteRemainder(value, i);
+		RemainderWriter<T>::Write(stream, stream_index, value, i);
 	}
 
 private:
@@ -175,10 +182,7 @@ private:
 	INTERNAL_TYPE &GetCurrentByte() {
 		return current;
 	}
-	//! Write a value of type INTERNAL_TYPE directly to the stream
-	void WriteToStream(INTERNAL_TYPE value) {
-		stream[stream_index++] = value;
-	}
+
 	void WriteToStream() {
 		stream[stream_index++] = current;
 		current = 0;
