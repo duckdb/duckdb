@@ -12,6 +12,7 @@
 #include <cstring>
 #ifdef DEBUG
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/assert.hpp"
 #endif
 
 namespace duckdb_chimp {
@@ -113,7 +114,7 @@ public:
 		uint32_t temp_value = 0;
 		std::memcpy((uint8_t *)&temp_value, (void *)(buffer + buffer_idx), 3);
 		for (size_t i = 0; i < flags.size(); i++) {
-			assert(flags[i] == ExtractValue(temp_value, i));
+			D_ASSERT(flags[i] == ExtractValue(temp_value, i));
 		}
 		flags.clear();
 #endif
@@ -127,7 +128,7 @@ public:
 			current |= (value & 7) << LeadingZeroBufferConstants::SHIFTS[counter & 7];
 #ifdef DEBUG
 			// Verify that the bits are serialized correctly
-			assert(flags[counter & 7] == ExtractValue(current, counter & 7));
+			D_ASSERT(flags[counter & 7] == ExtractValue(current, counter & 7));
 #endif
 
 			if ((counter & (LEADING_ZERO_BLOCK_SIZE - 1)) == 7) {
