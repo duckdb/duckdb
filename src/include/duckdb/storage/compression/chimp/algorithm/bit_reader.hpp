@@ -127,13 +127,29 @@ public:
 	template <class T, uint8_t BYTES>
 	inline T ReadBytes(const uint8_t &remainder) {
 		T result = 0;
-		if (BYTES == 0) {
-			result = InnerRead(remainder, BYTES);
-			index += (BYTES << 3) + remainder;
-			return result;
+		if (BYTES > 0) {
+			result = result << 8 | InnerReadByte(0);
 		}
-		for (uint8_t i = 0; i < BYTES; i++) {
-			result = result << 8 | InnerReadByte(i);
+		if (BYTES > 1) {
+			result = result << 8 | InnerReadByte(1);
+		}
+		if (BYTES > 2) {
+			result = result << 8 | InnerReadByte(2);
+		}
+		if (BYTES > 3) {
+			result = result << 8 | InnerReadByte(3);
+		}
+		if (BYTES > 4) {
+			result = result << 8 | InnerReadByte(4);
+		}
+		if (BYTES > 5) {
+			result = result << 8 | InnerReadByte(5);
+		}
+		if (BYTES > 6) {
+			result = result << 8 | InnerReadByte(6);
+		}
+		if (BYTES > 7) {
+			result = result << 8 | InnerReadByte(7);
 		}
 		result = result << remainder | InnerRead(remainder, BYTES);
 		index += (BYTES << 3) + remainder;
