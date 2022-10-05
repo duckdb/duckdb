@@ -1,2 +1,31 @@
 channel|id|sales|returns_|profit
-NULL|NULL|NULL|NULL|NULL
+NULL|NULL|229240.98|25451.82|-73114.62
+catalog channel|NULL|76852.71|10074.36|6945.78
+catalog channel|catalog_pageAAAAAAAAAHCBAAAA|209.44|0|-5017.32
+catalog channel|catalog_pageAAAAAAAABHABAAAA|6152.40|0|972.90
+catalog channel|catalog_pageAAAAAAAABOPAAAAA|3207.47|537.44|-2547.01
+catalog channel|catalog_pageAAAAAAAACNPAAAAA|2220.63|449.10|-314.68
+catalog channel|catalog_pageAAAAAAAADMPAAAAA|2103.75|0|869.85
+catalog channel|catalog_pageAAAAAAAAEDABAAAA|3383.12|0|1440.92
+catalog channel|catalog_pageAAAAAAAAEFCBAAAA|145.53|0|-469.63
+catalog channel|catalog_pageAAAAAAAAFGABAAAA|643.20|0|62.10
+catalog channel|catalog_pageAAAAAAAAFMPAAAAA|6528.00|0|2559.36
+catalog channel|catalog_pageAAAAAAAAGPPAAAAA|991.12|0|551.98
+catalog channel|catalog_pageAAAAAAAAHCCBAAAA|162.11|0|-2316.41
+catalog channel|catalog_pageAAAAAAAAHLCBAAAA|1105.96|0|423.12
+catalog channel|catalog_pageAAAAAAAAJCABAAAA|4730.40|0|2270.16
+catalog channel|catalog_pageAAAAAAAAJPPAAAAA|859.86|0|-340.43
+catalog channel|catalog_pageAAAAAAAAKGABAAAA|132.86|0|-771.42
+catalog channel|catalog_pageAAAAAAAALAABAAAA|23607.20|0|7647.00
+catalog channel|catalog_pageAAAAAAAALNPAAAAA|1694.20|0|-842.54
+catalog channel|catalog_pageAAAAAAAAMCABAAAA|1377.36|0|-379.92
+catalog channel|catalog_pageAAAAAAAAMOCBAAAA|4168.42|0|1244.42
+catalog channel|catalog_pageAAAAAAAANAABAAAA|323.52|0|107.56
+catalog channel|catalog_pageAAAAAAAANDCBAAAA|749.74|591.90|-516.53
+catalog channel|catalog_pageAAAAAAAAOOPAAAAA|9870.26|8495.92|2139.86
+catalog channel|catalog_pageAAAAAAAAOPPAAAAA|2031.48|0|146.52
+catalog channel|catalog_pageAAAAAAAAPNCBAAAA|454.68|0|25.92
+store channel|NULL|126481.26|13753.88|-64974.84
+store channel|storeAAAAAAAABAAAAAAA|126481.26|13753.88|-64974.84
+web channel|NULL|25907.01|1623.58|-15085.56
+web channel|web_siteAAAAAAAABAAAAAAA|25907.01|1623.58|-15085.56
