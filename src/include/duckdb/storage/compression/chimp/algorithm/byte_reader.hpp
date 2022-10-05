@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <iostream>
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb_chimp {
 
@@ -33,13 +34,7 @@ public:
 
 	template <class T>
 	T ReadValue() {
-		throw std::runtime_error("fixme read value");
-		//		uint64_t bytes = 0;
-		//		const uint8_t bytes_to_read = (SIZE >> 3) + ((SIZE & 7) != 0);
-		//		duckdb::FastMemcpy(&bytes, (void*)(buffer + index), bytes_to_read);
-		//		T result = (T)bytes;
-		//		index += bytes_to_read;
-		//		return result;
+		throw duckdb::InternalException("Specialization for ReadValue is not implemented");
 	}
 
 	template <>

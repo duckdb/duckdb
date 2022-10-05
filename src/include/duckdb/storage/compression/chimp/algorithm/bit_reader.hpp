@@ -13,7 +13,6 @@
 #include <assert.h>
 #include <exception>
 #include <stdexcept>
-#include <string>
 
 namespace duckdb_chimp {
 
@@ -60,7 +59,8 @@ static const uint8_t shifts[] = {0, // unused
 //! Right shifts
 //! Right shift the values to cut off the mask when SIZE + index exceeds 8
 static const uint8_t right_shifts[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, // no-op
+    1, 2, 3, 4, 5, 6, 7, 8,
 };
 
 struct BitReader {
