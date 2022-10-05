@@ -40,6 +40,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_ODBC: 1
+      BUILD_JEMALLOC: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       STATIC_LIBCPP: 1
@@ -106,6 +107,7 @@ jobs:
      BUILD_FTS: 1
      BUILD_JSON: 1
      BUILD_EXCEL: 1
+     BUILD_JEMALLOC: 1
      TREAT_WARNINGS_AS_ERRORS: 1
      FORCE_WARN_UNUSED: 1
      STATIC_LIBCPP: 1
@@ -288,7 +290,7 @@ jobs:
       shell: bash
       run: |
         mkdir -p build/release
-        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_JEMALLOC_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
       shell: bash
@@ -345,7 +347,7 @@ jobs:
         export TOOLCHAIN=`pwd`/rpi-tools
         mkdir -p build/release
         cd build/release
-        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
+        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_JEMALLOC_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
         cmake --build .
         file duckdb
 
@@ -416,6 +418,7 @@ jobs:
       BUILD_EXCEL: 1
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
+      BUILD_JEMALLOC: 1
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
 
