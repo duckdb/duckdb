@@ -144,11 +144,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		names.assign(union_col_names.begin(), union_col_names.end());
 		return_types.assign(union_col_types.begin(), union_col_types.end());
 		D_ASSERT(names.size() == return_types.size());
-	} else {
-		auto &col_names = result->initial_reader->col_names;
-		for (idx_t col = 0; col < col_names.size(); ++col) {
-			result->initial_reader->insert_cols_idx.push_back(col);
-		}
 	}
 
 	if (result->options.include_file_name) {
@@ -225,10 +220,6 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			} else {
 				data.csv_reader =
 				    make_unique<BufferedCSVReader>(context, bind_data.options, data.csv_reader->sql_types);
-
-				for (idx_t col = 0; col < data.csv_reader->col_names.size(); ++col) {
-					data.csv_reader->insert_cols_idx.push_back(col);
-				}
 			}
 			data.file_index++;
 		} else {

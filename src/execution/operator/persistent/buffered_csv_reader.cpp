@@ -1982,6 +1982,11 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	if (parse_chunk.size() == 0) {
 		return;
 	}
+	if (insert_cols_idx.empty()){
+		for (idx_t col = 0; col < sql_types.size(); ++col){
+			insert_cols_idx.push_back(col);
+		}
+	}
 
 	bool conversion_error_ignored = false;
 
