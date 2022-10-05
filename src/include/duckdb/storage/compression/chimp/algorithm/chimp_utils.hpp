@@ -97,9 +97,15 @@ struct CountZeros {};
 template <>
 struct CountZeros<uint32_t> {
 	inline static int Leading(uint32_t value) {
+		if (!value) {
+			return 32;
+		}
 		return __builtin_clz(value);
 	}
 	inline static int Trailing(uint32_t value) {
+		if (!value) {
+			return 32;
+		}
 		return __builtin_ctz(value);
 	}
 };
@@ -107,9 +113,15 @@ struct CountZeros<uint32_t> {
 template <>
 struct CountZeros<uint64_t> {
 	inline static int Leading(uint64_t value) {
+		if (!value) {
+			return 64;
+		}
 		return __builtin_clzll(value);
 	}
 	inline static int Trailing(uint64_t value) {
+		if (!value) {
+			return 64;
+		}
 		return __builtin_ctzll(value);
 	}
 };
