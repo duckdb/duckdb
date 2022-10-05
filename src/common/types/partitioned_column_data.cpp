@@ -25,7 +25,7 @@ unique_ptr<PartitionedColumnData> PartitionedColumnData::CreateShared() {
 PartitionedColumnData::~PartitionedColumnData() {
 }
 
-void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendState &state) {
+void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendState &state) const {
 	state.partition_sel.Initialize();
 	state.slice_chunk.Initialize(context, types);
 	InitializeAppendStateInternal(state);
@@ -97,7 +97,7 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 			state.slice_chunk.Reset();
 			state.slice_chunk.Slice(input, partition_sel, partition_length);
 
-			// Append it to the partition
+			// Append it to the partition directly
 			partition.Append(partition_append_state, state.slice_chunk);
 		} else {
 			// Append the input chunk to the partition buffer using the selection vector
@@ -114,7 +114,7 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 }
 
 void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &state) {
-	for (idx_t i = 0; i < partitions.size(); i++) {
+	for (idx_t i = 0; i < state.partition_buffers.size(); i++) {
 		auto &partition_buffer = *state.partition_buffers[i];
 		if (partition_buffer.size() > 0) {
 			partitions[i]->Append(partition_buffer);
@@ -130,10 +130,14 @@ void PartitionedColumnData::Combine(PartitionedColumnData &other) {
 		partitions = move(other.partitions);
 	} else {
 		// Combine the append state's partitions into this PartitionedColumnData
-		for (idx_t i = 0; i < NumberOfPartitions(); i++) {
+		for (idx_t i = 0; i < other.partitions.size(); i++) {
 			partitions[i]->Combine(*other.partitions[i]);
 		}
 	}
+}
+
+vector<unique_ptr<ColumnDataCollection>> &PartitionedColumnData::GetPartitions() {
+	return partitions;
 }
 
 void PartitionedColumnData::CreateAllocator() {

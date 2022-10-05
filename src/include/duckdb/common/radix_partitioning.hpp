@@ -57,6 +57,7 @@ public:
 	                             vector<unique_ptr<RowDataCollection>> &partition_string_heaps, idx_t radix_bits);
 };
 
+//! RadixPartitionedColumnData is a PartitionedColumnData that partitions input based on the radix of a hash
 class RadixPartitionedColumnData : public PartitionedColumnData {
 public:
 	RadixPartitionedColumnData(ClientContext &context, vector<LogicalType> types, idx_t radix_bits, idx_t hash_col_idx);
@@ -64,7 +65,10 @@ public:
 	~RadixPartitionedColumnData() override;
 
 protected:
-	virtual idx_t BufferSize() const override {
+	//===--------------------------------------------------------------------===//
+	// Radix Partitioning interface implementation
+	//===--------------------------------------------------------------------===//
+	idx_t BufferSize() const override {
 		return STANDARD_VECTOR_SIZE;
 	}
 	void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const override;

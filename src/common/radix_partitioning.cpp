@@ -414,10 +414,7 @@ RadixPartitionedColumnData::RadixPartitionedColumnData(ClientContext &context_p,
     : PartitionedColumnData(PartitionedColumnDataType::RADIX, context_p, move(types_p)), radix_bits(radix_bits_p),
       hash_col_idx(hash_col_idx_p) {
 	D_ASSERT(hash_col_idx < types.size());
-
-	// We know the number of partitions beforehand, so we can just create them
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-
 	allocators->allocators.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
 		CreateAllocator();
@@ -428,7 +425,7 @@ RadixPartitionedColumnData::RadixPartitionedColumnData(ClientContext &context_p,
 RadixPartitionedColumnData::RadixPartitionedColumnData(const RadixPartitionedColumnData &other)
     : PartitionedColumnData(other), radix_bits(other.radix_bits), hash_col_idx(other.hash_col_idx) {
 	for (idx_t i = 0; i < RadixPartitioning::NumberOfPartitions(radix_bits); i++) {
-		partitions.emplace_back(CreateCollectionForPartition(i));
+		partitions.emplace_back(CreatePartitionCollection(i));
 	}
 }
 
@@ -436,14 +433,13 @@ RadixPartitionedColumnData::~RadixPartitionedColumnData() {
 }
 
 void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const {
-	// We know the number of partitions beforehand, so we can just initialize them
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	state.partition_buffers.reserve(num_partitions);
 	state.partition_append_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
 		state.partition_append_states.emplace_back();
 		partitions[i]->InitializeAppend(state.partition_append_states[i]);
-		state.partition_buffers.emplace_back(CreateAppendPartitionBuffer());
+		state.partition_buffers.emplace_back(CreatePartitionBuffer());
 	}
 }
 
