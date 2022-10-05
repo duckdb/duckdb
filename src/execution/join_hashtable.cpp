@@ -1044,6 +1044,8 @@ void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_pt
 		tuples_per_round = (total_count + 2) / 3;
 	}
 
+	// TODO: crank up the number of partitions if we know we must partition the probe side
+	//  This speeds up probing significantly due to better cache locality
 	// Set the number of radix bits (minimum 4, maximum 8)
 	for (; radix_bits < 8; radix_bits++) {
 		auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
@@ -1281,7 +1283,19 @@ void ProbeSpill::ScanChunk(ChunkManagementState &state, idx_t chunk_idx, DataChu
 	auto &segment = *chunk_ref.first;
 	auto &idx_within_segment = chunk_ref.second;
 
-	state.handles.clear();
+	// TODO: delete handles of passed blocks
+	//  Difficulties:
+	//  - segment contains a ColumnDataAllocator and a vector of ChunkMetaData, which is indexed by idx_within_segment
+	//  - The ChunkMetaData contains a vector of block IDs that must be kept alive
+	//  - The block IDs index the vector of BlockMetaData in the ColumnDataAllocator, which is a private field ...
+	//  - We've sorted these chunk references by their minimum block ID
+	//  Solution?
+	//  - When the minimum block ID of a ChunkMetaData is N, we can delete all BlockMetaData up to index N
+	//  - When the allocator changes, we can delete it! - Also need to reset handles in local scan state
+	//  Plan of attack: Add InitializeScanAndConsume to ColumnDataCollection? Or a bool "consume" to InitializeScan
+	//  Need a few fields in the scan states to accomplish this
+
+	state.handles.clear(); // TODO: don't clear if same allocator as before
 	chunk.Reset();
 	segment.FetchChunk(state, idx_within_segment, chunk, column_ids);
 	chunk.Verify();

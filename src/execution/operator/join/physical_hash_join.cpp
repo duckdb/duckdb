@@ -869,6 +869,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	}
 	D_ASSERT(can_go_external);
 	// TODO: scan and consume CDC's
+	//  Allocate buffer chunks with capacity of 128
 	//  String handling in CDC's
 
 	if (gstate.global_stage == HashJoinSourceStage::INIT) {
