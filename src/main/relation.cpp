@@ -243,7 +243,11 @@ void Relation::WriteCSV(const string &csv_file) {
 }
 
 shared_ptr<Relation> Relation::CreateView(const string &name, bool replace, bool temporary) {
-	auto view = make_shared<CreateViewRelation>(shared_from_this(), name, replace, temporary);
+	return CreateView(DEFAULT_SCHEMA,name,replace,temporary);
+}
+
+shared_ptr<Relation> Relation::CreateView(const string &schema_name,const string &name, bool replace, bool temporary) {
+	auto view = make_shared<CreateViewRelation>(shared_from_this(), schema_name,name, replace, temporary);
 	auto res = view->Execute();
 	if (res->HasError()) {
 		const string prepended_message = "Failed to create view '" + name + "': ";
