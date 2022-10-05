@@ -113,7 +113,7 @@ NULL	4	NULL
 
 # where
 query I
-SELECT id FROM tbl1 WHERE a = {str: 'foo'}
+SELECT id FROM tbl1 WHERE a = union_value(str :='foo')
 ----
 3
 
@@ -126,4 +126,4 @@ SELECT id from tbl1 where a = 'foo'::UNION(num INT, str VARCHAR)
 query I 
 SELECT union_tag('foo'::UNION(num INT, str VARCHAR))
 ----
-
+str

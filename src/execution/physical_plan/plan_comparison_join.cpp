@@ -77,6 +77,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 		case LogicalTypeId::STRUCT:
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP:
+		case LogicalTypeId::UNION:
 			return;
 		default:
 			break;

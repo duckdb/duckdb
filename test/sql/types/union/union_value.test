@@ -8,8 +8,6 @@ CREATE TABLE tbl(u UNION(num INTEGER, str STRING));
 statement ok
 INSERT INTO tbl VALUES (UNION_VALUE(num := 1));
 
-
-
 # union_value must take exactly one argument
 statement error
 INSERT INTO tbl VALUES (union_value());
@@ -37,8 +35,9 @@ SELECT CASE WHEN union_tag(u) = 'num' THEN u ELSE NULL END AS num FROM tbl;
 ----
 1
 1
-NULL
 1
+NULL
+2
 NULL
 1
 NULL

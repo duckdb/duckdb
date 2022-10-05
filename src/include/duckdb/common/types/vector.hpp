@@ -370,27 +370,36 @@ struct StructVector {
 
 struct UnionVector {
 	static inline union_tag_t *GetTags(Vector &v) {
-		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			auto &child = DictionaryVector::Child(v);
-			return GetTags(child);
-		}
 		// the tag vector is always the first struct child.
-		auto &entries = StructVector::GetEntries(v);
-		return FlatVector::GetData<union_tag_t>(*entries[0]);
+		auto &tag_vector = *StructVector::GetEntries(v)[0];
+		if (tag_vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &child = DictionaryVector::Child(tag_vector);
+			return FlatVector::GetData<union_tag_t>(child);
+		}
+		return FlatVector::GetData<union_tag_t>(tag_vector);
 	}
 
 	static inline const union_tag_t *GetTags(const Vector &v) {
-		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			auto &child = DictionaryVector::Child(v);
-			return GetTags(child);
-		}
 		// the tag vector is always the first struct child.
-		auto &entries = StructVector::GetEntries(v);
-		return FlatVector::GetData<union_tag_t>(*entries[0]);
+		auto &tag_vector = *StructVector::GetEntries(v)[0];
+		if (tag_vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &child = DictionaryVector::Child(tag_vector);
+			return FlatVector::GetData<union_tag_t>(child);
+		}
+		return FlatVector::GetData<union_tag_t>(tag_vector);
 	}
 
+	//! Set every entry in the the UnionVector to a specific tag
+	DUCKDB_API static inline void SetTags(Vector &vector, union_tag_t tag, idx_t count) {
+		D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
+		auto tags = GetTags(vector);
+		memset(tags, tag, count);
+	};
+
+	//! Get the union members vector by index
 	DUCKDB_API static const Vector &GetMember(const Vector &vector, idx_t index);
 	DUCKDB_API static Vector &GetMember(Vector &vector, idx_t index);
+	DUCKDB_API static void foo();
 };
 
 struct SequenceVector {

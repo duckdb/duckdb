@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE tbl (a UNION(a INT, b INT));
 
 statement ok
-INSERT INTO tbl VALUES ({'b': 1}), ({'a': 4}), ({'a': 1}), ({'b': 2}), ({'a': 3}), (NULL);
+INSERT INTO tbl VALUES (union_value(b := 1)), (union_value(a := 4)), (union_value(a := 1)), (union_value(b := 2)), (union_value(a := 3)), (NULL);
 
 # unions sort first by tag, then by value
 query II
@@ -29,30 +29,6 @@ b	1
 a	4
 a	3
 a	1
-
-
-statement ok
-CREATE TABLE tbl2 (a STRUCT(a INT, b INT));
-
-statement ok
-INSERT INTO tbl2 VALUES ({'a': 1, 'b': 2}), ({'a': 3, 'b': 4}), ({'a': 5, 'b': 6}), (NULL);
-
-# structs sort by field name, then by value
-query II
-SELECT a.a, a.b FROM tbl2 ORDER BY a ASC;
-----
-NULL	NULL
-1	2
-3	4
-5	6
-
-query II
-SELECT a.a, a.b FROM tbl2 ORDER BY a DESC;
-----
-NULL	NULL
-5	6
-3	4
-1	2
 
 
 

@@ -1590,6 +1590,7 @@ void ListVector::PushBack(Vector &target, const Value &insert) {
 }
 
 
+// Union vector
 const Vector &UnionVector::GetMember(const Vector &vector, idx_t index){
 	D_ASSERT(index < UnionType::GetMemberCount(vector.GetType()));
 	auto &entries = StructVector::GetEntries(vector);
@@ -1601,5 +1602,7 @@ Vector &UnionVector::GetMember(Vector &vector, idx_t index) {
 	auto &entries = StructVector::GetEntries(vector);
 	return *entries[index + 1]; // skip the "tag" entry
 }
+
+
 
 } // namespace duckdb

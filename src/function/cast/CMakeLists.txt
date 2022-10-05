@@ -13,6 +13,7 @@ add_library_unity(
   string_cast.cpp
   struct_cast.cpp
   time_casts.cpp
+  union_casts.cpp
   uuid_casts.cpp)
 
 set(ALL_OBJECT_FILES

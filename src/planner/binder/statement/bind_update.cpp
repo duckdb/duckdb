@@ -68,6 +68,9 @@ static bool TypeSupportsRegularUpdate(const LogicalType &type) {
 		}
 		return true;
 	}
+	case LogicalTypeId::UNION: {
+		throw new NotImplementedException("todo");
+	}
 	default:
 		return true;
 	}

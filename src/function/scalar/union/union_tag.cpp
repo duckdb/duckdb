@@ -58,6 +58,11 @@ static void UnionTagFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 	result.Slice(tag_name_vector, selection, args.size());
 	result.Verify(args.size());
+
+	if(args.size() == 1) {
+		result.Flatten(args.size());
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunction &bound_function,

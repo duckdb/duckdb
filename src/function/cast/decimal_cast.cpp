@@ -281,6 +281,8 @@ BoundCastInfo DefaultCasts::DecimalCastSwitch(BindCastInput &input, const Logica
 			throw InternalException("Unimplemented internal decimal type");
 		}
 	}
+	case LogicalTypeId::UNION:
+		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}

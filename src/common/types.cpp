@@ -746,8 +746,7 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		return LogicalType::LIST(move(new_child));
 	}
 	if (type_id == LogicalTypeId::STRUCT 
-		|| type_id == LogicalTypeId::MAP 
-		|| type_id == LogicalTypeId::UNION) {
+		|| type_id == LogicalTypeId::MAP) {
 		// struct: perform recursively
 		auto &left_child_types = StructType::GetChildTypes(left);
 		auto &right_child_types = StructType::GetChildTypes(right);
@@ -761,8 +760,25 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
 			child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
 		}
-		return type_id == LogicalTypeId::STRUCT ? LogicalType::STRUCT(move(child_types))
-		                                        : LogicalType::MAP(move(child_types));
+
+		return type_id == LogicalTypeId::STRUCT 
+			? LogicalType::STRUCT(move(child_types)) 
+			: LogicalType::MAP(move(child_types));
+	}
+	if(type_id == LogicalTypeId::UNION) {
+		auto left_member_types = UnionType::GetMemberTypes(left);
+		auto right_member_types = UnionType::GetMemberTypes(right);
+		if (left_member_types.size() != right_member_types.size()) {
+			// child types are not of equal size, we can't cast anyway
+			// just return the left child
+			return left;
+		}
+		child_list_t<LogicalType> member_types;
+		for (idx_t i = 0; i < left_member_types.size(); i++) {
+			auto child_type = MaxLogicalType(left_member_types[i].second, right_member_types[i].second);
+			member_types.push_back(make_pair(left_member_types[i].first, move(child_type)));
+		}
+		return LogicalType::UNION(move(member_types));
 	}
 	// types are equal but no extra specifier: just return the type
 	return left;

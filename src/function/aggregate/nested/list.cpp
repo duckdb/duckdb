@@ -482,7 +482,10 @@ static void InitializeValidities(Vector &vector, idx_t &capacity) {
 	if (vector.GetType().id() == LogicalTypeId::LIST) {
 		auto &child_vector = ListVector::GetEntry(vector);
 		InitializeValidities(child_vector, capacity);
-	} else if (vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP) {
+	} else if (
+		vector.GetType().id() == LogicalTypeId::STRUCT || 
+		vector.GetType().id() == LogicalTypeId::MAP || 
+		vector.GetType().id() == LogicalTypeId::UNION) {
 		auto &children = StructVector::GetEntries(vector);
 		for (auto &child : children) {
 			InitializeValidities(*child, capacity);
@@ -501,7 +504,10 @@ static void RecursiveFlatten(Vector &vector, idx_t &count) {
 		auto child_vector_count = ListVector::GetListSize(vector);
 		RecursiveFlatten(child_vector, child_vector_count);
 
-	} else if (vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP) {
+	} else if (
+		vector.GetType().id() == LogicalTypeId::STRUCT || 
+		vector.GetType().id() == LogicalTypeId::MAP ||
+		vector.GetType().id() == LogicalTypeId::UNION) {
 		auto &children = StructVector::GetEntries(vector);
 		for (auto &child : children) {
 			RecursiveFlatten(*child, count);

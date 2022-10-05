@@ -150,6 +150,8 @@ BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const Logical
 		auto varchar_type = LogicalType::STRUCT(move(varchar_children));
 		return BoundCastInfo(StructToVarcharCast, BindStructToStructCast(input, source, varchar_type));
 	}
+	case LogicalTypeId::UNION:
+		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return TryVectorNullCast;
 	}

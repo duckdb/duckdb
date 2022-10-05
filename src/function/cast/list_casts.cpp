@@ -132,6 +132,8 @@ BoundCastInfo DefaultCasts::ListCastSwitch(BindCastInput &input, const LogicalTy
 	case LogicalTypeId::JSON:
 		return BoundCastInfo(ListToVarcharCast,
 		                     BindListToListCast(input, source, LogicalType::LIST(LogicalType::VARCHAR)));
+	case LogicalTypeId::UNION: 
+		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}
