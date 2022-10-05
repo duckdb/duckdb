@@ -1,6 +1,6 @@
 # name: test/optimizer/remove_unused_filter_column.test
 # description: Test removal of filter columns that are unused in the remainder of a query plan
-# group: [progress_bar]
+# group: [optimizer]
 
 require parquet
 
