@@ -242,21 +242,26 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 
 	auto current_result_ptr = (INTERNAL_TYPE *)(result_data + result_offset);
 
-	auto scan_size = std::min(scan_count, scan_state.LeftInGroup());
+	auto scanned = std::min(scan_count, scan_state.LeftInGroup());
 
 	if (!scan_state.group_state.Started()) {
-		scan_state.template ScanGroup<INTERNAL_TYPE>(current_result_ptr, scan_size);
+		scan_state.template ScanGroup<INTERNAL_TYPE>(current_result_ptr, scanned);
 	} else {
-		scan_state.template ScanPartialGroup<INTERNAL_TYPE>(current_result_ptr, scan_size);
+		scan_state.template ScanPartialGroup<INTERNAL_TYPE>(current_result_ptr, scanned);
 	}
-	scan_count -= scan_size;
+	scan_count -= scanned;
 	if (!scan_count) {
 		//! Already scanned everything
 		return;
 	}
 	// We know for sure that the last group has ended
 	D_ASSERT(!scan_state.group_state.Started());
-	scan_state.template ScanGroup<INTERNAL_TYPE>(current_result_ptr + scan_size, scan_count);
+	while (scan_count) {
+		auto to_scan = duckdb::MinValue<idx_t>(scan_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
+		scan_state.template ScanGroup<INTERNAL_TYPE>(current_result_ptr + scanned, to_scan);
+		scan_count -= to_scan;
+		scanned += to_scan;
+	}
 }
 
 template <class T>
