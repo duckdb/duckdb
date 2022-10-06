@@ -38,13 +38,14 @@ struct PartialBlockState {
 };
 
 struct PartialBlock {
-	PartialBlockState state;
-
-	explicit PartialBlock(PartialBlockState &&state) : state(move(state)) {
+	explicit PartialBlock(PartialBlockState state) : state(move(state)) {
 	}
 	virtual ~PartialBlock() {
 	}
 
+	PartialBlockState state;
+
+public:
 	virtual void Flush() = 0;
 };
 

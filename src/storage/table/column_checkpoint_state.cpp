@@ -27,6 +27,11 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 }
 
 struct PartialBlockForCheckpoint : PartialBlock {
+	struct PartialColumnSegment {
+		ColumnSegment *segment;
+		uint32_t offset_in_block;
+	};
+public:
 	PartialBlockForCheckpoint(ColumnSegment *first_segment, BlockManager &block_manager, PartialBlockState state)
 	    : PartialBlock(state), first_segment(first_segment), block_manager(block_manager) {
 	}
@@ -46,10 +51,6 @@ struct PartialBlockForCheckpoint : PartialBlock {
 	vector<PartialColumnSegment> tail_segments;
 
 public:
-	struct PartialColumnSegment {
-		ColumnSegment *segment;
-		uint32_t offset_in_block;
-	};
 
 	bool IsFlushed() {
 		// first_segment is zeroed on Flush
