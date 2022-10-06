@@ -35,7 +35,7 @@ SELECT * FROM read_csv_auto('__TEST_DIR__/ubn*.csv');
 query III
 SELECT a, b, c
 FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE)
-ORDER BY a
+ORDER BY a;
 ----
 1	NULL	NULL
 2	NULL	NULL
