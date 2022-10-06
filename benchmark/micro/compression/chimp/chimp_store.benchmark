@@ -6,14 +6,16 @@ name Chimp Insert
 group chimp
 storage persistent
 require_reinit
+require parquet
+require httpfs
 
 load
-PRAGMA force_compression='uncompressed';
+PRAGMA force_compression='chimp';
 DROP TABLE IF EXISTS temperatures;
 CREATE TABLE temperatures (
 	temperature DOUBLE
 );
 
 run
-INSERT INTO temperatures SELECT temp FROM 'benchmark/trainbenchmark/float_datasets/city_temperature.csv' t(temp), range(28);
+INSERT INTO temperatures SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(28);
 checkpoint;

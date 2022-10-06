@@ -1,0 +1,105 @@
+# name: test/sql/storage/compression/chimp/chimp_compression_ratio.test_coverage
+# description: Assert chimp compression ratio is within reasonable margins
+# group: [chimp]
+
+require parquet
+
+require httpfs
+
+# load the DB from disk
+load __TEST_DIR__/test_chimp.db
+
+# First test: detailed compression ratio
+statement ok
+PRAGMA force_compression='chimp';
+
+# Uncompressed value size: (1024 * 64bit) = 65536
+# Compress value size: 64(bits) + 64(frame-of-reference) + (1024 * 1) = 1152
+# Ratio: 65536 / 1152 = 56.88
+
+statement ok
+CREATE TABLE test_chimped(
+	temperature double
+);
+
+statement ok
+INSERT INTO test_chimped SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(12);
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+CREATE TABLE test_uncompressed(
+	temperature double
+);
+
+statement ok
+INSERT INTO test_uncompressed SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(12);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test_chimped') WHERE segment_type != 'VALIDITY' AND compression != 'Chimp';
+----
+
+#statement error
+#select * from pragma_storage_info('test_chimped') where segment_type not in('VARCHAR', 'VALIDITY')
+
+#statement error
+#select * from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')
+
+statement error
+select (uncompressed::DOUBLE / chimped::DOUBLE), (uncompressed::DOUBLE / chimped::DOUBLE) FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_chimped') where segment_type not in('VARCHAR', 'VALIDITY')) as chimped,
+        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
+)
+
+statement ok
+drop table test_chimped
+
+statement ok
+drop table test_uncompressed
+
+# Assert that all supported types do in fact compress
+foreach type int8 int16 int32 int64 uint8 uint16 uint32 uint64 decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) bool
+
+statement ok
+PRAGMA force_compression='uncompressed';
+
+statement ok
+CREATE TABLE test_uncompressed AS SELECT (i%2)::${type} FROM range(0, 2500000) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='chimp'
+
+statement ok
+CREATE TABLE test_chimped AS SELECT (i%2)::${type} FROM range(0, 2500000) tbl(i);
+
+statement ok
+checkpoint
+
+## assert compression ratio >2 wich should be achieved for even the smallest types for this data
+#query II
+#select (uncompressed::FLOAT / chimped::FLOAT) > 2, CAST(1 as ${type}) FROM (
+#    select
+#        (select count(distinct block_id) from pragma_storage_info('test_chimped') where segment_type not in('VARCHAR', 'VALIDITY')) and compression != 'Constant' as chimped,
+#        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) and compression != 'Constant' as uncompressed
+#)
+#----
+#1	1
+
+statement ok
+drop table test_chimped
+
+statement ok
+drop table test_uncompressed
+
+endloop
