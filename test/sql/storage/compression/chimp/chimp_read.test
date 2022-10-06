@@ -14,9 +14,6 @@ statement ok
 PRAGMA force_compression='chimp';
 
 statement ok
-PRAGMA threads=1;
-
-statement ok
 CREATE TABLE temperatures (
 	temperature DOUBLE
 );
