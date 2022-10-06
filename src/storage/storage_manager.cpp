@@ -233,7 +233,6 @@ void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_chec
 	if (delete_wal) {
 		wal->Delete();
 		wal.reset();
-		;
 	}
 }
 
