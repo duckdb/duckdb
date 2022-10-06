@@ -12,11 +12,11 @@ CompressionType RowGroupWriter::GetColumnCompressionType(idx_t i) {
 }
 
 void RowGroupWriter::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
-	partial_block_mgr.RegisterPartialBlock(move(allocation));
+	partial_block_manager.RegisterPartialBlock(move(allocation));
 }
 
 PartialBlockAllocation RowGroupWriter::GetBlockAllocation(uint32_t segment_size) {
-	return partial_block_mgr.GetBlockAllocation(segment_size);
+	return partial_block_manager.GetBlockAllocation(segment_size);
 }
 
 void SingleFileRowGroupWriter::WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state) {

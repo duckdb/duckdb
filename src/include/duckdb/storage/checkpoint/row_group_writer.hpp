@@ -22,8 +22,8 @@ class SegmentStatistics;
 // Writes data for an entire row group.
 class RowGroupWriter {
 public:
-	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_mgr)
-	    : table(table), partial_block_mgr(partial_block_mgr) {
+	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager)
+	    : table(table), partial_block_manager(partial_block_manager) {
 	}
 	virtual ~RowGroupWriter() {
 	}
@@ -39,15 +39,15 @@ public:
 
 protected:
 	TableCatalogEntry &table;
-	PartialBlockManager &partial_block_mgr;
+	PartialBlockManager &partial_block_manager;
 };
 
 // Writes data for an entire row group.
 class SingleFileRowGroupWriter : public RowGroupWriter {
 public:
-	SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_mgr,
+	SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
 	                         MetaBlockWriter &table_data_writer)
-	    : RowGroupWriter(table, partial_block_mgr), table_data_writer(table_data_writer) {
+	    : RowGroupWriter(table, partial_block_manager), table_data_writer(table_data_writer) {
 	}
 
 	//! MetaBlockWriter is a cursor on a given BlockManager. This returns the
