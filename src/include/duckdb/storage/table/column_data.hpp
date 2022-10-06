@@ -38,7 +38,8 @@ class ColumnData {
 	friend class ColumnDataCheckpointer;
 
 public:
-	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent);
+	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
+	           ColumnData *parent);
 	virtual ~ColumnData();
 
 	//! The block manager
@@ -114,16 +115,18 @@ public:
 	                            Vector &scan_vector);
 
 	virtual void DeserializeColumn(Deserializer &source);
-	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                                          Deserializer &source, const LogicalType &type, ColumnData *parent);
+	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+	                                          idx_t start_row, Deserializer &source, const LogicalType &type,
+	                                          ColumnData *parent);
 
 	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result);
 	virtual void Verify(RowGroup &parent);
 
-	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                                           const LogicalType &type, ColumnData *parent = nullptr);
-	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                                                 const LogicalType &type, ColumnData *parent = nullptr);
+	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+	                                           idx_t start_row, const LogicalType &type, ColumnData *parent = nullptr);
+	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
+	                                                 idx_t column_index, idx_t start_row, const LogicalType &type,
+	                                                 ColumnData *parent = nullptr);
 
 protected:
 	//! Append a transient segment

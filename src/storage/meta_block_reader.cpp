@@ -5,11 +5,8 @@
 
 namespace duckdb {
 
-MetaBlockReader::MetaBlockReader(BlockManager &block_manager, block_id_t block_id,
-		bool free_blocks_on_read) :
-	block_manager(block_manager), offset(0), next_block(-1),
-		free_blocks_on_read(free_blocks_on_read)
-{
+MetaBlockReader::MetaBlockReader(BlockManager &block_manager, block_id_t block_id, bool free_blocks_on_read)
+    : block_manager(block_manager), offset(0), next_block(-1), free_blocks_on_read(free_blocks_on_read) {
 	ReadNewBlock(block_id);
 }
 

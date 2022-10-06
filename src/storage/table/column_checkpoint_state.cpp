@@ -27,12 +27,9 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 }
 
 struct PartialBlockForCheckpoint : PartialBlock {
-	PartialBlockForCheckpoint(
-			ColumnSegment *first_segment,
-			BlockManager &block_manager,
-			PartialBlockState state) :
-		PartialBlock(move(state)), first_segment(first_segment), block_manager(block_manager)
-	{}
+	PartialBlockForCheckpoint(ColumnSegment *first_segment, BlockManager &block_manager, PartialBlockState state)
+	    : PartialBlock(move(state)), first_segment(first_segment), block_manager(block_manager) {
+	}
 
 	virtual ~PartialBlockForCheckpoint() override {
 		D_ASSERT(IsFlushed() || Exception::UncaughtException());
@@ -46,7 +43,7 @@ struct PartialBlockForCheckpoint : PartialBlock {
 	// (via ColumnSegment::ConvertToPersistent)
 	ColumnSegment *first_segment;
 	BlockManager &block_manager;
-	
+
 	struct PartialColumnSegment {
 		ColumnSegment *segment;
 		uint32_t offset_in_block;
@@ -102,7 +99,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		if (allocation.partial_block) {
 			// Use an existing block.
 			D_ASSERT(offset_in_block > 0);
-			auto pstate = (PartialBlockForCheckpoint*) allocation.partial_block.get();
+			auto pstate = (PartialBlockForCheckpoint *)allocation.partial_block.get();
 			// pin the source block
 			auto old_handle = buffer_manager.Pin(segment->block);
 			// pin the target block
@@ -113,10 +110,8 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		} else {
 			// Create a new block for future reuse.
 			D_ASSERT(offset_in_block == 0);
-			allocation.partial_block = make_unique<PartialBlockForCheckpoint>(
-				segment.get(),
-				*allocation.block_manager,
-				allocation.state);
+			allocation.partial_block =
+			    make_unique<PartialBlockForCheckpoint>(segment.get(), *allocation.block_manager, allocation.state);
 		}
 		// Writer will decide whether to reuse this block.
 		writer.RegisterPartialBlock(move(allocation));
@@ -126,7 +121,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		auto &config = DBConfig::GetConfig(db);
 		segment->function =
 		    config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
-	    segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
+		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
 	}
 
 	// construct the data pointer

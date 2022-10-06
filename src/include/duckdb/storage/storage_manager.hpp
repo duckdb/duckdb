@@ -35,7 +35,8 @@ class StorageCommitState {
 public:
 	// Destruction of this object, without prior call to FlushCommit,
 	// will roll back the committed changes.
-	virtual ~StorageCommitState() {}
+	virtual ~StorageCommitState() {
+	}
 
 	// Make the commit persistent
 	virtual void FlushCommit() = 0;

@@ -40,15 +40,17 @@ struct PartialBlockState {
 struct PartialBlock {
 	PartialBlockState state;
 
-	explicit PartialBlock(PartialBlockState &&state) : state(move(state)) {}
-	virtual ~PartialBlock() {}
+	explicit PartialBlock(PartialBlockState &&state) : state(move(state)) {
+	}
+	virtual ~PartialBlock() {
+	}
 
 	virtual void Flush() = 0;
 };
 
 struct PartialBlockAllocation {
 	// BlockManager owning the block_id
-	BlockManager *block_manager{nullptr};
+	BlockManager *block_manager {nullptr};
 	//! How many bytes assigned to the caller?
 	uint32_t allocation_size;
 	//! State of assigned block.
@@ -65,16 +67,15 @@ public:
 	// 20% free / 80% utilization
 	static constexpr const idx_t DEFAULT_FREE_SPACE_THRESHOLD = Storage::BLOCK_SIZE / 5;
 	// Max number of shared references to a block. No effective limit by default.
-	static constexpr const idx_t DEFAULT_MAX_USE_COUNT = 1<<20;
+	static constexpr const idx_t DEFAULT_MAX_USE_COUNT = 1 << 20;
 	// No point letting map size grow unbounded. We'll drop blocks with the
 	// least free space first.
 	static constexpr const idx_t MAX_BLOCK_MAP_SIZE = 10;
 
-	PartialBlockManager(BlockManager &block_manager,
-			uint32_t free_space_threshold = DEFAULT_FREE_SPACE_THRESHOLD,
-			uint32_t max_use_count = DEFAULT_MAX_USE_COUNT) :
-		block_manager(block_manager), free_space_threshold(free_space_threshold),
-		max_use_count(max_use_count) {}
+	PartialBlockManager(BlockManager &block_manager, uint32_t free_space_threshold = DEFAULT_FREE_SPACE_THRESHOLD,
+	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT)
+	    : block_manager(block_manager), free_space_threshold(free_space_threshold), max_use_count(max_use_count) {
+	}
 
 	//! Flush any remaining partial blocks to disk
 	void FlushPartialBlocks();
@@ -104,8 +105,10 @@ protected:
 
 class CheckpointWriter {
 public:
-	explicit CheckpointWriter(DatabaseInstance &db) : db(db) {}
-	virtual ~CheckpointWriter() {}
+	explicit CheckpointWriter(DatabaseInstance &db) : db(db) {
+	}
+	virtual ~CheckpointWriter() {
+	}
 
 	//! The database
 	DatabaseInstance &db;
@@ -127,7 +130,8 @@ protected:
 
 class CheckpointReader {
 public:
-	virtual ~CheckpointReader() {}
+	virtual ~CheckpointReader() {
+	}
 
 protected:
 	virtual void LoadCheckpoint(ClientContext &context, MetaBlockReader &reader);
@@ -140,15 +144,13 @@ protected:
 	virtual void ReadIndex(ClientContext &context, MetaBlockReader &reader);
 	virtual void ReadType(ClientContext &context, MetaBlockReader &reader);
 
-	virtual void ReadTableData(ClientContext &context, MetaBlockReader &reader,
-		BoundCreateTableInfo &bound_info);
+	virtual void ReadTableData(ClientContext &context, MetaBlockReader &reader, BoundCreateTableInfo &bound_info);
 };
 
 class SingleFileCheckpointReader final : public CheckpointReader {
 public:
-	explicit SingleFileCheckpointReader(SingleFileStorageManager &storage) :
-		storage(storage)
-  {}
+	explicit SingleFileCheckpointReader(SingleFileStorageManager &storage) : storage(storage) {
+	}
 
 	void LoadFromStorage();
 
@@ -163,11 +165,11 @@ class SingleFileTableDataWriter;
 class SingleFileCheckpointWriter final : public CheckpointWriter {
 	friend class SingleFileRowGroupWriter;
 	friend class SingleFileTableDataWriter;
+
 public:
-	explicit SingleFileCheckpointWriter(DatabaseInstance &db, BlockManager &block_manager) :
-		CheckpointWriter(db),
-		partial_block_mgr(block_manager)
-  {}
+	explicit SingleFileCheckpointWriter(DatabaseInstance &db, BlockManager &block_manager)
+	    : CheckpointWriter(db), partial_block_mgr(block_manager) {
+	}
 
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connection is available because right now the checkpointing cannot be done online. (TODO)
@@ -178,6 +180,7 @@ public:
 	virtual BlockPointer WriteIndexData(IndexCatalogEntry &index_catalog) override;
 
 	BlockManager &GetBlockManager();
+
 private:
 	//! The metadata writer is responsible for writing schema information
 	unique_ptr<MetaBlockWriter> metadata_writer;

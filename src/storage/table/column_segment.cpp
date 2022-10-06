@@ -15,9 +15,10 @@
 
 namespace duckdb {
 
-unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager, block_id_t block_id,
-                                                                 idx_t offset, const LogicalType &type, idx_t start,
-                                                                 idx_t count, CompressionType compression_type,
+unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
+                                                                 block_id_t block_id, idx_t offset,
+                                                                 const LogicalType &type, idx_t start, idx_t count,
+                                                                 CompressionType compression_type,
                                                                  unique_ptr<BaseStatistics> statistics) {
 	auto &config = DBConfig::GetConfig(db);
 	CompressionFunction *function;
@@ -29,8 +30,8 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 		function = config.GetCompressionFunction(compression_type, type.InternalType());
 		block = block_manager.RegisterBlock(block_id);
 	}
-	return make_unique<ColumnSegment>(db, block, type, ColumnSegmentType::PERSISTENT, start, count, function, move(statistics),
-	                                  block_id, offset);
+	return make_unique<ColumnSegment>(db, block, type, ColumnSegmentType::PERSISTENT, start, count, function,
+	                                  move(statistics), block_id, offset);
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
@@ -39,17 +40,16 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 	// transient: allocate a buffer for the uncompressed segment
 	auto block = BufferManager::GetBufferManager(db).RegisterMemory(Storage::BLOCK_SIZE, false);
-	return make_unique<ColumnSegment>(db, block,
-																		type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
+	return make_unique<ColumnSegment>(db, block, type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
 	                                  INVALID_BLOCK, 0);
 }
 
-ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type_p, ColumnSegmentType segment_type, idx_t start,
-                             idx_t count, CompressionFunction *function_p, unique_ptr<BaseStatistics> statistics,
-                             block_id_t block_id_p, idx_t offset_p)
+ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type_p,
+                             ColumnSegmentType segment_type, idx_t start, idx_t count, CompressionFunction *function_p,
+                             unique_ptr<BaseStatistics> statistics, block_id_t block_id_p, idx_t offset_p)
     : SegmentBase(start, count), db(db), type(move(type_p)), type_size(GetTypeIdSize(type.InternalType())),
-      segment_type(segment_type), function(function_p), stats(type, move(statistics)), block(block), block_id(block_id_p),
-      offset(offset_p) {
+      segment_type(segment_type), function(function_p), stats(type, move(statistics)), block(block),
+      block_id(block_id_p), offset(offset_p) {
 	D_ASSERT(function);
 	if (function->init_segment) {
 		segment_state = function->init_segment(*this, block_id);

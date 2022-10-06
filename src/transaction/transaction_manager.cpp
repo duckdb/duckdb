@@ -156,8 +156,6 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 		}
 	}
 	auto &storage = StorageManager::GetStorageManager(context);
-	// QQ: What happens if checkpoint fails? It doesn't look like the transaction
-	// state ever gets rolled back. The DB instance must become invalid?
 	storage.CreateCheckpoint();
 }
 

@@ -16,8 +16,8 @@ namespace duckdb {
 //! List column data represents a list
 class ListColumnData : public ColumnData {
 public:
-	ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-	               ColumnData *parent = nullptr);
+	ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+	               LogicalType type, ColumnData *parent = nullptr);
 
 	//! The child-column of the list
 	unique_ptr<ColumnData> child_column;

@@ -8,9 +8,10 @@
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-                                       ColumnData *parent)
-    : ColumnData(block_manager, info, column_index, start_row, move(type), parent), validity(block_manager, info, 0, start_row, this) {
+StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                       idx_t start_row, LogicalType type, ColumnData *parent)
+    : ColumnData(block_manager, info, column_index, start_row, move(type), parent),
+      validity(block_manager, info, 0, start_row, this) {
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {

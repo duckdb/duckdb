@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-MetaBlockWriter::MetaBlockWriter(BlockManager &block_manager, block_id_t initial_block_id) : block_manager(block_manager) {
+MetaBlockWriter::MetaBlockWriter(BlockManager &block_manager, block_id_t initial_block_id)
+    : block_manager(block_manager) {
 	if (initial_block_id == INVALID_BLOCK) {
 		initial_block_id = GetNextBlockId();
 	}

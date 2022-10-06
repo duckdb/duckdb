@@ -16,7 +16,8 @@ class DataTable;
 
 class TableIOManager {
 public:
-	virtual ~TableIOManager(){}
+	virtual ~TableIOManager() {
+	}
 
 	//! Obtains a reference to the TableIOManager of a specific table
 	static TableIOManager &Get(DataTable &table);

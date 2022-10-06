@@ -15,7 +15,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
     : table(table), allocator(Allocator::Get(table.db)), deleted_rows(0) {
 	auto types = table.GetTypes();
 	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
-												 types, MAX_ROW_ID, 0);
+	                                             types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
 	stats.InitializeEmpty(types);
 	table.info->indexes.Scan([&](Index &index) {
@@ -27,7 +27,8 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.AddIndex(make_unique<ART>(art.column_ids, art.table_io_manager, move(unbound_expressions), art.constraint_type, art.db));
+			indexes.AddIndex(make_unique<ART>(art.column_ids, art.table_io_manager, move(unbound_expressions),
+			                                  art.constraint_type, art.db));
 		}
 		return false;
 	});

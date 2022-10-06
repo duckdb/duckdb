@@ -54,9 +54,9 @@ public:
 	//! The block that this segment relates to
 	shared_ptr<BlockHandle> block;
 
-	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager, block_id_t id, idx_t offset,
-	                                                         const LogicalType &type_p, idx_t start, idx_t count,
-	                                                         CompressionType compression_type,
+	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
+	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
+	                                                         idx_t start, idx_t count, CompressionType compression_type,
 	                                                         unique_ptr<BaseStatistics> statistics);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start);
 
@@ -116,9 +116,9 @@ public:
 	}
 
 public:
-	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
-	              CompressionFunction *function, unique_ptr<BaseStatistics> statistics, block_id_t block_id,
-	              idx_t offset);
+	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type, ColumnSegmentType segment_type,
+	              idx_t start, idx_t count, CompressionFunction *function, unique_ptr<BaseStatistics> statistics,
+	              block_id_t block_id, idx_t offset);
 
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);

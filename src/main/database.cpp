@@ -144,9 +144,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// TODO: Support an extension here, to generate different storage managers
 	// depending on the DB path structure/prefix.
 	const string dbPath = config.options.database_path;
-	storage = make_unique<SingleFileStorageManager>(*this, dbPath,
-		                                      			  config.options.access_mode == AccessMode::READ_ONLY);
-	
+	storage = make_unique<SingleFileStorageManager>(*this, dbPath, config.options.access_mode == AccessMode::READ_ONLY);
+
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 	scheduler = make_unique<TaskScheduler>(*this);

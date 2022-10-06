@@ -43,7 +43,7 @@ protected:
 class SingleFileTableDataWriter : public TableDataWriter {
 public:
 	SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager, TableCatalogEntry &table,
-	                MetaBlockWriter &table_data_writer, MetaBlockWriter &meta_data_writer);
+	                          MetaBlockWriter &table_data_writer, MetaBlockWriter &meta_data_writer);
 
 public:
 	virtual void FinalizeTable(vector<unique_ptr<BaseStatistics>> &&global_stats, DataTableInfo *info) override;

@@ -22,8 +22,8 @@ class TableStatistics;
 
 class RowGroupCollection {
 public:
-	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types, idx_t row_start,
-	                   idx_t total_rows = 0);
+	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,
+	                   idx_t row_start, idx_t total_rows = 0);
 
 public:
 	idx_t GetTotalRows() const;

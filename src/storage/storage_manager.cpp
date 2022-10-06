@@ -85,8 +85,8 @@ void StorageManager::Initialize() {
 ///////////////////////////////////////////////////////////////////////////
 class SingleFileTableIOManager : public TableIOManager {
 public:
-	explicit SingleFileTableIOManager(BlockManager &block_manager) :
-		block_manager(block_manager) {}
+	explicit SingleFileTableIOManager(BlockManager &block_manager) : block_manager(block_manager) {
+	}
 
 	BlockManager &block_manager;
 
@@ -99,8 +99,9 @@ public:
 	}
 };
 
-SingleFileStorageManager::SingleFileStorageManager(DatabaseInstance &db, string path, bool read_only) :
-      StorageManager(db, move(path), read_only) {}
+SingleFileStorageManager::SingleFileStorageManager(DatabaseInstance &db, string path, bool read_only)
+    : StorageManager(db, move(path), read_only) {
+}
 
 void SingleFileStorageManager::LoadDatabase() {
 	if (InMemory()) {
@@ -166,9 +167,8 @@ public:
 	void FlushCommit() override;
 };
 
-SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint) :
-	checkpoint(checkpoint)
-{
+SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint)
+    : checkpoint(checkpoint) {
 	log = storage_manager.GetWriteAheadLog();
 	if (log) {
 		auto initial_size = log->GetWALSize();
@@ -212,7 +212,8 @@ SingleFileStorageCommitState::~SingleFileStorageCommitState() {
 	}
 }
 
-unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(Transaction &transaction, bool checkpoint) {
+unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(Transaction &transaction,
+                                                                               bool checkpoint) {
 	return make_unique<SingleFileStorageCommitState>(*this, checkpoint);
 }
 
@@ -231,7 +232,8 @@ void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_chec
 	}
 	if (delete_wal) {
 		wal->Delete();
-		wal.reset();;
+		wal.reset();
+		;
 	}
 }
 

@@ -22,8 +22,11 @@ class SegmentStatistics;
 // Writes data for an entire row group.
 class RowGroupWriter {
 public:
-	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_mgr) : table(table), partial_block_mgr(partial_block_mgr) {}
-	virtual ~RowGroupWriter() {}
+	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_mgr)
+	    : table(table), partial_block_mgr(partial_block_mgr) {
+	}
+	virtual ~RowGroupWriter() {
+	}
 
 	CompressionType GetColumnCompressionType(idx_t i);
 
@@ -42,8 +45,10 @@ protected:
 // Writes data for an entire row group.
 class SingleFileRowGroupWriter : public RowGroupWriter {
 public:
-	SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_mgr, MetaBlockWriter &table_data_writer) :
-		RowGroupWriter(table, partial_block_mgr), table_data_writer(table_data_writer) {}
+	SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_mgr,
+	                         MetaBlockWriter &table_data_writer)
+	    : RowGroupWriter(table, partial_block_mgr), table_data_writer(table_data_writer) {
+	}
 
 	//! MetaBlockWriter is a cursor on a given BlockManager. This returns the
 	//! cursor against which we should write payload data for the specified RowGroup.

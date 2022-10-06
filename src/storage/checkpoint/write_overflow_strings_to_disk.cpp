@@ -66,7 +66,6 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 }
 
 void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
-	// QQ: How does this block ever get freed, if the checkpoint/table get overwritten?
 	if (block_id != INVALID_BLOCK) {
 		// there is an old block, write it first
 		block_manager.Write(handle.GetFileBuffer(), block_id);

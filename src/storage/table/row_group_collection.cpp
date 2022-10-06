@@ -8,9 +8,10 @@
 
 namespace duckdb {
 
-RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager, vector<LogicalType> types_p, idx_t row_start_p,
-                                       idx_t total_rows_p)
-    : block_manager(block_manager), total_rows(total_rows_p), info(move(info_p)), types(move(types_p)), row_start(row_start_p) {
+RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager,
+                                       vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p)
+    : block_manager(block_manager), total_rows(total_rows_p), info(move(info_p)), types(move(types_p)),
+      row_start(row_start_p) {
 	row_groups = make_shared<SegmentTree>();
 }
 
@@ -389,10 +390,8 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 // Checkpoint
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
-	for (auto row_group = (RowGroup *)row_groups->GetRootSegment();
-			row_group;
-			row_group = (RowGroup *)row_group->next.get())
-	{
+	for (auto row_group = (RowGroup *)row_groups->GetRootSegment(); row_group;
+	     row_group = (RowGroup *)row_group->next.get()) {
 		auto rowg_writer = writer.GetRowGroupWriter(*row_group);
 		auto pointer = row_group->Checkpoint(*rowg_writer, global_stats);
 		writer.AddRowGroup(move(pointer), move(rowg_writer));

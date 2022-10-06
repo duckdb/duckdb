@@ -59,8 +59,6 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 	vector<unique_ptr<Expression>> unbound_expressions;
 	vector<unique_ptr<Expression>> bound_expressions;
 	idx_t key_nr = 0;
-	//QQ: Should we check that an identical index doesn't already exist?
-	//QQ: It seems most indices have names but not all constraints do?
 	for (auto &key : keys) {
 		D_ASSERT(key < columns.size());
 		auto &column = columns[key];
@@ -77,10 +75,11 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 	unique_ptr<ART> art;
 	// create an adaptive radix tree around the expressions
 	if (index_block) {
-		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), move(unbound_expressions), constraint_type, storage->db,
-		                       index_block->block_id, index_block->offset);
+		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), move(unbound_expressions), constraint_type,
+		                       storage->db, index_block->block_id, index_block->offset);
 	} else {
-		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), move(unbound_expressions), constraint_type, storage->db);
+		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), move(unbound_expressions), constraint_type,
+		                       storage->db);
 		if (!storage->IsRoot()) {
 			throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 		}
@@ -118,9 +117,9 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 			}
 			storage_columns.push_back(col_def.Copy());
 		}
-		storage = make_shared<DataTable>(
-			catalog->db, StorageManager::GetStorageManager(catalog->db).GetTableIOManager(info),
-			schema->name, name, move(storage_columns), move(info->data));
+		storage =
+		    make_shared<DataTable>(catalog->db, StorageManager::GetStorageManager(catalog->db).GetTableIOManager(info),
+		                           schema->name, name, move(storage_columns), move(info->data));
 
 		// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
 		idx_t indexes_idx = 0;
@@ -133,11 +132,6 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				if (unique.is_primary_key) {
 					constraint_type = IndexConstraintType::PRIMARY;
 				}
-				//QQ: I don't understand this logic. The logic for each constraint is
-				// different depending on whether the entire table has any indexes or not.
-				// Should this logic not be constraint by constraint?
-				// Or is this create vs. load? In which case, is it obvious to the reader that indexes
-				// would be empty in the create case but not in the load case?
 				if (info->indexes.empty()) {
 					AddDataTableIndex(storage.get(), get_columns, unique.keys, constraint_type);
 				} else {

@@ -27,10 +27,12 @@ void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_pt
 	writer.reset();
 }
 
-SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager, TableCatalogEntry &table,
-	                MetaBlockWriter &table_data_writer, MetaBlockWriter &meta_data_writer) :
-		TableDataWriter(table), checkpoint_manager(checkpoint_manager), table_data_writer(table_data_writer), meta_data_writer(meta_data_writer) 
-{}
+SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
+                                                     TableCatalogEntry &table, MetaBlockWriter &table_data_writer,
+                                                     MetaBlockWriter &meta_data_writer)
+    : TableDataWriter(table), checkpoint_manager(checkpoint_manager), table_data_writer(table_data_writer),
+      meta_data_writer(meta_data_writer) {
+}
 
 unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
 	return make_unique<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_mgr, table_data_writer);

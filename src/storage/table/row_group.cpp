@@ -19,15 +19,17 @@ namespace duckdb {
 constexpr const idx_t RowGroup::ROW_GROUP_VECTOR_COUNT;
 constexpr const idx_t RowGroup::ROW_GROUP_SIZE;
 
-RowGroup::RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start, idx_t count)
+RowGroup::RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start,
+                   idx_t count)
     : SegmentBase(start, count), db(db), block_manager(block_manager), table_info(table_info) {
 
 	Verify();
 }
 
-RowGroup::RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, const vector<LogicalType> &types,
-                   RowGroupPointer &&pointer)
-    : SegmentBase(pointer.row_start, pointer.tuple_count), db(db), block_manager(block_manager), table_info(table_info) {
+RowGroup::RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info,
+                   const vector<LogicalType> &types, RowGroupPointer &&pointer)
+    : SegmentBase(pointer.row_start, pointer.tuple_count), db(db), block_manager(block_manager),
+      table_info(table_info) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != types.size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -36,7 +38,8 @@ RowGroup::RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableI
 		auto &block_pointer = pointer.data_pointers[i];
 		MetaBlockReader column_data_reader(block_manager, block_pointer.block_id);
 		column_data_reader.offset = block_pointer.offset;
-		this->columns.push_back(ColumnData::Deserialize(block_manager, table_info, i, start, column_data_reader, types[i], nullptr));
+		this->columns.push_back(
+		    ColumnData::Deserialize(block_manager, table_info, i, start, column_data_reader, types[i], nullptr));
 	}
 
 	// set up the statistics
@@ -162,7 +165,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, Expressio
 	Verify();
 
 	// construct a new column data for the new column
-	auto added_column = ColumnData::CreateColumn(block_manager, GetTableInfo(), columns.size(), start, new_column.Type());
+	auto added_column =
+	    ColumnData::CreateColumn(block_manager, GetTableInfo(), columns.size(), start, new_column.Type());
 	auto added_col_stats = make_shared<SegmentStatistics>(
 	    new_column.Type(), BaseStatistics::CreateEmpty(new_column.Type(), StatisticsType::LOCAL_STATS));
 

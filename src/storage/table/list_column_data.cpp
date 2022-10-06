@@ -4,9 +4,10 @@
 
 namespace duckdb {
 
-ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type_p,
-                               ColumnData *parent)
-    : ColumnData(block_manager, info, column_index, start_row, move(type_p), parent), validity(block_manager, info, 0, start_row, this) {
+ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+                               LogicalType type_p, ColumnData *parent)
+    : ColumnData(block_manager, info, column_index, start_row, move(type_p), parent),
+      validity(block_manager, info, 0, start_row, this) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
 	// the child column, with column index 1 (0 is the validity mask)

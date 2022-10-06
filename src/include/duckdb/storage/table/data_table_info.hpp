@@ -40,4 +40,4 @@ struct DataTableInfo {
 	}
 };
 
-}
+} // namespace duckdb

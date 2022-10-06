@@ -386,8 +386,9 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 
 	switch (info->index_type) {
 	case IndexType::ART: {
-		auto art = make_unique<ART>(info->column_ids, TableIOManager::Get(*table_catalog->storage), move(unbound_expressions), info->constraint_type, *context.db,
-		                            root_block_id, root_offset);
+		auto art =
+		    make_unique<ART>(info->column_ids, TableIOManager::Get(*table_catalog->storage), move(unbound_expressions),
+		                     info->constraint_type, *context.db, root_block_id, root_offset);
 		index_catalog->index = art.get();
 		table_catalog->storage->info->indexes.AddIndex(move(art));
 		break;
@@ -462,8 +463,7 @@ void CheckpointReader::ReadTable(ClientContext &context, MetaBlockReader &reader
 }
 
 void CheckpointReader::ReadTableData(ClientContext &context, MetaBlockReader &reader,
-		BoundCreateTableInfo &bound_info)
-{
+                                     BoundCreateTableInfo &bound_info) {
 	auto block_id = reader.Read<block_id_t>();
 	auto offset = reader.Read<uint64_t>();
 
@@ -493,8 +493,7 @@ PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_
 	// if the block is less than 80% full, we consider it a "partial block"
 	// which means we will try to fit it with other blocks
 	// check if there is a partial block available we can write to
-	if (segment_size <= free_space_threshold &&
-			GetPartialBlock(segment_size, allocation.partial_block)) {
+	if (segment_size <= free_space_threshold && GetPartialBlock(segment_size, allocation.partial_block)) {
 		//! there is! increase the reference count of this block
 		allocation.partial_block->state.block_use_count += 1;
 		allocation.state = allocation.partial_block->state;

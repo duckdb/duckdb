@@ -37,9 +37,9 @@ public:
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
 
 	void MarkWrittenBlocks() {
-	  for (auto &block_id : written_blocks) {
-	    block_manager.MarkBlockAsModified(block_id);
-	  }
+		for (auto &block_id : written_blocks) {
+			block_manager.MarkBlockAsModified(block_id);
+		}
 	}
 
 protected:

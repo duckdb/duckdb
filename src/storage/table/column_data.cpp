@@ -17,8 +17,10 @@
 
 namespace duckdb {
 
-ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent)
-    : block_manager(block_manager), info(info), column_index(column_index), start(start_row), type(move(type)), parent(parent) {
+ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+                       LogicalType type, ColumnData *parent)
+    : block_manager(block_manager), info(info), column_index(column_index), start(start_row), type(move(type)),
+      parent(parent) {
 }
 
 ColumnData::~ColumnData() {
@@ -366,17 +368,16 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
-		    GetDatabase(),
-		    block_manager,
-		    data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
+		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
 		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
 		    move(data_pointer.statistics));
 		data.AppendSegment(move(segment));
 	}
 }
 
-shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                               Deserializer &source, const LogicalType &type, ColumnData *parent) {
+shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                               idx_t start_row, Deserializer &source, const LogicalType &type,
+                                               ColumnData *parent) {
 	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, parent);
 	entry->DeserializeColumn(source);
 	return entry;
@@ -466,8 +467,8 @@ void ColumnData::Verify(RowGroup &parent) {
 }
 
 template <class RET, class OP>
-static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, const LogicalType &type,
-                                ColumnData *parent) {
+static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+                                const LogicalType &type, ColumnData *parent) {
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		return OP::template Create<StructColumnData>(block_manager, info, column_index, start_row, type, parent);
 	} else if (type.InternalType() == PhysicalType::LIST) {
@@ -478,14 +479,17 @@ static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info
 	return OP::template Create<StandardColumnData>(block_manager, info, column_index, start_row, type, parent);
 }
 
-shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                                const LogicalType &type, ColumnData *parent) {
-	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(block_manager, info, column_index, start_row, type, parent);
+shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                                idx_t start_row, const LogicalType &type, ColumnData *parent) {
+	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(block_manager, info, column_index, start_row,
+	                                                                       type, parent);
 }
 
-unique_ptr<ColumnData> ColumnData::CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                                      const LogicalType &type, ColumnData *parent) {
-	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(block_manager, info, column_index, start_row, type, parent);
+unique_ptr<ColumnData> ColumnData::CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
+                                                      idx_t column_index, idx_t start_row, const LogicalType &type,
+                                                      ColumnData *parent) {
+	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(block_manager, info, column_index, start_row,
+	                                                                       type, parent);
 }
 
 } // namespace duckdb

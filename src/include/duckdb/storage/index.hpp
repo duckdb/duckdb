@@ -29,8 +29,8 @@ struct IndexLock;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-	      IndexConstraintType constraint_type);
+	Index(IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids,
+	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type);
 	virtual ~Index() = default;
 
 	//! The type of the index

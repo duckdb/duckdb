@@ -42,8 +42,8 @@ public:
 
 public:
 	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start, idx_t count);
-	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, const vector<LogicalType> &types,
-	         RowGroupPointer &&pointer);
+	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info,
+	         const vector<LogicalType> &types, RowGroupPointer &&pointer);
 	~RowGroup();
 
 private:

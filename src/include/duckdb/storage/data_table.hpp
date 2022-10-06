@@ -39,8 +39,9 @@ class TableDataWriter;
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(DatabaseInstance &db, shared_ptr<TableIOManager> table_io_manager, const string &schema, const string &table,
-	          vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data = nullptr);
+	DataTable(DatabaseInstance &db, shared_ptr<TableIOManager> table_io_manager, const string &schema,
+	          const string &table, vector<ColumnDefinition> column_definitions_p,
+	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
