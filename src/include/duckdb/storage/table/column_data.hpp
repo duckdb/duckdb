@@ -40,6 +40,7 @@ class ColumnData {
 public:
 	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
 	           ColumnData *parent);
+	ColumnData(ColumnData &other, idx_t start, ColumnData *parent);
 	virtual ~ColumnData();
 
 	//! The block manager
@@ -124,9 +125,11 @@ public:
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                           idx_t start_row, const LogicalType &type, ColumnData *parent = nullptr);
+	static shared_ptr<ColumnData> CreateColumn(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
 	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
 	                                                 idx_t column_index, idx_t start_row, const LogicalType &type,
 	                                                 ColumnData *parent = nullptr);
+	static unique_ptr<ColumnData> CreateColumnUnique(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
 
 protected:
 	//! Append a transient segment

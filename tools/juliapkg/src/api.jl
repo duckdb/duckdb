@@ -2270,6 +2270,22 @@ function duckdb_replacement_scan_add_parameter(info, parameter)
     )
 end
 
+"""
+Report that an error has occurred while executing the replacement scan.
+
+* info: The info object
+* error: The error message
+"""
+function duckdb_replacement_scan_set_error(info, error_message)
+    return ccall(
+        (:duckdb_replacement_scan_set_error, libduckdb),
+        Cvoid,
+        (duckdb_replacement_scan_info, Ptr{UInt8}),
+        info,
+        error_message
+    )
+end
+
 #=
 //===--------------------------------------------------------------------===//
 // Appender

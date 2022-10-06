@@ -1,0 +1,16 @@
+# name: benchmark/micro/compression/fsst/fsst_store_worst_case.benchmark
+# description: Storing a column containing only unique strings.
+# group: [fsst]
+
+name name fsst Compression Write
+group fsst
+storage persistent
+require_reinit
+
+load
+PRAGMA force_compression='fsst';
+DROP TABLE IF EXISTS test;
+
+run
+CREATE TABLE test AS SELECT gen_random_uuid()::VARCHAR AS i FROM range(0, 2000000) tbl(i);
+checkpoint;

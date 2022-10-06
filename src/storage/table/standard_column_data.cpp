@@ -14,6 +14,10 @@ StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInf
       validity(block_manager, info, 0, start_row, this) {
 }
 
+StandardColumnData::StandardColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
+    : ColumnData(original, start_row, parent), validity(((StandardColumnData &)original).validity, start_row, this) {
+}
+
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	if (!state.segment_checked) {
 		if (!state.current) {

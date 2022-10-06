@@ -44,13 +44,11 @@ public:
 	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start, idx_t count);
 	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info,
 	         const vector<LogicalType> &types, RowGroupPointer &&pointer);
+	RowGroup(RowGroup &row_group, idx_t start);
 	~RowGroup();
 
 private:
 	//! The database instance
-	// QQ: We don't need the db pointer except to get the transaction manager.
-	// Why not hang transaction manager or DB reference off of the Transaction object
-	// instead?
 	DatabaseInstance &db;
 	//! The block manager
 	BlockManager &block_manager;
@@ -165,6 +163,8 @@ private:
 
 struct VersionNode {
 	unique_ptr<ChunkInfo> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
+
+	void SetStart(idx_t start);
 };
 
 } // namespace duckdb

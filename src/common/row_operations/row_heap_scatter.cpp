@@ -289,7 +289,7 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 
 			// serialize list validity
 			for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
-				auto list_idx = list_vdata.sel->get_index(entry_idx) + entry_offset;
+				auto list_idx = list_vdata.sel->get_index(entry_idx + entry_offset);
 				if (!list_vdata.validity.RowIsValid(list_idx)) {
 					*(list_validitymask_location) &= ~(1UL << entry_offset_in_byte);
 				}
