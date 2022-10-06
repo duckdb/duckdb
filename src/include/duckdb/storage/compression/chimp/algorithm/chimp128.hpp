@@ -52,6 +52,7 @@ struct Chimp128CompressionState {
 		leading_zero_buffer.Flush();
 	}
 
+	// Reset the state
 	void Reset() {
 		first = true;
 		ring_buffer.Reset();
