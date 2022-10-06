@@ -261,7 +261,7 @@ public:
 	                  OperatorState &state) const final;
 
 	bool RequiresFinalExecute() const final {
-		return true;
+		return enable_cache;
 	}
 
 protected:
