@@ -1358,6 +1358,7 @@ bool BufferedCSVReader::TryParseComplexCSV(DataChunk &insert_chunk, string &erro
 	bool finished_chunk = false;
 	idx_t column = 0;
 	vector<idx_t> escape_positions;
+	bool has_quotes = false;
 	uint8_t delimiter_pos = 0, escape_pos = 0, quote_pos = 0;
 	idx_t offset = 0;
 
@@ -1420,9 +1421,10 @@ normal:
 	} while (ReadBuffer(start));
 	goto final_state;
 add_value:
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
+	has_quotes = false;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after delimiter, go to final state
@@ -1432,10 +1434,11 @@ add_value:
 add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
 	offset = 0;
+	has_quotes = false;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after newline, go to final state
@@ -1457,6 +1460,7 @@ in_quotes:
 	// this state parses the remainder of a quoted value
 	quote_pos = 0;
 	escape_pos = 0;
+	has_quotes = true;
 	position++;
 	do {
 		for (; position < buffer_size; position++) {
@@ -1568,7 +1572,7 @@ final_state:
 	}
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+		AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 	// final stage, only reached after parsing the file is finished
@@ -1586,6 +1590,7 @@ bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	bool finished_chunk = false;
 	idx_t column = 0;
 	idx_t offset = 0;
+	bool has_quotes = false;
 	vector<idx_t> escape_positions;
 
 	// read values into the buffer (if any)
@@ -1627,9 +1632,10 @@ normal:
 	// file ends during normal scan: go to end state
 	goto final_state;
 add_value:
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
+	has_quotes = false;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after delimiter, go to final state
@@ -1639,10 +1645,11 @@ add_value:
 add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
 	offset = 0;
+	has_quotes = false;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after delimiter, go to final state
@@ -1662,6 +1669,7 @@ add_row : {
 in_quotes:
 	/* state: in_quotes */
 	// this state parses the remainder of a quoted value
+	has_quotes = true;
 	position++;
 	do {
 		for (; position < buffer_size; position++) {
@@ -1748,7 +1756,7 @@ final_state:
 
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+		AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 
@@ -1848,7 +1856,8 @@ bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_ch
 	}
 }
 
-void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions) {
+void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions,
+                                 bool has_quotes) {
 	if (length == 0 && column == 0) {
 		row_empty = true;
 	} else {
@@ -1879,8 +1888,9 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 
 	str_val[length] = '\0';
 
-	// test against null string
-	if (!options.force_not_null[column] && strcmp(options.null_str.c_str(), str_val) == 0) {
+	// test against null string, but only if the value was not quoted
+	if ((!has_quotes || sql_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
+	    strcmp(options.null_str.c_str(), str_val) == 0) {
 		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
 	} else {
 		auto &v = parse_chunk.data[column];

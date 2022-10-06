@@ -215,6 +215,11 @@ void InterpretedBenchmark::LoadBenchmark() {
 						continue;
 					}
 					auto result_splits = StringUtil::Split(line, "|");
+					for (auto &split : result_splits) {
+						if (split == "(empty)") {
+							split = string();
+						}
+					}
 					if (result_column_count < 0) {
 						result_column_count = result_splits.size();
 					} else if (idx_t(result_column_count) != result_splits.size()) {

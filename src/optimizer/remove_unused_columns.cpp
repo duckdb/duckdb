@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -16,7 +17,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
-#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -31,7 +31,7 @@ void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBi
 }
 
 template <class T>
-void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx) {
+void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace) {
 	idx_t offset = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
 		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
@@ -41,7 +41,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 			list.erase(list.begin() + col_idx);
 			offset++;
 			col_idx--;
-		} else if (offset > 0) {
+		} else if (offset > 0 && replace) {
 			// column is used but the ColumnBinding has changed because of removed columns
 			ReplaceBinding(current_binding, ColumnBinding(table_idx, col_idx));
 		}
@@ -214,6 +214,17 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		if (!everything_referenced) {
 			auto &get = (LogicalGet &)op;
+
+			// Create "selection vector" of all column ids
+			vector<idx_t> proj_sel;
+			for (idx_t col_idx = 0; col_idx < get.column_ids.size(); col_idx++) {
+				proj_sel.push_back(col_idx);
+			}
+			// Create a copy that we can use to match ids later
+			auto col_sel = proj_sel;
+			// Clear unused ids, exclude filter columns that are projected out immediately
+			ClearUnusedExpressions(proj_sel, get.table_index, false);
+
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
 			for (auto &filter : get.table_filters.filters) {
@@ -232,8 +243,31 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					column_references.insert(make_pair(filter_binding, vector<BoundColumnRefExpression *>()));
 				}
 			}
-			// table scan: figure out which columns are referenced
-			ClearUnusedExpressions(get.column_ids, get.table_index);
+
+			// Clear unused ids, include filter columns that are projected out immediately
+			ClearUnusedExpressions(col_sel, get.table_index);
+
+			// Now set the column ids in the LogicalGet using the "selection vector"
+			vector<column_t> column_ids;
+			column_ids.reserve(col_sel.size());
+			for (auto col_sel_idx : col_sel) {
+				column_ids.push_back(get.column_ids[col_sel_idx]);
+			}
+			get.column_ids = move(column_ids);
+
+			if (get.function.filter_prune) {
+				// Now set the projection cols by matching the "selection vector" that excludes filter columns
+				// with the "selection vector" that includes filter columns
+				idx_t col_idx = 0;
+				for (auto proj_sel_idx : proj_sel) {
+					for (; col_idx < col_sel.size(); col_idx++) {
+						if (proj_sel_idx == col_sel[col_idx]) {
+							get.projection_ids.push_back(col_idx);
+							break;
+						}
+					}
+				}
+			}
 
 			if (get.column_ids.empty()) {
 				// this generally means we are only interested in whether or not anything exists in the table (e.g.
