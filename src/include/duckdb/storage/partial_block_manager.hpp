@@ -64,7 +64,7 @@ struct PartialBlockAllocation {
 class PartialBlockManager {
 public:
 	// 20% free / 80% utilization
-	static constexpr const idx_t DEFAULT_FREE_SPACE_THRESHOLD = Storage::BLOCK_SIZE / 5 * 4;
+	static constexpr const idx_t DEFAULT_MAX_PARTIAL_BLOCK_SIZE = Storage::BLOCK_SIZE / 5 * 4;
 	// Max number of shared references to a block. No effective limit by default.
 	static constexpr const idx_t DEFAULT_MAX_USE_COUNT = 1 << 20;
 	// No point letting map size grow unbounded. We'll drop blocks with the
@@ -72,9 +72,9 @@ public:
 	static constexpr const idx_t MAX_BLOCK_MAP_SIZE = 1 << 31;
 
 public:
-	PartialBlockManager(BlockManager &block_manager, uint32_t free_space_threshold = DEFAULT_FREE_SPACE_THRESHOLD,
+	PartialBlockManager(BlockManager &block_manager, uint32_t max_partial_block_size = DEFAULT_MAX_PARTIAL_BLOCK_SIZE,
 	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT)
-	    : block_manager(block_manager), free_space_threshold(free_space_threshold), max_use_count(max_use_count) {
+	    : block_manager(block_manager), max_partial_block_size(max_partial_block_size), max_use_count(max_use_count) {
 	}
 
 public:
@@ -95,7 +95,8 @@ protected:
 	//! the same amount of left-over space
 	multimap<idx_t, unique_ptr<PartialBlock>> partially_filled_blocks;
 
-	uint32_t free_space_threshold;
+	//! The maximum size (in bytes) at which a partial block will be considered a partial block
+	uint32_t max_partial_block_size;
 	uint32_t max_use_count;
 
 protected:

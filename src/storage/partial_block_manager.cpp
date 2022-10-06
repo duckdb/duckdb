@@ -13,7 +13,7 @@ PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_
 	// if the block is less than 80% full, we consider it a "partial block"
 	// which means we will try to fit it with other blocks
 	// check if there is a partial block available we can write to
-	if (segment_size <= free_space_threshold && GetPartialBlock(segment_size, allocation.partial_block)) {
+	if (segment_size <= max_partial_block_size && GetPartialBlock(segment_size, allocation.partial_block)) {
 		//! there is! increase the reference count of this block
 		allocation.partial_block->state.block_use_count += 1;
 		allocation.state = allocation.partial_block->state;
@@ -54,7 +54,7 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocati
 		state.offset_in_block = new_size;
 		auto new_space_left = state.block_size - new_size;
 		// check if the block is STILL partially filled after adding the segment_size
-		if (new_space_left >= Storage::BLOCK_SIZE - free_space_threshold) {
+		if (new_space_left >= Storage::BLOCK_SIZE - max_partial_block_size) {
 			// the block is still partially filled: add it to the partially_filled_blocks list
 			partially_filled_blocks.insert(make_pair(new_space_left, move(allocation.partial_block)));
 		}
