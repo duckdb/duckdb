@@ -60,6 +60,7 @@ struct Chimp128CompressionState {
 		leading_zero_buffer.Reset();
 		flag_buffer.Reset();
 		packed_data_buffer.Reset();
+		previous_value = 0;
 	}
 
 	CHIMP_TYPE BitsWritten() const {
@@ -73,6 +74,7 @@ struct Chimp128CompressionState {
 	PackedDataBuffer<EMPTY> packed_data_buffer;
 	RingBuffer<CHIMP_TYPE> ring_buffer; //! The ring buffer that holds the previous values
 	uint8_t previous_leading_zeros;     //! The leading zeros of the reference value
+	CHIMP_TYPE previous_value = 0;
 	bool first = true;
 };
 
@@ -170,6 +172,7 @@ public:
 				state.SetLeadingZeros(leading_zeros);
 			}
 		}
+		state.previous_value = in;
 		state.ring_buffer.Insert(in);
 	}
 };

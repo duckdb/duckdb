@@ -49,6 +49,7 @@ public:
 		for (idx_t i = 0; i < group_size; i++) {
 			flags[1 + i] = flag_buffer.Extract();
 		}
+		D_ASSERT(group_size != 0);
 		max_flags_to_read = group_size;
 		index = 0;
 	}
@@ -64,7 +65,6 @@ public:
 	}
 
 	idx_t CalculatePackedDataCount() const {
-		D_ASSERT(max_flags_to_read != 0);
 		idx_t count = 0;
 		for (idx_t i = 0; i < max_flags_to_read; i++) {
 			count += flags[1 + i] == duckdb_chimp::TRAILING_EXCEEDS_THRESHOLD;
@@ -176,15 +176,16 @@ public:
 		// Load how many blocks of leading zero bits we have
 		metadata_ptr -= sizeof(uint8_t);
 		auto leading_zero_block_count = Load<uint8_t>(metadata_ptr);
+		D_ASSERT(leading_zero_block_count <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE / 8);
 
 		// Load the leading zero blocks
 		metadata_ptr -= 3 * leading_zero_block_count;
 		group_state.LoadLeadingZeros(metadata_ptr, (uint32_t)leading_zero_block_count * 8);
 
-		// Load how many flags there are
-		metadata_ptr -= sizeof(uint16_t);
-		auto size_of_group = Load<uint16_t>(metadata_ptr);
-		const auto flag_byte_count = AlignValue<uint16_t, 4>(size_of_group) / 4;
+		// Figure out how many flags there are
+		uint16_t size_of_group =
+		    duckdb::MinValue<uint16_t>(segment.count - total_value_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
+		uint16_t flag_byte_count = (AlignValue<uint16_t, 4>(size_of_group) / 4);
 
 		// Load the flags
 		metadata_ptr -= flag_byte_count;

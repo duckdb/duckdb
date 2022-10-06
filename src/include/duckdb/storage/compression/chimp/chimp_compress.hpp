@@ -84,7 +84,7 @@ public:
 	// Ptr to next free spot in segment;
 	data_ptr_t segment_data;
 	data_ptr_t metadata_ptr;
-	uint32_t next_group_byte_index_start = 0;
+	uint32_t next_group_byte_index_start = ChimpPrimitives::HEADER_SIZE;
 	// The total size of metadata in the current segment
 	idx_t metadata_byte_size = 0;
 
@@ -165,7 +165,8 @@ public:
 	void WriteValue(CHIMP_TYPE value, bool is_valid) {
 		current_segment->count++;
 		if (!is_valid) {
-			return;
+			// store this as "value_identical", only using 9 bits for a NULL
+			value = state.chimp_state.previous_value;
 		}
 		duckdb_chimp::Chimp128Compression<CHIMP_TYPE, false>::Store(value, state.chimp_state);
 		group_idx++;
@@ -185,6 +186,8 @@ public:
 		next_group_byte_index_start = UsedSpace();
 
 		const uint8_t leading_zero_block_count = state.chimp_state.leading_zero_buffer.BlockCount();
+		// Every 8 values are packed in one block
+		D_ASSERT(leading_zero_block_count <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE / 8);
 		metadata_ptr -= sizeof(uint8_t);
 		metadata_byte_size += sizeof(uint8_t);
 		// Store how many leading zero blocks there are
@@ -198,12 +201,7 @@ public:
 
 		//! This is max 1024, because it's the amount of flags there are, not the amount of bytes that takes up
 		const uint16_t flag_bytes = state.chimp_state.flag_buffer.BytesUsed();
-		const uint16_t flag_count = state.chimp_state.flag_buffer.FlagCount();
-		metadata_ptr -= sizeof(uint16_t);
-		metadata_byte_size += sizeof(uint16_t);
-		// Store how many flag bytes there are
-		// We cant use the 'count' of the segment to figure this out, because NULLs increase count
-		Store<uint16_t>(flag_count, metadata_ptr);
+		D_ASSERT(flag_bytes != 0);
 
 		metadata_ptr -= flag_bytes;
 		metadata_byte_size += flag_bytes;
@@ -231,7 +229,10 @@ public:
 	}
 
 	void FlushSegment() {
-		FlushGroup();
+		if (group_idx) {
+			// Only call this when the group actually has data that needs to be flushed
+			FlushGroup();
+		}
 		state.chimp_state.output.Flush();
 		auto &checkpoint_state = checkpointer.GetCheckpointState();
 		auto dataptr = handle.Ptr();
@@ -262,14 +263,6 @@ public:
 	void Finalize() {
 		FlushSegment();
 		current_segment.reset();
-	}
-
-private:
-	// Space remaining between the metadata_ptr growing down and data ptr growing up
-	idx_t RemainingSize() {
-		const auto distance = metadata_ptr - segment_data;
-		const idx_t bits_written = state.chimp_state.output.BytesWritten();
-		return distance - ((bits_written / 8) + (bits_written % 8 != 0));
 	}
 };
 
