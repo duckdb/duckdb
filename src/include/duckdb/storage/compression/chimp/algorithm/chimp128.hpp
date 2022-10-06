@@ -243,7 +243,7 @@ public:
 	}
 
 	static inline CHIMP_TYPE LoadFirst(DecompressState &state) {
-		CHIMP_TYPE result = state.input.template ReadValue<CHIMP_TYPE, sizeof(CHIMP_TYPE) * __CHAR_BIT__>();
+		CHIMP_TYPE result = state.input.template ReadValue<CHIMP_TYPE, sizeof(CHIMP_TYPE) * 8>();
 		state.ring_buffer.template InsertScan<true>(result);
 		state.first = false;
 		state.reference_value = result;
