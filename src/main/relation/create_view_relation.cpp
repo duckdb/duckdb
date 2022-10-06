@@ -4,7 +4,13 @@
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
-
+CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view_name_p, bool replace_p,
+                                       bool temporary_p)
+	: Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(move(child_p)),
+	  schema_name(move("")),
+      view_name(move(view_name_p)), replace(replace_p), temporary(temporary_p) {
+	context.GetContext()->TryBindRelation(*this, this->columns);
+}
 CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string schema_name_p, string view_name_p, bool replace_p,
                                        bool temporary_p)
     : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(move(child_p)),
