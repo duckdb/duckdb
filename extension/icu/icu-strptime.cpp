@@ -159,6 +159,77 @@ struct ICUStrptime : public ICUDateFunc {
 		bind = bound_function.bind;
 		bound_function.bind = StrpTimeBindFunction;
 	}
+
+	static bool CastFromVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+		auto &cast_data = (CastData &)*parameters.cast_data;
+		auto info = (BindData *)cast_data.info.get();
+		CalendarPtr cal(info->calendar->clone());
+		const auto tz_name = info->tz_setting.c_str();
+
+		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
+		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
+			    timestamp_t result;
+			    const auto str = input.GetDataUnsafe();
+			    const auto len = input.GetSize();
+			    string_t tz(nullptr, 0);
+			    if (!Timestamp::TryConvertTimestampTZ(str, len, result, tz)) {
+				    auto msg = Timestamp::ConversionError(string(str, len));
+				    if (parameters.error_message) {
+					    *parameters.error_message = msg;
+					    mask.SetInvalid(idx);
+				    } else {
+					    throw ConversionException(msg);
+				    }
+			    } else if (tz.GetSize()) {
+				    // Convert parts to TZ
+				    auto calendar = cal.get();
+				    SetTimeZone(calendar, tz);
+
+				    // Now get the parts in the given time zone
+				    date_t d;
+				    dtime_t t;
+				    Timestamp::Convert(result, d, t);
+
+				    int32_t data[7];
+				    Date::Convert(d, data[0], data[1], data[2]);
+				    calendar->set(UCAL_EXTENDED_YEAR, data[0]); // strptime doesn't understand eras
+				    calendar->set(UCAL_MONTH, data[1] - 1);
+				    calendar->set(UCAL_DATE, data[2]);
+
+				    Time::Convert(t, data[3], data[4], data[5], data[6]);
+				    calendar->set(UCAL_HOUR_OF_DAY, data[3]);
+				    calendar->set(UCAL_MINUTE, data[4]);
+				    calendar->set(UCAL_SECOND, data[5]);
+
+				    int32_t millis = data[6] / Interval::MICROS_PER_MSEC;
+				    uint64_t micros = data[6] % Interval::MICROS_PER_MSEC;
+				    calendar->set(UCAL_MILLISECOND, millis);
+
+				    result = GetTime(calendar, micros);
+			    }
+
+			    return result;
+		    });
+		return true;
+	}
+
+	static BoundCastInfo BindCastFromVarchar(BindCastInput &input, const LogicalType &source,
+	                                         const LogicalType &target) {
+		if (!input.context) {
+			throw InternalException("Missing context for VARCHAR to TIMESTAMPTZ cast.");
+		}
+
+		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
+
+		return BoundCastInfo(CastFromVarchar, move(cast_data));
+	}
+
+	static void AddCasts(ClientContext &context) {
+		auto &config = DBConfig::GetConfig(context);
+		auto &casts = config.GetCastFunctions();
+
+		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ, BindCastFromVarchar);
+	}
 };
 
 bind_scalar_function_t ICUStrptime::bind = nullptr;
@@ -262,17 +333,6 @@ struct ICUStrftime : public ICUDateFunc {
 		catalog.AddFunction(context, &func_info);
 	}
 
-	struct ICUBoundCastData : public BoundCastData {
-		explicit ICUBoundCastData(unique_ptr<FunctionData> info_p) : info(move(info_p)) {
-		}
-
-		unique_ptr<BoundCastData> Copy() const override {
-			return make_unique<ICUBoundCastData>(info->Copy());
-		}
-
-		unique_ptr<FunctionData> info;
-	};
-
 	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, const string &tz_name, Vector &result) {
 		// Infinity is always formatted the same way
 		if (!Timestamp::IsFinite(input)) {
@@ -323,7 +383,7 @@ struct ICUStrftime : public ICUDateFunc {
 	}
 
 	static bool CastToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (ICUBoundCastData &)*parameters.cast_data;
+		auto &cast_data = (CastData &)*parameters.cast_data;
 		auto info = (BindData *)cast_data.info.get();
 		CalendarPtr calendar(info->calendar->clone());
 		const auto tz_name = info->tz_setting.c_str();
@@ -337,10 +397,10 @@ struct ICUStrftime : public ICUDateFunc {
 
 	static BoundCastInfo BindCastToVarchar(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 		if (!input.context) {
-			throw InternalException("Missing context for TIMESTAMPTZ cast.");
+			throw InternalException("Missing context for TIMESTAMPTZ to VARCHAR cast.");
 		}
 
-		auto cast_data = make_unique<ICUBoundCastData>(make_unique<BindData>(*input.context));
+		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
 
 		return BoundCastInfo(CastToVarchar, move(cast_data));
 	}
@@ -358,6 +418,7 @@ void RegisterICUStrptimeFunctions(ClientContext &context) {
 	ICUStrftime::AddBinaryTimestampFunction("strftime", context);
 
 	// Add string casts
+	ICUStrptime::AddCasts(context);
 	ICUStrftime::AddCasts(context);
 }
 

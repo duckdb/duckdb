@@ -31,6 +31,17 @@ struct ICUDateFunc {
 		unique_ptr<FunctionData> Copy() const override;
 	};
 
+	struct CastData : public BoundCastData {
+		explicit CastData(unique_ptr<FunctionData> info_p) : info(move(info_p)) {
+		}
+
+		unique_ptr<BoundCastData> Copy() const override {
+			return make_unique<CastData>(info->Copy());
+		}
+
+		unique_ptr<FunctionData> info;
+	};
+
 	//! Binds a default calendar object for use by the function
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
