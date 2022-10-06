@@ -1,12 +1,11 @@
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/projection/physical_tableinout_function.hpp"
-
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 
@@ -51,8 +50,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// create the table scan node
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, move(op.bind_data), op.column_ids,
-		                                           op.names, move(table_filters), op.estimated_cardinality);
+		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, move(op.bind_data),
+		                                           op.returned_types, op.column_ids, vector<column_t>(), op.names,
+		                                           move(table_filters), op.estimated_cardinality);
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -87,8 +87,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		projection->children.push_back(move(node));
 		return move(projection);
 	} else {
-		return make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.column_ids, op.names,
-		                                      move(table_filters), op.estimated_cardinality);
+		return make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.returned_types,
+		                                      op.column_ids, op.projection_ids, op.names, move(table_filters),
+		                                      op.estimated_cardinality);
 	}
 }
 

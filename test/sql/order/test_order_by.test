@@ -11,6 +11,11 @@ CREATE TABLE test (a INTEGER, b INTEGER);
 statement ok
 INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);
 
+query I
+select b from test where a = 12;
+----
+21
+
 # simple ORDER BY
 query I
 SELECT b FROM test ORDER BY a DESC;
