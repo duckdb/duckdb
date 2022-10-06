@@ -34,6 +34,6 @@ public:
 
 protected:
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                                  GlobalOperatorState &gstate, OperatorState &state) const override;
+	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
 };
 } // namespace duckdb

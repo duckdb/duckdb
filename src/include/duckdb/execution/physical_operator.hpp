@@ -32,8 +32,8 @@ public:
 	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
 	}
 
-	virtual void AllowCaching(bool val){
-		(void) val;
+	virtual void AllowCaching(bool val) {
+		(void)val;
 	}
 };
 
@@ -143,8 +143,8 @@ public:
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
-	virtual void FinalExecute(ExecutionContext &context, DataChunk &chunk,
-	                                   GlobalOperatorState &gstate, OperatorState &state) const;
+	virtual void FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+	                          OperatorState &state) const;
 
 	virtual bool ParallelOperator() const {
 		return false;
@@ -238,7 +238,7 @@ public:
 	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
 	}
 
-	virtual void AllowCaching(bool val){
+	virtual void AllowCaching(bool val) {
 		allow_caching = val;
 	}
 
@@ -258,7 +258,7 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const final;
 	void FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-	                                    OperatorState &state) const final;
+	                  OperatorState &state) const final;
 
 	bool RequiresFinalExecute() const final {
 		return true;
@@ -267,7 +267,7 @@ public:
 protected:
 	//! Child classes need to implement the ExecuteInternal method instead of the Execute
 	virtual OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                                            GlobalOperatorState &gstate, OperatorState &state) const = 0;
+	                                           GlobalOperatorState &gstate, OperatorState &state) const = 0;
 
 private:
 	bool CanCacheType(const LogicalType &type);

@@ -53,7 +53,7 @@ OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChun
 }
 
 void PhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-                  OperatorState &state) const {
+                                    OperatorState &state) const {
 	throw InternalException("Calling FinalExecute on a node that is not an operator!");
 }
 // LCOV_EXCL_STOP
@@ -244,7 +244,8 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 	}
 }
 
-CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
+CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types,
+                                                 idx_t estimated_cardinality)
     : PhysicalOperator(type, move(types), estimated_cardinality) {
 
 	enable_cache = true;
@@ -257,18 +258,18 @@ CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vect
 }
 
 OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                           GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto& state = (CachingOperatorState&) state_p;
+                                                    GlobalOperatorState &gstate, OperatorState &state_p) const {
+	auto &state = (CachingOperatorState &)state_p;
 
 	// Fetch result form child
 	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
 
 #if STANDARD_VECTOR_SIZE >= 128
-	if (state.allow_caching && chunk.size() < CACHE_THRESHOLD) {s
-		// we have filtered out a significant amount of tuples
-		// add this chunk to the cache and continue
+	if (state.allow_caching && chunk.size() < CACHE_THRESHOLD) {
+		    // we have filtered out a significant amount of tuples
+		    // add this chunk to the cache and continue
 
-		if (!state.cached_chunk) {
+		    if (!state.cached_chunk) {
 			state.cached_chunk = make_unique<DataChunk>();
 			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
 		}
@@ -292,8 +293,8 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 }
 
 void CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-                  OperatorState &state_p) const {
-	auto& state = (CachingOperatorState&) state_p;
+                                           OperatorState &state_p) const {
+	auto &state = (CachingOperatorState &)state_p;
 	if (state.cached_chunk) {
 		chunk.Move(*state.cached_chunk);
 		state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());

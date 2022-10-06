@@ -135,7 +135,8 @@ void PipelineExecutor::PushFinalize() {
 			tmp_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[i]->GetTypes());
 
 			// TODO do the state params even make sense here?
-			pipeline.operators[i]->FinalExecute(context, *tmp_chunk, *pipeline.operators[i]->op_state, *intermediate_states[i]);
+			pipeline.operators[i]->FinalExecute(context, *tmp_chunk, *pipeline.operators[i]->op_state,
+			                                    *intermediate_states[i]);
 
 			// Push the resulting chunk
 			ExecutePushInternal(*tmp_chunk, i + 1);

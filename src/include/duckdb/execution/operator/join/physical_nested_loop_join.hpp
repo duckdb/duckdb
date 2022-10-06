@@ -34,7 +34,7 @@ public:
 protected:
 	// CachingOperator Interface
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                           GlobalOperatorState &gstate, OperatorState &state) const override;
+	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
 
 public:
 	// Source interface

@@ -55,6 +55,7 @@ public:
 	bool ParallelOperator() const override {
 		return true;
 	}
+
 protected:
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const override;

@@ -52,8 +52,8 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	return function.in_out_function(context, data, input, chunk);
 }
 
-void PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate_p,
-                                              OperatorState &state_p) const {
+void PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk,
+                                              GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = (TableInOutGlobalState &)gstate_p;
 	auto &state = (TableInOutLocalState &)state_p;
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());

@@ -34,6 +34,7 @@ public:
 	bool ParallelOperator() const override {
 		return true;
 	}
+
 protected:
 	// CachingOperator Interface
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
