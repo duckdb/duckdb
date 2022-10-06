@@ -1,110 +1,86 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/compression/patas/patas.hpp
+// duckdb/common/patas/patas.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "duckdb/storage/compression/patas/algorithm/patas.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/function/compression_function.hpp"
+
 namespace duckdb {
 
-template <class FLOATING_TYPE, bool EMPTY>
-class PatasCompressionState {
-public:
-public:
-private:
-private:
+using byte_index_t = uint32_t;
+
+//! FIXME: replace ChimpType with this
+template <class T>
+struct FloatingToExact {};
+
+template <>
+struct FloatingToExact<double> {
+	typedef uint64_t type;
 };
 
-template <class FLOATING_TYPE>
-struct PatasCompression {
-	using State = PatasCompressionState<FLOATING_TYPE, EMPTY>;
-
-	static void Store(FLOATING_TYPE value, State &state) {
-		if (state.first) {
-			StoreFirst(value, state);
-		} else {
-			StoreCompressed(value, state);
-		}
-	}
-
-	static void StoreFirst(FLOATING_TYPE value, State &state) {
-		// write first value, uncompressed
-	}
-
-	static void StoreCompressed(FLOATING_TYPE value, State &state) {
-		// XOR with previous value
-
-		// Figure out the trailing zeros (max 6 bits)
-
-		// Figure out the significant bytes (max 3 bits)
-
-		// ^ store these in a temporary buffer, compress them with FOR
-		// Every BITPACKING_GROUP_SIZE, store them to disk
-
-		// Write the significant bytes to disk
-	}
+template <>
+struct FloatingToExact<float> {
+	typedef uint32_t type;
 };
 
-// Decompression (happens per segment)
-
-template <class FLOATING_TYPE>
-class PatasDecompressionState {
+class ChimpPrimitives {
 public:
-	PatasDecompressionState() {
-	}
-
-public:
-	//! Set the array to read the 'trailing_zero' values from
-	void SetTrailingZeroBuffer() {
-	}
-	//! Set the array to read the 'byte_count' values from
-	void SetByteCountBuffer() {
-	}
-	//! Set the array to read the significant bytes from
-	void SetInputBuffer() {
-		// TODO: This can probably be passed as constructor parameter
-		// since the block of significant byte values is contiguous for the entire segment
-	}
-	//! Reset the state for a new group
-	void Reset() {
-	}
-
-private:
-private:
-	// ByteReader byte_reader;
-	// (pointer to) array of 'trailing_zero' values
-	// (pointer to) array of 'byte_count' values
-	// group_index - keep track of which index we're at in the group
-	// FLOATING_TYPE previous_value - the last value to XOR with
+	static constexpr uint32_t CHIMP_SEQUENCE_SIZE = 1024;
+	static constexpr uint8_t MAX_BYTES_PER_VALUE = sizeof(double) + 1; // extra wiggle room
+	static constexpr uint8_t CACHELINE_SIZE = 64;
+	static constexpr uint8_t HEADER_SIZE = sizeof(uint32_t);
+	static constexpr uint8_t FLAG_BIT_SIZE = 2;
+	static constexpr uint32_t LEADING_ZERO_BLOCK_BUFFERSIZE = 385;
 };
 
-template <class FLOATING_TYPE>
-struct PatasDecompression {
-	using State = PatasDecompressionState<FLOATING_TYPE>;
+//! Where all the magic happens
+template <class T, bool EMPTY>
+struct PatasState {
+public:
+	using EXACT_TYPE = typename FloatingToExact<T>::type;
 
-	static FLOATING_TYPE Load(State &state) {
-		if (state.first) {
-			return LoadFirst(state);
-		}
-		return DecompressValue(state);
+	PatasState(void *state_p = nullptr) : data_ptr(state_p), patas_state() {
+	}
+	//! The Compress/Analyze State
+	void *data_ptr;
+	PatasCompressionState<EXACT_TYPE, EMPTY> patas_state;
+
+public:
+	void AssignDataBuffer(uint8_t *data_out) {
+		patas_state.output.SetStream(data_out);
 	}
 
-	static FLOATING_TYPE LoadFirst(State &state) {
-		// return the first value of the buffer
-		// set state.first to false
+	void AssignFlagBuffer(uint8_t *flag_out) {
+		patas_state.flag_buffer.SetBuffer(flag_out);
 	}
-	static FLOATING_TYPE DecompressValue(State &state) {
-		// Get the trailing_zeros value for the current index
-		// Get the byte_count value for the current index
-		//^ these have been unpacked beforehand for the entire group
 
-		// Read the 'byte_count' bytes size value from the buffer
-		// XOR with the previous value
+	void AssignPackedDataBuffer(uint16_t *packed_data_out) {
+		patas_state.packed_data_buffer.SetBuffer(packed_data_out);
+	}
 
-		// return the value
+	void AssignLeadingZeroBuffer(uint8_t *leading_zero_out) {
+		patas_state.leading_zero_buffer.SetBuffer(leading_zero_out);
+	}
+
+	template <class OP>
+	void Flush() {
+		patas_state.output.Flush();
+	}
+
+	template <class OP>
+	bool Update(T uncompressed_value, bool is_valid) {
+		OP::template Operation<T>(uncompressed_value, is_valid, data_ptr);
+		return true;
 	}
 };
 
