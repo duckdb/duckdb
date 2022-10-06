@@ -12,17 +12,23 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
 		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
 	}
+
 	bool can_cache_in_pipeline = pipeline.sink && !pipeline.IsOrderDependent() && !requires_batch_index;
-	// TODO globally disable caching somehow?
+
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
 	for (idx_t i = 0; i < pipeline.operators.size(); i++) {
 		auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
 		auto current_operator = pipeline.operators[i];
+
 		auto chunk = make_unique<DataChunk>();
 		chunk->Initialize(Allocator::Get(context.client), prev_operator->GetTypes());
 		intermediate_chunks.push_back(move(chunk));
-		intermediate_states.push_back(current_operator->GetOperatorState(context));
+
+		auto op_state = current_operator->GetOperatorState(context);
+		op_state->AllowCaching(can_cache_in_pipeline);
+		intermediate_states.push_back(std::move(op_state));
+
 		if (current_operator->IsSink() && current_operator->sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
 			// one of the operators has already figured out no output is possible
 			// we can skip executing the pipeline

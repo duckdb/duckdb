@@ -247,7 +247,6 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
     : PhysicalOperator(type, move(types), estimated_cardinality) {
 
-	// TODO why are these types not supported for caching?
 	enable_cache = true;
 	for (auto &col_type : types) {
 		if (!CanCacheType(col_type)) {
@@ -261,11 +260,11 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
                            GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto& state = (CachingOperatorState&) state_p;
 
-	// TODO only cache for VZ over 128: #if STANDARD_VECTOR_SIZE >= 128
 	// Fetch result form child
 	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
 
-	if (chunk.size() < CACHE_THRESHOLD) {
+#if STANDARD_VECTOR_SIZE >= 128
+	if (state.allow_caching && chunk.size() < CACHE_THRESHOLD) {s
 		// we have filtered out a significant amount of tuples
 		// add this chunk to the cache and continue
 
@@ -287,6 +286,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 			chunk.Reset();
 		}
 	}
+#endif
 
 	return child_result;
 }
