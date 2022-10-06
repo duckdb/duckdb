@@ -83,14 +83,14 @@ void StorageManager::Initialize() {
 }
 
 ///////////////////////////////////////////////////////////////////////////
-
-class SingleFileTableIoManager : public TableIoManager {
+class SingleFileTableIOManager : public TableIOManager {
 public:
-	BlockManager &block_manager;
-
-	explicit SingleFileTableIoManager(BlockManager &block_manager) :
+	explicit SingleFileTableIOManager(BlockManager &block_manager) :
 		block_manager(block_manager) {}
 
+	BlockManager &block_manager;
+
+public:
 	virtual BlockManager &GetIndexBlockManager() override {
 		return block_manager;
 	}
@@ -99,11 +99,13 @@ public:
 	}
 };
 
+SingleFileStorageManager::SingleFileStorageManager(DatabaseInstance &db, string path, bool read_only) :
+      StorageManager(db, move(path), read_only) {}
 
 void SingleFileStorageManager::LoadDatabase() {
 	if (InMemory()) {
 		block_manager = make_unique<InMemoryBlockManager>(*buffer_manager);
-		table_io_manager = make_unique<SingleFileTableIoManager>(*block_manager);
+		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
 
@@ -124,11 +126,11 @@ void SingleFileStorageManager::LoadDatabase() {
 		}
 		// initialize the block manager while creating a new db file
 		block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, true, config.options.use_direct_io);
-		table_io_manager = make_unique<SingleFileTableIoManager>(*block_manager);
+		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
 	} else {
 		// initialize the block manager while loading the current db file
 		block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, false, config.options.use_direct_io);
-		table_io_manager = make_unique<SingleFileTableIoManager>(*block_manager);
+		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
 
 		//! Load from storage
 		auto checkpointer = SingleFileCheckpointReader(*this);
@@ -260,10 +262,10 @@ bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
 	return expected_wal_size > db.config.options.checkpoint_wal_size;
 }
 
-shared_ptr<TableIoManager> SingleFileStorageManager::GetTableIoManager(BoundCreateTableInfo */*info*/) {
+shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCreateTableInfo *info /*info*/) {
 	// This is an unmanaged reference. No ref/deref overhead. Lifetime of the
 	// TableIoManager follows lifetime of the StorageManager (this).
-	return shared_ptr<TableIoManager>(shared_ptr<char>(nullptr), table_io_manager.get());
+	return shared_ptr<TableIOManager>(shared_ptr<char>(nullptr), table_io_manager.get());
 }
 
 } // namespace duckdb

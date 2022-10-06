@@ -18,6 +18,8 @@ WriteAheadLog::WriteAheadLog(DatabaseInstance &database, const string &path) : s
 	                                             FileFlags::FILE_FLAGS_APPEND);
 }
 
+WriteAheadLog::~WriteAheadLog() {}
+
 int64_t WriteAheadLog::GetWALSize() {
 	D_ASSERT(writer);
 	return writer->GetFileSize();

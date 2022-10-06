@@ -14,7 +14,7 @@ namespace duckdb {
 LocalTableStorage::LocalTableStorage(DataTable &table)
     : table(table), allocator(Allocator::Get(table.db)), deleted_rows(0) {
 	auto types = table.GetTypes();
-	row_groups = make_shared<RowGroupCollection>(table.info, table.table_io_manager->GetBlockManagerForRowData(),
+	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
 												 types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
 	stats.InitializeEmpty(types);

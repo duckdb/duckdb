@@ -22,13 +22,13 @@
 
 namespace duckdb {
 
-DataTable::DataTable(DatabaseInstance &db, shared_ptr<TableIoManager> table_io_manager_p, const string &schema, const string &table,
+DataTable::DataTable(DatabaseInstance &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema, const string &table,
                      vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data)
-    : info(make_shared<DataTableInfo>(db, schema, table)), column_definitions(move(column_definitions_p)), db(db),
-      table_io_manager(move(table_io_manager_p)), is_root(true) {
+    : info(make_shared<DataTableInfo>(db, move(table_io_manager_p), schema, table)), column_definitions(move(column_definitions_p)), db(db),
+      is_root(true) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
-	this->row_groups = make_shared<RowGroupCollection>(info, table_io_manager->GetBlockManagerForRowData(), types, 0);
+	this->row_groups = make_shared<RowGroupCollection>(info, TableIOManager::Get(*this).GetBlockManagerForRowData(), types, 0);
 	if (data && !data->row_groups.empty()) {
 		this->row_groups->Initialize(*data);
 		stats.Initialize(types, *data);
@@ -43,7 +43,7 @@ DataTable::DataTable(DatabaseInstance &db, shared_ptr<TableIoManager> table_io_m
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
-    : info(parent.info), db(parent.db), table_io_manager(parent.table_io_manager), is_root(true) {
+    : info(parent.info), db(parent.db), is_root(true) {
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
@@ -69,7 +69,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : info(parent.info), db(parent.db), table_io_manager(parent.table_io_manager), is_root(true) {
+    : info(parent.info), db(parent.db), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
@@ -118,7 +118,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 // Alter column to add new constraint
 DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint)
-    : info(parent.info), db(parent.db), table_io_manager(parent.table_io_manager), row_groups(parent.row_groups), is_root(true) {
+    : info(parent.info), db(parent.db), row_groups(parent.row_groups), is_root(true) {
 
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	for (auto &column_def : parent.column_definitions) {
@@ -138,7 +138,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      const vector<column_t> &bound_columns, Expression &cast_expr)
-    : info(parent.info), db(parent.db), table_io_manager(parent.table_io_manager), is_root(true) {
+    : info(parent.info), db(parent.db), is_root(true) {
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
 	for (auto &column_def : parent.column_definitions) {
@@ -177,6 +177,10 @@ vector<LogicalType> DataTable::GetTypes() {
 		types.push_back(it.Type());
 	}
 	return types;
+}
+
+TableIOManager &TableIOManager::Get(DataTable &table) {
+	return *table.info->table_io_manager;
 }
 
 //===--------------------------------------------------------------------===//

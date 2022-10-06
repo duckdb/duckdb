@@ -44,7 +44,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 	// create the global index
 	switch (info->index_type) {
 	case IndexType::ART: {
-		state->global_index = make_unique<ART>(storage_ids, *table.storage->table_io_manager, unbound_expressions, info->constraint_type, *context.db);
+		state->global_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions, info->constraint_type, *context.db);
 		break;
 	}
 	default:
@@ -64,7 +64,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->local_index =
-		    make_unique<ART>(storage_ids, *table.storage->table_io_manager, unbound_expressions, info->constraint_type, *context.client.db);
+		    make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions, info->constraint_type, *context.client.db);
 		break;
 	}
 	default:

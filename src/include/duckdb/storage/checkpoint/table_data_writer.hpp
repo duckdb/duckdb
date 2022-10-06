@@ -8,35 +8,9 @@
 
 #pragma once
 
-#include "duckdb/storage/checkpoint_manager.hpp"
+#include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
-class CheckpointWriter;
-class ColumnCheckpointState;
-class ColumnData;
-class ColumnSegment;
-class RowGroup;
-class BaseStatistics;
-class SegmentStatistics;
-
-// Writes data for an entire row group.
-class RowGroupWriter {
-public:
-	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_mgr) : table(table), partial_block_mgr(partial_block_mgr) {}
-
-	CompressionType GetColumnCompressionType(idx_t i);
-
-	virtual void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state) = 0;
-
-	virtual MetaBlockWriter &GetPayloadWriter() = 0;
-
-	void RegisterPartialBlock(PartialBlockAllocation &&allocation);
-	PartialBlockAllocation GetBlockAllocation(uint32_t segment_size);
-
-protected:
-	TableCatalogEntry &table;
-	PartialBlockManager &partial_block_mgr;
-};
 
 //! The table data writer is responsible for writing the data of a table to
 //! storage.
@@ -50,6 +24,7 @@ public:
 	explicit TableDataWriter(TableCatalogEntry &table);
 	virtual ~TableDataWriter();
 
+public:
 	void WriteTableData();
 
 	CompressionType GetColumnCompressionType(idx_t i);
@@ -65,26 +40,12 @@ protected:
 	vector<RowGroupPointer> row_group_pointers;
 };
 
-// Writes data for an entire row group.
-class SingleFileRowGroupWriter : public RowGroupWriter {
-public:
-	SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_mgr, MetaBlockWriter &table_data_writer) :
-		RowGroupWriter(table, partial_block_mgr), table_data_writer(table_data_writer) {}
-
-	virtual void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state) override;
-
-	virtual MetaBlockWriter &GetPayloadWriter() override;
-
-	//! MetaBlockWriter is a cursor on a given BlockManager. This returns the
-	//! cursor against which we should write payload data for the specified RowGroup.
-	MetaBlockWriter &table_data_writer;
-};
-
 class SingleFileTableDataWriter : public TableDataWriter {
 public:
 	SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager, TableCatalogEntry &table,
 	                MetaBlockWriter &table_data_writer, MetaBlockWriter &meta_data_writer);
 
+public:
 	virtual void FinalizeTable(vector<unique_ptr<BaseStatistics>> &&global_stats, DataTableInfo *info) override;
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 

@@ -386,7 +386,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 
 	switch (info->index_type) {
 	case IndexType::ART: {
-		auto art = make_unique<ART>(info->column_ids, *table_catalog->storage->table_io_manager, move(unbound_expressions), info->constraint_type, *context.db,
+		auto art = make_unique<ART>(info->column_ids, TableIOManager::Get(*table_catalog->storage), move(unbound_expressions), info->constraint_type, *context.db,
 		                            root_block_id, root_offset);
 		index_catalog->index = art.get();
 		table_catalog->storage->info->indexes.AddIndex(move(art));

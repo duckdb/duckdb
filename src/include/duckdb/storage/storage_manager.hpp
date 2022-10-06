@@ -11,6 +11,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 
 namespace duckdb {
@@ -22,24 +23,12 @@ class TransactionManager;
 class TableCatalogEntry;
 
 struct DatabaseSize {
-	idx_t total_blocks{0};
-	idx_t block_size{0};
-	idx_t free_blocks{0};
-	idx_t used_blocks{0};
-	idx_t bytes{0};
-	idx_t wal_size{0};
-};
-
-class TableIoManager {
-public:
-	// The following would make more sense, but not all indexes are named.
-	// It's not clear how to identify one index vs. another (for constraints).
-	//    virtual BlockManager &GetBlockManagerForIndex(string index_name) = 0;
-	// So do this instead:
-	virtual BlockManager &GetIndexBlockManager() = 0;
-
-	// Get block manager for a new row group.
-	virtual BlockManager &GetBlockManagerForRowData() = 0;
+	idx_t total_blocks = 0;
+	idx_t block_size = 0;
+	idx_t free_blocks = 0;
+	idx_t used_blocks = 0;
+	idx_t bytes = 0;
+	idx_t wal_size = 0;
 };
 
 class StorageCommitState {
@@ -90,7 +79,7 @@ public:
 	virtual bool IsCheckpointClean(block_id_t checkpoint_id) = 0;
 	virtual void CreateCheckpoint(bool delete_wal = false, bool force_checkpoint = false) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
-	virtual shared_ptr<TableIoManager> GetTableIoManager(BoundCreateTableInfo *info) = 0;
+	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 
 protected:
 	virtual void LoadDatabase() = 0;
@@ -99,7 +88,7 @@ protected:
 	//! The path of the database
 	string path;
 	//! The WriteAheadLog of the storage manager
-	std::unique_ptr<WriteAheadLog> wal;
+	unique_ptr<WriteAheadLog> wal;
 
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
@@ -108,22 +97,22 @@ protected:
 //! Stores database in a single file.
 class SingleFileStorageManager : public StorageManager {
 public:
-	using StorageManager::StorageManager;
+	SingleFileStorageManager(DatabaseInstance &db, string path, bool read_only);
 
 	//! The BlockManager to read/store meta information and data in blocks
 	unique_ptr<BlockManager> block_manager;
 	//! TableIoManager
-	unique_ptr<TableIoManager> table_io_manager;
+	unique_ptr<TableIOManager> table_io_manager;
 
 public:
-	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
-	virtual unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) override;
-	virtual bool IsCheckpointClean(block_id_t checkpoint_id) override;
-	virtual void CreateCheckpoint(bool delete_wal, bool force_checkpoint) override;
-	virtual DatabaseSize GetDatabaseSize() override;
-	virtual shared_ptr<TableIoManager> GetTableIoManager(BoundCreateTableInfo *info) override;
+	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
+	unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) override;
+	bool IsCheckpointClean(block_id_t checkpoint_id) override;
+	void CreateCheckpoint(bool delete_wal, bool force_checkpoint) override;
+	DatabaseSize GetDatabaseSize() override;
+	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 
 protected:
-	virtual void LoadDatabase() override;
+	void LoadDatabase() override;
 };
 } // namespace duckdb

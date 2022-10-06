@@ -42,6 +42,7 @@ class WriteAheadLog {
 public:
 	//! Initialize the WAL in the specified directory
 	explicit WriteAheadLog(DatabaseInstance &database, const string &path);
+	virtual ~WriteAheadLog();
 
 	//! Skip writing to the WAL
 	bool skip_writing;
