@@ -1,8 +1,8 @@
-#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/dl.hpp"
-#include "mbedtls_wrapper.hpp"
-#include "duckdb/function/replacement_open.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/function/replacement_open.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
 
@@ -133,7 +133,7 @@ void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string
 		                            init_fun_name, res.filename, e.what());
 	}
 
-	DuckDB(DatabaseInstance::GetDatabase(context)).SetExtensionLoaded(extension);
+	DatabaseInstance::GetDatabase(context).SetExtensionLoaded(extension);
 }
 
 unique_ptr<ReplacementOpenData> ExtensionHelper::ReplacementOpenPre(const string &extension, DBConfig &config) {
