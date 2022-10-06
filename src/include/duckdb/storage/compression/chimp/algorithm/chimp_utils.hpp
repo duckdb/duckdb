@@ -49,7 +49,7 @@ static inline int __builtin_clzll(unsigned long long mask) {
 }
 
 static inline int __builtin_ctz(unsigned int value) {
-	unsigned int trailing_zero = 0;
+	unsigned long trailing_zero = 0;
 
 	if (_BitScanForward(&trailing_zero, value)) {
 		return trailing_zero;
@@ -60,7 +60,7 @@ static inline int __builtin_ctz(unsigned int value) {
 }
 
 static inline int __builtin_clz(unsigned int value) {
-	unsigned int leading_zero = 0;
+	unsigned long leading_zero = 0;
 
 	if (_BitScanReverse(&leading_zero, value)) {
 		return 31 - leading_zero;
