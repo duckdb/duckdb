@@ -89,8 +89,6 @@ struct SignificantBits<uint32_t> {
 	static constexpr uint8_t mask = ((uint8_t)1 << size) - 1;
 };
 
-// COUNT ZEROS
-
 template <class T>
 struct CountZeros {};
 
