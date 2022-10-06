@@ -28,10 +28,10 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 
 struct PartialBlockForCheckpoint : PartialBlock {
 	PartialBlockForCheckpoint(ColumnSegment *first_segment, BlockManager &block_manager, PartialBlockState state)
-	    : PartialBlock(move(state)), first_segment(first_segment), block_manager(block_manager) {
+	    : PartialBlock(state), first_segment(first_segment), block_manager(block_manager) {
 	}
 
-	virtual ~PartialBlockForCheckpoint() override {
+	~PartialBlockForCheckpoint() override {
 		D_ASSERT(IsFlushed() || Exception::UncaughtException());
 	}
 
@@ -43,19 +43,20 @@ struct PartialBlockForCheckpoint : PartialBlock {
 	// (via ColumnSegment::ConvertToPersistent)
 	ColumnSegment *first_segment;
 	BlockManager &block_manager;
+	vector<PartialColumnSegment> tail_segments;
 
+public:
 	struct PartialColumnSegment {
 		ColumnSegment *segment;
 		uint32_t offset_in_block;
 	};
-	vector<PartialColumnSegment> tail_segments;
 
 	bool IsFlushed() {
 		// first_segment is zeroed on Flush
 		return !first_segment;
 	}
 
-	virtual void Flush() override {
+	void Flush() override {
 		// At this point, we've already copied all data from tail_segments
 		// into the page owned by first_segment. We flush all segment data to
 		// disk with the following call.

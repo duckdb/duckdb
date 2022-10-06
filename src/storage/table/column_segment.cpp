@@ -52,7 +52,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
                              ColumnSegmentType segment_type, idx_t start, idx_t count, CompressionFunction *function_p,
                              unique_ptr<BaseStatistics> statistics, block_id_t block_id_p, idx_t offset_p)
     : SegmentBase(start, count), db(db), type(move(type_p)), type_size(GetTypeIdSize(type.InternalType())),
-      segment_type(segment_type), function(function_p), stats(type, move(statistics)), block(block),
+      segment_type(segment_type), function(function_p), stats(type, move(statistics)), block(move(block)),
       block_id(block_id_p), offset(offset_p) {
 	D_ASSERT(function);
 	if (function->init_segment) {

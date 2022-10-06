@@ -91,10 +91,10 @@ public:
 	BlockManager &block_manager;
 
 public:
-	virtual BlockManager &GetIndexBlockManager() override {
+	BlockManager &GetIndexBlockManager() override {
 		return block_manager;
 	}
-	virtual BlockManager &GetBlockManagerForRowData() override {
+	BlockManager &GetBlockManagerForRowData() override {
 		return block_manager;
 	}
 };
@@ -161,7 +161,7 @@ class SingleFileStorageCommitState : public StorageCommitState {
 
 public:
 	SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint);
-	~SingleFileStorageCommitState();
+	~SingleFileStorageCommitState() override;
 
 	// Make the commit persistent
 	void FlushCommit() override;
