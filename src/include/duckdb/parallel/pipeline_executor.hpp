@@ -81,9 +81,6 @@ private:
 	//! Whether or not this pipeline requires keeping track of the batch index of the source
 	bool requires_batch_index = false;
 
-	//! Cached chunks for any operators that require caching
-	vector<unique_ptr<DataChunk>> cached_chunks;
-
 private:
 	void StartOperator(PhysicalOperator *op);
 	void EndOperator(PhysicalOperator *op, DataChunk *chunk);

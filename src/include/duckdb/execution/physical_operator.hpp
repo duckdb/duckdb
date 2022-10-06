@@ -146,10 +146,6 @@ public:
 		return false;
 	}
 
-	virtual bool RequiresCache() const {
-		return false;
-	}
-
 	virtual bool RequiresFinalExecute() const {
 		return false;
 	}
@@ -244,10 +240,9 @@ public:
 class CachingPhysicalOperator : public PhysicalOperator {
 public:
 	static constexpr const idx_t CACHE_THRESHOLD = 64;
+	CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality);
 
-	CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
-	    : PhysicalOperator(type, move(types), estimated_cardinality) {
-	}
+	bool enable_cache;
 
 public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -259,14 +254,13 @@ public:
 		return true;
 	}
 
-	bool RequiresCache() const final {
-		return false;
-	}
-
 protected:
 	//! Child classes need to implement the ExecuteInternal method instead of the Execute
 	virtual OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                            GlobalOperatorState &gstate, OperatorState &state) const = 0;
+
+private:
+	bool CanCacheType(const LogicalType &type);
 };
 
 } // namespace duckdb

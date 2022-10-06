@@ -216,7 +216,7 @@ unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ExecutionCo
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-class PhysicalNestedLoopJoinState : public OperatorState {
+class PhysicalNestedLoopJoinState : public CachingOperatorState {
 public:
 	PhysicalNestedLoopJoinState(Allocator &allocator, const PhysicalNestedLoopJoin &op,
 	                            const vector<JoinCondition> &conditions)
@@ -259,7 +259,7 @@ unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ExecutionCont
 	return make_unique<PhysicalNestedLoopJoinState>(Allocator::Get(context.client), *this, conditions);
 }
 
-OperatorResultType PhysicalNestedLoopJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
