@@ -301,8 +301,8 @@ idx_t DuckDB::NumberOfThreads() {
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->loaded_extensions.find(name) != instance->loaded_extensions.end();
 }
-void DuckDB::SetExtensionLoaded(const std::string &name) {
-	instance->loaded_extensions.insert(name);
+void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
+	loaded_extensions.insert(name);
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
