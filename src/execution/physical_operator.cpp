@@ -225,4 +225,45 @@ void PhysicalOperator::Verify() {
 #endif
 }
 
+OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                           GlobalOperatorState &gstate, OperatorState &state_p) const {
+	auto& state = (CachingOperatorState&) state_p;
+
+	// Fetch result form child
+	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
+
+	if (chunk.size() < CACHE_THRESHOLD) {
+		// we have filtered out a significant amount of tuples
+		// add this chunk to the cache and continue
+
+		if (!state.cached_chunk) {
+			state.cached_chunk = make_unique<DataChunk>();
+			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+		}
+
+		state.cached_chunk->Append(chunk);
+
+		// TODO should we also flush if child_result == OperatorResultType::FINISHED?
+		if (state.cached_chunk->size() >= (STANDARD_VECTOR_SIZE - CACHE_THRESHOLD)) {
+			// chunk cache full: return it
+			chunk.Move(*state.cached_chunk);
+			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+			return child_result;
+		} else {
+			// chunk cache not full return empty result
+			chunk.Reset();
+		}
+	}
+
+	return child_result;
+}
+
+void CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+                  OperatorState &state_p) const {
+
+	auto& state = (CachingOperatorState&) state_p;
+	chunk.Move(*state.cached_chunk);
+	state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+}
+
 } // namespace duckdb

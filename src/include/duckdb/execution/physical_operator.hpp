@@ -230,4 +230,43 @@ public:
 	                        PhysicalOperator *pipeline_child);
 };
 
+class CachingOperatorState : public OperatorState {
+public:
+	virtual ~CachingOperatorState() {
+	}
+
+	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
+	}
+	unique_ptr<DataChunk> cached_chunk;
+};
+
+//! Base class that caches output from child class below certain cache threshold
+class CachingPhysicalOperator : public PhysicalOperator {
+public:
+	static constexpr const idx_t CACHE_THRESHOLD = 64;
+
+	CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
+	    : PhysicalOperator(type, move(types), estimated_cardinality) {
+	}
+
+public:
+	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                           GlobalOperatorState &gstate, OperatorState &state) const final;
+	void FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+	                                    OperatorState &state) const final;
+
+	bool RequiresFinalExecute() const final {
+		return true;
+	}
+
+	bool RequiresCache() const final {
+		return false;
+	}
+
+protected:
+	//! Child classes need to implement the ExecuteInternal method instead of the Execute
+	virtual OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                                            GlobalOperatorState &gstate, OperatorState &state) const = 0;
+};
+
 } // namespace duckdb
