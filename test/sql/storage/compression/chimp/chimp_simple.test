@@ -6,25 +6,30 @@
 load __TEST_DIR__/test_chimp.db
 
 statement ok
-PRAGMA force_compression='chimp'
+PRAGMA force_compression='uncompressed'
 
-#statement error
-#select random() * 100 from range(1024);
-
-# simple compression with few values
+# Create a table with random doubles compressed as Uncompressed
 statement ok
-CREATE TABLE test (a double);
-
-statement ok
-COPY test FROM 'test/sql/copy/csv/data/test/chimp_identical.csv';
+create table random_double as select random() * 100 from range(1024);
 
 statement ok
 checkpoint
 
+# Now create a duplicate of this table, compressed with Chimp instead
+statement ok
+PRAGMA force_compression='chimp'
+
+statement ok
+create table random_chimp_double as select * from random_double;
+
+statement ok
+checkpoint
+
+# Assert that the data was not corrupted by compressing to Chimp
 query I nosort r1
-select * from 'test/sql/copy/csv/data/test/chimp_identical.csv'
+select * from random_double;
 ----
 
 query I nosort r1
-select a from test
+select * from random_chimp_double;
 ----
