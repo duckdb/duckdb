@@ -142,6 +142,25 @@ void PipelineExecutor::PushFinalize() {
 			cached_chunks[i].reset();
 		}
 	}
+
+	// Loop through operators
+	// Call FinalExecute to fetch last chunk
+	for (idx_t i = start_idx; i < pipeline.operators.size(); i++) {
+
+		// Do we really need to check this for all operators?
+		if (pipeline.operators[i]->RequiresFinalExecute()) {
+			// TODO reuse an available Chunk?
+			auto tmp_chunk = make_unique<DataChunk>();
+			tmp_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[i]->GetTypes());
+
+			// TODO do the state params even make sense here?
+			pipeline.operators[i]->FinalExecute(context, *tmp_chunk, *pipeline.operators[i]->op_state, *intermediate_states[i]);
+
+			// Push the resulting chunk
+			ExecutePushInternal(*tmp_chunk, i + 1);
+		}
+	}
+
 	D_ASSERT(local_sink_state);
 	// run the combine for the sink
 	pipeline.sink->Combine(context, *pipeline.sink->sink_state, *local_sink_state);

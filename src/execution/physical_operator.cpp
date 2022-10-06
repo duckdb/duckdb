@@ -51,6 +51,11 @@ OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChun
                                              GlobalOperatorState &gstate, OperatorState &state) const {
 	throw InternalException("Calling Execute on a node that is not an operator!");
 }
+
+void PhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+                  OperatorState &state) const {
+	throw InternalException("Calling FinalExecute on a node that is not an operator!");
+}
 // LCOV_EXCL_STOP
 
 //===--------------------------------------------------------------------===//
