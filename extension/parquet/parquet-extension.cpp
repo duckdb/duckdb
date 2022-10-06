@@ -1,42 +1,37 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include <string>
-#include <vector>
+#include "parquet-extension.hpp"
+
+#include "duckdb.hpp"
+#include "parquet_metadata.hpp"
+#include "parquet_reader.hpp"
+#include "parquet_writer.hpp"
+#include "zstd_file_system.hpp"
+
 #include <fstream>
 #include <iostream>
 #include <numeric>
-
-#include "parquet-extension.hpp"
-#include "parquet_reader.hpp"
-#include "parquet_writer.hpp"
-#include "parquet_metadata.hpp"
-#include "zstd_file_system.hpp"
-
-#include "duckdb.hpp"
+#include <string>
+#include <vector>
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-
-#include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-
-#include "duckdb/storage/statistics/base_statistics.hpp"
-
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/field_writer.hpp"
-
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #endif
 
 namespace duckdb {
@@ -71,6 +66,8 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 	idx_t file_index;
 	vector<column_t> column_ids;
 	TableFilterSet *table_filters;
+	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
+	DataChunk all_columns;
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
@@ -81,8 +78,15 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t row_group_index;
 	idx_t max_threads;
 
+	vector<idx_t> projection_ids;
+	vector<LogicalType> scanned_types;
+
 	idx_t MaxThreads() const override {
 		return max_threads;
+	}
+
+	bool CanRemoveFilterColumns() const {
+		return !projection_ids.empty();
 	}
 };
 
@@ -134,6 +138,7 @@ public:
 
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
+		table_function.filter_prune = true;
 		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
 		set.AddFunction(table_function);
 		table_function.arguments = {LogicalType::LIST(LogicalType::VARCHAR)};
@@ -355,6 +360,9 @@ public:
 		result->is_parallel = true;
 		result->batch_index = 0;
 		result->table_filters = input.filters;
+		if (input.CanRemoveFilterColumns()) {
+			result->all_columns.Initialize(context.client, gstate.scanned_types);
+		}
 		if (!ParquetParallelStateNext(context.client, bind_data, *result, gstate)) {
 			return nullptr;
 		}
@@ -383,6 +391,17 @@ public:
 		result->file_index = 0;
 		result->batch_index = 0;
 		result->max_threads = ParquetScanMaxThreads(context, input.bind_data);
+		if (input.CanRemoveFilterColumns()) {
+			result->projection_ids = input.projection_ids;
+			const auto table_types = bind_data.types;
+			for (const auto &col_idx : input.column_ids) {
+				if (IsRowIdColumnId(col_idx)) {
+					result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+				} else {
+					result->scanned_types.push_back(table_types[col_idx]);
+				}
+			}
+		}
 		return move(result);
 	}
 
@@ -422,7 +441,14 @@ public:
 		auto &bind_data = (ParquetReadBindData &)*data_p.bind_data;
 
 		do {
-			data.reader->Scan(data.scan_state, output);
+			if (gstate.CanRemoveFilterColumns()) {
+				data.all_columns.Reset();
+				data.reader->Scan(data.scan_state, data.all_columns);
+				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
+			} else {
+				data.reader->Scan(data.scan_state, output);
+			}
+
 			bind_data.chunk_count++;
 			if (output.size() > 0) {
 				return;
