@@ -5,6 +5,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
 namespace duckdb {
 

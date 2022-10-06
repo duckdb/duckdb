@@ -15,6 +15,7 @@
 
 namespace duckdb {
 class BlockHandle;
+class BlockManager;
 class BufferHandle;
 class DatabaseInstance;
 

@@ -16,6 +16,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 

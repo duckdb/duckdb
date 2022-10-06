@@ -8,6 +8,7 @@
 #include "duckdb/planner/table_filter.hpp"
 
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
 
