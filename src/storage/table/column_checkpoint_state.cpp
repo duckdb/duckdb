@@ -31,6 +31,7 @@ struct PartialBlockForCheckpoint : PartialBlock {
 		ColumnSegment *segment;
 		uint32_t offset_in_block;
 	};
+
 public:
 	PartialBlockForCheckpoint(ColumnSegment *first_segment, BlockManager &block_manager, PartialBlockState state)
 	    : PartialBlock(state), first_segment(first_segment), block_manager(block_manager) {
@@ -51,7 +52,6 @@ public:
 	vector<PartialColumnSegment> tail_segments;
 
 public:
-
 	bool IsFlushed() {
 		// first_segment is zeroed on Flush
 		return !first_segment;
