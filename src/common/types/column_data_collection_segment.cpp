@@ -215,12 +215,6 @@ void ColumnDataCollectionSegment::FetchChunk(idx_t chunk_idx, DataChunk &result,
 	D_ASSERT(chunk_idx < chunk_data.size());
 	ChunkManagementState state;
 	state.properties = ColumnDataScanProperties::DISALLOW_ZERO_COPY;
-	FetchChunk(state, chunk_idx, result, column_ids);
-}
-
-void ColumnDataCollectionSegment::FetchChunk(ChunkManagementState &state, idx_t chunk_idx, DataChunk &result,
-                                             const vector<column_t> &column_ids) {
-	D_ASSERT(chunk_idx < chunk_data.size());
 	ReadChunk(chunk_idx, state, result, column_ids);
 }
 

@@ -14,6 +14,8 @@ namespace duckdb {
 using ValidityBytes = JoinHashTable::ValidityBytes;
 using ScanStructure = JoinHashTable::ScanStructure;
 using ProbeSpill = JoinHashTable::ProbeSpill;
+using ProbeSpillLocalScanState = JoinHashTable::ProbeSpillLocalScanState;
+using ProbeSpillGlobalScanState = JoinHashTable::ProbeSpillGlobalScanState;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
@@ -1191,7 +1193,7 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChun
 }
 
 ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types)
-    : context(context), probe_types(probe_types) {
+    : ht(ht), context(context), probe_types(probe_types) {
 	if (ht.total_count - ht.Count() <= ht.tuples_per_round) {
 		// No need to partition as we will only have one more probe round
 		partitioned = false;
@@ -1253,57 +1255,86 @@ void ProbeSpill::Finalize() {
 	}
 }
 
-void ProbeSpill::PrepareNextProbeCollection(JoinHashTable &ht) {
-	// Reset previous probe collection
-	current_probe_collection = nullptr;
-	chunk_references.clear();
+idx_t ProbeSpill::ChunkCount(ProbeSpillGlobalScanState &gstate) const {
+	if (partitioned) {
+		idx_t count = 0;
+		for (idx_t i = ht.partition_start; i < ht.partition_end; i++) {
+			count += gstate.partition_chunk_references[i].size();
+		}
+		return count;
+	} else {
+		return global_spill_collection->ChunkCount();
+	}
+}
+
+void ProbeSpill::PrepareNextProbe(ProbeSpillGlobalScanState &gstate) {
 	if (partitioned) {
 		auto &partitions = global_partitions->GetPartitions();
+		if (gstate.partition_chunk_references.empty()) {
+			// First call to prepare - initialize chunk references for all partitions
+			for (idx_t i = 0; i < partitions.size(); i++) {
+				gstate.partition_chunk_references.push_back(partitions[i]->GetChunkReferences(true));
+			}
+		}
+
 		if (ht.partition_start == partitions.size()) {
 			return;
 		}
 
-		// Pre-allocate
-		idx_t chunks = 0;
-		for (idx_t p_idx = ht.partition_start; p_idx < ht.partition_end; p_idx++) {
-			chunks += partitions[p_idx]->ChunkCount();
-		}
-		chunk_references.reserve(chunks);
-
-		// Get sorted chunk references per partition
-		for (idx_t p_idx = ht.partition_start; p_idx < ht.partition_end; p_idx++) {
-			auto partition_chunk_references = partitions[p_idx]->GetChunkReferences(true);
-			chunk_references.insert(chunk_references.end(), partition_chunk_references.begin(),
-			                        partition_chunk_references.end());
-		}
-
-		// TODO: what to do with partition collections?
+		// Reset indices
+		gstate.probe_partition_idx = ht.partition_start;
+		gstate.probe_chunk_idx = 0;
 	} else {
-		current_probe_collection = move(global_spill_collection);
-		chunk_references = current_probe_collection->GetChunkReferences(false);
+		global_spill_collection->InitializeScan(gstate.scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY, true);
 	}
 }
 
-void ProbeSpill::ScanChunk(ChunkManagementState &state, idx_t chunk_idx, DataChunk &chunk) {
-	auto &chunk_ref = chunk_references[chunk_idx];
-	auto &segment = *chunk_ref.first;
-	auto &idx_within_segment = chunk_ref.second;
+bool ProbeSpill::GetScanIndex(ProbeSpillGlobalScanState &gstate, ProbeSpillLocalScanState &lstate) {
+	if (partitioned) {
+		// Check if done
+		if (gstate.probe_partition_idx == ht.partition_end) {
+			return false;
+		}
 
-	// TODO: delete handles of passed blocks
-	//  Difficulties:
-	//  - segment contains a ColumnDataAllocator and a vector of ChunkMetaData, which is indexed by idx_within_segment
-	//  - The ChunkMetaData contains a vector of block IDs that must be kept alive
-	//  - The block IDs index the vector of BlockMetaData in the ColumnDataAllocator, which is a private field ...
-	//  - We've sorted these chunk references by their minimum block ID
-	//  Solution?
-	//  - When the minimum block ID of a ChunkMetaData is N, we can delete all BlockMetaData up to index N
-	//  - When the allocator changes, we can delete it! - Also need to reset handles in local scan state
-	//  Plan of attack: Add InitializeScanAndConsume to ColumnDataCollection? Or a bool "consume" to InitializeScan
-	//  Need a few fields in the scan states to accomplish this
+		// Get indices
+		auto next_partition_index = gstate.probe_partition_idx;
+		auto next_chunk_index = gstate.probe_chunk_idx++;
 
-	state.handles.clear(); // TODO: don't clear if same allocator as before
+		if (lstate.probe_partition_index != next_partition_index) {
+			// Previously scanned a different partition, need to reset local state pins
+			lstate.scan_state.current_chunk_state.handles.clear();
+		}
+
+		// Assign them to local state
+		lstate.probe_partition_index = next_partition_index;
+		lstate.probe_chunk_index = next_chunk_index;
+
+		// Increment to next partition, if needed
+		if (gstate.probe_chunk_idx == gstate.partition_chunk_references[gstate.probe_partition_idx].size()) {
+			gstate.probe_partition_idx++;
+			gstate.probe_chunk_idx = 0;
+		}
+		return true;
+	} else {
+		return global_spill_collection->NextScanIndex(gstate.scan_state.scan_state, lstate.probe_chunk_index,
+		                                              lstate.probe_segment_index, lstate.probe_row_index);
+	}
+}
+
+void ProbeSpill::ScanChunk(ProbeSpillGlobalScanState &gstate, ProbeSpillLocalScanState &lstate, DataChunk &chunk) {
 	chunk.Reset();
-	segment.FetchChunk(state, idx_within_segment, chunk, column_ids);
+	if (partitioned) {
+		auto &chunk_ref = gstate.partition_chunk_references[lstate.probe_partition_index][lstate.probe_chunk_index];
+		auto &segment = *chunk_ref.first;
+		auto &idx_within_segment = chunk_ref.second;
+
+		segment.ReadChunk(idx_within_segment, lstate.scan_state.current_chunk_state, chunk, column_ids);
+	} else {
+		D_ASSERT(gstate.scan_state.scan_state.consume);
+		D_ASSERT(gstate.scan_state.scan_state.properties == ColumnDataScanProperties::ALLOW_ZERO_COPY);
+		global_spill_collection->ScanAtIndex(gstate.scan_state, lstate.scan_state, chunk, lstate.probe_chunk_index,
+		                                     lstate.probe_segment_index, lstate.probe_row_index);
+	}
 	chunk.Verify();
 }
 

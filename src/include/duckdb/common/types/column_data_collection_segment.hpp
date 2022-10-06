@@ -112,8 +112,6 @@ public:
 	idx_t ChunkCount() const;
 	void FetchChunk(idx_t chunk_idx, DataChunk &result);
 	void FetchChunk(idx_t chunk_idx, DataChunk &result, const vector<column_t> &column_ids);
-	void FetchChunk(ChunkManagementState &state, idx_t chunk_idx, DataChunk &result,
-	                const vector<column_t> &column_ids);
 
 	void Verify();
 

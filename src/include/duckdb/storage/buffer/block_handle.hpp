@@ -53,6 +53,10 @@ public:
 		unswizzled = unswizzler;
 	}
 
+	inline void SetCanDestroy(bool can_destroy_p) {
+		can_destroy = can_destroy_p;
+	}
+
 private:
 	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock();
@@ -72,7 +76,7 @@ private:
 	//! Internal eviction timestamp
 	atomic<idx_t> eviction_timestamp;
 	//! Whether or not the buffer can be destroyed (only used for temporary buffers)
-	const bool can_destroy;
+	bool can_destroy;
 	//! The memory usage of the block
 	idx_t memory_usage;
 	//! Does the block contain any memory pointers?

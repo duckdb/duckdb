@@ -241,6 +241,28 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
+	//! Thread-global scan state for the probe spill
+	struct ProbeSpillGlobalScanState {
+		ColumnDataParallelScanState scan_state;
+		vector<vector<pair<ColumnDataCollectionSegment *, idx_t>>> partition_chunk_references;
+
+		idx_t probe_partition_idx;
+		idx_t probe_chunk_idx;
+	};
+
+	//! Thread-local scan state for the probe spill
+	struct ProbeSpillLocalScanState {
+		ColumnDataLocalScanState scan_state;
+
+		idx_t probe_partition_index = DConstants::INVALID_INDEX;
+		idx_t probe_chunk_index;
+		idx_t probe_segment_index;
+		idx_t probe_row_index;
+	};
+
+	//! ProbeSpill represents materialized probe-side data that could not be probed during PhysicalHashJoin::Execute
+	//! because the HashTable did not fit in memory. The ProbeSpill is not partitioned if the remaining data can be
+	//! dealt with in just 1 more round of probing, otherwise it is radix partitioned in the same way as the HashTable
 	struct ProbeSpill {
 	public:
 		ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types);
@@ -252,16 +274,18 @@ public:
 		//! Finalize by merging the thread-local accumulated data
 		void Finalize();
 
-		//! Get the probe collection for the next probe round
-		void PrepareNextProbeCollection(JoinHashTable &ht);
-		//! Number of chunks in the current probe collection
-		idx_t ChunkCount() const {
-			return chunk_references.size();
-		}
+		//! The number of chunks in the current probe round
+		idx_t ChunkCount(ProbeSpillGlobalScanState &gstate) const;
+
+		//! Prepare the next probe round
+		void PrepareNextProbe(ProbeSpillGlobalScanState &gstate);
+		//! Get the indices to scan next
+		bool GetScanIndex(ProbeSpillGlobalScanState &gstate, ProbeSpillLocalScanState &lstate);
 		//! Scans the chunk with the given index
-		void ScanChunk(ChunkManagementState &state, idx_t chunk_idx, DataChunk &chunk);
+		void ScanChunk(ProbeSpillGlobalScanState &gstate, ProbeSpillLocalScanState &lstate, DataChunk &chunk);
 
 	private:
+		JoinHashTable &ht;
 		mutex lock;
 		ClientContext &context;
 
@@ -281,11 +305,6 @@ public:
 		unique_ptr<ColumnDataCollection> global_spill_collection;
 		vector<unique_ptr<ColumnDataCollection>> local_spill_collections;
 		vector<unique_ptr<ColumnDataAppendState>> local_spill_append_states;
-
-		//! The probe collection currently being read
-		unique_ptr<ColumnDataCollection> current_probe_collection;
-		//! The references (in order) to the chunks of the current probe collection
-		vector<pair<ColumnDataCollectionSegment *, idx_t>> chunk_references;
 	};
 
 	//! Whether we are doing an external hash join

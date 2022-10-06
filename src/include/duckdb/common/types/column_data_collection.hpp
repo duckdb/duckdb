@@ -71,21 +71,21 @@ public:
 	//! Initializes a chunk with the correct types for a given scan state
 	DUCKDB_API void InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
-	DUCKDB_API void
-	InitializeScan(ColumnDataScanState &state,
-	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
+	DUCKDB_API void InitializeScan(ColumnDataScanState &state,
+	                               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY,
+	                               bool consume = false) const;
 	//! Initializes a Scan state for scanning a subset of the columns
-	DUCKDB_API void
-	InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
-	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
+	DUCKDB_API void InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
+	                               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY,
+	                               bool consume = false) const;
 	//! Initialize a parallel scan over the column data collection over all columns
-	DUCKDB_API void
-	InitializeScan(ColumnDataParallelScanState &state,
-	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
+	DUCKDB_API void InitializeScan(ColumnDataParallelScanState &state,
+	                               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY,
+	                               bool consume = false) const;
 	//! Initialize a parallel scan over the column data collection over a subset of the columns
-	DUCKDB_API void
-	InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids,
-	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
+	DUCKDB_API void InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids,
+	                               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY,
+	                               bool consume = false) const;
 	//! Scans a DataChunk from the ColumnDataCollection
 	DUCKDB_API bool Scan(ColumnDataScanState &state, DataChunk &result) const;
 	//! Scans a DataChunk from the ColumnDataCollection

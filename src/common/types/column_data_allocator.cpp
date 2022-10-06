@@ -28,13 +28,19 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
 	}
 }
 
-BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
+BufferHandle ColumnDataAllocator::Pin(uint32_t block_id, bool consume) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	if (shared) {
 		lock_guard<mutex> guard(lock);
-		return alloc.buffer_manager->Pin(blocks[block_id].handle);
+		auto &block_handle = blocks[block_id].handle;
+		auto result = alloc.buffer_manager->Pin(block_handle);
+		block_handle->SetCanDestroy(consume);
+		return result;
 	} else {
-		return alloc.buffer_manager->Pin(blocks[block_id].handle);
+		auto &block_handle = blocks[block_id].handle;
+		auto result = alloc.buffer_manager->Pin(block_handle);
+		block_handle->SetCanDestroy(consume);
+		return result;
 	}
 }
 
@@ -143,7 +149,7 @@ void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, Chun
 			// already pinned: don't need to do anything
 			continue;
 		}
-		state.handles[block_id] = Pin(block_id);
+		state.handles[block_id] = Pin(block_id, state.consume);
 	}
 }
 
