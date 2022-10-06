@@ -12,32 +12,23 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
 		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
 	}
+
 	bool can_cache_in_pipeline = pipeline.sink && !pipeline.IsOrderDependent() && !requires_batch_index;
+
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
-	cached_chunks.resize(pipeline.operators.size());
 	for (idx_t i = 0; i < pipeline.operators.size(); i++) {
 		auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
 		auto current_operator = pipeline.operators[i];
+
 		auto chunk = make_unique<DataChunk>();
 		chunk->Initialize(Allocator::Get(context.client), prev_operator->GetTypes());
 		intermediate_chunks.push_back(move(chunk));
-		intermediate_states.push_back(current_operator->GetOperatorState(context));
-		if (can_cache_in_pipeline && current_operator->RequiresCache()) {
-			auto &cache_types = current_operator->GetTypes();
-			bool can_cache = true;
-			for (auto &type : cache_types) {
-				if (!CanCacheType(type)) {
-					can_cache = false;
-					break;
-				}
-			}
-			if (!can_cache) {
-				continue;
-			}
-			cached_chunks[i] = make_unique<DataChunk>();
-			cached_chunks[i]->Initialize(Allocator::Get(context.client), current_operator->GetTypes());
-		}
+
+		auto op_state = current_operator->GetOperatorState(context);
+		op_state->AllowCaching(can_cache_in_pipeline);
+		intermediate_states.push_back(std::move(op_state));
+
 		if (current_operator->IsSink() && current_operator->sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
 			// one of the operators has already figured out no output is possible
 			// we can skip executing the pipeline
@@ -136,12 +127,22 @@ void PipelineExecutor::PushFinalize() {
 	// we still need to flush caches from the CROSS_PRODUCT
 	D_ASSERT(in_process_operators.empty());
 	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
-	for (idx_t i = start_idx; i < cached_chunks.size(); i++) {
-		if (cached_chunks[i] && cached_chunks[i]->size() > 0) {
-			ExecutePushInternal(*cached_chunks[i], i + 1);
-			cached_chunks[i].reset();
+	for (idx_t i = start_idx; i < pipeline.operators.size(); i++) {
+		// Do we really need to check this for all operators?
+		if (pipeline.operators[i]->RequiresFinalExecute()) {
+			// TODO reuse an available Chunk?
+			auto tmp_chunk = make_unique<DataChunk>();
+			tmp_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[i]->GetTypes());
+
+			// TODO do the state params even make sense here?
+			pipeline.operators[i]->FinalExecute(context, *tmp_chunk, *pipeline.operators[i]->op_state,
+			                                    *intermediate_states[i]);
+
+			// Push the resulting chunk
+			ExecutePushInternal(*tmp_chunk, i + 1);
 		}
 	}
+
 	D_ASSERT(local_sink_state);
 	// run the combine for the sink
 	pipeline.sink->Combine(context, *pipeline.sink->sink_state, *local_sink_state);
@@ -152,46 +153,6 @@ void PipelineExecutor::PushFinalize() {
 	}
 	pipeline.executor.Flush(thread);
 	local_sink_state.reset();
-}
-
-bool PipelineExecutor::CanCacheType(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::LIST:
-	case LogicalTypeId::MAP:
-		return false;
-	case LogicalTypeId::STRUCT: {
-		auto &entries = StructType::GetChildTypes(type);
-		for (auto &entry : entries) {
-			if (!CanCacheType(entry.second)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	default:
-		return true;
-	}
-}
-
-void PipelineExecutor::CacheChunk(DataChunk &current_chunk, idx_t operator_idx) {
-#if STANDARD_VECTOR_SIZE >= 128
-	if (cached_chunks[operator_idx]) {
-		if (current_chunk.size() < CACHE_THRESHOLD) {
-			// we have filtered out a significant amount of tuples
-			// add this chunk to the cache and continue
-			auto &chunk_cache = *cached_chunks[operator_idx];
-			chunk_cache.Append(current_chunk);
-			if (chunk_cache.size() >= (STANDARD_VECTOR_SIZE - CACHE_THRESHOLD)) {
-				// chunk cache full: return it
-				current_chunk.Move(chunk_cache);
-				chunk_cache.Initialize(Allocator::Get(context.client), pipeline.operators[operator_idx]->GetTypes());
-			} else {
-				// chunk cache not full: probe again
-				current_chunk.Reset();
-			}
-		}
-	}
-#endif
 }
 
 void PipelineExecutor::ExecutePull(DataChunk &result) {
@@ -307,7 +268,6 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 				return OperatorResultType::FINISHED;
 			}
 			current_chunk.Verify();
-			CacheChunk(current_chunk, operator_idx);
 		}
 
 		if (current_chunk.size() == 0) {

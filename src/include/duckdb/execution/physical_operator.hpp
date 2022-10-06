@@ -31,6 +31,10 @@ public:
 
 	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
 	}
+
+	virtual void AllowCaching(bool val) {
+		(void)val;
+	}
 };
 
 class GlobalOperatorState {
@@ -139,12 +143,14 @@ public:
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
+	virtual void FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+	                          OperatorState &state) const;
 
 	virtual bool ParallelOperator() const {
 		return false;
 	}
 
-	virtual bool RequiresCache() const {
+	virtual bool RequiresFinalExecute() const {
 		return false;
 	}
 
@@ -222,6 +228,49 @@ public:
 	virtual void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state);
 	void BuildChildPipeline(Executor &executor, Pipeline &current, PipelineBuildState &state,
 	                        PhysicalOperator *pipeline_child);
+};
+
+class CachingOperatorState : public OperatorState {
+public:
+	virtual ~CachingOperatorState() {
+	}
+
+	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
+	}
+
+	virtual void AllowCaching(bool val) {
+		allow_caching = val;
+	}
+
+	unique_ptr<DataChunk> cached_chunk;
+	bool allow_caching = true;
+};
+
+//! Base class that caches output from child class below certain cache threshold
+class CachingPhysicalOperator : public PhysicalOperator {
+public:
+	static constexpr const idx_t CACHE_THRESHOLD = 64;
+	CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality);
+
+	bool enable_cache;
+
+public:
+	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                           GlobalOperatorState &gstate, OperatorState &state) const final;
+	void FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+	                  OperatorState &state) const final;
+
+	bool RequiresFinalExecute() const final {
+		return true;
+	}
+
+protected:
+	//! Child classes need to implement the ExecuteInternal method instead of the Execute
+	virtual OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                                           GlobalOperatorState &gstate, OperatorState &state) const = 0;
+
+private:
+	bool CanCacheType(const LogicalType &type);
 };
 
 } // namespace duckdb

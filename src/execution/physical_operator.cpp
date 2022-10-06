@@ -51,6 +51,11 @@ OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChun
                                              GlobalOperatorState &gstate, OperatorState &state) const {
 	throw InternalException("Calling Execute on a node that is not an operator!");
 }
+
+void PhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+                                    OperatorState &state) const {
+	throw InternalException("Calling FinalExecute on a node that is not an operator!");
+}
 // LCOV_EXCL_STOP
 
 //===--------------------------------------------------------------------===//
@@ -218,6 +223,82 @@ void PhysicalOperator::Verify() {
 		child->Verify();
 	}
 #endif
+}
+
+bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		return false;
+	case LogicalTypeId::STRUCT: {
+		auto &entries = StructType::GetChildTypes(type);
+		for (auto &entry : entries) {
+			if (!CanCacheType(entry.second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return true;
+	}
+}
+
+CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types,
+                                                 idx_t estimated_cardinality)
+    : PhysicalOperator(type, move(types), estimated_cardinality) {
+
+	enable_cache = true;
+	for (auto &col_type : types) {
+		if (!CanCacheType(col_type)) {
+			enable_cache = false;
+			break;
+		}
+	}
+}
+
+OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                    GlobalOperatorState &gstate, OperatorState &state_p) const {
+	auto &state = (CachingOperatorState &)state_p;
+
+	// Fetch result form child
+	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
+
+#if STANDARD_VECTOR_SIZE >= 128
+	if (state.allow_caching && chunk.size() < CACHE_THRESHOLD) {
+		    // we have filtered out a significant amount of tuples
+		    // add this chunk to the cache and continue
+
+		    if (!state.cached_chunk) {
+			state.cached_chunk = make_unique<DataChunk>();
+			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+		}
+
+		state.cached_chunk->Append(chunk);
+
+		if (state.cached_chunk->size() >= (STANDARD_VECTOR_SIZE - CACHE_THRESHOLD) ||
+		    child_result == OperatorResultType::FINISHED)  {
+			// chunk cache full: return it
+			chunk.Move(*state.cached_chunk);
+			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+			return child_result;
+		} else {
+			// chunk cache not full return empty result
+			chunk.Reset();
+		}
+	}
+#endif
+
+	return child_result;
+}
+
+void CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+                                           OperatorState &state_p) const {
+	auto &state = (CachingOperatorState &)state_p;
+	if (state.cached_chunk) {
+		chunk.Move(*state.cached_chunk);
+		state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+	}
 }
 
 } // namespace duckdb
