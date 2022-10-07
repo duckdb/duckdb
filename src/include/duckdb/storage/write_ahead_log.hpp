@@ -40,10 +40,10 @@ class TransactionManager;
 //! server crashes or is shut down.
 class WriteAheadLog {
 public:
-	explicit WriteAheadLog(DatabaseInstance &database);
+	//! Initialize the WAL in the specified directory
+	explicit WriteAheadLog(DatabaseInstance &database, const string &path);
+	virtual ~WriteAheadLog();
 
-	//! Whether or not the WAL has been initialized
-	bool initialized;
 	//! Skip writing to the WAL
 	bool skip_writing;
 
@@ -51,14 +51,12 @@ public:
 	//! Replay the WAL
 	static bool Replay(DatabaseInstance &database, string &path);
 
-	//! Initialize the WAL in the specified directory
-	void Initialize(string &path);
 	//! Returns the current size of the WAL in bytes
 	int64_t GetWALSize();
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
 
-	void WriteCreateTable(TableCatalogEntry *entry);
+	virtual void WriteCreateTable(TableCatalogEntry *entry);
 	void WriteDropTable(TableCatalogEntry *entry);
 
 	void WriteCreateSchema(SchemaCatalogEntry *entry);
@@ -104,7 +102,7 @@ public:
 
 	void WriteCheckpoint(block_id_t meta_block);
 
-private:
+protected:
 	DatabaseInstance &database;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;

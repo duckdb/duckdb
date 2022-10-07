@@ -18,12 +18,13 @@
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
+class BlockManager;
 class ColumnData;
 class DatabaseInstance;
 class DataTable;
 struct DataTableInfo;
 class ExpressionExecutor;
-class TableDataWriter;
+class RowGroupWriter;
 class UpdateSegment;
 class Vector;
 struct RowGroupPointer;
@@ -40,15 +41,17 @@ public:
 	static constexpr const idx_t ROW_GROUP_SIZE = STANDARD_VECTOR_SIZE * ROW_GROUP_VECTOR_COUNT;
 
 public:
-	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count);
-	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector<LogicalType> &types,
-	         RowGroupPointer &pointer);
+	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start, idx_t count);
+	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info,
+	         const vector<LogicalType> &types, RowGroupPointer &&pointer);
 	RowGroup(RowGroup &row_group, idx_t start);
 	~RowGroup();
 
 private:
 	//! The database instance
 	DatabaseInstance &db;
+	//! The block manager
+	BlockManager &block_manager;
 	//! The table info of this row_group
 	DataTableInfo &table_info;
 	//! The version info of the row_group (inserted and deleted tuple info)
@@ -61,6 +64,9 @@ private:
 public:
 	DatabaseInstance &GetDatabase() {
 		return db;
+	}
+	BlockManager &GetBlockManager() {
+		return block_manager;
 	}
 	DataTableInfo &GetTableInfo() {
 		return table_info;
@@ -117,7 +123,7 @@ public:
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(TransactionData transaction, DataTable *table, row_t *row_ids, idx_t count);
 
-	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
+	RowGroupPointer Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);
 

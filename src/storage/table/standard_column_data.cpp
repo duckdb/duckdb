@@ -8,9 +8,10 @@
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-                                       ColumnData *parent)
-    : ColumnData(info, column_index, start_row, move(type), parent), validity(info, 0, start_row, this) {
+StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                       idx_t start_row, LogicalType type, ColumnData *parent)
+    : ColumnData(block_manager, info, column_index, start_row, move(type), parent),
+      validity(block_manager, info, 0, start_row, this) {
 }
 
 StandardColumnData::StandardColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
@@ -158,7 +159,7 @@ void StandardColumnData::CommitDropColumn() {
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
-	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
+	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, RowGroupWriter &writer)
 	    : ColumnCheckpointState(row_group, column_data, writer) {
 	}
 
@@ -171,18 +172,18 @@ public:
 		return move(global_stats);
 	}
 
-	void FlushToDisk() override {
-		ColumnCheckpointState::FlushToDisk();
-		validity_state->FlushToDisk();
+	void WriteDataPointers() override {
+		ColumnCheckpointState::WriteDataPointers();
+		validity_state->WriteDataPointers();
 	}
 };
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowGroup &row_group,
-                                                                            TableDataWriter &writer) {
+                                                                            RowGroupWriter &writer) {
 	return make_unique<StandardColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
                                                                  ColumnCheckpointInfo &checkpoint_info) {
 	auto validity_state = validity.Checkpoint(row_group, writer, checkpoint_info);
 	auto base_state = ColumnData::Checkpoint(row_group, writer, checkpoint_info);
