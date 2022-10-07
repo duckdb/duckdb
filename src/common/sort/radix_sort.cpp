@@ -9,11 +9,10 @@ namespace duckdb {
 static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &start, const idx_t &end,
                           const idx_t &tie_col, bool *ties, const data_ptr_t blob_ptr, const SortLayout &sort_layout) {
 	const auto row_width = sort_layout.blob_layout.GetRowWidth();
-	const idx_t &col_idx = sort_layout.sorting_to_blob_col.at(tie_col);
 	// Locate the first blob row in question
 	data_ptr_t row_ptr = dataptr + start * sort_layout.entry_size;
 	data_ptr_t blob_row_ptr = blob_ptr + Load<uint32_t>(row_ptr + sort_layout.comparison_size) * row_width;
-	if (!Comparators::TieIsBreakable(col_idx, blob_row_ptr, sort_layout.blob_layout)) {
+	if (!Comparators::TieIsBreakable(tie_col, blob_row_ptr, sort_layout)) {
 		// Quick check to see if ties can be broken
 		return;
 	}
@@ -26,6 +25,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 	}
 	// Slow pointer-based sorting
 	const int order = sort_layout.order_types[tie_col] == OrderType::DESCENDING ? -1 : 1;
+	const idx_t &col_idx = sort_layout.sorting_to_blob_col.at(tie_col);
 	const auto &tie_col_offset = sort_layout.blob_layout.GetOffsets()[col_idx];
 	auto logical_type = sort_layout.blob_layout.GetTypes()[col_idx];
 	std::sort(entry_ptrs, entry_ptrs + end - start,

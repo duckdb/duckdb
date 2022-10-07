@@ -66,6 +66,14 @@ void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
 	}
 }
 
+void TableStatistics::MergeStats(TableStatistics &other) {
+	auto l = GetLock();
+	D_ASSERT(column_stats.size() == other.column_stats.size());
+	for (idx_t i = 0; i < column_stats.size(); i++) {
+		column_stats[i]->stats->Merge(*other.column_stats[i]->stats);
+	}
+}
+
 void TableStatistics::MergeStats(idx_t i, BaseStatistics &stats) {
 	auto l = GetLock();
 	MergeStats(*l, i, stats);

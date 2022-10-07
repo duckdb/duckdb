@@ -37,13 +37,13 @@ WITH wss AS
 SELECT s_store_name1,
        s_store_id1,
        d_week_seq1,
-       sun_sales1/sun_sales2,
-       mon_sales1/mon_sales2,
-       tue_sales1/tue_sales2,
-       wed_sales1/wed_sales2,
-       thu_sales1/thu_sales2,
-       fri_sales1/fri_sales2,
-       sat_sales1/sat_sales2
+       sun_sales1/sun_sales2 AS sun_sales_ratio,
+       mon_sales1/mon_sales2 AS mon_sales_ratio,
+       tue_sales1/tue_sales2 AS tue_sales_ratio,
+       wed_sales1/wed_sales2 AS wed_sales_ratio,
+       thu_sales1/thu_sales2 AS thu_sales_ratio,
+       fri_sales1/fri_sales2 AS fri_sales_ratio,
+       sat_sales1/sat_sales2 AS sat_sales_ratio
 FROM
   (SELECT s_store_name s_store_name1,
           wss.d_week_seq d_week_seq1,

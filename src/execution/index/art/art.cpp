@@ -11,9 +11,10 @@
 
 namespace duckdb {
 
-ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-         IndexConstraintType constraint_type, DatabaseInstance &db, idx_t block_id, idx_t block_offset)
-    : Index(IndexType::ART, column_ids, unbound_expressions, constraint_type), db(db) {
+ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
+         const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
+         DatabaseInstance &db, idx_t block_id, idx_t block_offset)
+    : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db) {
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree = Node::Deserialize(*this, block_id, block_offset);
 	} else {
@@ -310,7 +311,9 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 	keys.reserve(STANDARD_VECTOR_SIZE);
 
 	auto skipped_all_nulls = false;
-	auto temp_art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
+	auto temp_art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
+	                                 this->constraint_type, this->db);
+	
 	for (;;) {
 		DataChunk ordered_chunk;
 		ordered_chunk.Initialize(allocator, payload_types);
@@ -354,7 +357,8 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 		auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
 		// construct the ART of this chunk
-		auto art = make_unique<ART>(this->column_ids, this->unbound_expressions, this->constraint_type, this->db);
+		auto art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
+		                            this->constraint_type, this->db);
 		auto key_section = KeySection(start_idx, ordered_chunk.size() - 1, 0, 0);
 		auto has_constraint = IsUnique();
 		Construct(keys, row_ids, art->tree, key_section, has_constraint);
@@ -730,6 +734,7 @@ bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive,
 	if (!tree) {
 		return true;
 	}
+
 	Iterator *it = &state->iterator;
 
 	if (!it->art) {

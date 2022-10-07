@@ -5,16 +5,17 @@
 
 namespace duckdb {
 
-bool VectorOperations::TryCast(CastFunctionSet &set, Vector &source, Vector &result, idx_t count, string *error_message,
-                               bool strict) {
-	auto cast_function = set.GetCastFunction(source.GetType(), result.GetType());
+bool VectorOperations::TryCast(CastFunctionSet &set, GetCastFunctionInput &input, Vector &source, Vector &result,
+                               idx_t count, string *error_message, bool strict) {
+	auto cast_function = set.GetCastFunction(source.GetType(), result.GetType(), input);
 	CastParameters parameters(cast_function.cast_data.get(), strict, error_message);
 	return cast_function.function(source, result, count, parameters);
 }
 
 bool VectorOperations::DefaultTryCast(Vector &source, Vector &result, idx_t count, string *error_message, bool strict) {
 	CastFunctionSet set;
-	return VectorOperations::TryCast(set, source, result, count, error_message, strict);
+	GetCastFunctionInput input;
+	return VectorOperations::TryCast(set, input, source, result, count, error_message, strict);
 }
 
 void VectorOperations::DefaultCast(Vector &source, Vector &result, idx_t count, bool strict) {
@@ -25,7 +26,8 @@ bool VectorOperations::TryCast(ClientContext &context, Vector &source, Vector &r
                                string *error_message, bool strict) {
 	auto &config = DBConfig::GetConfig(context);
 	auto &set = config.GetCastFunctions();
-	return VectorOperations::TryCast(set, source, result, count, error_message, strict);
+	GetCastFunctionInput get_input(context);
+	return VectorOperations::TryCast(set, get_input, source, result, count, error_message, strict);
 }
 
 void VectorOperations::Cast(ClientContext &context, Vector &source, Vector &result, idx_t count, bool strict) {

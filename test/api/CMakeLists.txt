@@ -25,7 +25,8 @@ endif()
 
 if(${BUILD_TPCH_EXTENSION} AND NOT ${DISABLE_BUILTIN_EXTENSIONS})
   include_directories(../../extension/tpch/include)
-  set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_tpch_with_relations.cpp)
+  set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_tpch_with_relations.cpp
+                       serialized_plans/test_plan_serialization_bwc.cpp)
 endif()
 
 add_library_unity(test_api OBJECT ${TEST_API_OBJECTS})

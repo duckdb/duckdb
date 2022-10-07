@@ -66,6 +66,7 @@ struct ArrowScanFunctionData : public PyTableFunctionData {
 	}
 	//! This holds the original list type (col_idx, [ArrowListType,size])
 	unordered_map<idx_t, unique_ptr<ArrowConvertData>> arrow_convert_data;
+	vector<LogicalType> all_types;
 	atomic<idx_t> lines_read;
 	ArrowSchemaWrapper schema_root;
 	idx_t rows_per_thread;
@@ -86,6 +87,8 @@ struct ArrowScanLocalState : public LocalTableFunctionState {
 	//! Store child vectors for Arrow Dictionary Vectors (col-idx,vector)
 	unordered_map<idx_t, unique_ptr<Vector>> arrow_dictionary_vectors;
 	TableFilterSet *filters = nullptr;
+	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
+	DataChunk all_columns;
 };
 
 struct ArrowScanGlobalState : public GlobalTableFunctionState {
@@ -94,8 +97,15 @@ struct ArrowScanGlobalState : public GlobalTableFunctionState {
 	idx_t max_threads = 1;
 	bool done = false;
 
+	vector<idx_t> projection_ids;
+	vector<LogicalType> scanned_types;
+
 	idx_t MaxThreads() const override {
 		return max_threads;
+	}
+
+	bool CanRemoveFilterColumns() const {
+		return !projection_ids.empty();
 	}
 };
 

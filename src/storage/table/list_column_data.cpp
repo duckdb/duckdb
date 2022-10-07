@@ -4,13 +4,20 @@
 
 namespace duckdb {
 
-ListColumnData::ListColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type_p,
-                               ColumnData *parent)
-    : ColumnData(info, column_index, start_row, move(type_p), parent), validity(info, 0, start_row, this) {
+ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+                               LogicalType type_p, ColumnData *parent)
+    : ColumnData(block_manager, info, column_index, start_row, move(type_p), parent),
+      validity(block_manager, info, 0, start_row, this) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
 	// the child column, with column index 1 (0 is the validity mask)
-	child_column = ColumnData::CreateColumnUnique(info, 1, start_row, child_type, this);
+	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, start_row, child_type, this);
+}
+
+ListColumnData::ListColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
+    : ColumnData(original, start_row, parent), validity(((ListColumnData &)original).validity, start_row, this) {
+	auto &list_data = (ListColumnData &)original;
+	child_column = ColumnData::CreateColumnUnique(*list_data.child_column, start_row, this);
 }
 
 bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -62,7 +69,7 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	ColumnScanState child_state;
 	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(child_state, child_offset);
+		child_column->InitializeScanWithOffset(child_state, start + child_offset);
 	}
 	state.child_states.push_back(move(child_state));
 }
@@ -107,7 +114,8 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
 		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT ||
-		         state.child_states[1].row_index + child_scan_count <= child_column->GetMaxEntry());
+		         state.child_states[1].row_index + child_scan_count <=
+		             child_column->start + child_column->GetMaxEntry());
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
 	}
 
@@ -132,6 +140,9 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	auto &first_entry = data[0];
 	auto &last_entry = data[scan_count - 1];
 	idx_t child_scan_count = last_entry.offset + last_entry.length - first_entry.offset;
+	if (child_scan_count == 0) {
+		return;
+	}
 
 	// skip the child state forward by the child_scan_count
 	child_column->Skip(state.child_states[1], child_scan_count);
@@ -296,9 +307,9 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 		auto &child_type = ListType::GetChildType(result.GetType());
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
-		child_column->InitializeScanWithOffset(*child_state, original_offset);
+		child_column->InitializeScanWithOffset(*child_state, start + original_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
-		         child_state->row_index + child_scan_count <= child_column->GetMaxEntry());
+		         child_state->row_index + child_scan_count - this->start <= child_column->GetMaxEntry());
 		child_column->ScanCount(*child_state, child_scan, child_scan_count);
 
 		ListVector::Append(result, child_scan, child_scan_count);
@@ -311,7 +322,7 @@ void ListColumnData::CommitDropColumn() {
 }
 
 struct ListColumnCheckpointState : public ColumnCheckpointState {
-	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
+	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, RowGroupWriter &writer)
 	    : ColumnCheckpointState(row_group, column_data, writer) {
 		global_stats = make_unique<ListStatistics>(column_data.type);
 	}
@@ -328,18 +339,18 @@ public:
 		return stats;
 	}
 
-	void FlushToDisk() override {
-		ColumnCheckpointState::FlushToDisk();
-		validity_state->FlushToDisk();
-		child_state->FlushToDisk();
+	void WriteDataPointers() override {
+		ColumnCheckpointState::WriteDataPointers();
+		validity_state->WriteDataPointers();
+		child_state->WriteDataPointers();
 	}
 };
 
-unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) {
+unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer) {
 	return make_unique<ListColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
                                                              ColumnCheckpointInfo &checkpoint_info) {
 	auto validity_state = validity.Checkpoint(row_group, writer, checkpoint_info);
 	auto base_state = ColumnData::Checkpoint(row_group, writer, checkpoint_info);
