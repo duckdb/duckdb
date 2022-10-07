@@ -8,13 +8,16 @@
 #include "duckdb/planner/table_filter.hpp"
 
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(DataTable &table)
     : table(table), allocator(Allocator::Get(table.db)), deleted_rows(0) {
 	auto types = table.GetTypes();
-	row_groups = make_shared<RowGroupCollection>(table.info, types, MAX_ROW_ID, 0);
+	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
+	                                             types, MAX_ROW_ID, 0);
+
 	stats.InitializeEmpty(types);
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
@@ -25,7 +28,8 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.AddIndex(make_unique<ART>(art.column_ids, move(unbound_expressions), art.constraint_type, art.db));
+			indexes.AddIndex(make_unique<ART>(art.column_ids, art.table_io_manager, move(unbound_expressions),
+			                                  art.constraint_type, art.db));
 		}
 		return false;
 	});
@@ -205,6 +209,9 @@ bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
+	// bulk append threshold: a full row group
+	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE;
+
 	auto storage_entry = move(table_storage[&table]);
 	table_storage[&table].reset();
 
@@ -215,8 +222,10 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 
 	TableAppendState append_state;
 	table.AppendLock(append_state);
-	if (append_state.row_start == 0 && storage.table.info->indexes.Empty() && storage.deleted_rows == 0) {
-		// table is currently empty: move over the storage directly
+	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
+	    storage.table.info->indexes.Empty() && storage.deleted_rows == 0) {
+		// table is currently empty OR we are bulk appending to a table with existing storage: move over the storage
+		// directly
 		table.MergeStorage(*storage.row_groups, storage.indexes, storage.stats);
 	} else {
 		bool constraint_violated = false;

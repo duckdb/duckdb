@@ -303,6 +303,13 @@ Closes the specified connection and de-allocates all memory allocated for that c
 */
 DUCKDB_API void duckdb_disconnect(duckdb_connection *connection);
 
+/*!
+Returns the version of the linked DuckDB, with a version postfix for dev versions
+
+Usually used for developing C extensions that must return this for a compatibility check.
+*/
+DUCKDB_API const char *duckdb_library_version();
+
 //===--------------------------------------------------------------------===//
 // Configuration
 //===--------------------------------------------------------------------===//
@@ -1778,6 +1785,14 @@ Adds a parameter to the replacement scan function.
 * parameter: The parameter to add.
 */
 DUCKDB_API void duckdb_replacement_scan_add_parameter(duckdb_replacement_scan_info info, duckdb_value parameter);
+
+/*!
+Report that an error has occurred while executing the replacement scan.
+
+* info: The info object
+* error: The error message
+*/
+DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info info, const char *error);
 
 //===--------------------------------------------------------------------===//
 // Appender

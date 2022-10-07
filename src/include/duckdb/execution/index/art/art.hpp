@@ -50,8 +50,9 @@ enum VerifyExistenceType : uint8_t {
 
 class ART : public Index {
 public:
-	ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-	    IndexConstraintType constraint_type, DatabaseInstance &db, idx_t block_id = DConstants::INVALID_INDEX,
+	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
+	    const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
+	    DatabaseInstance &db, idx_t block_id = DConstants::INVALID_INDEX,
 	    idx_t block_offset = DConstants::INVALID_INDEX);
 	~ART() override;
 
@@ -60,6 +61,7 @@ public:
 
 	DatabaseInstance &db;
 
+public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate
 	unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, Value value,

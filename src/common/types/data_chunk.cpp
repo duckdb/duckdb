@@ -159,7 +159,7 @@ void DataChunk::Fuse(DataChunk &other) {
 	other.Destroy();
 }
 
-void DataChunk::ReferenceColumns(DataChunk &other, vector<column_t> column_ids) {
+void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &column_ids) {
 	D_ASSERT(ColumnCount() == column_ids.size());
 	Reset();
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {

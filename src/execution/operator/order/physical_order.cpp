@@ -87,11 +87,7 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &g
 	lstate.key_executor.Execute(input, keys);
 
 	auto &payload = lstate.payload;
-	payload.Reset();
-	for (idx_t col_idx = 0; col_idx < projections.size(); col_idx++) {
-		payload.data[col_idx].Reference(input.data[projections[col_idx]]);
-	}
-	payload.SetCardinality(input.size());
+	payload.ReferenceColumns(input, projections);
 
 	// Sink the data into the local sort state
 	keys.Verify();

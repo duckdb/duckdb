@@ -23,8 +23,8 @@ unique_ptr<BoundCastData> BindMapToMapCast(BindCastInput &input, const LogicalTy
 	auto target_key = LogicalType::LIST(MapType::KeyType(target));
 	auto source_val = LogicalType::LIST(MapType::ValueType(source));
 	auto target_val = LogicalType::LIST(MapType::ValueType(target));
-	auto key_cast = input.function_set.GetCastFunction(source_key, target_key);
-	auto value_cast = input.function_set.GetCastFunction(source_val, target_val);
+	auto key_cast = input.GetCastFunction(source_key, target_key);
+	auto value_cast = input.GetCastFunction(source_val, target_val);
 	return make_unique<MapBoundCastData>(move(key_cast), move(value_cast));
 }
 

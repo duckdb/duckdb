@@ -20,7 +20,7 @@ unique_ptr<BoundCastData> BindListToListCast(BindCastInput &input, const Logical
 	vector<BoundCastInfo> child_cast_info;
 	auto &source_child_type = ListType::GetChildType(source);
 	auto &result_child_type = ListType::GetChildType(target);
-	auto child_cast = input.function_set.GetCastFunction(source_child_type, result_child_type);
+	auto child_cast = input.GetCastFunction(source_child_type, result_child_type);
 	return make_unique<ListBoundCastData>(move(child_cast));
 }
 

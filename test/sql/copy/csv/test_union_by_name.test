@@ -1,0 +1,144 @@
+# name: test/sql/copy/csv/test_union_by_name.test
+# description: UNION_BY_NAME test
+# group: [csv]
+
+statement ok
+CREATE TABLE ubn1(a BIGINT);
+
+statement ok
+CREATE TABLE ubn2(a INTEGER, b INTEGER);
+
+statement ok
+CREATE TABLE ubn3(a INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO ubn1 VALUES (1), (2), (9223372036854775807);
+
+statement ok
+INSERT INTO ubn2 VALUES (3,4), (5, 6);
+
+statement ok
+INSERT INTO ubn3 VALUES (100,101), (102, 103);
+
+statement ok
+COPY ubn1 TO '__TEST_DIR__/ubn1.csv' WITH (HEADER 1, DELIMITER ',');
+
+statement ok
+COPY ubn2 TO '__TEST_DIR__/ubn2.csv' WITH (HEADER 1, DELIMITER ',');
+
+statement ok
+COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (HEADER 1, DELIMITER ',');
+
+statement error
+SELECT * FROM read_csv_auto('__TEST_DIR__/ubn*.csv');
+
+query III
+SELECT a, b, c
+FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE)
+ORDER BY a;
+----
+1	NULL	NULL
+2	NULL	NULL
+3	4	NULL
+5	6	NULL
+100	NULL	101
+102	NULL	103
+9223372036854775807	NULL	NULL
+
+query TTT
+SELECT typeof(a), typeof(b), typeof(c)
+FROM read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE)
+LIMIT 1;
+----
+BIGINT	INTEGER	INTEGER
+
+# Test timestamp type
+statement error
+SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn*.csv')
+
+query IIIII
+SELECT  a, b, c, ts, k  
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE) 
+ORDER BY a, c, ts
+----
+NULL	NULL	3	2003-06-30 12:03:10	6
+NULL	NULL	5	2003-06-30 12:03:10	6
+NULL	NULL	6	2003-06-30 12:03:10	6
+NULL	NULL	100	Monday	NULL
+NULL	NULL	200	Sunday	NULL
+NULL	NULL	300	Friday	NULL
+1	2	3	NULL	NULL
+3	4	5	NULL	NULL
+34fd321	91	NULL	2020-12-30 03:25:58.745232+01	NULL
+4	5	6	NULL	NULL
+8cb123cb8	90	NULL	2020-12-30 02:25:58.745232+01	NULL
+fg5391jn4	92	NULL	2020-12-30 04:25:58.745232+01	NULL
+test	88	NULL	2020-12-30 01:25:58.745232+01	NULL
+
+query TTTTT
+SELECT  typeof(a), typeof(b), typeof(c), typeof(ts), typeof(k)
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+LIMIT 1;
+----
+VARCHAR	INTEGER	INTEGER	VARCHAR	INTEGER
+
+
+# Test glob pattern [12] and union_by_name with filename options
+query IIIII
+SELECT a, b, c, ts, replace(filename, '\', '/')
+FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
+ORDER BY a, c, ts
+----
+1	2	3	NULL	data/csv/union-by-name/ubn1.csv
+3	4	5	NULL	data/csv/union-by-name/ubn1.csv
+34fd321	91	NULL	2020-12-30 02:25:58.745232	data/csv/union-by-name/ubn2.csv
+4	5	6	NULL	data/csv/union-by-name/ubn1.csv
+8cb123cb8	90	NULL	2020-12-30 01:25:58.745232	data/csv/union-by-name/ubn2.csv
+fg5391jn4	92	NULL	2020-12-30 03:25:58.745232	data/csv/union-by-name/ubn2.csv
+test	88	NULL	2020-12-30 00:25:58.745232	data/csv/union-by-name/ubn2.csv
+
+query TTTT
+SELECT typeof(a), typeof(b), typeof(c), typeof(ts)
+FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',UNION_BY_NAME=TRUE)
+LIMIT 1
+----
+VARCHAR	INTEGER	INTEGER	TIMESTAMP
+
+
+# Test ubn[23] timestamp type casting
+query T
+SELECT typeof(ts)
+FROM read_csv_auto('data/csv/union-by-name/ubn[23].csv',UNION_BY_NAME=TRUE)
+LIMIT 1
+----
+TIMESTAMP
+
+# Test glob pattern [!1-2] and union_by_name with filename options
+query IIII
+SELECT k, c, ts, replace(filename, '\', '/')
+FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE) 
+ORDER BY c
+----
+6	3	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+6	5	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+6	6	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+NULL	100	Monday	data/csv/union-by-name/ubn4.csv
+NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
+NULL	300	Friday	data/csv/union-by-name/ubn4.csv
+
+# Test hive_partition with union_by_name 
+statement error
+SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE)
+
+query IIII
+SELECT id, value, a, part
+FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
+ORDER BY id
+----
+1	value1	aaa	a
+2	value2	NULL	b
+
+# Test hive_partition with union_by_name 
+statement error
+SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
+

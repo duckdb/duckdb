@@ -18326,7 +18326,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     sqlite3_free(p->zFreeOnClose);
     p->zFreeOnClose = 0;
     p->openMode = SHELL_OPEN_UNSPEC;
-    p->openFlags = 0;
+    p->openFlags = p->openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
     p->szMax = 0;
     /* Check for command-line arguments */
     for(iName=1; iName<nArg && azArg[iName][0]=='-'; iName++){

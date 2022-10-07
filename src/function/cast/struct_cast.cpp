@@ -30,8 +30,7 @@ unique_ptr<BoundCastData> BindStructToStructCast(BindCastInput &input, const Log
 		throw TypeMismatchException(source, target, "Cannot cast STRUCTs of different size");
 	}
 	for (idx_t i = 0; i < source_child_types.size(); i++) {
-		auto child_cast =
-		    input.function_set.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
+		auto child_cast = input.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
 		child_cast_info.push_back(move(child_cast));
 	}
 	return make_unique<StructBoundCastData>(move(child_cast_info), target);

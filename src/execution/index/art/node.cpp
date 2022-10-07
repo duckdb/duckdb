@@ -1,9 +1,10 @@
 #include "duckdb/execution/index/art/node.hpp"
 
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 #include "duckdb/common/swap.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -138,8 +139,7 @@ BlockPointer Node::SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, 
 	for (idx_t i = 0; i < internal_type.children_size; i++) {
 		child_offsets.emplace_back(internal_type.children[i].Serialize(art, writer));
 	}
-	auto block_id = writer.block->id;
-	uint32_t offset = writer.offset;
+	auto ptr = writer.GetBlockPointer();
 	// Write Node Type
 	writer.Write(type);
 	// Write count
@@ -155,7 +155,7 @@ BlockPointer Node::SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, 
 		writer.Write(offsets.block_id);
 		writer.Write(offsets.offset);
 	}
-	return {block_id, offset};
+	return ptr;
 }
 
 BlockPointer Node::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
@@ -191,7 +191,7 @@ void Node::DeserializeInternal(duckdb::MetaBlockReader &reader) {
 }
 
 Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
-	MetaBlockReader reader(art.db, block_id);
+	MetaBlockReader reader(art.table_io_manager.GetIndexBlockManager(), block_id);
 	reader.offset = offset;
 	auto n = reader.Read<uint8_t>();
 	NodeType node_type(static_cast<NodeType>(n));

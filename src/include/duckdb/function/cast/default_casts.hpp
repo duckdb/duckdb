@@ -58,11 +58,14 @@ public:
 };
 
 struct BindCastInput {
-	BindCastInput(CastFunctionSet &function_set, BindCastInfo *info) : function_set(function_set), info(info) {
-	}
+	DUCKDB_API BindCastInput(CastFunctionSet &function_set, BindCastInfo *info, ClientContext *context);
 
 	CastFunctionSet &function_set;
 	BindCastInfo *info;
+	ClientContext *context;
+
+public:
+	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);
 };
 
 struct DefaultCasts {
