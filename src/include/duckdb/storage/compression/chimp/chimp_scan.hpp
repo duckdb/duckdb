@@ -145,7 +145,6 @@ public:
 		D_ASSERT(group_size <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
-		// Increase the internal index used for the flags
 		values[0] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::LoadFirst(chimp_state);
 		for (idx_t i = 1; i < group_size; i++) {
 			values[i] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::DecompressValue(
@@ -181,12 +180,16 @@ public:
 	void LoadGroup() {
 		chimp_state.Reset();
 
+		//! FIXME: If we change the order of this to flag -> leading_zero_blocks -> packed_data
+		//! We can leave out the leading zero block count as well, because it can be derived from
+		//! Extracting all the flags and counting the 3's
+
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= sizeof(uint32_t);
-		auto data_bit_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_bit_offset < Storage::BLOCK_SIZE);
+		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
+		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
 		//  Only used for point queries
-		(void)data_bit_offset;
+		(void)data_byte_offset;
 
 		// Load how many blocks of leading zero bits we have
 		metadata_ptr -= sizeof(uint8_t);

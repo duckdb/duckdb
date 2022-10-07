@@ -26,8 +26,6 @@
 
 namespace duckdb {
 
-// State
-
 template <class T>
 struct ChimpCompressionState : public CompressionState {
 public:
@@ -95,6 +93,7 @@ public:
 		idx_t required_space = ChimpPrimitives::MAX_BYTES_PER_VALUE;
 		// Any value could be the last,
 		// so the cost of flushing metadata should be factored into the cost
+
 		// byte offset of data
 		required_space += sizeof(byte_index_t);
 		// amount of leading zero blocks
@@ -143,6 +142,7 @@ public:
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		compressed_segment->function = function;
 		current_segment = move(compressed_segment);
+		next_group_byte_index_start = ChimpPrimitives::HEADER_SIZE;
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
@@ -165,6 +165,7 @@ public:
 	void WriteValue(CHIMP_TYPE value, bool is_valid) {
 		current_segment->count++;
 		if (!is_valid) {
+			//! FIXME: find a cheaper alternative to storing a NULL
 			// store this as "value_identical", only using 9 bits for a NULL
 			value = state.chimp_state.previous_value;
 		}
@@ -206,7 +207,7 @@ public:
 		                          ? ChimpPrimitives::CHIMP_SEQUENCE_SIZE
 		                          : 0;
 		const idx_t size_of_group = padding + current_segment->count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE;
-		D_ASSERT((AlignValue<idx_t, 4>(size_of_group) / 4) == flag_bytes);
+		D_ASSERT((AlignValue<idx_t, 4>(size_of_group - 1) / 4) == flag_bytes);
 #endif
 		D_ASSERT(flag_bytes != 0);
 
@@ -220,7 +221,7 @@ public:
 		// as the count can be derived from unpacking the flags and counting the '1' flags
 
 		// FIXME: this does stop us from skipping groups with point queries,
-		// because the metadata has a variable size
+		// because the metadata has a variable size, and we have to extract all flags + iterate them to know this size
 		const uint16_t packed_data_blocks_count = state.chimp_state.packed_data_buffer.index;
 		metadata_ptr -= packed_data_blocks_count * 2;
 		metadata_byte_size += packed_data_blocks_count * 2;
@@ -235,6 +236,7 @@ public:
 		group_idx = 0;
 	}
 
+	// FIXME: only do this if the wasted space meets a certain threshold (>= 20%)
 	void FlushSegment() {
 		if (group_idx) {
 			// Only call this when the group actually has data that needs to be flushed
@@ -259,8 +261,6 @@ public:
 #ifdef DEBUG
 		D_ASSERT(verify_bytes == *(uint32_t *)(dataptr + metadata_offset));
 #endif
-		// idx_t count = current_segment->count;
-		// printf("TOTAL_BYTES: %llu | COUNT: %llu\n", total_segment_size, count);
 		//  Store the offset of the metadata of the first group (which is at the highest address).
 		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
