@@ -77,6 +77,8 @@ public:
 
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
 
+	static unique_ptr<LogicalOperator> Copy(unique_ptr<LogicalOperator> &op, ClientContext &context);
+
 	virtual bool RequireOptimizer() const {
 		return true;
 	}
