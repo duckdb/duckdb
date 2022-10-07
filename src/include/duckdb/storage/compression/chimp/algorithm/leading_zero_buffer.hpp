@@ -148,6 +148,9 @@ public:
 		counter++;
 		return result;
 	}
+	size_t GetCount() const {
+		return counter;
+	}
 	size_t BlockCount() const {
 		return (counter >> 3) + ((counter & 7) != 0);
 	}

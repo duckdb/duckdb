@@ -40,7 +40,7 @@ public:
 			//! Need access to the CompressionState to be able to flush the segment
 			auto state_wrapper = (ChimpCompressionState<VALUE_TYPE> *)state_p;
 
-			if (is_valid && !state_wrapper->HasEnoughSpace()) {
+			if (!state_wrapper->HasEnoughSpace()) {
 				// Segment is full
 				auto row_start = state_wrapper->current_segment->start + state_wrapper->current_segment->count;
 				state_wrapper->FlushSegment();
@@ -201,6 +201,11 @@ public:
 
 		//! This is max 1024, because it's the amount of flags there are, not the amount of bytes that takes up
 		const uint16_t flag_bytes = state.chimp_state.flag_buffer.BytesUsed();
+#ifdef DEBUG
+		const idx_t padding = (current_segment->count % % ChimpPrimitives::CHIMP_SEQUENCE_SIZE) == 0 ? 1024 : 0;
+		const idx_t size_of_group = padding + current_segment->count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE;
+		D_ASSERT((AlignValue<idx_t, 4>(size_of_group) / 4) == flag_bytes);
+#endif
 		D_ASSERT(flag_bytes != 0);
 
 		metadata_ptr -= flag_bytes;

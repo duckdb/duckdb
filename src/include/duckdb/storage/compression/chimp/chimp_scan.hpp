@@ -54,6 +54,13 @@ public:
 		index = 0;
 	}
 	void LoadLeadingZeros(uint8_t *packed_data, idx_t leading_zero_block_size) {
+#ifdef DEBUG
+		idx_t flag_one_count = 0;
+		for (idx_t i = 0; i < max_flags_to_read; i++) {
+			flag_one_count += flags[1 + i] == duckdb_chimp::LEADING_ZERO_LOAD;
+		}
+		D_ASSERT(flag_one_count == leading_zero_block_size);
+#endif
 		duckdb_chimp::LeadingZeroBuffer<false> leading_zero_buffer;
 		leading_zero_buffer.SetBuffer(packed_data);
 		for (idx_t i = 0; i < leading_zero_block_size; i++) {
@@ -78,6 +85,7 @@ public:
 			duckdb_chimp::PackedDataUtils<CHIMP_TYPE>::Unpack(packed_data[i], unpacked_data_blocks[i]);
 		}
 		unpacked_index = 0;
+		max_packed_data_to_read = packed_data_block_count;
 	}
 
 public:
@@ -87,10 +95,11 @@ public:
 	uint32_t leading_zero_index;
 	uint32_t unpacked_index;
 	duckdb_chimp::UnpackedData unpacked_data_blocks[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
+	idx_t max_leading_zeros_to_read;
 
 private:
 	idx_t max_flags_to_read;
-	idx_t max_leading_zeros_to_read;
+	idx_t max_packed_data_to_read;
 };
 
 template <class T>
@@ -121,17 +130,18 @@ public:
 	ColumnSegment &segment;
 
 	idx_t LeftInGroup() const {
-		return ChimpPrimitives::CHIMP_SEQUENCE_SIZE - (total_value_count & (ChimpPrimitives::CHIMP_SEQUENCE_SIZE - 1));
+		return ChimpPrimitives::CHIMP_SEQUENCE_SIZE - (total_value_count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 	}
 
 	bool GroupFinished() const {
-		return (total_value_count & (ChimpPrimitives::CHIMP_SEQUENCE_SIZE - 1)) == 0;
+		return (total_value_count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE) == 0;
 	}
 
 	// Scan a group from the start
 	template <class CHIMP_TYPE>
 	void ScanGroup(CHIMP_TYPE *values, idx_t group_size) {
 		D_ASSERT(group_size <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
+		D_ASSERT(group_size <= LeftInGroup());
 
 		// Increase the internal index used for the flags
 		values[0] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::LoadFirst(chimp_state);
@@ -139,6 +149,7 @@ public:
 			values[i] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::DecompressValue(
 			    group_state.flags[i], group_state.leading_zeros, group_state.leading_zero_index,
 			    group_state.unpacked_data_blocks, group_state.unpacked_index, chimp_state);
+			D_ASSERT(group_state.leading_zero_index <= group_state.max_leading_zeros_to_read);
 		}
 		group_state.index += group_size;
 		total_value_count += group_size;
@@ -151,6 +162,7 @@ public:
 	template <class CHIMP_TYPE>
 	void ScanPartialGroup(CHIMP_TYPE *values, idx_t group_size) {
 		D_ASSERT(group_size <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
+		D_ASSERT(group_size <= LeftInGroup());
 
 		for (idx_t i = 0; i < group_size; i++) {
 			values[i] = duckdb_chimp::Chimp128Decompression<CHIMP_TYPE>::Load(
@@ -170,6 +182,7 @@ public:
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_bit_offset = Load<uint32_t>(metadata_ptr);
+		D_ASSERT(data_bit_offset < Storage::BLOCK_SIZE);
 		//  Only used for point queries
 		(void)data_bit_offset;
 
@@ -178,19 +191,25 @@ public:
 		auto leading_zero_block_count = Load<uint8_t>(metadata_ptr);
 		D_ASSERT(leading_zero_block_count <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE / 8);
 
-		// Load the leading zero blocks
+		// Load the leading zero block count
 		metadata_ptr -= 3 * leading_zero_block_count;
-		group_state.LoadLeadingZeros(metadata_ptr, (uint32_t)leading_zero_block_count * 8);
+		const auto leading_zero_block_ptr = metadata_ptr;
 
 		// Figure out how many flags there are
-		uint16_t size_of_group =
-		    duckdb::MinValue<uint16_t>(segment.count - total_value_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
-		uint16_t flag_byte_count = (AlignValue<uint16_t, 4>(size_of_group) / 4);
+		D_ASSERT(segment.count >= total_value_count);
+		uint16_t flag_count =
+		    duckdb::MinValue<idx_t>(segment.count - total_value_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
+		// Reduce by one, because the first value of a group does not have a flag
+		flag_count--;
+		uint16_t flag_byte_count = (AlignValue<uint16_t, 4>(flag_count) / 4);
 
 		// Load the flags
 		metadata_ptr -= flag_byte_count;
 		auto flags = metadata_ptr;
-		group_state.LoadFlags(flags, size_of_group);
+		group_state.LoadFlags(flags, flag_count);
+
+		// Load the leading zero blocks
+		group_state.LoadLeadingZeros(leading_zero_block_ptr, (uint32_t)leading_zero_block_count * 8);
 
 		// Load packed data blocks
 		auto packed_data_block_count = group_state.CalculatePackedDataCount();
@@ -209,15 +228,14 @@ public:
 		using INTERNAL_TYPE = typename ChimpType<T>::type;
 		INTERNAL_TYPE buffer[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
 
-		idx_t to_skip = skip_count;
-		while (to_skip) {
-			auto skip_size = std::min(to_skip, LeftInGroup());
-			if (group_state.Started()) {
+		while (skip_count) {
+			auto skip_size = std::min(skip_count, LeftInGroup());
+			if (!group_state.Started()) {
 				ScanGroup(buffer, skip_size);
 			} else {
 				ScanPartialGroup(buffer, skip_size);
 			}
-			to_skip -= skip_size;
+			skip_count -= skip_size;
 		}
 	}
 };
