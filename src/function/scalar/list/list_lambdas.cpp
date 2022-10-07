@@ -119,7 +119,6 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 	vector<Vector> slices;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount() - 1; col_idx++) {
 		slices.emplace_back(Vector(args.data[col_idx + 1], sel_vectors[col_idx], elem_cnt));
-		slices[col_idx].Flatten(elem_cnt);
 		input_chunk.data[col_idx + 1].Reference(slices[col_idx]);
 	}
 
@@ -143,6 +142,15 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
 		result_validity.SetInvalid(0);
 		return;
+	}
+
+	// e.g. window functions in sub queries return dictionary vectors, which segfault on expression execution
+	// if not flattened first
+	for (idx_t i = 1; i < args.ColumnCount(); i++) {
+		if (args.data[i].GetVectorType() != VectorType::FLAT_VECTOR &&
+		    args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			args.data[i].Flatten(count);
+		}
 	}
 
 	// get the lists data
