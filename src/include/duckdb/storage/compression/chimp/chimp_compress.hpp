@@ -202,7 +202,9 @@ public:
 		//! This is max 1024, because it's the amount of flags there are, not the amount of bytes that takes up
 		const uint16_t flag_bytes = state.chimp_state.flag_buffer.BytesUsed();
 #ifdef DEBUG
-		const idx_t padding = (current_segment->count % % ChimpPrimitives::CHIMP_SEQUENCE_SIZE) == 0 ? 1024 : 0;
+		const idx_t padding = (current_segment->count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE) == 0
+		                          ? ChimpPrimitives::CHIMP_SEQUENCE_SIZE
+		                          : 0;
 		const idx_t size_of_group = padding + current_segment->count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE;
 		D_ASSERT((AlignValue<idx_t, 4>(size_of_group) / 4) == flag_bytes);
 #endif
