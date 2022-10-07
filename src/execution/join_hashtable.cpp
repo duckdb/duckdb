@@ -9,6 +9,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include <iostream>
+
 namespace duckdb {
 
 using ValidityBytes = JoinHashTable::ValidityBytes;
@@ -1199,6 +1201,7 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
 		partitioned = false;
 	} else {
 		// More than one probe round to go, so we need to partition
+		std::cout << "partitioning probe-side" << std::endl;
 		partitioned = true;
 		global_partitions =
 		    make_unique<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
@@ -1285,7 +1288,7 @@ void ProbeSpill::PrepareNextProbe(ProbeSpillGlobalScanState &gstate) {
 		gstate.probe_partition_idx = ht.partition_start;
 		gstate.probe_chunk_idx = 0;
 	} else {
-		global_spill_collection->InitializeScan(gstate.scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY, true);
+		global_spill_collection->InitializeScan(gstate.scan_state);
 	}
 }
 
@@ -1330,7 +1333,6 @@ void ProbeSpill::ScanChunk(ProbeSpillGlobalScanState &gstate, ProbeSpillLocalSca
 
 		segment.ReadChunk(idx_within_segment, lstate.scan_state.current_chunk_state, chunk, column_ids);
 	} else {
-		D_ASSERT(gstate.scan_state.scan_state.consume);
 		D_ASSERT(gstate.scan_state.scan_state.properties == ColumnDataScanProperties::ALLOW_ZERO_COPY);
 		global_spill_collection->ScanAtIndex(gstate.scan_state, lstate.scan_state, chunk, lstate.probe_chunk_index,
 		                                     lstate.probe_segment_index, lstate.probe_row_index);

@@ -723,7 +723,6 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, A
 
 	auto &chunk_state = probe_local_scan.scan_state.current_chunk_state;
 	chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
-	chunk_state.consume = true;
 
 	probe_chunk.Initialize(allocator, sink.probe_types);
 	join_keys.Initialize(allocator, op.condition_types);

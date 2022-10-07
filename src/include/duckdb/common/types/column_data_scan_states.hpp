@@ -36,7 +36,6 @@ enum class ColumnDataScanProperties : uint8_t {
 struct ChunkManagementState {
 	unordered_map<idx_t, BufferHandle> handles;
 	ColumnDataScanProperties properties = ColumnDataScanProperties::INVALID;
-	bool consume = false;
 };
 
 struct ColumnDataAppendState {
@@ -51,7 +50,6 @@ struct ColumnDataScanState {
 	idx_t current_row_index;
 	idx_t next_row_index;
 	ColumnDataScanProperties properties;
-	bool consume;
 	vector<column_t> column_ids;
 };
 

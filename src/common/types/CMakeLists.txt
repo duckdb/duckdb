@@ -13,6 +13,7 @@ add_library_unity(
   column_data_allocator.cpp
   column_data_collection.cpp
   column_data_collection_segment.cpp
+  column_data_consumer.cpp
   data_chunk.cpp
   date.cpp
   decimal.cpp

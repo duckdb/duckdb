@@ -593,36 +593,34 @@ void ColumnDataCollection::Append(DataChunk &input) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, ColumnDataScanProperties properties,
-                                          bool consume) const {
+void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, ColumnDataScanProperties properties) const {
 	vector<column_t> column_ids;
 	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
 		column_ids.push_back(i);
 	}
-	InitializeScan(state, move(column_ids), properties, consume);
+	InitializeScan(state, move(column_ids), properties);
 }
 
 void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
-                                          ColumnDataScanProperties properties, bool consume) const {
+                                          ColumnDataScanProperties properties) const {
 	state.chunk_index = 0;
 	state.segment_index = 0;
 	state.current_row_index = 0;
 	state.next_row_index = 0;
 	state.current_chunk_state.handles.clear();
 	state.properties = properties;
-	state.consume = consume;
 	state.column_ids = move(column_ids);
 }
 
-void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, ColumnDataScanProperties properties,
-                                          bool consume) const {
-	InitializeScan(state.scan_state, properties, consume);
+void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state,
+                                          ColumnDataScanProperties properties) const {
+	InitializeScan(state.scan_state, properties);
 }
 
 void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids,
-                                          ColumnDataScanProperties properties, bool consume) const {
-	InitializeScan(state.scan_state, move(column_ids), properties, consume);
+                                          ColumnDataScanProperties properties) const {
+	InitializeScan(state.scan_state, move(column_ids), properties);
 }
 
 bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
@@ -691,7 +689,6 @@ void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, Colum
 	}
 	auto &segment = *segments[segment_index];
 	lstate.current_chunk_state.properties = state.scan_state.properties;
-	lstate.current_chunk_state.consume = state.scan_state.consume;
 	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result, state.scan_state.column_ids);
 	lstate.current_row_index = row_index;
 	result.Verify();
@@ -815,35 +812,8 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 	return true;
 }
 
-vector<pair<ColumnDataCollectionSegment *, idx_t>> ColumnDataCollection::GetChunkReferences(bool sort) {
-	// Create a vector containing a reference to every chunk
-	vector<pair<ColumnDataCollectionSegment *, idx_t>> result;
-	if (Count() == 0) {
-		return result;
-	}
-
-	result.reserve(ChunkCount());
-	for (auto &segment : segments) {
-		for (idx_t chunk_index = 0; chunk_index < segment->chunk_data.size(); chunk_index++) {
-			result.emplace_back(segment.get(), chunk_index);
-		}
-	}
-
-	if (sort) {
-		// Sort them by lowest block id
-		std::sort(result.begin(), result.end(),
-		          [](const pair<ColumnDataCollectionSegment *, idx_t> &lhs,
-		             const pair<ColumnDataCollectionSegment *, idx_t> &rhs) -> bool {
-			          const auto &lhs_block_ids = lhs.first->chunk_data[lhs.second].block_ids;
-			          const auto &rhs_block_ids = rhs.first->chunk_data[rhs.second].block_ids;
-			          const uint32_t lhs_min_block_id = *std::min_element(lhs_block_ids.begin(), lhs_block_ids.end());
-			          const uint32_t rhs_min_block_id = *std::min_element(rhs_block_ids.begin(), rhs_block_ids.end());
-
-			          return lhs_min_block_id < rhs_min_block_id;
-		          });
-	}
-
-	return result;
+const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {
+	return segments;
 }
 
 } // namespace duckdb
