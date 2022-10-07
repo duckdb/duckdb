@@ -217,7 +217,8 @@ class IpcResultStreamIterator {
  */
 Connection.prototype.arrowIPCStream = async function (sql) {
     // TODO: allow prepared statements too
-    const statement = new Statement(this, "SELECT * FROM get_arrow_ipc('" + sql + "', 120);");
+    const query = "SELECT * FROM get_arrow_ipc((" + sql + "));";
+    const statement = new Statement(this, query);
     return new IpcResultStreamIterator(await statement.stream.apply(statement, arguments));
 }
 
@@ -503,6 +504,17 @@ Database.prototype.each = function () {
 Database.prototype.all = function () {
     default_connection(this).all.apply(this.default_connection, arguments);
     return this;
+}
+
+/**
+ * Convenience method for Connection#arrowIPCStream using a built-in default connection
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Database.prototype.arrowIPCStream = function () {
+    return default_connection(this).arrowIPCStream.apply(this.default_connection, arguments);
 }
 
 /**

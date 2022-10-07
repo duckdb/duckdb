@@ -7,7 +7,7 @@ const { performance } = require('perf_hooks');
 const build = 'release';
 const extension_path = `../../build/${build}/extension/arrow/arrow.duckdb_extension`;
 
-describe('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
+describe.only('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
     const total = 1000;
 
     let db;
@@ -99,7 +99,7 @@ describe('[Benchmark] single int column load (50M tuples)',() => {
         const batches = [];
         let got_rows = 0;
 
-        conn.run('CREATE TABLE copy_table AS SELECT * FROM test;', (err, result) => {
+        conn.run('CREATE TABLE copy_table AS SELECT * FROM test', (err, result) => {
             if (err) throw err;
             done();
         });
@@ -110,7 +110,7 @@ describe('[Benchmark] single int column load (50M tuples)',() => {
         let got_rows = 0;
         const batches = [];
 
-        const result = await conn.arrowIPCStream('SELECT * FROM test;');
+        const result = await conn.arrowIPCStream('SELECT * FROM test');
         const ipc_buffers = await result.toArray();
         const reader = await arrow.RecordBatchReader.from(ipc_buffers);
         const table = arrow.tableFromIPC(reader);
@@ -120,7 +120,7 @@ describe('[Benchmark] single int column load (50M tuples)',() => {
 });
 
 describe('[Benchmark] TPC-H lineitem.parquet', () => {
-    const sql = "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date) AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity < 24;"
+    const sql = "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date) AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity < 24"
 	const parquet_file_path_sf0_01 = "/tmp/lineitem_sf0_01.parquet";
 	const parquet_file_path_sf1 = "/tmp/lineitem_sf1.parquet";
     const tpch_answer_sf0_01 = [{revenue: 1193053.2253}];
@@ -148,7 +148,7 @@ describe('[Benchmark] TPC-H lineitem.parquet', () => {
 
     it('lineitem.parquet -> DuckDB -> arrow IPC -> query from DuckDB', async () => {
         const startTimeLoad = performance.now()
-        const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
+        const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '"');
         const ipc_buffers = await result.toArray();
 
         // We can now create a RecordBatchReader & Table from the materialized stream
@@ -208,14 +208,14 @@ describe('Validate with TPCH lineitem SF0.01', () => {
 
     // `table_name` in these queries will be replaced by either the parquet file directly, or the ipc buffer
     const queries = [
-        "select count(*) from table_name LIMIT 10;",
+        "select count(*) from table_name LIMIT 10",
         "select sum(l_orderkey) as sum_orderkey FROM table_name",
         "select * from table_name LIMIT 10",
         "select l_orderkey from table_name WHERE l_orderkey=2 LIMIT 2",
         "select l_extendedprice from table_name",
         "select l_extendedprice from table_name WHERE l_extendedprice > 53468 and l_extendedprice < 53469  LIMIT 2",
         "select count(l_orderkey) from table_name where l_commitdate > '1996-10-28'",
-        "SELECT sum(l_extendedprice * l_discount) AS revenue FROM table_name WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date) AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity < 24;"
+        "SELECT sum(l_extendedprice * l_discount) AS revenue FROM table_name WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date) AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity < 24"
     ];
 
     let db;
@@ -248,7 +248,7 @@ describe('Validate with TPCH lineitem SF0.01', () => {
             });
 
             // Secondly copy parquet file completely into Arrow IPC format
-            const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '";');
+            const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '"');
             const ipc_buffers = await result.toArray();
 
             // Now re-run query on Arrow IPC stream

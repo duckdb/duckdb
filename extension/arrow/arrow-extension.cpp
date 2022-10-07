@@ -22,6 +22,7 @@
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/function/table/arrow.hpp"
@@ -160,11 +161,13 @@ static constexpr idx_t DEFAULT_CHUNK_SIZE = 120;
 
 struct ToArrowIpcFunctionData : public TableFunctionData {
 	ToArrowIpcFunctionData() {}
-	string query;
 	idx_t chunk_size;
+	idx_t current_count = 0;
 	bool finished = false;
-	std::shared_ptr<arrow::RecordBatchReader> record_batch_reader = nullptr;
+	bool sent_schema = false;
 	shared_ptr<arrow::Schema> schema;
+	unique_ptr<ArrowAppender> appender;
+	vector<string> input_table_names;
 };
 
 // TODO allow omitting argument to use default
@@ -172,68 +175,109 @@ static unique_ptr<FunctionData>
 ToArrowIpcBind(ClientContext &context, TableFunctionBindInput &input,
                 vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<ToArrowIpcFunctionData>();
-	result->query = input.inputs[0].ToString();
 
-	if (input.inputs.size() > 1) {
-		result->chunk_size = input.inputs[1].GetValue<int>() * STANDARD_VECTOR_SIZE;
-	} else {
+//	if (input.inputs.size() > 1) {
+//		result->chunk_size = input.inputs[1].GetValue<int>() * STANDARD_VECTOR_SIZE;
+//	} else {
 		result->chunk_size = DEFAULT_CHUNK_SIZE * STANDARD_VECTOR_SIZE;
-	}
+//	}
 
+	result->input_table_names = input.input_table_names;
 	return_types.emplace_back(LogicalType::BLOB);
-	names.emplace_back("IPC stream blob");
+	names.emplace_back("ipc");
 	return move(result);
 }
 
-static void ToArrowIpcFunction(ClientContext &context, TableFunctionInput &data_p,
+static OperatorResultType ToArrowIpcFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
                           DataChunk &output) {
 	std::shared_ptr<arrow::Buffer> arrow_serialized_ipc_buffer;
 	auto &data = (ToArrowIpcFunctionData &)*data_p.bind_data;
+
 	if (data.finished) {
 		output.SetCardinality(0);
-		return;
+		return OperatorResultType::FINISHED;
 	}
-	if (!data.record_batch_reader) {
-		// First get the duckdb query result
-		auto new_conn = Connection(*context.db);
-		auto query_result = new_conn.SendQuery(data.query);
 
-		// Then convert query result into a RecordBatchReader
-		ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(query_result), data.chunk_size);
-		data.record_batch_reader = arrow::ImportRecordBatchReader(&result_stream->stream).ValueOrDie();
+	if (!data.sent_schema) {
+		// First time we send the serialized schema only
+		auto tz = context.client.GetClientProperties().timezone;
+		auto types = input.GetTypes();
+
+		ArrowSchema schema;
+		ArrowConverter::ToArrowSchema(&schema, types, data.input_table_names, tz);
 
 		// Serialize the schema
-		auto schema = data.record_batch_reader->schema();
-		auto result = arrow::ipc::SerializeSchema(*schema);
+		data.schema = arrow::ImportSchema(&schema).ValueOrDie();
+		auto result = arrow::ipc::SerializeSchema(*data.schema);
 		arrow_serialized_ipc_buffer = result.ValueOrDie();
-	} else {
-		auto batch = data.record_batch_reader->Next().ValueOrDie();
 
-		if (!batch) {
-			output.SetCardinality(0);
-			data.finished = true;
-			return;
+	} else {
+		if (!data.appender) {
+			data.appender = make_unique<ArrowAppender>(input.GetTypes(), data.chunk_size);
 		}
+
+		// Append input chunk
+		data.appender->Append(input);
+		data.current_count += input.size();
+
+		// TODO handle case where caching not allowed!
+
+		// If chunk size is reached, we can flush to IPC blob
+		if (data.current_count >= data.chunk_size) {
+			// Construct record batch from DataChunk
+			ArrowArray arr = data.appender->Finalize();
+			auto record_batch = arrow::ImportRecordBatch(&arr, data.schema).ValueOrDie();
+
+			// Serialize recordbatch
+			auto options = arrow::ipc::IpcWriteOptions::Defaults();
+			auto result = arrow::ipc::SerializeRecordBatch(*record_batch, options);
+			arrow_serialized_ipc_buffer = result.ValueOrDie();
+
+			// Reset appender TODO slow?
+			data.appender.reset();
+			data.current_count = 0;
+		} else {
+			return OperatorResultType::NEED_MORE_INPUT;
+		}
+	}
+
+	// TODO clean up
+	auto wrapped_buffer = make_buffer<ArrowStringVectorBuffer>(arrow_serialized_ipc_buffer);
+	auto& vector = output.data[0];
+	StringVector::AddBuffer(vector, wrapped_buffer);
+	auto data_ptr = (string_t*)vector.GetData();
+	*data_ptr = string_t((const char*)arrow_serialized_ipc_buffer->data(), arrow_serialized_ipc_buffer->size());
+	output.SetCardinality(1);
+
+	if (!data.sent_schema) {
+		data.sent_schema = true;
+		return OperatorResultType::HAVE_MORE_OUTPUT;
+	} else {
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
+}
+
+static void ToArrowIpcFunctionFinal(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (ToArrowIpcFunctionData &)*data_p.bind_data;
+	std::shared_ptr<arrow::Buffer> arrow_serialized_ipc_buffer;
+
+	// TODO clean up
+	if (data.appender) {
+		ArrowArray arr = data.appender->Finalize();
+		auto record_batch = arrow::ImportRecordBatch(&arr, data.schema).ValueOrDie();
 
 		// Serialize recordbatch
 		auto options = arrow::ipc::IpcWriteOptions::Defaults();
-		auto result = arrow::ipc::SerializeRecordBatch(*batch, options);
+		auto result = arrow::ipc::SerializeRecordBatch(*record_batch, options);
 		arrow_serialized_ipc_buffer = result.ValueOrDie();
-	}
 
-	output.SetCardinality(1);
-
-	// TODO: benchmark difference here
-	if (true) {
 		auto wrapped_buffer = make_buffer<ArrowStringVectorBuffer>(arrow_serialized_ipc_buffer);
-
-		// Instead of calling setvalue which copies the blob, we need to move it into there
 		auto& vector = output.data[0];
 		StringVector::AddBuffer(vector, wrapped_buffer);
 		auto data_ptr = (string_t*)vector.GetData();
 		*data_ptr = string_t((const char*)arrow_serialized_ipc_buffer->data(), arrow_serialized_ipc_buffer->size());
-	} else {
-		output.SetValue(0, 0, Value::BLOB((duckdb::const_data_ptr_t)arrow_serialized_ipc_buffer->data(), arrow_serialized_ipc_buffer->size()));
+		output.SetCardinality(1);
+		data.appender.reset();
 	}
 }
 
@@ -242,10 +286,12 @@ static void LoadInternal(DatabaseInstance &instance) {
 	con.BeginTransaction();
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
-	// TODO refactor to take a Query as a parameter instead of a String. There's a way to do this, see:
 	// test/sql/function/generic/test_table_param.test
-	TableFunction get_arrow_ipc_func("get_arrow_ipc", {LogicalType::VARCHAR, LogicalType::INTEGER},
-	                                 ToArrowIpcFunction, ToArrowIpcBind);
+	TableFunction get_arrow_ipc_func("get_arrow_ipc", {LogicalType::TABLE},
+	                                 nullptr, ToArrowIpcBind);
+	get_arrow_ipc_func.in_out_function = ToArrowIpcFunction;
+	get_arrow_ipc_func.in_out_function_final = ToArrowIpcFunctionFinal;
+
 	CreateTableFunctionInfo get_arrow_ipc_info(get_arrow_ipc_func);
 	catalog.CreateTableFunction(*con.context, &get_arrow_ipc_info);
 
