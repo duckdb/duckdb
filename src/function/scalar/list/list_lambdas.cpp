@@ -119,6 +119,7 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 	vector<Vector> slices;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount() - 1; col_idx++) {
 		slices.emplace_back(Vector(args.data[col_idx + 1], sel_vectors[col_idx], elem_cnt));
+		slices[col_idx].Flatten(elem_cnt);
 		input_chunk.data[col_idx + 1].Reference(slices[col_idx]);
 	}
 
