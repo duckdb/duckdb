@@ -1,18 +1,44 @@
 # name: test/temp.test
 # group: [test]
 
-statement  ok
-CREATE TABLE data (str VARCHAR)
+# statement  ok
+# CREATE TABLE tripleNested (col1 VARCHAR)
+#
+# statement ok
+# INSERT INTO tripleNested VALUES ('[[[1,2,6,8,10],[7]],[[100]]]'),(NULL);
+#
+# query I
+# SELECT col1::INT[][][] FROM tripleNested;
+# ----
+# [[[1, 2, 6, 8, 10], [7]], [[100]]]
+# NULL
+
+#query I
+#SELECT CAST('[[[1,2,6,8,10],[7]],[[100]]]' AS INT[][][]);
+#----
+#NULL
+
+
+
+# statement ok
+# CREATE TABLE tbl (col1 VARCHAR);
+#
+# statement ok
+# INSERT INTO tbl VALUES ('[1,2,2]'), ('[345,67865,44,4]'), ('[5,6,7]');
+#
+# query I
+# SELECT cast(col1 as int[]) FROM tbl WHERE LEN(cast(col1 as int[])) < 4;
+# ----
+# [1, 2, 2]
+# [5, 6, 7]
 
 statement ok
-INSERT INTO data VALUES ('[1,2,2]'), ('[345,67865,44,4]'), ('[5,6,7]');
+CREATE TABLE tbl (col1 VARCHAR);
 
 statement ok
-SELECT str::INT[] FROM data;
+INSERT INTO tbl VALUES ('    [  [1, 2] , [  3 ] ]    ');
 
 query I
-SELECT str::INT[] FROM data;
+SELECT cast(col1 as int[][]) FROM tbl;
 ----
-[1, 2, 2]
-[345, 67865, 44, 4]
-[5, 6, 7]
+[[1, 2], [3]]

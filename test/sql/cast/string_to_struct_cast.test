@@ -38,18 +38,18 @@ SELECT CAST('[12,13,14]' AS VARCHAR[]);
 ----
 [12, 13, 14]
 
-# statement ok
-# SELECT CAST('["hello", "world", "!"]' AS VARCHAR[]);
+statement ok
+SELECT CAST('["hello", "world", "!"]' AS VARCHAR[]);
 
-# statement ok
-# SELECT CAST('[hello, world, !]' AS VARCHAR[]);
+statement ok
+SELECT CAST('[hello, world, !]' AS VARCHAR[]);
 
 
 
 #               Nested lists
 # ---------------------------------------------------
-# statement ok
-# SELECT CAST('[ [12,13,14], [8, 9], [4], [2, 1, 0] ]' AS INT[][]);
+statement ok
+SELECT CAST('[ [12,13,14], [8, 9], [4], [2, 1, 0] ]' AS INT[][]);
 
 # statement ok
 # SELECT CAST('[ [[12,13,14], [8, 9]], [[4]], [[2, 1, 0], [99]] ]' AS INT[][][]);
@@ -67,7 +67,7 @@ SELECT CAST('[12,13,14]' AS VARCHAR[]);
 
 
 #               NULL values
-# ---------------------------------------------------
+# ------------------------------67---------------------
 # statement ok
 # SELECT CAST('[ [12,13,14], [8, 9], NULL, [2, 1, NULL] ]' AS INT[][]);
 
@@ -76,9 +76,6 @@ SELECT CAST('[12,13,14]' AS VARCHAR[]);
 
 # statement ok
 # SELECT CAST('[ [[12,13,14], NULL], [[4]], NULL, [[2, 1, 0], [99]] ]' AS INT[][]);
-
-# statement ok
-# SELECT CAST('[ NULL ]' AS INT[][]);
 
 
 
@@ -94,20 +91,23 @@ SELECT CAST('[12,13,14]' AS VARCHAR[]);
 #               Syntax error checking
 # ---------------------------------------------------
 
-# statement error
-# SELECT CAST('[3]]'::INT[]);
+statement error
+SELECT CAST('{[3]}' AS INT[]);
 
 # statement error
-# SELECT CAST('[3], [[1]]'::INT[][]);
+# SELECT CAST('[3]]' AS INT[]);
 
 # statement error
-# SELECT CAST('[[3 1]]'::INT[][]);
+# SELECT CAST('[3], [[1]]' AS INT[][]);
 
 # statement error
-# SELECT CAST('[[3], [[5], [4]]'::INT[][]);
+# SELECT CAST('[[3 1]]' AS INT[][]);
 
 # statement error
-# SELECT CAST('][3]'::INT[]);
+# SELECT CAST('[[3], [[5], [4]]' AS INT[][]);
+
+# statement error
+# SELECT CAST('][3]' AS INT[]);
 
 
 
@@ -123,18 +123,34 @@ SELECT CAST('[12,13,14]' AS VARCHAR[]);
 
 #               Test for whitespaces
 # ---------------------------------------------------
-# statement ok
-# SELECT CAST('['   hello','            world', '!         ']' AS VARCHAR[]);
+statement ok
+SELECT CAST('[ [12,     13,14], [8, 9], [ 4    ], [    2, 1,     0] ]  ' AS INT[][]);
+
+# SELECT CAST('[ [12,     13,14], [8, 9]     , [ 4    ], [    2, 1,     0]]' AS INT[][]);
 
 # statement ok
-# SELECT CAST('[ [12,     13,14], [8, 9]     , [ 4    ], [2, 1,     0] ]' AS INT[][]);
+# SELECT CAST('['   hello','            world', '!         ']' AS VARCHAR[]);
 
 
 
 #               Test with tables
 # ---------------------------------------------------
+statement  ok
+CREATE TABLE stringList (str VARCHAR)
+
 statement ok
-CREATE TABLE tbl (col1 VARCHAR)
+INSERT INTO stringList VALUES ('["hello","world","!"]'), ('["Amazing","text"]');
+
+query I
+SELECT str::VARCHAR[] FROM stringList;
+----
+["hello", "world", "!"]
+["Amazing", "text"]
+
+
+# ---------------------------------------------------
+statement ok
+CREATE TABLE tbl (col1 VARCHAR);
 
 statement ok
 INSERT INTO tbl VALUES ('[1,2,2]'), ('[345,67865,44,4]'), ('[5,6,7]');
@@ -142,21 +158,68 @@ INSERT INTO tbl VALUES ('[1,2,2]'), ('[345,67865,44,4]'), ('[5,6,7]');
 statement ok
 SELECT col1::INT[] FROM tbl;
 
-# statement ok
-# CREATE TABLE nested (col1 VARCHAR)
+# ---------------------------------------------------
+statement ok
+CREATE TABLE doubleNested (col1 VARCHAR);
 
-# statement ok
-# INSERT INTO nested VALUES ('[[1,2], [2]]'), ('[[345], [67865,44,4]]'), ('[[5], [6,7]]');
+statement ok
+INSERT INTO doubleNested VALUES ('[[1,2],[2]]'), ('[[345],[67865,44,4]]'), ('[[5],[6,7]]');
 
-# statement ok
-# SELECT col1::INT[][] FROM nested;
+statement ok
+SELECT col1::INT[][] FROM doubleNested;
+
+
+# ---------------------------------------------------
+statement  ok
+CREATE TABLE tripleNested (col1 VARCHAR)
+
+statement ok
+INSERT INTO tripleNested VALUES ('[[[1,2],[3]]]'), ('[[[4]]]');
+
+query I
+SELECT col1::INT[][][] FROM tripleNested;
+----
+[[[1, 2], [3]]]
+[[[4]]]
+
+# ---------------------------------------------------
+statement  ok
+CREATE TABLE crazyNested (col1 VARCHAR)
+
+statement ok
+INSERT INTO crazyNested VALUES ('[[[[1],[3,4,9],[0,1]]]]'), ('[[[[4]]]]');
+
+statement ok
+SELECT col1::INT[][][][] FROM crazyNested;
 
 
 
 #               Test WHERE clause
 # ---------------------------------------------------
-# statement ok
-# SELECT col1::INT[] FROM tbl WHERE > 3;
+query I
+SELECT * FROM tbl WHERE cast(col1 as int[]) = [1, 2, 2];
+----
+[1,2,2]
+
+query I
+SELECT col1 FROM tbl WHERE LEN(cast(col1 as int[])) < 4;
+----
+[1,2,2]
+[5,6,7]
+
+query I
+SELECT cast(col1 as int[]) FROM tbl WHERE LEN(cast(col1 as int[])) < 4;
+----
+[1, 2, 2]
+[5, 6, 7]
 
 # statement ok
-# SELECT * FROM tbl WHERE CAST(col1 AS INTEGER);
+# CREATE TABLE tbl2 (col1 VARCHAR[]);
+
+# statement ok
+# INSERT INTO tbl2 VALUES ('[2, 3, 8, 1]'), ('[9]'), ('[4]');
+
+# query I
+# SELECT CAST(col1 AS INT[]) FROM tbl2 WHERE LEN(col1 AS int[]) > 3;
+# ----
+# [2, 3, 8, 1]

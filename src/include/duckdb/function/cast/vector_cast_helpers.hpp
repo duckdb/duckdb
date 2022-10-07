@@ -198,14 +198,23 @@ struct VectorCastHelpers {
 };
 
 struct VectorSplitStringifiedList {
-    VectorSplitStringifiedList(string input);
+    VectorSplitStringifiedList(const string_t& input);
 
-    string input;
-    vector<string> parts;
+//    string_t &input;
+    const char* buf;
+    idx_t len;
+    vector<string_t> parts;
     enum ParserState { INITIAL, BRACKETS };
+    bool is_valid;
+
+public:
+    idx_t CountParts();
+    void Split();
 
 private:
-    void Split();
+    bool SkipToClose(idx_t& i);
+
+//    void RemoveWhitespace();
 };
 
 

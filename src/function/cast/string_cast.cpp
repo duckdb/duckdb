@@ -116,52 +116,94 @@ bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters 
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	auto source_data = FlatVector::GetData<string_t>(source);
+    UnifiedVectorFormat unified_source;
+    source.ToUnifiedFormat(count, unified_source);
+    auto source_data = (string_t *)unified_source.data;
 
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
-	varchar_list.SetVectorType(source.GetVectorType());
-	ListVector::Reserve(varchar_list, 10); // TODO hardcoded now, needs to have exact count of parts
+//    result.SetVectorType(VectorType::FLAT_VECTOR);
 
-    result.SetVectorType(source.GetVectorType());
+    if(source.GetVectorType() == VectorType::CONSTANT_VECTOR ){
+        result.SetVectorType(VectorType::CONSTANT_VECTOR);
+    }
+    else{
+        result.SetVectorType(VectorType::FLAT_VECTOR);
+    }
 
+    std::vector<vector<string_t> > parted_strings;
+
+    idx_t total_list_size = 0;
+    for (idx_t i = 0; i < count; i++) {
+        auto idx = unified_source.sel->get_index(i);
+
+        if (!unified_source.validity.RowIsValid(idx)) {
+            continue;
+        }
+
+        auto splitted_string = VectorSplitStringifiedList(source_data[idx]);
+        splitted_string.Split();
+//        auto parts = splitted_string.parts;
+        parted_strings.push_back(splitted_string.parts);
+        total_list_size += splitted_string.CountParts();
+        //auto valid = true;
+        // could use HandleCastError::AssignError?
+        if (!splitted_string.is_valid) {
+            if (parameters.error_message) { // TRY_CAST
+                *parameters.error_message = "Error";
+                ConstantVector::SetNull(result, true);
+            } else { // CAST
+                throw ConversionException("Oh no");
+            }
+        }
+
+
+    }
+    ListVector::Reserve(varchar_list, total_list_size);
+
+    // list_data contains for each row an offset and length that reference indexes of the child vector
     auto list_data = ListVector::GetData(varchar_list);
-    // list_data contains for each row an offset and length that reference indexes of the child vector
-
     auto list_data_result = ListVector::GetData(result);
-    // list_data contains for each row an offset and length that reference indexes of the child vector
 
+    // Child contains the actual raw values in the varchar_list ListVector
     auto &child = ListVector::GetEntry(varchar_list);
-	// Child contains the actual raw values in the varchar_list ListVector
 	auto child_data = FlatVector::GetData<string_t>(child);
 
-	//	auto &validity = FlatVector::Validity(result); // TODO
+    auto &validity  = unified_source.validity;
+
 
 	idx_t total = 0;
 	for (idx_t i = 0; i < count; i++) { // loop over source strings
-		auto parts = VectorSplitStringifiedList(source_data[i].GetString()).parts;
-		//SplitWithStateMachine(source_data[i].GetString(), parts);
+        // checks if the source_data[i] is NULL (non-existing value)
+        // if so, skip parsing, and directly set the corresponding result row to NULL as well
+        if (!validity.RowIsValid(i)) {
+            FlatVector::SetNull(result, i, true);
+            continue;
+        }
+        auto &parts = parted_strings[i];
 
-		list_data[i].offset = total;        // offset (start of list in child vector) is current total count
+		list_data[i].offset = total;        // offset (start of list in child vector)
 		list_data[i].length = parts.size(); // length is the amount of parts coming from this string
 		list_data_result[i].offset = total;
 		list_data_result[i].length = parts.size();
 
 		idx_t child_start = total;
-		for (string part : parts) {
-			child_data[child_start] = string_t(part); // TODO convert string to string_t?
-			child_start++;
+		for (string_t &part : parts) {
+            child_data[child_start] = StringVector::AddString(child, part);
+            child_start++;
 		}
 		total += parts.size();
 		D_ASSERT(child_start == total);
 	}
-	ListVector::SetListSize(varchar_list, total); // sets child size
-	ListVector::SetListSize(result, total);
+    D_ASSERT(total_list_size == total);
+
+	ListVector::SetListSize(varchar_list, total_list_size); // sets child size
+	ListVector::SetListSize(result, total_list_size);
 
 	auto &result_child = ListVector::GetEntry(result);
 
 	auto &cast_data = (ListBoundCastData &)*parameters.cast_data;
     CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data.get());
-	return cast_data.child_cast_info.function(child, result_child, total, child_parameters);
+	return cast_data.child_cast_info.function(child, result_child, total_list_size, child_parameters);
 }
 
 bool StringToStringList(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -169,33 +211,36 @@ bool StringToStringList(Vector &source, Vector &result, idx_t count, CastParamet
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	auto source_data = FlatVector::GetData<string_t>(source);
-
 	auto &child = ListVector::GetEntry(result);
 
 	auto child_data = FlatVector::GetData<string_t>(child);
-
 	auto list_data = ListVector::GetData(result);
-	// list_data contains for each row an offset and length that reference indexes of the child vector
 
-	auto &validity = FlatVector::Validity(result); // TODO
+//	auto &validity = FlatVector::Validity(result); // TODO
+    result.SetVectorType(source.GetVectorType());
 
-	idx_t total = 0;                    // counter for child vector
-	for (idx_t i = 0; i < count; i++) { // loop over source strings
-//		vector<string> parts;
-//		SplitWithStateMachine(source_data[i].GetString(), parts);
-        auto parts = VectorSplitStringifiedList(source_data[i].GetString()).parts;
+    idx_t total = 0;
+	for (idx_t i = 0; i < count; i++) {
+
+//        auto parts = VectorSplitStringifiedList(source_data[i]).parts;
+        auto splitted_string = VectorSplitStringifiedList(source_data[i]);
+        splitted_string.Split();
+        auto parts = splitted_string.parts;
+
 		list_data[i].offset = total;
 		list_data[i].length = parts.size();
 
 		idx_t child_start = total;
-		for (string part : parts) {
+		for (string_t& part : parts) {
 			child_data[child_start] = part;
 			child_start++;
 		}
 		total += parts.size();
 		D_ASSERT(child_start == total);
 	}
-	ListVector::SetListSize(result, total);
+
+    ListVector::SetListSize(result, total);
+
 	return true;
 }
 
@@ -204,14 +249,13 @@ BoundCastInfo StringToListCast(BindCastInput &input, const LogicalType &source, 
 		return BoundCastInfo(&StringToStringList);
 	}
 
+    // second argument allows for a secondary casting function to be passed in the CastParameters
 	return BoundCastInfo(&StringListCast,
 	                     BindListToListCast(input, LogicalType::LIST(LogicalType::VARCHAR), target));
-    // second argument allows for a secondary casting function to be passed in the CastParameters
 }
 
 BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const LogicalType &source,
                                              const LogicalType &target) {
-	// now switch on the target type
 	switch (target.id()) {
 	case LogicalTypeId::DATE:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, date_t, duckdb::TryCastErrorMessage>);
