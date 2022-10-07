@@ -11,15 +11,14 @@
 
 namespace duckdb {
 
-WriteAheadLog::WriteAheadLog(DatabaseInstance &database) : initialized(false), skip_writing(false), database(database) {
-}
-
-void WriteAheadLog::Initialize(string &path) {
+WriteAheadLog::WriteAheadLog(DatabaseInstance &database, const string &path) : skip_writing(false), database(database) {
 	wal_path = path;
 	writer = make_unique<BufferedFileWriter>(database.GetFileSystem(), path.c_str(),
 	                                         FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                                             FileFlags::FILE_FLAGS_APPEND);
-	initialized = true;
+}
+
+WriteAheadLog::~WriteAheadLog() {
 }
 
 int64_t WriteAheadLog::GetWALSize() {
@@ -37,10 +36,9 @@ void WriteAheadLog::Truncate(int64_t size) {
 }
 
 void WriteAheadLog::Delete() {
-	if (!initialized) {
+	if (!writer) {
 		return;
 	}
-	initialized = false;
 	writer.reset();
 
 	auto &fs = FileSystem::GetFileSystem(database);

@@ -160,7 +160,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// first we check the current segments
 	// if there are any persistent segments, we will mark their old block ids as modified
 	// since the segments will be rewritten their old on disk data is no longer required
-	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
+	auto &block_manager = col_data.block_manager;
 	for (auto segment = (ColumnSegment *)owned_segment.get(); segment; segment = (ColumnSegment *)segment->next.get()) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
