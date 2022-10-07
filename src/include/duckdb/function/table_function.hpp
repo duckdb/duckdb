@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/function/function.hpp"
-#include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 
 #include <functional>
 
@@ -59,21 +59,37 @@ struct TableFunctionBindInput {
 
 struct TableFunctionInitInput {
 	TableFunctionInitInput(const FunctionData *bind_data_p, const vector<column_t> &column_ids_p,
-	                       TableFilterSet *filters_p)
-	    : bind_data(bind_data_p), column_ids(column_ids_p), filters(filters_p) {
+	                       const vector<idx_t> &projection_ids_p, TableFilterSet *filters_p)
+	    : bind_data(bind_data_p), column_ids(column_ids_p), projection_ids(projection_ids_p), filters(filters_p) {
 	}
 
 	const FunctionData *bind_data;
 	const vector<column_t> &column_ids;
+	const vector<idx_t> projection_ids;
 	TableFilterSet *filters;
+
+	bool CanRemoveFilterColumns() const {
+		if (projection_ids.empty()) {
+			// Not set, can't remove filter columns
+			return false;
+		} else if (projection_ids.size() == column_ids.size()) {
+			// Filter column is used in remainder of plan, can't remove
+			return false;
+		} else {
+			// Less columns need to be projected out than that we scan
+			return true;
+		}
+	}
 };
 
 struct TableFunctionInput {
+public:
 	TableFunctionInput(const FunctionData *bind_data_p, LocalTableFunctionState *local_state_p,
 	                   GlobalTableFunctionState *global_state_p)
 	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p) {
 	}
 
+public:
 	const FunctionData *bind_data;
 	LocalTableFunctionState *local_state;
 	GlobalTableFunctionState *global_state;
@@ -166,6 +182,9 @@ public:
 	//! Whether or not the table function supports filter pushdown. If not supported a filter will be added
 	//! that applies the table filter directly.
 	bool filter_pushdown;
+	//! Whether or not the table function can immediately prune out filter columns that are unused in the remainder of
+	//! the query plan, e.g., "SELECT i FROM tbl WHERE j = 42;" - j does not need to leave the table function at all
+	bool filter_prune;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 };

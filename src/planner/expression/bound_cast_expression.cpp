@@ -32,11 +32,13 @@ unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, co
 
 static BoundCastInfo BindCastFunction(ClientContext &context, const LogicalType &source, const LogicalType &target) {
 	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
-	return cast_functions.GetCastFunction(source, target);
+	GetCastFunctionInput input(context);
+	return cast_functions.GetCastFunction(source, target, input);
 }
 
 unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
-                                             CastFunctionSet &cast_functions, bool try_cast) {
+                                             CastFunctionSet &cast_functions, GetCastFunctionInput &get_input,
+                                             bool try_cast) {
 	D_ASSERT(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;
@@ -75,20 +77,23 @@ unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const 
 	if (!target_type.IsValid()) {
 		return expr;
 	}
-	auto cast_function = cast_functions.GetCastFunction(expr->return_type, target_type);
+
+	auto cast_function = cast_functions.GetCastFunction(expr->return_type, target_type, get_input);
 	return AddCastExpressionInternal(move(expr), target_type, move(cast_function), try_cast);
 }
 
 unique_ptr<Expression> BoundCastExpression::AddDefaultCastToType(unique_ptr<Expression> expr,
                                                                  const LogicalType &target_type, bool try_cast) {
 	CastFunctionSet default_set;
-	return AddCastToTypeInternal(move(expr), target_type, default_set, try_cast);
+	GetCastFunctionInput get_input;
+	return AddCastToTypeInternal(move(expr), target_type, default_set, get_input, try_cast);
 }
 
 unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context, unique_ptr<Expression> expr,
                                                           const LogicalType &target_type, bool try_cast) {
 	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
-	return AddCastToTypeInternal(move(expr), target_type, cast_functions, try_cast);
+	GetCastFunctionInput get_input(context);
+	return AddCastToTypeInternal(move(expr), target_type, cast_functions, get_input, try_cast);
 }
 
 bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type) {

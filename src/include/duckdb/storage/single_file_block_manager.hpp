@@ -27,9 +27,8 @@ class SingleFileBlockManager : public BlockManager {
 public:
 	SingleFileBlockManager(DatabaseInstance &db, string path, bool read_only, bool create_new, bool use_direct_io);
 
-	void StartCheckpoint() override;
 	//! Creates a new Block using the specified block_id and returns a pointer
-	unique_ptr<Block> CreateBlock(block_id_t block_id) override;
+	unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) override;
 	//! Return the next free block id
 	block_id_t GetFreeBlockId() override;
 	//! Returns whether or not a specified block is the root block
@@ -55,10 +54,11 @@ public:
 	idx_t FreeBlocks() override {
 		return free_list.size();
 	}
+
+private:
 	//! Load the free list from the file
 	void LoadFreeList();
 
-private:
 	void Initialize(DatabaseHeader &header);
 
 	//! Return the blocks to which we will write the free list and modified blocks
