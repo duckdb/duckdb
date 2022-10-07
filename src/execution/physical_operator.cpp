@@ -244,9 +244,9 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 	}
 }
 
-CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types,
+CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types_p,
                                                  idx_t estimated_cardinality)
-    : PhysicalOperator(type, move(types), estimated_cardinality) {
+    : PhysicalOperator(type, move(types_p), estimated_cardinality) {
 
 	enable_cache = true;
 	for (auto &col_type : types) {
@@ -265,11 +265,11 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
 
 #if STANDARD_VECTOR_SIZE >= 128
-	if (state.allow_caching && chunk.size() < CACHE_THRESHOLD) {
+	if (enable_cache && state.allow_caching && chunk.size() < CACHE_THRESHOLD) {
 		    // we have filtered out a significant amount of tuples
 		    // add this chunk to the cache and continue
 
-		    if (!state.cached_chunk) {
+		if (!state.cached_chunk) {
 			state.cached_chunk = make_unique<DataChunk>();
 			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
 		}

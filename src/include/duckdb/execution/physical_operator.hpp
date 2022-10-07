@@ -232,13 +232,13 @@ public:
 
 class CachingOperatorState : public OperatorState {
 public:
-	virtual ~CachingOperatorState() {
+	~CachingOperatorState() override {
 	}
 
-	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
+	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
 	}
 
-	virtual void AllowCaching(bool val) {
+	void AllowCaching(bool val) final{
 		allow_caching = val;
 	}
 
@@ -261,7 +261,7 @@ public:
 	                  OperatorState &state) const final;
 
 	bool RequiresFinalExecute() const final {
-		return true;
+		return enable_cache;
 	}
 
 protected:
