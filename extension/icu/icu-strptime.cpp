@@ -2,6 +2,8 @@
 #include "include/icu-datefunc.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -13,7 +15,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -174,12 +175,8 @@ struct ICUStrptime : public ICUDateFunc {
 			    string_t tz(nullptr, 0);
 			    if (!Timestamp::TryConvertTimestampTZ(str, len, result, tz)) {
 				    auto msg = Timestamp::ConversionError(string(str, len));
-				    if (parameters.error_message) {
-					    *parameters.error_message = msg;
-					    mask.SetInvalid(idx);
-				    } else {
-					    throw ConversionException(msg);
-				    }
+				    HandleCastError::AssignError(msg, parameters.error_message);
+				    mask.SetInvalid(idx);
 			    } else if (tz.GetSize()) {
 				    // Convert parts to TZ
 				    auto calendar = cal.get();
