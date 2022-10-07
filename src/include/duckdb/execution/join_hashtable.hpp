@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/types/column_data_consumer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
@@ -241,25 +242,6 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
-	//! Thread-global scan state for the probe spill
-	struct ProbeSpillGlobalScanState {
-		ColumnDataParallelScanState scan_state;
-		vector<vector<pair<ColumnDataCollectionSegment *, idx_t>>> partition_chunk_references;
-
-		idx_t probe_partition_idx;
-		idx_t probe_chunk_idx;
-	};
-
-	//! Thread-local scan state for the probe spill
-	struct ProbeSpillLocalScanState {
-		ColumnDataLocalScanState scan_state;
-
-		idx_t probe_partition_index = DConstants::INVALID_INDEX;
-		idx_t probe_chunk_index;
-		idx_t probe_segment_index;
-		idx_t probe_row_index;
-	};
-
 	//! ProbeSpill represents materialized probe-side data that could not be probed during PhysicalHashJoin::Execute
 	//! because the HashTable did not fit in memory. The ProbeSpill is not partitioned if the remaining data can be
 	//! dealt with in just 1 more round of probing, otherwise it is radix partitioned in the same way as the HashTable
@@ -267,6 +249,7 @@ public:
 	public:
 		ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types);
 
+	public:
 		//! Create an append state for a new thread and assign an index
 		idx_t RegisterThread();
 		//! Append a chunk to this ProbeSpill
@@ -274,15 +257,11 @@ public:
 		//! Finalize by merging the thread-local accumulated data
 		void Finalize();
 
-		//! The number of chunks in the current probe round
-		idx_t ChunkCount(ProbeSpillGlobalScanState &gstate) const;
-
+	public:
 		//! Prepare the next probe round
-		void PrepareNextProbe(ProbeSpillGlobalScanState &gstate);
-		//! Get the indices to scan next
-		bool GetScanIndex(ProbeSpillGlobalScanState &gstate, ProbeSpillLocalScanState &lstate);
-		//! Scans the chunk with the given index
-		void ScanChunk(ProbeSpillGlobalScanState &gstate, ProbeSpillLocalScanState &lstate, DataChunk &chunk);
+		void PrepareNextProbe();
+		//! Scans and consumes the ColumnDataCollection
+		unique_ptr<ColumnDataConsumer> consumer;
 
 	private:
 		JoinHashTable &ht;

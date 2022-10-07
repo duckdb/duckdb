@@ -16,8 +16,6 @@ namespace duckdb {
 using ValidityBytes = JoinHashTable::ValidityBytes;
 using ScanStructure = JoinHashTable::ScanStructure;
 using ProbeSpill = JoinHashTable::ProbeSpill;
-using ProbeSpillLocalScanState = JoinHashTable::ProbeSpillLocalScanState;
-using ProbeSpillGlobalScanState = JoinHashTable::ProbeSpillGlobalScanState;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
@@ -1048,8 +1046,6 @@ void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_pt
 		tuples_per_round = (total_count + 2) / 3;
 	}
 
-	// TODO: crank up the number of partitions if we know we must partition the probe side
-	//  This speeds up probing significantly due to better cache localityp
 	// Set the number of radix bits (minimum 4, maximum 8)
 	for (; radix_bits < 8; radix_bits++) {
 		auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
@@ -1201,7 +1197,6 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
 		partitioned = false;
 	} else {
 		// More than one probe round to go, so we need to partition
-		std::cout << "partitioning probe-side" << std::endl;
 		partitioned = true;
 		global_partitions =
 		    make_unique<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
@@ -1247,7 +1242,7 @@ void ProbeSpill::Finalize() {
 			global_partitions->Combine(*local_partition);
 		}
 		local_partitions.clear();
-		local_spill_append_states.clear();
+		local_partition_append_states.clear();
 	} else {
 		global_spill_collection = move(local_spill_collections[0]);
 		for (idx_t i = 1; i < local_spill_collections.size(); i++) {
@@ -1258,86 +1253,21 @@ void ProbeSpill::Finalize() {
 	}
 }
 
-idx_t ProbeSpill::ChunkCount(ProbeSpillGlobalScanState &gstate) const {
-	if (partitioned) {
-		idx_t count = 0;
-		for (idx_t i = ht.partition_start; i < ht.partition_end; i++) {
-			count += gstate.partition_chunk_references[i].size();
-		}
-		return count;
-	} else {
-		return global_spill_collection->ChunkCount();
-	}
-}
-
-void ProbeSpill::PrepareNextProbe(ProbeSpillGlobalScanState &gstate) {
+void ProbeSpill::PrepareNextProbe() {
 	if (partitioned) {
 		auto &partitions = global_partitions->GetPartitions();
-		if (gstate.partition_chunk_references.empty()) {
-			// First call to prepare - initialize chunk references for all partitions
-			for (idx_t i = 0; i < partitions.size(); i++) {
-				gstate.partition_chunk_references.push_back(partitions[i]->GetChunkReferences(true));
-			}
-		}
-
 		if (ht.partition_start == partitions.size()) {
 			return;
 		}
 
-		// Reset indices
-		gstate.probe_partition_idx = ht.partition_start;
-		gstate.probe_chunk_idx = 0;
-	} else {
-		global_spill_collection->InitializeScan(gstate.scan_state);
-	}
-}
-
-bool ProbeSpill::GetScanIndex(ProbeSpillGlobalScanState &gstate, ProbeSpillLocalScanState &lstate) {
-	if (partitioned) {
-		// Check if done
-		if (gstate.probe_partition_idx == ht.partition_end) {
-			return false;
+		// Move specific partitions to the global spill collection
+		global_spill_collection = move(partitions[ht.partition_start]);
+		for (idx_t i = ht.partition_start + 1; i < ht.partition_end; i++) {
+			global_spill_collection->Combine(*partitions[i]);
 		}
-
-		// Get indices
-		auto next_partition_index = gstate.probe_partition_idx;
-		auto next_chunk_index = gstate.probe_chunk_idx++;
-
-		if (lstate.probe_partition_index != next_partition_index) {
-			// Previously scanned a different partition, need to reset local state pins
-			lstate.scan_state.current_chunk_state.handles.clear();
-		}
-
-		// Assign them to local state
-		lstate.probe_partition_index = next_partition_index;
-		lstate.probe_chunk_index = next_chunk_index;
-
-		// Increment to next partition, if needed
-		if (gstate.probe_chunk_idx == gstate.partition_chunk_references[gstate.probe_partition_idx].size()) {
-			gstate.probe_partition_idx++;
-			gstate.probe_chunk_idx = 0;
-		}
-		return true;
-	} else {
-		return global_spill_collection->NextScanIndex(gstate.scan_state.scan_state, lstate.probe_chunk_index,
-		                                              lstate.probe_segment_index, lstate.probe_row_index);
 	}
-}
-
-void ProbeSpill::ScanChunk(ProbeSpillGlobalScanState &gstate, ProbeSpillLocalScanState &lstate, DataChunk &chunk) {
-	chunk.Reset();
-	if (partitioned) {
-		auto &chunk_ref = gstate.partition_chunk_references[lstate.probe_partition_index][lstate.probe_chunk_index];
-		auto &segment = *chunk_ref.first;
-		auto &idx_within_segment = chunk_ref.second;
-
-		segment.ReadChunk(idx_within_segment, lstate.scan_state.current_chunk_state, chunk, column_ids);
-	} else {
-		D_ASSERT(gstate.scan_state.scan_state.properties == ColumnDataScanProperties::ALLOW_ZERO_COPY);
-		global_spill_collection->ScanAtIndex(gstate.scan_state, lstate.scan_state, chunk, lstate.probe_chunk_index,
-		                                     lstate.probe_segment_index, lstate.probe_row_index);
-	}
-	chunk.Verify();
+	consumer = make_unique<ColumnDataConsumer>(*global_spill_collection, column_ids);
+	consumer->InitializeScan();
 }
 
 } // namespace duckdb

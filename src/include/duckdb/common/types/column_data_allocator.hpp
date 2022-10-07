@@ -48,6 +48,11 @@ public:
 	void InitializeChunkState(ChunkManagementState &state, ChunkMetaData &meta_data);
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
 
+	//! Resets all owned data
+	void Reset();
+	//! Deletes the block with the given id
+	void DeleteBlock(uint32_t block_id);
+
 private:
 	void AllocateDataInternal(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
 	void AllocateBlock();

@@ -116,6 +116,15 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	return state.handles[block_id].Ptr() + offset;
 }
 
+void ColumnDataAllocator::Reset() {
+	blocks.clear();
+	allocated_data.clear();
+}
+
+void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {
+	blocks[block_id].handle->SetCanDestroy(true);
+}
+
 Allocator &ColumnDataAllocator::GetAllocator() {
 	return type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ? *alloc.allocator
 	                                                            : alloc.buffer_manager->GetBufferAllocator();
@@ -133,12 +142,8 @@ void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, Chun
 		for (auto it = state.handles.begin(); it != state.handles.end(); it++) {
 			if (chunk.block_ids.find(it->first) != chunk.block_ids.end()) {
 				// still required: do not release
-				Printer::Print(StringUtil::Format(to_string((uint64_t)&state) + ": still required " +
-				                                  to_string(it->first) + " " + to_string(it->second.IsValid())));
 				continue;
 			}
-			Printer::Print(StringUtil::Format(to_string((uint64_t)&state) + ": not required " + to_string(it->first) +
-			                                  " " + to_string(it->second.IsValid())));
 			state.handles.erase(it);
 			found_handle = true;
 			break;
@@ -149,13 +154,9 @@ void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, Chun
 	for (auto &block_id : chunk.block_ids) {
 		if (state.handles.find(block_id) != state.handles.end()) {
 			// already pinned: don't need to do anything
-			Printer::Print(StringUtil::Format(to_string((uint64_t)&state) + ": already pinned " + to_string(block_id) +
-			                                  " " + to_string(state.handles[block_id].IsValid())));
 			continue;
 		}
 		state.handles[block_id] = Pin(block_id);
-		Printer::Print(StringUtil::Format(to_string((uint64_t)&state) + ": newly pinned " + to_string(block_id) + " " +
-		                                  to_string(state.handles[block_id].IsValid())));
 	}
 }
 

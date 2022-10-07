@@ -539,7 +539,7 @@ public:
 	//! For synchronizing the external hash join
 	atomic<bool> initialized;
 	atomic<HashJoinSourceStage> global_stage;
-	mutex &lock;
+	mutex lock;
 
 	//! For HT build synchronization
 	idx_t build_block_idx;
@@ -548,7 +548,6 @@ public:
 	idx_t build_blocks_per_thread;
 
 	//! For probe synchronization
-	JoinHashTable::ProbeSpillGlobalScanState probe_global_scan;
 	idx_t probe_chunk_count;
 	idx_t probe_chunk_done;
 
@@ -587,7 +586,7 @@ public:
 	idx_t build_block_idx_end;
 
 	//! Local scan state for probe spill
-	JoinHashTable::ProbeSpillLocalScanState probe_local_scan;
+	ColumnDataConsumerScanState probe_local_scan;
 	//! Chunks for holding the scanned probe collection
 	DataChunk probe_chunk;
 	DataChunk join_keys;
@@ -613,7 +612,7 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 }
 
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context)
-    : op(op), initialized(false), global_stage(HashJoinSourceStage::INIT), lock(probe_global_scan.scan_state.lock),
+    : op(op), initialized(false), global_stage(HashJoinSourceStage::INIT),
       probe_count(op.children[0]->estimated_cardinality),
       parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120) {
 }
@@ -659,9 +658,9 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 }
 
 void HashJoinGlobalSourceState::PrepareProbe(HashJoinGlobalSinkState &sink) {
-	sink.probe_spill->PrepareNextProbe(probe_global_scan);
+	sink.probe_spill->PrepareNextProbe();
 
-	probe_chunk_count = sink.probe_spill->ChunkCount(probe_global_scan);
+	probe_chunk_count = sink.probe_spill->consumer->ChunkCount();
 	probe_chunk_done = 0;
 
 	if (IsRightOuterJoin(op.join_type)) {
@@ -697,7 +696,7 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 		}
 		break;
 	case HashJoinSourceStage::PROBE:
-		if (sink.probe_spill->GetScanIndex(probe_global_scan, lstate.probe_local_scan)) {
+		if (sink.probe_spill->consumer->AssignChunk(lstate.probe_local_scan)) {
 			lstate.local_stage = global_stage;
 			return true;
 		}
@@ -719,11 +718,10 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 
 HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, Allocator &allocator)
     : local_stage(HashJoinSourceStage::INIT), addresses(LogicalType::POINTER) {
-	auto &sink = (HashJoinGlobalSinkState &)*op.sink_state;
-
-	auto &chunk_state = probe_local_scan.scan_state.current_chunk_state;
+	auto &chunk_state = probe_local_scan.current_chunk_state;
 	chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
 
+	auto &sink = (HashJoinGlobalSinkState &)*op.sink_state;
 	probe_chunk.Initialize(allocator, sink.probe_types);
 	join_keys.Initialize(allocator, op.condition_types);
 	payload.Initialize(allocator, op.children[0]->types);
@@ -792,6 +790,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 		scan_structure->Next(join_keys, payload, chunk);
 		if (chunk.size() == 0) {
 			scan_structure = nullptr;
+			sink.probe_spill->consumer->FinishChunk(probe_local_scan);
 			lock_guard<mutex> lock(gstate.lock);
 			if (++gstate.probe_chunk_done == gstate.probe_chunk_count) {
 				if (IsRightOuterJoin(gstate.op.join_type)) {
@@ -800,13 +799,12 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 					gstate.PrepareBuild(sink);
 				}
 			}
-			// TODO: delete blocks that we passed (blocks could have different allocators ...)
 		}
 		return;
 	}
 
 	// Scan input chunk for next probe
-	sink.probe_spill->ScanChunk(gstate.probe_global_scan, probe_local_scan, probe_chunk);
+	sink.probe_spill->consumer->ScanChunk(probe_local_scan, probe_chunk);
 
 	// Get the probe chunk columns/hashes
 	join_keys.ReferenceColumns(probe_chunk, join_key_indices);
