@@ -59,6 +59,8 @@ public:
 		for (idx_t i = 0; i < max_flags_to_read; i++) {
 			flag_one_count += flags[1 + i] == duckdb_chimp::LEADING_ZERO_LOAD;
 		}
+		// There are 8 leading zero values packed in one block, the block could not be entire filled
+		flag_one_count = AlignValue<idx_t, 8>(flag_one_count);
 		D_ASSERT(flag_one_count == leading_zero_block_size);
 #endif
 		duckdb_chimp::LeadingZeroBuffer<false> leading_zero_buffer;
