@@ -458,6 +458,18 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 	D_ASSERT(sink.finalized);
 	D_ASSERT(!sink.scanned_data);
 
+	// some initialization for external hash join
+	if (sink.external) {
+		if (!sink.probe_spill) {
+			// initialize probe spill if not yet done
+			sink.InitializeProbeSpill(context.client);
+		}
+		if (state.thread_idx == DConstants::INVALID_INDEX) {
+			// assign thread index
+			state.thread_idx = sink.probe_spill->RegisterThread();
+		}
+	}
+
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return OperatorResultType::FINISHED;
 	}
@@ -481,18 +493,6 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 	if (sink.hash_table->Count() == 0) {
 		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, input, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
-	}
-
-	// some initialization for external hash join
-	if (sink.external) {
-		if (!sink.probe_spill) {
-			// initialize probe spill if not yet done
-			sink.InitializeProbeSpill(context.client);
-		}
-		if (state.thread_idx == DConstants::INVALID_INDEX) {
-			// assign thread index
-			state.thread_idx = sink.probe_spill->RegisterThread();
-		}
 	}
 
 	// resolve the join keys for the left chunk
