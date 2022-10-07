@@ -41,3 +41,7 @@ endif()
 if(${BUILD_INET_EXTENSION})
   add_subdirectory(inet)
 endif()
+
+if(${BUILD_GEO_EXTENSION})
+  add_subdirectory(geo)
+endif()

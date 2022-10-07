@@ -257,6 +257,7 @@ option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extensio
 option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
 option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
 option(BUILD_INET_EXTENSION "Build the inet extension." FALSE)
+option(BUILD_GEO_EXTENSION "Build the geo extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -559,6 +560,11 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/inet/include)
     add_definitions(-DBUILD_INET_EXTENSION=${BUILD_INET_EXTENSION})
   endif()
+
+  if(${BUILD_GEO_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/geo/include)
+    add_definitions(-DBUILD_GEO_EXTENSION=${BUILD_GEO_EXTENSION})
+  endif()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -604,6 +610,10 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_INET_EXTENSION})
     add_dependencies(${LIBRARY} inet_extension)
+  endif()
+
+  if(${BUILD_GEO_EXTENSION})
+    add_dependencies(${LIBRARY} geo_extension)
   endif()
 
 endfunction()
@@ -656,6 +666,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_INET_EXTENSION})
     target_link_libraries(${LIBRARY} inet_extension)
+  endif()
+
+  if(${BUILD_GEO_EXTENSION})
+    target_link_libraries(${LIBRARY} geo_extension)
   endif()
 endfunction()
 
