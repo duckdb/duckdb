@@ -163,7 +163,6 @@ public:
 	}
 };
 
-
 unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const LogicalType &source,
                                                  const LogicalType &target) {
 	D_ASSERT(source.id() == LogicalTypeId::UNION);
@@ -189,6 +188,7 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 
 	return make_unique<UnionToUnionBoundCastData>(move(child_cast_info), target);
 }
+
 static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = (UnionToUnionBoundCastData &)*parameters.cast_data;
 	
@@ -238,8 +238,9 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	// first cast all child elements to varchar
 	auto &cast_data = (UnionToUnionBoundCastData &)*parameters.cast_data;
 	Vector varchar_struct(cast_data.target, count);
-	UnionToUnionCast(source, varchar_struct, count, parameters);
 
+	UnionToUnionCast(source, varchar_struct, count, parameters);
+	
 	// now construct the actual varchar vector
 	varchar_struct.Flatten(count);
 	auto child_types = UnionType::GetMemberTypes(source.GetType());
@@ -253,20 +254,23 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
+
 		auto tag = tags[i];
 		auto &child = UnionVector::GetMember(varchar_struct, tag);
 		auto child_str = FlatVector::GetData<string_t>(child)[i];
-		result_data[i] = StringVector::AddString(result, child_str);
+		auto child_valid = FlatVector::Validity(child).RowIsValid(i);
+		if(child_valid) {
+			result_data[i] = StringVector::AddString(result, child_str);		
+		}
+		else {
+			result_data[i] = StringVector::AddString(result, "NULL");
+		}
 	}
 
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (constant) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-	} else {
-		source.Flatten(count);
-		FlatVector::Validity(result) = FlatVector::Validity(source);
 	}
-
+	
 	return true;
 }
 
