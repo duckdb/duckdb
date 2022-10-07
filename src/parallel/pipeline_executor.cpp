@@ -168,6 +168,29 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 				source_chunk.Reset();
 				FetchFromSource(source_chunk);
 				if (source_chunk.size() == 0) {
+					// TODO DEDUPLICATE
+					idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
+
+					for (idx_t i = start_idx; i < pipeline.operators.size(); i++) {
+						if (pipeline.operators[i]->RequiresFinalExecute()) {
+							unique_ptr<DataChunk> remaining_chunk;
+							remaining_chunk = make_unique<DataChunk>();
+							remaining_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[i]->GetTypes());
+							pipeline.operators[i]->FinalExecute(context, *remaining_chunk, *pipeline.operators[i]->op_state,
+							                                    *intermediate_states[i]);
+							auto state = Execute(*remaining_chunk, result, i + 1);
+							if (state == OperatorResultType::FINISHED) {
+								FinishProcessing(i); // TODO is this even correct? I dont think so: i think this is now O(N^2) because
+								// TODO we rerun this for every op in the pipeline, I think we need a way to mark the operator as finalized
+							}
+
+							// If this resulting in a result, we are done, else we should continue past the other operators
+							if (result.size() > 0) {
+								break;
+							}
+						}
+					}
+
 					break;
 				}
 			}
