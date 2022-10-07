@@ -1,0 +1,88 @@
+# name: test/sql/storage/wal/wal_create_index.test
+# description: Test serialization of index to WAL
+# group: [wal]
+
+# load the DB from disk
+load __TEST_DIR__/test_wal_create_index.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+insert into integers values (1,1), (2,2), (3,3)
+
+# Test single column
+statement ok
+create unique index i_index on integers(i);
+
+#query II
+#EXPLAIN SELECT i FROM integers  where i = 1
+#----
+#logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+# this succeeds so I am guessing that it does not find the index for constraint checking
+statement error
+INSERT INTO integers VALUES (1, 1)
+
+# this succeeds, so the index is somewhere?
+statement ok
+DROP INDEX i_index;
+
+query II
+EXPLAIN SELECT i FROM integers  where i = 1
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+#restart
+#
+#statement ok
+#PRAGMA disable_checkpoint_on_shutdown
+#
+#statement ok
+#PRAGMA wal_autocheckpoint='1TB';
+#
+#statement ok
+#drop index i_index
+#
+#restart
+#
+#statement ok
+#PRAGMA disable_checkpoint_on_shutdown
+#
+#statement ok
+#PRAGMA wal_autocheckpoint='1TB';
+#
+## Test more complex expression
+#
+#statement ok
+#create index i_index on integers using art((i+j))
+#
+#query II
+#EXPLAIN SELECT i FROM integers  where i+j = 2
+#----
+#logical_opt	<REGEX>:.*INDEX_SCAN.*
+#
+#query I
+#SELECT i FROM integers  where i+j = 2
+#----
+#1
+#
+#statement ok
+#drop index i_index

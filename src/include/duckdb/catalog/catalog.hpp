@@ -29,6 +29,7 @@ struct CreateSequenceInfo;
 struct CreateCollationInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
+struct CreateIndexInfo;
 
 class ClientContext;
 class Transaction;
@@ -124,6 +125,8 @@ public:
 	DUCKDB_API CatalogEntry *CreateType(ClientContext &context, CreateTypeInfo *info);
 	//! Creates a collation in the catalog
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
+	//! Creates an index in the catalog
+	DUCKDB_API CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table);
 
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateTable(ClientContext &context, SchemaCatalogEntry *schema,
@@ -150,6 +153,9 @@ public:
 	//! Creates a collation in the catalog
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, SchemaCatalogEntry *schema,
 	                                         CreateCollationInfo *info);
+	//! Creates an index in the catalog
+	DUCKDB_API CatalogEntry *CreateIndex(ClientContext &context, SchemaCatalogEntry *schema, CreateIndexInfo *info,
+	                                     TableCatalogEntry *table);
 
 	//! Drops an entry from the catalog
 	DUCKDB_API void DropEntry(ClientContext &context, DropInfo *info);

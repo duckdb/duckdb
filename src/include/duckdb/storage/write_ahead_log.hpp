@@ -17,6 +17,7 @@
 
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -76,6 +77,9 @@ public:
 
 	void WriteCreateTableMacro(TableMacroCatalogEntry *entry);
 	void WriteDropTableMacro(TableMacroCatalogEntry *entry);
+
+	void WriteCreateIndex(IndexCatalogEntry *entry);
+	void WriteDropIndex(IndexCatalogEntry *entry);
 
 	void WriteCreateType(TypeCatalogEntry *entry);
 	void WriteDropType(TypeCatalogEntry *entry);

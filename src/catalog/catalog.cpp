@@ -139,6 +139,16 @@ CatalogEntry *Catalog::CreateCollation(ClientContext &context, SchemaCatalogEntr
 	return schema->CreateCollation(context, info);
 }
 
+CatalogEntry *Catalog::CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) {
+	auto schema = GetSchema(context, info->schema);
+	return CreateIndex(context, schema, info, table);
+}
+
+CatalogEntry *Catalog::CreateIndex(ClientContext &context, SchemaCatalogEntry *schema, CreateIndexInfo *info,
+                                   TableCatalogEntry *table) {
+	return schema->CreateIndex(context, info, table);
+}
+
 CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *info) {
 	D_ASSERT(!info->schema.empty());
 	if (info->schema == TEMP_SCHEMA) {

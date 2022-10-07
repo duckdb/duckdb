@@ -60,6 +60,9 @@ private:
 	void ReplayCreateTableMacro();
 	void ReplayDropTableMacro();
 
+	void ReplayCreateIndex();
+	void ReplayDropIndex();
+
 	void ReplayUseTable();
 	void ReplayInsert();
 	void ReplayDelete();
@@ -221,7 +224,12 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_TYPE:
 		ReplayDropType();
 		break;
-
+	case WALType::CREATE_INDEX:
+		ReplayCreateIndex();
+		break;
+	case WALType::DROP_INDEX:
+		ReplayDropIndex();
+		break;
 	default:
 		throw InternalException("Invalid WAL entry type!");
 	}
@@ -432,6 +440,36 @@ void ReplayState::ReplayCreateTableMacro() {
 void ReplayState::ReplayDropTableMacro() {
 	DropInfo info;
 	info.type = CatalogType::TABLE_MACRO_ENTRY;
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Index
+//===--------------------------------------------------------------------===//
+void ReplayState::ReplayCreateIndex() {
+	auto info = IndexCatalogEntry::Deserialize(source, context);
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	current_table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
+
+	catalog.CreateIndex(context, info.get(), current_table);
+	D_ASSERT(current_table);
+}
+
+void ReplayState::ReplayDropIndex() {
+	DropInfo info;
+
+	info.type = CatalogType::INDEX_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 	if (deserialize_only) {

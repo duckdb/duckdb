@@ -158,6 +158,29 @@ void WriteAheadLog::WriteDropTableMacro(TableMacroCatalogEntry *entry) {
 }
 
 //===--------------------------------------------------------------------===//
+// CREATE INDEX
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateIndex(IndexCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::CREATE_INDEX);
+	entry->Serialize(*writer);
+}
+
+//===--------------------------------------------------------------------===//
+// DROP INDEX
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteDropIndex(IndexCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::DROP_INDEX);
+	writer->WriteString(entry->schema->name);
+	writer->WriteString(entry->name);
+}
+
+//===--------------------------------------------------------------------===//
 // Custom Types
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateType(TypeCatalogEntry *entry) {
