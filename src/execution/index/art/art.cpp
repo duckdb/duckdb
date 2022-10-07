@@ -313,7 +313,7 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 	auto skipped_all_nulls = false;
 	auto temp_art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
 	                                 this->constraint_type, this->db);
-	
+
 	for (;;) {
 		DataChunk ordered_chunk;
 		ordered_chunk.Initialize(allocator, payload_types);
