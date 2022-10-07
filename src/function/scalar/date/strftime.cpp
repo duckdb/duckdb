@@ -77,7 +77,12 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		return Date::MONTH_NAMES[Date::ExtractMonth(date) - 1].GetSize();
 	case StrTimeSpecifier::YEAR_DECIMAL: {
 		auto year = Date::ExtractYear(date);
-		return NumericHelper::SignedLength<int32_t, uint32_t>(year);
+		// Be consistent with WriteStandardSpecifier
+		if (0 <= year && year <= 9999) {
+			return 4;
+		} else {
+			return NumericHelper::SignedLength<int32_t, uint32_t>(year);
+		}
 	}
 	case StrTimeSpecifier::MONTH_DECIMAL: {
 		idx_t len = 1;
