@@ -52,17 +52,6 @@ static const uint8_t remainder_masks[] = {
     255, // 0b11111111,
 };
 
-//! Left shifts
-static const uint8_t shifts[] = {0, // unused
-                                 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0};
-
-//! Right shifts
-//! Right shift the values to cut off the mask when SIZE + index exceeds 8
-static const uint8_t right_shifts[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, // no-op
-    1, 2, 3, 4, 5, 6, 7, 8,
-};
-
 struct BitReader {
 public:
 public:
