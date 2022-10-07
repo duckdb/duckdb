@@ -55,14 +55,6 @@ BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	return *db.GetStorageManager().buffer_manager;
 }
 
-BlockManager &BlockManager::GetBlockManager(DatabaseInstance &db) {
-	return *db.GetStorageManager().block_manager;
-}
-
-BlockManager &BlockManager::GetBlockManager(ClientContext &context) {
-	return BlockManager::GetBlockManager(DatabaseInstance::GetDatabase(context));
-}
-
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 	return *context.db;
 }
@@ -149,10 +141,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
-	//	config.create_storage_manager(config.options.database_path,
-	//	                              config.options.access_mode == AccessMode::READ_ONLY);
-	storage = make_unique<StorageManager>(*this, config.options.database_path,
-	                                      config.options.access_mode == AccessMode::READ_ONLY);
+	// TODO: Support an extension here, to generate different storage managers
+	// depending on the DB path structure/prefix.
+	const string dbPath = config.options.database_path;
+	storage = make_unique<SingleFileStorageManager>(*this, dbPath, config.options.access_mode == AccessMode::READ_ONLY);
+
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 	scheduler = make_unique<TaskScheduler>(*this);
@@ -301,8 +294,8 @@ idx_t DuckDB::NumberOfThreads() {
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->loaded_extensions.find(name) != instance->loaded_extensions.end();
 }
-void DuckDB::SetExtensionLoaded(const std::string &name) {
-	instance->loaded_extensions.insert(name);
+void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
+	loaded_extensions.insert(name);
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {

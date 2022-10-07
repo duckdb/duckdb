@@ -4,13 +4,14 @@
 
 namespace duckdb {
 
-ListColumnData::ListColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type_p,
-                               ColumnData *parent)
-    : ColumnData(info, column_index, start_row, move(type_p), parent), validity(info, 0, start_row, this) {
+ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+                               LogicalType type_p, ColumnData *parent)
+    : ColumnData(block_manager, info, column_index, start_row, move(type_p), parent),
+      validity(block_manager, info, 0, start_row, this) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
 	// the child column, with column index 1 (0 is the validity mask)
-	child_column = ColumnData::CreateColumnUnique(info, 1, start_row, child_type, this);
+	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, start_row, child_type, this);
 }
 
 ListColumnData::ListColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
@@ -321,7 +322,7 @@ void ListColumnData::CommitDropColumn() {
 }
 
 struct ListColumnCheckpointState : public ColumnCheckpointState {
-	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
+	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, RowGroupWriter &writer)
 	    : ColumnCheckpointState(row_group, column_data, writer) {
 		global_stats = make_unique<ListStatistics>(column_data.type);
 	}
@@ -338,18 +339,18 @@ public:
 		return stats;
 	}
 
-	void FlushToDisk() override {
-		ColumnCheckpointState::FlushToDisk();
-		validity_state->FlushToDisk();
-		child_state->FlushToDisk();
+	void WriteDataPointers() override {
+		ColumnCheckpointState::WriteDataPointers();
+		validity_state->WriteDataPointers();
+		child_state->WriteDataPointers();
 	}
 };
 
-unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) {
+unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer) {
 	return make_unique<ListColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
                                                              ColumnCheckpointInfo &checkpoint_info) {
 	auto validity_state = validity.Checkpoint(row_group, writer, checkpoint_info);
 	auto base_state = ColumnData::Checkpoint(row_group, writer, checkpoint_info);

@@ -19,6 +19,7 @@ add_library_unity(
   storage_manager.cpp
   table_index_list.cpp
   write_ahead_log.cpp
+  partial_block_manager.cpp
   single_file_block_manager.cpp
   storage_info.cpp
   storage_lock.cpp
