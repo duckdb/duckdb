@@ -36,7 +36,7 @@ namespace duckdb_jemalloc {
 #define JEMALLOC_HAVE_ATTR_FORMAT_PRINTF
 
 /* Defined if fallthrough attribute is supported. */
-#define JEMALLOC_HAVE_ATTR_FALLTHROUGH
+// #define JEMALLOC_HAVE_ATTR_FALLTHROUGH
 
 /* Defined if cold attribute is supported. */
 #define JEMALLOC_HAVE_ATTR_COLD
