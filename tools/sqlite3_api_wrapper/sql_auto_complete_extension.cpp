@@ -225,7 +225,7 @@ regular_scan:
 			last_pos = pos;
 			goto in_quotes;
 		}
-		if (sql[pos] == '-' && pos + 1 < sql.size() && sql[pos] == '-') {
+		if (sql[pos] == '-' && pos + 1 < sql.size() && sql[pos + 1] == '-') {
 			goto in_comment;
 		}
 		if (sql[pos] == ';') {
