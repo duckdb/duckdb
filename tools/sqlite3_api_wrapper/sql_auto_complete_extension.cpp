@@ -147,8 +147,8 @@ static vector<string> GenerateSuggestions(ClientContext &context, const string &
 	case_insensitive_set_t column_name_keywords = {"SELECT", "WHERE", "BY", "HAVING", "QUALIFY", "LIMIT", "SET"};
 	case_insensitive_set_t table_name_keywords = {"FROM", "JOIN", "INSERT", "UPDATE", "DELETE"};
 	case_insensitive_map_t<unordered_set<string>> next_keyword_map;
-	next_keyword_map["SELECT"] = {"FROM",    "WHERE", "GROUP",  "HAVING", "WINDOW", "ORDER",  "BY",        "LIMIT",
-	                              "QUALIFY", "USING", "SAMPLE", "VALUES", "UNION",  "EXCEPT", "INTERSECT", "DISTINCT"};
+	next_keyword_map["SELECT"] = {"FROM",    "WHERE",  "GROUP",  "HAVING", "WINDOW", "ORDER",     "LIMIT",
+	                              "QUALIFY", "SAMPLE", "VALUES", "UNION",  "EXCEPT", "INTERSECT", "DISTINCT"};
 	next_keyword_map["WITH"] = {"RECURSIVE", "SELECT", "AS"};
 	next_keyword_map["INSERT"] = {"INTO", "VALUES", "SELECT", "DEFAULT"};
 	next_keyword_map["DELETE"] = {"FROM", "WHERE", "USING"};
@@ -205,6 +205,8 @@ process_word : {
 	auto entry = next_keyword_map.find(next_word);
 	if (entry != next_keyword_map.end()) {
 		suggested_keywords = entry->second;
+	} else {
+		suggested_keywords.erase(next_word);
 	}
 }
 	last_pos = pos - 1;
