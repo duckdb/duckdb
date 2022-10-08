@@ -150,6 +150,9 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 				suggestions.emplace_back(col, 1);
 			}
 		} else {
+			if (StringUtil::CharacterIsOperator(entry->name[0])) {
+				continue;
+			}
 			suggestions.emplace_back(entry->name);
 		};
 	}
