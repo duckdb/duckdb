@@ -8,7 +8,7 @@ foreach type DOUBLE FLOAT
 
 # Create the initial data to start with (without this Constant compression will be used at first)
 statement ok
-create table temp_table as select random() * 100 from range(5);
+create table temp_table as select random()::${type} * 100 from range(5);
 
 foreach compression Chimp Uncompressed
 
@@ -37,7 +37,7 @@ loop i 0 10240
 
 # Create a temporary table containing the value we want to add to both tables
 statement ok
-create table temp_table as select random() * 100;
+create table temp_table as select random()::${type} * 100 + ${i};
 
 foreach compression Chimp Uncompressed
 
@@ -67,13 +67,12 @@ drop table temp_table;
 # ---------------- VERIFY CORRECTNESS ----------------
 
 query I
-select chimp == uncompressed from (
-    select
-        (select fsum(data) from chimp_tbl) as chimp,
-        (select fsum(data) from uncompressed_tbl) as uncompressed
-)
+select data as chimp_data from chimp_tbl except select data from uncompressed_tbl;
 ----
-True
+
+query I
+select data as uncompressed_data from uncompressed_tbl except select data from chimp_tbl;
+----
 
 # i
 endloop

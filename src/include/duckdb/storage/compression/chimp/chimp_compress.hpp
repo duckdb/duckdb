@@ -209,7 +209,6 @@ public:
 		const idx_t size_of_group = padding + current_segment->count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE;
 		D_ASSERT((AlignValue<idx_t, 4>(size_of_group - 1) / 4) == flag_bytes);
 #endif
-		D_ASSERT(flag_bytes != 0);
 
 		metadata_ptr -= flag_bytes;
 		metadata_byte_size += flag_bytes;

@@ -34,7 +34,7 @@ public:
 	}
 	uint8_t GetFlag() {
 		D_ASSERT(index <= max_flags_to_read);
-		D_ASSERT(index <= 1024);
+		D_ASSERT(index <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 		return flags[index++];
 	}
 	// Assuming the group is completely full
