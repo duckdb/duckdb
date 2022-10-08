@@ -136,7 +136,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "liblwgeom/lwin_wkt.hpp"
-#include "liblwgeom/lwin_wkt_parse.hpp"
+#include "parser/lwin_wkt_parse.hpp"
 
 namespace duckdb {
 
@@ -260,7 +260,7 @@ typedef union YYSTYPE
 	POINTARRAY *ptarrayvalue;
 }
 /* Line 193 of yacc.c.  */
-#line 264 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 264 "extension/geo/parser/lwin_wkt_parse.cpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
@@ -285,7 +285,7 @@ typedef struct YYLTYPE
 
 
 /* Line 216 of yacc.c.  */
-#line 289 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 289 "extension/geo/parser/lwin_wkt_parse.cpp"
 
 #ifdef short
 # undef short
@@ -1431,187 +1431,187 @@ yydestruct (yymsg, yytype, yyvaluep, yylocationp)
       case 28: /* "geometry_no_srid" */
 #line 187 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1435 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1435 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 29: /* "geometrycollection" */
 #line 188 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1440 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1440 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 30: /* "geometry_list" */
 #line 189 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1445 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1445 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 31: /* "multisurface" */
 #line 196 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1450 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1450 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 32: /* "surface_list" */
 #line 174 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1455 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1455 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 33: /* "tin" */
 #line 203 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1460 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1460 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 34: /* "polyhedralsurface" */
 #line 202 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1465 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1465 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 35: /* "multipolygon" */
 #line 195 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1470 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1470 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 36: /* "polygon_list" */
 #line 175 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1475 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1475 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 37: /* "patch_list" */
 #line 176 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1480 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1480 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 38: /* "polygon" */
 #line 199 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1485 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1485 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 39: /* "polygon_untagged" */
 #line 201 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1490 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1490 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 40: /* "patch" */
 #line 200 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1495 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1495 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 41: /* "curvepolygon" */
 #line 185 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1500 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1500 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 42: /* "curvering_list" */
 #line 172 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1505 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1505 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 43: /* "curvering" */
 #line 186 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1510 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1510 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 44: /* "patchring_list" */
 #line 182 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1515 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1515 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 45: /* "ring_list" */
 #line 181 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1520 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1520 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 46: /* "patchring" */
 #line 171 "extension/geo/parser/lwin_wkt_parse.y"
 	{ ptarray_free((yyvaluep->ptarrayvalue)); };
-#line 1525 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1525 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 47: /* "ring" */
 #line 170 "extension/geo/parser/lwin_wkt_parse.y"
 	{ ptarray_free((yyvaluep->ptarrayvalue)); };
-#line 1530 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1530 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 48: /* "compoundcurve" */
 #line 184 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1535 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1535 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 49: /* "compound_list" */
 #line 180 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1540 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1540 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 50: /* "multicurve" */
 #line 192 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1545 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1545 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 51: /* "curve_list" */
 #line 179 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1550 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1550 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 52: /* "multilinestring" */
 #line 193 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1555 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1555 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 53: /* "linestring_list" */
 #line 178 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1560 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1560 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 54: /* "circularstring" */
 #line 183 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1565 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1565 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 55: /* "linestring" */
 #line 190 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1570 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1570 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 56: /* "linestring_untagged" */
 #line 191 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1575 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1575 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 57: /* "triangle_list" */
 #line 173 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1580 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1580 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 58: /* "triangle" */
 #line 204 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1585 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1585 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 59: /* "triangle_untagged" */
 #line 205 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1590 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1590 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 60: /* "multipoint" */
 #line 194 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1595 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1595 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 61: /* "point_list" */
 #line 177 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1600 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1600 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 62: /* "point_untagged" */
 #line 198 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1605 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1605 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 63: /* "point" */
 #line 197 "extension/geo/parser/lwin_wkt_parse.y"
 	{ lwgeom_free((yyvaluep->geometryvalue)); };
-#line 1610 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1610 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
       case 64: /* "ptarray" */
 #line 169 "extension/geo/parser/lwin_wkt_parse.y"
 	{ ptarray_free((yyvaluep->ptarrayvalue)); };
-#line 1615 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 1615 "extension/geo/parser/lwin_wkt_parse.cpp"
 	break;
 
       default:
@@ -2610,7 +2610,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 2614 "extension/geo/liblwgeom/lwin_wkt_parse.cpp"
+#line 2614 "extension/geo/parser/lwin_wkt_parse.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);

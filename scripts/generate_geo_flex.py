@@ -9,7 +9,7 @@ from python_helpers import open_utf8
 pg_path = os.path.join('extension', 'geo')
 flex_bin = 'flex'
 flex_file_path = os.path.join(pg_path, 'parser', 'lwin_wkt_lex.l')
-target_file = os.path.join(pg_path, 'liblwgeom', 'lwin_wkt_lex.cpp')
+target_file = os.path.join(pg_path, 'parser', 'lwin_wkt_lex.cpp')
 
 proc = subprocess.Popen([flex_bin, "-o", target_file, flex_file_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 stdout = proc.stdout.read().decode('utf8')

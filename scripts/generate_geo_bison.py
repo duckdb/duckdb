@@ -9,8 +9,8 @@ from python_helpers import open_utf8
 pg_path = os.path.join('extension', 'geo')
 bison_bin = 'bison'
 bison_file_path = os.path.join(pg_path, 'parser', 'lwin_wkt_parse.y')
-target_header_file = os.path.join(pg_path, "include", 'liblwgeom', 'lwin_wkt_parse.hpp')
-target_source_file = os.path.join(pg_path, 'liblwgeom', 'lwin_wkt_parse.cpp')
+target_header_file = os.path.join(pg_path, "include", 'parser', 'lwin_wkt_parse.hpp')
+target_source_file = os.path.join(pg_path, 'parser', 'lwin_wkt_parse.cpp')
 
 proc = subprocess.Popen([bison_bin, "-p wkt_yy", '-o' + target_source_file, '--defines=' + target_header_file, "-d", bison_file_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 stdout = proc.stdout.read().decode('utf8')

@@ -17,4 +17,6 @@
 */extension/tpch/*
 */extension/visualizer/*
 */extension/json/yyjson/*
+*/extension/geo/parser/*
+*/extension/geo/include/parser/*
 src/main/extension_helper.cpp

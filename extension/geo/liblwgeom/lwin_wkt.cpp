@@ -1,5 +1,5 @@
 #include "liblwgeom/lwgeom_wkt.hpp"
-#include "liblwgeom/lwin_wkt_parse.hpp"
+#include "parser/lwin_wkt_parse.hpp"
 
 #include <cstring>
 

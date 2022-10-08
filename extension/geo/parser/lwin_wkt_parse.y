@@ -5,7 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "liblwgeom/lwin_wkt.hpp"
-#include "liblwgeom/lwin_wkt_parse.hpp"
+#include "parser/lwin_wkt_parse.hpp"
 
 /*namespace duckdb {*/
 
