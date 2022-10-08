@@ -75,7 +75,7 @@ SELECT regexp_extract(s, '(b..)(b..)', i) FROM test
 query T
 SELECT regexp_extract('foobarbaz', NULL, 0)
 ----
-(empty)
+NULL
 
 query T
 SELECT regexp_extract('foobarbaz', 'b..', NULL)
