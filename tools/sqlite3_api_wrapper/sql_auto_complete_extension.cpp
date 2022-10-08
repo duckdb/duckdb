@@ -30,13 +30,13 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 };
 
 struct AutoCompleteCandidate {
-	AutoCompleteCandidate(string candidate_p, double score_multiplier = 1)
-	    : candidate(move(candidate_p)), score_multiplier(score_multiplier) {
+	AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0)
+	    : candidate(move(candidate_p)), score_bonus(score_bonus) {
 	}
 
 	string candidate;
-	//! The higher the score multiplier, the lower the more likely this candidate will be chosen
-	double score_multiplier;
+	//! The higher the score bonus, the more likely this candidate will be chosen
+	int32_t score_bonus;
 };
 
 static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix,
@@ -47,22 +47,26 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(available_suggestions.size());
 	for (auto &suggestion : available_suggestions) {
+		const int32_t BASE_SCORE = 10;
 		auto &str = suggestion.candidate;
-		auto multiplier = suggestion.score_multiplier;
+		auto bonus = suggestion.score_bonus;
+
+		D_ASSERT(BASE_SCORE - bonus >= 0);
+		auto score = idx_t(BASE_SCORE - bonus);
 		if (prefix.size() == 0) {
-			scores.emplace_back(str, idx_t(multiplier * 10));
 		} else if (prefix.size() < str.size()) {
-			scores.emplace_back(
-			    str, idx_t(multiplier * StringUtil::LevenshteinDistance(str.substr(0, prefix.size()), prefix)));
+			score += StringUtil::LevenshteinDistance(str.substr(0, prefix.size()), prefix);
 		} else {
-			scores.emplace_back(str, idx_t(multiplier * StringUtil::LevenshteinDistance(str, prefix)));
+			score += StringUtil::LevenshteinDistance(str, prefix);
 		}
+		D_ASSERT(score >= 0);
+		scores.emplace_back(str, score);
 	}
-	auto results = StringUtil::TopNStrings(scores, 20, 5);
+	auto results = StringUtil::TopNStrings(scores, 20, 999);
 	if (add_quotes) {
 		for (auto &result : results) {
 			if (extra_keywords.find(result) == extra_keywords.end()) {
-				result = KeywordHelper::WriteOptionallyQuoted(result);
+				result = KeywordHelper::WriteOptionallyQuoted(result, '"', true);
 			}
 		}
 	}
@@ -124,9 +128,9 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllTables(context, true);
 	for (auto &entry : all_entries) {
-		// prioritize user-defined entries
-		double score_multiplier = (entry->internal || entry->type == CatalogType::TABLE_FUNCTION_ENTRY) ? 1 : 0.5;
-		suggestions.emplace_back(entry->name, score_multiplier);
+		// prioritize user-defined entries (views & tables)
+		int32_t bonus = (entry->internal || entry->type == CatalogType::TABLE_FUNCTION_ENTRY) ? 0 : 1;
+		suggestions.emplace_back(entry->name, bonus);
 	}
 	return suggestions;
 }
@@ -138,15 +142,15 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			auto &table = (TableCatalogEntry &)*entry;
 			for (auto &col : table.columns) {
-				suggestions.emplace_back(col.GetName(), 0.5);
+				suggestions.emplace_back(col.GetName(), 1);
 			}
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
 			auto &view = (ViewCatalogEntry &)*entry;
 			for (auto &col : view.aliases) {
-				suggestions.emplace_back(col, 0.5);
+				suggestions.emplace_back(col, 1);
 			}
 		} else {
-			suggestions.emplace_back(entry->name, 1.5);
+			suggestions.emplace_back(entry->name);
 		};
 	}
 	return suggestions;
@@ -191,9 +195,11 @@ static vector<string> GenerateSuggestions(ClientContext &context, const string &
 	// figure out which state we are in by doing a run through the query
 	idx_t pos = 0;
 	idx_t last_pos = 0;
+	bool seen_word = false;
 	unordered_set<string> suggested_keywords;
 	SuggestionState suggest_state = SuggestionState::SUGGEST_KEYWORD;
-	case_insensitive_set_t column_name_keywords = {"SELECT", "WHERE", "BY", "HAVING", "QUALIFY", "LIMIT", "SET"};
+	case_insensitive_set_t column_name_keywords = {"SELECT", "WHERE", "BY",    "HAVING", "QUALIFY",
+	                                               "LIMIT",  "SET",   "USING", "ON"};
 	case_insensitive_set_t table_name_keywords = {"FROM",   "JOIN",  "INSERT", "UPDATE",
 	                                              "DELETE", "ALTER", "DROP",   "CALL"};
 	case_insensitive_map_t<unordered_set<string>> next_keyword_map;
@@ -229,10 +235,11 @@ regular_scan:
 			continue;
 		}
 		if (StringUtil::CharacterIsSpace(sql[pos]) || StringUtil::CharacterIsOperator(sql[pos])) {
-			if (pos > last_pos + 1) {
+			if (seen_word) {
 				goto process_word;
 			}
-			last_pos++;
+		} else {
+			seen_word = true;
 		}
 	}
 	goto standard_suggestion;
@@ -249,6 +256,8 @@ in_quotes:
 	for (; pos < sql.size(); pos++) {
 		if (sql[pos] == '"') {
 			pos++;
+			last_pos = pos;
+			seen_word = true;
 			goto regular_scan;
 		}
 	}
@@ -257,14 +266,18 @@ in_string_constant:
 	for (; pos < sql.size(); pos++) {
 		if (sql[pos] == '\'') {
 			pos++;
+			last_pos = pos;
+			seen_word = true;
 			goto regular_scan;
 		}
 	}
 	suggest_state = SuggestionState::SUGGEST_FILE_NAME;
 	goto standard_suggestion;
 process_word : {
+	while (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos])) {
+		last_pos++;
+	}
 	auto next_word = sql.substr(last_pos, pos - last_pos);
-	StringUtil::Trim(next_word);
 	if (table_name_keywords.find(next_word) != table_name_keywords.end()) {
 		suggest_state = SuggestionState::SUGGEST_TABLE_NAME;
 	} else if (column_name_keywords.find(next_word) != column_name_keywords.end()) {
@@ -276,12 +289,15 @@ process_word : {
 	} else {
 		suggested_keywords.erase(next_word);
 	}
-}
-	last_pos = pos - 1;
+	seen_word = false;
+	last_pos = pos;
 	goto regular_scan;
+}
 standard_suggestion:
+	while (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos])) {
+		last_pos++;
+	}
 	auto last_word = sql.substr(last_pos, pos - last_pos);
-	StringUtil::Trim(last_word);
 	switch (suggest_state) {
 	case SuggestionState::SUGGEST_KEYWORD:
 		return ComputeSuggestions(SuggestKeyword(context), last_word, suggested_keywords);

@@ -201,8 +201,9 @@ vector<string> StringUtil::TopNStrings(vector<pair<string, idx_t>> scores, idx_t
 	if (scores.empty()) {
 		return vector<string>();
 	}
-	sort(scores.begin(), scores.end(),
-	     [](const pair<string, idx_t> &a, const pair<string, idx_t> &b) -> bool { return a.second < b.second; });
+	sort(scores.begin(), scores.end(), [](const pair<string, idx_t> &a, const pair<string, idx_t> &b) -> bool {
+		return a.second < b.second || (a.second == b.second && a.first.size() < b.first.size());
+	});
 	vector<string> result;
 	result.push_back(scores[0].first);
 	for (idx_t i = 1; i < MinValue<idx_t>(scores.size(), n); i++) {

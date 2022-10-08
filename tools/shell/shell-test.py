@@ -784,6 +784,65 @@ SELECT * FROM sql_auto_complete('SELECT * FROM read_csv_a') LIMIT 1;
 """, out="read_csv_auto"
 )
 
+test("""
+CREATE TABLE partsupp(ps_suppkey int);
+CREATE TABLE supplier(s_suppkey int);
+CREATE TABLE nation(n_nationkey int);
+SELECT * FROM sql_auto_complete('DROP TABLE na') LIMIT 1;
+""", out="nation"
+)
+
+test("""
+CREATE TABLE partsupp(ps_suppkey int);
+CREATE TABLE supplier(s_suppkey int);
+CREATE TABLE nation(n_nationkey int);
+SELECT * FROM sql_auto_complete('SELECT s_supp') LIMIT 1;
+""", out="s_suppkey"
+)
+
+# joins
+test("""
+CREATE TABLE partsupp(ps_suppkey int);
+CREATE TABLE supplier(s_suppkey int);
+CREATE TABLE nation(n_nationkey int);
+SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supp') LIMIT 1;
+""", out="supplier"
+)
+
+test("""
+CREATE TABLE partsupp(ps_suppkey int);
+CREATE TABLE supplier(s_suppkey int);
+CREATE TABLE nation(n_nationkey int);
+.mode csv
+SELECT l,l FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier ON (s_supp') t(l) LIMIT 1;
+""", out="s_suppkey,s_suppkey"
+)
+
+test("""
+CREATE TABLE partsupp(ps_suppkey int);
+CREATE TABLE supplier(s_suppkey int);
+CREATE TABLE nation(n_nationkey int);
+SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_') LIMIT 1;
+""", out="ps_suppkey"
+)
+
+test("""
+SELECT * FROM sql_auto_complete('SELECT * FR') LIMIT 1;
+""", out="FROM"
+)
+
+test("""
+CREATE TABLE MyTable(MyColumn Varchar);
+SELECT * FROM sql_auto_complete('SELECT My') LIMIT 1;
+""", out="MyColumn"
+)
+
+test("""
+CREATE TABLE MyTable(MyColumn Varchar);
+SELECT * FROM sql_auto_complete('SELECT MyColumn FROM My') LIMIT 1;
+""", out="MyTable"
+)
+
 if os.name != 'nt':
      test('''
 create table mytable as select * from
