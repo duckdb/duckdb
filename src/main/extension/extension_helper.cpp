@@ -93,7 +93,7 @@ static DefaultExtension internal_extensions[] = {
     {"sqlite_scanner", "Adds support for reading SQLite database files", false},
     {"postgres_scanner", "Adds support for reading from a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
-	{"geo", "Adds support for Geometry data types and functions", GEO_STATICALLY_LOADED},
+    {"geo", "Adds support for Geometry data types and functions", GEO_STATICALLY_LOADED},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -112,7 +112,7 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 // Load Statically Compiled Extension
 //===--------------------------------------------------------------------===//
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet",    "icu",  "tpch",  "tpcds",    "fts", "httpfs",
+	unordered_set<string> extensions {"parquet",    "icu",  "tpch",  "tpcds",    "fts",  "httpfs",
 	                                  "visualizer", "json", "excel", "sqlsmith", "inet", "geo"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);

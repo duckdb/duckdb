@@ -24,7 +24,7 @@ bool GeoFunctions::CastVarcharToGEO(Vector &source, Vector &result, idx_t count,
 			continue;
 		}
 
-        auto gser = Geometry::ToGserialized(input[idx]);
+		auto gser = Geometry::ToGserialized(input[idx]);
 		if (!gser) {
 			FlatVector::SetNull(result, i, true);
 			success = false;
@@ -46,8 +46,8 @@ bool GeoFunctions::CastVarcharToGEO(Vector &source, Vector &result, idx_t count,
 bool GeoFunctions::CastGeoToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	GenericExecutor::ExecuteUnary<PrimitiveType<string_t>, PrimitiveType<string_t>>(
 	    source, result, count, [&](PrimitiveType<string_t> input) {
-			auto text = Geometry::GetString(input.val);
-			return StringVector::AddString(result, text);
+		    auto text = Geometry::GetString(input.val);
+		    return StringVector::AddString(result, text);
 	    });
 	return true;
 }

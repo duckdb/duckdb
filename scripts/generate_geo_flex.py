@@ -34,7 +34,7 @@ namespace duckdb {
 ''')
 text = text.replace('register ', '')
 
-text = text + "\n} /* duckdb */\n"
+text = text + "\n} // namespace duckdb\n"
 
 text = re.sub('[(]void[)][ ]*fprintf', '//', text)
 text = re.sub('exit[(]', 'throw std::runtime_error(msg); //', text)

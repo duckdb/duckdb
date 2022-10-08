@@ -129,4 +129,4 @@ typedef struct YYLTYPE
 
 extern YYLTYPE  wkt_yylloc;
 
-} /* duckdb */
+} // namespace duckdb

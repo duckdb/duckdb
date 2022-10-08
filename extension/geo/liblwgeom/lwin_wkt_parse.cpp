@@ -138,7 +138,7 @@
 #include "liblwgeom/lwin_wkt.hpp"
 #include "liblwgeom/lwin_wkt_parse.hpp"
 
-namespace duckdb{
+namespace duckdb {
 
 /* Prototypes to quiet the compiler */
 int wkt_yyparse(void);
@@ -2835,4 +2835,4 @@ yyreturn:
 
 
 
-} /* duckdb */
+} // namespace duckdb

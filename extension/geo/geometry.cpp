@@ -19,9 +19,9 @@ string Geometry::GetString(string_t geometry, DataFormatType ftype) {
 		text = postgis.LWGEOM_asText(data, len);
 		break;
 
-	// case DataFormatType::FORMAT_VALUE_TYPE_GEOJSON:
-	// 	text = postgis.LWGEOM_asGeoJson(data, len);
-	// 	break;
+		// case DataFormatType::FORMAT_VALUE_TYPE_GEOJSON:
+		// 	text = postgis.LWGEOM_asGeoJson(data, len);
+		// 	break;
 
 	default:
 		break;

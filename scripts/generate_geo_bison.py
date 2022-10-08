@@ -27,7 +27,7 @@ with open_utf8(target_header_file, 'r') as f:
 # add the duckdb namespace
 header_text = "namespace duckdb {\n" + header_text
 
-header_text = header_text + "\n} /* duckdb */\n"
+header_text = header_text + "\n} // namespace duckdb\n"
 
 with open_utf8(target_header_file, 'w+') as f:
 	f.write(header_text)
@@ -37,9 +37,9 @@ with open_utf8(target_source_file, 'r') as f:
 	source_text = f.read()
 
 # add the duckdb namespace
-source_text = source_text.replace("/*namespace duckdb{*/", "namespace duckdb{")
+source_text = source_text.replace("/*namespace duckdb {*/", "namespace duckdb {")
 
-source_text = source_text + "\n} /* duckdb */\n"
+source_text = source_text + "\n} // namespace duckdb\n"
 
 with open_utf8(target_source_file, 'w+') as f:
 	f.write(source_text)

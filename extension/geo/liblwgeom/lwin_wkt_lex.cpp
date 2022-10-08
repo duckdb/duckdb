@@ -2239,4 +2239,4 @@ void wkt_lexer_close()
 
 
 
-} /* duckdb */
+} // namespace duckdb
