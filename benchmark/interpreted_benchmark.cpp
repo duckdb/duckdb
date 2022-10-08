@@ -270,6 +270,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	unique_ptr<QueryResult> result;
 	LoadBenchmark();
 	auto state = make_unique<InterpretedBenchmarkState>(GetDatabasePath());
+	extensions.insert("parquet");
 	for (auto &extension : extensions) {
 		auto result = ExtensionHelper::LoadExtension(state->db, extension);
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
