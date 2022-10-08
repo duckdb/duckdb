@@ -274,7 +274,11 @@ vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const 
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(strings.size());
 	for (auto &str : strings) {
-		scores.emplace_back(str, LevenshteinDistance(str, target));
+		if (target.size() < str.size()) {
+			scores.emplace_back(str, LevenshteinDistance(str.substr(0, target.size()), target));
+		} else {
+			scores.emplace_back(str, LevenshteinDistance(str, target));
+		}
 	}
 	return TopNStrings(scores, n, threshold);
 }
