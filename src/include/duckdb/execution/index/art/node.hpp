@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
@@ -19,16 +20,14 @@ namespace duckdb {
 enum class NodeType : uint8_t { NLeaf = 0, N4 = 1, N16 = 2, N48 = 3, N256 = 4 };
 class ART;
 class Node;
-class SwizzleablePointer;
 
 struct InternalType {
 	explicit InternalType(Node *n);
 
-	void Set(uint8_t *key_p, uint16_t key_size_p, SwizzleablePointer *children_p, uint16_t children_size_p);
-
+	void Set(uint8_t *key_p, uint16_t key_size_p, ArtPointer *children_p, uint16_t children_size_p);
 	uint8_t *key;
 	uint16_t key_size;
-	SwizzleablePointer *children;
+	ArtPointer *children;
 	uint16_t children_size;
 };
 
