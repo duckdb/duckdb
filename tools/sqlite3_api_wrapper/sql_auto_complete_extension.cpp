@@ -29,10 +29,36 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-static vector<string> ComputeSuggestions(vector<string> available_suggestions, const string &prefix,
+struct AutoCompleteCandidate {
+	AutoCompleteCandidate(string candidate_p, double score_multiplier = 1)
+	    : candidate(move(candidate_p)), score_multiplier(score_multiplier) {
+	}
+
+	string candidate;
+	//! The higher the score multiplier, the lower the more likely this candidate will be chosen
+	double score_multiplier;
+};
+
+static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix,
                                          const unordered_set<string> &extra_keywords, bool add_quotes = false) {
-	available_suggestions.insert(available_suggestions.end(), extra_keywords.begin(), extra_keywords.end());
-	auto results = StringUtil::TopNLevenshtein(available_suggestions, prefix, 10);
+	for (auto &kw : extra_keywords) {
+		available_suggestions.emplace_back(move(kw));
+	}
+	vector<pair<string, idx_t>> scores;
+	scores.reserve(available_suggestions.size());
+	for (auto &suggestion : available_suggestions) {
+		auto &str = suggestion.candidate;
+		auto multiplier = suggestion.score_multiplier;
+		if (prefix.size() == 0) {
+			scores.emplace_back(str, idx_t(multiplier * 10));
+		} else if (prefix.size() < str.size()) {
+			scores.emplace_back(
+			    str, idx_t(multiplier * StringUtil::LevenshteinDistance(str.substr(0, prefix.size()), prefix)));
+		} else {
+			scores.emplace_back(str, idx_t(multiplier * StringUtil::LevenshteinDistance(str, prefix)));
+		}
+	}
+	auto results = StringUtil::TopNStrings(scores, 20, 5);
 	if (add_quotes) {
 		for (auto &result : results) {
 			if (extra_keywords.find(result) == extra_keywords.end()) {
@@ -47,63 +73,86 @@ static vector<string> InitialKeywords() {
 	return vector<string> {"SELECT",     "INSERT",     "DELETE",   "UPDATE",  "CREATE",  "DROP",     "COPY",
 	                       "ALTER",      "WITH",       "EXPORT",   "BEGIN",   "VACUUM",  "PREPARE",  "EXECUTE",
 	                       "DEALLOCATE", "SET",        "CALL",     "ANALYZE", "EXPLAIN", "DESCRIBE", "SUMMARIZE",
-	                       "LOAD",       "CHECKPOINT", "ROLLBACK", "COMMIT"};
+	                       "LOAD",       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL"};
 }
 
-static vector<string> SuggestKeyword(ClientContext &context) {
-	return InitialKeywords();
+static vector<AutoCompleteCandidate> SuggestKeyword(ClientContext &context) {
+	auto keywords = InitialKeywords();
+	vector<AutoCompleteCandidate> result;
+	for (auto &kw : keywords) {
+		result.emplace_back(move(kw));
+	}
+	return result;
 }
 
-static vector<CatalogEntry *> GetAllTables(ClientContext &context) {
+static vector<CatalogEntry *> GetAllTables(ClientContext &context, bool for_table_names) {
 	vector<CatalogEntry *> result;
-	// scan all the schemas for tables and collect themand collect them
+	// scan all the schemas for tables and collect them and collect them
+	// for column names we avoid adding internal entries, because it pollutes the auto-complete too much
+	// for table names this is generally fine, however
 	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
-			if (!entry->internal) {
+			if (!entry->internal || for_table_names) {
 				result.push_back(entry);
 			}
 		});
 	};
+	if (for_table_names) {
+		for (auto &schema : schemas) {
+			schema->Scan(context, CatalogType::TABLE_FUNCTION_ENTRY,
+			             [&](CatalogEntry *entry) { result.push_back(entry); });
+		};
+	} else {
+		for (auto &schema : schemas) {
+			schema->Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY,
+			             [&](CatalogEntry *entry) { result.push_back(entry); });
+		};
+	}
 
 	// check the temp schema as well
 	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
-		if (!entry->internal) {
+		if (!entry->internal || for_table_names) {
 			result.push_back(entry);
 		}
 	});
+
 	return result;
 }
 
-static vector<string> SuggestTableName(ClientContext &context) {
-	vector<string> suggestions;
-	auto all_entries = GetAllTables(context);
+static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto all_entries = GetAllTables(context, true);
 	for (auto &entry : all_entries) {
-		suggestions.push_back(entry->name);
+		// prioritize user-defined entries
+		double score_multiplier = (entry->internal || entry->type == CatalogType::TABLE_FUNCTION_ENTRY) ? 1 : 0.5;
+		suggestions.emplace_back(entry->name, score_multiplier);
 	}
 	return suggestions;
 }
 
-static vector<string> SuggestColumnName(ClientContext &context) {
-	vector<string> suggestions;
-	auto all_entries = GetAllTables(context);
+static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto all_entries = GetAllTables(context, false);
 	for (auto &entry : all_entries) {
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			auto &table = (TableCatalogEntry &)*entry;
 			for (auto &col : table.columns) {
-				suggestions.push_back(col.GetName());
+				suggestions.emplace_back(col.GetName(), 0.5);
 			}
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
 			auto &view = (ViewCatalogEntry &)*entry;
 			for (auto &col : view.aliases) {
-				suggestions.push_back(col);
+				suggestions.emplace_back(col, 0.5);
 			}
-		}
+		} else {
+			suggestions.emplace_back(entry->name, 1.5);
+		};
 	}
 	return suggestions;
 }
 
-static vector<string> SuggestFileName(ClientContext &context, string &prefix) {
+static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	string search_dir;
 	for (idx_t i = prefix.size(); i > 0; i--) {
@@ -118,7 +167,7 @@ static vector<string> SuggestFileName(ClientContext &context, string &prefix) {
 	} else {
 		search_dir = fs.ExpandPath(search_dir, FileOpener::Get(context));
 	}
-	vector<string> result;
+	vector<AutoCompleteCandidate> result;
 	fs.ListFiles(search_dir, [&](const string &fname, bool is_dir) {
 		string suggestion;
 		if (is_dir) {
@@ -126,7 +175,7 @@ static vector<string> SuggestFileName(ClientContext &context, string &prefix) {
 		} else {
 			suggestion = fname;
 		}
-		result.push_back(move(suggestion));
+		result.emplace_back(move(suggestion));
 	});
 	return result;
 }
@@ -145,7 +194,8 @@ static vector<string> GenerateSuggestions(ClientContext &context, const string &
 	unordered_set<string> suggested_keywords;
 	SuggestionState suggest_state = SuggestionState::SUGGEST_KEYWORD;
 	case_insensitive_set_t column_name_keywords = {"SELECT", "WHERE", "BY", "HAVING", "QUALIFY", "LIMIT", "SET"};
-	case_insensitive_set_t table_name_keywords = {"FROM", "JOIN", "INSERT", "UPDATE", "DELETE", "ALTER", "DROP"};
+	case_insensitive_set_t table_name_keywords = {"FROM",   "JOIN",  "INSERT", "UPDATE",
+	                                              "DELETE", "ALTER", "DROP",   "CALL"};
 	case_insensitive_map_t<unordered_set<string>> next_keyword_map;
 	next_keyword_map["SELECT"] = {"FROM",    "WHERE",  "GROUP",  "HAVING", "WINDOW", "ORDER",     "LIMIT",
 	                              "QUALIFY", "SAMPLE", "VALUES", "UNION",  "EXCEPT", "INTERSECT", "DISTINCT"};
@@ -169,6 +219,15 @@ regular_scan:
 			last_pos = pos;
 			goto in_quotes;
 		}
+		if (sql[pos] == '-' && pos + 1 < sql.size() && sql[pos] == '-') {
+			goto in_comment;
+		}
+		if (sql[pos] == ';') {
+			// semicolon: restart suggestion flow
+			suggest_state = SuggestionState::SUGGEST_KEYWORD;
+			suggested_keywords.clear();
+			continue;
+		}
 		if (StringUtil::CharacterIsSpace(sql[pos]) || StringUtil::CharacterIsOperator(sql[pos])) {
 			if (pos > last_pos + 1) {
 				goto process_word;
@@ -177,6 +236,15 @@ regular_scan:
 		}
 	}
 	goto standard_suggestion;
+in_comment:
+	for (; pos < sql.size(); pos++) {
+		if (sql[pos] == '\n' || sql[pos] == '\r') {
+			pos++;
+			goto regular_scan;
+		}
+	}
+	// no suggestions inside comments
+	return vector<string>();
 in_quotes:
 	for (; pos < sql.size(); pos++) {
 		if (sql[pos] == '"') {

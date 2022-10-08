@@ -747,6 +747,43 @@ SELECT * FROM sql_auto_complete('select "Funky Column" FROM f') LIMIT 1;
 """, out="\"Funky Table With Spaces\""
 )
 
+# semicolon
+test("""
+SELECT * FROM sql_auto_complete('SELECT 42; SEL') LIMIT 1;
+""", out="SELECT"
+)
+
+# comments
+test("""
+SELECT * FROM sql_auto_complete('--SELECT * FROM
+SEL') LIMIT 1;
+""", out="SELECT"
+)
+
+# scalar functions
+test("""
+SELECT * FROM sql_auto_complete('SELECT regexp_m') LIMIT 1;
+""", out="regexp_matches"
+)
+
+# aggregate functions
+test("""
+SELECT * FROM sql_auto_complete('SELECT approx_c') LIMIT 1;
+""", out="approx_count_distinct"
+)
+
+# built-in views
+test("""
+SELECT * FROM sql_auto_complete('SELECT * FROM sqlite_ma') LIMIT 1;
+""", out="sqlite_master"
+)
+
+# table functions
+test("""
+SELECT * FROM sql_auto_complete('SELECT * FROM read_csv_a') LIMIT 1;
+""", out="read_csv_auto"
+)
+
 if os.name != 'nt':
      test('''
 create table mytable as select * from
