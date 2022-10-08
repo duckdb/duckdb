@@ -24,12 +24,24 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
 
-	auto &file_pattern = StringValue::Get(input.inputs[0]);
+	vector<string> patterns;
+	if (input.inputs[0].type().id() == LogicalTypeId::LIST) {
+		// list of globs
+		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
+			patterns.push_back(StringValue::Get(val));
+		}
+	} else {
+		// single glob pattern
+		patterns.push_back(StringValue::Get(input.inputs[0]));
+	}
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	result->files = fs.Glob(file_pattern, context);
-	if (result->files.empty()) {
-		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+	for (auto &file_pattern : patterns) {
+		auto files = fs.Glob(file_pattern, context);
+		if (files.empty()) {
+			throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+		}
+		result->files.insert(result->files.end(), files.begin(), files.end());
 	}
 
 	for (auto &kv : input.named_parameters) {
@@ -397,8 +409,9 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, Fie
 	return move(result_data);
 }
 
-TableFunction ReadCSVTableFunction::GetFunction() {
-	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInit);
+TableFunction ReadCSVTableFunction::GetFunction(bool list_parameter) {
+	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
+	TableFunction read_csv("read_csv", {parameter}, ReadCSVFunction, ReadCSVBind, ReadCSVInit);
 	read_csv.table_scan_progress = CSVReaderProgress;
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
@@ -407,15 +420,26 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	return read_csv;
 }
 
-void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ReadCSVTableFunction::GetFunction());
-
-	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVAutoBind, ReadCSVInit);
+TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
+	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
+	TableFunction read_csv_auto("read_csv_auto", {parameter}, ReadCSVFunction, ReadCSVAutoBind, ReadCSVInit);
 	read_csv_auto.table_scan_progress = CSVReaderProgress;
 	read_csv_auto.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv_auto.serialize = CSVReaderSerialize;
 	read_csv_auto.deserialize = CSVReaderDeserialize;
 	ReadCSVAddNamedParameters(read_csv_auto);
+	return read_csv_auto;
+}
+
+void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
+	TableFunctionSet read_csv("read_csv");
+	read_csv.AddFunction(ReadCSVTableFunction::GetFunction());
+	read_csv.AddFunction(ReadCSVTableFunction::GetFunction(true));
+	set.AddFunction(read_csv);
+
+	TableFunctionSet read_csv_auto("read_csv_auto");
+	read_csv_auto.AddFunction(ReadCSVTableFunction::GetAutoFunction());
+	read_csv_auto.AddFunction(ReadCSVTableFunction::GetAutoFunction(true));
 	set.AddFunction(read_csv_auto);
 }
 

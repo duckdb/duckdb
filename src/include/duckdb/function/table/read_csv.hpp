@@ -58,7 +58,8 @@ struct CSVCopyFunction {
 };
 
 struct ReadCSVTableFunction {
-	static TableFunction GetFunction();
+	static TableFunction GetFunction(bool list_parameter = false);
+	static TableFunction GetAutoFunction(bool list_parameter = false);
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
