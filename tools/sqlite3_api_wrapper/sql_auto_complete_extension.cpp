@@ -10,6 +10,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/file_opener.hpp"
 
 namespace duckdb {
 
@@ -28,16 +30,24 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 };
 
 static vector<string> ComputeSuggestions(vector<string> available_suggestions, const string &prefix,
-                                         const vector<string> &extra_keywords) {
+                                         const unordered_set<string> &extra_keywords, bool add_quotes = false) {
 	available_suggestions.insert(available_suggestions.end(), extra_keywords.begin(), extra_keywords.end());
-	return StringUtil::TopNLevenshtein(available_suggestions, prefix, 10);
+	auto results = StringUtil::TopNLevenshtein(available_suggestions, prefix, 10);
+	if (add_quotes) {
+		for (auto &result : results) {
+			if (extra_keywords.find(result) == extra_keywords.end()) {
+				result = KeywordHelper::WriteOptionallyQuoted(result);
+			}
+		}
+	}
+	return results;
 }
 
 static vector<string> InitialKeywords() {
-	return vector<string> {"WITH",    "SELECT",   "INSERT",     "DELETE", "UPDATE",  "ALTER",
-	                       "CREATE",  "DROP",     "COPY",       "EXPORT", "IMPORT",  "VACUUM",
-	                       "PREPARE", "EXECUTE",  "DEALLOCATE", "SET",    "CALL",    "ANALYZE",
-	                       "EXPLAIN", "DESCRIBE", "SUMMARIZE",  "LOAD",   "INSTALL", "CHECKPOINT"};
+	return vector<string> {"SELECT",     "INSERT",     "DELETE",   "UPDATE",  "CREATE",  "DROP",     "COPY",
+	                       "ALTER",      "WITH",       "EXPORT",   "BEGIN",   "VACUUM",  "PREPARE",  "EXECUTE",
+	                       "DEALLOCATE", "SET",        "CALL",     "ANALYZE", "EXPLAIN", "DESCRIBE", "SUMMARIZE",
+	                       "LOAD",       "CHECKPOINT", "ROLLBACK", "COMMIT"};
 }
 
 static vector<string> SuggestKeyword(ClientContext &context) {
@@ -105,6 +115,8 @@ static vector<string> SuggestFileName(ClientContext &context, string &prefix) {
 	}
 	if (search_dir.empty()) {
 		search_dir = ".";
+	} else {
+		search_dir = fs.ExpandPath(search_dir, FileOpener::Get(context));
 	}
 	vector<string> result;
 	fs.ListFiles(search_dir, [&](const string &fname, bool is_dir) {
@@ -130,11 +142,11 @@ static vector<string> GenerateSuggestions(ClientContext &context, const string &
 	// figure out which state we are in by doing a run through the query
 	idx_t pos = 0;
 	idx_t last_pos = 0;
-	vector<string> suggested_keywords;
+	unordered_set<string> suggested_keywords;
 	SuggestionState suggest_state = SuggestionState::SUGGEST_KEYWORD;
 	case_insensitive_set_t column_name_keywords = {"SELECT", "WHERE", "BY", "HAVING", "QUALIFY", "LIMIT", "SET"};
 	case_insensitive_set_t table_name_keywords = {"FROM", "JOIN", "INSERT", "UPDATE", "DELETE"};
-	case_insensitive_map_t<vector<string>> next_keyword_map;
+	case_insensitive_map_t<unordered_set<string>> next_keyword_map;
 	next_keyword_map["SELECT"] = {"FROM",    "WHERE", "GROUP",  "HAVING", "WINDOW", "ORDER",  "BY",        "LIMIT",
 	                              "QUALIFY", "USING", "SAMPLE", "VALUES", "UNION",  "EXCEPT", "INTERSECT", "DISTINCT"};
 	next_keyword_map["WITH"] = {"RECURSIVE", "SELECT", "AS"};
@@ -167,7 +179,7 @@ regular_scan:
 	goto standard_suggestion;
 in_quotes:
 	for (; pos < sql.size(); pos++) {
-		if (sql[pos] == '\'') {
+		if (sql[pos] == '"') {
 			pos++;
 			goto regular_scan;
 		}
@@ -185,7 +197,6 @@ in_string_constant:
 process_word : {
 	auto next_word = sql.substr(last_pos, pos - last_pos);
 	StringUtil::Trim(next_word);
-	printf("%s\n", next_word.c_str());
 	if (table_name_keywords.find(next_word) != table_name_keywords.end()) {
 		suggest_state = SuggestionState::SUGGEST_TABLE_NAME;
 	} else if (column_name_keywords.find(next_word) != column_name_keywords.end()) {
@@ -200,15 +211,16 @@ process_word : {
 	goto regular_scan;
 standard_suggestion:
 	auto last_word = sql.substr(last_pos, pos - last_pos);
+	StringUtil::Trim(last_word);
 	switch (suggest_state) {
 	case SuggestionState::SUGGEST_KEYWORD:
 		return ComputeSuggestions(SuggestKeyword(context), last_word, suggested_keywords);
 	case SuggestionState::SUGGEST_TABLE_NAME:
-		return ComputeSuggestions(SuggestTableName(context), last_word, suggested_keywords);
+		return ComputeSuggestions(SuggestTableName(context), last_word, suggested_keywords, true);
 	case SuggestionState::SUGGEST_COLUMN_NAME:
-		return ComputeSuggestions(SuggestColumnName(context), last_word, suggested_keywords);
+		return ComputeSuggestions(SuggestColumnName(context), last_word, suggested_keywords, true);
 	case SuggestionState::SUGGEST_FILE_NAME:
-		return ComputeSuggestions(SuggestFileName(context, last_word), last_word, vector<string>());
+		return ComputeSuggestions(SuggestFileName(context, last_word), last_word, unordered_set<string>());
 	}
 }
 

@@ -631,6 +631,122 @@ test('''
 SELECT lsmode(1) AS lsmode;
 ''', out='lsmode')
 
+
+# test auto-complete
+test("""
+CALL sql_auto_complete('SEL')
+""", out="SELECT"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('SELECT my_') LIMIT 1;
+""", out="my_column"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('SELECT my_column FROM my_') LIMIT 1;
+""", out="my_table"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('SELECT my_column FROM my_table WH') LIMIT 1;
+""", out="WHERE"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('INS') LIMIT 1;
+""", out="INSERT"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('INSERT IN') LIMIT 1;
+""", out="INTO"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('INSERT INTO my_t') LIMIT 1;
+""", out="my_table"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('INSERT INTO my_table VAL') LIMIT 1;
+""", out="VALUES"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('DEL') LIMIT 1;
+""", out="DELETE"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('DELETE F') LIMIT 1;
+""", out="FROM"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('DELETE FROM m') LIMIT 1;
+""", out="my_table"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('DELETE FROM my_table WHERE m') LIMIT 1;
+""", out="my_column"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('U') LIMIT 1;
+""", out="UPDATE"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('UPDATE m') LIMIT 1;
+""", out="my_table"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('UPDATE "m') LIMIT 1;
+""", out="my_table"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('UPDATE my_table SET m') LIMIT 1;
+""", out="my_column"
+)
+
+
+test("""
+CREATE TABLE "Funky Table With Spaces"(my_column INTEGER);
+SELECT * FROM sql_auto_complete('SELECT * FROM F') LIMIT 1;
+""", out="\"Funky Table With Spaces\""
+)
+
+test("""
+CREATE TABLE "Funky Table With Spaces"("Funky Column" int);
+SELECT * FROM sql_auto_complete('select f') LIMIT 1;
+""", out="\"Funky Column\""
+)
+
+test("""
+CREATE TABLE "Funky Table With Spaces"("Funky Column" int);
+SELECT * FROM sql_auto_complete('select "Funky Column" FROM f') LIMIT 1;
+""", out="\"Funky Table With Spaces\""
+)
+
 if os.name != 'nt':
      test('''
 create table mytable as select * from
