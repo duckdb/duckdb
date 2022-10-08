@@ -203,8 +203,8 @@ void InterpretedBenchmark::LoadBenchmark() {
 				// read the results from the file
 				DuckDB db;
 				Connection con(db);
-				auto result =
-				    con.Query("SELECT * FROM read_csv_auto('" + splits[1] + "', delim='|', header=1, nullstr='NULL')");
+				auto result = con.Query("SELECT * FROM read_csv_auto('" + splits[1] +
+				                        "', delim='|', header=1, nullstr='NULL', all_varchar=1)");
 				result_column_count = result->ColumnCount();
 				for (auto &row : *result) {
 					vector<string> row_values;
@@ -387,13 +387,13 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 			if (result_values[r][c] == "NULL" && value.IsNull()) {
 				continue;
 			}
+			if (result_values[r][c] == value.ToString()) {
+				continue;
+			}
 
 			Value verify_val(result_values[r][c]);
 			try {
-				if (result_values[r][c] == value.ToString()) {
-					continue;
-				}
-				verify_val = verify_val.CastAs(*state.con.context, state.result->types[c]);
+				verify_val = verify_val.CastAs(*state.con.context, value.type());
 				if (result_values[r][c] == "(empty)" && (verify_val.ToString() == "" || value.IsNull())) {
 					continue;
 				}
