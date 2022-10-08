@@ -223,6 +223,8 @@ standard_suggestion:
 		return ComputeSuggestions(SuggestColumnName(context), last_word, suggested_keywords, true);
 	case SuggestionState::SUGGEST_FILE_NAME:
 		return ComputeSuggestions(SuggestFileName(context, last_word), last_word, unordered_set<string>());
+	default:
+		throw InternalException("Unrecognized suggestion state");
 	}
 }
 
