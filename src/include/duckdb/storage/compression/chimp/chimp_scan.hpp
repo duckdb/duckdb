@@ -49,7 +49,6 @@ public:
 		for (idx_t i = 0; i < group_size; i++) {
 			flags[1 + i] = flag_buffer.Extract();
 		}
-		D_ASSERT(group_size != 0);
 		max_flags_to_read = group_size;
 		index = 0;
 	}
