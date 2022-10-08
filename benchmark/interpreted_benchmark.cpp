@@ -391,13 +391,13 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 			if (result_values[r][c] == value.ToString()) {
 				continue;
 			}
+			if (result_values[r][c] == "(empty)" && (value.ToString() == "" || value.IsNull())) {
+				continue;
+			}
 
 			Value verify_val(result_values[r][c]);
 			try {
 				verify_val = verify_val.CastAs(*state.con.context, value.type());
-				if (result_values[r][c] == "(empty)" && (verify_val.ToString() == "" || value.IsNull())) {
-					continue;
-				}
 			} catch (...) {
 			}
 			if (!Value::ValuesAreEqual(*state.con.context, verify_val, value)) {
