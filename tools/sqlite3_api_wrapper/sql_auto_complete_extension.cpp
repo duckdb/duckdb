@@ -198,7 +198,7 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 		if (is_dir) {
 			suggestion = fname + fs.PathSeparator();
 		} else {
-			suggestion = fname;
+			suggestion = fname + "'";
 		}
 		int score = 0;
 		if (is_dir && fname[0] != '.') {
@@ -223,6 +223,7 @@ static unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext
 	// figure out which state we are in by doing a run through the query
 	idx_t pos = 0;
 	idx_t last_pos = 0;
+	idx_t pos_offset = 0;
 	bool seen_word = false;
 	unordered_set<string> suggested_keywords;
 	SuggestionState suggest_state = SuggestionState::SUGGEST_KEYWORD;
@@ -289,6 +290,7 @@ in_quotes:
 			goto regular_scan;
 		}
 	}
+	pos_offset = 1;
 	goto standard_suggestion;
 in_string_constant:
 	for (; pos < sql.size(); pos++) {
@@ -326,6 +328,7 @@ standard_suggestion:
 		last_pos++;
 	}
 	auto last_word = sql.substr(last_pos, pos - last_pos);
+	last_pos -= pos_offset;
 	vector<string> suggestions;
 	switch (suggest_state) {
 	case SuggestionState::SUGGEST_KEYWORD:
