@@ -69,6 +69,8 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 		for (auto &result : results) {
 			if (extra_keywords.find(result) == extra_keywords.end()) {
 				result = KeywordHelper::WriteOptionallyQuoted(result, '"', true);
+			} else {
+				result = result + " ";
 			}
 		}
 	}
@@ -76,17 +78,21 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 }
 
 static vector<string> InitialKeywords() {
-	return vector<string> {"SELECT",     "INSERT",     "DELETE",   "UPDATE",  "CREATE",  "DROP",     "COPY",
-	                       "ALTER",      "WITH",       "EXPORT",   "BEGIN",   "VACUUM",  "PREPARE",  "EXECUTE",
-	                       "DEALLOCATE", "SET",        "CALL",     "ANALYZE", "EXPLAIN", "DESCRIBE", "SUMMARIZE",
-	                       "LOAD",       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL"};
+	return vector<string> {"SELECT",     "INSERT",   "DELETE",  "UPDATE",  "CREATE",   "DROP",      "COPY",
+	                       "ALTER",      "WITH",     "EXPORT",  "BEGIN",   "VACUUM",   "PREPARE",   "EXECUTE",
+	                       "DEALLOCATE", "CALL",     "ANALYZE", "EXPLAIN", "DESCRIBE", "SUMMARIZE", "LOAD",
+	                       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL"};
 }
 
 static vector<AutoCompleteCandidate> SuggestKeyword(ClientContext &context) {
 	auto keywords = InitialKeywords();
 	vector<AutoCompleteCandidate> result;
 	for (auto &kw : keywords) {
-		result.emplace_back(move(kw));
+		auto score = 0;
+		if (kw == "SELECT" || kw == "DELETE" || kw == "INSERT" || kw == "UPDATE") {
+			score = 1;
+		}
+		result.emplace_back(kw + " ", score);
 	}
 	return result;
 }
