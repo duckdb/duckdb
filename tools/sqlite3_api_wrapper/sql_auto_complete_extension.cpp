@@ -180,6 +180,7 @@ static bool KnownExtension(const string &fname) {
 static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	string search_dir;
+	D_ASSERT(last_pos >= prefix.size());
 	for (idx_t i = prefix.size(); i > 0; i--, last_pos--) {
 		if (prefix[i - 1] == '/' || prefix[i - 1] == '\\') {
 			search_dir = prefix.substr(0, i - 1);
@@ -347,6 +348,9 @@ standard_suggestion:
 		break;
 	default:
 		throw InternalException("Unrecognized suggestion state");
+	}
+	if (last_pos >= sql.size()) {
+		throw InternalException("last_pos out of range");
 	}
 	return make_unique<SQLAutoCompleteFunctionData>(move(suggestions), last_pos);
 }
