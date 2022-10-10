@@ -4,6 +4,10 @@
 
 require icu
 
+# Normalise the testing locale
+statement ok
+SET Calendar = 'gregorian';
+
 statement ok
 SET TimeZone = 'America/Los_Angeles';
 
@@ -131,8 +135,8 @@ NULL	NULL
 query II
 SELECT millisecond(ts), millisecond(ts::TIMESTAMP) FROM timestamps;
 ----
-43988	41987
-48124	48123
+43987	41987
+48123	48123
 0	0
 0	0
 13123	13123
@@ -513,14 +517,14 @@ ORDER BY 2
 ----
 NULL	NULL
 {'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL}	-infinity
-{'era': 0, 'year': 44, 'month': 3, 'day': 15}	0044-03-13 (BC) 09:33:41.987654+00
-{'era': 1, 'year': 1962, 'month': 7, 'day': 31}	1962-07-31 12:20:48.123456+00
-{'era': 1, 'year': 2020, 'month': 12, 'day': 31}	2021-01-01 00:00:00+00
-{'era': 1, 'year': 2021, 'month': 2, 'day': 1}	2021-02-02 00:00:00+00
-{'era': 1, 'year': 2021, 'month': 11, 'day': 15}	2021-11-15 09:30:00+00
-{'era': 1, 'year': 2021, 'month': 11, 'day': 15}	2021-11-15 10:30:00+00
-{'era': 1, 'year': 2021, 'month': 11, 'day': 26}	2021-11-26 10:15:13.123456+00
-{'era': 1, 'year': 2021, 'month': 12, 'day': 24}	2021-12-24 22:00:00+00
+{'era': 0, 'year': 44, 'month': 3, 'day': 15}	0044-03-15 (BC) 01:40:43.987654 America/Los_Angeles
+{'era': 1, 'year': 1962, 'month': 7, 'day': 31}	1962-07-31 05:20:48.123456 America/Los_Angeles
+{'era': 1, 'year': 2020, 'month': 12, 'day': 31}	2020-12-31 16:00:00 America/Los_Angeles
+{'era': 1, 'year': 2021, 'month': 2, 'day': 1}	2021-02-01 16:00:00 America/Los_Angeles
+{'era': 1, 'year': 2021, 'month': 11, 'day': 15}	2021-11-15 01:30:00 America/Los_Angeles
+{'era': 1, 'year': 2021, 'month': 11, 'day': 15}	2021-11-15 02:30:00 America/Los_Angeles
+{'era': 1, 'year': 2021, 'month': 11, 'day': 26}	2021-11-26 02:15:13.123456 America/Los_Angeles
+{'era': 1, 'year': 2021, 'month': 12, 'day': 24}	2021-12-24 14:00:00 America/Los_Angeles
 {'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL}	infinity
 
 # Time parts
@@ -531,14 +535,14 @@ ORDER BY 2
 ----
 NULL	NULL
 {'hour': NULL, 'minute': NULL, 'microsecond': NULL}	-infinity
-{'hour': 1, 'minute': 40, 'microsecond': 43987654}	0044-03-13 (BC) 09:33:41.987654+00
-{'hour': 5, 'minute': 20, 'microsecond': 48123456}	1962-07-31 12:20:48.123456+00
-{'hour': 16, 'minute': 0, 'microsecond': 0}	2021-01-01 00:00:00+00
-{'hour': 16, 'minute': 0, 'microsecond': 0}	2021-02-02 00:00:00+00
-{'hour': 1, 'minute': 30, 'microsecond': 0}	2021-11-15 09:30:00+00
-{'hour': 2, 'minute': 30, 'microsecond': 0}	2021-11-15 10:30:00+00
-{'hour': 2, 'minute': 15, 'microsecond': 13123456}	2021-11-26 10:15:13.123456+00
-{'hour': 14, 'minute': 0, 'microsecond': 0}	2021-12-24 22:00:00+00
+{'hour': 1, 'minute': 40, 'microsecond': 43987654}	0044-03-15 (BC) 01:40:43.987654 America/Los_Angeles
+{'hour': 5, 'minute': 20, 'microsecond': 48123456}	1962-07-31 05:20:48.123456 America/Los_Angeles
+{'hour': 16, 'minute': 0, 'microsecond': 0}	2020-12-31 16:00:00 America/Los_Angeles
+{'hour': 16, 'minute': 0, 'microsecond': 0}	2021-02-01 16:00:00 America/Los_Angeles
+{'hour': 1, 'minute': 30, 'microsecond': 0}	2021-11-15 01:30:00 America/Los_Angeles
+{'hour': 2, 'minute': 30, 'microsecond': 0}	2021-11-15 02:30:00 America/Los_Angeles
+{'hour': 2, 'minute': 15, 'microsecond': 13123456}	2021-11-26 02:15:13.123456 America/Los_Angeles
+{'hour': 14, 'minute': 0, 'microsecond': 0}	2021-12-24 14:00:00 America/Los_Angeles
 {'hour': NULL, 'minute': NULL, 'microsecond': NULL}	infinity
 
 # Year parts
@@ -549,14 +553,14 @@ ORDER BY 2
 ----
 NULL	NULL
 {'millennium': NULL, 'century': NULL, 'decade': NULL, 'quarter': NULL}	-infinity
-{'millennium': -1, 'century': -1, 'decade': 4, 'quarter': 1}	0044-03-13 (BC) 09:33:41.987654+00
-{'millennium': 2, 'century': 20, 'decade': 196, 'quarter': 3}	1962-07-31 12:20:48.123456+00
-{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-01-01 00:00:00+00
-{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 1}	2021-02-02 00:00:00+00
-{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-15 09:30:00+00
-{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-15 10:30:00+00
-{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-26 10:15:13.123456+00
-{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-12-24 22:00:00+00
+{'millennium': -1, 'century': -1, 'decade': 4, 'quarter': 1}	0044-03-15 (BC) 01:40:43.987654 America/Los_Angeles
+{'millennium': 2, 'century': 20, 'decade': 196, 'quarter': 3}	1962-07-31 05:20:48.123456 America/Los_Angeles
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2020-12-31 16:00:00 America/Los_Angeles
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 1}	2021-02-01 16:00:00 America/Los_Angeles
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-15 01:30:00 America/Los_Angeles
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-15 02:30:00 America/Los_Angeles
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-11-26 02:15:13.123456 America/Los_Angeles
+{'millennium': 3, 'century': 21, 'decade': 202, 'quarter': 4}	2021-12-24 14:00:00 America/Los_Angeles
 {'millennium': NULL, 'century': NULL, 'decade': NULL, 'quarter': NULL}	infinity
 
 # Day parts
@@ -567,14 +571,14 @@ ORDER BY 2
 ----
 NULL	NULL
 {'weekday': NULL, 'isodow': NULL, 'doy': NULL}	-infinity
-{'weekday': 3, 'isodow': 4, 'doy': 74}	0044-03-13 (BC) 09:33:41.987654+00
-{'weekday': 2, 'isodow': 3, 'doy': 212}	1962-07-31 12:20:48.123456+00
-{'weekday': 4, 'isodow': 5, 'doy': 366}	2021-01-01 00:00:00+00
-{'weekday': 1, 'isodow': 2, 'doy': 32}	2021-02-02 00:00:00+00
-{'weekday': 1, 'isodow': 2, 'doy': 319}	2021-11-15 09:30:00+00
-{'weekday': 1, 'isodow': 2, 'doy': 319}	2021-11-15 10:30:00+00
-{'weekday': 5, 'isodow': 6, 'doy': 330}	2021-11-26 10:15:13.123456+00
-{'weekday': 5, 'isodow': 6, 'doy': 358}	2021-12-24 22:00:00+00
+{'weekday': 3, 'isodow': 4, 'doy': 74}	0044-03-15 (BC) 01:40:43.987654 America/Los_Angeles
+{'weekday': 2, 'isodow': 3, 'doy': 212}	1962-07-31 05:20:48.123456 America/Los_Angeles
+{'weekday': 4, 'isodow': 5, 'doy': 366}	2020-12-31 16:00:00 America/Los_Angeles
+{'weekday': 1, 'isodow': 2, 'doy': 32}	2021-02-01 16:00:00 America/Los_Angeles
+{'weekday': 1, 'isodow': 2, 'doy': 319}	2021-11-15 01:30:00 America/Los_Angeles
+{'weekday': 1, 'isodow': 2, 'doy': 319}	2021-11-15 02:30:00 America/Los_Angeles
+{'weekday': 5, 'isodow': 6, 'doy': 330}	2021-11-26 02:15:13.123456 America/Los_Angeles
+{'weekday': 5, 'isodow': 6, 'doy': 358}	2021-12-24 14:00:00 America/Los_Angeles
 {'weekday': NULL, 'isodow': NULL, 'doy': NULL}	infinity
 
 # ISO parts
@@ -585,14 +589,14 @@ ORDER BY 2
 ----
 NULL	NULL
 {'isoyear': NULL, 'week': NULL, 'yearweek': NULL}	-infinity
-{'isoyear': -43, 'week': 11, 'yearweek': -4311}	0044-03-13 (BC) 09:33:41.987654+00
-{'isoyear': 1962, 'week': 31, 'yearweek': 196231}	1962-07-31 12:20:48.123456+00
-{'isoyear': 2020, 'week': 53, 'yearweek': 202053}	2021-01-01 00:00:00+00
-{'isoyear': 2021, 'week': 5, 'yearweek': 202105}	2021-02-02 00:00:00+00
-{'isoyear': 2021, 'week': 46, 'yearweek': 202146}	2021-11-15 09:30:00+00
-{'isoyear': 2021, 'week': 46, 'yearweek': 202146}	2021-11-15 10:30:00+00
-{'isoyear': 2021, 'week': 47, 'yearweek': 202147}	2021-11-26 10:15:13.123456+00
-{'isoyear': 2021, 'week': 51, 'yearweek': 202151}	2021-12-24 22:00:00+00
+{'isoyear': -43, 'week': 11, 'yearweek': -4311}	0044-03-15 (BC) 01:40:43.987654 America/Los_Angeles
+{'isoyear': 1962, 'week': 31, 'yearweek': 196231}	1962-07-31 05:20:48.123456 America/Los_Angeles
+{'isoyear': 2020, 'week': 53, 'yearweek': 202053}	2020-12-31 16:00:00 America/Los_Angeles
+{'isoyear': 2021, 'week': 5, 'yearweek': 202105}	2021-02-01 16:00:00 America/Los_Angeles
+{'isoyear': 2021, 'week': 46, 'yearweek': 202146}	2021-11-15 01:30:00 America/Los_Angeles
+{'isoyear': 2021, 'week': 46, 'yearweek': 202146}	2021-11-15 02:30:00 America/Los_Angeles
+{'isoyear': 2021, 'week': 47, 'yearweek': 202147}	2021-11-26 02:15:13.123456 America/Los_Angeles
+{'isoyear': 2021, 'week': 51, 'yearweek': 202151}	2021-12-24 14:00:00 America/Los_Angeles
 {'isoyear': NULL, 'week': NULL, 'yearweek': NULL}	infinity
 
 # Miscellaneous parts
@@ -603,14 +607,14 @@ ORDER BY 2
 ----
 NULL	NULL
 {'epoch': NULL, 'second': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}	-infinity
-{'epoch': -63517990756, 'second': 43, 'timezone': -28378, 'timezone_hour': -7, 'timezone_minute': -52}	0044-03-13 (BC) 09:33:41.987654+00
-{'epoch': -234211151, 'second': 48, 'timezone': -25200, 'timezone_hour': -7, 'timezone_minute': 0}	1962-07-31 12:20:48.123456+00
-{'epoch': 1609430400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-01-01 00:00:00+00
-{'epoch': 1612195200, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-02-02 00:00:00+00
-{'epoch': 1636939800, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 09:30:00+00
-{'epoch': 1636943400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 10:30:00+00
-{'epoch': 1637892913, 'second': 13, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-26 10:15:13.123456+00
-{'epoch': 1640354400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-12-24 22:00:00+00
+{'epoch': -63517990756, 'second': 43, 'timezone': -28378, 'timezone_hour': -7, 'timezone_minute': -52}	0044-03-15 (BC) 01:40:43.987654 America/Los_Angeles
+{'epoch': -234211151, 'second': 48, 'timezone': -25200, 'timezone_hour': -7, 'timezone_minute': 0}	1962-07-31 05:20:48.123456 America/Los_Angeles
+{'epoch': 1609430400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2020-12-31 16:00:00 America/Los_Angeles
+{'epoch': 1612195200, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-02-01 16:00:00 America/Los_Angeles
+{'epoch': 1636939800, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 01:30:00 America/Los_Angeles
+{'epoch': 1636943400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-15 02:30:00 America/Los_Angeles
+{'epoch': 1637892913, 'second': 13, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-11-26 02:15:13.123456 America/Los_Angeles
+{'epoch': 1640354400, 'second': 0, 'timezone': -28800, 'timezone_hour': -8, 'timezone_minute': 0}	2021-12-24 14:00:00 America/Los_Angeles
 {'epoch': NULL, 'second': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}	infinity
 
 # Correctness: Compare struct values with scalar values
@@ -662,21 +666,21 @@ FROM (VALUES
 query TTT
 SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM februaries;
 ----
-1900-02-12 00:00:00+00	1900-02-28	1900-02-28
-1992-02-12 00:00:00+00	1992-02-29	1992-02-29
-2000-02-12 00:00:00+00	2000-02-29	2000-02-29
+1900-02-11 16:00:00 America/Los_Angeles	1900-02-28	1900-02-28
+1992-02-11 16:00:00 America/Los_Angeles	1992-02-29	1992-02-29
+2000-02-11 16:00:00 America/Los_Angeles	2000-02-29	2000-02-29
 
 query TTT
 SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM timestamps;
 ----
-0044-03-13 (BC) 09:33:41.987654+00	0044-03-29 (BC)	0044-03-31 (BC)
-1962-07-31 12:20:48.123456+00	1962-07-31	1962-07-31
-2021-01-01 00:00:00+00	2020-12-31	2021-01-31
-2021-02-02 00:00:00+00	2021-02-28	2021-02-28
-2021-11-26 10:15:13.123456+00	2021-11-30	2021-11-30
-2021-11-15 10:30:00+00	2021-11-30	2021-11-30
-2021-11-15 09:30:00+00	2021-11-30	2021-11-30
-2021-12-24 22:00:00+00	2021-12-31	2021-12-31
+0044-03-15 (BC) 01:40:43.987654 America/Los_Angeles	0044-03-29 (BC)	0044-03-31 (BC)
+1962-07-31 05:20:48.123456 America/Los_Angeles	1962-07-31	1962-07-31
+2020-12-31 16:00:00 America/Los_Angeles	2020-12-31	2021-01-31
+2021-02-01 16:00:00 America/Los_Angeles	2021-02-28	2021-02-28
+2021-11-26 02:15:13.123456 America/Los_Angeles	2021-11-30	2021-11-30
+2021-11-15 02:30:00 America/Los_Angeles	2021-11-30	2021-11-30
+2021-11-15 01:30:00 America/Los_Angeles	2021-11-30	2021-11-30
+2021-12-24 14:00:00 America/Los_Angeles	2021-12-31	2021-12-31
 infinity	NULL	NULL
 -infinity	NULL	NULL
 NULL	NULL	NULL

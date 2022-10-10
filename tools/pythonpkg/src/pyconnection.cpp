@@ -208,9 +208,8 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 
-	if (py_object_type == "DataFrame") {
+	if (DuckDBPyConnection::IsPandasDataframe(python_object)) {
 		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(python_object);
 		{
 			py::gil_scoped_release release;
@@ -223,7 +222,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object),
 		                                                       make_unique<RegisteredObject>(new_df)));
 		connection->context->external_dependencies[name] = move(dependencies);
-	} else if (IsAcceptedArrowObject(py_object_type)) {
+	} else if (IsAcceptedArrowObject(python_object)) {
 		auto stream_factory =
 		    make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr(), connection->context->config);
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
@@ -242,6 +241,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), python_object)));
 		connection->context->external_dependencies[name] = move(dependencies);
 	} else {
+		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
 	}
 	return this;
@@ -373,8 +373,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	}
 	py::gil_scoped_acquire acquire;
 	string name = "arrow_object_" + GenerateRandomName();
-	auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
-	if (!IsAcceptedArrowObject(py_object_type)) {
+	if (!IsAcceptedArrowObject(arrow_object)) {
+		auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object Type %s is not an accepted Arrow Object.", py_object_type);
 	}
 	auto stream_factory =
@@ -553,17 +553,16 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		return nullptr;
 	}
 	auto entry = dict[table_name];
-	auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	if (py_object_type == "DataFrame") {
+	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
 		string name = "df_" + GenerateRandomName();
 		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
 		table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
 		table_function->external_dependency = make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry),
 		                                                                      make_unique<RegisteredObject>(new_df));
-	} else if (DuckDBPyConnection::IsAcceptedArrowObject(py_object_type)) {
+	} else if (DuckDBPyConnection::IsAcceptedArrowObject(entry)) {
 		string name = "arrow_" + GenerateRandomName();
 		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
@@ -581,6 +580,7 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		location += ":";
 		location += py::cast<py::str>(current_frame.attr("f_lineno"));
 		std::string cpp_table_name = table_name;
+		auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
 
 		throw InvalidInputException(
 		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
@@ -714,13 +714,20 @@ void DuckDBPyConnection::Cleanup() {
 	import_cache.reset();
 }
 
-bool DuckDBPyConnection::IsAcceptedArrowObject(string &py_object_type) {
-	if (py_object_type == "Table" || py_object_type == "FileSystemDataset" || py_object_type == "InMemoryDataset" ||
-	    py_object_type == "RecordBatchReader" || py_object_type == "Scanner") {
-		return true;
-	}
-	return false;
+bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return import_cache.pandas.DataFrame.IsInstance(object);
 }
+
+bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return import_cache.arrow.lib.Table.IsInstance(object) ||
+	       import_cache.arrow.lib.RecordBatchReader.IsInstance(object) ||
+	       import_cache.arrow.dataset.FileSystemDataset.IsInstance(object) ||
+	       import_cache.arrow.dataset.InMemoryDataset.IsInstance(object) ||
+	       import_cache.arrow.dataset.Scanner.IsInstance(object);
+}
+
 unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
 	// we first release the gil and then acquire the connection lock
 	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
