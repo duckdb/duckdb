@@ -34,7 +34,7 @@ for ext in extensions:
 
 libraries = []
 if platform.system() == 'Windows':
-    libraries += ['ws2_32', 'Shlwapi']
+    libraries += ['ws2_32']
 
 link_flags = ''
 for libname in libraries:
@@ -116,7 +116,7 @@ with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:
 
 text = text.replace('{{ SOURCES }}', object_list)
 text = text.replace('{{ INCLUDES }}', include_list)
-text = text.replace('{{ LINK_FLAGS }}', "-lws2_32 -lShlwapi")
+text = text.replace('{{ LINK_FLAGS }}', "-lws2_32")
 
 # now write it to the output Makevars
 with open_utf8(os.path.join('src', 'Makevars.win'), 'w+') as f:

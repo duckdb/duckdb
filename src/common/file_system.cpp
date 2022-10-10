@@ -24,13 +24,10 @@
 #else
 #include <string>
 #include <sysinfoapi.h>
-#include <shlwapi.h>
 
 #ifdef __MINGW32__
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
-#else
-#pragma comment(lib, "Shlwapi.lib")
 #endif
 
 #undef FILE_CREATE // woo mingw
@@ -49,19 +46,20 @@ FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
 	return ClientData::Get(context).file_opener.get();
 }
 
-bool FileSystem::IsPathAbsolute(const string &path) {
-#ifndef _WIN32
-	auto path_separator = FileSystem::PathSeparator();
-	if (path.rfind(path_separator, 0) == 0) {
+bool PathMatched(const string &path, const string &sub_path) {
+	if (path.rfind(sub_path, 0) == 0) {
 		return true;
 	}
 	return false;
-#else
-	return !PathIsRelativeA(path.c_str());
-#endif
 }
 
 #ifndef _WIN32
+
+bool FileSystem::IsPathAbsolute(const string &path) {
+	auto path_separator = FileSystem::PathSeparator();
+	return PathMatched(path, path_separator);
+}
+
 string FileSystem::PathSeparator() {
 	return "/";
 }
@@ -90,6 +88,21 @@ string FileSystem::GetWorkingDirectory() {
 	return string(buffer.get());
 }
 #else
+
+bool FileSystem::IsPathAbsolute(const string &path) {
+	// 1) A single backslash
+	auto sub_path = FileSystem::PathSeparator();
+	bool is_absolute = PathMatched(path, sub_path);
+	// 2) check if starts with a double-backslash (i.e., \\)
+	sub_path += FileSystem::PathSeparator();
+	is_absolute = is_absolute || PathMatched(path, sub_path);
+	// 3) A disk designator with a backslash (e.g., C:\)
+	auto path_aux = path;
+	path_aux.erase(0, 1);
+	sub_path = ":" + FileSystem::PathSeparator();
+	is_absolute = is_absolute || PathMatched(path_aux, sub_path);
+	return is_absolute;
+}
 
 string FileSystem::PathSeparator() {
 	return "\\";
