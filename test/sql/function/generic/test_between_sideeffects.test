@@ -2,6 +2,8 @@
 # description: Test between statement with expressions that have side effects
 # group: [generic]
 
+require icu
+
 statement ok
 PRAGMA enable_verification
 
@@ -34,14 +36,15 @@ query I
 EXECUTE v2(now() - INTERVAL '10 minute')
 ----
 
-# this should always be false
 loop i 0 100
 
+# this should always be false
 query I
 SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
 ----
 false
 
+# this should always be true
 query I
 SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
 ----

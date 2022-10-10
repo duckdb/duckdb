@@ -10,10 +10,14 @@ PRAGMA force_compression='uncompressed'
 
 # Create a table with random doubles compressed as Uncompressed
 statement ok
-create table random_double as select random() * 100 from range(1024);
+create table random_double as select random()::DOUBLE * 100 as data from range(1024);
 
 statement ok
 checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('random_double') WHERE segment_type == 'double' AND compression != 'Uncompressed';
+----
 
 # Now create a duplicate of this table, compressed with Chimp instead
 statement ok
@@ -25,11 +29,15 @@ create table random_chimp_double as select * from random_double;
 statement ok
 checkpoint
 
+query I
+SELECT compression FROM pragma_storage_info('random_chimp_double') WHERE segment_type == 'double' AND compression != 'Chimp';
+----
+
 # Assert that the data was not corrupted by compressing to Chimp
-query I nosort r1
+query I sort r1
 select * from random_double;
 ----
 
-query I nosort r1
+query I sort r1
 select * from random_chimp_double;
 ----

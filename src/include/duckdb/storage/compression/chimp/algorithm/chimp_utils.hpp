@@ -49,7 +49,7 @@ static inline int __builtin_clzll(unsigned long long mask) {
 }
 
 static inline int __builtin_ctz(unsigned int value) {
-	DWORD trailing_zero = 0;
+	unsigned long trailing_zero = 0;
 
 	if (_BitScanForward(&trailing_zero, value)) {
 		return trailing_zero;
@@ -60,7 +60,7 @@ static inline int __builtin_ctz(unsigned int value) {
 }
 
 static inline int __builtin_clz(unsigned int value) {
-	DWORD leading_zero = 0;
+	unsigned long leading_zero = 0;
 
 	if (_BitScanReverse(&leading_zero, value)) {
 		return 31 - leading_zero;
@@ -88,8 +88,6 @@ struct SignificantBits<uint32_t> {
 	static constexpr uint8_t size = 5;
 	static constexpr uint8_t mask = ((uint8_t)1 << size) - 1;
 };
-
-// COUNT ZEROS
 
 template <class T>
 struct CountZeros {};

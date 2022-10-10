@@ -24,6 +24,7 @@
 
 #include "duckdb/storage/compression/chimp/algorithm/bit_reader.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/output_bit_stream.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb_chimp {
 
@@ -42,6 +43,7 @@ template <class CHIMP_TYPE, bool EMPTY>
 struct Chimp128CompressionState {
 
 	Chimp128CompressionState() : ring_buffer(), previous_leading_zeros(std::numeric_limits<uint8_t>::max()) {
+		previous_value = 0;
 	}
 
 	inline void SetLeadingZeros(int32_t value = std::numeric_limits<uint8_t>::max()) {
@@ -52,6 +54,7 @@ struct Chimp128CompressionState {
 		leading_zero_buffer.Flush();
 	}
 
+	// Reset the state
 	void Reset() {
 		first = true;
 		ring_buffer.Reset();
@@ -59,6 +62,7 @@ struct Chimp128CompressionState {
 		leading_zero_buffer.Reset();
 		flag_buffer.Reset();
 		packed_data_buffer.Reset();
+		previous_value = 0;
 	}
 
 	CHIMP_TYPE BitsWritten() const {
@@ -72,6 +76,7 @@ struct Chimp128CompressionState {
 	PackedDataBuffer<EMPTY> packed_data_buffer;
 	RingBuffer<CHIMP_TYPE> ring_buffer; //! The ring buffer that holds the previous values
 	uint8_t previous_leading_zeros;     //! The leading zeros of the reference value
+	CHIMP_TYPE previous_value = 0;
 	bool first = true;
 };
 
@@ -104,6 +109,7 @@ public:
 	static void WriteFirst(CHIMP_TYPE in, State &state) {
 		state.ring_buffer.template Insert<true>(in);
 		state.output.template WriteValue<CHIMP_TYPE, BIT_SIZE>(in);
+		state.previous_value = in;
 		state.first = false;
 	}
 
@@ -169,6 +175,7 @@ public:
 				state.SetLeadingZeros(leading_zeros);
 			}
 		}
+		state.previous_value = in;
 		state.ring_buffer.Insert(in);
 	}
 };
@@ -243,7 +250,7 @@ public:
 	}
 
 	static inline CHIMP_TYPE LoadFirst(DecompressState &state) {
-		CHIMP_TYPE result = state.input.template ReadValue<CHIMP_TYPE, sizeof(CHIMP_TYPE) * __CHAR_BIT__>();
+		CHIMP_TYPE result = state.input.template ReadValue<CHIMP_TYPE, sizeof(CHIMP_TYPE) * 8>();
 		state.ring_buffer.template InsertScan<true>(result);
 		state.first = false;
 		state.reference_value = result;
@@ -263,7 +270,7 @@ public:
 		}
 		case TRAILING_EXCEEDS_THRESHOLD: {
 			const UnpackedData &unpacked = unpacked_data[unpacked_index++];
-			state.leading_zeros = ChimpDecompressionConstants::LEADING_REPRESENTATION[unpacked.leading_zero];
+			state.leading_zeros = unpacked.leading_zero;
 			state.trailing_zeros = BIT_SIZE - unpacked.significant_bits - state.leading_zeros;
 			result = state.input.template ReadValue<CHIMP_TYPE>(unpacked.significant_bits);
 			result <<= state.trailing_zeros;
@@ -277,6 +284,7 @@ public:
 		}
 		case LEADING_ZERO_LOAD: {
 			state.leading_zeros = leading_zeros[leading_zero_index++];
+			D_ASSERT(state.leading_zeros <= BIT_SIZE);
 			result = state.input.template ReadValue<CHIMP_TYPE>(BIT_SIZE - state.leading_zeros);
 			result ^= state.reference_value;
 			break;

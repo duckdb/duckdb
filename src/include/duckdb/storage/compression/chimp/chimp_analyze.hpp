@@ -27,13 +27,13 @@ public:
 	idx_t group_idx = 0;
 	idx_t data_byte_size = 0;
 	idx_t metadata_byte_size = 0;
-	//! Keep track of when a segment would end, to accurately simulate Reset()s in compress step
 
 public:
 	void WriteValue(CHIMP_TYPE value, bool is_valid) {
 		if (!is_valid) {
 			return;
 		}
+		//! Keep track of when a segment would end, to accurately simulate Reset()s in compress step
 		if (!HasEnoughSpace()) {
 			StartNewSegment();
 		}
@@ -138,7 +138,6 @@ idx_t ChimpFinalAnalyze(AnalyzeState &state) {
 	// Finish the last "segment"
 	chimp_state.StartNewSegment();
 	const auto final_analyze_size = chimp_state.TotalUsedBytes();
-	// printf("FINAL_ANALYZE_SIZE: %llu\n", final_analyze_size);
 	return final_analyze_size;
 }
 

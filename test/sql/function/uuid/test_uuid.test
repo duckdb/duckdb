@@ -42,3 +42,19 @@ SELECT * FROM uuids ORDER BY gen_random_uuid()
 # we can select gen_random_uuid
 statement ok
 SELECT gen_random_uuid() FROM uuids
+
+# UUID v4 follows `XXXXXXXX-XXXX-4XXX-XXXX-XXXXXXXXXXXX` format
+query I
+SELECT DISTINCT substring(uuid()::varchar, 15, 1) FROM range(100)
+----
+4
+
+# UUID v4 variant 1 follows `XXXXXXXX-XXXX-4XXX-[89ab]XXX-XXXXXXXXXXXX` format
+# the probability for 100 iters not to cover the 4 possible values is (3/4)**100 == 3e-13
+query I
+SELECT DISTINCT substring(uuid()::varchar, 20, 1) AS x FROM range(100) ORDER BY x
+----
+8
+9
+a
+b

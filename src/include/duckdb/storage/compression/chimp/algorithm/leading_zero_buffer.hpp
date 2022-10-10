@@ -50,11 +50,11 @@ public:
 	static constexpr uint32_t LEADING_ZERO_BLOCK_BIT_SIZE = LEADING_ZERO_BLOCK_SIZE * LEADING_ZERO_BITS_SIZE;
 	static constexpr uint32_t MAX_LEADING_ZERO_BLOCKS = CHIMP_GROUP_SIZE / LEADING_ZERO_BLOCK_SIZE;
 	static constexpr uint32_t MAX_BITS_USED_BY_ZERO_BLOCKS = MAX_LEADING_ZERO_BLOCKS * LEADING_ZERO_BLOCK_BIT_SIZE;
-	static constexpr uint32_t MAX_BYTES_USED_BY_ZERO_BLOCKS = MAX_BITS_USED_BY_ZERO_BLOCKS / __CHAR_BIT__;
+	static constexpr uint32_t MAX_BYTES_USED_BY_ZERO_BLOCKS = MAX_BITS_USED_BY_ZERO_BLOCKS / 8;
 
 	// Add an extra byte to prevent heap buffer overflow on the last group, because we'll be addressing 4 bytes each
 	static constexpr uint32_t BUFFER_SIZE =
-	    MAX_BYTES_USED_BY_ZERO_BLOCKS + (sizeof(uint32_t) - (LEADING_ZERO_BLOCK_BIT_SIZE / __CHAR_BIT__));
+	    MAX_BYTES_USED_BY_ZERO_BLOCKS + (sizeof(uint32_t) - (LEADING_ZERO_BLOCK_BIT_SIZE / 8));
 
 	template <typename T>
 	const T Load(const uint8_t *ptr) {
@@ -147,6 +147,9 @@ public:
 		    (temp & LeadingZeroBufferConstants::MASKS[counter & 7]) >> LeadingZeroBufferConstants::SHIFTS[counter & 7];
 		counter++;
 		return result;
+	}
+	size_t GetCount() const {
+		return counter;
 	}
 	size_t BlockCount() const {
 		return (counter >> 3) + ((counter & 7) != 0);

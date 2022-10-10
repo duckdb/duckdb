@@ -324,6 +324,8 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		has_escape = true;
 	} else if (loption == "ignore_errors") {
 		ignore_errors = ParseBoolean(value, loption);
+	} else if (loption == "union_by_name") {
+		union_by_name = ParseBoolean(value, loption);
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}
@@ -535,6 +537,7 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		SkipRowsAndReadHeader(options.skip_rows, options.header);
 	}
 	InitParseChunk(sql_types.size());
+	InitInsertChunkIdx(sql_types.size());
 	// we only need reset support during the automatic CSV type detection
 	// since reset support might require caching (in the case of streams), we disable it for the remainder
 	file_handle->DisableReset();
@@ -677,6 +680,12 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 		// initialize the parse_chunk with a set of VARCHAR types
 		vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
 		parse_chunk.Initialize(allocator, varchar_types);
+	}
+}
+
+void BufferedCSVReader::InitInsertChunkIdx(idx_t num_cols) {
+	for (idx_t col = 0; col < num_cols; ++col) {
+		insert_cols_idx.push_back(col);
 	}
 }
 
@@ -1979,6 +1988,13 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	return false;
 }
 
+void BufferedCSVReader::SetNullUnionCols(DataChunk &insert_chunk) {
+	for (idx_t col = 0; col < insert_nulls_idx.size(); ++col) {
+		insert_chunk.data[insert_nulls_idx[col]].SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(insert_chunk.data[insert_nulls_idx[col]], true);
+	}
+}
+
 void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	if (parse_chunk.size() == 0) {
 		return;
@@ -2009,22 +2025,25 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					}
 				}
 			}
-			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
+			insert_chunk.data[insert_cols_idx[col_idx]].Reference(parse_chunk.data[col_idx]);
 		} else {
 			string error_message;
 			bool success;
 			if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx],
-				                            parse_chunk.size(), error_message);
+				success =
+				    TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_cols_idx[col_idx]],
+				                      parse_chunk.size(), error_message);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
 			           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx],
-				                                 parse_chunk.size(), error_message);
+				success = TryCastTimestampVector(options, parse_chunk.data[col_idx],
+				                                 insert_chunk.data[insert_cols_idx[col_idx]], parse_chunk.size(),
+				                                 error_message);
 			} else {
 				// target type is not varchar: perform a cast
-				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
+				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx],
+				                                           insert_chunk.data[insert_cols_idx[col_idx]],
 				                                           parse_chunk.size(), &error_message);
 			}
 			if (success) {

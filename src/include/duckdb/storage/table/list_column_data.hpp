@@ -16,8 +16,8 @@ namespace duckdb {
 //! List column data represents a list
 class ListColumnData : public ColumnData {
 public:
-	ListColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-	               ColumnData *parent = nullptr);
+	ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+	               LogicalType type, ColumnData *parent = nullptr);
 	ListColumnData(ColumnData &original, idx_t start_row, ColumnData *parent = nullptr);
 
 	//! The child-column of the list
@@ -51,8 +51,8 @@ public:
 
 	void CommitDropColumn() override;
 
-	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
 	                                             ColumnCheckpointInfo &checkpoint_info) override;
 
 	void DeserializeColumn(Deserializer &source) override;
