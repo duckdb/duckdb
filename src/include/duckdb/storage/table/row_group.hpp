@@ -114,7 +114,7 @@ public:
 	              row_t row_id, DataChunk &result, idx_t result_idx);
 
 	//! Append count rows to the version info
-	void AppendVersionInfo(TransactionData transaction, idx_t start, idx_t count, transaction_t commit_id);
+	void AppendVersionInfo(TransactionData transaction, idx_t count);
 	//! Commit a previous append made by RowGroup::AppendVersionInfo
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t count);
 	//! Revert a previous append made by RowGroup::AppendVersionInfo
@@ -127,7 +127,7 @@ public:
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);
 
-	void InitializeAppend(TransactionData transaction, RowGroupAppendState &append_state, idx_t remaining_append_count);
+	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
 	void Update(TransactionData transaction, DataChunk &updates, row_t *ids, idx_t offset, idx_t count,
