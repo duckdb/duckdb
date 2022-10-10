@@ -48,8 +48,9 @@ public:
 	void Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids,
 	           Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
 
-	void InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count);
-	void Append(TransactionData transaction, DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
+	void InitializeAppend(TableAppendState &state);
+	void Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
+	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row, idx_t count);
 

@@ -50,14 +50,18 @@ struct IndexLock {
 };
 
 struct TableAppendState {
-	TableAppendState() : row_group_append_state(*this) {
+	TableAppendState() : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr) {
 	}
+	~TableAppendState();
 
 	RowGroupAppendState row_group_append_state;
 	unique_lock<mutex> append_lock;
 	row_t row_start;
 	row_t current_row;
-	idx_t remaining_append_count;
+	//! The total number of rows appended by the append operation
+	idx_t total_append_count;
+	//! The first row-group that has been appended to
+	RowGroup *start_row_group;
 };
 
 } // namespace duckdb

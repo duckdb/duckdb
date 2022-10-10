@@ -140,8 +140,9 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	//! Append to the chunk
 	TableAppendState state;
 	TransactionData transaction_data(0, 0);
-	storage->row_groups->InitializeAppend(transaction_data, state, chunk.size());
-	storage->row_groups->Append(transaction_data, chunk, state, storage->stats);
+	storage->row_groups->InitializeAppend(state);
+	storage->row_groups->Append(chunk, state, storage->stats);
+	storage->row_groups->FinalizeAppend(transaction_data, state);
 }
 
 LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
@@ -229,7 +230,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		table.MergeStorage(*storage.row_groups, storage.indexes, storage.stats);
 	} else {
 		bool constraint_violated = false;
-		table.InitializeAppend(transaction, append_state, append_count);
+		table.InitializeAppend(append_state);
 		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
 			if (!table.AppendToIndexes(chunk, append_state.current_row)) {
@@ -237,9 +238,10 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 				return false;
 			}
 			// append to base table
-			table.Append(transaction, chunk, append_state);
+			table.Append(chunk, append_state);
 			return true;
 		});
+		table.FinalizeAppend(transaction, append_state);
 		if (constraint_violated) {
 			// need to revert the append
 			row_t current_row = append_state.row_start;

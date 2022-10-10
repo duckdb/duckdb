@@ -105,9 +105,11 @@ public:
 	//! Fetches an append lock
 	void AppendLock(TableAppendState &state);
 	//! Begin appending structs to this table, obtaining necessary locks, etc
-	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
-	//! Append a chunk to the table using the AppendState obtained from BeginAppend
-	void Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state);
+	void InitializeAppend(TableAppendState &state);
+	//! Append a chunk to the table using the AppendState obtained from InitializeAppend
+	void Append(DataChunk &chunk, TableAppendState &state);
+	//! Finalize an append with the given transaction context
+	void FinalizeAppend(Transaction &transaction, TableAppendState &state);
 	//! Commit the append
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	//! Write a segment of the table to the WAL

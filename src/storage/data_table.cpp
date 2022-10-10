@@ -505,17 +505,22 @@ void DataTable::AppendLock(TableAppendState &state) {
 	state.row_start = row_groups->GetTotalRows();
 }
 
-void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
+void DataTable::InitializeAppend(TableAppendState &state) {
 	// obtain the append lock for this table
 	if (!state.append_lock) {
 		throw InternalException("DataTable::AppendLock should be called before DataTable::InitializeAppend");
 	}
-	row_groups->InitializeAppend(transaction, state, append_count);
+	row_groups->InitializeAppend(state);
 }
 
-void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state) {
+void DataTable::Append(DataChunk &chunk, TableAppendState &state) {
 	D_ASSERT(is_root);
-	row_groups->Append(transaction, chunk, state, stats);
+	row_groups->Append(chunk, state, stats);
+}
+
+void DataTable::FinalizeAppend(Transaction &transaction, TableAppendState &state) {
+	D_ASSERT(is_root);
+	row_groups->FinalizeAppend(transaction, state);
 }
 
 void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
