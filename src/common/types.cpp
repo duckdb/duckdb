@@ -769,16 +769,11 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		auto left_member_types = UnionType::GetMemberTypes(left);
 		auto right_member_types = UnionType::GetMemberTypes(right);
 		if (left_member_types.size() != right_member_types.size()) {
-			// child types are not of equal size, we can't cast anyway
-			// just return the left child
-			return left;
+			// return the "larger" type, with the most members
+			return left_member_types.size() > right_member_types.size() ? left : right;
 		}
-		child_list_t<LogicalType> member_types;
-		for (idx_t i = 0; i < left_member_types.size(); i++) {
-			auto child_type = MaxLogicalType(left_member_types[i].second, right_member_types[i].second);
-			member_types.push_back(make_pair(left_member_types[i].first, move(child_type)));
-		}
-		return LogicalType::UNION(move(member_types));
+		// otherwise, keep left, dont try to meld the two together.
+		return left;
 	}
 	// types are equal but no extra specifier: just return the type
 	return left;
