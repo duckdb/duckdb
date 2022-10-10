@@ -217,6 +217,10 @@ Executor &ClientContext::GetExecutor() {
 	return *active_query->executor;
 }
 
+FileOpener *FileOpener::Get(ClientContext &context) {
+	return ClientData::Get(context).file_opener.get();
+}
+
 const string &ClientContext::GetCurrentQuery() {
 	D_ASSERT(active_query);
 	return active_query->query;

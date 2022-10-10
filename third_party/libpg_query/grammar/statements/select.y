@@ -1946,18 +1946,6 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @2;
 					$$ = (PGNode *)n;
 				}
-			| row {
-				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
-				$$ = (PGNode *) n;
-			}
-			| '{' dict_arguments_opt_comma '}' {
-				PGFuncCall *n = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
-				$$ = (PGNode *) n;
-			}
-			| '[' opt_expr_list_opt_comma ']' {
-				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
-				$$ = (PGNode *) n;
-			}
 			| a_expr LAMBDA_ARROW a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
@@ -1967,9 +1955,9 @@ a_expr:		c_expr									{ $$ = $1; }
 				$$ = (PGNode *) n;
 			}
 			| a_expr DOUBLE_ARROW a_expr %prec Op
-                        {
-                                        $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "->>", $1, $3, @2);
-                        }
+			{
+							$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "->>", $1, $3, @2);
+			}
 			| row OVERLAPS row
 				{
 					if (list_length($1) != 2)
@@ -2142,17 +2130,6 @@ a_expr:		c_expr									{ $$ = $1; }
 					else
 						$$ = (PGNode *) makeAExpr(PG_AEXPR_OP_ALL, $2, $1, $5, @2);
 				}
-			| ARRAY select_with_parens
-				{
-					PGSubLink *n = makeNode(PGSubLink);
-					n->subLinkType = PG_ARRAY_SUBLINK;
-					n->subLinkId = 0;
-					n->testexpr = NULL;
-					n->operName = NULL;
-					n->subselect = $2;
-					n->location = @2;
-					$$ = (PGNode *)n;
-				}
 			| DEFAULT
 				{
 					/*
@@ -2167,11 +2144,6 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| ARRAY '[' opt_expr_list_opt_comma ']' {
-				PGList *func_name = list_make1(makeString("construct_array"));
-				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
-				$$ = (PGNode *) n;
-			}
 		;
 
 /*
@@ -2297,6 +2269,37 @@ c_expr:		columnref								{ $$ = $1; }
 					else
 						$$ = $2;
 				}
+			| row {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
+				$$ = (PGNode *) n;
+			}
+			| '{' dict_arguments_opt_comma '}' {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
+				$$ = (PGNode *) n;
+			}
+			| '[' opt_expr_list_opt_comma ']' {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
+				$$ = (PGNode *) n;
+			}
+			| list_comprehension {
+				$$ = $1;
+			}
+			| ARRAY select_with_parens
+				{
+					PGSubLink *n = makeNode(PGSubLink);
+					n->subLinkType = PG_ARRAY_SUBLINK;
+					n->subLinkId = 0;
+					n->testexpr = NULL;
+					n->operName = NULL;
+					n->subselect = $2;
+					n->location = @2;
+					$$ = (PGNode *)n;
+				}
+			| ARRAY '[' opt_expr_list_opt_comma ']' {
+				PGList *func_name = list_make1(makeString("construct_array"));
+				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
+				$$ = (PGNode *) n;
+			}
 			| case_expr
 				{ $$ = $1; }
 			| func_expr opt_indirection
@@ -2636,6 +2639,33 @@ func_expr_common_subexpr:
 					$$ = (PGNode *)c;
 				}
 		;
+
+list_comprehension:
+				'[' a_expr FOR ColId IN_P a_expr ']'
+				{
+					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
+					lambda->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda->rhs = $2;
+					lambda->location = @1;
+					PGFuncCall *n = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda), @1);
+					$$ = (PGNode *) n;
+				}
+				| '[' a_expr FOR ColId IN_P c_expr IF_P a_expr']'
+				{
+					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
+					lambda->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda->rhs = $2;
+					lambda->location = @1;
+
+					PGLambdaFunction *lambda_filter = makeNode(PGLambdaFunction);
+					lambda_filter->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda_filter->rhs = $8;
+					lambda_filter->location = @8;
+					PGFuncCall *filter = makeFuncCall(SystemFuncName("list_filter"), list_make2($6, lambda_filter), @1);
+					PGFuncCall *n = makeFuncCall(SystemFuncName("list_apply"), list_make2(filter, lambda), @1);
+					$$ = (PGNode *) n;
+				}
+			;
 
 /* We allow several variants for SQL and other compatibility. */
 /*
