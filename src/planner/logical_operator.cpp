@@ -349,10 +349,10 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	return result;
 }
 
-unique_ptr<LogicalOperator> LogicalOperator::Copy(unique_ptr<LogicalOperator> &op, ClientContext &context) {
+unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
 	BufferedSerializer logical_op_serializer;
 	try {
-		op->Serialize(logical_op_serializer);
+		this->Serialize(logical_op_serializer);
 	} catch (NotImplementedException &ex) {
 		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children to "
 		                              "be serializable: " +

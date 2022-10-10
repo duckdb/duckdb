@@ -43,7 +43,7 @@ static void test_helper(string sql, vector<string> fixtures = vector<string>()) 
 		plan = optimizer.Optimize(move(plan));
 
 		// LogicalOperator's copy utilizes its serialize and deserialize methods
-		auto new_plan = LogicalOperator::Copy(plan, *con.context);
+		auto new_plan = plan->Copy(*con.context);
 
 		auto optimized_plan = optimizer.Optimize(move(new_plan));
 		con.context->transaction.Commit();
