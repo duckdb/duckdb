@@ -80,6 +80,8 @@ private:
 	int32_t finished_processing_idx = -1;
 	//! Whether or not this pipeline requires keeping track of the batch index of the source
 	bool requires_batch_index = false;
+	//! Whether this pipeline supports caching of intermediate results
+	bool can_cache_in_pipeline;
 
 private:
 	void StartOperator(PhysicalOperator *op);

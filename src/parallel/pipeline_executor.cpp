@@ -13,7 +13,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
 	}
 
-	bool can_cache_in_pipeline = pipeline.sink && !pipeline.IsOrderDependent() && !requires_batch_index;
+	can_cache_in_pipeline = pipeline.sink && !pipeline.IsOrderDependent() && !requires_batch_index;
 
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
@@ -121,25 +121,32 @@ void PipelineExecutor::PushFinalize() {
 		throw InternalException("Calling PushFinalize on a pipeline that has been finalized already");
 	}
 	finalized = true;
-	// flush all caches
+	// flush all caching operators
 	// note that even if an operator has finished, we might still need to flush caches AFTER that operator
 	// e.g. if we have SOURCE -> LIMIT -> CROSS_PRODUCT -> SINK, if the LIMIT reports no more rows will be passed on
 	// we still need to flush caches from the CROSS_PRODUCT
 	D_ASSERT(in_process_operators.empty());
-	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
-	for (idx_t i = start_idx; i < pipeline.operators.size(); i++) {
-		// Do we really need to check this for all operators?
-		if (pipeline.operators[i]->RequiresFinalExecute()) {
-			// TODO reuse an available Chunk?
-			auto tmp_chunk = make_unique<DataChunk>();
-			tmp_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[i]->GetTypes());
 
-			// TODO do the state params even make sense here?
-			pipeline.operators[i]->FinalExecute(context, *tmp_chunk, *pipeline.operators[i]->op_state,
-			                                    *intermediate_states[i]);
+	if (can_cache_in_pipeline) {
+		idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
+		for (idx_t op_idx = start_idx; op_idx < pipeline.operators.size(); op_idx++) {
+			if (pipeline.operators[op_idx]->RequiresFinalExecute()) {
+				unique_ptr<DataChunk> tmp_chunk;
+				auto chunk_idx = op_idx + 1;
+				bool last_op = chunk_idx >= intermediate_chunks.size();
 
-			// Push the resulting chunk
-			ExecutePushInternal(*tmp_chunk, i + 1);
+				if (last_op) {
+					tmp_chunk = make_unique<DataChunk>();
+					tmp_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[op_idx]->GetTypes());
+				}
+				auto& curr_chunk = last_op ? *tmp_chunk : *intermediate_chunks[chunk_idx];
+				pipeline.operators[op_idx]->FinalExecute(context, curr_chunk, *pipeline.operators[op_idx]->op_state,
+				                                         *intermediate_states[op_idx]);
+				auto result = ExecutePushInternal(curr_chunk, op_idx + 1);
+				if (result == OperatorResultType::FINISHED) {
+					break;
+				}
+			}
 		}
 	}
 
@@ -168,25 +175,33 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 				source_chunk.Reset();
 				FetchFromSource(source_chunk);
 				if (source_chunk.size() == 0) {
-					// TODO DEDUPLICATE
-					idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
+					// TODO DEDUPLICATE AND DE-HORRIFY
 
-					for (idx_t i = start_idx; i < pipeline.operators.size(); i++) {
-						if (pipeline.operators[i]->RequiresFinalExecute()) {
-							unique_ptr<DataChunk> remaining_chunk;
-							remaining_chunk = make_unique<DataChunk>();
-							remaining_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[i]->GetTypes());
-							pipeline.operators[i]->FinalExecute(context, *remaining_chunk, *pipeline.operators[i]->op_state,
-							                                    *intermediate_states[i]);
-							auto state = Execute(*remaining_chunk, result, i + 1);
-							if (state == OperatorResultType::FINISHED) {
-								FinishProcessing(i); // TODO is this even correct? I dont think so: i think this is now O(N^2) because
-								// TODO we rerun this for every op in the pipeline, I think we need a way to mark the operator as finalized
-							}
+					if (can_cache_in_pipeline) {
+						idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
+						for (idx_t op_idx = start_idx; op_idx < pipeline.operators.size(); op_idx++) {
+							if (pipeline.operators[op_idx]->RequiresFinalExecute()) {
+								unique_ptr<DataChunk> tmp_chunk;
+								auto chunk_idx = op_idx + 1;
+								bool last_op = chunk_idx >= intermediate_chunks.size();
 
-							// If this resulting in a result, we are done, else we should continue past the other operators
-							if (result.size() > 0) {
-								break;
+								if (last_op) {
+									tmp_chunk = make_unique<DataChunk>();
+									tmp_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[op_idx]->GetTypes());
+								}
+								auto& curr_chunk = last_op ? *tmp_chunk : *intermediate_chunks[chunk_idx];
+								pipeline.operators[op_idx]->FinalExecute(context, curr_chunk, *pipeline.operators[op_idx]->op_state,
+								                                         *intermediate_states[op_idx]);
+								auto state = Execute(curr_chunk, result, op_idx + 1);
+								if (state == OperatorResultType::FINISHED) {
+									FinishProcessing(op_idx);
+									break;
+								}
+
+								// If this resulting in a result, we are done, else we should continue past the other operators
+								if (result.size() > 0) {
+									break;
+								}
 							}
 						}
 					}

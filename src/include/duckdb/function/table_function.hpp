@@ -91,7 +91,7 @@ typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context,
 typedef void (*table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 
 typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context, TableFunctionInput &data,
-                                                      DataChunk &input, DataChunk &output);
+                                                      DataChunk &input, DataChunk &output, bool allow_cache);
 typedef void (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data, DataChunk &output);
 typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const FunctionData *bind_data,
                                                   LocalTableFunctionState *local_state,
