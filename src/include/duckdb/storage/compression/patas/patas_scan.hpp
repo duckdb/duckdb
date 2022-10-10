@@ -128,6 +128,7 @@ public:
 
 	void LoadGroup() {
 		patas_state.Reset();
+		group_state.Reset();
 
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= sizeof(uint32_t);
