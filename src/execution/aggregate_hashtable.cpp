@@ -642,6 +642,7 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 		partition_entry->Verify();
 		total_count += partition_entry->Size();
 	}
+	(void)total_count;
 	D_ASSERT(total_count == entries);
 }
 
