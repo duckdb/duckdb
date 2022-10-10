@@ -447,7 +447,7 @@ bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
 	return true;
 }
 
-bool ART::Insert(Node *&node, Key &key, unsigned depth, row_t row_id) {
+bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
@@ -553,7 +553,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	}
 }
 
-void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
+void ART::Erase(Node *&node, Key &key, idx_t depth, row_t row_id) {
 	if (!node) {
 		return;
 	}
@@ -654,14 +654,14 @@ bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
 
 	// we need to look for a leaf
-	auto leaf = (Leaf *)(Lookup(tree, key, 0));
+	auto leaf = Lookup(tree, key, 0);
 	if (!leaf) {
 		return;
 	}
 	result_size = leaf->count;
 }
 
-Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
+Leaf *ART::Lookup(Node *node, Key &key, idx_t depth) {
 	while (node) {
 		if (node->type == NodeType::NLeaf) {
 			auto leaf = (Leaf *)node;
@@ -672,7 +672,7 @@ Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
 					return nullptr;
 				}
 			}
-			return node;
+			return (Leaf *)node;
 		}
 		if (node->prefix.Size()) {
 			for (idx_t pos = 0; pos < node->prefix.Size(); pos++) {
