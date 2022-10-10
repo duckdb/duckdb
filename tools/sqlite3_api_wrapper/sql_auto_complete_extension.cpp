@@ -16,10 +16,12 @@
 namespace duckdb {
 
 struct SQLAutoCompleteFunctionData : public TableFunctionData {
-	explicit SQLAutoCompleteFunctionData(vector<string> suggestions_p) : suggestions(move(suggestions_p)) {
+	explicit SQLAutoCompleteFunctionData(vector<string> suggestions_p, idx_t start_pos)
+	    : suggestions(move(suggestions_p)), start_pos(start_pos) {
 	}
 
 	vector<string> suggestions;
+	idx_t start_pos;
 };
 
 struct SQLAutoCompleteData : public GlobalTableFunctionState {
@@ -165,10 +167,21 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 	return suggestions;
 }
 
-static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix) {
+static bool KnownExtension(const string &fname) {
+	vector<string> known_extensions {".parquet", ".csv", ".tsv", ".csv.gz", ".tsv.gz", ".tbl"};
+	for (auto &ext : known_extensions) {
+		if (StringUtil::EndsWith(fname, ext)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	string search_dir;
-	for (idx_t i = prefix.size(); i > 0; i--) {
+	D_ASSERT(last_pos >= prefix.size());
+	for (idx_t i = prefix.size(); i > 0; i--, last_pos--) {
 		if (prefix[i - 1] == '/' || prefix[i - 1] == '\\') {
 			search_dir = prefix.substr(0, i - 1);
 			prefix = prefix.substr(i);
@@ -186,16 +199,23 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 		if (is_dir) {
 			suggestion = fname + fs.PathSeparator();
 		} else {
-			suggestion = fname;
+			suggestion = fname + "'";
 		}
-		result.emplace_back(move(suggestion));
+		int score = 0;
+		if (is_dir && fname[0] != '.') {
+			score = 2;
+		}
+		if (KnownExtension(fname)) {
+			score = 1;
+		}
+		result.emplace_back(move(suggestion), score);
 	});
 	return result;
 }
 
 enum class SuggestionState : uint8_t { SUGGEST_KEYWORD, SUGGEST_TABLE_NAME, SUGGEST_COLUMN_NAME, SUGGEST_FILE_NAME };
 
-static vector<string> GenerateSuggestions(ClientContext &context, const string &sql) {
+static unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
 	// for auto-completion, we consider 4 scenarios
 	// * there is nothing in the buffer, or only one word -> suggest a keyword
 	// * the previous keyword is SELECT, WHERE, BY, HAVING, ... -> suggest a column name
@@ -204,6 +224,7 @@ static vector<string> GenerateSuggestions(ClientContext &context, const string &
 	// figure out which state we are in by doing a run through the query
 	idx_t pos = 0;
 	idx_t last_pos = 0;
+	idx_t pos_offset = 0;
 	bool seen_word = false;
 	unordered_set<string> suggested_keywords;
 	SuggestionState suggest_state = SuggestionState::SUGGEST_KEYWORD;
@@ -260,7 +281,7 @@ in_comment:
 		}
 	}
 	// no suggestions inside comments
-	return vector<string>();
+	return make_unique<SQLAutoCompleteFunctionData>(vector<string>(), 0);
 in_quotes:
 	for (; pos < sql.size(); pos++) {
 		if (sql[pos] == '"') {
@@ -270,6 +291,7 @@ in_quotes:
 			goto regular_scan;
 		}
 	}
+	pos_offset = 1;
 	goto standard_suggestion;
 in_string_constant:
 	for (; pos < sql.size(); pos++) {
@@ -307,18 +329,30 @@ standard_suggestion:
 		last_pos++;
 	}
 	auto last_word = sql.substr(last_pos, pos - last_pos);
+	last_pos -= pos_offset;
+	vector<string> suggestions;
 	switch (suggest_state) {
 	case SuggestionState::SUGGEST_KEYWORD:
-		return ComputeSuggestions(SuggestKeyword(context), last_word, suggested_keywords);
+		suggestions = ComputeSuggestions(SuggestKeyword(context), last_word, suggested_keywords);
+		break;
 	case SuggestionState::SUGGEST_TABLE_NAME:
-		return ComputeSuggestions(SuggestTableName(context), last_word, suggested_keywords, true);
+		suggestions = ComputeSuggestions(SuggestTableName(context), last_word, suggested_keywords, true);
+		break;
 	case SuggestionState::SUGGEST_COLUMN_NAME:
-		return ComputeSuggestions(SuggestColumnName(context), last_word, suggested_keywords, true);
+		suggestions = ComputeSuggestions(SuggestColumnName(context), last_word, suggested_keywords, true);
+		break;
 	case SuggestionState::SUGGEST_FILE_NAME:
-		return ComputeSuggestions(SuggestFileName(context, last_word), last_word, unordered_set<string>());
+		last_pos = pos;
+		suggestions =
+		    ComputeSuggestions(SuggestFileName(context, last_word, last_pos), last_word, unordered_set<string>());
+		break;
 	default:
 		throw InternalException("Unrecognized suggestion state");
 	}
+	if (last_pos >= sql.size()) {
+		throw InternalException("last_pos out of range");
+	}
+	return make_unique<SQLAutoCompleteFunctionData>(move(suggestions), last_pos);
 }
 
 static unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
@@ -326,7 +360,10 @@ static unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, Tabl
 	names.emplace_back("suggestion");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return make_unique<SQLAutoCompleteFunctionData>(GenerateSuggestions(context, StringValue::Get(input.inputs[0])));
+	names.emplace_back("suggestion_start");
+	return_types.emplace_back(LogicalType::INTEGER);
+
+	return GenerateSuggestions(context, StringValue::Get(input.inputs[0]));
 }
 
 unique_ptr<GlobalTableFunctionState> SQLAutoCompleteInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -348,6 +385,9 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 
 		// suggestion, VARCHAR
 		output.SetValue(0, count, Value(entry));
+
+		// suggestion_start, INTEGER
+		output.SetValue(1, count, Value::INTEGER(bind_data.start_pos));
 
 		count++;
 	}

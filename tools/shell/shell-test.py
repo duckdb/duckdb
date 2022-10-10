@@ -844,6 +844,42 @@ SELECT * FROM sql_auto_complete('SELECT MyColumn FROM My') LIMIT 1;
 )
 
 if os.name != 'nt':
+     shell_test_dir = 'shell_test_dir'
+     try:
+          os.mkdir(shell_test_dir)
+     except:
+          pass
+     try:
+          os.mkdir(os.path.join(shell_test_dir, 'extra_path'))
+     except:
+          pass
+
+     base_files = ['extra.parquet', 'extra.file']
+     for fname in base_files:
+          with open(os.path.join(shell_test_dir, fname), 'w+') as f:
+               f.write('')
+
+     test("""
+     CREATE TABLE MyTable(MyColumn Varchar);
+     SELECT * FROM sql_auto_complete('SELECT * FROM ''shell_test') LIMIT 1;
+     """, out="shell_test_dir/"
+          )
+
+     test("""
+     CREATE TABLE MyTable(MyColumn Varchar);
+     SELECT * FROM sql_auto_complete('SELECT * FROM ''shell_test_dir/extra') LIMIT 1;
+     """, out="extra_path/"
+          )
+
+     test("""
+     CREATE TABLE MyTable(MyColumn Varchar);
+     SELECT * FROM sql_auto_complete('SELECT * FROM ''shell_test_dir/extra.par') LIMIT 1;
+     """, out="extra.parquet"
+          )
+
+     shutil.rmtree(shell_test_dir)
+
+if os.name != 'nt':
      test('''
 create table mytable as select * from
 read_csv('/dev/stdin',
