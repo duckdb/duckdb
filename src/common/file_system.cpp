@@ -92,16 +92,22 @@ string FileSystem::GetWorkingDirectory() {
 bool FileSystem::IsPathAbsolute(const string &path) {
 	// 1) A single backslash
 	auto sub_path = FileSystem::PathSeparator();
-	bool is_absolute = PathMatched(path, sub_path);
+	if (PathMatched(path, sub_path)) {
+		return true;
+	}
 	// 2) check if starts with a double-backslash (i.e., \\)
 	sub_path += FileSystem::PathSeparator();
-	is_absolute = is_absolute || PathMatched(path, sub_path);
+	if (PathMatched(path, sub_path)) {
+		return true;
+	}
 	// 3) A disk designator with a backslash (e.g., C:\)
 	auto path_aux = path;
 	path_aux.erase(0, 1);
 	sub_path = ":" + FileSystem::PathSeparator();
-	is_absolute = is_absolute || PathMatched(path_aux, sub_path);
-	return is_absolute;
+	if (PathMatched(path, sub_path)) {
+		return true;
+	}
+	return false;
 }
 
 string FileSystem::PathSeparator() {
