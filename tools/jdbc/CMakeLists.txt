@@ -4,7 +4,7 @@ find_package(JNI)
 cmake_minimum_required(VERSION 3.11.0)
 
 if(NOT JNI_FOUND OR NOT Java_FOUND)
-  message(FATAL_ERROR No compatible Java/JNI found)
+  message(FATAL_ERROR "No compatible Java/JNI found")
 endif()
 
 include(UseJava)
@@ -13,7 +13,7 @@ project(DuckDBJDummy NONE)
 file(GLOB JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
 file(GLOB JAVA_TEST_FILES src/test/java/org/duckdb/test/*.java)
 
-set(CMAKE_JAVA_COMPILE_FLAGS -source 1.7 -target 1.7 -encoding utf-8)
+set(CMAKE_JAVA_COMPILE_FLAGS -source 1.8 -target 1.8 -encoding utf-8)
 
 add_jar(duckdb_jdbc ${JAVA_SRC_FILES} ${JAVA_TEST_FILES}
         META-INF/services/java.sql.Driver GENERATE_NATIVE_HEADERS duckdb-native)
@@ -29,6 +29,9 @@ if(OS_NAME STREQUAL "linux")
 endif()
 if(APPLE)
   set(OS_ARCH universal)
+endif()
+if(OVERRIDE_JDBC_OS_ARCH)
+  set(OS_ARCH ${OVERRIDE_JDBC_OS_ARCH})
 endif()
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${OS_ARCH})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})

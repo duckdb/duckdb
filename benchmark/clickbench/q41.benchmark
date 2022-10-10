@@ -1,0 +1,7 @@
+# name: benchmark/clickbench/q41.benchmark
+# description: Run query 41 from the ClickBench benchmark
+# group: [clickbench]
+
+template benchmark/clickbench/clickbench-noresult.benchmark.in
+QUERY_NUMBER=41
+QUERY_NUMBER_PADDED=41

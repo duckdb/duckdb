@@ -175,11 +175,11 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DATA_PAGE:
-		PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
+		PreparePage(page_hdr);
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DICTIONARY_PAGE:
-		PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
+		PreparePage(page_hdr);
 		Dictionary(move(block), page_hdr.dictionary_page_header.num_values);
 		break;
 	default:
@@ -188,95 +188,92 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 }
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
-	// FIXME this is copied from the other prepare, merge the decomp part
-
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
 	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
+
+	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
+		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+			throw std::runtime_error("Page size mismatch");
+		}
+		trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
+		return;
+	}
+
 	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
 	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
 	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
-	auto possibly_compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 	trans.read((uint8_t *)block->ptr, uncompressed_bytes);
 
-	switch (chunk->meta_data.codec) {
-	case CompressionCodec::UNCOMPRESSED:
-		trans.read(((uint8_t *)block->ptr) + uncompressed_bytes, possibly_compressed_bytes);
-		break;
+	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
+	ResizeableBuffer compressed_buffer(reader.allocator, compressed_bytes);
+	trans.read((uint8_t *)compressed_buffer.ptr, compressed_bytes);
 
-	case CompressionCodec::SNAPPY: {
-		// TODO move allocation outta here
-		ResizeableBuffer compressed_bytes_buffer(reader.allocator, possibly_compressed_bytes);
-		trans.read((uint8_t *)compressed_bytes_buffer.ptr, possibly_compressed_bytes);
-
-		auto res = duckdb_snappy::RawUncompress((const char *)compressed_bytes_buffer.ptr, possibly_compressed_bytes,
-		                                        ((char *)block->ptr) + uncompressed_bytes);
-		if (!res) {
-			throw std::runtime_error("Decompression failure");
-		}
-		break;
-	}
-
-	default: {
-		std::stringstream codec_name;
-		codec_name << chunk->meta_data.codec;
-		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, gzip or snappy");
-		break;
-	}
-	}
+	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr, compressed_bytes,
+	                   (char *)block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
 }
 
-void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size) {
+void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
-	block = make_shared<ResizeableBuffer>(reader.allocator, compressed_page_size + 1);
-	trans.read((uint8_t *)block->ptr, compressed_page_size);
+	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
 
-	// TODO this allocation should probably be avoided
-	shared_ptr<ResizeableBuffer> unpacked_block;
-	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
-		unpacked_block = make_shared<ResizeableBuffer>(reader.allocator, uncompressed_page_size + 1);
+	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
+		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+			throw std::runtime_error("Page size mismatch");
+		}
+		trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
+		return;
 	}
 
-	switch (chunk->meta_data.codec) {
+	ResizeableBuffer compressed_buffer(reader.allocator, page_hdr.compressed_page_size + 1);
+	trans.read((uint8_t *)compressed_buffer.ptr, page_hdr.compressed_page_size);
+
+	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr, page_hdr.compressed_page_size,
+	                   (char *)block->ptr, page_hdr.uncompressed_page_size);
+}
+
+void ColumnReader::DecompressInternal(CompressionCodec::type codec, const char *src, idx_t src_size, char *dst,
+                                      idx_t dst_size) {
+	switch (codec) {
 	case CompressionCodec::UNCOMPRESSED:
-		break;
+		throw InternalException("Parquet data unexpectedly uncompressed");
 	case CompressionCodec::GZIP: {
 		MiniZStream s;
-
-		s.Decompress((const char *)block->ptr, compressed_page_size, (char *)unpacked_block->ptr,
-		             uncompressed_page_size);
-		block = move(unpacked_block);
-
+		s.Decompress(src, src_size, dst, dst_size);
 		break;
 	}
 	case CompressionCodec::SNAPPY: {
-		auto res =
-		    duckdb_snappy::RawUncompress((const char *)block->ptr, compressed_page_size, (char *)unpacked_block->ptr);
-		if (!res) {
-			throw std::runtime_error("Decompression failure");
+		{
+			size_t uncompressed_size = 0;
+			auto res = duckdb_snappy::GetUncompressedLength(src, src_size, &uncompressed_size);
+			if (!res) {
+				throw std::runtime_error("Snappy decompression failure");
+			}
+			if (uncompressed_size != (size_t)dst_size) {
+				throw std::runtime_error("Snappy decompression failure: Uncompressed data size mismatch");
+			}
 		}
-		block = move(unpacked_block);
+		auto res = duckdb_snappy::RawUncompress(src, src_size, dst);
+		if (!res) {
+			throw std::runtime_error("Snappy decompression failure");
+		}
 		break;
 	}
 	case CompressionCodec::ZSTD: {
-		auto res = duckdb_zstd::ZSTD_decompress((char *)unpacked_block->ptr, uncompressed_page_size,
-		                                        (const char *)block->ptr, compressed_page_size);
-		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)uncompressed_page_size) {
+		auto res = duckdb_zstd::ZSTD_decompress(dst, dst_size, src, src_size);
+		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)dst_size) {
 			throw std::runtime_error("ZSTD Decompression failure");
 		}
-		block = move(unpacked_block);
 		break;
 	}
-
 	default: {
 		std::stringstream codec_name;
-		codec_name << chunk->meta_data.codec;
+		codec_name << codec;
 		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, gzip or snappy");
+		                         "\". Supported options are uncompressed, gzip, snappy or zstd");
 		break;
 	}
 	}
@@ -773,7 +770,7 @@ idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 			}
 		}
 	}
-	VectorOperations::Cast(intermediate_vector, result, amount);
+	VectorOperations::DefaultCast(intermediate_vector, result, amount);
 	return amount;
 }
 
@@ -1140,15 +1137,29 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 			return make_unique<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(
 			    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 		case Type::INT64:
-			switch (schema_p.converted_type) {
-			case ConvertedType::TIMESTAMP_MICROS:
-				return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			case ConvertedType::TIMESTAMP_MILLIS:
-				return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			default:
-				break;
+			if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIMESTAMP) {
+				if (schema_p.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.MICROS) {
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.NANOS) {
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				}
+
+			} else if (schema_p.__isset.converted_type) {
+				switch (schema_p.converted_type) {
+				case ConvertedType::TIMESTAMP_MICROS:
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				case ConvertedType::TIMESTAMP_MILLIS:
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				default:
+					break;
+				}
 			}
 		default:
 			break;

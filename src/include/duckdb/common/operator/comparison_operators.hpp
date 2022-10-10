@@ -23,59 +23,59 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 struct Equals {
 	template <class T>
-	static inline bool Operation(T left, T right) {
+	DUCKDB_API static inline bool Operation(T left, T right) {
 		return left == right;
 	}
 };
 struct NotEquals {
 	template <class T>
-	static inline bool Operation(T left, T right) {
+	DUCKDB_API static inline bool Operation(T left, T right) {
 		return !Equals::Operation(left, right);
 	}
 };
 
 struct GreaterThan {
 	template <class T>
-	static inline bool Operation(T left, T right) {
+	DUCKDB_API static inline bool Operation(T left, T right) {
 		return left > right;
 	}
 };
 
 struct GreaterThanEquals {
 	template <class T>
-	static inline bool Operation(T left, T right) {
+	DUCKDB_API static inline bool Operation(T left, T right) {
 		return left >= right;
 	}
 };
 
 struct LessThan {
 	template <class T>
-	static inline bool Operation(T left, T right) {
+	DUCKDB_API static inline bool Operation(T left, T right) {
 		return GreaterThan::Operation(right, left);
 	}
 };
 
 struct LessThanEquals {
 	template <class T>
-	static inline bool Operation(T left, T right) {
+	DUCKDB_API static inline bool Operation(T left, T right) {
 		return GreaterThanEquals::Operation(right, left);
 	}
 };
 
 template <>
-bool Equals::Operation(float left, float right);
+DUCKDB_API bool Equals::Operation(float left, float right);
 template <>
-bool Equals::Operation(double left, double right);
+DUCKDB_API bool Equals::Operation(double left, double right);
 
 template <>
-bool GreaterThan::Operation(float left, float right);
+DUCKDB_API bool GreaterThan::Operation(float left, float right);
 template <>
-bool GreaterThan::Operation(double left, double right);
+DUCKDB_API bool GreaterThan::Operation(double left, double right);
 
 template <>
-bool GreaterThanEquals::Operation(float left, float right);
+DUCKDB_API bool GreaterThanEquals::Operation(float left, float right);
 template <>
-bool GreaterThanEquals::Operation(double left, double right);
+DUCKDB_API bool GreaterThanEquals::Operation(double left, double right);
 
 // Distinct semantics are from Postgres record sorting. NULL = NULL and not-NULL < NULL
 // Deferring to the non-distinct operations removes the need for further specialisation.

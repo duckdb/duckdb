@@ -11,7 +11,7 @@ namespace duckdb {
 static LogicalType ResolveNotType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	// NOT expression, cast child to BOOLEAN
 	D_ASSERT(children.size() == 1);
-	children[0]->expr = BoundCastExpression::AddCastToType(move(children[0]->expr), LogicalType::BOOLEAN);
+	children[0]->expr = BoundCastExpression::AddDefaultCastToType(move(children[0]->expr), LogicalType::BOOLEAN);
 	return LogicalType(LogicalTypeId::BOOLEAN);
 }
 
@@ -27,7 +27,7 @@ static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression 
 
 	// cast all children to the same type
 	for (idx_t i = 0; i < children.size(); i++) {
-		children[i]->expr = BoundCastExpression::AddCastToType(move(children[i]->expr), max_type);
+		children[i]->expr = BoundCastExpression::AddDefaultCastToType(move(children[i]->expr), max_type);
 	}
 	// (NOT) IN always returns a boolean
 	return LogicalType::BOOLEAN;

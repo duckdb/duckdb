@@ -1,0 +1,13 @@
+# name: test/sql/types/map/map_cast.test
+# description: Test map cast
+# group: [map]
+
+query I
+SELECT MAP(['a', 'b', 'c'], [1, 2, NULL])::MAP(VARCHAR, VARCHAR)
+----
+{a=1, b=2, c=NULL}
+
+query I
+SELECT MAP(['a', 'b', 'c'], [1, 2, NULL])::MAP(VARCHAR, BIGINT)
+----
+{a=1, b=2, c=NULL}

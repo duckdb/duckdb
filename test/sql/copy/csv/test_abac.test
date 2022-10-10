@@ -120,7 +120,7 @@ COPY abac_tbl FROM 'test/sql/copy/csv/data/abac/file_ends_in_quoted_value.csv' (
 query T
 SELECT * FROM abac_tbl
 ----
-NULL
+(empty)
 
 statement ok
 DROP TABLE abac_tbl
@@ -138,7 +138,7 @@ COPY abac_tbl FROM 'test/sql/copy/csv/data/abac/file_ends_in_quoted_value.csv' (
 query T
 SELECT * FROM abac_tbl
 ----
-NULL
+(empty)
 
 statement ok
 DROP TABLE abac_tbl

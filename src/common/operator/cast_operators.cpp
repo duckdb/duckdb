@@ -17,6 +17,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types.hpp"
 #include "fast_float/fast_float.h"
 #include "fmt/format.h"
 
@@ -821,7 +822,7 @@ struct IntegerCastOperation {
 		return true;
 	}
 
-	template <class T, bool NEGATIVE>
+	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
 		if (state.seen_decimal) {
 			return true;
@@ -847,7 +848,7 @@ struct IntegerCastOperation {
 		return true;
 	}
 
-	template <class T>
+	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
 		return true;
 	}
@@ -874,7 +875,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 					if (!StringUtil::CharacterIsDigit(buf[pos])) {
 						break;
 					}
-					if (!OP::template HandleDecimal<T, NEGATIVE>(result, buf[pos] - '0')) {
+					if (!OP::template HandleDecimal<T, NEGATIVE, ALLOW_EXPONENT>(result, buf[pos] - '0')) {
 						return false;
 					}
 					pos++;
@@ -928,7 +929,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 			return false;
 		}
 	}
-	if (!OP::template Finalize<T>(result)) {
+	if (!OP::template Finalize<T, NEGATIVE>(result)) {
 		return false;
 	}
 	return pos > start_pos;
@@ -1276,6 +1277,15 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast From Pointer
+//===--------------------------------------------------------------------===//
+template <>
+string_t CastFromPointer::Operation(uintptr_t input, Vector &vector) {
+	std::string s = duckdb_fmt::format("0x{:x}", input);
+	return StringVector::AddString(vector, s);
+}
+
+//===--------------------------------------------------------------------===//
 // Cast To Blob
 //===--------------------------------------------------------------------===//
 template <>
@@ -1473,7 +1483,7 @@ struct HugeIntegerCastOperation {
 		}
 	}
 
-	template <class T, bool NEGATIVE>
+	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &result, uint8_t digit) {
 		// Integer casts round
 		if (!result.decimal) {
@@ -1491,7 +1501,7 @@ struct HugeIntegerCastOperation {
 		return true;
 	}
 
-	template <class T>
+	template <class T, bool NEGATIVE>
 	static bool Finalize(T &result) {
 		return result.Flush();
 	}
@@ -1518,6 +1528,9 @@ struct DecimalCastData {
 	uint8_t scale;
 	uint8_t digit_count;
 	uint8_t decimal_count;
+	//! Only set when ALLOW_EXPONENT is enabled
+	uint8_t excessive_decimals;
+	bool positive_exponent;
 };
 
 struct DecimalCastOperation {
@@ -1541,14 +1554,45 @@ struct DecimalCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
+	static void RoundUpResult(T &state) {
+		if (NEGATIVE) {
+			state.result -= 1;
+		} else {
+			state.result += 1;
+		}
+	}
+
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
-		Finalize<T>(state);
+		auto decimal_excess = (state.decimal_count > state.scale) ? state.decimal_count - state.scale : 0;
+		if (exponent > 0) {
+			state.positive_exponent = true;
+			//! Positive exponents need up to 'exponent' amount of digits
+			//! Everything beyond that amount needs to be truncated
+			if (decimal_excess > exponent) {
+				//! We've allowed too many decimals
+				state.excessive_decimals = decimal_excess - exponent;
+				exponent = 0;
+			} else {
+				exponent -= decimal_excess;
+			}
+			D_ASSERT(exponent >= 0);
+		}
+		if (!Finalize<T, NEGATIVE>(state)) {
+			return false;
+		}
 		if (exponent < 0) {
+			bool round_up = false;
 			for (idx_t i = 0; i < idx_t(-int64_t(exponent)); i++) {
+				auto mod = state.result % 10;
+				round_up = NEGATIVE ? mod <= -5 : mod >= 5;
 				state.result /= 10;
 				if (state.result == 0) {
 					break;
 				}
+			}
+			if (round_up) {
+				RoundUpResult<T, NEGATIVE>(state);
 			}
 			return true;
 		} else {
@@ -1562,12 +1606,17 @@ struct DecimalCastOperation {
 		}
 	}
 
-	template <class T, bool NEGATIVE>
+	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
-		if (state.decimal_count == state.scale) {
+		if (!ALLOW_EXPONENT && state.decimal_count == state.scale) {
 			// we exceeded the amount of supported decimals
 			// however, we don't throw an error here
 			// we just truncate the decimal
+			return true;
+		}
+		//! If we expect an exponent, we need to preserve the decimals
+		//! But we don't want to overflow, so we prevent overflowing the result with this check
+		if (state.digit_count + state.decimal_count >= DecimalWidth<decltype(state.result)>::max) {
 			return true;
 		}
 		state.decimal_count++;
@@ -1579,11 +1628,36 @@ struct DecimalCastOperation {
 		return true;
 	}
 
-	template <class T>
+	template <class T, bool NEGATIVE>
+	static bool TruncateExcessiveDecimals(T &state) {
+		D_ASSERT(state.excessive_decimals);
+		bool round_up = false;
+		for (idx_t i = 0; i < state.excessive_decimals; i++) {
+			auto mod = state.result % 10;
+			round_up = NEGATIVE ? mod <= -5 : mod >= 5;
+			state.result /= 10.0;
+		}
+		//! Only round up when exponents are involved
+		if (state.positive_exponent && round_up) {
+			RoundUpResult<T, NEGATIVE>(state);
+		}
+		D_ASSERT(state.decimal_count > state.scale);
+		state.decimal_count = state.scale;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
-		// if we have not gotten exactly "scale" decimals, we need to multiply the result
-		// e.g. if we have a string "1.0" that is cast to a DECIMAL(9,3), the value needs to be 1000
-		// but we have only gotten the value "10" so far, so we multiply by 1000
+		if (!state.positive_exponent && state.decimal_count > state.scale) {
+			//! Did not encounter an exponent, but ALLOW_EXPONENT was on
+			state.excessive_decimals = state.decimal_count - state.scale;
+		}
+		if (state.excessive_decimals && !TruncateExcessiveDecimals<T, NEGATIVE>(state)) {
+			return false;
+		}
+		//  if we have not gotten exactly "scale" decimals, we need to multiply the result
+		//  e.g. if we have a string "1.0" that is cast to a DECIMAL(9,3), the value needs to be 1000
+		//  but we have only gotten the value "10" so far, so we multiply by 1000
 		for (uint8_t i = state.decimal_count; i < state.scale; i++) {
 			state.result *= 10;
 		}
@@ -1599,6 +1673,8 @@ bool TryDecimalStringCast(string_t input, T &result, string *error_message, uint
 	state.scale = scale;
 	state.digit_count = 0;
 	state.decimal_count = 0;
+	state.excessive_decimals = 0;
+	state.positive_exponent = false;
 	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false>(input.GetDataUnsafe(),
 	                                                                                 input.GetSize(), state, false)) {
 		string error = StringUtil::Format("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(),

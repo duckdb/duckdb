@@ -11,7 +11,7 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 
 	Napi::Function t = DefineClass(
 	    env, "Database",
-	    {InstanceMethod("close", &Database::Close), InstanceMethod("wait", &Database::Wait),
+	    {InstanceMethod("close_internal", &Database::Close), InstanceMethod("wait", &Database::Wait),
 	     InstanceMethod("serialize", &Database::Serialize), InstanceMethod("parallelize", &Database::Parallelize),
 	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt)});
 

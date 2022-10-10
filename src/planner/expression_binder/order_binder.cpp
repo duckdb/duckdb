@@ -38,6 +38,9 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 }
 
 unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpression> expr) {
+	if (!extra_list) {
+		throw InternalException("CreateExtraReference called without extra_list");
+	}
 	auto result = CreateProjectionReference(*expr, extra_list->size());
 	extra_list->push_back(move(expr));
 	return result;

@@ -34,7 +34,8 @@ public:
 public:
 	template <class T, class BASE>
 	static string ToString(const T &entry) {
-		return entry.left->ToString() + " " + ExpressionTypeToOperator(entry.type) + " " + entry.right->ToString();
+		return StringUtil::Format("(%s %s %s)", entry.left->ToString(), ExpressionTypeToOperator(entry.type),
+		                          entry.right->ToString());
 	}
 };
 } // namespace duckdb

@@ -98,6 +98,8 @@ bool ExpressionExecutor::TryEvaluateScalar(const Expression &expr, Value &result
 	try {
 		result = EvaluateScalar(expr);
 		return true;
+	} catch (InternalException &ex) {
+		throw ex;
 	} catch (...) {
 		return false;
 	}

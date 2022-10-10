@@ -54,7 +54,7 @@ void PreparedStatementData::Bind(vector<Value> values) {
 			throw BinderException("Could not find parameter with index %llu", i + 1);
 		}
 		D_ASSERT(it.second);
-		if (!values[i].TryCastAs(it.second->return_type)) {
+		if (!values[i].DefaultTryCastAs(it.second->return_type)) {
 			throw BinderException(
 			    "Type mismatch for binding parameter with index %llu, expected type %s but got type %s", i + 1,
 			    it.second->return_type.ToString().c_str(), values[i].type().ToString().c_str());

@@ -1,0 +1,7 @@
+# name: benchmark/clickbench/q33.benchmark
+# description: Run query 33 from the ClickBench benchmark
+# group: [clickbench]
+
+template benchmark/clickbench/clickbench-noresult.benchmark.in
+QUERY_NUMBER=33
+QUERY_NUMBER_PADDED=33

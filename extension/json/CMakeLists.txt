@@ -11,6 +11,7 @@ set(JSON_EXTENSION_FILES
     json-extension.cpp
     json_common.cpp
     json_functions/json_array_length.cpp
+    json_functions/json_contains.cpp
     json_functions/json_extract.cpp
     json_functions/json_merge_patch.cpp
     json_functions/json_structure.cpp
@@ -21,8 +22,8 @@ set(JSON_EXTENSION_FILES
     ${YYJSON_OBJECT_FILES})
 
 add_library(json_extension STATIC ${JSON_EXTENSION_FILES})
-set(INGORE_WARNINGS OFF)
-build_loadable_extension(json ${JSON_EXTENSION_FILES} ${IGNORE_WARNINGS})
+set(PARAMETERS "-warnings")
+build_loadable_extension(json ${PARAMETERS} ${JSON_EXTENSION_FILES})
 
 install(
   TARGETS json_extension

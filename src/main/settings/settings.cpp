@@ -259,6 +259,18 @@ Value EnableExternalAccessSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Enable FSST Vectors
+//===--------------------------------------------------------------------===//
+void EnableFSSTVectors::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_fsst_vectors = input.GetValue<bool>();
+}
+
+Value EnableFSSTVectors::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.enable_fsst_vectors);
+}
+
+//===--------------------------------------------------------------------===//
 // Allow Unsigned Extensions
 //===--------------------------------------------------------------------===//
 void AllowUnsignedExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -417,7 +429,7 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void HomeDirectorySetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.home_directory = input.IsNull() ? input.ToString() : string();
+	config.home_directory = input.IsNull() ? string() : input.ToString();
 }
 
 Value HomeDirectorySetting::GetSetting(ClientContext &context) {

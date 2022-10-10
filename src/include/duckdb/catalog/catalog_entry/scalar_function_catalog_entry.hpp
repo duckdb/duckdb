@@ -18,11 +18,12 @@ namespace duckdb {
 //! A table function in the catalog
 class ScalarFunctionCatalogEntry : public StandardEntry {
 public:
-	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateScalarFunctionInfo *info)
-	    : StandardEntry(CatalogType::SCALAR_FUNCTION_ENTRY, schema, catalog, info->name), functions(info->functions) {
-	}
+	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateScalarFunctionInfo *info);
 
 	//! The scalar functions
 	ScalarFunctionSet functions;
+
+public:
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
 };
 } // namespace duckdb

@@ -4,3 +4,41 @@
 
 statement ok
 SELECT CAST(CURRENT_TIME AS STRING), CAST(CURRENT_DATE AS STRING), CAST(CURRENT_TIMESTAMP AS STRING), CAST(NOW() AS STRING)
+
+query I
+SELECT typeof(CURRENT_TIME);
+----
+TIME
+
+query I
+SELECT typeof(CURRENT_DATE);
+----
+DATE
+
+query I
+SELECT typeof(CURRENT_TIMESTAMP);
+----
+TIMESTAMP WITH TIME ZONE
+
+query I
+SELECT typeof(get_current_time());
+----
+TIME
+
+foreach func today current_date
+
+query I
+SELECT typeof(${func}());
+----
+DATE
+
+endloop
+
+foreach func now get_current_timestamp transaction_timestamp
+
+query I
+SELECT typeof(${func}());
+----
+TIMESTAMP WITH TIME ZONE
+
+endloop

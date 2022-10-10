@@ -72,8 +72,8 @@ public:
 					return function_name + "(" + entry.children[0]->ToString() + ")";
 				}
 			} else if (entry.children.size() == 2) {
-				return "(" + entry.children[0]->ToString() + " " + function_name + " " + entry.children[1]->ToString() +
-				       ")";
+				return StringUtil::Format("(%s %s %s)", entry.children[0]->ToString(), function_name,
+				                          entry.children[1]->ToString());
 			}
 		}
 		// standard function call

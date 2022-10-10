@@ -21,6 +21,7 @@ static DefaultCompressionMethod internal_compression_methods[] = {
     {CompressionType::COMPRESSION_BITPACKING, BitpackingFun::GetFunction, BitpackingFun::TypeIsSupported},
     {CompressionType::COMPRESSION_DICTIONARY, DictionaryCompressionFun::GetFunction,
      DictionaryCompressionFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_FSST, FSSTFun::GetFunction, FSSTFun::TypeIsSupported},
     {CompressionType::COMPRESSION_AUTO, nullptr, nullptr}};
 
 static CompressionFunction *FindCompressionFunction(CompressionFunctionSet &set, CompressionType type,
@@ -71,10 +72,12 @@ vector<CompressionFunction *> DBConfig::GetCompressionFunctions(PhysicalType dat
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_RLE, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_BITPACKING, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_DICTIONARY, data_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_FSST, data_type);
 	return result;
 }
 
 CompressionFunction *DBConfig::GetCompressionFunction(CompressionType type, PhysicalType data_type) {
+	lock_guard<mutex> l(compression_functions->lock);
 	// check if the function is already loaded
 	auto function = FindCompressionFunction(*compression_functions, type, data_type);
 	if (function) {

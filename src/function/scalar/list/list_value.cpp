@@ -24,7 +24,7 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i].offset = ListVector::GetListSize(result);
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-			auto val = args.GetValue(col_idx, i).CastAs(child_type);
+			auto val = args.GetValue(col_idx, i).DefaultCastAs(child_type);
 			ListVector::PushBack(result, val);
 		}
 		result_data[i].length = args.ColumnCount();

@@ -1,0 +1,12 @@
+# name: test/fuzzer/pedro/correlated_offset_subquery.test
+# description: Issue #4563: Correlated offset subquery
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT (SELECT 1 OFFSET c0) FROM (VALUES(1)) c0;
+
+statement error
+SELECT 0 FROM (SELECT 8 c0) WHERE (SELECT 1 LIMIT c0);

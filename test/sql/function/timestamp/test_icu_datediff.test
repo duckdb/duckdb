@@ -4,6 +4,10 @@
 
 require icu
 
+# Normalise the testing locale
+statement ok
+SET Calendar = 'gregorian';
+
 statement ok
 SET TimeZone = 'America/Los_Angeles';
 
@@ -87,3 +91,29 @@ FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(
 1
 
 endloop
+
+# Week starts on Monday for ICU
+query III
+SELECT *, DATE_DIFF('week', lo, hi)
+FROM (
+	SELECT (d - INTERVAL 9 HOUR)::TIMESTAMPTZ AS lo, (d + INTERVAL 7 HOUR)::TIMESTAMPTZ AS hi
+	FROM generate_series('2022-09-01'::DATE, '2022-09-12'::DATE, INTERVAL 1 DAY) tbl(d)
+);
+----
+2022-08-31 08:00:00 America/Los_Angeles	2022-09-01 00:00:00 America/Los_Angeles	0
+2022-09-01 08:00:00 America/Los_Angeles	2022-09-02 00:00:00 America/Los_Angeles	0
+2022-09-02 08:00:00 America/Los_Angeles	2022-09-03 00:00:00 America/Los_Angeles	0
+2022-09-03 08:00:00 America/Los_Angeles	2022-09-04 00:00:00 America/Los_Angeles	0
+2022-09-04 08:00:00 America/Los_Angeles	2022-09-05 00:00:00 America/Los_Angeles	1
+2022-09-05 08:00:00 America/Los_Angeles	2022-09-06 00:00:00 America/Los_Angeles	0
+2022-09-06 08:00:00 America/Los_Angeles	2022-09-07 00:00:00 America/Los_Angeles	0
+2022-09-07 08:00:00 America/Los_Angeles	2022-09-08 00:00:00 America/Los_Angeles	0
+2022-09-08 08:00:00 America/Los_Angeles	2022-09-09 00:00:00 America/Los_Angeles	0
+2022-09-09 08:00:00 America/Los_Angeles	2022-09-10 00:00:00 America/Los_Angeles	0
+2022-09-10 08:00:00 America/Los_Angeles	2022-09-11 00:00:00 America/Los_Angeles	0
+2022-09-11 08:00:00 America/Los_Angeles	2022-09-12 00:00:00 America/Los_Angeles	1
+
+query I
+SELECT date_diff('week', '2015-10-06 04:22:11'::timestamptz, '2016-11-25 23:19:37'::timestamptz);
+----
+59

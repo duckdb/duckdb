@@ -29,7 +29,7 @@ public:
 	ChunkCollection(Allocator &allocator);
 	ChunkCollection(ClientContext &context);
 
-	//! The amount of columns in the ChunkCollection
+	//! The types of columns in the ChunkCollection
 	DUCKDB_API vector<LogicalType> &Types() {
 		return types;
 	}

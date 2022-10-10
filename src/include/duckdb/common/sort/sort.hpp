@@ -26,7 +26,10 @@ struct SortConstants {
 
 struct SortLayout {
 public:
+	SortLayout() {
+	}
 	explicit SortLayout(const vector<BoundOrderByNode> &orders);
+	SortLayout GetPrefixComparisonLayout(idx_t num_prefix_cols) const;
 
 public:
 	idx_t column_count;

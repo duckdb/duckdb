@@ -2,6 +2,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -55,7 +56,6 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	bool any_failed = original->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
 		return RunStatementInternal(lock, q, move(s), false, false);
 	});
-
 	// Execute the verifiers
 	for (auto &verifier : statement_verifiers) {
 		bool failed = verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
@@ -72,6 +72,10 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
 			statement_verifiers.push_back(move(prepared_statement_verifier));
+		}
+	} else {
+		if (db->IsInvalidated()) {
+			return original->materialized_result->GetErrorObject();
 		}
 	}
 

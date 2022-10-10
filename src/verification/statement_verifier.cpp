@@ -61,7 +61,7 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 		for (idx_t i = 0; i < expr_count; i++) {
 			D_ASSERT(!select_list[i]->Equals(nullptr));
 			// Run the ToString, to verify that it doesn't crash
-			auto str = select_list[i]->ToString();
+			select_list[i]->ToString();
 
 			if (select_list[i]->HasSubquery()) {
 				continue;
@@ -73,11 +73,6 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 			D_ASSERT(select_list[i]->Hash() == other.select_list[i]->Hash());
 
 			other.select_list[i]->Verify();
-
-			// ToString round trip
-			auto parsed_list = Parser::ParseExpressionList(str);
-			D_ASSERT(parsed_list.size() == 1);
-			D_ASSERT(parsed_list[0]->Equals(select_list[i].get()));
 		}
 	}
 #endif

@@ -16,6 +16,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -105,8 +106,8 @@ bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 	initial_reader.reset();
 	if (checkpoint_state.checkpoint_id != INVALID_BLOCK) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
-		auto &manager = BlockManager::GetBlockManager(database);
-		if (manager.IsRootBlock(checkpoint_state.checkpoint_id)) {
+		auto &manager = StorageManager::GetStorageManager(database);
+		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
 			// the contents of the WAL have already been checkpointed
 			// we can safely truncate the WAL and ignore its contents
 			return true;

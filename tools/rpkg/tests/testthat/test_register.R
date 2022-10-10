@@ -20,8 +20,10 @@ test_that("duckdb_register() works", {
   row.names(res) <- row.names(mtcars)
   expect_true(identical(res, mtcars))
 
-  # do not need unregister, can simply overwrite
-  duckdb::duckdb_register(con, "my_df1", iris)
+  # re-registering under same name is an error by default, see issue #967
+  expect_error(duckdb::duckdb_register(con, "my_df1", iris))
+  # can force an overwrite
+  duckdb::duckdb_register(con, "my_df1", iris, overwrite=TRUE)
   res <- dbReadTable(con, "my_df1")
   res$Species <- as.factor(res$Species)
   expect_true(identical(res, iris))

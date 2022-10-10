@@ -55,6 +55,11 @@ public:
 		return layout.GetTypes();
 	}
 
+	//! The number of rows in the collection
+	inline idx_t Count() const {
+		return total_count;
+	}
+
 	//! The number of rows scanned so far
 	inline idx_t Scanned() const {
 		return total_scanned;

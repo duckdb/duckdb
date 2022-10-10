@@ -17,18 +17,21 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/function/replacement_open.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 
 namespace duckdb {
+class CastFunctionSet;
 class ClientContext;
-class TableFunctionRef;
 class CompressionFunction;
+class TableFunctionRef;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -68,6 +71,8 @@ struct ExtensionOption {
 };
 
 struct DBConfigOptions {
+	//! Database file path. May be empty for in-memory mode
+	string database_path;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
 	//! Checkpoint when WAL reaches this size (default: 16MB)
@@ -119,8 +124,12 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> set_variables;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	//! Enable emitting FSST Vectors
+	bool enable_fsst_vectors = false;
+
 	bool operator==(const DBConfigOptions &other) const;
 };
+
 struct DBConfig {
 	friend class DatabaseInstance;
 	friend class StorageManager;
@@ -132,6 +141,10 @@ public:
 
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
+
+	//! Replacement open handlers are callbacks that run pre and post database initialization
+	vector<ReplacementOpen> replacement_opens;
+
 	//! Extra parameters that can be SET for loaded extensions
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
@@ -141,9 +154,9 @@ public:
 	unique_ptr<Allocator> allocator;
 	//! Database configuration options
 	DBConfigOptions options;
-
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
+	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
 
 	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
@@ -156,6 +169,7 @@ public:
 	DUCKDB_API static const DBConfig &GetConfig(const DatabaseInstance &db);
 	DUCKDB_API static vector<ConfigurationOption> GetOptions();
 	DUCKDB_API static idx_t GetOptionCount();
+	DUCKDB_API static vector<string> GetOptionNames();
 
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static ConfigurationOption *GetOptionByIndex(idx_t index);
@@ -174,8 +188,11 @@ public:
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
 
+	DUCKDB_API CastFunctionSet &GetCastFunctions();
+
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
+	unique_ptr<CastFunctionSet> cast_functions;
 };
 
 } // namespace duckdb
