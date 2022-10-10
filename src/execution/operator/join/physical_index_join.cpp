@@ -15,7 +15,7 @@ namespace duckdb {
 class IndexJoinOperatorState : public OperatorState {
 public:
 	IndexJoinOperatorState(Allocator &allocator, const PhysicalIndexJoin &op)
-	    : probe_executor(allocator), arena_allocator(allocator) {
+	    : probe_executor(allocator), arena_allocator(allocator), keys(STANDARD_VECTOR_SIZE) {
 		rhs_rows.resize(STANDARD_VECTOR_SIZE);
 		result_sizes.resize(STANDARD_VECTOR_SIZE);
 
@@ -27,7 +27,6 @@ public:
 			rhs_chunk.Initialize(allocator, op.fetch_types);
 		}
 		rhs_sel.Initialize(STANDARD_VECTOR_SIZE);
-		keys.reserve(STANDARD_VECTOR_SIZE);
 	}
 
 	bool first_fetch = true;
@@ -155,7 +154,6 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 	auto &art = (ART &)*index;
 
 	// generate the keys for this chunk
-	state.keys.clear();
 	state.arena_allocator.Reset();
 	ART::GenerateKeys(state.arena_allocator, state.join_keys, state.keys);
 

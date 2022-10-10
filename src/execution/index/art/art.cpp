@@ -69,7 +69,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 }
 
 //===--------------------------------------------------------------------===//
-// Insert
+// Keys
 //===--------------------------------------------------------------------===//
 
 template <class T>
@@ -77,13 +77,12 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
+	D_ASSERT(keys.size() >= count);
 	auto input_data = (T *)idata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if (idata.validity.RowIsValid(idx)) {
-			keys.emplace_back(Key::CreateKey<T>(allocator, input_data[idx]));
-		} else {
-			keys.emplace_back(Key());
+			Key::CreateKey<T>(allocator, keys[i], input_data[idx]);
 		}
 	}
 }
@@ -102,15 +101,8 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 			if (!idata.validity.RowIsValid(idx)) {
 				// this column entry is NULL, set whole key to NULL
 				keys[i] = Key();
-
 			} else {
-				// concatenate the keys
-				auto new_key = Key::CreateKey<T>(allocator, input_data[idx]);
-				auto key_len = keys[i].len + new_key.len;
-				auto compound_data = allocator.Allocate(key_len);
-				memcpy(compound_data, keys[i].data, keys[i].len);
-				memcpy(compound_data + keys[i].len, new_key.data, new_key.len);
-				keys[i] = Key(compound_data, key_len);
+				keys[i].ConcatKey<T>(allocator, input_data[idx]);
 			}
 		}
 	}
@@ -210,6 +202,10 @@ void ART::GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> 
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Insert
+//===--------------------------------------------------------------------===//
+
 struct KeySection {
 	KeySection(idx_t start_p, idx_t end_p, idx_t depth_p, data_t key_byte_p)
 	    : start(start_p), end(end_p), depth(depth_p), key_byte(key_byte_p) {};
@@ -307,8 +303,7 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 	payload_types.emplace_back(LogicalType::ROW_TYPE);
 
 	ArenaAllocator arena_allocator(allocator);
-	vector<Key> keys;
-	keys.reserve(STANDARD_VECTOR_SIZE);
+	vector<Key> keys(STANDARD_VECTOR_SIZE);
 
 	auto skipped_all_nulls = false;
 	auto temp_art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
@@ -332,7 +327,6 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 		D_ASSERT(logical_types[0] == ordered_chunk.data[0].GetType());
 
 		// generate the keys for the given input
-		keys.clear();
 		arena_allocator.Reset();
 		GenerateKeys(arena_allocator, ordered_chunk, keys);
 
@@ -383,8 +377,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 	// generate the keys for the given input
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	vector<Key> keys;
-	keys.reserve(input.size());
+	vector<Key> keys(input.size());
 	GenerateKeys(arena_allocator, input, keys);
 
 	// now insert the elements into the index
@@ -536,7 +529,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 
 	// then generate the keys for the given input
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	vector<Key> keys;
+	vector<Key> keys(expression.size());
 	GenerateKeys(arena_allocator, expression, keys);
 
 	// now erase the elements from the database
@@ -855,8 +848,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 
 	// generate the keys for the given input
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	vector<Key> keys;
-	keys.reserve(expression_chunk.size());
+	vector<Key> keys(expression_chunk.size());
 	GenerateKeys(arena_allocator, expression_chunk, keys);
 
 	for (idx_t i = 0; i < chunk.size(); i++) {
