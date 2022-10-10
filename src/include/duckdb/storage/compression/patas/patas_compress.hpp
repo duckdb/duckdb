@@ -41,7 +41,7 @@ public:
 			//! Need access to the CompressionState to be able to flush the segment
 			auto state_wrapper = (PatasCompressionState<VALUE_TYPE> *)state_p;
 
-			if (is_valid && !state_wrapper->HasEnoughSpace()) {
+			if (!state_wrapper->HasEnoughSpace()) {
 				// Segment is full
 				auto row_start = state_wrapper->current_segment->start + state_wrapper->current_segment->count;
 				state_wrapper->FlushSegment();
@@ -171,8 +171,8 @@ public:
 
 	template <uint8_t BITWIDTH>
 	void FlushBitpackedData(uint8_t *src, uint8_t *dest, uint8_t block_count) {
-		BitpackingPrimitives::PackBuffer(dest, src, block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE,
-		                                 BITWIDTH);
+		BitpackingPrimitives::PackBuffer<uint8_t, true>(
+		    dest, src, block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, BITWIDTH);
 	}
 
 	void FlushGroup() {
@@ -185,6 +185,7 @@ public:
 		uint8_t bitpacked_block_count =
 		    AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(state.patas_state.index) /
 		    BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		// FIXME: is this necessary, cant we just derive this from the count of the segment??
 		D_ASSERT(bitpacked_block_count <=
 		         (PatasPrimitives::PATAS_GROUP_SIZE / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE));
 		metadata_ptr -= sizeof(uint8_t);
@@ -222,8 +223,10 @@ public:
 
 	//! FIXME: only compact if the unused space meets a certain threshold (20%)
 	void FlushSegment() {
-		FlushGroup();
-		state.patas_state.output.Flush();
+		//! TODO: only flush the group if the group idx is not 0
+		if (group_idx != 0) {
+			FlushGroup();
+		}
 		auto &checkpoint_state = checkpointer.GetCheckpointState();
 		auto dataptr = handle.Ptr();
 

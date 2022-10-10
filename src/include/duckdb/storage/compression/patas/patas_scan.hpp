@@ -1,0 +1,235 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/storage/compression/chimp/chimp_scan.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/storage/compression/chimp/chimp.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
+
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/function/compression/compression.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/operator/subtract.hpp"
+
+namespace duckdb {
+
+struct PatasGroupState {
+public:
+	bool Started() const {
+		return !!index;
+	}
+	void Reset() {
+		index = 0;
+	}
+	// Assuming the group is completely full
+	idx_t RemainingInGroup() const {
+		return PatasPrimitives::PATAS_GROUP_SIZE - index;
+	}
+	void LoadByteCounts(uint8_t *bitpacked_data, idx_t block_count) {
+		//! Unpack 'count' values of bitpacked data, unpacked per group of 32 values
+		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(byte_counts, bitpacked_data, value_count,
+		                                            PatasPrimitives::BYTECOUNT_BITSIZE, true);
+	}
+	void LoadTrailingZeros(uint8_t *bitpacked_data, idx_t count) {
+		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(trailing_zeros, bitpacked_data, value_count,
+		                                            PatasPrimitives::TRAILING_ZERO_BITSIZE, true);
+	}
+
+public:
+	idx_t index;
+	uint8_t trailing_zeros[PatasPrimitives::PATAS_GROUP_SIZE];
+	uint8_t byte_counts[PatasPrimitives::PATAS_GROUP_SIZE];
+};
+
+template <class T>
+struct PatasScanState : public SegmentScanState {
+public:
+	using EXACT_TYPE = typename PatasType<T>::type;
+
+	explicit PatasScanState(ColumnSegment &segment) : segment(segment) {
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+
+		handle = buffer_manager.Pin(segment.block);
+		auto dataptr = handle.Ptr();
+		// ScanStates never exceed the boundaries of a Segment,
+		// but are not guaranteed to start at the beginning of the Block
+		auto start_of_data_segment = dataptr + segment.GetBlockOffset() + PatasPrimitives::HEADER_SIZE;
+		patas_state.input.SetStream(start_of_data_segment);
+		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
+		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
+		LoadGroup();
+	}
+
+	PatasDecompressionState<EXACT_TYPE> patas_state;
+	BufferHandle handle;
+	data_ptr_t metadata_ptr;
+	idx_t total_value_count = 0;
+	PatasGroupState group_state;
+
+	ColumnSegment &segment;
+
+	idx_t LeftInGroup() const {
+		return PatasPrimitives::PATAS_GROUP_SIZE - (total_value_count % PatasPrimitives::PATAS_GROUP_SIZE);
+	}
+
+	bool GroupFinished() const {
+		return (total_value_count % PatasPrimitives::PATAS_GROUP_SIZE) == 0;
+	}
+
+	// Scan a group from the start
+	template <class EXACT_TYPE>
+	void ScanGroup(EXACT_TYPE *values, idx_t group_size) {
+		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
+		D_ASSERT(group_size <= LeftInGroup());
+
+		values[0] = PatasDecompression<EXACT_TYPE>::LoadFirst(patas_state);
+		for (idx_t i = 1; i < group_size; i++) {
+			values[i] = PatasDecompression<EXACT_TYPE>::DecompressValue(patas_state);
+		}
+		group_state.index += group_size;
+		total_value_count += group_size;
+		if (GroupFinished() && total_value_count < segment.count) {
+			LoadGroup();
+		}
+	}
+
+	// Scan up to a group boundary
+	template <class EXACT_TYPE>
+	void ScanPartialGroup(EXACT_TYPE *values, idx_t group_size) {
+		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
+		D_ASSERT(group_size <= LeftInGroup());
+
+		for (idx_t i = 0; i < group_size; i++) {
+			values[i] = PatasDecompression<EXACT_TYPE>::Load(patas_stat);
+		}
+		group_state.index += group_size;
+		total_value_count += group_size;
+		if (GroupFinished() && total_value_count < segment.count) {
+			LoadGroup();
+		}
+	}
+
+	void LoadGroup() {
+		patas_state.Reset();
+
+		// Load the offset indicating where a groups data starts
+		metadata_ptr -= sizeof(uint32_t);
+		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
+		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
+		//  Only used for point queries
+		(void)data_byte_offset;
+
+		// Load how many blocks of bitpacked data we have
+		metadata_ptr -= sizeof(uint8_t);
+		auto bitpacked_block_count = Load<uint8_t>(metadata_ptr);
+		D_ASSERT(bitpacked_block_count <=
+		         PatasPrimitives::PATAS_GROUP_SIZE / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+
+		// Load the leading zero block count
+		metadata_ptr -= 3 * leading_zero_block_count;
+		const auto leading_zero_block_ptr = metadata_ptr;
+
+		// Align to a 32-byte boundary
+		const uint8_t byte_align_offset = (metadata_ptr % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+		metadata_ptr -= byte_align_offset;
+
+		metadata_ptr -=
+		    (PatasPrimitives::TRAILING_ZERO_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
+		    bitpacked_block_count;
+
+		// Unpack and store the trailing zeros for the entire group
+		group_state.LoadTrailingZeros(metadata_ptr, bitpacked_block_count);
+
+		metadata_ptr -= (PatasPrimitives::BYTECOUNT_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
+		                bitpacked_block_count;
+
+		// Unpack and store the byte counts for the entire group
+		group_state.LoadByteCounts(metadata_ptr, bitpacked_block_count);
+	}
+
+public:
+	//! Skip the next 'skip_count' values, we don't store the values
+	// TODO: use the metadata to determine if we can skip a group
+	void Skip(ColumnSegment &segment, idx_t skip_count) {
+		using INTERNAL_TYPE = typename PatasType<T>::type;
+		INTERNAL_TYPE buffer[PatasPrimitives::PATAS_GROUP_SIZE];
+
+		while (skip_count) {
+			auto skip_size = std::min(skip_count, LeftInGroup());
+			if (!group_state.Started()) {
+				ScanGroup(buffer, skip_size);
+			} else {
+				ScanPartialGroup(buffer, skip_size);
+			}
+			skip_count -= skip_size;
+		}
+	}
+};
+
+template <class T>
+unique_ptr<SegmentScanState> PatasInitScan(ColumnSegment &segment) {
+	auto result = make_unique_base<SegmentScanState, PatasScanState<T>>(segment);
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Scan base data
+//===--------------------------------------------------------------------===//
+template <class T>
+void PatasScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                      idx_t result_offset) {
+	using INTERNAL_TYPE = typename PatasType<T>::type;
+	auto &scan_state = (PatasScanState<T> &)*state.scan_state;
+
+	T *result_data = FlatVector::GetData<T>(result);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+
+	auto current_result_ptr = (INTERNAL_TYPE *)(result_data + result_offset);
+
+	auto scanned = std::min(scan_count, scan_state.LeftInGroup());
+
+	if (!scan_state.group_state.Started()) {
+		scan_state.template ScanGroup<INTERNAL_TYPE>(current_result_ptr, scanned);
+	} else {
+		scan_state.template ScanPartialGroup<INTERNAL_TYPE>(current_result_ptr, scanned);
+	}
+	scan_count -= scanned;
+	if (!scan_count) {
+		//! Already scanned everything
+		return;
+	}
+	// We know for sure that the last group has ended
+	D_ASSERT(!scan_state.group_state.Started());
+	while (scan_count) {
+		auto to_scan = duckdb::MinValue<idx_t>(scan_count, PatasPrimitives::PATAS_GROUP_SIZE);
+		scan_state.template ScanGroup<INTERNAL_TYPE>(current_result_ptr + scanned, to_scan);
+		scan_count -= to_scan;
+		scanned += to_scan;
+	}
+}
+
+template <class T>
+void PatasSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+	auto &scan_state = (PatasScanState<T> &)*state.scan_state;
+	scan_state.Skip(segment, skip_count);
+}
+
+template <class T>
+void PatasScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	PatasScanPartial<T>(segment, state, scan_count, result, 0);
+}
+
+} // namespace duckdb
