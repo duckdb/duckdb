@@ -1935,6 +1935,9 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	linenr++;
 
 	if (row_empty) {
+		if (mode == ParserMode::PARSING) {
+			FlatVector::SetNull(parse_chunk.data[0], insert_chunk.size(), false);
+		}
 		row_empty = false;
 		if (sql_types.size() != 1) {
 			column = 0;
