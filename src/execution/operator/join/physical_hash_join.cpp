@@ -572,7 +572,7 @@ public:
 	//! Build, probe and scan for external hash join
 	void ExternalBuild(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate);
 	void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, DataChunk &chunk);
-	void ExternalScan(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, DataChunk &chunk);
+	void ExternalScanHT(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, DataChunk &chunk);
 
 	//! Scans the HT for full/outer join
 	void ScanFullOuter(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate);
@@ -661,7 +661,6 @@ void HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sin
 	case HashJoinSourceStage::SCAN_HT:
 		if (full_outer_scan.scanned == full_outer_scan.total) {
 			PrepareBuild(sink);
-			return;
 		}
 		break;
 	default:
@@ -767,7 +766,7 @@ void HashJoinLocalSourceState::ExecuteTask(HashJoinGlobalSinkState &sink, HashJo
 		ExternalProbe(sink, gstate, chunk);
 		break;
 	case HashJoinSourceStage::SCAN_HT:
-		ExternalScan(sink, gstate, chunk);
+		ExternalScanHT(sink, gstate, chunk);
 		break;
 	default:
 		throw InternalException("Unexpected HashJoinSourceStage in ExecuteTask!");
@@ -827,8 +826,8 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	scan_structure->Next(join_keys, payload, chunk);
 }
 
-void HashJoinLocalSourceState::ExternalScan(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
-                                            DataChunk &chunk) {
+void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
+                                              DataChunk &chunk) {
 	D_ASSERT(local_stage == HashJoinSourceStage::SCAN_HT && full_outer_in_progress != 0);
 
 	if (full_outer_found_entries != 0) {
@@ -870,7 +869,6 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		return;
 	}
 	D_ASSERT(can_go_external);
-	// TODO: String handling in CDC's
 
 	if (gstate.global_stage == HashJoinSourceStage::INIT) {
 		gstate.Initialize(context.client, sink);
@@ -888,9 +886,9 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (gstate.global_stage != HashJoinSourceStage::DONE && chunk.size() == 0) {
-		if (!lstate.TaskFinished()) {
+		if (!lstate.TaskFinished() || gstate.AssignTask(sink, lstate)) {
 			lstate.ExecuteTask(sink, gstate, chunk);
-		} else if (!gstate.AssignTask(sink, lstate)) {
+		} else {
 			gstate.TryPrepareNextStage(sink);
 		}
 	}
