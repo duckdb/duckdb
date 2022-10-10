@@ -9,7 +9,7 @@ ColumnDataConsumer::ColumnDataConsumer(ColumnDataCollection &collection_p, vecto
 void ColumnDataConsumer::InitializeScan() {
 	chunk_count = collection.ChunkCount();
 	current_chunk_index = 0;
-	current_chunk_index = 0;
+	chunk_delete_index = DConstants::INVALID_INDEX;
 
 	// Initialize chunk references and sort them, so we can scan them in a sane order, regardless of how it was created
 	chunk_references.reserve(chunk_count);
@@ -25,6 +25,7 @@ bool ColumnDataConsumer::AssignChunk(ColumnDataConsumerScanState &state) {
 	lock_guard<mutex> guard(lock);
 	if (current_chunk_index == chunk_count) {
 		// All chunks have been assigned
+		state.current_chunk_state.handles.clear();
 		state.chunk_index = DConstants::INVALID_INDEX;
 		return false;
 	}
@@ -67,15 +68,18 @@ void ColumnDataConsumer::ConsumeChunks(idx_t delete_index_start, idx_t delete_in
 		}
 		auto &prev_chunk_ref = chunk_references[chunk_index - 1];
 		auto &curr_chunk_ref = chunk_references[chunk_index];
+		auto prev_min_block_id = prev_chunk_ref.GetMinimumBlockID();
+		auto curr_min_block_id = curr_chunk_ref.GetMinimumBlockID();
 		if (prev_chunk_ref.segment->allocator.get() != curr_chunk_ref.segment->allocator.get()) {
-			// Moved to the next allocator, reset the previous one
-			prev_chunk_ref.segment->allocator->Reset();
+			// Moved to the next allocator, delete all remaining blocks in the previous one
+			auto &prev_allocator = *prev_chunk_ref.segment->allocator;
+			for (uint32_t block_id = prev_min_block_id; block_id < prev_allocator.BlockCount(); block_id++) {
+				prev_allocator.DeleteBlock(block_id);
+			}
 			continue;
 		}
 		// Same allocator, see if we can delete blocks
-		auto prev_min_block_id = prev_chunk_ref.GetMinimumBlockID();
-		auto curr_min_block_id = curr_chunk_ref.GetMinimumBlockID();
-		for (idx_t block_id = prev_min_block_id; block_id < curr_min_block_id; block_id++) {
+		for (uint32_t block_id = prev_min_block_id; block_id < curr_min_block_id; block_id++) {
 			prev_chunk_ref.segment->allocator->DeleteBlock(block_id);
 		}
 	}

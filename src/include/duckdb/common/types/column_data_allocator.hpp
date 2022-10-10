@@ -40,6 +40,9 @@ public:
 	void MakeShared() {
 		shared = true;
 	}
+	idx_t BlockCount() const {
+		return blocks.size();
+	}
 
 public:
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
@@ -48,8 +51,6 @@ public:
 	void InitializeChunkState(ChunkManagementState &state, ChunkMetaData &meta_data);
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
 
-	//! Resets all owned data
-	void Reset();
 	//! Deletes the block with the given id
 	void DeleteBlock(uint32_t block_id);
 
@@ -58,7 +59,7 @@ private:
 	void AllocateBlock();
 	BufferHandle Pin(uint32_t block_id);
 
-	bool HasBlocks() {
+	bool HasBlocks() const {
 		return !blocks.empty();
 	}
 

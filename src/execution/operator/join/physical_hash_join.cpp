@@ -523,6 +523,8 @@ public:
 
 	//! Initialize this source state using the info in the sink
 	void Initialize(ClientContext &context, HashJoinGlobalSinkState &sink);
+	//! Try to prepare the next stage
+	void TryPrepareNextStage(HashJoinGlobalSinkState &sink);
 	//! Prepare the next build/probe stage for external hash join (must hold lock)
 	void PrepareBuild(HashJoinGlobalSinkState &sink);
 	void PrepareProbe(HashJoinGlobalSinkState &sink);
@@ -638,6 +640,35 @@ void HashJoinGlobalSourceState::Initialize(ClientContext &context, HashJoinGloba
 	initialized = true;
 }
 
+void HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sink) {
+	lock_guard<mutex> guard(lock);
+	switch (global_stage.load()) {
+	case HashJoinSourceStage::BUILD:
+		if (build_block_done == build_block_count) {
+			sink.hash_table->finalized = true;
+			PrepareProbe(sink);
+		}
+		break;
+	case HashJoinSourceStage::PROBE:
+		if (probe_chunk_done == probe_chunk_count) {
+			if (IsRightOuterJoin(op.join_type)) {
+				global_stage = HashJoinSourceStage::SCAN_HT;
+			} else {
+				PrepareBuild(sink);
+			}
+		}
+		break;
+	case HashJoinSourceStage::SCAN_HT:
+		if (full_outer_scan.scanned == full_outer_scan.total) {
+			PrepareBuild(sink);
+			return;
+		}
+		break;
+	default:
+		break;
+	}
+}
+
 void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	D_ASSERT(global_stage != HashJoinSourceStage::BUILD);
 	auto &ht = *sink.hash_table;
@@ -669,16 +700,6 @@ void HashJoinGlobalSourceState::PrepareProbe(HashJoinGlobalSinkState &sink) {
 	}
 
 	global_stage = HashJoinSourceStage::PROBE;
-	if (probe_chunk_count > 0) {
-		return;
-	}
-
-	// Empty probe collection, go straight into the next stage
-	if (IsRightOuterJoin(op.join_type)) {
-		global_stage = HashJoinSourceStage::SCAN_HT;
-	} else {
-		PrepareBuild(sink);
-	}
 }
 
 bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJoinLocalSourceState &lstate) {
@@ -775,10 +796,6 @@ void HashJoinLocalSourceState::ExternalBuild(HashJoinGlobalSinkState &sink, Hash
 
 	lock_guard<mutex> guard(gstate.lock);
 	gstate.build_block_done += build_block_idx_end - build_block_idx_start;
-	if (gstate.build_block_done == gstate.build_block_count) {
-		ht.finalized = true;
-		gstate.PrepareProbe(sink);
-	}
 }
 
 void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
@@ -792,13 +809,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 			scan_structure = nullptr;
 			sink.probe_spill->consumer->FinishChunk(probe_local_scan);
 			lock_guard<mutex> lock(gstate.lock);
-			if (++gstate.probe_chunk_done == gstate.probe_chunk_count) {
-				if (IsRightOuterJoin(gstate.op.join_type)) {
-					gstate.global_stage = HashJoinSourceStage::SCAN_HT;
-				} else {
-					gstate.PrepareBuild(sink);
-				}
-			}
+			gstate.probe_chunk_done++;
 		}
 		return;
 	}
@@ -831,10 +842,6 @@ void HashJoinLocalSourceState::ExternalScan(HashJoinGlobalSinkState &sink, HashJ
 	auto &fo_ss = gstate.full_outer_scan;
 	fo_ss.scanned += full_outer_in_progress;
 	full_outer_in_progress = 0;
-	if (fo_ss.scanned == fo_ss.total) {
-		gstate.PrepareBuild(sink);
-		return;
-	}
 }
 
 void HashJoinLocalSourceState::ScanFullOuter(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) {
@@ -863,9 +870,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		return;
 	}
 	D_ASSERT(can_go_external);
-	// TODO: scan and consume CDC's
-	//  Allocate buffer chunks with capacity of 128
-	//  String handling in CDC's
+	// TODO: String handling in CDC's
 
 	if (gstate.global_stage == HashJoinSourceStage::INIT) {
 		gstate.Initialize(context.client, sink);
@@ -883,12 +888,15 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (gstate.global_stage != HashJoinSourceStage::DONE && chunk.size() == 0) {
-		if (lstate.TaskFinished()) {
-			if (!gstate.AssignTask(sink, lstate)) {
-				continue; // Cannot assign work, spinlock
-			}
+		if (!lstate.TaskFinished()) {
+			lstate.ExecuteTask(sink, gstate, chunk);
+		} else if (!gstate.AssignTask(sink, lstate)) {
+			gstate.TryPrepareNextStage(sink);
 		}
-		lstate.ExecuteTask(sink, gstate, chunk);
+	}
+
+	if (gstate.global_stage == HashJoinSourceStage::DONE) {
+		lstate.probe_local_scan.current_chunk_state.handles.clear();
 	}
 }
 

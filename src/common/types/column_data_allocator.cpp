@@ -116,11 +116,6 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	return state.handles[block_id].Ptr() + offset;
 }
 
-void ColumnDataAllocator::Reset() {
-	blocks.clear();
-	allocated_data.clear();
-}
-
 void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {
 	blocks[block_id].handle->SetCanDestroy(true);
 }
