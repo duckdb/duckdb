@@ -165,15 +165,6 @@ bool RowGroupCollection::IsEmpty() const {
 	return row_groups->GetRootSegment() == nullptr;
 }
 
-TableAppendState::~TableAppendState() {
-	if (Exception::UncaughtException()) {
-		return;
-	}
-	// if these assertions get triggered FinalizeAppend was not called correctly
-	D_ASSERT(!start_row_group);
-	D_ASSERT(total_append_count == 0);
-}
-
 void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 	state.row_start = total_rows;
 	state.current_row = state.row_start;

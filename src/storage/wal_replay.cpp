@@ -467,7 +467,7 @@ void ReplayState::ReplayInsert() {
 	}
 
 	// append to the current table
-	current_table->storage->Append(*current_table, context, chunk);
+	current_table->storage->LocalAppend(*current_table, context, chunk);
 }
 
 void ReplayState::ReplayDelete() {

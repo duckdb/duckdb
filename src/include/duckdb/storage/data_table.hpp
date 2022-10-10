@@ -25,6 +25,7 @@
 
 namespace duckdb {
 class ClientContext;
+class ColumnDataCollection;
 class ColumnDefinition;
 class DataTable;
 class RowGroup;
@@ -83,8 +84,17 @@ public:
 	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_ids,
 	           idx_t fetch_count, ColumnFetchState &state);
 
-	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
-	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	//! Initializes an append to transaction-local storage
+	void InitializeLocalAppend(LocalAppendState &state, ClientContext &context);
+	//! Append a DataChunk to the transaction-local storage of the table.
+	void LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	//! Finalizes a transaction-local append
+	void FinalizeLocalAppend(LocalAppendState &state);
+	//! Append a chunk to the transaction-local storage of this table
+	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	//! Append a column data collection to the transaction-local storage of this table
+	void LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection);
+
 	//! Delete the entries with the specified row identifier from the table
 	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
 	//! Update the entries with the specified row identifier from the table

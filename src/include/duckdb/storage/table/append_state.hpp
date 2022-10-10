@@ -16,9 +16,9 @@
 namespace duckdb {
 class ColumnSegment;
 class DataTable;
+class LocalTableStorage;
 class RowGroup;
 class UpdateSegment;
-class ValiditySegment;
 
 struct TableAppendState;
 
@@ -52,7 +52,6 @@ struct IndexLock {
 struct TableAppendState {
 	TableAppendState() : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr) {
 	}
-	~TableAppendState();
 
 	RowGroupAppendState row_group_append_state;
 	unique_lock<mutex> append_lock;
@@ -62,6 +61,11 @@ struct TableAppendState {
 	idx_t total_append_count;
 	//! The first row-group that has been appended to
 	RowGroup *start_row_group;
+};
+
+struct LocalAppendState {
+	TableAppendState append_state;
+	LocalTableStorage *storage;
 };
 
 } // namespace duckdb

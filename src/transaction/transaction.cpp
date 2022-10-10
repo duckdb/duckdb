@@ -97,7 +97,7 @@ string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool c
 	LocalStorage::CommitState commit_state;
 	auto storage_commit_state = storage_manager.GenStorageCommitState(*this, checkpoint);
 	try {
-		storage.Commit(commit_state, *this, log, commit_id);
+		storage.Commit(commit_state, *this);
 		undo_buffer.Commit(iterator_state, log, commit_id);
 		if (log) {
 			// commit any sequences that were used to the WAL
