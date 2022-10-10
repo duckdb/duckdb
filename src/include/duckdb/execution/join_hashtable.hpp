@@ -242,6 +242,13 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
+	struct ProbeSpillLocalState {
+		PartitionedColumnData *local_partition;
+		PartitionedColumnDataAppendState *local_partition_append_state;
+
+		ColumnDataCollection *local_spill_collection;
+		ColumnDataAppendState *local_spill_append_state;
+	};
 	//! ProbeSpill represents materialized probe-side data that could not be probed during PhysicalHashJoin::Execute
 	//! because the HashTable did not fit in memory. The ProbeSpill is not partitioned if the remaining data can be
 	//! dealt with in just 1 more round of probing, otherwise it is radix partitioned in the same way as the HashTable
@@ -250,10 +257,10 @@ public:
 		ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types);
 
 	public:
-		//! Create an append state for a new thread and assign an index
-		idx_t RegisterThread();
+		//! Create a state for a new thread
+		ProbeSpillLocalState RegisterThread();
 		//! Append a chunk to this ProbeSpill
-		void Append(DataChunk &chunk, idx_t thread_idx);
+		void Append(DataChunk &chunk, ProbeSpillLocalState &local_state);
 		//! Finalize by merging the thread-local accumulated data
 		void Finalize();
 
@@ -327,7 +334,7 @@ public:
 	bool PrepareExternalFinalize();
 	//! Probe whatever we can, sink the rest into a thread-local HT
 	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, DataChunk &payload, ProbeSpill &probe_spill,
-	                                        idx_t thread_idx, DataChunk &spill_chunk);
+	                                        ProbeSpillLocalState &spill_state, DataChunk &spill_chunk);
 
 private:
 	//! First and last partition of the current partitioned round

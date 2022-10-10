@@ -16,6 +16,7 @@ namespace duckdb {
 using ValidityBytes = JoinHashTable::ValidityBytes;
 using ScanStructure = JoinHashTable::ScanStructure;
 using ProbeSpill = JoinHashTable::ProbeSpill;
+using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalState;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
@@ -1149,7 +1150,7 @@ static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &keys, DataChunk 
 }
 
 unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChunk &payload, ProbeSpill &probe_spill,
-                                                       idx_t thread_idx, DataChunk &spill_chunk) {
+                                                       ProbeSpillLocalState &spill_state, DataChunk &spill_chunk) {
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
 	Hash(keys, *FlatVector::IncrementalSelectionVector(), keys.size(), hashes);
@@ -1168,7 +1169,7 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChun
 	// can't probe these values right now, append to spill
 	spill_chunk.Slice(false_sel, false_count);
 	spill_chunk.Verify();
-	probe_spill.Append(spill_chunk, thread_idx);
+	probe_spill.Append(spill_chunk, spill_state);
 
 	// slice the stuff we CAN probe right now
 	hashes.Slice(true_sel, true_count);
@@ -1207,28 +1208,32 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
 	}
 }
 
-idx_t ProbeSpill::RegisterThread() {
-	idx_t thread_idx;
+ProbeSpillLocalState ProbeSpill::RegisterThread() {
+	ProbeSpillLocalState result;
 	lock_guard<mutex> guard(lock);
 	if (partitioned) {
-		thread_idx = local_partition_append_states.size();
 		local_partitions.emplace_back(global_partitions->CreateShared());
 		local_partition_append_states.emplace_back(make_unique<PartitionedColumnDataAppendState>());
 		local_partitions.back()->InitializeAppendState(*local_partition_append_states.back());
+
+		result.local_partition = local_partitions.back().get();
+		result.local_partition_append_state = local_partition_append_states.back().get();
 	} else {
-		thread_idx = local_spill_collections.size();
 		local_spill_collections.emplace_back(make_unique<ColumnDataCollection>(context, probe_types));
 		local_spill_append_states.emplace_back(make_unique<ColumnDataAppendState>());
 		local_spill_collections.back()->InitializeAppend(*local_spill_append_states.back());
+
+		result.local_spill_collection = local_spill_collections.back().get();
+		result.local_spill_append_state = local_spill_append_states.back().get();
 	}
-	return thread_idx;
+	return result;
 }
 
-void ProbeSpill::Append(DataChunk &chunk, idx_t thread_idx) {
+void ProbeSpill::Append(DataChunk &chunk, ProbeSpillLocalState &local_state) {
 	if (partitioned) {
-		local_partitions[thread_idx]->Append(*local_partition_append_states[thread_idx], chunk);
+		local_state.local_partition->Append(*local_state.local_partition_append_state, chunk);
 	} else {
-		local_spill_collections[thread_idx]->Append(*local_spill_append_states[thread_idx], chunk);
+		local_state.local_spill_collection->Append(*local_state.local_spill_append_state, chunk);
 	}
 }
 

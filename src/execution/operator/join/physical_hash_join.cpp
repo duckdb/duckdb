@@ -413,8 +413,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class HashJoinOperatorState : public OperatorState {
 public:
-	explicit HashJoinOperatorState(Allocator &allocator)
-	    : probe_executor(allocator), thread_idx(DConstants::INVALID_INDEX) {
+	explicit HashJoinOperatorState(Allocator &allocator) : probe_executor(allocator), initialized(false) {
 	}
 
 	DataChunk join_keys;
@@ -422,8 +421,9 @@ public:
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 	unique_ptr<OperatorState> perfect_hash_join_state;
 
+	bool initialized;
+	JoinHashTable::ProbeSpillLocalState spill_state;
 	//! Chunk to sink data into for external join
-	idx_t thread_idx;
 	DataChunk spill_chunk;
 
 public:
@@ -464,9 +464,10 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 			// initialize probe spill if not yet done
 			sink.InitializeProbeSpill(context.client);
 		}
-		if (state.thread_idx == DConstants::INVALID_INDEX) {
-			// assign thread index
-			state.thread_idx = sink.probe_spill->RegisterThread();
+		if (!state.initialized) {
+			// initialize local state if not yet done
+			state.spill_state = sink.probe_spill->RegisterThread();
+			state.initialized = true;
 		}
 	}
 
@@ -502,7 +503,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 	// perform the actual probe
 	if (sink.external) {
 		state.scan_structure = sink.hash_table->ProbeAndSpill(state.join_keys, input, *sink.probe_spill,
-		                                                      state.thread_idx, state.spill_chunk);
+		                                                      state.spill_state, state.spill_chunk);
 	} else {
 		state.scan_structure = sink.hash_table->Probe(state.join_keys);
 	}
