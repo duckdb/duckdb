@@ -37,7 +37,7 @@ public:
 		if (!HasEnoughSpace()) {
 			StartNewSegment();
 		}
-		PatasCompression<EXACT_TYPE, true>::Store(value, state.patas_state);
+		patas::PatasCompression<EXACT_TYPE, true>::Store(value, state.patas_state);
 		group_idx++;
 		if (group_idx == PatasPrimitives::PATAS_GROUP_SIZE) {
 			StartNewGroup();
@@ -45,21 +45,20 @@ public:
 	}
 
 	void StartNewSegment() {
-		state.template Flush<EmptyPatasWriter>();
 		StartNewGroup();
 		data_byte_size += UsedSpace();
 		metadata_byte_size += PatasPrimitives::HEADER_SIZE;
-		state.patas_state.output.SetStream(nullptr);
+		state.patas_state.byte_writer.SetStream(nullptr);
 	}
 
 	idx_t CurrentGroupMetadataSize() const {
 		// Metadata size is constant, we require only 3 + 6 bits of metadata per value, aligned to bitpacking algorithm
 		// group size (32)
 		const uint64_t byte_count_bits =
-		    AlignValue<uint64_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(state.patas_state.index) *
+		    AlignValue<uint64_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(state.patas_state.Index()) *
 		    PatasPrimitives::BYTECOUNT_BITSIZE;
 		const uint64_t trailing_zero_bits =
-		    AlignValue<uint64_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(state.patas_state.index) *
+		    AlignValue<uint64_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(state.patas_state.Index()) *
 		    PatasPrimitives::TRAILING_ZERO_BITSIZE;
 		return byte_count_bits + trailing_zero_bits;
 	}
@@ -82,7 +81,7 @@ public:
 	}
 
 	idx_t UsedSpace() const {
-		return state.patas_state.output.BytesWritten();
+		return state.patas_state.byte_writer.BytesWritten();
 	}
 
 	bool HasEnoughSpace() {
@@ -103,7 +102,7 @@ struct EmptyPatasWriter {
 
 	template <class VALUE_TYPE>
 	static void Operation(VALUE_TYPE uncompressed_value, bool is_valid, void *state_p) {
-		using EXACT_TYPE = typename PatasType<VALUE_TYPE>::type;
+		using EXACT_TYPE = typename FloatingToExact<VALUE_TYPE>::type;
 
 		auto state_wrapper = (PatasAnalyzeState<VALUE_TYPE> *)state_p;
 		state_wrapper->WriteValue(*(EXACT_TYPE *)(&uncompressed_value), is_valid);

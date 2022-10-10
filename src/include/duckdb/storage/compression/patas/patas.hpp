@@ -33,14 +33,6 @@ struct FloatingToExact<float> {
 	typedef uint32_t type;
 };
 
-class PatasPrimitives {
-public:
-	static constexpr uint32_t PATAS_GROUP_SIZE = 1024;
-	static constexpr uint8_t HEADER_SIZE = sizeof(uint32_t);
-	static constexpr uint8_t TRAILING_ZERO_BITSIZE = 6;
-	static constexpr uint8_t BYTECOUNT_BITSIZE = 3;
-};
-
 template <class T, bool EMPTY>
 struct PatasState {
 public:
@@ -50,7 +42,7 @@ public:
 	}
 	//! The Compress/Analyze State
 	void *data_ptr;
-	PatasCompressionState<EXACT_TYPE, EMPTY> patas_state;
+	patas::PatasCompressionState<EXACT_TYPE, EMPTY> patas_state;
 
 public:
 	void AssignDataBuffer(uint8_t *data_out) {

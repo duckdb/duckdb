@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/bitpacking.hpp"
-#include "duckdb/storage/compression/chimp/chimp.hpp"
+#include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/storage/compression/chimp/chimp_analyze.hpp"
+#include "duckdb/storage/compression/patas/patas_analyze.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
@@ -162,9 +162,9 @@ public:
 		if (!is_valid) {
 			return;
 		}
-		PatasCompression<EXACT_TYPE, false>::Store(value, state.patas_state);
+		patas::PatasCompression<EXACT_TYPE, false>::Store(value, state.patas_state);
 		group_idx++;
-		if (group_idx == PatasPrimitives::CHIMP_SEQUENCE_SIZE) {
+		if (group_idx == PatasPrimitives::PATAS_GROUP_SIZE) {
 			FlushGroup();
 		}
 	}
@@ -194,7 +194,7 @@ public:
 		Store<uint8_t>(bitpacked_block_count, metadata_ptr);
 
 		//! Align the metadata_ptr to 32 bytes
-		uint8_t byte_align_offset = (metadata_ptr % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+		uint8_t byte_align_offset = ((uint64_t)metadata_ptr % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
 		metadata_ptr -= byte_align_offset;
 		metadata_byte_size += byte_align_offset;
 
