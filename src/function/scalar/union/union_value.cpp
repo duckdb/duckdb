@@ -23,10 +23,9 @@ static void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &
 	
 	// Assign the new entries to the result vector
 	UnionVector::GetMember(result, 0).Reference(args.data[0]);
-
+	
 	// Reset tags
-	auto tags = UnionVector::GetTags(result);
-	memset(tags, 0, sizeof(union_tag_t) * args.size());
+	UnionVector::SetTags(result, 0, args.size());
 	
 	if(args.AllConstant()){
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

@@ -16,7 +16,7 @@ two
 three
 
 statement ok
-create table tbl2(u UNION(i32 INT, str VARCHAR, f32 FLOAT));
+create table tbl2(u UNION(str VARCHAR, i32 INT, f32 FLOAT));
 
 statement ok
 insert into tbl2 values ('five'), (4), (6.0);
