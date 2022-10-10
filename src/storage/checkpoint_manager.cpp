@@ -40,10 +40,6 @@ BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
 	return *storage_manager.block_manager;
 }
 
-BlockPointer SingleFileCheckpointWriter::WriteIndexData(IndexCatalogEntry &index_catalog) {
-	return index_catalog.index->Serialize(*table_metadata_writer);
-}
-
 MetaBlockWriter &SingleFileCheckpointWriter::GetMetaBlockWriter() {
 	return *metadata_writer;
 }
@@ -329,9 +325,9 @@ void CheckpointReader::ReadSequence(ClientContext &context, MetaBlockReader &rea
 // Indexes
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog) {
-	// Write the index data and metadata
-	// Serialize the necessary meta data for index catalog construction.
-	auto root_offset = WriteIndexData(index_catalog);
+	// The index data should already have been written as part of WriteTableData.
+	// Here, we need only serialize the pointer to that data.
+	auto root_offset = index_catalog.index->GetSerializedDataPointer();
 	auto &metadata_writer = GetMetaBlockWriter();
 	index_catalog.Serialize(metadata_writer);
 	// Serialize the Block id and offset of root node
