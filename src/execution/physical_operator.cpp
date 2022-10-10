@@ -297,7 +297,9 @@ void CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk 
 	auto &state = (CachingOperatorState &)state_p;
 	if (state.cached_chunk) {
 		chunk.Move(*state.cached_chunk);
-		state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+		state.cached_chunk.reset();
+	} else {
+		chunk.SetCardinality(0);
 	}
 }
 
