@@ -52,7 +52,7 @@ public:
 				NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
 			}
 
-			state_wrapper->WriteValue(*(EXACT_TYPE *)(&value), is_valid);
+			state_wrapper->WriteValue(*(EXACT_TYPE *)(&value));
 		}
 	};
 
@@ -66,6 +66,7 @@ public:
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		state.data_ptr = (void *)this;
+		state.patas_state.Reset();
 	}
 
 	ColumnDataCheckpointer &checkpointer;
@@ -112,11 +113,9 @@ public:
 		const idx_t effective_bitpack_block_index = AlignValue<idx_t, 32>(state.patas_state.index);
 
 		// Current bytes taken up by the bitpacked 'trailing_zero' blocks
-		D_ASSERT(ValueIsAligned((effective_bitpack_block_index * 6) / 8));
 		metadata_size += (effective_bitpack_block_index * 6) / 8;
 
 		// Current bytes taken up by the bitpacked 'byte_count' blocks
-		D_ASSERT(ValueIsAligned((effective_bitpack_block_index * 3) / 8));
 		metadata_size += (effective_bitpack_block_index * 3) / 8;
 		return metadata_size;
 	}
@@ -157,11 +156,8 @@ public:
 		}
 	}
 
-	void WriteValue(EXACT_TYPE value, bool is_valid) {
+	void WriteValue(EXACT_TYPE value) {
 		current_segment->count++;
-		if (!is_valid) {
-			return;
-		}
 		patas::PatasCompression<EXACT_TYPE, false>::Store(value, state.patas_state);
 		group_idx++;
 		if (group_idx == PatasPrimitives::PATAS_GROUP_SIZE) {
@@ -171,7 +167,7 @@ public:
 
 	template <uint8_t BITWIDTH>
 	void FlushBitpackedData(uint8_t *src, uint8_t *dest, uint8_t block_count) {
-		BitpackingPrimitives::PackBuffer<uint8_t, true>(
+		BitpackingPrimitives::PackBuffer<uint8_t>(
 		    dest, src, block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, BITWIDTH);
 	}
 
@@ -193,26 +189,20 @@ public:
 		// Store how many bitpacked blocks there are (storing BITPACKING_ALGORITHM_GROUP_SIZE values per block)
 		Store<uint8_t>(bitpacked_block_count, metadata_ptr);
 
-		//! Align the metadata_ptr to 32 bytes
-		uint8_t byte_align_offset = ((uint64_t)metadata_ptr % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
-		metadata_ptr -= byte_align_offset;
-		metadata_byte_size += byte_align_offset;
-
-		metadata_ptr -=
+		const uint64_t trailing_zeros_bits =
 		    (PatasPrimitives::TRAILING_ZERO_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
 		    bitpacked_block_count;
-		metadata_byte_size +=
-		    (PatasPrimitives::TRAILING_ZERO_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
+		const uint64_t byte_counts_bits =
+		    (PatasPrimitives::BYTECOUNT_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
 		    bitpacked_block_count;
+		metadata_ptr -= AlignValue(trailing_zeros_bits) / 8;
+		metadata_byte_size += AlignValue(trailing_zeros_bits) / 8;
 		// Bitpack + store the 'trailing_zero' values
 		FlushBitpackedData<PatasPrimitives::TRAILING_ZERO_BITSIZE>(state.patas_state.trailing_zeros, metadata_ptr,
 		                                                           bitpacked_block_count);
 
-		metadata_ptr -= (PatasPrimitives::BYTECOUNT_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
-		                bitpacked_block_count;
-		metadata_byte_size +=
-		    (PatasPrimitives::BYTECOUNT_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
-		    bitpacked_block_count;
+		metadata_ptr -= AlignValue(byte_counts_bits) / 8;
+		metadata_byte_size += AlignValue(byte_counts_bits) / 8;
 		// Bitpack + store the 'byte_count' values
 		FlushBitpackedData<PatasPrimitives::BYTECOUNT_BITSIZE>(state.patas_state.byte_counts, metadata_ptr,
 		                                                       bitpacked_block_count);

@@ -145,7 +145,7 @@ struct PatasDecompression {
 		// return the first value of the buffer
 		// set state.first to false
 		D_ASSERT(state.group_index == 0);
-		EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE>(sizeof(EXACT_TYPE));
+		EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE>(sizeof(EXACT_TYPE) * 8);
 		state.previous_value = result;
 		state.group_index++;
 		return result;
@@ -156,8 +156,9 @@ struct PatasDecompression {
 		// Get the trailing_zeros value for the current index
 		// Get the byte_count value for the current index
 
-		EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE>(state.byte_counts[state.group_index]);
+		EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE>(state.byte_counts[state.group_index] * 8);
 		result <<= state.trailing_zeros[state.group_index];
+		result ^= state.previous_value;
 
 		state.group_index++;
 		state.previous_value = result;

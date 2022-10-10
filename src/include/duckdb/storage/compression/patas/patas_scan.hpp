@@ -40,12 +40,12 @@ public:
 		//! Unpack 'count' values of bitpacked data, unpacked per group of 32 values
 		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 		BitpackingPrimitives::UnPackBuffer<uint8_t>(byte_counts, bitpacked_data, value_count,
-		                                            PatasPrimitives::BYTECOUNT_BITSIZE, true);
+		                                            PatasPrimitives::BYTECOUNT_BITSIZE);
 	}
 	void LoadTrailingZeros(uint8_t *bitpacked_data, idx_t block_count) {
 		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 		BitpackingPrimitives::UnPackBuffer<uint8_t>(trailing_zeros, bitpacked_data, value_count,
-		                                            PatasPrimitives::TRAILING_ZERO_BITSIZE, true);
+		                                            PatasPrimitives::TRAILING_ZERO_BITSIZE);
 	}
 
 public:
@@ -71,6 +71,10 @@ public:
 		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
 		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
 		LoadGroup();
+
+		//! FIXME: could these arrays just live in the patas_state to begin with??
+		patas_state.trailing_zeros = group_state.trailing_zeros;
+		patas_state.byte_counts = group_state.byte_counts;
 	}
 
 	patas::PatasDecompressionState<EXACT_TYPE> patas_state;
@@ -138,21 +142,17 @@ public:
 		D_ASSERT(bitpacked_block_count <=
 		         PatasPrimitives::PATAS_GROUP_SIZE / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
 
-		// Align to a 32-byte boundary
-		const uint8_t byte_align_offset =
-		    ((uint64_t)metadata_ptr % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
-		metadata_ptr -= byte_align_offset;
-
-		metadata_ptr -=
+		const uint64_t trailing_zeros_bits =
 		    (PatasPrimitives::TRAILING_ZERO_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
 		    bitpacked_block_count;
-
+		const uint64_t byte_counts_bits =
+		    (PatasPrimitives::BYTECOUNT_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
+		    bitpacked_block_count;
+		metadata_ptr -= AlignValue(trailing_zeros_bits) / 8;
 		// Unpack and store the trailing zeros for the entire group
 		group_state.LoadTrailingZeros(metadata_ptr, bitpacked_block_count);
 
-		metadata_ptr -= (PatasPrimitives::BYTECOUNT_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
-		                bitpacked_block_count;
-
+		metadata_ptr -= AlignValue(byte_counts_bits) / 8;
 		// Unpack and store the byte counts for the entire group
 		group_state.LoadByteCounts(metadata_ptr, bitpacked_block_count);
 	}

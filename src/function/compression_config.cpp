@@ -75,6 +75,7 @@ vector<CompressionFunction *> DBConfig::GetCompressionFunctions(PhysicalType dat
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_BITPACKING, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_DICTIONARY, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_CHIMP, data_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_PATAS, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_FSST, data_type);
 	return result;
 }
