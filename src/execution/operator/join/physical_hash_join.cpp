@@ -540,7 +540,6 @@ public:
 	const PhysicalHashJoin &op;
 
 	//! For synchronizing the external hash join
-	atomic<bool> initialized;
 	atomic<HashJoinSourceStage> global_stage;
 	mutex lock;
 
@@ -615,18 +614,15 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 }
 
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context)
-    : op(op), initialized(false), global_stage(HashJoinSourceStage::INIT),
+    : op(op), global_stage(HashJoinSourceStage::INIT), probe_chunk_count(0), probe_chunk_done(0),
       probe_count(op.children[0]->estimated_cardinality),
       parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120) {
 }
 
 void HashJoinGlobalSourceState::Initialize(ClientContext &context, HashJoinGlobalSinkState &sink) {
-	if (initialized) {
-		return;
-	}
 	lock_guard<mutex> init_lock(lock);
-	if (initialized) {
-		// Have to check if anything changed since we got the lock
+	if (global_stage != HashJoinSourceStage::INIT) {
+		// Another thread initialized
 		return;
 	}
 	full_outer_scan.total = sink.hash_table->Count();
@@ -638,7 +634,7 @@ void HashJoinGlobalSourceState::Initialize(ClientContext &context, HashJoinGloba
 	// Finalize the probe spill too
 	sink.probe_spill->Finalize();
 
-	initialized = true;
+	global_stage = HashJoinSourceStage::PROBE;
 }
 
 void HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sink) {
@@ -717,7 +713,7 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 		}
 		break;
 	case HashJoinSourceStage::PROBE:
-		if (sink.probe_spill->consumer->AssignChunk(lstate.probe_local_scan)) {
+		if (sink.probe_spill->consumer && sink.probe_spill->consumer->AssignChunk(lstate.probe_local_scan)) {
 			lstate.local_stage = global_stage;
 			return true;
 		}
@@ -869,19 +865,10 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		}
 		return;
 	}
-	D_ASSERT(can_go_external);
 
+	D_ASSERT(can_go_external);
 	if (gstate.global_stage == HashJoinSourceStage::INIT) {
 		gstate.Initialize(context.client, sink);
-
-		lock_guard<mutex> lock(gstate.lock);
-		if (gstate.global_stage == HashJoinSourceStage::INIT) {
-			if (IsRightOuterJoin(join_type)) {
-				gstate.global_stage = HashJoinSourceStage::SCAN_HT;
-			} else {
-				gstate.PrepareBuild(sink);
-			}
-		}
 	}
 
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
@@ -892,10 +879,6 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		} else {
 			gstate.TryPrepareNextStage(sink);
 		}
-	}
-
-	if (gstate.global_stage == HashJoinSourceStage::DONE) {
-		lstate.probe_local_scan.current_chunk_state.handles.clear();
 	}
 }
 
