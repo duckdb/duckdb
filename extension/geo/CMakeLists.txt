@@ -32,6 +32,7 @@ set(GEO_EXTENSION_FILES
     liblwgeom/stringbuffer.cpp
     liblwgeom/lwprint.cpp
     liblwgeom/lwin_geojson.cpp
+    liblwgeom/lwout_geojson.cpp
     parser/lwin_wkt_lex.cpp
     parser/lwin_wkt_parse.cpp
     libpgcommon/lwgeom_pg.cpp

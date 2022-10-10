@@ -19,6 +19,7 @@ size_t LWGEOM_size(GSERIALIZED *gser);
 char *LWGEOM_base(GSERIALIZED *gser);
 std::string LWGEOM_asText(const void *base, size_t size);
 std::string LWGEOM_asBinary(const void *base, size_t size);
+std::string LWGEOM_asGeoJson(const void* base, size_t size);
 void LWGEOM_free(GSERIALIZED *gser);
 
 } // namespace duckdb

@@ -394,6 +394,11 @@ extern void ptarray_free(POINTARRAY *pa);
 extern void lwpoint_free(LWPOINT *pt);
 extern void lwgeom_free(LWGEOM *geom);
 
+/**
+ * Strip out the Z/M components of an #LWGEOM
+ */
+extern LWGEOM *lwgeom_force_2d(const LWGEOM *geom);
+
 extern float next_float_down(double d);
 extern float next_float_up(double d);
 
@@ -672,6 +677,8 @@ extern void *lwrealloc(void *mem, size_t size);
 extern void lwfree(void *mem);
 
 void lwerror(const char *fmt, ...);
+
+extern lwvarlena_t *lwgeom_to_geojson(const LWGEOM *geo, const char *srs, int precision, int has_bbox);
 
 #endif /* !defined _LIBLWGEOM_H  */
 

@@ -79,6 +79,24 @@ void lwgeom_free(LWGEOM *lwgeom) {
 	return;
 }
 
+LWGEOM *lwgeom_force_2d(const LWGEOM *geom) {
+	return lwgeom_force_dims(geom, 0, 0, 0, 0);
+}
+
+LWGEOM *lwgeom_force_dims(const LWGEOM *geom, int hasz, int hasm, double zval, double mval) {
+	if (!geom)
+		return NULL;
+	switch (geom->type) {
+	case POINTTYPE:
+		return lwpoint_as_lwgeom(lwpoint_force_dims((LWPOINT *)geom, hasz, hasm, zval, mval));
+		// Need to do with postgis
+
+	default:
+		// lwerror("lwgeom_force_2d: unsupported geom type: %s", lwtype_name(geom->type));
+		return NULL;
+	}
+}
+
 /**
  * Calculate the gbox for this geometry, a cartesian box or
  * geodetic box, depending on how it is flagged.

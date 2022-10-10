@@ -49,4 +49,20 @@ void lwpoint_free(LWPOINT *pt) {
 	lwfree(pt);
 }
 
+LWPOINT *lwpoint_force_dims(const LWPOINT *point, int hasz, int hasm, double zval, double mval) {
+	POINTARRAY *pdims = NULL;
+	LWPOINT *pointout;
+
+	/* Return 2D empty */
+	if (lwpoint_is_empty(point)) {
+		pointout = lwpoint_construct_empty(point->srid, hasz, hasm);
+	} else {
+		/* Always we duplicate the ptarray and return */
+		pdims = ptarray_force_dims(point->point, hasz, hasm, zval, mval);
+		pointout = lwpoint_construct(point->srid, NULL, pdims);
+	}
+	pointout->type = point->type;
+	return pointout;
+}
+
 } // namespace duckdb

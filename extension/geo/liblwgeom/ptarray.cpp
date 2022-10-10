@@ -148,4 +148,24 @@ int ptarray_insert_point(POINTARRAY *pa, const POINT4D *p, uint32_t where) {
 	return LW_SUCCESS;
 }
 
+POINTARRAY *ptarray_force_dims(const POINTARRAY *pa, int hasz, int hasm, double zval, double mval) {
+	/* TODO handle zero-length point arrays */
+	uint32_t i;
+	int in_hasz = FLAGS_GET_Z(pa->flags);
+	int in_hasm = FLAGS_GET_M(pa->flags);
+	POINT4D pt;
+	POINTARRAY *pa_out = ptarray_construct_empty(hasz, hasm, pa->npoints);
+
+	for (i = 0; i < pa->npoints; i++) {
+		getPoint4d_p(pa, i, &pt);
+		if (hasz && !in_hasz)
+			pt.z = zval;
+		if (hasm && !in_hasm)
+			pt.m = mval;
+		ptarray_append_point(pa_out, &pt, LW_TRUE);
+	}
+
+	return pa_out;
+}
+
 } // namespace duckdb

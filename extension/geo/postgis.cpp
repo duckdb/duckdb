@@ -25,6 +25,10 @@ string Postgis::LWGEOM_asText(const void *data, size_t size) {
 	return duckdb::LWGEOM_asText(data, size);
 }
 
+string Postgis::LWGEOM_asGeoJson(const void *data, size_t size) {
+	return duckdb::LWGEOM_asGeoJson(data, size);
+}
+
 idx_t Postgis::LWGEOM_size(GSERIALIZED *gser) {
 	return duckdb::LWGEOM_size(gser);
 }

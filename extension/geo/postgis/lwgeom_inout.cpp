@@ -135,6 +135,16 @@ std::string LWGEOM_asBinary(const void *base, size_t size) {
 	return rstr;
 }
 
+std::string LWGEOM_asGeoJson(const void *base, size_t size) {
+	std::string rstr = "";
+	LWGEOM *lwgeom = lwgeom_from_wkb(static_cast<const uint8_t *>(base), size, LW_PARSER_CHECK_NONE);
+	auto varlen = lwgeom_to_geojson(lwgeom, nullptr, OUT_DEFAULT_DECIMAL_DIGITS, 0);
+	rstr = std::string(varlen->data);
+	lwfree(varlen);
+	lwgeom_free(lwgeom);
+	return rstr;
+}
+
 void LWGEOM_free(GSERIALIZED *gser) {
 	if (gser) {
 		lwfree(gser);

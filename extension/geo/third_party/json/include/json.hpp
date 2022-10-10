@@ -1,9 +1,8 @@
 #pragma one
 
+#include "json_tokener.hpp"
+#include "linkhash.hpp"
+
 #include <iostream>
 
-namespace json {
-
-extern void json_test_func();
-
-} // namespace json
+namespace json {} // namespace json

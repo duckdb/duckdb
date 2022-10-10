@@ -46,7 +46,7 @@ bool GeoFunctions::CastVarcharToGEO(Vector &source, Vector &result, idx_t count,
 bool GeoFunctions::CastGeoToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	GenericExecutor::ExecuteUnary<PrimitiveType<string_t>, PrimitiveType<string_t>>(
 	    source, result, count, [&](PrimitiveType<string_t> input) {
-		    auto text = Geometry::GetString(input.val);
+		    auto text = Geometry::GetString(input.val, DataFormatType::FORMAT_VALUE_TYPE_GEOJSON);
 		    return StringVector::AddString(result, text);
 	    });
 	return true;
