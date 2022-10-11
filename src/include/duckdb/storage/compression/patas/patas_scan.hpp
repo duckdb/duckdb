@@ -93,45 +93,45 @@ public:
 		return (total_value_count % PatasPrimitives::PATAS_GROUP_SIZE) == 0;
 	}
 
-	// Scan a group from the start
-	template <class EXACT_TYPE>
-	void ScanGroup(EXACT_TYPE *values, idx_t group_size) {
-		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
-		D_ASSERT(group_size <= LeftInGroup());
+	//	// Scan a group from the start
+	//	template <class EXACT_TYPE>
+	//	void ScanGroup(EXACT_TYPE *values, idx_t group_size) {
+	//		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
+	//		D_ASSERT(group_size <= LeftInGroup());
 
-#ifdef DEBUG
-		const auto old_data_size = patas_state.byte_reader.Index();
-#endif
-		values[0] = patas::PatasDecompression<EXACT_TYPE>::LoadFirst(patas_state);
-		for (idx_t i = 1; i < group_size; i++) {
-			values[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(patas_state);
-		}
-		group_state.index += group_size;
-		total_value_count += group_size;
-#ifdef DEBUG
-		idx_t expected_change = 0;
-		idx_t start_idx = group_state.index - group_size;
-		for (idx_t i = 0; i < group_size; i++) {
-			uint8_t byte_count = patas_state.byte_counts[start_idx + i];
-			uint8_t trailing_zeros = patas_state.trailing_zeros[start_idx + i];
-			if (byte_count == 0) {
-				byte_count += sizeof(EXACT_TYPE);
-			}
-			if (byte_count == 1 && trailing_zeros == 0) {
-				byte_count -= 1;
-			}
-			expected_change += byte_count;
-		}
-		D_ASSERT(patas_state.byte_reader.Index() >= old_data_size);
-		D_ASSERT(expected_change == (patas_state.byte_reader.Index() - old_data_size));
-#endif
-		if (GroupFinished() && total_value_count < segment.count) {
-			LoadGroup();
-		}
-		// if (total_value_count == segment.count){
-		// printf("DECOMPRESS: DATA BYTES SIZE: %llu\n", patas_state.byte_reader.Index());
-		//}
-	}
+	//#ifdef DEBUG
+	//		const auto old_data_size = patas_state.byte_reader.Index();
+	//#endif
+	//		values[0] = patas::PatasDecompression<EXACT_TYPE>::LoadFirst(patas_state);
+	//		for (idx_t i = 1; i < group_size; i++) {
+	//			values[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(patas_state);
+	//		}
+	//		group_state.index += group_size;
+	//		total_value_count += group_size;
+	//#ifdef DEBUG
+	//		idx_t expected_change = 0;
+	//		idx_t start_idx = group_state.index - group_size;
+	//		for (idx_t i = 0; i < group_size; i++) {
+	//			uint8_t byte_count = patas_state.byte_counts[start_idx + i];
+	//			uint8_t trailing_zeros = patas_state.trailing_zeros[start_idx + i];
+	//			if (byte_count == 0) {
+	//				byte_count += sizeof(EXACT_TYPE);
+	//			}
+	//			if (byte_count == 1 && trailing_zeros == 0) {
+	//				byte_count -= 1;
+	//			}
+	//			expected_change += byte_count;
+	//		}
+	//		D_ASSERT(patas_state.byte_reader.Index() >= old_data_size);
+	//		D_ASSERT(expected_change == (patas_state.byte_reader.Index() - old_data_size));
+	//#endif
+	//		if (GroupFinished() && total_value_count < segment.count) {
+	//			LoadGroup();
+	//		}
+	//		// if (total_value_count == segment.count){
+	//		// printf("DECOMPRESS: DATA BYTES SIZE: %llu\n", patas_state.byte_reader.Index());
+	//		//}
+	//	}
 
 	// Scan up to a group boundary
 	template <class EXACT_TYPE>
@@ -147,9 +147,6 @@ public:
 		if (GroupFinished() && total_value_count < segment.count) {
 			LoadGroup();
 		}
-		// if (total_value_count == segment.count){
-		// printf("DECOMPRESS: DATA BYTES SIZE: %llu\n", patas_state.byte_reader.Index());
-		//}
 	}
 
 	void LoadGroup() {
@@ -193,11 +190,7 @@ public:
 
 		while (skip_count) {
 			auto skip_size = std::min(skip_count, LeftInGroup());
-			if (!group_state.Started()) {
-				ScanGroup(buffer, skip_size);
-			} else {
-				ScanPartialGroup(buffer, skip_size);
-			}
+			ScanPartialGroup(buffer, skip_size);
 			skip_count -= skip_size;
 		}
 	}
@@ -223,25 +216,21 @@ void PatasScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 
 	auto current_result_ptr = (EXACT_TYPE *)(result_data + result_offset);
 
-	auto scanned = std::min(scan_count, scan_state.LeftInGroup());
+	auto current_group_remainder = std::min(scan_count, scan_state.LeftInGroup());
+	scan_count -= current_group_remainder;
+	auto iterations = scan_count / PatasPrimitives::PATAS_GROUP_SIZE;
+	auto remainder = scan_count % PatasPrimitives::PATAS_GROUP_SIZE;
 
-	if (!scan_state.group_state.Started()) {
-		scan_state.template ScanGroup<EXACT_TYPE>(current_result_ptr, scanned);
-	} else {
-		scan_state.template ScanPartialGroup<EXACT_TYPE>(current_result_ptr, scanned);
+	scan_state.template ScanPartialGroup<EXACT_TYPE>(current_result_ptr, current_group_remainder);
+
+	for (idx_t i = 0; i < iterations; i++) {
+		scan_state.template ScanPartialGroup<EXACT_TYPE>(current_result_ptr + current_group_remainder +
+		                                                     (i * PatasPrimitives::PATAS_GROUP_SIZE),
+		                                                 PatasPrimitives::PATAS_GROUP_SIZE);
 	}
-	scan_count -= scanned;
-	if (!scan_count) {
-		//! Already scanned everything
-		return;
-	}
-	// We know for sure that the last group has ended
-	D_ASSERT(!scan_state.group_state.Started());
-	while (scan_count) {
-		auto to_scan = duckdb::MinValue<idx_t>(scan_count, PatasPrimitives::PATAS_GROUP_SIZE);
-		scan_state.template ScanGroup<EXACT_TYPE>(current_result_ptr + scanned, to_scan);
-		scan_count -= to_scan;
-		scanned += to_scan;
+	if (remainder) {
+		scan_state.template ScanPartialGroup<EXACT_TYPE>(
+		    current_result_ptr + current_group_remainder + (iterations * PatasPrimitives::PATAS_GROUP_SIZE), remainder);
 	}
 }
 
