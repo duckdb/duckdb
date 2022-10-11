@@ -95,13 +95,13 @@ bool Key::Empty() {
 }
 
 template <class T>
-inline Key Key::ConcatKey(ArenaAllocator &allocator, T new_element) {
+void Key::ConcatKey(ArenaAllocator &allocator, T new_element) {
 
 	auto concat_key = Key::CreateKey<T>(allocator, new_element);
-	auto key_len = len + concat_key.len;
-	auto compound_data = allocator.Allocate(key_len);
+	auto compound_data = allocator.Allocate(len + concat_key.len);
 	memcpy(compound_data, data, len);
 	memcpy(compound_data + len, concat_key.data, concat_key.len);
-	return Key(compound_data, key_len);
+	len += concat_key.len;
+	data = compound_data;
 }
 } // namespace duckdb

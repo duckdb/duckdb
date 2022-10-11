@@ -66,7 +66,7 @@ public:
 	bool Empty();
 
 	template <class T>
-	inline Key ConcatKey(ArenaAllocator &allocator, T new_element);
+	void ConcatKey(ArenaAllocator &allocator, T new_element);
 
 private:
 	template <class T>
