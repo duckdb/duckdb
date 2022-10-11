@@ -37,6 +37,7 @@ public:
 	}
 	void SetOutputBuffer(uint8_t *output) {
 		byte_writer.SetStream(output);
+		Reset();
 	}
 	idx_t Index() const {
 		return index;
@@ -86,11 +87,16 @@ struct PatasCompression {
 		// Figure out the trailing zeros (max 6 bits)
 		const uint8_t trailing_zero = CountZeros<EXACT_TYPE>::Trailing(xor_result);
 
+		const bool is_equal = xor_result == 0;
+
 		// Figure out the significant bytes (max 3 bits)
-		const uint8_t significant_bits = EXACT_TYPE_BITSIZE - trailing_zero;
+		const uint8_t significant_bits = (EXACT_TYPE_BITSIZE - trailing_zero) + is_equal;
 		const uint8_t significant_bytes = (significant_bits >> 3) + ((significant_bits & 7) != 0);
 
-		state.byte_writer.template WriteValue<EXACT_TYPE>(xor_result >> trailing_zero, significant_bits);
+		// Avoid an invalid shift error when xor_result is 0
+		state.byte_writer.template WriteValue<EXACT_TYPE>(xor_result >> (trailing_zero - is_equal),
+		                                                  significant_bits - is_equal);
+		// We store equal as: 0 bytes of data, byte_count: 1, trailing_zeros: 0
 		state.UpdateMetadata(value, trailing_zero, significant_bytes);
 	}
 };
@@ -156,8 +162,18 @@ struct PatasDecompression {
 		// Get the trailing_zeros value for the current index
 		// Get the byte_count value for the current index
 
-		EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE>(state.byte_counts[state.group_index] * 8);
-		result <<= state.trailing_zeros[state.group_index];
+		auto byte_count = state.byte_counts[state.group_index];
+		D_ASSERT(byte_count <= sizeof(EXACT_TYPE));
+		auto trailing_zeros = state.trailing_zeros[state.group_index];
+		D_ASSERT(trailing_zeros <= 64);
+
+		// Full bytes is stored as 0
+		byte_count += (sizeof(EXACT_TYPE) * (byte_count == 0));
+		// Equal is stored as byte_count: 1, trailing_zeros: 0
+		byte_count -= (byte_count == 1 && trailing_zeros == 0);
+
+		EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE>(byte_count * 8);
+		result <<= trailing_zeros;
 		result ^= state.previous_value;
 
 		state.group_index++;

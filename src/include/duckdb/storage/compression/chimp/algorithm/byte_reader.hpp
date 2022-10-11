@@ -32,6 +32,10 @@ public:
 		index = 0;
 	}
 
+	size_t Index() const {
+		return index;
+	}
+
 	template <class T>
 	T ReadValue() {
 		throw duckdb::InternalException("Specialization for ReadValue is not implemented");
@@ -40,25 +44,29 @@ public:
 	template <>
 	uint8_t ReadValue<uint8_t>() {
 		auto result = duckdb::Load<uint8_t>(buffer + index);
-		index++;
+		// index++;
+		IncreaseIndex(1);
 		return result;
 	}
 	template <>
 	uint16_t ReadValue<uint16_t>() {
 		auto result = duckdb::Load<uint16_t>(buffer + index);
-		index += 2;
+		// index += 2;
+		IncreaseIndex(2);
 		return result;
 	}
 	template <>
 	uint32_t ReadValue<uint32_t>() {
 		auto result = duckdb::Load<uint32_t>(buffer + index);
-		index += 4;
+		// index += 4;
+		IncreaseIndex(4);
 		return result;
 	}
 	template <>
 	uint64_t ReadValue<uint64_t>() {
 		auto result = duckdb::Load<uint64_t>(buffer + index);
-		index += 8;
+		// index += 8;
+		IncreaseIndex(8);
 		return result;
 	}
 
@@ -71,6 +79,8 @@ public:
 	T ReadValue(const uint8_t &size) {
 		T result = 0;
 		switch (size) {
+		case 0:
+			return 0;
 		case 1:
 		case 2:
 		case 3:
@@ -80,7 +90,8 @@ public:
 		case 7:
 		case 8:
 			result = duckdb::Load<uint8_t>(buffer + index);
-			index++;
+			// index++;
+			IncreaseIndex(1);
 			return result;
 		case 9:
 		case 10:
@@ -91,7 +102,8 @@ public:
 		case 15:
 		case 16:
 			result = duckdb::Load<uint16_t>(buffer + index);
-			index += 2;
+			// index += 2;
+			IncreaseIndex(2);
 			return result;
 		case 17:
 		case 18:
@@ -102,7 +114,8 @@ public:
 		case 23:
 		case 24:
 			memcpy(&result, (void *)(buffer + index), 3);
-			index += 3;
+			// index += 3;
+			IncreaseIndex(3);
 			return result;
 		case 25:
 		case 26:
@@ -113,7 +126,8 @@ public:
 		case 31:
 		case 32:
 			result = duckdb::Load<uint32_t>(buffer + index);
-			index += 4;
+			// index += 4;
+			IncreaseIndex(4);
 			return result;
 		case 33:
 		case 34:
@@ -124,7 +138,8 @@ public:
 		case 39:
 		case 40:
 			memcpy(&result, (void *)(buffer + index), 5);
-			index += 5;
+			// index += 5;
+			IncreaseIndex(5);
 			return result;
 		case 41:
 		case 42:
@@ -135,7 +150,8 @@ public:
 		case 47:
 		case 48:
 			memcpy(&result, (void *)(buffer + index), 6);
-			index += 6;
+			// index += 6;
+			IncreaseIndex(6);
 			return result;
 		case 49:
 		case 50:
@@ -146,17 +162,24 @@ public:
 		case 55:
 		case 56:
 			memcpy(&result, (void *)(buffer + index), 7);
-			index += 7;
+			// index += 7;
+			IncreaseIndex(7);
 			return result;
 		default:
 			result = duckdb::Load<uint64_t>(buffer + index);
 			//			memcpy(&result, (void *)(buffer + index), 8);
-			index += 8;
+			// index += 8;
+			IncreaseIndex(8);
 			return result;
 		}
 	}
 
 private:
+	void IncreaseIndex(uint8_t value) {
+		index += value;
+		// printf("Index: %u\n", index);
+	}
+
 private:
 	uint8_t *buffer;
 	uint32_t index;

@@ -99,15 +99,38 @@ public:
 		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
+#ifdef DEBUG
+		const auto old_data_size = patas_state.byte_reader.Index();
+#endif
 		values[0] = patas::PatasDecompression<EXACT_TYPE>::LoadFirst(patas_state);
 		for (idx_t i = 1; i < group_size; i++) {
 			values[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(patas_state);
 		}
 		group_state.index += group_size;
 		total_value_count += group_size;
+#ifdef DEBUG
+		idx_t expected_change = 0;
+		idx_t start_idx = group_state.index - group_size;
+		for (idx_t i = 0; i < group_size; i++) {
+			uint8_t byte_count = patas_state.byte_counts[start_idx + i];
+			uint8_t trailing_zeros = patas_state.trailing_zeros[start_idx + i];
+			if (byte_count == 0) {
+				byte_count += sizeof(EXACT_TYPE);
+			}
+			if (byte_count == 1 && trailing_zeros == 0) {
+				byte_count -= 1;
+			}
+			expected_change += byte_count;
+		}
+		D_ASSERT(patas_state.byte_reader.Index() >= old_data_size);
+		D_ASSERT(expected_change == (patas_state.byte_reader.Index() - old_data_size));
+#endif
 		if (GroupFinished() && total_value_count < segment.count) {
 			LoadGroup();
 		}
+		// if (total_value_count == segment.count){
+		// printf("DECOMPRESS: DATA BYTES SIZE: %llu\n", patas_state.byte_reader.Index());
+		//}
 	}
 
 	// Scan up to a group boundary
@@ -124,6 +147,9 @@ public:
 		if (GroupFinished() && total_value_count < segment.count) {
 			LoadGroup();
 		}
+		// if (total_value_count == segment.count){
+		// printf("DECOMPRESS: DATA BYTES SIZE: %llu\n", patas_state.byte_reader.Index());
+		//}
 	}
 
 	void LoadGroup() {

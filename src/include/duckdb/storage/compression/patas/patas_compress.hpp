@@ -104,7 +104,7 @@ public:
 	}
 
 	idx_t RemainingSpace() const {
-		return metadata_ptr - (handle.Ptr() + AlignValue(UsedSpace()));
+		return metadata_ptr - (handle.Ptr() + UsedSpace());
 	}
 
 	idx_t CurrentGroupMetadataSize() const {
@@ -113,16 +113,16 @@ public:
 		const idx_t effective_bitpack_block_index = AlignValue<idx_t, 32>(state.patas_state.index);
 
 		// Current bytes taken up by the bitpacked 'trailing_zero' blocks
-		metadata_size += (effective_bitpack_block_index * 6) / 8;
+		metadata_size += (effective_bitpack_block_index * PatasPrimitives::TRAILING_ZERO_BITSIZE) / 8;
 
 		// Current bytes taken up by the bitpacked 'byte_count' blocks
-		metadata_size += (effective_bitpack_block_index * 3) / 8;
+		metadata_size += (effective_bitpack_block_index * PatasPrimitives::BYTECOUNT_BITSIZE) / 8;
 		return metadata_size;
 	}
 
 	// The current segment has enough space to fit this new value
 	bool HasEnoughSpace() {
-		if (handle.Ptr() + PatasPrimitives::HEADER_SIZE + AlignValue(UsedSpace() + RequiredSpace()) >=
+		if (handle.Ptr() + AlignValue(PatasPrimitives::HEADER_SIZE + UsedSpace() + RequiredSpace()) >=
 		    (metadata_ptr - CurrentGroupMetadataSize())) {
 			return false;
 		}
@@ -241,6 +241,7 @@ public:
 		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
 		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);
+		// printf("COMPRESS: DATA BYTES SIZE: %llu\n", UsedSpace());
 	}
 
 	void Finalize() {
