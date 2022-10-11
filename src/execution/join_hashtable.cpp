@@ -1250,9 +1250,13 @@ void ProbeSpill::Finalize() {
 		local_partitions.clear();
 		local_partition_append_states.clear();
 	} else {
-		global_spill_collection = move(local_spill_collections[0]);
-		for (idx_t i = 1; i < local_spill_collections.size(); i++) {
-			global_spill_collection->Combine(*local_spill_collections[i]);
+		if (local_spill_collections.empty()) {
+			global_spill_collection = make_unique<ColumnDataCollection>(context, probe_types);
+		} else {
+			global_spill_collection = move(local_spill_collections[0]);
+			for (idx_t i = 1; i < local_spill_collections.size(); i++) {
+				global_spill_collection->Combine(*local_spill_collections[i]);
+			}
 		}
 		local_spill_collections.clear();
 		local_spill_append_states.clear();
@@ -1263,7 +1267,7 @@ void ProbeSpill::PrepareNextProbe() {
 	if (partitioned) {
 		auto &partitions = global_partitions->GetPartitions();
 		if (partitions.empty() || ht.partition_start == partitions.size()) {
-			// Can't probe, just put an empty one
+			// Can't probe, just make an empty one
 			global_spill_collection = make_unique<ColumnDataCollection>(context, probe_types);
 		} else {
 			// Move specific partitions to the global spill collection

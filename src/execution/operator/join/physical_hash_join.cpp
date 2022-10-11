@@ -461,7 +461,9 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 
 	// some initialization for external hash join
 	if (sink.external && !state.initialized) {
-		// initialize local state if not yet done
+		if (!sink.probe_spill) {
+			sink.InitializeProbeSpill(context.client);
+		}
 		state.spill_state = sink.probe_spill->RegisterThread();
 		state.initialized = true;
 	}
