@@ -17,7 +17,7 @@ public:
 	Node4();
 	uint8_t key[4];
 	// Pointers to the child nodes
-	ArtPointer children[4];
+	ARTPointer children[4];
 
 public:
 	//! Get position of a byte, returns DConstants::INVALID_INDEX if not exists

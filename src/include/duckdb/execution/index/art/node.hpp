@@ -24,10 +24,10 @@ class Node;
 struct InternalType {
 	explicit InternalType(Node *n);
 
-	void Set(uint8_t *key_p, uint16_t key_size_p, ArtPointer *children_p, uint16_t children_size_p);
+	void Set(uint8_t *key_p, uint16_t key_size_p, ARTPointer *children_p, uint16_t children_size_p);
 	uint8_t *key;
 	uint16_t key_size;
-	ArtPointer *children;
+	ARTPointer *children;
 	uint16_t children_size;
 };
 

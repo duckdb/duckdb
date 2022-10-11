@@ -29,7 +29,9 @@ public:
 	//! Unswizzle the pointer (if possible)
 	Node *Unswizzle(ART &art);
 
-	bool empty() const { return !pointer; }
+	bool empty() const {
+		return !pointer;
+	}
 
 	//! Deletes the underlying object (if necessary) and set the pointer to null_ptr
 	void Reset();
@@ -47,6 +49,6 @@ private:
 
 // Note: SwizzleablePointer assumes top 33 bits of the block_id are 0. Use a different
 // pointer implementation if that does not hold.
-using ArtPointer = SwizzleablePointer;
+using ARTPointer = SwizzleablePointer;
 
 } // namespace duckdb

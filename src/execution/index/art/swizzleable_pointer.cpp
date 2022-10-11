@@ -30,7 +30,11 @@ SwizzleablePointer::SwizzleablePointer(duckdb::MetaBlockReader &reader) {
 }
 
 SwizzleablePointer &SwizzleablePointer::operator=(const Node *ptr) {
-	// Note: If the object already has a non-swizzled pointer, this will leak memory.
+	// If the object already has a non-swizzled pointer, this will leak memory.
+	//
+	// TODO: If enabled, this assert will fire, indicating a possible leak. If an exception
+	// is thrown here, it will cause a double-free. There is some work to do to make all this safer.
+	// D_ASSERT(empty() || IsSwizzled());
 	if (sizeof(ptr) == 4) {
 		pointer = (uint32_t)(size_t)ptr;
 	} else {
@@ -46,13 +50,14 @@ bool operator!=(const SwizzleablePointer &s_ptr, const uint64_t &ptr) {
 BlockPointer SwizzleablePointer::GetSwizzledBlockInfo() {
 	D_ASSERT(IsSwizzled());
 	idx_t pointer_size = sizeof(pointer) * 8;
-	// Note: This is destructive. Pointer will be invalid after this
-	// operation.
+	// This is destructive. Pointer will be invalid after this operation.
+	// That's okay because this is only ever called from Unswizzle.
 	pointer = pointer & ~(1ULL << (pointer_size - 1));
 	uint32_t block_id = pointer >> (pointer_size / 2);
 	uint32_t offset = pointer & 0xffffffff;
 	return {block_id, offset};
 }
+
 bool SwizzleablePointer::IsSwizzled() {
 	idx_t pointer_size = sizeof(pointer) * 8;
 	return (pointer >> (pointer_size - 1)) & 1;
