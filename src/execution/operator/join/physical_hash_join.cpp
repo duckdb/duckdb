@@ -422,7 +422,7 @@ public:
 	unique_ptr<OperatorState> perfect_hash_join_state;
 
 	bool initialized;
-	JoinHashTable::ProbeSpillLocalState spill_state;
+	JoinHashTable::ProbeSpillLocalAppendState spill_state;
 	//! Chunk to sink data into for external join
 	DataChunk spill_chunk;
 

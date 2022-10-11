@@ -21,18 +21,11 @@ struct ColumnDataConsumerScanState {
 
 //! ColumnDataConsumer can scan a ColumnDataCollection, and consume it in the process, i.e., read blocks are deleted
 class ColumnDataConsumer {
-private:
+public:
 	struct ChunkReference {
 	public:
-		ChunkReference(ColumnDataCollectionSegment *segment_p, uint32_t chunk_index_p)
-		    : segment(segment_p), chunk_index_in_segment(chunk_index_p) {
-		}
-
-		inline uint32_t GetMinimumBlockID() const {
-			const auto &block_ids = segment->chunk_data[chunk_index_in_segment].block_ids;
-			return *std::min_element(block_ids.begin(), block_ids.end());
-		}
-
+		ChunkReference(ColumnDataCollectionSegment *segment_p, uint32_t chunk_index_p);
+		uint32_t GetMinimumBlockID() const;
 		friend bool operator<(const ChunkReference &lhs, const ChunkReference &rhs) {
 			// Sort by allocator first
 			if (lhs.segment->allocator.get() != rhs.segment->allocator.get()) {

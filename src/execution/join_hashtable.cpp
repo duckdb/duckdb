@@ -16,7 +16,7 @@ namespace duckdb {
 using ValidityBytes = JoinHashTable::ValidityBytes;
 using ScanStructure = JoinHashTable::ScanStructure;
 using ProbeSpill = JoinHashTable::ProbeSpill;
-using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalState;
+using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
@@ -90,7 +90,7 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		}
 	}
 
-	lock_guard<mutex> lock(partition_lock);
+	lock_guard<mutex> lock(partitioned_data_lock);
 	if (partition_block_collections.empty()) {
 		D_ASSERT(partition_string_heaps.empty());
 		// Move partitions to this HT
@@ -1150,7 +1150,8 @@ static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &keys, DataChunk 
 }
 
 unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChunk &payload, ProbeSpill &probe_spill,
-                                                       ProbeSpillLocalState &spill_state, DataChunk &spill_chunk) {
+                                                       ProbeSpillLocalAppendState &spill_state,
+                                                       DataChunk &spill_chunk) {
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
 	Hash(keys, *FlatVector::IncrementalSelectionVector(), keys.size(), hashes);
@@ -1209,7 +1210,7 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
 }
 
 ProbeSpillLocalState ProbeSpill::RegisterThread() {
-	ProbeSpillLocalState result;
+	ProbeSpillLocalAppendState result;
 	lock_guard<mutex> guard(lock);
 	if (partitioned) {
 		local_partitions.emplace_back(global_partitions->CreateShared());
@@ -1229,7 +1230,7 @@ ProbeSpillLocalState ProbeSpill::RegisterThread() {
 	return result;
 }
 
-void ProbeSpill::Append(DataChunk &chunk, ProbeSpillLocalState &local_state) {
+void ProbeSpill::Append(DataChunk &chunk, ProbeSpillLocalAppendState &local_state) {
 	if (partitioned) {
 		local_state.local_partition->Append(*local_state.local_partition_append_state, chunk);
 	} else {

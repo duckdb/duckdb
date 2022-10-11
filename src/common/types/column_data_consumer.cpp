@@ -1,6 +1,19 @@
 #include "duckdb/common/types/column_data_consumer.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
+
+using ChunkReference = ColumnDataConsumer::ChunkReference;
+
+ChunkReference::ChunkReference(ColumnDataCollectionSegment *segment_p, uint32_t chunk_index_p)
+    : segment(segment_p), chunk_index_in_segment(chunk_index_p) {
+}
+
+uint32_t ChunkReference::GetMinimumBlockID() const {
+	const auto &block_ids = segment->chunk_data[chunk_index_in_segment].block_ids;
+	return *std::min_element(block_ids.begin(), block_ids.end());
+}
 
 ColumnDataConsumer::ColumnDataConsumer(ColumnDataCollection &collection_p, vector<column_t> column_ids)
     : collection(collection_p), column_ids(move(column_ids)) {
@@ -68,19 +81,20 @@ void ColumnDataConsumer::ConsumeChunks(idx_t delete_index_start, idx_t delete_in
 		}
 		auto &prev_chunk_ref = chunk_references[chunk_index - 1];
 		auto &curr_chunk_ref = chunk_references[chunk_index];
+		auto prev_allocator = prev_chunk_ref.segment->allocator.get();
+		auto curr_allocator = curr_chunk_ref.segment->allocator.get();
 		auto prev_min_block_id = prev_chunk_ref.GetMinimumBlockID();
 		auto curr_min_block_id = curr_chunk_ref.GetMinimumBlockID();
-		if (prev_chunk_ref.segment->allocator.get() != curr_chunk_ref.segment->allocator.get()) {
+		if (prev_allocator != curr_allocator) {
 			// Moved to the next allocator, delete all remaining blocks in the previous one
-			auto &prev_allocator = *prev_chunk_ref.segment->allocator;
-			for (uint32_t block_id = prev_min_block_id; block_id < prev_allocator.BlockCount(); block_id++) {
-				prev_allocator.DeleteBlock(block_id);
+			for (uint32_t block_id = prev_min_block_id; block_id < prev_allocator->BlockCount(); block_id++) {
+				prev_allocator->DeleteBlock(block_id);
 			}
 			continue;
 		}
 		// Same allocator, see if we can delete blocks
 		for (uint32_t block_id = prev_min_block_id; block_id < curr_min_block_id; block_id++) {
-			prev_chunk_ref.segment->allocator->DeleteBlock(block_id);
+			prev_allocator->DeleteBlock(block_id);
 		}
 	}
 }

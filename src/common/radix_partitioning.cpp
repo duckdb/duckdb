@@ -6,6 +6,7 @@
 #include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 
 namespace duckdb {
 
@@ -184,7 +185,10 @@ struct PartitionFunctor {
 
 		auto &data_blocks = block_collection.blocks;
 		auto &heap_blocks = string_heap.blocks;
-		for (idx_t block_idx = 0; block_idx < data_blocks.size(); block_idx++) {
+		for (idx_t block_idx_plus_one = data_blocks.size(); block_idx_plus_one > 0; block_idx_plus_one--) {
+			// We loop through blocks in reverse to save some of that PRECIOUS I/O
+			idx_t block_idx = block_idx_plus_one - 1;
+
 			RowDataBlock *data_block;
 			BufferHandle data_handle;
 			data_ptr_t data_ptr;
