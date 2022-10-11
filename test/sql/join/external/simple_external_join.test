@@ -8,9 +8,6 @@ pragma verify_external
 statement ok
 pragma verify_parallelism
 
-#statement ok
-#pragma threads=1
-
 # Create tables with large string values so that we have to swizzle strings
 # The tables have some overlapping values to keep the join result small
 statement ok

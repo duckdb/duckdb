@@ -69,7 +69,19 @@ protected:
 	// Radix Partitioning interface implementation
 	//===--------------------------------------------------------------------===//
 	idx_t BufferSize() const override {
-		return STANDARD_VECTOR_SIZE;
+		switch (radix_bits) {
+		case 1:
+		case 2:
+		case 3:
+		case 4:
+			return 1024;
+		case 5:
+			return 512;
+		case 6:
+			return 256;
+		default:
+			return 128;
+		}
 	}
 	void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const override;
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;

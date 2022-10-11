@@ -55,7 +55,7 @@ public:
 	//! Get the partitions in this PartitionedColumnData
 	vector<unique_ptr<ColumnDataCollection>> &GetPartitions();
 
-private:
+protected:
 	//===--------------------------------------------------------------------===//
 	// Partitioning type implementation interface
 	//===--------------------------------------------------------------------===//
