@@ -52,8 +52,8 @@ void BufferedFileWriter::Sync() {
 
 void BufferedFileWriter::Truncate(int64_t size) {
 	uint64_t persistent = fs.GetFileSize(*handle);
-	D_ASSERT((uint64_t) size <= persistent + offset); 
-	if (persistent <= (uint64_t) size) {
+	D_ASSERT((uint64_t)size <= persistent + offset);
+	if (persistent <= (uint64_t)size) {
 		// truncating into the pending write buffer.
 		offset = size - persistent;
 	} else {

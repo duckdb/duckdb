@@ -71,7 +71,9 @@ public:
 	//! Closes the file handle.
 	DUCKDB_API virtual void Close() = 0;
 
-	string GetPath() const { return path; }
+	string GetPath() const {
+		return path;
+	}
 
 public:
 	FileSystem &file_system;
