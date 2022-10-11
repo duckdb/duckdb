@@ -42,11 +42,11 @@ public:
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
-	DataFrame FetchDF(bool date_as_datetime);
+	DataFrame FetchDF(bool date_as_object);
 
 	duckdb::pyarrow::Table FetchArrowTable(idx_t chunk_size);
 
-	DataFrame FetchDFChunk(bool date_as_datetime, idx_t vectors_per_chunk);
+	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
 
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
@@ -63,7 +63,7 @@ private:
 
 	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size);
 
-	DataFrame FrameFromNumpy(bool date_as_datetime, const py::handle &o);
+	DataFrame FrameFromNumpy(bool date_as_object, const py::handle &o);
 
 	void ChangeToTZType(DataFrame &df);
 	void ChangeDateToDatetime(DataFrame &df);
