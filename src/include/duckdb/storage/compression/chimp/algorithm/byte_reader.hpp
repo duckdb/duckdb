@@ -27,7 +27,7 @@ public:
 	}
 
 public:
-	void SetStream(uint8_t *buffer) {
+	void SetStream(const uint8_t *buffer) {
 		this->buffer = buffer;
 		index = 0;
 	}
@@ -111,7 +111,7 @@ public:
 	}
 
 private:
-	uint8_t *buffer;
+	const uint8_t *buffer;
 	uint32_t index;
 };
 

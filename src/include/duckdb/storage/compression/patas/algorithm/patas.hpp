@@ -113,16 +113,8 @@ public:
 	}
 
 public:
-	//! Set the array to read the 'trailing_zero' values from
-	void SetTrailingZeroBuffer(uint8_t *buffer) {
-		trailing_zeros = buffer;
-	}
-	//! Set the array to read the 'byte_count' values from
-	void SetByteCountBuffer(uint8_t *buffer) {
-		byte_counts = buffer;
-	}
 	//! Set the array to read the significant bytes from
-	void SetInputBuffer(uint8_t *buffer) {
+	void SetInputBuffer(const uint8_t *buffer) {
 		// TODO: This can probably be passed as constructor parameter
 		// since the block of significant byte values is contiguous for the entire segment
 		byte_reader.SetStream(buffer);
@@ -132,8 +124,6 @@ public:
 		previous_value = 0;
 	}
 	ByteReader byte_reader;
-	uint8_t *trailing_zeros;
-	uint8_t *byte_counts;
 	EXACT_TYPE previous_value;
 };
 
@@ -141,25 +131,24 @@ template <class EXACT_TYPE>
 struct PatasDecompression {
 	using State = PatasDecompressionState<EXACT_TYPE>;
 
-	static EXACT_TYPE Load(State &state, idx_t index) {
+	static inline EXACT_TYPE Load(State &state, idx_t index, uint8_t byte_counts[], uint8_t trailing_zeros[]) {
 		if (index == 0) {
 			return LoadFirst(state, index);
 		}
-		return DecompressValue(state, index);
+		return DecompressValue(state, index, byte_counts, trailing_zeros);
 	}
 
-	static EXACT_TYPE LoadFirst(State &state, idx_t index) {
+	static inline EXACT_TYPE LoadFirst(State &state, idx_t index) {
 		const EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE, sizeof(EXACT_TYPE)>();
 		state.previous_value = result;
 		return result;
 	}
 
-	static EXACT_TYPE DecompressValue(State &state, idx_t index) {
-		const auto byte_count = state.byte_counts[index];
-		const auto trailing_zeros = state.trailing_zeros[index];
-
+	static inline EXACT_TYPE DecompressValue(State &state, idx_t index, uint8_t byte_counts[],
+	                                         uint8_t trailing_zeros[]) {
 		const EXACT_TYPE result =
-		    (state.byte_reader.template ReadValue<EXACT_TYPE>(byte_count) << trailing_zeros) ^ state.previous_value;
+		    (state.byte_reader.template ReadValue<EXACT_TYPE>(byte_counts[index]) << trailing_zeros[index]) ^
+		    state.previous_value;
 
 		state.previous_value = result;
 		return result;

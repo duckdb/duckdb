@@ -71,10 +71,6 @@ public:
 		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
 		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
 		LoadGroup();
-
-		//! FIXME: could these arrays just live in the patas_state to begin with??
-		patas_state.trailing_zeros = group_state.trailing_zeros;
-		patas_state.byte_counts = group_state.byte_counts;
 	}
 
 	patas::PatasDecompressionState<EXACT_TYPE> patas_state;
@@ -140,7 +136,8 @@ public:
 		D_ASSERT(group_size <= LeftInGroup());
 
 		for (idx_t i = 0; i < group_size; i++) {
-			values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(patas_state, group_state.index + i);
+			values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(
+			    patas_state, group_state.index + i, group_state.byte_counts, group_state.trailing_zeros);
 		}
 		group_state.index += group_size;
 		total_value_count += group_size;
