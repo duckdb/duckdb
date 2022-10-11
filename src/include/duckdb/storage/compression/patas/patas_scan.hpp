@@ -24,6 +24,7 @@
 
 namespace duckdb {
 
+template <class EXACT_TYPE>
 struct PatasGroupState {
 public:
 	bool Started() const {
@@ -31,6 +32,7 @@ public:
 	}
 	void Reset() {
 		index = 0;
+		previous = 0;
 	}
 	// Assuming the group is completely full
 	idx_t RemainingInGroup() const {
@@ -52,6 +54,7 @@ public:
 	idx_t index;
 	uint8_t trailing_zeros[PatasPrimitives::PATAS_GROUP_SIZE];
 	uint8_t byte_counts[PatasPrimitives::PATAS_GROUP_SIZE];
+	EXACT_TYPE previous;
 };
 
 template <class T>
@@ -77,7 +80,7 @@ public:
 	BufferHandle handle;
 	data_ptr_t metadata_ptr;
 	idx_t total_value_count = 0;
-	PatasGroupState group_state;
+	PatasGroupState<EXACT_TYPE> group_state;
 
 	ColumnSegment &segment;
 
@@ -135,10 +138,13 @@ public:
 		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
-		for (idx_t i = 0; i < group_size; i++) {
+		values[0] = patas::PatasDecompression<EXACT_TYPE>::Load(patas_state, group_state.index, group_state.byte_counts,
+		                                                        group_state.trailing_zeros, group_state.previous);
+		for (idx_t i = 1; i < group_size; i++) {
 			values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(
-			    patas_state, group_state.index + i, group_state.byte_counts, group_state.trailing_zeros);
+			    patas_state, group_state.index + i, group_state.byte_counts, group_state.trailing_zeros, values[i - 1]);
 		}
+		group_state.previous = values[group_size - 1];
 		group_state.index += group_size;
 		total_value_count += group_size;
 		if (GroupFinished() && total_value_count < segment.count) {
@@ -147,7 +153,6 @@ public:
 	}
 
 	void LoadGroup() {
-		patas_state.Reset();
 		group_state.Reset();
 
 		// Load the offset indicating where a groups data starts

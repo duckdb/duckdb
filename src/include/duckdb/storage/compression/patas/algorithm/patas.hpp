@@ -119,30 +119,22 @@ public:
 		// since the block of significant byte values is contiguous for the entire segment
 		byte_reader.SetStream(buffer);
 	}
-	//! Reset the state for a new group
-	void Reset() {
-		previous_value = 0;
-	}
 	ByteReader byte_reader;
-	EXACT_TYPE previous_value;
 };
 
 template <class EXACT_TYPE>
 struct PatasDecompression {
 	using State = PatasDecompressionState<EXACT_TYPE>;
 
-	static inline EXACT_TYPE Load(State &state, idx_t index, uint8_t byte_counts[], uint8_t trailing_zeros[]) {
-		return DecompressValue(state, index, byte_counts, trailing_zeros);
+	static inline EXACT_TYPE Load(State &state, idx_t index, uint8_t byte_counts[], uint8_t trailing_zeros[],
+	                              EXACT_TYPE previous) {
+		return DecompressValue(state, index, byte_counts, trailing_zeros, previous);
 	}
 
-	static inline EXACT_TYPE DecompressValue(State &state, idx_t index, uint8_t byte_counts[],
-	                                         uint8_t trailing_zeros[]) {
-		const EXACT_TYPE result =
-		    (state.byte_reader.template ReadValue<EXACT_TYPE>(byte_counts[index]) << trailing_zeros[index]) ^
-		    state.previous_value;
-
-		state.previous_value = result;
-		return result;
+	static inline EXACT_TYPE DecompressValue(State &state, idx_t index, uint8_t byte_counts[], uint8_t trailing_zeros[],
+	                                         EXACT_TYPE previous) {
+		return (state.byte_reader.template ReadValue<EXACT_TYPE>(byte_counts[index]) << trailing_zeros[index]) ^
+		       previous;
 	}
 };
 

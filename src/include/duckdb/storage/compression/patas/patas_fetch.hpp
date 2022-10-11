@@ -33,7 +33,8 @@ void PatasFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 	auto result_data = FlatVector::GetData<EXACT_TYPE>(result);
 	result_data[result_idx] = patas::PatasDecompression<EXACT_TYPE>::Load(
 	    scan_state.patas_state, scan_state.group_state.index, scan_state.group_state.byte_counts,
-	    scan_state.group_state.trailing_zeros);
+	    scan_state.group_state.trailing_zeros, scan_state.group_state.previous);
+	scan_state.group_state.previous = result_data[result_idx];
 }
 
 } // namespace duckdb
