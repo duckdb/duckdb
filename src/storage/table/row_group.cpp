@@ -539,8 +539,6 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 	}
 	lock_guard<mutex> lock(row_group_lock);
 
-	this->count = row_group_end;
-
 	// create the version_info if it doesn't exist yet
 	if (!version_info) {
 		version_info = make_unique<VersionNode>();
@@ -573,6 +571,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 			info->Append(start, end, transaction.transaction_id);
 		}
 	}
+	this->count = row_group_end;
 }
 
 void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count) {
