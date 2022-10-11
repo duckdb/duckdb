@@ -681,10 +681,10 @@ void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	other.Merge(*stats[column_idx]->statistics);
 }
 
-RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
-	RowGroupPointer row_group_pointer;
-	vector<unique_ptr<ColumnCheckpointState>> states;
-	states.reserve(columns.size());
+RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types, vector<unique_ptr<BaseStatistics>> &global_stats) {
+	RowGroupWriteData result;
+	result.states.reserve(columns.size());
+	result.statistics.reserve(columns.size());
 
 	// Checkpoint the individual columns of the row group
 	// Here we're iterating over columns. Each column can have multiple segments.
@@ -694,26 +694,40 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<B
 	// Some of these columns are composite (list, struct). The data is written
 	// first sequentially, and the pointers are written later, so that the
 	// pointers all end up densely packed, and thus more cache-friendly.
-	auto &block_manager = writer.GetPartialBlockManager();
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
-		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(column_idx)};
-		auto checkpoint_state = column->Checkpoint(*this, block_manager, checkpoint_info);
+		ColumnCheckpointInfo checkpoint_info {compression_types[column_idx]};
+		auto checkpoint_state = column->Checkpoint(*this, manager, checkpoint_info);
 		D_ASSERT(checkpoint_state);
 
 		auto stats = checkpoint_state->GetStatistics();
 		D_ASSERT(stats);
 
 		global_stats[column_idx]->Merge(*stats);
-		row_group_pointer.statistics.push_back(move(stats));
-		states.push_back(move(checkpoint_state));
+		result.statistics.push_back(move(stats));
+		result.states.push_back(move(checkpoint_state));
 	}
+	D_ASSERT(result.states.size() == result.statistics.size());
+	return result;
+}
+
+
+RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+	RowGroupPointer row_group_pointer;
+
+	vector<CompressionType> compression_types;
+	compression_types.reserve(columns.size());
+	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
+	}
+	auto result = WriteToDisk(writer.GetPartialBlockManager(), compression_types, global_stats);
+	row_group_pointer.statistics = move(result.statistics);
 
 	// construct the row group pointer and write the column meta data to disk
-	D_ASSERT(states.size() == columns.size());
+	D_ASSERT(result.states.size() == columns.size());
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
-	for (auto &state : states) {
+	for (auto &state : result.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
 		auto pointer = data_writer.GetBlockPointer();
