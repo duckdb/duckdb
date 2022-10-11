@@ -18,7 +18,7 @@ SwizzleablePointer::SwizzleablePointer(duckdb::MetaBlockReader &reader) {
 	}
 	idx_t pointer_size = sizeof(pointer) * 8;
 	pointer = block_id;
-	//This assumes high 32 bits of pointer are zero.
+	// This assumes high 32 bits of pointer are zero.
 	pointer = pointer << (pointer_size / 2);
 	D_ASSERT((pointer >> (pointer_size / 2)) == block_id);
 	pointer += offset;
