@@ -12,6 +12,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -29,6 +30,8 @@ struct ColumnAppendState {
 	vector<ColumnAppendState> child_appends;
 	//! The write lock that is held by the append
 	unique_ptr<StorageLockKey> lock;
+	//! The compression append state
+	unique_ptr<CompressionAppendState> append_state;
 };
 
 struct RowGroupAppendState {
