@@ -132,16 +132,7 @@ struct PatasDecompression {
 	using State = PatasDecompressionState<EXACT_TYPE>;
 
 	static inline EXACT_TYPE Load(State &state, idx_t index, uint8_t byte_counts[], uint8_t trailing_zeros[]) {
-		if (index == 0) {
-			return LoadFirst(state, index);
-		}
 		return DecompressValue(state, index, byte_counts, trailing_zeros);
-	}
-
-	static inline EXACT_TYPE LoadFirst(State &state, idx_t index) {
-		const EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE, sizeof(EXACT_TYPE)>();
-		state.previous_value = result;
-		return result;
 	}
 
 	static inline EXACT_TYPE DecompressValue(State &state, idx_t index, uint8_t byte_counts[],
