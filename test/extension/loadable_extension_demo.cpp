@@ -11,8 +11,8 @@ using namespace duckdb;
 //===--------------------------------------------------------------------===//
 // Scalar function
 //===--------------------------------------------------------------------===//
-inline string_t hello_fun(string_t what) {
-	return "Hello, " + what.GetString();
+inline int32_t hello_fun(string_t what) {
+	return what.GetSize() + 5;
 }
 
 inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -225,8 +225,8 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	auto &client_context = *con.context;
 	auto &catalog = Catalog::GetCatalog(client_context);
 	con.BeginTransaction();
-	con.CreateScalarFunction<string_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
-	                                             LogicalType(LogicalTypeId::VARCHAR), &hello_fun);
+	con.CreateScalarFunction<int32_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
+	                                            LogicalType(LogicalTypeId::INTEGER), &hello_fun);
 
 	catalog.CreateFunction(client_context, &hello_alias_info);
 

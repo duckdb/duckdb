@@ -24,7 +24,7 @@ LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extensio
 query I
 SELECT hello('World');
 ----
-Hello, World
+10
 
 query I
 QUACK QUACK QUACK
