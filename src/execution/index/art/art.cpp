@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 
 #include <algorithm>
 #include <cstring>
