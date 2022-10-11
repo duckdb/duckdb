@@ -29,8 +29,8 @@ public:
 	//! Unswizzle the pointer (if possible)
 	Node *Unswizzle(ART &art);
 
-	bool empty() const {
-		return !pointer;
+	operator bool() const {
+		return pointer;
 	}
 
 	//! Deletes the underlying object (if necessary) and set the pointer to null_ptr
