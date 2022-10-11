@@ -86,6 +86,8 @@ public:
 	DUCKDB_API static int64_t Epoch(date_t date);
 	//! Extract the epoch from the date (nanoseconds since 1970-01-01)
 	DUCKDB_API static int64_t EpochNanoseconds(date_t date);
+	//! Extract the epoch from the date (microseconds since 1970-01-01)
+	DUCKDB_API static int64_t EpochMicroseconds(date_t date);
 	//! Convert the epoch (seconds since 1970-01-01) to a date_t
 	DUCKDB_API static date_t EpochToDate(int64_t epoch);
 
