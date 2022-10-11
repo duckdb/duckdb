@@ -182,7 +182,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make reldebug
+      run: make debug
 
     - name: Test
       shell: bash
