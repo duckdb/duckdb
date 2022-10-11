@@ -1262,14 +1262,15 @@ void ProbeSpill::Finalize() {
 void ProbeSpill::PrepareNextProbe() {
 	if (partitioned) {
 		auto &partitions = global_partitions->GetPartitions();
-		if (ht.partition_start == partitions.size()) {
-			return;
-		}
-
-		// Move specific partitions to the global spill collection
-		global_spill_collection = move(partitions[ht.partition_start]);
-		for (idx_t i = ht.partition_start + 1; i < ht.partition_end; i++) {
-			global_spill_collection->Combine(*partitions[i]);
+		if (partitions.empty() || ht.partition_start == partitions.size()) {
+			// Can't probe, just put an empty one
+			global_spill_collection = make_unique<ColumnDataCollection>(context, probe_types);
+		} else {
+			// Move specific partitions to the global spill collection
+			global_spill_collection = move(partitions[ht.partition_start]);
+			for (idx_t i = ht.partition_start + 1; i < ht.partition_end; i++) {
+				global_spill_collection->Combine(*partitions[i]);
+			}
 		}
 	}
 	consumer = make_unique<ColumnDataConsumer>(*global_spill_collection, column_ids);

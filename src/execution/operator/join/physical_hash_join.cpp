@@ -446,6 +446,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	}
 	if (sink.external) {
 		state->spill_chunk.Initialize(allocator, sink.probe_types);
+		sink.InitializeProbeSpill(context.client);
 	}
 
 	return move(state);
@@ -459,16 +460,10 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 	D_ASSERT(!sink.scanned_data);
 
 	// some initialization for external hash join
-	if (sink.external) {
-		if (!sink.probe_spill) {
-			// initialize probe spill if not yet done
-			sink.InitializeProbeSpill(context.client);
-		}
-		if (!state.initialized) {
-			// initialize local state if not yet done
-			state.spill_state = sink.probe_spill->RegisterThread();
-			state.initialized = true;
-		}
+	if (sink.external && !state.initialized) {
+		// initialize local state if not yet done
+		state.spill_state = sink.probe_spill->RegisterThread();
+		state.initialized = true;
 	}
 
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
@@ -632,7 +627,9 @@ void HashJoinGlobalSourceState::Initialize(ClientContext &context, HashJoinGloba
 	build_blocks_per_thread = MaxValue<idx_t>((num_blocks + num_threads - 1) / num_threads, 1);
 
 	// Finalize the probe spill too
-	sink.probe_spill->Finalize();
+	if (sink.probe_spill) {
+		sink.probe_spill->Finalize();
+	}
 
 	global_stage = HashJoinSourceStage::PROBE;
 }
