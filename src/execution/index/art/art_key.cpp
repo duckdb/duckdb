@@ -94,14 +94,12 @@ bool Key::Empty() {
 	return len == 0;
 }
 
-template <class T>
-void Key::ConcatKey(ArenaAllocator &allocator, T new_element) {
+void Key::ConcatenateKey(ArenaAllocator &allocator, Key &other_key) {
 
-	auto concat_key = Key::CreateKey<T>(allocator, new_element);
-	auto compound_data = allocator.Allocate(len + concat_key.len);
+	auto compound_data = allocator.Allocate(len + other_key.len);
 	memcpy(compound_data, data, len);
-	memcpy(compound_data + len, concat_key.data, concat_key.len);
-	len += concat_key.len;
+	memcpy(compound_data + len, other_key.data, other_key.len);
+	len += other_key.len;
 	data = compound_data;
 }
 } // namespace duckdb

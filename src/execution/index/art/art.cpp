@@ -103,7 +103,8 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 				// this column entry is NULL, set whole key to NULL
 				keys[i] = Key();
 			} else {
-				keys[i].ConcatKey<T>(allocator, input_data[idx]);
+				auto other_key = Key::CreateKey<T>(allocator, input_data[idx]);
+				keys[i].ConcatenateKey(allocator, other_key);
 			}
 		}
 	}

@@ -64,9 +64,7 @@ public:
 
 	bool ByteMatches(Key &other, idx_t &depth);
 	bool Empty();
-
-	template <class T>
-	void ConcatKey(ArenaAllocator &allocator, T new_element);
+	void ConcatenateKey(ArenaAllocator &allocator, Key &concat_key);
 
 private:
 	template <class T>
