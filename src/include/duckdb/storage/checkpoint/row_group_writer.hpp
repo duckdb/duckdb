@@ -37,6 +37,10 @@ public:
 	void RegisterPartialBlock(PartialBlockAllocation &&allocation);
 	PartialBlockAllocation GetBlockAllocation(uint32_t segment_size);
 
+	PartialBlockManager &GetPartialBlockManager() {
+		return partial_block_manager;
+	}
+
 protected:
 	TableCatalogEntry &table;
 	PartialBlockManager &partial_block_manager;

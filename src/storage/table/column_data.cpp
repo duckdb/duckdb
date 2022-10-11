@@ -336,8 +336,9 @@ void ColumnData::CommitDropColumn() {
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer) {
-	return make_unique<ColumnCheckpointState>(row_group, *this, writer);
+unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &row_group,
+                                                                    PartialBlockManager &partial_block_manager) {
+	return make_unique<ColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
 void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
@@ -349,11 +350,12 @@ void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, 
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
+                                                         PartialBlockManager &partial_block_manager,
                                                          ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(row_group, writer);
+	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type, StatisticsType::LOCAL_STATS);
 
 	if (!data.root_node) {

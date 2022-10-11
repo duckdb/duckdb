@@ -694,10 +694,11 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<B
 	// Some of these columns are composite (list, struct). The data is written
 	// first sequentially, and the pointers are written later, so that the
 	// pointers all end up densely packed, and thus more cache-friendly.
+	auto &block_manager = writer.GetPartialBlockManager();
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
 		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(column_idx)};
-		auto checkpoint_state = column->Checkpoint(*this, writer, checkpoint_info);
+		auto checkpoint_state = column->Checkpoint(*this, block_manager, checkpoint_info);
 		D_ASSERT(checkpoint_state);
 
 		auto stats = checkpoint_state->GetStatistics();
@@ -724,7 +725,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<B
 		//
 		// Just as above, the state can refer to many other states, so this
 		// can cascade recursively into more pointer writes.
-		state->WriteDataPointers();
+		state->WriteDataPointers(writer);
 	}
 	row_group_pointer.versions = version_info;
 	Verify();

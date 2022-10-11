@@ -14,8 +14,9 @@
 
 namespace duckdb {
 
-ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, RowGroupWriter &writer)
-    : row_group(row_group), column_data(column_data), writer(writer) {
+ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
+                                             PartialBlockManager &partial_block_manager)
+    : row_group(row_group), column_data(column_data), partial_block_manager(partial_block_manager) {
 }
 
 ColumnCheckpointState::~ColumnCheckpointState() {
@@ -94,7 +95,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 
 	if (!segment->stats.statistics->IsConstant()) {
 		// non-constant block
-		PartialBlockAllocation allocation = writer.GetBlockAllocation(segment_size);
+		PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(segment_size);
 		block_id = allocation.state.block_id;
 		offset_in_block = allocation.state.offset_in_block;
 
@@ -116,7 +117,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 			    make_unique<PartialBlockForCheckpoint>(segment.get(), *allocation.block_manager, allocation.state);
 		}
 		// Writer will decide whether to reuse this block.
-		writer.RegisterPartialBlock(move(allocation));
+		partial_block_manager.RegisterPartialBlock(move(allocation));
 	} else {
 		// constant block: no need to write anything to disk besides the stats
 		// set up the compression function to constant
@@ -144,7 +145,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	data_pointers.push_back(move(data_pointer));
 }
 
-void ColumnCheckpointState::WriteDataPointers() {
+void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer) {
 	writer.WriteColumnDataPointers(*this);
 }
 
