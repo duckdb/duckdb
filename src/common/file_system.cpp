@@ -104,7 +104,7 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 	auto path_aux = path;
 	path_aux.erase(0, 1);
 	sub_path = ":" + FileSystem::PathSeparator();
-	if (PathMatched(path, sub_path)) {
+	if (PathMatched(path_aux, sub_path)) {
 		return true;
 	}
 	return false;
