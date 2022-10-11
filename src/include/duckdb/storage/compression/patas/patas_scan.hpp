@@ -140,7 +140,7 @@ public:
 		D_ASSERT(group_size <= LeftInGroup());
 
 		for (idx_t i = 0; i < group_size; i++) {
-			values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(patas_state);
+			values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(patas_state, group_state.index + i);
 		}
 		group_state.index += group_size;
 		total_value_count += group_size;

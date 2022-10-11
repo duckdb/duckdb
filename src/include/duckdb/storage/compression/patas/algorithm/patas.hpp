@@ -129,13 +129,11 @@ public:
 	}
 	//! Reset the state for a new group
 	void Reset() {
-		group_index = 0;
 		previous_value = 0;
 	}
 	ByteReader byte_reader;
 	uint8_t *trailing_zeros;
 	uint8_t *byte_counts;
-	idx_t group_index;
 	EXACT_TYPE previous_value;
 };
 
@@ -143,42 +141,26 @@ template <class EXACT_TYPE>
 struct PatasDecompression {
 	using State = PatasDecompressionState<EXACT_TYPE>;
 
-	static EXACT_TYPE Load(State &state) {
-		if (state.group_index == 0) {
-			return LoadFirst(state);
+	static EXACT_TYPE Load(State &state, idx_t index) {
+		if (index == 0) {
+			return LoadFirst(state, index);
 		}
-		return DecompressValue(state);
+		return DecompressValue(state, index);
 	}
 
-	static EXACT_TYPE LoadFirst(State &state) {
-		// return the first value of the buffer
-		// set state.first to false
-		D_ASSERT(state.group_index == 0);
-		EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE>(sizeof(EXACT_TYPE) * 8);
+	static EXACT_TYPE LoadFirst(State &state, idx_t index) {
+		const EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE, sizeof(EXACT_TYPE)>();
 		state.previous_value = result;
-		state.group_index++;
 		return result;
 	}
 
-	static EXACT_TYPE DecompressValue(State &state) {
-		D_ASSERT(state.group_index != 0);
-		// Get the trailing_zeros value for the current index
-		// Get the byte_count value for the current index
+	static EXACT_TYPE DecompressValue(State &state, idx_t index) {
+		const auto byte_count = state.byte_counts[index];
+		const auto trailing_zeros = state.trailing_zeros[index];
 
-		auto byte_count = state.byte_counts[state.group_index];
-		D_ASSERT(byte_count <= sizeof(EXACT_TYPE));
-		auto trailing_zeros = state.trailing_zeros[state.group_index];
-		D_ASSERT(trailing_zeros <= 64);
+		const EXACT_TYPE result =
+		    (state.byte_reader.template ReadValue<EXACT_TYPE>(byte_count) << trailing_zeros) ^ state.previous_value;
 
-		// Full bytes is stored as 0
-		byte_count += (sizeof(EXACT_TYPE) * (byte_count == 0));
-
-		EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE>(byte_count * 8);
-		result <<= trailing_zeros;
-		result ^= state.previous_value;
-
-		// printf("DECOMPRESS: byte_count: %u | trailing_zero: %u\n", (uint32_t)byte_count, (uint32_t)trailing_zeros);
-		state.group_index++;
 		state.previous_value = result;
 		return result;
 	}
