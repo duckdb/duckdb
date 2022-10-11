@@ -1,0 +1,17 @@
+# name: test/sql/storage/storage_optimistic_write.test
+# description: Test scanning of persisted storage
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write.db
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000)
+
+query I
+SELECT SUM(a) FROM test
+----
+499999500000

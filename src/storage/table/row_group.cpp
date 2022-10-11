@@ -681,7 +681,8 @@ void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	other.Merge(*stats[column_idx]->statistics);
 }
 
-RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types, vector<unique_ptr<BaseStatistics>> &global_stats) {
+RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
+                                        const vector<CompressionType> &compression_types) {
 	RowGroupWriteData result;
 	result.states.reserve(columns.size());
 	result.statistics.reserve(columns.size());
@@ -703,14 +704,12 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager, const vect
 		auto stats = checkpoint_state->GetStatistics();
 		D_ASSERT(stats);
 
-		global_stats[column_idx]->Merge(*stats);
 		result.statistics.push_back(move(stats));
 		result.states.push_back(move(checkpoint_state));
 	}
 	D_ASSERT(result.states.size() == result.statistics.size());
 	return result;
 }
-
 
 RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
 	RowGroupPointer row_group_pointer;
@@ -720,7 +719,10 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<B
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
 	}
-	auto result = WriteToDisk(writer.GetPartialBlockManager(), compression_types, global_stats);
+	auto result = WriteToDisk(writer.GetPartialBlockManager(), compression_types);
+	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+		global_stats[column_idx]->Merge(*result.statistics[column_idx]);
+	}
 	row_group_pointer.statistics = move(result.statistics);
 
 	// construct the row group pointer and write the column meta data to disk

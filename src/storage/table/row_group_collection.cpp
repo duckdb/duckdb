@@ -181,15 +181,16 @@ void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 	state.start_row_group->InitializeAppend(state.row_group_append_state);
 }
 
-void RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats) {
+RowGroup *RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats) {
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
 
+	RowGroup *current_row_group;
 	idx_t append_count = chunk.size();
 	idx_t remaining = chunk.size();
 	state.total_append_count += append_count;
 	while (true) {
-		auto current_row_group = state.row_group_append_state.row_group;
+		current_row_group = state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
 		idx_t append_count =
 		    MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
@@ -235,6 +236,7 @@ void RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, Table
 		}
 		stats.GetStats(col_idx).stats->UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
+	return current_row_group;
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
@@ -274,12 +276,7 @@ void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, 
 
 void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
 	if (total_rows != start_row + count) {
-		// interleaved append: don't do anything
-		// in this case the rows will stay as "inserted by transaction X", but will never be committed
-		// they will never be used by any other transaction and will essentially leave a gap
-		// this situation is rare, and as such we don't care about optimizing it (yet?)
-		// it only happens if C1 appends a lot of data -> C2 appends a lot of data -> C1 rolls back
-		return;
+		throw InternalException("Interleaved appends: this should no longer happen");
 	}
 	total_rows = start_row;
 

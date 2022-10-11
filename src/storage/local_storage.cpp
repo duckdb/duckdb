@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
@@ -141,8 +142,38 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
 	}
 
-	//! Append to the chunk
-	storage->row_groups->Append(chunk, state.append_state, storage->stats);
+	//! Append the chunk to the local storage
+	auto row_group = storage->row_groups->Append(chunk, state.append_state, storage->stats);
+
+	//! Check if we should pre-emptively flush blocks to disk
+	storage->CheckFlush(row_group);
+}
+
+void LocalTableStorage::CheckFlush(RowGroup *row_group) {
+	if (row_group == prev_row_group) {
+		return;
+	}
+	if (!prev_row_group) {
+		// first time encountering a row group
+		prev_row_group = row_group;
+		return;
+	}
+	// we finished writing a complete row group
+	// write previous row group to disk
+	// allocate the partial block-manager if none is allocated yet
+	if (!partial_manager) {
+		D_ASSERT(compression_types.empty());
+		auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
+		partial_manager = make_unique<PartialBlockManager>(block_manager);
+		for (auto &column : table.column_definitions) {
+			compression_types.push_back(column.CompressionType());
+		}
+	}
+	auto row_group_pointer = prev_row_group->WriteToDisk(*partial_manager, compression_types);
+	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
+		stats.MergeStats(col_idx, *row_group_pointer.statistics[col_idx]);
+	}
+	prev_row_group = row_group;
 }
 
 void LocalStorage::FinalizeAppend(LocalAppendState &state) {
@@ -232,8 +263,15 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	    storage.table.info->indexes.Empty() && storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending to a table with existing storage: move over the storage
 		// directly
+		if (storage.partial_manager) {
+			storage.partial_manager->FlushPartialBlocks();
+			storage.partial_manager.reset();
+		}
 		table.MergeStorage(*storage.row_groups, storage.indexes, storage.stats);
 	} else {
+		if (storage.partial_manager) {
+			throw InternalException("partial manager should only exist when we are merging");
+		}
 		bool constraint_violated = false;
 		table.InitializeAppend(append_state);
 		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {

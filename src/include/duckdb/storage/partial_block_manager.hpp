@@ -76,6 +76,8 @@ public:
 	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT)
 	    : block_manager(block_manager), max_partial_block_size(max_partial_block_size), max_use_count(max_use_count) {
 	}
+	virtual ~PartialBlockManager() {
+	}
 
 public:
 	//! Flush any remaining partial blocks to disk

@@ -49,7 +49,8 @@ public:
 	           Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
 
 	void InitializeAppend(TableAppendState &state);
-	void Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
+	//! Appends to the row group collection - writes a pointer to the last row group that has been written to
+	RowGroup *Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row, idx_t count);

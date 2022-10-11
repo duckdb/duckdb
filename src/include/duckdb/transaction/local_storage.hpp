@@ -30,7 +30,6 @@ public:
 	// Create a LocalTableStorage from a ADD COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  Expression *default_value);
-
 	~LocalTableStorage();
 
 	DataTable &table;
@@ -44,9 +43,17 @@ public:
 	TableStatistics stats;
 	//! The number of deleted rows
 	idx_t deleted_rows;
+	//! The previously written row group
+	RowGroup *prev_row_group = nullptr;
+	//! The partial block manager (if we created one yet)
+	unique_ptr<PartialBlockManager> partial_manager;
+	//! The set of column compression types (if any)
+	vector<CompressionType> compression_types;
 
 public:
 	void InitializeScan(CollectionScanState &state, TableFilterSet *table_filters = nullptr);
+	//! Check if we should flush the previously written row-group to disk
+	void CheckFlush(RowGroup *row_group);
 	idx_t EstimatedSize();
 };
 
