@@ -755,7 +755,7 @@ inline void picohash_init_hmac(picohash_ctx_t *ctx, void (*initf)(picohash_ctx_t
         /* hash the key if it is too long */
         picohash_update(ctx, key, key_len);
         picohash_final(ctx, ctx->_hmac.key);
-        ctx->_hmac.hash_reset(ctx);
+        ctx->_reset(ctx);
     } else {
         memcpy(ctx->_hmac.key, key, key_len);
     }
