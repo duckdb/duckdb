@@ -74,6 +74,7 @@ public:
 	                              std::unordered_map<string, int32_t> *seen_strings = nullptr) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
+		return StringAppendBase(handle, segment, stats, data, offset, count);
 	}
 	template <bool DUPLICATE_ELIMINATE = false>
 	static idx_t StringAppendBase(BufferHandle &handle, ColumnSegment &segment, SegmentStatistics &stats,
