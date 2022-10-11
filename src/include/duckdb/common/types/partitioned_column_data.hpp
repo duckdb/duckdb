@@ -16,7 +16,7 @@ namespace duckdb {
 //! Local state for parallel partitioning
 struct PartitionedColumnDataAppendState {
 public:
-	explicit PartitionedColumnDataAppendState() : partition_indices(LogicalType::UBIGINT) {
+	PartitionedColumnDataAppendState() : partition_indices(LogicalType::UBIGINT) {
 	}
 
 public:
@@ -25,11 +25,7 @@ public:
 	DataChunk slice_chunk;
 
 	vector<unique_ptr<DataChunk>> partition_buffers;
-	vector<ColumnDataAppendState> partition_append_states;
-
-private:
-	//! Implicit copying is not allowed
-	PartitionedColumnDataAppendState(const PartitionedColumnDataAppendState &) = delete;
+	vector<unique_ptr<ColumnDataAppendState>> partition_append_states;
 };
 
 enum class PartitionedColumnDataType : uint8_t { RADIX, INVALID };

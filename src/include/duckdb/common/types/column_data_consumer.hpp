@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/common/types/column_data_scan_states.hpp"
 
 namespace duckdb {
 
