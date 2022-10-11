@@ -15,6 +15,8 @@ namespace duckdb {
 
 struct EmptyPatasWriter;
 
+using duckdb_chimp::SignificantBits;
+
 template <class T>
 struct PatasAnalyzeState : public AnalyzeState {
 public:
@@ -59,7 +61,7 @@ public:
 		    PatasPrimitives::BYTECOUNT_BITSIZE;
 		const uint64_t trailing_zero_bits =
 		    AlignValue<uint64_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(state.patas_state.Index()) *
-		    PatasPrimitives::TRAILING_ZERO_BITSIZE;
+		    SignificantBits<EXACT_TYPE>::size;
 		return byte_count_bits + trailing_zero_bits;
 	}
 

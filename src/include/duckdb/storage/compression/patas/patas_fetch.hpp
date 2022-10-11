@@ -31,10 +31,15 @@ void PatasFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 	PatasScanState<T> scan_state(segment);
 	scan_state.Skip(segment, row_id);
 	auto result_data = FlatVector::GetData<EXACT_TYPE>(result);
+	result_data[result_idx] = (EXACT_TYPE)0;
+
+	const auto index_diff = scan_state.group_state.index_diffs[scan_state.group_state.index];
+	const auto cache_index = scan_state.group_state.stored_previous_values - index_diff;
+
 	result_data[result_idx] = patas::PatasDecompression<EXACT_TYPE>::Load(
 	    scan_state.patas_state, scan_state.group_state.index, scan_state.group_state.byte_counts,
-	    scan_state.group_state.trailing_zeros, scan_state.group_state.previous);
-	scan_state.group_state.previous = result_data[result_idx];
+	    scan_state.group_state.trailing_zeros, scan_state.group_state.previous_values[cache_index]);
+	scan_state.group_state.CachePreviousValues(result_data + result_idx, 1);
 }
 
 } // namespace duckdb

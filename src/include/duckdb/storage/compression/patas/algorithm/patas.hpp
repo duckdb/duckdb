@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/compression/chimp/algorithm/byte_writer.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/ring_buffer.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/byte_reader.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 #include "duckdb/storage/compression/patas/shared.hpp"
@@ -19,21 +20,23 @@ namespace duckdb {
 
 namespace patas {
 
+using duckdb_chimp::BUFFER_SIZE;
 using duckdb_chimp::ByteReader;
 using duckdb_chimp::ByteWriter;
 using duckdb_chimp::CountZeros;
+using duckdb_chimp::RingBuffer;
 
 template <class EXACT_TYPE, bool EMPTY>
 class PatasCompressionState {
 public:
-	PatasCompressionState() : index(0), previous_value(0), first(true) {
+	PatasCompressionState() : index(0), first(true) {
 	}
 
 public:
 	void Reset() {
 		index = 0;
-		previous_value = 0;
 		first = true;
+		ring_buffer.Reset();
 	}
 	void SetOutputBuffer(uint8_t *output) {
 		byte_writer.SetStream(output);
@@ -44,10 +47,10 @@ public:
 	}
 
 public:
-	void UpdateMetadata(EXACT_TYPE previous_value, uint8_t trailing_zero, uint8_t byte_count) {
-		this->previous_value = previous_value;
+	void UpdateMetadata(uint8_t trailing_zero, uint8_t byte_count, uint8_t index_diff) {
 		trailing_zeros[index] = trailing_zero;
 		byte_counts[index] = byte_count;
+		indices[index] = index_diff;
 		index++;
 	}
 
@@ -55,8 +58,9 @@ public:
 	ByteWriter<EMPTY> byte_writer;
 	uint8_t trailing_zeros[PATAS_GROUP_SIZE];
 	uint8_t byte_counts[PATAS_GROUP_SIZE];
+	uint8_t indices[PATAS_GROUP_SIZE];
 	idx_t index;
-	EXACT_TYPE previous_value;
+	RingBuffer<EXACT_TYPE> ring_buffer;
 	bool first;
 };
 
@@ -75,14 +79,27 @@ struct PatasCompression {
 
 	static void StoreFirst(EXACT_TYPE value, State &state) {
 		// write first value, uncompressed
+		state.ring_buffer.template Insert<true>(value);
 		state.byte_writer.template WriteValue<EXACT_TYPE, EXACT_TYPE_BITSIZE>(value);
 		state.first = false;
-		state.UpdateMetadata(value, 0, sizeof(EXACT_TYPE));
+		state.UpdateMetadata(0, sizeof(EXACT_TYPE), 0);
 	}
 
 	static void StoreCompressed(EXACT_TYPE value, State &state) {
+		auto key = state.ring_buffer.Key(value);
+		uint64_t reference_index = state.ring_buffer.IndexOf(key);
+
+		// Find the reference value to use when compressing the current value
+		const bool exceeds_highest_index = reference_index > state.ring_buffer.Size();
+		const bool difference_too_big = ((state.ring_buffer.Size() + 1) - reference_index) >= BUFFER_SIZE;
+		if (exceeds_highest_index || difference_too_big) {
+			// Reference index is not in range, use the directly previous value
+			reference_index = state.ring_buffer.Size();
+		}
+		const auto reference_value = state.ring_buffer.Value(reference_index % BUFFER_SIZE);
+
 		// XOR with previous value
-		EXACT_TYPE xor_result = value ^ state.previous_value;
+		EXACT_TYPE xor_result = value ^ reference_value;
 
 		// Figure out the trailing zeros (max 6 bits)
 		const uint8_t trailing_zero = CountZeros<EXACT_TYPE>::Trailing(xor_result);
@@ -96,7 +113,10 @@ struct PatasCompression {
 
 		// Avoid an invalid shift error when xor_result is 0
 		state.byte_writer.template WriteValue<EXACT_TYPE>(xor_result >> (trailing_zero - is_equal), significant_bits);
-		state.UpdateMetadata(value, trailing_zero, significant_bytes);
+
+		state.ring_buffer.Insert(value);
+		const uint8_t index_difference = state.ring_buffer.Size() - reference_index;
+		state.UpdateMetadata(trailing_zero, significant_bytes, index_difference);
 		// if (!EMPTY) {
 		//	printf("COMPRESS: byte_count: %u | trailing_zero: %u\n", (uint32_t)significant_bytes,
 		//	       (uint32_t)trailing_zero);

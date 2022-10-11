@@ -92,9 +92,14 @@ public:
 		// amount of bitpacking blocks
 		required_space += sizeof(uint8_t);
 		// first bitpacked 'trailing_zero' block
-		required_space += ((6 * 32) / 8); // 24
+		required_space +=
+		    ((SignificantBits<EXACT_TYPE>::size * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) / 8); // 24
 		// first bitpacked 'byte_count' block
-		required_space += ((3 * 32) / 8); // 12
+		required_space +=
+		    ((PatasPrimitives::BYTECOUNT_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) / 8); // 12
+		// first bitpacked 'index' block
+		required_space +=
+		    ((PatasPrimitives::INDEX_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) / 8); // 28
 		return required_space;
 	}
 
@@ -110,13 +115,17 @@ public:
 	idx_t CurrentGroupMetadataSize() const {
 		idx_t metadata_size = 0;
 
-		const idx_t effective_bitpack_block_index = AlignValue<idx_t, 32>(state.patas_state.index);
+		const idx_t effective_bitpack_block_index =
+		    AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(state.patas_state.index);
 
 		// Current bytes taken up by the bitpacked 'trailing_zero' blocks
-		metadata_size += (effective_bitpack_block_index * PatasPrimitives::TRAILING_ZERO_BITSIZE) / 8;
+		metadata_size += (effective_bitpack_block_index * SignificantBits<EXACT_TYPE>::size) / 8;
 
 		// Current bytes taken up by the bitpacked 'byte_count' blocks
 		metadata_size += (effective_bitpack_block_index * PatasPrimitives::BYTECOUNT_BITSIZE) / 8;
+
+		// Current bytes taken up by the bitpacked 'index_diff' blocks
+		metadata_size += (effective_bitpack_block_index * PatasPrimitives::INDEX_BITSIZE) / 8;
 		return metadata_size;
 	}
 
@@ -190,22 +199,32 @@ public:
 		Store<uint8_t>(bitpacked_block_count, metadata_ptr);
 
 		const uint64_t trailing_zeros_bits =
-		    (PatasPrimitives::TRAILING_ZERO_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
+		    (SignificantBits<EXACT_TYPE>::size * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
 		    bitpacked_block_count;
 		const uint64_t byte_counts_bits =
 		    (PatasPrimitives::BYTECOUNT_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
 		    bitpacked_block_count;
+		const uint64_t index_diff_bits =
+		    (PatasPrimitives::INDEX_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
+		    bitpacked_block_count;
+
 		metadata_ptr -= AlignValue(trailing_zeros_bits) / 8;
 		metadata_byte_size += AlignValue(trailing_zeros_bits) / 8;
 		// Bitpack + store the 'trailing_zero' values
-		FlushBitpackedData<PatasPrimitives::TRAILING_ZERO_BITSIZE>(state.patas_state.trailing_zeros, metadata_ptr,
-		                                                           bitpacked_block_count);
+		FlushBitpackedData<SignificantBits<EXACT_TYPE>::size>(state.patas_state.trailing_zeros, metadata_ptr,
+		                                                      bitpacked_block_count);
 
 		metadata_ptr -= AlignValue(byte_counts_bits) / 8;
 		metadata_byte_size += AlignValue(byte_counts_bits) / 8;
 		// Bitpack + store the 'byte_count' values
 		FlushBitpackedData<PatasPrimitives::BYTECOUNT_BITSIZE>(state.patas_state.byte_counts, metadata_ptr,
 		                                                       bitpacked_block_count);
+
+		metadata_ptr -= AlignValue(index_diff_bits) / 8;
+		metadata_byte_size += AlignValue(index_diff_bits) / 8;
+		// Bitpack + store the 'index_diff' values
+		FlushBitpackedData<PatasPrimitives::INDEX_BITSIZE>(state.patas_state.indices, metadata_ptr,
+		                                                   bitpacked_block_count);
 
 		state.patas_state.Reset();
 		group_idx = 0;
@@ -240,8 +259,9 @@ public:
 		// Store the offset to the metadata
 		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
+		// uint64_t count = current_segment->count;
+		// printf("SIZE: %llu | COUNT: %llu\n", total_segment_size, count);
 		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);
-		// printf("COMPRESS: DATA BYTES SIZE: %llu\n", UsedSpace());
 	}
 
 	void Finalize() {
