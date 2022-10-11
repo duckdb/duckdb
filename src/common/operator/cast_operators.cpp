@@ -1277,6 +1277,15 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast From Pointer
+//===--------------------------------------------------------------------===//
+template <>
+string_t CastFromPointer::Operation(uintptr_t input, Vector &vector) {
+	std::string s = duckdb_fmt::format("0x{:x}", input);
+	return StringVector::AddString(vector, s);
+}
+
+//===--------------------------------------------------------------------===//
 // Cast To Blob
 //===--------------------------------------------------------------------===//
 template <>

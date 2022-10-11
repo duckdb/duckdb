@@ -24,12 +24,16 @@ hash_t Hash(hugeint_t val) {
 
 template <>
 hash_t Hash(float val) {
-	return std::hash<float> {}(val);
+	static_assert(sizeof(float) == sizeof(uint32_t), "");
+	uint32_t uval = *((uint32_t *)&val);
+	return murmurhash64(uval);
 }
 
 template <>
 hash_t Hash(double val) {
-	return std::hash<double> {}(val);
+	static_assert(sizeof(double) == sizeof(uint64_t), "");
+	uint64_t uval = *((uint64_t *)&val);
+	return murmurhash64(uval);
 }
 
 template <>

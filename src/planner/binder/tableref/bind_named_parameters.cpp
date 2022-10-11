@@ -26,7 +26,7 @@ void Binder::BindNamedParameters(named_parameter_type_map_t &types, named_parame
 			                                                kv.first, func_name, error_msg));
 		}
 		if (entry->second.id() != LogicalTypeId::ANY) {
-			kv.second = kv.second.CastAs(entry->second);
+			kv.second = kv.second.DefaultCastAs(entry->second);
 		}
 	}
 }

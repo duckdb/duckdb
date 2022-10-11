@@ -9,7 +9,7 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 	auto &input = (NumericStatistics &)*input_p;
 
 	Value min = input.min, max = input.max;
-	if (!min.TryCastAs(target) || !max.TryCastAs(target)) {
+	if (!min.DefaultTryCastAs(target) || !max.DefaultTryCastAs(target)) {
 		// overflow in cast: bailout
 		return nullptr;
 	}

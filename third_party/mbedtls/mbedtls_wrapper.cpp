@@ -1,4 +1,6 @@
 #include "mbedtls_wrapper.hpp"
+// otherwise we have different definitions for mbedtls_pk_context / mbedtls_sha256_context
+#define MBEDTLS_ALLOW_PRIVATE_ACCESS
 
 #include "mbedtls/sha256.h"
 #include "mbedtls/pk.h"

@@ -15,7 +15,7 @@ void FillResult(Value &values, Vector &result, idx_t row) {
 	}
 
 	//! now set the pointer
-	auto &entry = ((list_entry_t *)result.GetData())[row];
+	auto &entry = ListVector::GetData(result)[row];
 	entry.length = list_values.size();
 	entry.offset = current_offset;
 }
@@ -25,21 +25,36 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.data[0].GetType().id() == LogicalTypeId::MAP);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
+	if (args.data[1].GetType().id() == LogicalTypeId::SQLNULL) {
+		//! We don't need to look through the map if the 'key' to look for is NULL
+		//! Because maps can't have NULL as key
+		ListVector::SetListSize(result, 0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto list_data = ConstantVector::GetData<list_entry_t>(result);
+		list_data->offset = 0;
+		list_data->length = 0;
+		result.Verify(args.size());
+		return;
+	}
+
 	auto &map = args.data[0];
 	auto &key = args.data[1];
 
-	auto key_value = key.GetValue(0);
-	UnifiedVectorFormat offset_data;
+	UnifiedVectorFormat map_keys_data;
+	UnifiedVectorFormat key_data;
 
-	auto &children = StructVector::GetEntries(map);
-	children[0]->ToUnifiedFormat(args.size(), offset_data);
-	auto &key_type = ListType::GetChildType(children[0]->GetType());
-	if (key_type != LogicalTypeId::SQLNULL) {
-		key_value = key_value.CastAs(key_type);
-	}
+	auto &map_keys = MapVector::GetKeys(map);
+	auto &map_values = MapVector::GetValues(map);
+
+	map_keys.ToUnifiedFormat(args.size(), map_keys_data);
+	key.ToUnifiedFormat(args.size(), key_data);
+
 	for (idx_t row = 0; row < args.size(); row++) {
-		auto offsets = ListVector::Search(*children[0], key_value, offset_data.sel->get_index(row));
-		auto values = ListVector::GetValuesFromOffsets(*children[1], offsets);
+		idx_t row_index = map_keys_data.sel->get_index(row);
+		idx_t key_index = key_data.sel->get_index(row);
+		auto key_value = key.GetValue(key_index);
+		auto offsets = ListVector::Search(map_keys, key_value, row_index);
+		auto values = ListVector::GetValuesFromOffsets(map_values, offsets);
 		FillResult(values, result, row);
 	}
 
@@ -58,11 +73,14 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	if (arguments[0]->return_type.id() != LogicalTypeId::MAP) {
 		throw BinderException("MAP_EXTRACT can only operate on MAPs");
 	}
-	auto &child_types = StructType::GetChildTypes(arguments[0]->return_type);
-	auto &value_type = ListType::GetChildType(child_types[1].second);
+	auto &value_type = MapType::ValueType(arguments[0]->return_type);
 
 	//! Here we have to construct the List Type that will be returned
 	bound_function.return_type = LogicalType::LIST(value_type);
+	auto key_type = MapType::KeyType(arguments[0]->return_type);
+	if (key_type.id() != LogicalTypeId::SQLNULL && arguments[1]->return_type.id() != LogicalTypeId::SQLNULL) {
+		bound_function.arguments[1] = MapType::KeyType(arguments[0]->return_type);
+	}
 	return make_unique<VariableReturnBindData>(value_type);
 }
 

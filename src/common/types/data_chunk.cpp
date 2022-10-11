@@ -82,6 +82,15 @@ void DataChunk::SetValue(idx_t col_idx, idx_t index, const Value &val) {
 	data[col_idx].SetValue(index, val);
 }
 
+bool DataChunk::AllConstant() const {
+	for (auto &v : data) {
+		if (v.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
 	SetCardinality(chunk);
@@ -150,7 +159,7 @@ void DataChunk::Fuse(DataChunk &other) {
 	other.Destroy();
 }
 
-void DataChunk::ReferenceColumns(DataChunk &other, vector<column_t> column_ids) {
+void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &column_ids) {
 	D_ASSERT(ColumnCount() == column_ids.size());
 	Reset();
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {

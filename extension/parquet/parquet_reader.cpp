@@ -95,8 +95,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
 	}
-	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && s_ele.__isset.logicalType && s_ele.logicalType.__isset.UUID) {
-		return LogicalType::UUID;
+	if (s_ele.__isset.logicalType) {
+		if (s_ele.logicalType.__isset.UUID) {
+			if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY) {
+				return LogicalType::UUID;
+			}
+		} else if (s_ele.logicalType.__isset.TIMESTAMP) {
+			return LogicalType::TIMESTAMP;
+		}
 	}
 	if (s_ele.__isset.converted_type) {
 		switch (s_ele.converted_type) {
@@ -252,7 +258,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 
 	if (!s_ele.__isset.type) { // inner node
 		if (s_ele.num_children == 0) {
-			throw std::runtime_error("Node has no children but should");
+			throw InvalidInputException("Node has no children but should");
 		}
 		child_list_t<LogicalType> child_types;
 		vector<unique_ptr<ColumnReader>> child_readers;
@@ -569,7 +575,7 @@ uint64_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
 
 	if (total_compressed_size != 0 && calc_compressed_size != 0 &&
 	    (idx_t)total_compressed_size != calc_compressed_size) {
-		throw std::runtime_error("mismatch between calculated compressed size and reported compressed size");
+		throw InvalidInputException("mismatch between calculated compressed size and reported compressed size");
 	}
 
 	return total_compressed_size ? total_compressed_size : calc_compressed_size;
@@ -912,7 +918,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			double scan_percentage = (double)(to_scan_compressed_bytes) / total_row_group_span;
 
 			if (to_scan_compressed_bytes > total_row_group_span) {
-				throw std::runtime_error(
+				throw InvalidInputException(
 				    "Malformed parquet file: sum of total compressed bytes of columns seems incorrect");
 			}
 
@@ -1036,11 +1042,12 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 
-			//			std::cout << "Reading nofilter for col " <<
-			// root_reader->GetChildReader(file_col_idx)->Schema().name
-			//<< "\n";
-			root_reader->GetChildReader(file_col_idx)
-			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
+			auto rows_read = root_reader->GetChildReader(file_col_idx)
+			                     ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
+			if (rows_read != result.size()) {
+				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",
+				                            file_col_idx, result.size(), rows_read);
+			}
 		}
 	}
 

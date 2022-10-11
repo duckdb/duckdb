@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-ICUDateFunc::BindData::BindData(const BindData &other) : calendar(other.calendar->clone()) {
+ICUDateFunc::BindData::BindData(const BindData &other)
+    : tz_setting(other.tz_setting), cal_setting(other.cal_setting), calendar(other.calendar->clone()) {
 }
 
 ICUDateFunc::BindData::BindData(ClientContext &context) {
@@ -86,7 +87,11 @@ timestamp_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
 
 uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_t date) {
 	int64_t millis = date.value / Interval::MICROS_PER_MSEC;
-	uint64_t micros = date.value % Interval::MICROS_PER_MSEC;
+	int64_t micros = date.value % Interval::MICROS_PER_MSEC;
+	if (micros < 0) {
+		--millis;
+		micros += Interval::MICROS_PER_MSEC;
+	}
 
 	const auto udate = UDate(millis);
 	UErrorCode status = U_ZERO_ERROR;
@@ -94,7 +99,7 @@ uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_t date) {
 	if (U_FAILURE(status)) {
 		throw Exception("Unable to set ICU calendar time.");
 	}
-	return micros;
+	return uint64_t(micros);
 }
 
 int32_t ICUDateFunc::ExtractField(icu::Calendar *calendar, UCalendarDateFields field) {

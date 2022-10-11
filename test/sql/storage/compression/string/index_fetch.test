@@ -1,0 +1,42 @@
+# name: test/sql/storage/compression/string/index_fetch.test
+# description: Fetch from compressed string column with index
+# group: [string]
+
+# load the DB from disk
+load __TEST_DIR__/test_string_compression.db
+
+foreach compression fsst dictionary
+
+foreach enable_fsst_vector true false
+
+statement ok
+SET enable_fsst_vectors='${enable_fsst_vector}'
+
+statement ok
+PRAGMA force_compression='${compression}'
+
+statement ok
+CREATE TABLE test(id INTEGER PRIMARY KEY, col VARCHAR)
+
+statement ok
+INSERT INTO test SELECT i id, i::VARCHAR b FROM range(10000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+query IIIIII
+SELECT MIN(id), MAX(id), SUM(col::INT), MIN(col::INT), MAX(col::INT), COUNT(*) FROM test WHERE id=5000
+----
+5000	5000	5000	5000	5000	1
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+statement ok
+DROP TABLE test;
+
+endloop
+
+endloop

@@ -220,6 +220,12 @@ end
     r = first(rr)
     @test typeof.(Tuple(r)) ==
           (Missing, Int32, Int32, Float32, Float32, Float64, String, String, String, String, DateTime, DateTime)
+    # Issue #4809: Concrete `String` types.
+    # Want to test exactly the types `execute` returns, so check the schema directly and
+    # avoid calling `Tuple` or anything else that would narrow the types in the result.
+    schema = Tables.schema(rr)
+    @test nonmissingtype.(schema.types) ==
+          (Int32, Int32, Int32, Float32, Float32, Float64, String, String, String, String, DateTime, DateTime)
 end
 
 @testset "Issue #158: Missing DB File" begin

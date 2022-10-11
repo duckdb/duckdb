@@ -62,7 +62,7 @@ static void GetBitPosition(idx_t row_idx, idx_t &current_byte, uint8_t &current_
 }
 
 static void UnsetBit(uint8_t *data, idx_t current_byte, uint8_t current_bit) {
-	data[current_byte] &= ~(1 << current_bit);
+	data[current_byte] &= ~((uint64_t)1 << current_bit);
 }
 
 static void NextBit(idx_t &current_byte, uint8_t &current_bit) {

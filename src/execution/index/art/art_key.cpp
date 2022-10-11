@@ -69,4 +69,8 @@ bool Key::operator==(const Key &k) const {
 	}
 	return true;
 }
+
+bool Key::ByteMatches(Key &other, idx_t &depth) {
+	return data[depth] == other[depth];
+}
 } // namespace duckdb

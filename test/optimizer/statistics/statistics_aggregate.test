@@ -22,13 +22,13 @@ logical_opt	<!REGEX>:.*IS_NULL.*
 query II
 EXPLAIN SELECT i=4 FROM (SELECT i FROM integers GROUP BY i) integers(i);
 ----
-logical_opt	<!REGEX>:.*i = 4.*
+logical_opt	<!REGEX>:.*\(i = 4\).*
 
 # i=3 is in range [1,3]
 query II
 EXPLAIN SELECT i=3 FROM (SELECT i FROM integers GROUP BY i) integers(i);
 ----
-logical_opt	<REGEX>:.*i = 3.*
+logical_opt	<REGEX>:.*\(i = 3\).*
 
 # count without null values
 query I

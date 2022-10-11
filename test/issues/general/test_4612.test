@@ -1,0 +1,30 @@
+# name: test/issues/general/test_4612.test
+# description: Issue 4612: Can't select by blob field
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE blobs (b BYTEA);
+
+statement ok
+INSERT INTO blobs VALUES('\xaa\xff\xaa'), ('\xAA\xFF\xAA\xAA\xFF\xAA'), ('\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA');
+
+query I
+SELECT * FROM blobs;
+----
+\xAA\xFF\xAA
+\xAA\xFF\xAA\xAA\xFF\xAA
+\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA
+
+
+query I
+SELECT * FROM blobs where b = '\xaa\xff\xaA';
+----
+\xAA\xFF\xAA
+
+query I
+SELECT * FROM blobs where b = '\xAA\xFF\xAA';
+----
+\xAA\xFF\xAA

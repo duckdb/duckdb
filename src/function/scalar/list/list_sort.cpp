@@ -101,13 +101,12 @@ void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_list
 static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() >= 1 && args.ColumnCount() <= 3);
 	auto count = args.size();
-	Vector &lists = args.data[0];
+	Vector &input_lists = args.data[0];
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_validity = FlatVector::Validity(result);
 
-	args.Flatten();
-	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
+	if (input_lists.GetType().id() == LogicalTypeId::SQLNULL) {
 		result_validity.SetInvalid(0);
 		return;
 	}
@@ -122,15 +121,18 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	LocalSortState local_sort_state;
 	local_sort_state.Initialize(global_sort_state, buffer_manager);
 
+	// this ensures that we do not change the order of the entries in the input chunk
+	VectorOperations::Copy(input_lists, result, count, 0, 0);
+
 	// get the child vector
-	auto lists_size = ListVector::GetListSize(lists);
-	auto &child_vector = ListVector::GetEntry(lists);
+	auto lists_size = ListVector::GetListSize(result);
+	auto &child_vector = ListVector::GetEntry(result);
 	UnifiedVectorFormat child_data;
 	child_vector.ToUnifiedFormat(lists_size, child_data);
 
 	// get the lists data
 	UnifiedVectorFormat lists_data;
-	lists.ToUnifiedFormat(count, lists_data);
+	result.ToUnifiedFormat(count, lists_data);
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// create the lists_indices vector, this contains an element for each list's entry,
@@ -227,7 +229,9 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		child_vector.Flatten(sel_sorted_idx);
 	}
 
-	result.Reference(lists);
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,

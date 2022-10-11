@@ -14,6 +14,8 @@
 #include <functional>
 
 namespace duckdb {
+class CastFunctionSet;
+struct GetCastFunctionInput;
 
 // VectorOperations contains a set of operations that operate on sets of
 // vectors. In general, the operators must all have the same type, otherwise an
@@ -155,10 +157,16 @@ struct VectorOperations {
 	//! Cast the data from the source type to the target type. Any elements that could not be converted are turned into
 	//! NULLs. If any elements cannot be converted, returns false and fills in the error_message. If no error message is
 	//! provided, an exception is thrown instead.
-	DUCKDB_API static bool TryCast(Vector &source, Vector &result, idx_t count, string *error_message,
-	                               bool strict = false);
+	DUCKDB_API static bool TryCast(CastFunctionSet &set, GetCastFunctionInput &input, Vector &source, Vector &result,
+	                               idx_t count, string *error_message, bool strict = false);
+	DUCKDB_API static bool DefaultTryCast(Vector &source, Vector &result, idx_t count, string *error_message,
+	                                      bool strict = false);
+	DUCKDB_API static bool TryCast(ClientContext &context, Vector &source, Vector &result, idx_t count,
+	                               string *error_message, bool strict = false);
 	//! Cast the data from the source type to the target type. Throws an exception if the cast fails.
-	DUCKDB_API static void Cast(Vector &source, Vector &result, idx_t count, bool strict = false);
+	DUCKDB_API static void Cast(ClientContext &context, Vector &source, Vector &result, idx_t count,
+	                            bool strict = false);
+	DUCKDB_API static void DefaultCast(Vector &source, Vector &result, idx_t count, bool strict = false);
 
 	// Copy the data of <source> to the target vector
 	static void Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,

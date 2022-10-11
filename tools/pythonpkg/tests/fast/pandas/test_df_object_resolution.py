@@ -4,6 +4,7 @@ import datetime
 import numpy as np
 import pytest
 import decimal
+from decimal import Decimal
 
 def create_generic_dataframe(data):
     return pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
@@ -274,6 +275,7 @@ class TestResolveObjectColumns(object):
         )
         duckdb_col = duckdb.query("select {'5':1, '-25':3, '32':3, '32456':7} as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        duckdb.query("drop view if exists tbl")
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_correct(self, duckdb_cursor):
@@ -284,6 +286,7 @@ class TestResolveObjectColumns(object):
         )
         duckdb_col = duckdb.query("select [[5], [34], [-245]] as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        duckdb.query("drop view if exists tbl")
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_contains_null(self, duckdb_cursor):
@@ -294,6 +297,7 @@ class TestResolveObjectColumns(object):
         )
         duckdb_col = duckdb.query("select [[5], NULL, [-245]] as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        duckdb.query("drop view if exists tbl")
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_starts_with_null(self, duckdb_cursor):
@@ -304,6 +308,7 @@ class TestResolveObjectColumns(object):
         )
         duckdb_col = duckdb.query("select [NULL, [5], [-245]] as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        duckdb.query("drop view if exists tbl")
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_value_upgrade(self, duckdb_cursor):
@@ -314,6 +319,7 @@ class TestResolveObjectColumns(object):
         )
         duckdb_col = duckdb.query("select [['5'], ['34'], ['-245']] as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        duckdb.query("drop view if exists tbl")
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_column_value_upgrade(self, duckdb_cursor):
@@ -346,8 +352,8 @@ class TestResolveObjectColumns(object):
         pd.testing.assert_frame_equal(converted_col, duckdb_col)
 
     def test_ubigint_object_conversion(self, duckdb_cursor):
-		# UBIGINT + TINYINT would result in HUGEINT, but conversion to HUGEINT is not supported yet from pandas->duckdb
-		# So this instead becomes a DOUBLE
+        # UBIGINT + TINYINT would result in HUGEINT, but conversion to HUGEINT is not supported yet from pandas->duckdb
+        # So this instead becomes a DOUBLE
         data = [18446744073709551615, 0]
         x = pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
         converted_col = duckdb.query_df(x, "x", "select * from x").df()
@@ -408,6 +414,49 @@ class TestResolveObjectColumns(object):
 
         assert(conversion == reference)
 
+    # Test that the column 'offset' is actually used when converting,
+    # and that the same 1024 (STANDARD_VECTOR_SIZE) values are not being scanned over and over again
+    def test_multiple_chunks(self):
+        standard_vector_size = 1024
+
+        data = []
+        data += [datetime.date(2022, 9, 13) for x in range(standard_vector_size)]
+        data += [datetime.date(2022, 9, 14) for x in range(standard_vector_size)]
+        data += [datetime.date(2022, 9, 15) for x in range(standard_vector_size)]
+        data += [datetime.date(2022, 9, 16) for x in range(standard_vector_size)]
+        x = pd.DataFrame({'dates': pd.Series(data=data, dtype='object')})
+        res = duckdb.query_df(x, "x", "select distinct * from x").df()
+        assert(len(res['dates'].__array__()) == 4)
+
+    def test_multiple_chunks_aggregate(self):
+        conn = duckdb.connect()
+        conn.execute("create table dates as select '2022-09-14'::DATE + INTERVAL (i::INTEGER) DAY as i from range(0, 4096) tbl(i);")
+        res = duckdb.query("select * from dates", connection=conn).df()
+        date_df = res.copy()
+        # Convert the values to `datetime.date` values, and the dtype of the column to 'object'
+        date_df['i'] = pd.to_datetime(res['i']).dt.date
+        assert(str(date_df['i'].dtype) == 'object')
+        expected_res = duckdb.query('select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from dates;', connection=conn).fetchall()
+        actual_res = duckdb.query_df(date_df, 'x', 'select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from x').fetchall()
+        assert(expected_res == actual_res)
+
+        conn.execute('drop table dates')
+        # Now with nulls interleaved
+        for i in range(0, len(res['i']), 2):
+            res['i'][i] = None
+
+
+        date_view = conn.register("date_view", res)
+        date_view.execute('create table dates as select * from date_view')
+        expected_res = duckdb.query("select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from dates", connection=conn).fetchall()
+
+        date_df = res.copy()
+        # Convert the values to `datetime.date` values, and the dtype of the column to 'object'
+        date_df['i'] = pd.to_datetime(res['i']).dt.date
+        assert(str(date_df['i'].dtype) == 'object')
+        actual_res = duckdb.query_df(date_df, 'x', 'select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from x').fetchall()
+        assert(expected_res == actual_res)
+
     def test_mixed_object_types(self):
         x = pd.DataFrame({
             'nested': pd.Series(data=[{'a': 1, 'b': 2}, [5, 4, 3], {'key': [1,2,3], 'value': ['a', 'b', 'c']}], dtype='object'),
@@ -423,6 +472,39 @@ class TestResolveObjectColumns(object):
         })
         with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
             res = duckdb.query_df(x, "x", "select * from x").df()
+
+    def test_numeric_decimal_zero_fractional(self):
+        duckdb_conn = duckdb.connect()
+        decimals = pd.DataFrame(
+            data={
+                "0": [
+                    Decimal("0.00"),
+                    Decimal("125.90"),
+                    Decimal("0.001"),
+                    Decimal("2502.63"),
+                    Decimal("0.000123"),
+                    Decimal("0.00"),
+                    Decimal("321.00"),
+                ]
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                (0.00),
+                (125.90),
+                (0.001),
+                (2502.63),
+                (0.000123),
+                (0.00),
+                (321.00)
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+
+        assert(conversion == reference)
 
     def test_numeric_decimal_incompatible(self):
         duckdb_conn = duckdb.connect()
@@ -446,5 +528,81 @@ class TestResolveObjectColumns(object):
         reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
         conversion = duckdb.query_df(x, "x", "select * from x").fetchall()
 
+        assert(conversion == reference)
+        print(reference)
+        print(conversion)
+
+    #result: [('1E-28',), ('10000000000000000000000000.0',)]
+    def test_numeric_decimal_combined(self):
+        duckdb_conn = duckdb.connect()
+        decimals = pd.DataFrame(
+            data={
+                "0": [
+                    Decimal("0.0000000000000000000000000001"),
+                    Decimal("10000000000000000000000000.0")
+                ]
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                (0.0000000000000000000000000001),
+                (10000000000000000000000000.0),
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+        assert(conversion == reference)
+        print(reference)
+        print(conversion)
+
+    #result: [('1234.0',), ('123456789.0',), ('1234567890123456789.0',), ('0.1234567890123456789',)]
+    def test_numeric_decimal_varying_sizes(self):
+        duckdb_conn = duckdb.connect()
+        decimals = pd.DataFrame(
+            data={
+                "0": [
+                    Decimal("1234.0"),
+                    Decimal("123456789.0"),
+                    Decimal("1234567890123456789.0"),
+                    Decimal("0.1234567890123456789")
+                ]
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                    (1234.0),
+                    (123456789.0),
+                    (1234567890123456789.0),
+                    (0.1234567890123456789)
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+        assert(conversion == reference)
+        print(reference)
+        print(conversion)
+
+    def test_numeric_decimal_out_of_range(self):
+        duckdb_conn = duckdb.connect()
+        data = [Decimal("1.234567890123456789012345678901234567"), Decimal("123456789012345678901234567890123456.0")]
+        decimals = pd.DataFrame(
+            data={
+                "0": data
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                    (1.234567890123456789012345678901234567),
+                    (123456789012345678901234567890123456.0)
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
         assert(conversion == reference)
 

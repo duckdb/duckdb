@@ -8,6 +8,6 @@ test_that("test_all_types() output", {
   withr::local_options(digits.secs = 6)
 
   expect_snapshot({
-    as.list(dbGetQuery(con, "SELECT * EXCLUDE (timestamp_tz, time_tz, uuid, interval, json, map) FROM test_all_types()"))
+    as.list(dbGetQuery(con, "SELECT * EXCLUDE (timestamp_tz, time_tz, map) FROM test_all_types()"))
   })
 })

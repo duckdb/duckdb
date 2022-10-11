@@ -1,0 +1,9 @@
+# name: test/fuzzer/pedro/recursive_cte_dependent_join.test
+# description: Issue #4679: Recursive CTE dependent join internal error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT (WITH RECURSIVE t1 AS (SELECT 1 UNION SELECT 1 FROM t1 WHERE c2 < 3) SELECT 2 FROM t1) FROM (SELECT 1 c2) t1;

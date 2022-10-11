@@ -195,5 +195,3 @@ from (SELECT a%4 as grp, list(a) as lsta, list(a) as lstb FROM range(7) tbl(a) g
 1	{1=1, 5=5}	[NULL]
 2	{2=2, 6=6}	[]
 3	{3=3}	[]
-
-

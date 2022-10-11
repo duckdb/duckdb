@@ -1,0 +1,23 @@
+# name: test/fuzzer/pedro/index_on_altered_table.test
+# description: Issue #4696: Alter table transaction conflict
+# group: [pedro]
+
+load __TEST_DIR__/index_on_altered_table.db
+
+statement ok
+CREATE TABLE t4 (c0 DATE, c3 VARCHAR(10));
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+ALTER TABLE t4 ADD c1 BLOB;
+
+statement error
+CREATE INDEX i3 ON t4 (c3);
+
+statement ok con1
+COMMIT;
+
+statement ok
+CHECKPOINT

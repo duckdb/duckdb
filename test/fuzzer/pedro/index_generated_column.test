@@ -1,0 +1,31 @@
+# name: test/fuzzer/pedro/index_generated_column.test
+# description: Issue #4580: heap-buffer-overflow when creating index on table with generated columns
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c0 INT AS (1), c1 INT);
+
+statement ok
+CREATE INDEX i0 ON t0 USING ART ((c0 + c1));
+
+query II
+SELECT * FROM t0 WHERE (c0 + c1) = 3
+----
+
+statement ok
+INSERT INTO t0 VALUES (2)
+
+query II
+SELECT * FROM t0 WHERE (c0 + c1) = 3
+----
+1	2
+
+statement ok
+DELETE FROM t0
+
+query II
+SELECT * FROM t0 WHERE (c0 + c1) = 3
+----

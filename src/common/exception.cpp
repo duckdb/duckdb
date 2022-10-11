@@ -4,6 +4,12 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
 
+#ifdef DUCKDB_CRASH_ON_ASSERT
+#include "duckdb/common/printer.hpp"
+#include <stdio.h>
+#include <stdlib.h>
+#endif
+
 namespace duckdb {
 
 Exception::Exception(const string &msg) : std::exception(), type(ExceptionType::INVALID), raw_message_(msg) {
@@ -158,6 +164,8 @@ void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message
 		throw ParameterNotAllowedException(message);
 	case ExceptionType::PARAMETER_NOT_RESOLVED:
 		throw ParameterNotResolvedException();
+	case ExceptionType::FATAL:
+		throw FatalException(message);
 	default:
 		throw Exception(type, message);
 	}
@@ -286,6 +294,10 @@ FatalException::FatalException(ExceptionType type, const string &msg) : Exceptio
 }
 
 InternalException::InternalException(const string &msg) : FatalException(ExceptionType::INTERNAL, msg) {
+#ifdef DUCKDB_CRASH_ON_ASSERT
+	Printer::Print("ABORT THROWN BY INTERNAL EXCEPTION: " + msg);
+	abort();
+#endif
 }
 
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {

@@ -58,7 +58,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		throw InvalidInputException("JSON structure must be a constant!");
 	} else {
 		auto structure_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-		if (!structure_val.TryCastAs(LogicalType::JSON)) {
+		if (!structure_val.DefaultTryCastAs(LogicalType::JSON)) {
 			throw InvalidInputException("cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
@@ -221,7 +221,7 @@ static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 	}
 
 	string error_message;
-	if (!VectorOperations::TryCast(string_vector, result, count, &error_message, strict) && strict) {
+	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &error_message, strict) && strict) {
 		throw InvalidInputException(error_message);
 	}
 }
@@ -390,6 +390,10 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 	// Transform
 	Transform(vals, result, count, strict);
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformFunction() {

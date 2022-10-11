@@ -1,0 +1,36 @@
+# name: test/sql/function/timestamp/current_timestamp.test
+# description: Test current_time/current_date/etc
+# group: [timestamp]
+
+require icu
+
+# Normalise the testing locale
+statement ok
+SET Calendar = 'gregorian';
+
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+statement ok
+PRAGMA enable_verification
+
+# get the millennium of the current date
+# FIXME: this needs to be updated in 982 years
+query I
+SELECT EXTRACT(MILLENNIUM FROM NOW())
+----
+3
+
+query I
+SELECT SUFFIX(CURRENT_TIMESTAMP::VARCHAR, 'America/Los_Angeles');
+----
+True
+
+foreach func now get_current_timestamp transaction_timestamp
+
+query I
+SELECT SUFFIX(${func}()::VARCHAR, 'America/Los_Angeles');
+----
+True
+
+endloop
