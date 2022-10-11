@@ -86,18 +86,21 @@ struct PatasCompression {
 
 		// Figure out the trailing zeros (max 6 bits)
 		const uint8_t trailing_zero = CountZeros<EXACT_TYPE>::Trailing(xor_result);
+		const uint8_t leading_zero = CountZeros<EXACT_TYPE>::Leading(xor_result);
 
 		const bool is_equal = xor_result == 0;
 
 		// Figure out the significant bytes (max 3 bits)
-		const uint8_t significant_bits = (EXACT_TYPE_BITSIZE - trailing_zero) + is_equal;
+		const uint8_t significant_bits = is_equal + (!is_equal * (EXACT_TYPE_BITSIZE - trailing_zero - leading_zero));
 		const uint8_t significant_bytes = (significant_bits >> 3) + ((significant_bits & 7) != 0);
 
 		// Avoid an invalid shift error when xor_result is 0
-		state.byte_writer.template WriteValue<EXACT_TYPE>(xor_result >> (trailing_zero - is_equal),
-		                                                  significant_bits - is_equal);
-		// We store equal as: 0 bytes of data, byte_count: 1, trailing_zeros: 0
+		state.byte_writer.template WriteValue<EXACT_TYPE>(xor_result >> (trailing_zero - is_equal), significant_bits);
 		state.UpdateMetadata(value, trailing_zero, significant_bytes);
+		// if (!EMPTY) {
+		//	printf("COMPRESS: byte_count: %u | trailing_zero: %u\n", (uint32_t)significant_bytes,
+		//	       (uint32_t)trailing_zero);
+		// }
 	}
 };
 
@@ -169,13 +172,12 @@ struct PatasDecompression {
 
 		// Full bytes is stored as 0
 		byte_count += (sizeof(EXACT_TYPE) * (byte_count == 0));
-		// Equal is stored as byte_count: 1, trailing_zeros: 0
-		byte_count -= (byte_count == 1 && trailing_zeros == 0);
 
 		EXACT_TYPE result = state.byte_reader.template ReadValue<EXACT_TYPE>(byte_count * 8);
 		result <<= trailing_zeros;
 		result ^= state.previous_value;
 
+		// printf("DECOMPRESS: byte_count: %u | trailing_zero: %u\n", (uint32_t)byte_count, (uint32_t)trailing_zeros);
 		state.group_index++;
 		state.previous_value = result;
 		return result;
