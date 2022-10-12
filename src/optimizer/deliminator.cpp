@@ -5,8 +5,8 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
+#include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
@@ -20,10 +20,22 @@ public:
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 	//! Whether the operator has one or more children of type DELIM_GET
 	bool HasChildDelimGet(LogicalOperator &op);
+
+public:
 	expression_map_t<Expression *> expr_map;
 	column_binding_map_t<bool> projection_map;
 	unique_ptr<LogicalOperator> temp_ptr;
 };
+
+static bool IsEqualityJoinCondition(JoinCondition &cond) {
+	switch (cond.comparison) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return true;
+	default:
+		return false;
+	}
+}
 
 void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
@@ -32,8 +44,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 		auto &delim_join = (LogicalDelimJoin &)op;
 		auto decs = &delim_join.duplicate_eliminated_columns;
 		for (auto &cond : delim_join.conditions) {
-			if (cond.comparison != ExpressionType::COMPARE_EQUAL &&
-			    cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			if (!IsEqualityJoinCondition(cond)) {
 				continue;
 			}
 			Expression *rhs = cond.right.get();
@@ -42,7 +53,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 				rhs = cast.child.get();
 			}
 			if (rhs->type != ExpressionType::BOUND_COLUMN_REF) {
-				throw InternalException("Erorr in deliminator: expected a bound column reference");
+				throw InternalException("Error in Deliminator: expected a bound column reference");
 			}
 			auto &colref = (BoundColumnRefExpression &)*rhs;
 			if (projection_map.find(colref.binding) != projection_map.end()) {
@@ -146,10 +157,20 @@ static bool OperatorIsDelimGet(LogicalOperator &op) {
 	return false;
 }
 
+static bool JoinTypeCanBeDeliminated(JoinType &join_type) {
+	switch (join_type) {
+	case JoinType::INNER:
+	case JoinType::SEMI:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, DeliminatorPlanUpdater &updater) {
 	auto &proj_or_agg = **op_ptr;
 	auto &join = (LogicalComparisonJoin &)*proj_or_agg.children[0];
-	if (join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI) {
+	if (!JoinTypeCanBeDeliminated(join.join_type)) {
 		return false;
 	}
 
@@ -169,9 +190,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, Deliminat
 	// check if joining with the DelimGet is redundant, and collect relevant column information
 	vector<Expression *> nulls_are_not_equal_exprs;
 	for (auto &cond : join.conditions) {
-		if (cond.comparison != ExpressionType::COMPARE_EQUAL &&
-		    cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-			// non-equality join condition
+		if (!IsEqualityJoinCondition(cond)) {
 			return false;
 		}
 		auto delim_side = delim_idx == 0 ? cond.left.get() : cond.right.get();
