@@ -162,6 +162,9 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 }
 
 void LocalTableStorage::CheckFlush(RowGroup *row_group) {
+	if (table.info->IsTemporary()) {
+		return;
+	}
 	if (row_group == prev_row_group) {
 		return;
 	}
