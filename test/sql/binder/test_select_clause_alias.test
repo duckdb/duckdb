@@ -1,0 +1,44 @@
+# name: test/sql/binder/test_select_clause_alias.test
+# description: Test referencing an alias that exists earlier on in the SELECT clause
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3);
+
+# we can refer to aliases that occur earlier-on in the SELECT clause
+query II
+SELECT i + 1 AS a, a + 1 AS b FROM integers ORDER BY b
+----
+2	3
+3	4
+4	5
+
+# we can also do this in a composite manner
+query IIII
+SELECT i + 1 AS a, a + a AS b, b + b AS c, c + c AS d FROM integers ORDER BY b
+----
+2	4	8	16
+3	6	12	24
+4	8	16	32
+
+# the original columns take priority over aliases
+query II
+SELECT i + 1 AS i, i + 1 AS b FROM integers ORDER BY b
+----
+2	2
+3	3
+4	4
+
+# we cannot refer to aliases that are defined LATER ON in the select clause
+statement error
+SELECT a + 1 AS b, i + 1 AS a FROM integers
+
+# expressions with side effects are not supported yet
+statement error
+SELECT RANDOM() AS a, a + 1 AS b FROM integers

@@ -49,8 +49,9 @@ enum VerifyExistenceType : uint8_t {
 
 class ART : public Index {
 public:
-	ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-	    IndexConstraintType constraint_type, DatabaseInstance &db, idx_t block_id = DConstants::INVALID_INDEX,
+	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
+	    const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
+	    DatabaseInstance &db, idx_t block_id = DConstants::INVALID_INDEX,
 	    idx_t block_offset = DConstants::INVALID_INDEX);
 	~ART() override;
 
@@ -59,6 +60,7 @@ public:
 
 	DatabaseInstance &db;
 
+public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate
 	unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, Value value,
@@ -104,13 +106,13 @@ private:
 	//! Insert a row id into a leaf node
 	bool InsertToLeaf(Leaf &leaf, row_t row_id);
 	//! Insert the leaf value into the tree
-	bool Insert(Node *&node, Key &key, unsigned depth, row_t row_id);
+	bool Insert(Node *&node, Key &key, idx_t depth, row_t row_id);
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
-	void Erase(Node *&node, Key &key, unsigned depth, row_t row_id);
+	void Erase(Node *&node, Key &key, idx_t depth, row_t row_id);
 
 	//! Find the node with a matching key, optimistic version
-	Node *Lookup(Node *node, Key &key, unsigned depth);
+	Leaf *Lookup(Node *node, Key &key, idx_t depth);
 
 	bool SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive, idx_t max_count,

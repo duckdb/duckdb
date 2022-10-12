@@ -17,6 +17,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/function/replacement_open.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
@@ -70,6 +71,8 @@ struct ExtensionOption {
 };
 
 struct DBConfigOptions {
+	//! Database file path. May be empty for in-memory mode
+	string database_path;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
 	//! Checkpoint when WAL reaches this size (default: 16MB)
@@ -121,6 +124,10 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> set_variables;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	//! Enable emitting FSST Vectors
+	bool enable_fsst_vectors = false;
+
+	bool operator==(const DBConfigOptions &other) const;
 };
 
 struct DBConfig {
@@ -129,10 +136,15 @@ struct DBConfig {
 
 public:
 	DUCKDB_API DBConfig();
+	DUCKDB_API DBConfig(std::unordered_map<string, string> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
+
+	//! Replacement open handlers are callbacks that run pre and post database initialization
+	vector<ReplacementOpen> replacement_opens;
+
 	//! Extra parameters that can be SET for loaded extensions
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
@@ -172,6 +184,9 @@ public:
 	DUCKDB_API vector<CompressionFunction *> GetCompressionFunctions(PhysicalType data_type);
 	//! Return the compression function for the specified compression type/physical type combo
 	DUCKDB_API CompressionFunction *GetCompressionFunction(CompressionType type, PhysicalType data_type);
+
+	bool operator==(const DBConfig &other);
+	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
 

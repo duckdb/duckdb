@@ -129,6 +129,7 @@ public:
 	//! final_analyze should return the score of the compression function
 	//! ideally this is the exact number of bytes required to store the data
 	//! this is not required/enforced: it can be an estimate as well
+	//! also this function can return DConstants::INVALID_INDEX to skip this compression method
 	compression_final_analyze_t final_analyze;
 
 	//! Compression step: actually compress the data

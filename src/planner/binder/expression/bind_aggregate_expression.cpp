@@ -67,7 +67,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	for (auto &child : aggr.children) {
 		aggregate_binder.BindChild(child, 0, error);
 		// We have to invert the fractions for PERCENTILE_XXXX DESC
-		if (invert_fractions) {
+		if (error.empty() && invert_fractions) {
 			InvertPercentileFractions(child);
 		}
 	}

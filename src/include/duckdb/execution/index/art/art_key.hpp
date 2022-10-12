@@ -38,6 +38,18 @@ public:
 		return CreateKey(allocator, element.GetValueUnsafe<T>());
 	}
 
+	template <class T>
+	static inline void CreateKey(ArenaAllocator &allocator, Key &key, T element) {
+		key.data = Key::CreateData<T>(allocator, element);
+		key.len = sizeof(element);
+	}
+
+	template <class T>
+	static inline void CreateKey(ArenaAllocator &allocator, Key &key, const Value element) {
+		key.data = Key::CreateData<T>(allocator, element.GetValueUnsafe<T>());
+		key.len = sizeof(element);
+	}
+
 public:
 	data_t &operator[](size_t i) {
 		return data[i];
@@ -52,6 +64,7 @@ public:
 
 	bool ByteMatches(Key &other, idx_t &depth);
 	bool Empty();
+	void ConcatenateKey(ArenaAllocator &allocator, Key &concat_key);
 
 private:
 	template <class T>
@@ -66,5 +79,9 @@ template <>
 Key Key::CreateKey(ArenaAllocator &allocator, string_t value);
 template <>
 Key Key::CreateKey(ArenaAllocator &allocator, const char *value);
+template <>
+void Key::CreateKey(ArenaAllocator &allocator, Key &key, string_t value);
+template <>
+void Key::CreateKey(ArenaAllocator &allocator, Key &key, const char *value);
 
 } // namespace duckdb

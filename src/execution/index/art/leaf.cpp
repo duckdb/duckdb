@@ -91,8 +91,7 @@ void Leaf::Merge(Node *&l_node, Node *&r_node) {
 }
 
 BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
-	auto block_id = writer.block->id;
-	uint32_t offset = writer.offset;
+	auto ptr = writer.GetBlockPointer();
 	// Write Node Type
 	writer.Write(type);
 	// Write compression Info
@@ -104,7 +103,7 @@ BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
 	for (idx_t i = 0; i < count; i++) {
 		writer.Write(row_ids[i]);
 	}
-	return {block_id, offset};
+	return ptr;
 }
 
 Leaf *Leaf::Deserialize(MetaBlockReader &reader) {

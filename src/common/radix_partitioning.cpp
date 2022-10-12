@@ -9,7 +9,7 @@
 namespace duckdb {
 
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
+RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
 	D_ASSERT(radix_bits <= sizeof(hash_t) * 8);
 	switch (radix_bits) {
 	case 1:
@@ -38,7 +38,7 @@ RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
 }
 
 template <class OP, class RETURN_TYPE, idx_t radix_bits_1, typename... ARGS>
-RETURN_TYPE DoubleRadixBitsSwitch2(idx_t radix_bits_2, ARGS &&...args) {
+RETURN_TYPE DoubleRadixBitsSwitch2(idx_t radix_bits_2, ARGS &&... args) {
 	D_ASSERT(radix_bits_2 <= sizeof(hash_t) * 8);
 	switch (radix_bits_2) {
 	case 1:
@@ -67,7 +67,7 @@ RETURN_TYPE DoubleRadixBitsSwitch2(idx_t radix_bits_2, ARGS &&...args) {
 }
 
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE DoubleRadixBitsSwitch1(idx_t radix_bits_1, idx_t radix_bits_2, ARGS &&...args) {
+RETURN_TYPE DoubleRadixBitsSwitch1(idx_t radix_bits_1, idx_t radix_bits_2, ARGS &&... args) {
 	D_ASSERT(radix_bits_1 <= sizeof(hash_t) * 8);
 	switch (radix_bits_1) {
 	case 1:
@@ -325,7 +325,7 @@ struct PartitionFunctor {
 	                                 RowDataCollection &string_heap, RowDataBlock &data_block,
 	                                 const data_ptr_t data_ptr, RowDataBlock &heap_block, BufferHandle &heap_handle) {
 		D_ASSERT(!layout.AllConstant());
-		D_ASSERT(heap_block.block->BlockId() == heap_handle.GetBlockId());
+		D_ASSERT(heap_block.block == heap_handle.GetBlockHandle());
 		D_ASSERT(data_block.count >= heap_block.count);
 		const auto count = data_block.count - heap_block.count;
 		if (count == 0) {

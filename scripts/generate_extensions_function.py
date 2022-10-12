@@ -14,8 +14,13 @@ parser.add_argument('--validate', action=argparse.BooleanOptionalAction,
 
 args = parser.parse_args()
 
+stored_functions = {
+    'substrait': ["from_substrait", "get_substrait", "get_substrait_json"]
+}
+
 functions = {}
-reader = csv.reader(open(os.path.join("..",'extensions.csv')))
+ext_dir = os.path.join('..', '.github', 'config', 'extensions.csv')
+reader = csv.reader(open(ext_dir))
 # This skips the first row (i.e., the header) of the CSV file.
 next(reader)
 
@@ -34,6 +39,18 @@ for filename in glob.iglob('/tmp/' + '**/*.duckdb_extension', recursive=True):
 
 for extension in reader:
     extension_name = extension[0]
+    if extension_name not in extension_path:
+        if extension_name not in stored_functions:
+            print(f"Missing extension {extension_name}")
+            exit(1)
+        extension_functions = stored_functions[extension_name]
+        print(f"Loading {extension_name} from stored functions: {extension_functions}")
+        function_map.update({
+            extension_function: extension_name
+            for extension_function in (set(extension_functions) - base_functions)
+        })
+        continue
+
     print(f"Load {extension_name} at {extension_path[extension_name]}")
     load = f"LOAD '{extension_path[extension_name]}';"
     extension_functions = os.popen(f'{duckdb_path} -unsigned -csv -c "{load}{get_func}" ').read().split("\n")[1:-1]

@@ -9,14 +9,15 @@ add_definitions(-DSQLITE_SHELL_IS_UTF8)
 
 include_directories(../../third_party/utf8proc/include)
 
-add_library(sqlite3_api_wrapper_static STATIC sqlite3_api_wrapper.cpp
-                                              ${ALL_OBJECT_FILES})
+set(SQLITE_API_WRAPPER_FILES
+    sqlite3_api_wrapper.cpp sql_auto_complete_extension.cpp ${ALL_OBJECT_FILES})
+
+add_library(sqlite3_api_wrapper_static STATIC ${SQLITE_API_WRAPPER_FILES})
 target_link_libraries(sqlite3_api_wrapper_static duckdb_static duckdb_utf8proc)
 link_threads(sqlite3_api_wrapper_static)
 
 if(NOT WIN32)
-  add_library(sqlite3_api_wrapper SHARED sqlite3_api_wrapper.cpp
-                                         ${ALL_OBJECT_FILES})
+  add_library(sqlite3_api_wrapper SHARED ${SQLITE_API_WRAPPER_FILES})
   target_link_libraries(sqlite3_api_wrapper duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
   link_threads(sqlite3_api_wrapper)
 

@@ -20,12 +20,14 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
+  db_instance_cache.cpp
   extension.cpp
   materialized_query_result.cpp
   pending_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
   relation.cpp
+  extension_prefix_opener.cpp
   query_profiler.cpp
   query_result.cpp
   stream_query_result.cpp)

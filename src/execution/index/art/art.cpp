@@ -11,9 +11,10 @@
 
 namespace duckdb {
 
-ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-         IndexConstraintType constraint_type, DatabaseInstance &db, idx_t block_id, idx_t block_offset)
-    : Index(IndexType::ART, column_ids, unbound_expressions, constraint_type), db(db) {
+ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
+         const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
+         DatabaseInstance &db, idx_t block_id, idx_t block_offset)
+    : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db) {
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree = Node::Deserialize(*this, block_id, block_offset);
 	} else {
@@ -68,7 +69,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 }
 
 //===--------------------------------------------------------------------===//
-// Insert
+// Keys
 //===--------------------------------------------------------------------===//
 
 template <class T>
@@ -76,13 +77,12 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
+	D_ASSERT(keys.size() >= count);
 	auto input_data = (T *)idata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if (idata.validity.RowIsValid(idx)) {
-			keys.emplace_back(Key::CreateKey<T>(allocator, input_data[idx]));
-		} else {
-			keys.emplace_back(Key());
+			Key::CreateKey<T>(allocator, keys[i], input_data[idx]);
 		}
 	}
 }
@@ -101,15 +101,9 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 			if (!idata.validity.RowIsValid(idx)) {
 				// this column entry is NULL, set whole key to NULL
 				keys[i] = Key();
-
 			} else {
-				// concatenate the keys
-				auto new_key = Key::CreateKey<T>(allocator, input_data[idx]);
-				auto key_len = keys[i].len + new_key.len;
-				auto compound_data = allocator.Allocate(key_len);
-				memcpy(compound_data, keys[i].data, keys[i].len);
-				memcpy(compound_data + keys[i].len, new_key.data, new_key.len);
-				keys[i] = Key(compound_data, key_len);
+				auto other_key = Key::CreateKey<T>(allocator, input_data[idx]);
+				keys[i].ConcatenateKey(allocator, other_key);
 			}
 		}
 	}
@@ -209,14 +203,17 @@ void ART::GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> 
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Insert
+//===--------------------------------------------------------------------===//
+
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, bool skip_remove) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
 
 	// generate the keys for the given input
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	vector<Key> keys;
-	keys.reserve(input.size());
+	vector<Key> keys(input.size());
 	GenerateKeys(arena_allocator, input, keys);
 
 	// now insert the elements into the index
@@ -289,7 +286,7 @@ bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
 	return true;
 }
 
-bool ART::Insert(Node *&node, Key &key, unsigned depth, row_t row_id) {
+bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
@@ -371,7 +368,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 
 	// then generate the keys for the given input
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	vector<Key> keys;
+	vector<Key> keys(expression.size());
 	GenerateKeys(arena_allocator, expression, keys);
 
 	// now erase the elements from the database
@@ -395,7 +392,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	}
 }
 
-void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
+void ART::Erase(Node *&node, Key &key, idx_t depth, row_t row_id) {
 	if (!node) {
 		return;
 	}
@@ -496,14 +493,14 @@ bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
 
 	// we need to look for a leaf
-	auto leaf = (Leaf *)(Lookup(tree, key, 0));
+	auto leaf = Lookup(tree, key, 0);
 	if (!leaf) {
 		return;
 	}
 	result_size = leaf->count;
 }
 
-Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
+Leaf *ART::Lookup(Node *node, Key &key, idx_t depth) {
 	while (node) {
 		if (node->type == NodeType::NLeaf) {
 			auto leaf = (Leaf *)node;
@@ -514,7 +511,7 @@ Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
 					return nullptr;
 				}
 			}
-			return node;
+			return (Leaf *)node;
 		}
 		if (node->prefix.Size()) {
 			for (idx_t pos = 0; pos < node->prefix.Size(); pos++) {
@@ -569,6 +566,7 @@ bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive,
 	if (!tree) {
 		return true;
 	}
+
 	Iterator *it = &state->iterator;
 
 	if (!it->art) {
@@ -689,8 +687,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 
 	// generate the keys for the given input
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
-	vector<Key> keys;
-	keys.reserve(expression_chunk.size());
+	vector<Key> keys(expression_chunk.size());
 	GenerateKeys(arena_allocator, expression_chunk, keys);
 
 	for (idx_t i = 0; i < chunk.size(); i++) {

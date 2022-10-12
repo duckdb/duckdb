@@ -8,7 +8,34 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
+#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyresult.hpp"
+
 namespace duckdb {
+
+PyArrowObjectType GetArrowType(const py::handle &obj) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+
+	auto scanner_class = import_cache.arrow.dataset.Scanner();
+	auto table_class = import_cache.arrow.lib.Table();
+	auto record_batch_reader_class = import_cache.arrow.lib.RecordBatchReader();
+	auto in_memory_dataset_class = import_cache.arrow.dataset.InMemoryDataset();
+	auto filesystem_dataset_class = import_cache.arrow.dataset.FileSystemDataset();
+
+	if (py::isinstance(obj, scanner_class)) {
+		return PyArrowObjectType::Scanner;
+	} else if (py::isinstance(obj, table_class)) {
+		return PyArrowObjectType::Table;
+	} else if (py::isinstance(obj, record_batch_reader_class)) {
+		return PyArrowObjectType::RecordBatchReader;
+	} else if (py::isinstance(obj, in_memory_dataset_class)) {
+		return PyArrowObjectType::InMemoryDataset;
+	} else if (py::isinstance(obj, filesystem_dataset_class)) {
+		return PyArrowObjectType::FileSystemDataset;
+	}
+	return PyArrowObjectType::Invalid;
+}
 
 py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
                                                               ArrowStreamParameters &parameters, ClientConfig &config) {
@@ -37,25 +64,39 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
 	py::handle arrow_obj_handle(factory->arrow_object);
+	auto arrow_object_type = GetArrowType(arrow_obj_handle);
+	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");
 
 	py::object scanner;
-	py::object arrow_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_dataset");
-	auto py_object_type = string(py::str(arrow_obj_handle.get_type().attr("__name__")));
-	if (py_object_type == "Table") {
+	py::object arrow_scanner = scanner_class.attr("from_dataset");
+	py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
+	switch (arrow_object_type) {
+	case PyArrowObjectType::Table: {
 		auto arrow_dataset = py::module_::import("pyarrow.dataset").attr("dataset");
 		auto dataset = arrow_dataset(arrow_obj_handle);
 		scanner = ProduceScanner(arrow_scanner, dataset, parameters, factory->config);
-	} else if (py_object_type == "RecordBatchReader") {
-		py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
+		break;
+	}
+	case PyArrowObjectType::RecordBatchReader: {
 		scanner = ProduceScanner(arrow_batch_scanner, arrow_obj_handle, parameters, factory->config);
-	} else if (py_object_type == "Scanner") {
+		break;
+	}
+	case PyArrowObjectType::Scanner: {
 		// If it's a scanner we have to turn it to a record batch reader, and then a scanner again since we can't stack
 		// scanners on arrow Otherwise pushed-down projections and filters will disappear like tears in the rain
 		auto record_batches = arrow_obj_handle.attr("to_reader")();
-		py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
 		scanner = ProduceScanner(arrow_batch_scanner, record_batches, parameters, factory->config);
-	} else {
+		break;
+	}
+	case PyArrowObjectType::InMemoryDataset:
+	case PyArrowObjectType::FileSystemDataset: {
 		scanner = ProduceScanner(arrow_scanner, arrow_obj_handle, parameters, factory->config);
+		break;
+	}
+	default: {
+		auto py_object_type = string(py::str(arrow_obj_handle.get_type().attr("__name__")));
+		throw InvalidInputException("Object of type '%s' is not a recognized Arrow object", py_object_type);
+	}
 	}
 
 	auto record_batches = scanner.attr("to_reader")();
@@ -69,9 +110,9 @@ void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowS
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
+	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");
 	py::handle arrow_obj_handle(factory->arrow_object);
-	auto py_object_type = string(py::str(arrow_obj_handle.get_type().attr("__name__")));
-	if (py_object_type == "Scanner") {
+	if (py::isinstance(arrow_obj_handle, scanner_class)) {
 		auto obj_schema = arrow_obj_handle.attr("projected_schema");
 		auto export_to_c = obj_schema.attr("_export_to_c");
 		export_to_c((uint64_t)&schema);

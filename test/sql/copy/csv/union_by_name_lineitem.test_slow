@@ -1,0 +1,19 @@
+# name: test/sql/copy/csv/union_by_name_lineitem.test_slow
+# description: Test union by name with larger files
+# group: [csv]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.1);
+
+statement ok
+COPY (SELECT l_orderkey, l_partkey, l_suppkey FROM lineitem) TO '__TEST_DIR__/union_by_name_lineitem1.csv' (HEADER);
+
+statement ok
+COPY (SELECT l_partkey, l_suppkey, l_orderkey FROM lineitem) TO '__TEST_DIR__/union_by_name_lineitem2.csv' (HEADER);
+
+query III
+SELECT SUM(l_partkey), SUM(l_suppkey), SUM(l_orderkey) FROM read_csv_auto('__TEST_DIR__/union_by_name_lineitem*.csv', unioN_by_name=TRUE)
+----
+12016239468	601239036	360448084286

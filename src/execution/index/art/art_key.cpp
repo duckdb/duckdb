@@ -28,6 +28,19 @@ Key Key::CreateKey(ArenaAllocator &allocator, const char *value) {
 	return Key::CreateKey(allocator, string_t(value, strlen(value)));
 }
 
+template <>
+void Key::CreateKey(ArenaAllocator &allocator, Key &key, string_t value) {
+	key.len = value.GetSize() + 1;
+	key.data = allocator.Allocate(key.len);
+	memcpy(key.data, value.GetDataUnsafe(), key.len - 1);
+	key.data[key.len - 1] = '\0';
+}
+
+template <>
+void Key::CreateKey(ArenaAllocator &allocator, Key &key, const char *value) {
+	Key::CreateKey(allocator, key, string_t(value, strlen(value)));
+}
+
 bool Key::operator>(const Key &k) const {
 	for (idx_t i = 0; i < MinValue<idx_t>(len, k.len); i++) {
 		if (data[i] > k.data[i]) {
@@ -79,5 +92,14 @@ bool Key::ByteMatches(Key &other, idx_t &depth) {
 
 bool Key::Empty() {
 	return len == 0;
+}
+
+void Key::ConcatenateKey(ArenaAllocator &allocator, Key &other_key) {
+
+	auto compound_data = allocator.Allocate(len + other_key.len);
+	memcpy(compound_data, data, len);
+	memcpy(compound_data + len, other_key.data, other_key.len);
+	len += other_key.len;
+	data = compound_data;
 }
 } // namespace duckdb

@@ -7,9 +7,9 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/common/stack.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
@@ -66,5 +66,7 @@ private:
 	bool Next();
 	//! Push part of the key to cur_key
 	void PushKey(Node *node, uint16_t pos);
+	//! Pop node
+	void PopNode();
 };
 } // namespace duckdb
