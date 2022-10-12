@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_cast.test
 # description: Test union to union casts
-# group: [union]
+# group: [union_type]
 
 statement ok
 create table tbl1(u UNION(i32 INT, str VARCHAR));

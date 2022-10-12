@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_value.test
 # description: Test union_value function
-# group: [xxxx]
+# group: [union_type]
 
 statement ok
 CREATE TABLE tbl(u UNION(num INTEGER, str STRING));

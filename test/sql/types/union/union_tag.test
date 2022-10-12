@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_tag.test
 # description: Test union_tag
-# group: [union]
+# group: [union_type]
 
 query I 
 SELECT union_tag('foo'::UNION(num INT, str VARCHAR))

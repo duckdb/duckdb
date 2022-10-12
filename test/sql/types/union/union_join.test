@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_join.test
 # description: Test union type joins
-# group: [union]
+# group: [union_type]
 
 statement ok
 CREATE TABLE tbl1(id INT, a UNION(b INT, c VARCHAR));

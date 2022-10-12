@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_sort.test
 # description: Test sorting of union types
-# group: [union]
+# group: [union_type]
 
 statement ok
 CREATE TABLE tbl (a UNION(a INT, b INT));

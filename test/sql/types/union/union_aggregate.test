@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_aggregate.test
 # description: Test union type with aggregate functions
-# group: [union]
+# group: [union_type]
 
 statement ok
 CREATE TABLE tbl1 (u UNION(num INT, str VARCHAR));
@@ -37,7 +37,7 @@ SELECT LAST(u) FROM tbl1 GROUP BY union_tag(u) HAVING union_tag(u) = 'num';
 2
 
 # unions are ordered by tag value first, then by value, in this case str > num 
-# since the union is defined as UNION(num INT<1>, str VARCHAR<2>)
+# since the union is defined as UNION(num INT<tag = 1>, str VARCHAR<tag = 2>)
 
 query II
 SELECT max(u), min(u) FROM tbl1;

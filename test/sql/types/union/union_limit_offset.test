@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_limit_offset.test
 # description: Test union type limit and offset
-# group: [union]
+# group: [union_type]
 
 statement ok
 CREATE TABLE tbl1 (u UNION(num INT, str VARCHAR));

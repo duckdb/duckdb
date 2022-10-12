@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_ambiguous.test
 # description: Test union types with ambiguous members
-# group: [union]
+# group: [union_type]
 
 # disallow members with same name
 statement error
@@ -83,7 +83,6 @@ CREATE TABLE tbl3(a UNION(b INT, c STRUCT(b INT)));
 statement ok
 INSERT INTO tbl3 VALUES (1), (union_value(b := 2)), (union_value(c := {'b': 3}));
 
-# TODO: do we always allow explict tags (like this?) or only when there is ambiguity?
 query I
 SELECT a FROM tbl3
 ----
