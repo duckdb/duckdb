@@ -39,7 +39,12 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t changed_idx,
                                      const LogicalType &target_type, const vector<column_t> &bound_columns,
                                      Expression &cast_expr)
-    : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows) {
+    : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows),
+      prev_row_group(parent.prev_row_group), partial_manager(move(parent.partial_manager)),
+      compression_types(move(parent.compression_types)), written_blocks(move(parent.written_blocks)) {
+	if (partial_manager) {
+		partial_manager->FlushPartialBlocks();
+	}
 	stats.InitializeAlterType(parent.stats, changed_idx, target_type);
 	row_groups =
 	    parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr, stats.GetStats(changed_idx));
@@ -48,7 +53,12 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 }
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
-    : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows) {
+    : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows),
+      prev_row_group(parent.prev_row_group), partial_manager(move(parent.partial_manager)),
+      compression_types(move(parent.compression_types)), written_blocks(move(parent.written_blocks)) {
+	if (partial_manager) {
+		partial_manager->FlushPartialBlocks();
+	}
 	stats.InitializeRemoveColumn(parent.stats, drop_idx);
 	row_groups = parent.row_groups->RemoveColumn(drop_idx);
 	parent.row_groups.reset();
@@ -57,7 +67,9 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column,
                                      Expression *default_value)
-    : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows) {
+    : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows),
+      prev_row_group(parent.prev_row_group), partial_manager(move(parent.partial_manager)),
+      compression_types(move(parent.compression_types)), written_blocks(move(parent.written_blocks)) {
 	idx_t new_column_idx = parent.table.column_definitions.size();
 	stats.InitializeAddColumn(parent.stats, new_column.GetType());
 	row_groups = parent.row_groups->AddColumn(new_column, default_value, stats.GetStats(new_column_idx));

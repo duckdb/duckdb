@@ -82,6 +82,7 @@ void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
 		e.second->Flush();
 	}
+	partially_filled_blocks.clear();
 }
 
 void PartialBlockManager::Clear() {
