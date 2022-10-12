@@ -18,9 +18,6 @@
 #include "duckdb/storage/compression/chimp/algorithm/packed_data.hpp"
 #include "duckdb/common/limits.hpp"
 
-//#include "byte_writer.hpp"
-//#include "byte_reader.hpp"
-
 #include "duckdb/storage/compression/chimp/algorithm/bit_reader.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/output_bit_stream.hpp"
 #include "duckdb/common/exception.hpp"
