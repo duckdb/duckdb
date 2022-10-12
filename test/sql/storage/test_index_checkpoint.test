@@ -9,7 +9,8 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-create table t2 (i integer,  uid varchar, PRIMARY KEY (i,uid));
+create table t2 (i integer,  uid varchar);
+create unique index iu on t2(uid);
 
 statement ok
 insert into t2 select i.range as i, gen_random_uuid() as uid FROM range(10000) as i;
@@ -21,9 +22,9 @@ statement ok
 select * from pragma_database_size();
 
 # A prior version of index checkpoint caused index data to be written twice,
-# which results in a database size of 1.8MB (7 blocks). When the data is not
-# duplicated, the size is just under 1.6MB (6 blocks). This verifies we do not regress.
+# which results in a database size of 2.8MB (11 blocks). When the data is not
+# duplicated, the size is just under 1.8MB (7 blocks). This verifies we do not regress.
 query I
-select total_blocks * block_size < 1600000 from pragma_database_size();
+select total_blocks * block_size < 2100000 from pragma_database_size();
 ----
 true
