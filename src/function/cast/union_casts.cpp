@@ -318,7 +318,6 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 		if (!member_cast.function(source_member_vector, result_member_vector, count, child_parameters)) {
 			return false;
 		}
-		// TODO: what about extra children in target thats not present in source? test this!
 	}
 
 	// cast succeeded, update union tags

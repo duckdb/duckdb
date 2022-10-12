@@ -57,7 +57,8 @@ static bool TypeSupportsRegularUpdate(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
-		// lists and maps don't support updates directly
+	case LogicalTypeId::UNION:
+		// lists and maps and unions don't support updates directly
 		return false;
 	case LogicalTypeId::STRUCT: {
 		auto &child_types = StructType::GetChildTypes(type);
@@ -67,9 +68,6 @@ static bool TypeSupportsRegularUpdate(const LogicalType &type) {
 			}
 		}
 		return true;
-	}
-	case LogicalTypeId::UNION: {
-		throw new NotImplementedException("todo");
 	}
 	default:
 		return true;
