@@ -40,14 +40,23 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 	const auto count = input.size();
 	unordered_map<idx_t, list_entry_t> partition_entries;
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
-	for (idx_t i = 0; i < count; i++) {
-		const auto &partition_index = partition_indices[i];
-		auto partition_entry = partition_entries.find(partition_index);
-		if (partition_entry == partition_entries.end()) {
-			partition_entries[partition_index] = list_entry_t(0, 1);
-		} else {
-			partition_entry->second.length++;
+	switch (state.partition_indices.GetVectorType()) {
+	case VectorType::FLAT_VECTOR:
+		for (idx_t i = 0; i < count; i++) {
+			const auto &partition_index = partition_indices[i];
+			auto partition_entry = partition_entries.find(partition_index);
+			if (partition_entry == partition_entries.end()) {
+				partition_entries[partition_index] = list_entry_t(0, 1);
+			} else {
+				partition_entry->second.length++;
+			}
 		}
+		break;
+	case VectorType::CONSTANT_VECTOR:
+		partition_entries[partition_indices[0]] = list_entry_t(0, count);
+		break;
+	default:
+		throw InternalException("Unexpected VectorType in PartitionedColumnData::Append");
 	}
 
 	// Early out: check if everything belongs to a single partition

@@ -61,7 +61,7 @@ protected:
 	//===--------------------------------------------------------------------===//
 	//! Size of the buffers in the append states for this type of partitioning (default 128)
 	virtual idx_t BufferSize() const {
-		return 128;
+		return MinValue<idx_t>(128, STANDARD_VECTOR_SIZE);
 	}
 	//! Initialize a PartitionedColumnDataAppendState for this type of partitioning (optional)
 	virtual void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const {

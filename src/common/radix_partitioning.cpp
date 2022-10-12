@@ -441,6 +441,7 @@ void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumn
 	state.partition_buffers.reserve(num_partitions);
 	state.partition_append_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
+		// TODO only initialize the append if partition idx > ...
 		state.partition_append_states.emplace_back(make_unique<ColumnDataAppendState>());
 		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
 		state.partition_buffers.emplace_back(CreatePartitionBuffer());
