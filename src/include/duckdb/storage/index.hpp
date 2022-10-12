@@ -81,7 +81,7 @@ public:
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	void Delete(DataChunk &entries, Vector &row_identifiers);
 
-	//! Insert data into the index. Does not lock the index.
+	//! Insert data into the index. The index lock must be already be initialized.
 	virtual bool Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers, bool skip_remove) = 0;
 
 	//! Merge other_index into this index.

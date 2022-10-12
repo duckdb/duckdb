@@ -80,7 +80,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 	lstate.key_chunk.Reset();
 	lstate.executor.Execute(input, lstate.key_chunk);
 
-	// scan the sorted row data and construct the index from it
+	// scan the key chunk and construct the local index from it
 	{
 		IndexLock local_lock;
 		lstate.local_index->InitializeLock(local_lock);
