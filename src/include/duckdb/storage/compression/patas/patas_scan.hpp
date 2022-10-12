@@ -142,18 +142,42 @@ public:
 	//	}
 
 	// Scan up to a group boundary
-	template <class EXACT_TYPE>
-	void ScanPartialGroup(EXACT_TYPE *values, idx_t group_size) {
+	template <class EXACT_TYPE, bool FROM_START = false>
+	void ScanGroup(EXACT_TYPE *values, idx_t group_size) {
 		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
-		// After that we can use the values idx
-		for (idx_t i = 0; i < group_size; i++) {
-			const auto index_diff = group_state.index_diffs[group_state.index + i];
-			values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(
-			    patas_state, group_state.index + i, group_state.byte_counts, group_state.trailing_zeros,
-			    group_state.previous_values[group_state.index + i - index_diff]);
-			group_state.previous_values[group_state.index + i] = values[i];
+		if (FROM_START) {
+			D_ASSERT(!group_state.Started());
+			D_ASSERT(group_state.index == 0);
+
+			// Since we are scanning from the start, we can use the values array as our 'previous_values'
+			for (idx_t i = 0; i < group_size; i++) {
+				const auto index_diff = group_state.index_diffs[i];
+				D_ASSERT(index_diff <= i);
+				values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(patas_state, i, group_state.byte_counts,
+				                                                        group_state.trailing_zeros,
+				                                                        (i != 0) * values[i - index_diff]);
+				group_state.previous_values[i] = values[i];
+			}
+			if (!GroupFinished()) {
+				// We don't need to copy over the values to 'previous_values' if the group has already ended
+				// Even then, we're only interested in the last 128 values, so we can avoid copying most of these
+				const idx_t previous_value_count = MinValue((idx_t)PatasPrimitives::PATAS_GROUP_SIZE, group_size);
+				const idx_t start_index = group_size - previous_value_count;
+				memcpy(group_state.previous_values + start_index, values + start_index,
+				       sizeof(EXACT_TYPE) * previous_value_count);
+			}
+		} else {
+			// We need to reference and update the 'previous_values' array directly,
+			// because we are not scanning from the start of a group
+			for (idx_t i = 0; i < group_size; i++) {
+				const auto index_diff = group_state.index_diffs[group_state.index + i];
+				values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(
+				    patas_state, group_state.index + i, group_state.byte_counts, group_state.trailing_zeros,
+				    ((group_state.index) + i != 0) * group_state.previous_values[group_state.index + i - index_diff]);
+				group_state.previous_values[group_state.index + i] = values[i];
+			}
 		}
 		group_state.index += group_size;
 		total_value_count += group_size;
@@ -212,7 +236,7 @@ public:
 
 		while (skip_count) {
 			auto skip_size = std::min(skip_count, LeftInGroup());
-			ScanPartialGroup(buffer, skip_size);
+			ScanGroup(buffer, skip_size);
 			skip_count -= skip_size;
 		}
 	}
@@ -238,21 +262,33 @@ void PatasScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 
 	auto current_result_ptr = (EXACT_TYPE *)(result_data + result_offset);
 
-	auto current_group_remainder = std::min(scan_count, scan_state.LeftInGroup());
-	scan_count -= current_group_remainder;
-	auto iterations = scan_count / PatasPrimitives::PATAS_GROUP_SIZE;
-	auto remainder = scan_count % PatasPrimitives::PATAS_GROUP_SIZE;
+	idx_t scanned = 0;
 
-	scan_state.template ScanPartialGroup<EXACT_TYPE>(current_result_ptr, current_group_remainder);
+	// while (scanned < scan_count) {
+	//	const idx_t to_scan = MinValue(scan_count - scanned, scan_state.LeftInGroup());
 
-	for (idx_t i = 0; i < iterations; i++) {
-		scan_state.template ScanPartialGroup<EXACT_TYPE>(current_result_ptr + current_group_remainder +
-		                                                     (i * PatasPrimitives::PATAS_GROUP_SIZE),
-		                                                 PatasPrimitives::PATAS_GROUP_SIZE);
+	//	scan_state.template ScanGroup<EXACT_TYPE>(current_result_ptr + scanned, to_scan);
+
+	//	scanned += to_scan;
+	//}
+	const auto last_group_remainder = MinValue(scan_count, scan_state.LeftInGroup());
+	if (!scan_state.group_state.Started()) {
+		scan_state.template ScanGroup<EXACT_TYPE, true>(current_result_ptr, last_group_remainder);
+	} else {
+		scan_state.template ScanGroup<EXACT_TYPE>(current_result_ptr, last_group_remainder);
 	}
-	if (remainder) {
-		scan_state.template ScanPartialGroup<EXACT_TYPE>(
-		    current_result_ptr + current_group_remainder + (iterations * PatasPrimitives::PATAS_GROUP_SIZE), remainder);
+
+	scanned += last_group_remainder;
+	const idx_t full_group_iterations = (scan_count - scanned) / PatasPrimitives::PATAS_GROUP_SIZE;
+
+	for (idx_t i = 0; i < full_group_iterations; i++) {
+		scan_state.template ScanGroup<EXACT_TYPE, true>(
+		    current_result_ptr + scanned + (i * PatasPrimitives::PATAS_GROUP_SIZE), PatasPrimitives::PATAS_GROUP_SIZE);
+	}
+
+	scanned += full_group_iterations * PatasPrimitives::PATAS_GROUP_SIZE;
+	if (scanned < scan_count) {
+		scan_state.template ScanGroup<EXACT_TYPE>(current_result_ptr + scanned, (scan_count - scanned));
 	}
 }
 
