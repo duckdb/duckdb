@@ -1,6 +1,11 @@
 name: Bug report
 description: Create a report to help us improve
 body:
+  - type: markdown
+    attributes:
+      value: >
+        Is your issue related to one of our "out of tree" extensions, eg, [sqlite_scanner](https://github.com/duckdblabs/sqlite_scanner), [postgres_scanner](https://github.com/duckdblabs/postgres_scanner)? If so, please raise your issue there instead of in this repository.
+
   - type: textarea
     attributes:
       label: What happens?
