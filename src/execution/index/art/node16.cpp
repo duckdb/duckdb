@@ -124,15 +124,18 @@ void Node16::EraseChild(Node *&node, int pos, ART &art) {
 	}
 }
 
-void Node16::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
+bool Node16::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
 
 	Node16 *r_n = (Node16 *)info.r_node;
 
 	for (idx_t i = 0; i < info.r_node->count; i++) {
 
 		auto l_child_pos = info.l_node->GetChildPos(r_n->key[i]);
-		Node::MergeAtByte(info, depth, l_child_pos, i, r_n->key[i], l_parent, l_pos);
+		if (!Node::MergeAtByte(info, depth, l_child_pos, i, r_n->key[i], l_parent, l_pos)) {
+			return false;
+		}
 	}
+	return true;
 }
 
 idx_t Node16::GetSize() {

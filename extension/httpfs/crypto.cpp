@@ -1,23 +1,14 @@
 #include "crypto.hpp"
-#include "picohash.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
 
-typedef unsigned char hash_bytes[PICOHASH_SHA256_DIGEST_LENGTH];
-typedef unsigned char hash_str[PICOHASH_SHA256_DIGEST_LENGTH * 2];
-
 void sha256(const char *in, size_t in_len, hash_bytes &out) {
-	picohash_ctx_t ctx;
-	picohash_init_sha256(&ctx);
-	picohash_update(&ctx, in, in_len);
-	picohash_final(&ctx, out);
+	duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(in, in_len, (char *)out);
 }
 
 void hmac256(const std::string &message, const char *secret, size_t secret_len, hash_bytes &out) {
-	picohash_ctx_t ctx;
-	picohash_init_hmac(&ctx, picohash_init_sha256, secret, secret_len);
-	picohash_update(&ctx, message.c_str(), message.length());
-	picohash_final(&ctx, out);
+	duckdb_mbedtls::MbedTlsWrapper::Hmac256(secret, secret_len, message.data(), message.size(), (char *)out);
 }
 
 void hmac256(std::string message, hash_bytes secret, hash_bytes &out) {
