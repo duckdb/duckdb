@@ -230,9 +230,6 @@ idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	if (!storage->indexes.Empty()) {
 		storage->row_groups->RemoveFromIndexes(storage->indexes, row_ids, count);
 	}
-	if (storage->HasWrittenBlocks()) {
-		storage->Rollback();
-	}
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	idx_t delete_count = storage->row_groups->Delete(TransactionData(0, 0), table, ids, count);
@@ -300,8 +297,10 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		}
 		table.MergeStorage(*storage.row_groups, storage.indexes, storage.stats);
 	} else {
-		if (storage.partial_manager) {
-			throw InternalException("partial manager should only exist when we are merging");
+		if (storage.partial_manager || !storage.written_blocks.empty()) {
+			// we have written data but cannot merge to disk after all
+			// revert the data we have already written
+			storage.Rollback();
 		}
 		bool constraint_violated = false;
 		table.InitializeAppend(append_state);
