@@ -147,11 +147,7 @@ void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gs
 	}
 
 	// merge the local index into the global index
-	{
-		IndexLock global_lock;
-		gstate.global_index->InitializeLock(global_lock);
-		gstate.global_index->MergeIndexes(lstate.local_index.get());
-	}
+	gstate.global_index->MergeIndexes(lstate.local_index.get());
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
