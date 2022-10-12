@@ -34,26 +34,7 @@ public:
 	}
 	void Reset() {
 		index = 0;
-		stored_previous_values = 0;
-	}
-
-	// If we read (for instance) 40 values, cache that and then read 40 more values, we have to add to the cache, not
-	// just replace the old one We have to assume that 'stored_previous_values' is reset to 0 every time a group ends,
-	// then we can use the 'count' and the 'stored_previous_values' to determine whether we need to override the old
-	// values Actually, we might need to memmove the previous_values if count < 128, and stored_previous_values != 0
-	void CachePreviousValues(EXACT_TYPE *values, idx_t count) {
-		D_ASSERT(count <= patas::BUFFER_SIZE);
-		const idx_t old_count = stored_previous_values;
-		// Limit the previous values count to 128
-		stored_previous_values = std::min((idx_t)patas::BUFFER_SIZE, stored_previous_values + count);
-		idx_t insert_at_index = 0;
-		if (old_count && count < patas::BUFFER_SIZE && old_count + count > patas::BUFFER_SIZE) {
-			// Old + new is bigger than the buffer, some of 'old' can still be referenced: move it back
-			const idx_t useful_values = (old_count + count) - patas::BUFFER_SIZE;
-			memmove(previous_values, previous_values + useful_values, (old_count - useful_values) * sizeof(EXACT_TYPE));
-			insert_at_index = (old_count - useful_values);
-		}
-		memcpy(previous_values + insert_at_index, values, count * sizeof(EXACT_TYPE));
+		previous_values[0] = (EXACT_TYPE)0;
 	}
 
 	// Assuming the group is completely full
@@ -82,9 +63,7 @@ public:
 	uint8_t trailing_zeros[PatasPrimitives::PATAS_GROUP_SIZE];
 	uint8_t byte_counts[PatasPrimitives::PATAS_GROUP_SIZE];
 	uint8_t index_diffs[PatasPrimitives::PATAS_GROUP_SIZE];
-
-	EXACT_TYPE previous_values[patas::BUFFER_SIZE];
-	idx_t stored_previous_values;
+	EXACT_TYPE previous_values[PatasPrimitives::PATAS_GROUP_SIZE];
 };
 
 template <class T>
@@ -168,39 +147,18 @@ public:
 		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
-		// Set the first value to 0, because the first value of a group uses this as reference
-		values[0] = (EXACT_TYPE)0;
-
-		// First load the values that (could) require cached values
-		for (idx_t i = 0; i < patas::BUFFER_SIZE && i < group_size; i++) {
-			const uint8_t index_diff = group_state.index_diffs[group_state.index + i];
-			if (index_diff > i) {
-				D_ASSERT((index_diff - i) <= group_state.stored_previous_values);
-				// Have to use the cached previous values
-				const auto cache_index = group_state.stored_previous_values - (index_diff - i);
-				values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(
-				    patas_state, group_state.index + i, group_state.byte_counts, group_state.trailing_zeros,
-				    group_state.previous_values[cache_index]);
-			} else {
-				values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(
-				    patas_state, group_state.index + i, group_state.byte_counts, group_state.trailing_zeros,
-				    values[i - index_diff]);
-			}
-		}
 		// After that we can use the values idx
-		for (idx_t i = std::min((idx_t)patas::BUFFER_SIZE, group_size); i < group_size; i++) {
+		for (idx_t i = 0; i < group_size; i++) {
 			const auto index_diff = group_state.index_diffs[group_state.index + i];
-			values[i] =
-			    patas::PatasDecompression<EXACT_TYPE>::Load(patas_state, group_state.index + i, group_state.byte_counts,
-			                                                group_state.trailing_zeros, values[i - index_diff]);
+			values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(
+			    patas_state, group_state.index + i, group_state.byte_counts, group_state.trailing_zeros,
+			    group_state.previous_values[group_state.index + i - index_diff]);
+			group_state.previous_values[group_state.index + i] = values[i];
 		}
 		group_state.index += group_size;
 		total_value_count += group_size;
 		if (GroupFinished() && total_value_count < segment.count) {
 			LoadGroup();
-		} else {
-			auto to_cache = std::min(group_size, (idx_t)patas::BUFFER_SIZE);
-			group_state.CachePreviousValues(values + (group_size - to_cache), to_cache);
 		}
 	}
 
@@ -240,6 +198,9 @@ public:
 		metadata_ptr -= AlignValue(index_diff_bits) / 8;
 		// Unpack and store the index differences for the entire group
 		group_state.LoadIndexDifferences(metadata_ptr, bitpacked_block_count);
+
+		// First value of a group references this
+		group_state.previous_values[0] = (EXACT_TYPE)0;
 	}
 
 public:

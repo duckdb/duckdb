@@ -34,12 +34,12 @@ void PatasFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 	result_data[result_idx] = (EXACT_TYPE)0;
 
 	const auto index_diff = scan_state.group_state.index_diffs[scan_state.group_state.index];
-	const auto cache_index = scan_state.group_state.stored_previous_values - index_diff;
+	const auto previous_index = scan_state.group_state.index - index_diff;
 
 	result_data[result_idx] = patas::PatasDecompression<EXACT_TYPE>::Load(
 	    scan_state.patas_state, scan_state.group_state.index, scan_state.group_state.byte_counts,
-	    scan_state.group_state.trailing_zeros, scan_state.group_state.previous_values[cache_index]);
-	scan_state.group_state.CachePreviousValues(result_data + result_idx, 1);
+	    scan_state.group_state.trailing_zeros, scan_state.group_state.previous_values[previous_index]);
+	scan_state.group_state.previous_values[scan_state.group_state.index] = result_data[result_idx];
 }
 
 } // namespace duckdb
