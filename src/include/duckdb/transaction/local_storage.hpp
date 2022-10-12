@@ -56,7 +56,8 @@ public:
 	void InitializeScan(CollectionScanState &state, TableFilterSet *table_filters = nullptr);
 	//! Check if we should flush the previously written row-group to disk
 	void CheckFlush(RowGroup *row_group);
-
+	//! Whether or not the local table storag ehas optimistically written blocks
+	bool HasWrittenBlocks();
 	void Rollback();
 	idx_t EstimatedSize();
 };

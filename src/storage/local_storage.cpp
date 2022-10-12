@@ -158,6 +158,14 @@ void LocalTableStorage::CheckFlush(RowGroup *row_group) {
 		prev_row_group = row_group;
 		return;
 	}
+	if (!table.info->indexes.Empty()) {
+		// we have indexes - we cannot merge
+		return;
+	}
+	if (deleted_rows != 0) {
+		// we have deletes - we cannot merge
+		return;
+	}
 	// we finished writing a complete row group
 	// write previous row group to disk
 	// allocate the partial block-manager if none is allocated yet
@@ -195,6 +203,10 @@ idx_t LocalStorage::EstimatedSize() {
 	return estimated_size;
 }
 
+bool LocalTableStorage::HasWrittenBlocks() {
+	return partial_manager || !written_blocks.empty();
+}
+
 idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	auto storage = GetStorage(table);
 	D_ASSERT(storage);
@@ -202,6 +214,9 @@ idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	// delete from unique indices (if any)
 	if (!storage->indexes.Empty()) {
 		storage->row_groups->RemoveFromIndexes(storage->indexes, row_ids, count);
+	}
+	if (storage->HasWrittenBlocks()) {
+		storage->Rollback();
 	}
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
@@ -322,6 +337,9 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 void LocalStorage::Rollback() {
 	for (auto &entry : table_storage) {
 		auto storage = entry.second.get();
+		if (!storage) {
+			continue;
+		}
 		storage->Rollback();
 	}
 }
