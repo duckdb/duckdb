@@ -230,6 +230,7 @@ public:
 	                        PhysicalOperator *pipeline_child);
 };
 
+//! Contains state for the CachingPhysicalOperator
 class CachingOperatorState : public OperatorState {
 public:
 	~CachingOperatorState() override {
@@ -246,7 +247,8 @@ public:
 	bool allow_caching = true;
 };
 
-//! Base class that caches output from child class below certain cache threshold
+//! Base class that caches output from child Operator class. Note that Operators inheriting from this class should also
+//! inherit their state class from the CachingOperatorState.
 class CachingPhysicalOperator : public PhysicalOperator {
 public:
 	static constexpr const idx_t CACHE_THRESHOLD = 64;

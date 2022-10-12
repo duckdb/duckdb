@@ -99,6 +99,14 @@ private:
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
 
+	//! FlushCachedOperators methods push/pull any remaining cached results through the pipeline
+	void FlushCachingOperatorsPull(DataChunk &result);
+	void FlushCachingOperatorsPush();
+
+	//! Helper function that fetches the intermediate chunk for op_idx if possible, for the last op in the pipeline,
+	//! it uses tmp_chunk to initialize a new chunk for this.
+	DataChunk* GetIntermediateChunk(unique_ptr<DataChunk>& tmp_chunk, idx_t op_idx);
+
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);
 };
