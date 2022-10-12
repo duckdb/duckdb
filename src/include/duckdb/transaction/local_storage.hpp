@@ -49,11 +49,15 @@ public:
 	unique_ptr<PartialBlockManager> partial_manager;
 	//! The set of column compression types (if any)
 	vector<CompressionType> compression_types;
+	//! The set of blocks that have been pre-emptively written to disk
+	unordered_set<block_id_t> written_blocks;
 
 public:
 	void InitializeScan(CollectionScanState &state, TableFilterSet *table_filters = nullptr);
 	//! Check if we should flush the previously written row-group to disk
 	void CheckFlush(RowGroup *row_group);
+
+	void Rollback();
 	idx_t EstimatedSize();
 };
 
@@ -90,6 +94,8 @@ public:
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
 	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction);
+	//! Rollback the local storage
+	void Rollback();
 
 	bool ChangesMade() noexcept {
 		return table_storage.size() > 0;

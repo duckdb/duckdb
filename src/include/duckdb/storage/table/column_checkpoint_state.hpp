@@ -13,6 +13,7 @@
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -39,6 +40,7 @@ public:
 
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
 	virtual void WriteDataPointers(RowGroupWriter &writer);
+	virtual void GetBlockIds(unordered_set<block_id_t> &result);
 };
 
 } // namespace duckdb

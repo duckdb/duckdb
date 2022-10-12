@@ -72,6 +72,11 @@ public:
 		tail_segments.clear();
 	}
 
+	void Clear() override {
+		first_segment = nullptr;
+		tail_segments.clear();
+	}
+
 	void AddSegmentToTail(ColumnSegment *segment, uint32_t offset_in_block) {
 		tail_segments.push_back({segment, offset_in_block});
 	}
@@ -147,6 +152,15 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 
 void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer) {
 	writer.WriteColumnDataPointers(*this);
+}
+
+void ColumnCheckpointState::GetBlockIds(unordered_set<block_id_t> &result) {
+	for (auto &pointer : data_pointers) {
+		if (pointer.block_pointer.block_id == INVALID_BLOCK) {
+			continue;
+		}
+		result.insert(pointer.block_pointer.block_id);
+	}
 }
 
 } // namespace duckdb

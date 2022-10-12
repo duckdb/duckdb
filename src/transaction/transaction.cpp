@@ -113,4 +113,20 @@ string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool c
 	}
 }
 
+void Transaction::Rollback() noexcept {
+	storage.Rollback();
+	undo_buffer.Rollback();
+}
+
+void Transaction::Cleanup() {
+	undo_buffer.Cleanup();
+}
+
+void Transaction::Invalidate() {
+	is_invalidated = true;
+}
+bool Transaction::IsInvalidated() {
+	return is_invalidated;
+}
+
 } // namespace duckdb

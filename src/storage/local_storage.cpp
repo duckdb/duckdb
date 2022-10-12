@@ -171,6 +171,7 @@ void LocalTableStorage::CheckFlush(RowGroup *row_group) {
 	}
 	auto row_group_pointer = prev_row_group->WriteToDisk(*partial_manager, compression_types);
 	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
+		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
 		stats.MergeStats(col_idx, *row_group_pointer.statistics[col_idx]);
 	}
 	prev_row_group = row_group;
@@ -316,6 +317,24 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 	}
 	// finished commit: clear local storage
 	table_storage.clear();
+}
+
+void LocalStorage::Rollback() {
+	for (auto &entry : table_storage) {
+		auto storage = entry.second.get();
+		storage->Rollback();
+	}
+}
+
+void LocalTableStorage::Rollback() {
+	if (partial_manager) {
+		partial_manager->Clear();
+		partial_manager.reset();
+	}
+	auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
+	for (auto block_id : written_blocks) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
 }
 
 idx_t LocalStorage::AddedRows(DataTable *table) {

@@ -264,6 +264,12 @@ public:
 			state->WriteDataPointers(writer);
 		}
 	}
+	void GetBlockIds(unordered_set<block_id_t> &result) override {
+		validity_state->GetBlockIds(result);
+		for (auto &state : child_states) {
+			state->GetBlockIds(result);
+		}
+	}
 };
 
 unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGroup &row_group,

@@ -177,6 +177,11 @@ public:
 		ColumnCheckpointState::WriteDataPointers(writer);
 		validity_state->WriteDataPointers(writer);
 	}
+
+	void GetBlockIds(unordered_set<block_id_t> &result) override {
+		ColumnCheckpointState::GetBlockIds(result);
+		validity_state->GetBlockIds(result);
+	}
 };
 
 unique_ptr<ColumnCheckpointState>

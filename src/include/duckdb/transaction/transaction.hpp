@@ -73,20 +73,12 @@ public:
 	bool AutomaticCheckpoint(DatabaseInstance &db);
 
 	//! Rollback
-	void Rollback() noexcept {
-		undo_buffer.Rollback();
-	}
+	void Rollback() noexcept;
 	//! Cleanup the undo buffer
-	void Cleanup() {
-		undo_buffer.Cleanup();
-	}
+	void Cleanup();
 
-	void Invalidate() {
-		is_invalidated = true;
-	}
-	bool IsInvalidated() {
-		return is_invalidated;
-	}
+	void Invalidate();
+	bool IsInvalidated();
 	bool ChangesMade();
 
 	timestamp_t GetCurrentTransactionStartTimestamp() {
