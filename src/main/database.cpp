@@ -28,7 +28,7 @@ DBConfig::DBConfig() {
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() {
+DatabaseInstance::DatabaseInstance() : is_invalidated(false) {
 }
 
 DatabaseInstance::~DatabaseInstance() {
