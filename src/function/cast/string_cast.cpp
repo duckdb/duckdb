@@ -129,8 +129,6 @@ bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters 
     source.ToUnifiedFormat(count, unified_source);
     auto source_data = (string_t *)unified_source.data;
 
-	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
-
     if(source.GetVectorType() == VectorType::CONSTANT_VECTOR ){
         result.SetVectorType(VectorType::CONSTANT_VECTOR);
     }
@@ -160,16 +158,13 @@ bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters 
                                                        ConstantVector::Validity(result), idx, parameters.error_message, all_converted);
         }
     }
-    ListVector::Reserve(varchar_list, total_list_size);
+    Vector varchar_vector(LogicalType::VARCHAR, total_list_size);
     ListVector::Reserve(result, total_list_size);
-    ListVector::SetListSize(varchar_list, total_list_size); // sets child size
     ListVector::SetListSize(result, total_list_size);
 
     // list_data contains for each row an offset and length that reference indexes of the child vector
-    auto list_data = ListVector::GetData(varchar_list);
-    auto list_data_result = ListVector::GetData(result);
-    auto &child = ListVector::GetEntry(varchar_list);     // Child contains the actual raw values in the varchar_list ListVector
-	auto child_data = FlatVector::GetData<string_t>(child);
+    auto list_data = ListVector::GetData(result);
+	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
 
 	idx_t total = 0;
 	for (idx_t i = 0; i < count; i++) { // loop over source strings
@@ -181,27 +176,20 @@ bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters 
         }
 
 		list_data[i].offset = total;        // offset (start of list in child vector)
-		list_data_result[i].offset = total;
-        auto valid = VectorStringifiedListParser::SplitStringifiedList(source_data[idx], child_data, total, child, false);
+        auto valid = VectorStringifiedListParser::SplitStringifiedList(source_data[idx], child_data, total, varchar_vector, false);
         if (!valid) {
             HandleVectorCastError::Operation<string_t>(CastExceptionText<string_t, string_t>(source_data[idx]),
                                                        ConstantVector::Validity(result), idx, parameters.error_message, all_converted);
         }
         list_data[i].length = total - list_data[i].offset; // length is the amount of parts coming from this string
-        list_data_result[i].length = total - list_data[i].offset;
 	}
     D_ASSERT(total_list_size == total);
-
 
 	auto &result_child = ListVector::GetEntry(result);
 	auto &cast_data = (ListBoundCastData &)*parameters.cast_data;
     CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data.get());
-	return cast_data.child_cast_info.function(child, result_child, total_list_size, child_parameters);
+	return cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters);
 }
-
-
-
-
 
 bool StringToStringList(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
