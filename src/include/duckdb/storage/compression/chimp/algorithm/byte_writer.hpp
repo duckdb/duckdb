@@ -20,7 +20,7 @@ public:
 	}
 
 public:
-	size_t BytesWritten() const {
+	idx_t BytesWritten() const {
 		return index;
 	}
 
@@ -56,7 +56,7 @@ public:
 private:
 private:
 	uint8_t *buffer;
-	size_t index;
+	idx_t index;
 };
 
 } // namespace duckdb

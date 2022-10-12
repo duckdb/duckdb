@@ -113,7 +113,7 @@ public:
 
 		uint32_t temp_value = 0;
 		memcpy((uint8_t *)&temp_value, (void *)(buffer + buffer_idx), 3);
-		for (size_t i = 0; i < flags.size(); i++) {
+		for (idx_t i = 0; i < flags.size(); i++) {
 			D_ASSERT(flags[i] == ExtractValue(temp_value, i));
 		}
 		flags.clear();
@@ -148,10 +148,10 @@ public:
 		counter++;
 		return result;
 	}
-	size_t GetCount() const {
+	idx_t GetCount() const {
 		return counter;
 	}
-	size_t BlockCount() const {
+	idx_t BlockCount() const {
 		return (counter >> 3) + ((counter & 7) != 0);
 	}
 

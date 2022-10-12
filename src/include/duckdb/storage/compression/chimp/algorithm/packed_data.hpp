@@ -89,7 +89,7 @@ public:
 		index++;
 	}
 
-	size_t index;
+	idx_t index;
 	uint16_t *buffer;
 };
 

@@ -33,11 +33,11 @@ public:
 public:
 	static constexpr uint8_t INTERNAL_TYPE_BITSIZE = sizeof(INTERNAL_TYPE) * 8;
 
-	size_t BytesWritten() const {
+	idx_t BytesWritten() const {
 		return (bits_written >> 3) + ((bits_written & 7) != 0);
 	}
 
-	size_t BitsWritten() const {
+	idx_t BitsWritten() const {
 		return bits_written;
 	}
 
@@ -61,7 +61,7 @@ public:
 		return (uint64_t *)stream;
 	}
 
-	size_t BitSize() const {
+	idx_t BitSize() const {
 		return (stream_index * INTERNAL_TYPE_BITSIZE) + (INTERNAL_TYPE_BITSIZE - free_bits);
 	}
 
@@ -208,9 +208,9 @@ private:
 
 	INTERNAL_TYPE current; //! The current value we're writing into (zero-initialized)
 	uint8_t free_bits;     //! How many bits are still unwritten in 'current'
-	size_t stream_index;   //! Index used to keep track of which index we're at in the stream
+	idx_t stream_index;    //! Index used to keep track of which index we're at in the stream
 
-	size_t bits_written; //! The total amount of bits written to this stream
+	idx_t bits_written; //! The total amount of bits written to this stream
 };
 
 } // namespace duckdb
