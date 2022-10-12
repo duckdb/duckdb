@@ -27,6 +27,7 @@ class Value {
 	friend struct StructValue;
 	friend struct ListValue;
 	friend struct UnionValue;
+
 public:
 	//! Create an empty NULL value of the specified type
 	DUCKDB_API explicit Value(LogicalType type = LogicalType::SQLNULL);

@@ -20,27 +20,27 @@ public:
 };
 
 static void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	
+
 	// Assign the new entries to the result vector
 	UnionVector::GetMember(result, 0).Reference(args.data[0]);
-	
+
 	// Reset tags
 	UnionVector::SetTags(result, 0, args.size());
-	
-	if(args.AllConstant()){
+
+	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
 static unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
-	
-	if(arguments.size() != 1) {
+                                               vector<unique_ptr<Expression>> &arguments) {
+
+	if (arguments.size() != 1) {
 		throw Exception("union_value takes exactly one argument");
 	}
 	auto &child = arguments[0];
 
-	if(child->alias.empty()) {
+	if (child->alias.empty()) {
 		throw BinderException("Need named argument for union tag, e.g. UNION_VALUE(a := b)");
 	}
 
@@ -54,7 +54,8 @@ static unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFun
 
 void UnionValueFun::RegisterFunction(BuiltinFunctions &set) {
 
-	auto fun = ScalarFunction("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
+	auto fun =
+	    ScalarFunction("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
 	fun.varargs = LogicalType::ANY;
 	fun.serialize = VariableReturnBindData::Serialize;
 	fun.deserialize = VariableReturnBindData::Deserialize;

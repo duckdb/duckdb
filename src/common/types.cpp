@@ -745,8 +745,7 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 		return LogicalType::LIST(move(new_child));
 	}
-	if (type_id == LogicalTypeId::STRUCT 
-		|| type_id == LogicalTypeId::MAP) {
+	if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::MAP) {
 		// struct: perform recursively
 		auto &left_child_types = StructType::GetChildTypes(left);
 		auto &right_child_types = StructType::GetChildTypes(right);
@@ -761,11 +760,10 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
 		}
 
-		return type_id == LogicalTypeId::STRUCT 
-			? LogicalType::STRUCT(move(child_types)) 
-			: LogicalType::MAP(move(child_types));
+		return type_id == LogicalTypeId::STRUCT ? LogicalType::STRUCT(move(child_types))
+		                                        : LogicalType::MAP(move(child_types));
 	}
-	if(type_id == LogicalTypeId::UNION) {
+	if (type_id == LogicalTypeId::UNION) {
 		auto left_member_types = UnionType::GetMemberTypes(left);
 		auto right_member_types = UnionType::GetMemberTypes(right);
 		if (left_member_types.size() != right_member_types.size()) {
@@ -1154,10 +1152,9 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 }
 
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT 
-	|| type.id() == LogicalTypeId::MAP 
-	|| type.id() == LogicalTypeId::UNION);
-	
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP ||
+	         type.id() == LogicalTypeId::UNION);
+
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((StructTypeInfo &)*info).child_types;
@@ -1213,7 +1210,6 @@ const LogicalType &MapType::ValueType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
 	return ListType::GetChildType(StructType::GetChildTypes(type)[1].second);
 }
-
 
 //===--------------------------------------------------------------------===//
 // Union Type

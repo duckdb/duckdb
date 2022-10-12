@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_aggregate.test
 # description: Test union type with aggregate functions
-# group: [union_type]
+# group: [union]
 
 statement ok
 CREATE TABLE tbl1 (u UNION(num INT, str VARCHAR));

@@ -7,7 +7,7 @@
 namespace duckdb {
 
 static unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunction &bound_function,
-											 vector<unique_ptr<Expression>> &arguments) {
+                                             vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 1);
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
@@ -20,15 +20,16 @@ static unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunct
 		throw InternalException("Can't get tags from an empty union");
 	}
 	bound_function.arguments[0] = arguments[0]->return_type;
-	
+
 	auto varchar_vector = Vector(LogicalType::VARCHAR, member_count);
-	for(idx_t i = 0; i < member_count; i++) {
+	for (idx_t i = 0; i < member_count; i++) {
 		auto str = string_t(UnionType::GetMemberName(arguments[0]->return_type, i));
-		FlatVector::GetData<string_t>(varchar_vector)[i] = str.IsInlined() ? str : StringVector::AddString(varchar_vector, str);
+		FlatVector::GetData<string_t>(varchar_vector)[i] =
+		    str.IsInlined() ? str : StringVector::AddString(varchar_vector, str);
 	}
 	auto enum_type = LogicalType::ENUM("", varchar_vector, member_count);
 	bound_function.return_type = enum_type;
-	
+
 	return nullptr;
 }
 
@@ -37,7 +38,7 @@ static void UnionTagFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &union_vector = args.data[0];
 	auto enums = FlatVector::GetData<uint8_t>(result);
 	auto tags = UnionVector::GetTags(union_vector);
-	
+
 	UnifiedVectorFormat sdata;
 	args.data[0].ToUnifiedFormat(args.size(), sdata);
 
@@ -51,16 +52,15 @@ static void UnionTagFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 	}
 
-	if(args.size() == 1) {
+	if (args.size() == 1) {
 		result.Flatten(args.size());
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
-
 void UnionTagFun::RegisterFunction(BuiltinFunctions &set) {
 	auto fun = ScalarFunction("union_tag", {LogicalTypeId::UNION}, LogicalTypeId::ANY, UnionTagFunction, UnionTagBind,
-	                      nullptr, nullptr); // TODO: Statistics?
+	                          nullptr, nullptr); // TODO: Statistics?
 
 	ScalarFunctionSet union_tag("union_tag");
 	union_tag.AddFunction(fun);

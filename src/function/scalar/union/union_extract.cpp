@@ -31,7 +31,7 @@ static void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	// this should be guaranteed by the binder
 	auto &vec = args.data[0];
 	vec.Verify(args.size());
-	
+
 	D_ASSERT(info.index < UnionType::GetMemberCount(vec.GetType()));
 	auto &member = UnionVector::GetMember(vec, info.index);
 	result.Reference(member);
@@ -99,7 +99,7 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 void UnionExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	auto fun = ScalarFunction("union_extract", {LogicalTypeId::UNION, LogicalType::VARCHAR}, LogicalType::ANY,
-								UnionExtractFunction, UnionExtractBind, nullptr, nullptr);
+	                          UnionExtractFunction, UnionExtractBind, nullptr, nullptr);
 
 	ScalarFunctionSet extract("union_extract");
 	extract.AddFunction(fun);

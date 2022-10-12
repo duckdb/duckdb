@@ -20,7 +20,7 @@ BoundCastInfo DefaultCasts::DateCastSwitch(BindCastInput &input, const LogicalTy
 		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampSec>);
 	case LogicalTypeId::TIMESTAMP_MS:
 		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampMS>);
-	case LogicalTypeId::UNION: 
+	case LogicalTypeId::UNION:
 		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return TryVectorNullCast;
@@ -37,7 +37,7 @@ BoundCastInfo DefaultCasts::TimeCastSwitch(BindCastInput &input, const LogicalTy
 	case LogicalTypeId::TIME_TZ:
 		// time to time with time zone
 		return ReinterpretCast;
-	case LogicalTypeId::UNION: 
+	case LogicalTypeId::UNION:
 		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return TryVectorNullCast;
@@ -55,7 +55,7 @@ BoundCastInfo DefaultCasts::TimeTzCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::TIME:
 		// time with time zone to time
 		return ReinterpretCast;
-	case LogicalTypeId::UNION: 
+	case LogicalTypeId::UNION:
 		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return TryVectorNullCast;
@@ -92,7 +92,7 @@ BoundCastInfo DefaultCasts::TimestampCastSwitch(BindCastInput &input, const Logi
 		// timestamp (us) to timestamp (s)
 		return BoundCastInfo(
 		    &VectorCastHelpers::TemplatedCastLoop<timestamp_t, timestamp_t, duckdb::CastTimestampUsToSec>);
-	case LogicalTypeId::UNION: 
+	case LogicalTypeId::UNION:
 		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return TryVectorNullCast;
@@ -133,7 +133,7 @@ BoundCastInfo DefaultCasts::TimestampNsCastSwitch(BindCastInput &input, const Lo
 		// timestamp (ns) to timestamp (us)
 		return BoundCastInfo(
 		    &VectorCastHelpers::TemplatedCastLoop<timestamp_t, timestamp_t, duckdb::CastTimestampNsToUs>);
-	case LogicalTypeId::UNION: 
+	case LogicalTypeId::UNION:
 		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return TryVectorNullCast;
@@ -152,7 +152,7 @@ BoundCastInfo DefaultCasts::TimestampMsCastSwitch(BindCastInput &input, const Lo
 		// timestamp (ms) to timestamp (us)
 		return BoundCastInfo(
 		    &VectorCastHelpers::TemplatedCastLoop<timestamp_t, timestamp_t, duckdb::CastTimestampMsToUs>);
-	case LogicalTypeId::UNION: 
+	case LogicalTypeId::UNION:
 		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return TryVectorNullCast;
@@ -171,7 +171,7 @@ BoundCastInfo DefaultCasts::TimestampSecCastSwitch(BindCastInput &input, const L
 		// timestamp (s) to timestamp (us)
 		return BoundCastInfo(
 		    &VectorCastHelpers::TemplatedCastLoop<timestamp_t, timestamp_t, duckdb::CastTimestampSecToUs>);
-	case LogicalTypeId::UNION: 
+	case LogicalTypeId::UNION:
 		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return TryVectorNullCast;
@@ -185,7 +185,7 @@ BoundCastInfo DefaultCasts::IntervalCastSwitch(BindCastInput &input, const Logic
 	case LogicalTypeId::JSON:
 		// time to varchar
 		return BoundCastInfo(&VectorCastHelpers::StringCast<interval_t, duckdb::StringCast>);
-	case LogicalTypeId::UNION: 
+	case LogicalTypeId::UNION:
 		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return TryVectorNullCast;

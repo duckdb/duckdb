@@ -144,7 +144,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::GetMemberTypes(type);
-		for(auto &member_type : member_types) {
+		for (auto &member_type : member_types) {
 			BindLogicalType(context, member_type.second, schema);
 		}
 		// Generate new Union Type

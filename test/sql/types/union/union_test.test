@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_test.test
 # description: Test union type
-# group: [union_type]
+# group: [union]
 
 statement ok
 CREATE TABLE tbl(u UNION(i INTEGER, f FLOAT));

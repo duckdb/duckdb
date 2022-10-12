@@ -131,8 +131,7 @@ bool ExpressionBinder::ContainsType(const LogicalType &type, LogicalTypeId targe
 	case LogicalTypeId::UNION: {
 		auto member_count = UnionType::GetMemberCount(type);
 		for (idx_t i = 0; i < member_count; i++) {
-			if (ContainsType(UnionType::GetMemberType(type, i), target))
-			{
+			if (ContainsType(UnionType::GetMemberType(type, i), target)) {
 				return true;
 			}
 		}

@@ -552,7 +552,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	}
 	case LogicalTypeId::UNION: {
 		auto tag = UnionVector::GetTags(*vector)[index]; // ((union_tag_t *)data)[index];
-		auto value =  UnionVector::GetMember(*vector, tag).GetValue(index);
+		auto value = UnionVector::GetMember(*vector, tag).GetValue(index);
 		auto members = UnionType::GetMemberTypes(type);
 		return Value::UNION(members, tag, move(value));
 	}
@@ -1516,10 +1516,9 @@ const Vector &MapVector::GetValues(const Vector &vector) {
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT 
-	|| vector.GetType().id() == LogicalTypeId::MAP
-	|| vector.GetType().id() == LogicalTypeId::UNION);
-	
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP ||
+	         vector.GetType().id() == LogicalTypeId::UNION);
+
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
 		return StructVector::GetEntries(child);
@@ -1731,9 +1730,8 @@ void ListVector::PushBack(Vector &target, const Value &insert) {
 	target_buffer.PushBack(insert);
 }
 
-
 // Union vector
-const Vector &UnionVector::GetMember(const Vector &vector, idx_t index){
+const Vector &UnionVector::GetMember(const Vector &vector, idx_t index) {
 	D_ASSERT(index < UnionType::GetMemberCount(vector.GetType()));
 	auto &entries = StructVector::GetEntries(vector);
 	return *entries[index + 1]; // skip the "tag" entry
@@ -1744,7 +1742,5 @@ Vector &UnionVector::GetMember(Vector &vector, idx_t index) {
 	auto &entries = StructVector::GetEntries(vector);
 	return *entries[index + 1]; // skip the "tag" entry
 }
-
-
 
 } // namespace duckdb

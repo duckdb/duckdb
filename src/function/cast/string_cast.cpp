@@ -142,7 +142,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::JSON:
 		return &DefaultCasts::ReinterpretCast;
-	case LogicalTypeId::UNION: 
+	case LogicalTypeId::UNION:
 		return DefaultCasts::ImplicitToUnionCast(input, source, target);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);

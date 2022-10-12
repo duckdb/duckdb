@@ -546,9 +546,8 @@ Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) 
 	result.is_null = false;
 	// add the tag to the front of the struct
 	result.struct_value.push_back(Value::TINYINT(tag));
-	for(idx_t i = 0; i < members.size(); i++) 
-	{
-		if(i == tag) {
+	for (idx_t i = 0; i < members.size(); i++) {
+		if (i == tag) {
 			result.struct_value.push_back(move(value));
 		} else {
 			result.struct_value.push_back(Value(members[i].second));

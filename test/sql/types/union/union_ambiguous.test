@@ -1,6 +1,6 @@
 # name: test/sql/types/union/union_ambiguous.test
 # description: Test union types with ambiguous members
-# group: [union_type]
+# group: [union]
 
 # disallow members with same name
 statement error
