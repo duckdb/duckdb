@@ -228,15 +228,19 @@ typedef struct {
 	void *internal_data;
 } duckdb_result;
 
-typedef void *duckdb_database;
-typedef void *duckdb_connection;
-typedef void *duckdb_prepared_statement;
-typedef void *duckdb_pending_result;
-typedef void *duckdb_appender;
-typedef void *duckdb_arrow;
-typedef void *duckdb_config;
-typedef void *duckdb_arrow_schema;
-typedef void *duckdb_arrow_array;
+typedef struct { void *__db; } *duckdb_database;
+typedef struct { void *__conn; } *duckdb_connection;
+typedef struct { void *__prep; } *duckdb_prepared_statement;
+typedef struct { void *__pend; } *duckdb_pending_result;
+typedef struct { void *__appn; } *duckdb_appender;
+typedef struct { void *__arrw; } *duckdb_arrow;
+typedef struct { void *__cnfg; } *duckdb_config;
+typedef struct { void *__arrs; } *duckdb_arrow_schema;
+typedef struct { void *__arra; } *duckdb_arrow_array;
+// typedef struct { void *__lglt; } *duckdb_logical_type;
+// typedef struct { void *__dtck; } *duckdb_data_chunk;
+// typedef struct { void *__vctr; } *duckdb_vector;
+// typedef struct { void *__val; } *duckdb_value;
 typedef void *duckdb_logical_type;
 typedef void *duckdb_data_chunk;
 typedef void *duckdb_vector;
