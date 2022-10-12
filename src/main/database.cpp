@@ -25,6 +25,23 @@ DBConfig::DBConfig() {
 	cast_functions = make_unique<CastFunctionSet>();
 }
 
+DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) {
+	compression_functions = make_unique<CompressionFunctionSet>();
+	if (read_only) {
+		options.access_mode = AccessMode::READ_ONLY;
+	}
+	for (auto &kv : config_dict) {
+		string key = kv.first;
+		string val = kv.second;
+		auto config_property = DBConfig::GetOptionByName(key);
+		if (!config_property) {
+			throw InvalidInputException("Unrecognized configuration property \"%s\"", key);
+		}
+		auto opt_val = Value(val);
+		DBConfig::SetOption(*config_property, opt_val);
+	}
+}
+
 DBConfig::~DBConfig() {
 }
 

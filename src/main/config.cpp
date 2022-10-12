@@ -179,4 +179,17 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	return (idx_t)multiplier * limit;
 }
 
+// Right now we only really care about access mode when comparing DBConfigs
+bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
+	return other.access_mode == access_mode;
+}
+
+bool DBConfig::operator==(const DBConfig &other) {
+	return other.options == options;
+}
+
+bool DBConfig::operator!=(const DBConfig &other) {
+	return !(other.options == options);
+}
+
 } // namespace duckdb
