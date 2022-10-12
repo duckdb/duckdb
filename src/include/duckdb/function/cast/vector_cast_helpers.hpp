@@ -197,25 +197,9 @@ struct VectorCastHelpers {
 	}
 };
 
-struct VectorSplitStringifiedList {
-    VectorSplitStringifiedList(const string_t& input);
-
-//    string_t &input;
-    const char* buf;
-    idx_t len;
-    vector<string_t> parts;
-    enum ParserState { INITIAL, BRACKETS };
-    bool is_valid;
-
-public:
-    idx_t CountParts();
-    void Split();
-
-private:
-    bool SkipToClose(idx_t& i);
-
-//    void RemoveWhitespace();
+struct VectorStringifiedListParser {
+    static idx_t CountParts(const string_t& input);
+    static bool SplitStringifiedList(const string_t& input, string_t* child_data, idx_t& child_start, Vector& child, bool is_stringlist);
 };
-
 
 } // namespace duckdb
