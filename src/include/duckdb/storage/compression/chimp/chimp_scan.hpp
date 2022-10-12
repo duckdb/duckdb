@@ -137,36 +137,25 @@ public:
 		return (total_value_count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE) == 0;
 	}
 
-	// Scan a group from the start
-	template <class CHIMP_TYPE>
+	template <class CHIMP_TYPE, bool FROM_START = true>
 	void ScanGroup(CHIMP_TYPE *values, idx_t group_size) {
 		D_ASSERT(group_size <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
-		values[0] = Chimp128Decompression<CHIMP_TYPE>::LoadFirst(chimp_state);
-		for (idx_t i = 1; i < group_size; i++) {
-			values[i] = Chimp128Decompression<CHIMP_TYPE>::DecompressValue(
-			    group_state.flags[i], group_state.leading_zeros, group_state.leading_zero_index,
-			    group_state.unpacked_data_blocks, group_state.unpacked_index, chimp_state);
-			D_ASSERT(group_state.leading_zero_index <= group_state.max_leading_zeros_to_read);
-		}
-		group_state.index += group_size;
-		total_value_count += group_size;
-		if (GroupFinished() && total_value_count < segment.count) {
-			LoadGroup();
-		}
-	}
-
-	// Scan up to a group boundary
-	template <class CHIMP_TYPE>
-	void ScanPartialGroup(CHIMP_TYPE *values, idx_t group_size) {
-		D_ASSERT(group_size <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
-		D_ASSERT(group_size <= LeftInGroup());
-
-		for (idx_t i = 0; i < group_size; i++) {
-			values[i] = Chimp128Decompression<CHIMP_TYPE>::Load(
-			    group_state.flags[group_state.index + i], group_state.leading_zeros, group_state.leading_zero_index,
-			    group_state.unpacked_data_blocks, group_state.unpacked_index, chimp_state);
+		if (FROM_START) {
+			values[0] = Chimp128Decompression<CHIMP_TYPE>::LoadFirst(chimp_state);
+			for (idx_t i = 1; i < group_size; i++) {
+				values[i] = Chimp128Decompression<CHIMP_TYPE>::DecompressValue(
+				    group_state.flags[i], group_state.leading_zeros, group_state.leading_zero_index,
+				    group_state.unpacked_data_blocks, group_state.unpacked_index, chimp_state);
+				D_ASSERT(group_state.leading_zero_index <= group_state.max_leading_zeros_to_read);
+			}
+		} else {
+			for (idx_t i = 0; i < group_size; i++) {
+				values[i] = Chimp128Decompression<CHIMP_TYPE>::Load(
+				    group_state.flags[group_state.index + i], group_state.leading_zeros, group_state.leading_zero_index,
+				    group_state.unpacked_data_blocks, group_state.unpacked_index, chimp_state);
+			}
 		}
 		group_state.index += group_size;
 		total_value_count += group_size;
@@ -233,9 +222,9 @@ public:
 		while (skip_count) {
 			auto skip_size = MinValue(skip_count, LeftInGroup());
 			if (!group_state.Started()) {
-				ScanGroup(buffer, skip_size);
+				ScanGroup<CHIMP_TYPE, true>(buffer, skip_size);
 			} else {
-				ScanPartialGroup(buffer, skip_size);
+				ScanGroup > CHIMP_TYPE, false > (buffer, skip_size);
 			}
 			skip_count -= skip_size;
 		}
@@ -265,9 +254,9 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 	auto scanned = MinValue(scan_count, scan_state.LeftInGroup());
 
 	if (!scan_state.group_state.Started()) {
-		scan_state.template ScanGroup<INTERNAL_TYPE>(current_result_ptr, scanned);
+		scan_state.template ScanGroup<INTERNAL_TYPE, true>(current_result_ptr, scanned);
 	} else {
-		scan_state.template ScanPartialGroup<INTERNAL_TYPE>(current_result_ptr, scanned);
+		scan_state.template ScanGroup<INTERNAL_TYPE, false>(current_result_ptr, scanned);
 	}
 	scan_count -= scanned;
 	if (!scan_count) {
@@ -278,7 +267,7 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 	D_ASSERT(!scan_state.group_state.Started());
 	while (scan_count) {
 		auto to_scan = MinValue<idx_t>(scan_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
-		scan_state.template ScanGroup<INTERNAL_TYPE>(current_result_ptr + scanned, to_scan);
+		scan_state.template ScanGroup<INTERNAL_TYPE, true>(current_result_ptr + scanned, to_scan);
 		scan_count -= to_scan;
 		scanned += to_scan;
 	}
