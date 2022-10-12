@@ -239,12 +239,12 @@ public:
 	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
 	}
 
-	void AllowCaching(bool val) final{
-		allow_caching = val;
+	void AllowCaching(bool val) final {
+		caching_allowed = val;
 	}
 
 	unique_ptr<DataChunk> cached_chunk;
-	bool allow_caching = true;
+	bool caching_allowed = true;
 };
 
 //! Base class that caches output from child Operator class. Note that Operators inheriting from this class should also
@@ -254,7 +254,7 @@ public:
 	static constexpr const idx_t CACHE_THRESHOLD = 64;
 	CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality);
 
-	bool enable_cache;
+	bool caching_supported;
 
 public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -263,7 +263,7 @@ public:
 	                  OperatorState &state) const final;
 
 	bool RequiresFinalExecute() const final {
-		return enable_cache;
+		return caching_supported;
 	}
 
 protected:

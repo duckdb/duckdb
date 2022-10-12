@@ -11,7 +11,7 @@ public:
 	bool allow_caching = true;
 
 public:
-	void AllowCaching(bool val) final{
+	void AllowCaching(bool val) final {
 		allow_caching = val;
 	}
 };

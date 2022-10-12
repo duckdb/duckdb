@@ -105,7 +105,7 @@ private:
 
 	//! Helper function that fetches the intermediate chunk for op_idx if possible, for the last op in the pipeline,
 	//! it uses tmp_chunk to initialize a new chunk for this.
-	DataChunk* GetIntermediateChunk(unique_ptr<DataChunk>& tmp_chunk, idx_t op_idx);
+	DataChunk *GetIntermediateChunk(unique_ptr<DataChunk> &tmp_chunk, idx_t op_idx);
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);

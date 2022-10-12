@@ -116,7 +116,7 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 	}
 }
 
-DataChunk* PipelineExecutor::GetIntermediateChunk(unique_ptr<DataChunk>& tmp_chunk, idx_t op_idx) {
+DataChunk *PipelineExecutor::GetIntermediateChunk(unique_ptr<DataChunk> &tmp_chunk, idx_t op_idx) {
 	auto chunk_idx = op_idx + 1;
 	bool last_op = chunk_idx >= intermediate_chunks.size();
 
@@ -134,7 +134,7 @@ void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 	for (idx_t op_idx = start_idx; op_idx < pipeline.operators.size(); op_idx++) {
 		if (pipeline.operators[op_idx]->RequiresFinalExecute()) {
 			unique_ptr<DataChunk> tmp_chunk;
-			auto& curr_chunk = *GetIntermediateChunk(tmp_chunk, op_idx);
+			auto &curr_chunk = *GetIntermediateChunk(tmp_chunk, op_idx);
 			pipeline.operators[op_idx]->FinalExecute(context, curr_chunk, *pipeline.operators[op_idx]->op_state,
 			                                         *intermediate_states[op_idx]);
 			auto state = Execute(curr_chunk, result, op_idx + 1);
@@ -156,7 +156,7 @@ void PipelineExecutor::FlushCachingOperatorsPush() {
 	for (idx_t op_idx = start_idx; op_idx < pipeline.operators.size(); op_idx++) {
 		if (pipeline.operators[op_idx]->RequiresFinalExecute()) {
 			unique_ptr<DataChunk> tmp_chunk;
-			auto& curr_chunk = *GetIntermediateChunk(tmp_chunk, op_idx);
+			auto &curr_chunk = *GetIntermediateChunk(tmp_chunk, op_idx);
 			pipeline.operators[op_idx]->FinalExecute(context, curr_chunk, *pipeline.operators[op_idx]->op_state,
 			                                         *intermediate_states[op_idx]);
 			auto result = ExecutePushInternal(curr_chunk, op_idx + 1);
