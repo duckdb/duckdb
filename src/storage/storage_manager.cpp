@@ -191,6 +191,7 @@ void SingleFileStorageCommitState::FlushCommit() {
 	if (log) {
 		// flush the WAL if any changes were made
 		if (log->GetTotalWritten() > initial_written) {
+			(void)checkpoint;
 			D_ASSERT(!checkpoint);
 			D_ASSERT(!log->skip_writing);
 			log->Flush();

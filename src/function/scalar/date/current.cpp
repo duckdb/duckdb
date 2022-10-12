@@ -47,7 +47,7 @@ static void CurrentDateFunction(DataChunk &input, ExpressionState &state, Vector
 static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 0);
 
-	auto val = Value::TIMESTAMP(GetTransactionTimestamp(state));
+	auto val = Value::TIMESTAMPTZ(GetTransactionTimestamp(state));
 	result.Reference(val);
 }
 
@@ -61,12 +61,13 @@ void CurrentTimeFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("current_date", {}, LogicalType::DATE, CurrentDateFunction, BindCurrentTime));
+	set.AddFunction({"today", "current_date"},
+	                ScalarFunction({}, LogicalType::DATE, CurrentDateFunction, BindCurrentTime));
 }
 
 void CurrentTimestampFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"now", "get_current_timestamp"},
-	                ScalarFunction({}, LogicalType::TIMESTAMP, CurrentTimestampFunction, BindCurrentTime));
+	set.AddFunction({"now", "get_current_timestamp", "transaction_timestamp"},
+	                ScalarFunction({}, LogicalType::TIMESTAMP_TZ, CurrentTimestampFunction, BindCurrentTime));
 }
 
 } // namespace duckdb

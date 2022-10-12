@@ -14384,32 +14384,40 @@ static char **readline_completion(const char *zText, int iStart, int iEnd){
 */
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc){
   int nLine = strlen30(zLine);
-  int i, iStart;
+  int copiedSuggestion = 0;
   sqlite3_stmt *pStmt = 0;
   char *zSql;
   char zBuf[1000];
 
   if( nLine>sizeof(zBuf)-30 ) return;
   if( zLine[0]=='.' || zLine[0]=='#') return;
-  for(i=nLine-1; i>=0 && (isalnum(zLine[i]) || zLine[i]=='_'); i--){}
-  if( i==nLine-1 ) return;
-  iStart = i+1;
-  memcpy(zBuf, zLine, iStart);
-  zSql = sqlite3_mprintf("SELECT DISTINCT candidate COLLATE nocase"
-                         "  FROM completion(%Q,%Q) ORDER BY 1",
-                         &zLine[iStart], zLine);
-  sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
+//  if( i==nLine-1 ) return;
+  zSql = sqlite3_mprintf("CALL sql_auto_complete(%Q)", zLine);
+  sqlite3 *localDb = NULL;
+  if (!globalDb) {
+    sqlite3_open(":memory:", &localDb);
+    sqlite3_prepare_v2(localDb, zSql, -1, &pStmt, 0);
+  } else {
+    sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
+  }
   sqlite3_free(zSql);
-  sqlite3_exec(globalDb, "PRAGMA page_count", 0, 0, 0); /* Load the schema */
   while( sqlite3_step(pStmt)==SQLITE_ROW ){
     const char *zCompletion = (const char*)sqlite3_column_text(pStmt, 0);
-    int nCompletion = sqlite3_column_bytes(pStmt, 0);
+	int nCompletion = sqlite3_column_bytes(pStmt, 0);
+	int iStart = sqlite3_column_int(pStmt, 1);
     if( iStart+nCompletion < sizeof(zBuf)-1 ){
+		if (!copiedSuggestion) {
+			memcpy(zBuf, zLine, iStart);
+			copiedSuggestion = 1;
+		}
       memcpy(zBuf+iStart, zCompletion, nCompletion+1);
       linenoiseAddCompletion(lc, zBuf);
     }
   }
   sqlite3_finalize(pStmt);
+  if (localDb) {
+	  sqlite3_close(localDb);
+  }
 }
 #endif
 
