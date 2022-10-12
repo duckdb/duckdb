@@ -13,7 +13,8 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
 	}
 
-	can_cache_in_pipeline = pipeline.sink && !pipeline.IsOrderDependent() && !requires_batch_index;
+	// TODO why do we disable cache when there is no sink?
+	can_cache_in_pipeline = /* pipeline.sink && */ !pipeline.IsOrderDependent() && !requires_batch_index;
 
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
