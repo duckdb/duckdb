@@ -2,6 +2,40 @@
 # description: Test union_tag
 # group: [union]
 
+statement ok
+CREATE TABLE tbl1 (u UNION(a INT, b FLOAT, c VARCHAR));
+
+statement ok
+INSERT INTO tbl1 VALUES (1), ('text'), (2.0);
+
+query I
+SELECT union_tag(u) FROM tbl1
+----
+a
+c
+b
+
+query I
+SELECT union_tag(u) FROM tbl1 WHERE u IN (1, 2.0)
+----
+a
+b
+
+query I
+SELECT enum_first(union_tag(u)) FROM tbl1 LIMIT 1;
+----
+a
+
+query I
+SELECT enum_last(union_tag(u)) FROM tbl1 LIMIT 1;
+----
+c
+
+query I
+SELECT enum_range(union_tag(u)) FROM tbl1 LIMIT 1;
+----
+[a, b, c]
+
 query I 
 SELECT union_tag('foo'::UNION(num INT, str VARCHAR))
 ----

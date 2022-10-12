@@ -32,18 +32,17 @@ a	1
 
 
 
-# todo also test nested unions
-#statement ok
-#CREATE TABLE tbl2 (a UNION(k INT, b UNION(k INT, v INT)));
+statement ok
+CREATE TABLE tbl2 (u UNION(lft INT, u UNION(lft VARCHAR, rght INT)));
 
-#statement ok
-#INSERT INTO tbl2 VALUES ({'k': 1})
+statement ok
+INSERT INTO tbl2 VALUES (union_value(lft := 1)), (NULL), (union_value(u := union_value(rght := 2))), (union_value(u := union_value(lft := '3'))), (union_value(u := '4'));
 
-#query II
-#SELECT union_tag(a), union_tag(a.b) FROM tbl2 ORDER BY a ASC;
-#----
-#a	NULL
-#a	NULL
-#a	NULL
-#b	b
-#b	a
+query III
+SELECT u, union_tag(u), union_tag(u.u) FROM tbl2 ORDER BY u;
+----
+NULL	NULL	NULL
+1	lft	NULL
+3	u	lft
+4	u	lft
+2	u	rght
