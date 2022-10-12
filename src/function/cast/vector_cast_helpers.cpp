@@ -33,7 +33,39 @@ namespace duckdb {
         return false;
     }
 
-    bool  VectorStringifiedListParser::SplitStringifiedList(const string_t& input, string_t* child_data, idx_t& child_start, Vector& child, bool is_stringlist) {
+    struct CountPartOperation {
+        idx_t count = 0;
+        bool is_stringlist = false;
+
+        void HandleValue(const char *buf, idx_t start_pos, idx_t pos) {
+            count++;
+        }
+    };
+
+    struct SplitStringOperation {
+        SplitStringOperation(string_t* child_data, idx_t& child_start, Vector& child, bool is_stringlist) :
+            child_data(child_data), child_start(child_start), child(child), is_stringlist(is_stringlist) {}
+
+        string_t* child_data;
+        idx_t& child_start;
+        Vector& child;
+        bool is_stringlist;
+
+        void HandleValue(const char *buf, idx_t start_pos, idx_t pos) {
+            child_data[child_start] = StringVector::AddString(child, buf + start_pos, pos - start_pos);
+            if (child_data[child_start].GetSize() >= 4
+                && buf[start_pos] == 'N'
+                && buf[start_pos + 1] == 'U'
+                && buf[start_pos + 2] == 'L'
+                && buf[start_pos + 3] == 'L') {
+                FlatVector::SetNull(child, child_start, true);
+            }
+            child_start++;
+        }
+    };
+
+    template<class OP>
+    static bool SplitStringifiedListInternal(const string_t& input, OP &state) {
         idx_t pos = 0;
         const char* buf = input.GetDataUnsafe();
         idx_t len = input.GetSize();
@@ -58,20 +90,11 @@ namespace duckdb {
                     return false;
                 }
             }
-            else if(is_stringlist && (buf[pos] == '"' || buf[pos] == '\'')) {
+            else if(state.is_stringlist && (buf[pos] == '"' || buf[pos] == '\'')) {
                 SkipToCloseQuotes(pos, buf, len);
             }
             else if (buf[pos] == ','  || buf[pos] == ']') {
-                child_data[child_start] = StringVector::AddString(child, buf + start_pos, pos - start_pos);
-                if (child_data[child_start].GetSize() >= 4
-                        && buf[start_pos] == 'N'
-                        && buf[start_pos + 1] == 'U'
-                        && buf[start_pos + 2] == 'L'
-                        && buf[start_pos + 3] == 'L') {
-                    FlatVector::SetNull(child, child_start, true);
-                }
-                child_start++;
-
+                state.HandleValue(buf, start_pos, pos);
                 if (buf[pos] == ']') {
                     lvl--;
                     break;
@@ -97,32 +120,14 @@ namespace duckdb {
         return true;
     }
 
+    bool VectorStringifiedListParser::SplitStringifiedList(const string_t& input, string_t* child_data, idx_t& child_start, Vector& child, bool is_stringlist) {
+        SplitStringOperation state(child_data, child_start, child, is_stringlist);
+        return SplitStringifiedListInternal<SplitStringOperation>(input, state);
+    }
+
     idx_t VectorStringifiedListParser::CountParts(const string_t& input) {
-        idx_t count = 0;
-        idx_t pos = 0;
-        const char* buf = input.GetDataUnsafe();
-        idx_t len = input.GetSize();
-
-        while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
-            pos++;
-        }
-        if (len == pos || buf[pos] != '[') {
-            return count;
-        }
-        pos++;
-
-        idx_t lvl = 1;
-        while (pos < len) {
-            if (buf[pos] == '[') {
-                SkipToClose(++pos, buf, len, lvl);
-            }
-            else if (buf[pos] == ',') {
-                count++;
-            } else if (buf[pos] == ']') {
-                return ++count;
-            }
-            pos++;
-        }
-        return count;
+        CountPartOperation state;
+        SplitStringifiedListInternal<CountPartOperation>(input, state);
+        return state.count;
     }
 } // namespace duckdb
