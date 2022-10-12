@@ -13,6 +13,7 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -53,8 +54,8 @@ struct IndexLock {
 };
 
 struct TableAppendState {
-	TableAppendState() : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr) {
-	}
+	TableAppendState();
+	~TableAppendState();
 
 	RowGroupAppendState row_group_append_state;
 	unique_lock<mutex> append_lock;
@@ -64,6 +65,10 @@ struct TableAppendState {
 	idx_t total_append_count;
 	//! The first row-group that has been appended to
 	RowGroup *start_row_group;
+	//! The transaction data
+	TransactionData transaction;
+	//! The remaining append count, only if the append count is known beforehand
+	idx_t remaining;
 };
 
 struct LocalAppendState {
