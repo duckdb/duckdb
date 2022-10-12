@@ -162,7 +162,7 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 }
 
 void LocalTableStorage::CheckFlush(RowGroup *row_group) {
-	if (table.info->IsTemporary()) {
+	if (table.info->IsTemporary() || table.db.GetStorageManager().InMemory()) {
 		return;
 	}
 	if (row_group == prev_row_group) {
