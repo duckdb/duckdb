@@ -8,20 +8,13 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <iostream>
+#include "duckdb.h"
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/exception.hpp"
 
-namespace duckdb_chimp {
+namespace duckdb {
 
-// This class reads arbitrary amounts of bits from a buffer
-// If 41 bits are requested (5 bytes + 1 bit), we will read 6 bytes and increment the byte index by 6
-// With the assumption that the remainder of the last byte read is zero-initialized
 class ByteReader {
-private:
-	static constexpr uint8_t final_shifts[8] = {0, 7, 6, 5, 4, 3, 2, 1};
-
 public:
 	ByteReader() : buffer(nullptr), index(0) {
 	}
@@ -34,30 +27,30 @@ public:
 
 	template <class T>
 	T ReadValue() {
-		throw duckdb::InternalException("Specialization for ReadValue is not implemented");
+		throw InternalException("Specialization for ReadValue is not implemented");
 	}
 
 	template <>
 	uint8_t ReadValue<uint8_t>() {
-		auto result = duckdb::Load<uint8_t>(buffer + index);
+		auto result = Load<uint8_t>(buffer + index);
 		index++;
 		return result;
 	}
 	template <>
 	uint16_t ReadValue<uint16_t>() {
-		auto result = duckdb::Load<uint16_t>(buffer + index);
+		auto result = Load<uint16_t>(buffer + index);
 		index += 2;
 		return result;
 	}
 	template <>
 	uint32_t ReadValue<uint32_t>() {
-		auto result = duckdb::Load<uint32_t>(buffer + index);
+		auto result = Load<uint32_t>(buffer + index);
 		index += 4;
 		return result;
 	}
 	template <>
 	uint64_t ReadValue<uint64_t>() {
-		auto result = duckdb::Load<uint64_t>(buffer + index);
+		auto result = Load<uint64_t>(buffer + index);
 		index += 8;
 		return result;
 	}
@@ -79,7 +72,7 @@ public:
 		case 6:
 		case 7:
 		case 8:
-			result = duckdb::Load<uint8_t>(buffer + index);
+			result = Load<uint8_t>(buffer + index);
 			index++;
 			return result;
 		case 9:
@@ -90,7 +83,7 @@ public:
 		case 14:
 		case 15:
 		case 16:
-			result = duckdb::Load<uint16_t>(buffer + index);
+			result = Load<uint16_t>(buffer + index);
 			index += 2;
 			return result;
 		case 17:
@@ -112,7 +105,7 @@ public:
 		case 30:
 		case 31:
 		case 32:
-			result = duckdb::Load<uint32_t>(buffer + index);
+			result = Load<uint32_t>(buffer + index);
 			index += 4;
 			return result;
 		case 33:
@@ -149,8 +142,7 @@ public:
 			index += 7;
 			return result;
 		default:
-			result = duckdb::Load<uint64_t>(buffer + index);
-			//			memcpy(&result, (void *)(buffer + index), 8);
+			result = Load<uint64_t>(buffer + index);
 			index += 8;
 			return result;
 		}
@@ -162,4 +154,4 @@ private:
 	uint32_t index;
 };
 
-} // namespace duckdb_chimp
+} // namespace duckdb

@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include <stdint.h>
+#include "duckdb.h"
 #ifdef DEBUG
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
 #endif
 
-namespace duckdb_chimp {
+namespace duckdb {
 
 struct FlagBufferConstants {
 	static constexpr uint8_t MASKS[4] = {
@@ -103,8 +103,8 @@ private:
 	uint32_t counter = 0;
 	uint8_t *buffer;
 #ifdef DEBUG
-	duckdb::vector<uint8_t> flags;
+	vector<uint8_t> flags;
 #endif
 };
 
-} // namespace duckdb_chimp
+} // namespace duckdb

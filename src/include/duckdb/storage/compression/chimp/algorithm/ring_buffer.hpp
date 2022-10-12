@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include <cstring>
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 
-namespace duckdb_chimp {
+namespace duckdb {
 
 template <class CHIMP_TYPE>
 class RingBuffer {
@@ -68,4 +67,4 @@ private:
 	uint64_t indices[INDICES_SIZE] = {}; //! Stores the corresponding indices
 };
 
-} // namespace duckdb_chimp
+} // namespace duckdb

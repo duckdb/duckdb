@@ -53,7 +53,7 @@ public:
 	}
 	//! The Compress/Analyze State
 	void *data_ptr;
-	duckdb_chimp::Chimp128CompressionState<CHIMP_TYPE, EMPTY> chimp_state;
+	Chimp128CompressionState<CHIMP_TYPE, EMPTY> chimp_state;
 
 public:
 	void AssignDataBuffer(uint8_t *data_out) {

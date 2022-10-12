@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <limits>
-#include <stddef.h>
-#include <stdint.h>
+#include "duckdb.h"
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/flag_buffer.hpp"
@@ -18,6 +16,7 @@
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/packed_data.hpp"
+#include "duckdb/common/limits.hpp"
 
 //#include "byte_writer.hpp"
 //#include "byte_reader.hpp"
@@ -26,9 +25,9 @@
 #include "duckdb/storage/compression/chimp/algorithm/output_bit_stream.hpp"
 #include "duckdb/common/exception.hpp"
 
-namespace duckdb_chimp {
+namespace duckdb {
 
-enum CompressionFlags {
+enum ChimpCompressionFlags {
 	VALUE_IDENTICAL = 0,
 	TRAILING_EXCEEDS_THRESHOLD = 1,
 	LEADING_ZERO_EQUALITY = 2,
@@ -42,11 +41,11 @@ enum CompressionFlags {
 template <class CHIMP_TYPE, bool EMPTY>
 struct Chimp128CompressionState {
 
-	Chimp128CompressionState() : ring_buffer(), previous_leading_zeros(std::numeric_limits<uint8_t>::max()) {
+	Chimp128CompressionState() : ring_buffer(), previous_leading_zeros(NumericLimits<uint8_t>::Maximum()) {
 		previous_value = 0;
 	}
 
-	inline void SetLeadingZeros(int32_t value = std::numeric_limits<uint8_t>::max()) {
+	inline void SetLeadingZeros(int32_t value = NumericLimits<uint8_t>::Maximum()) {
 		this->previous_leading_zeros = value;
 	}
 
@@ -199,7 +198,7 @@ public:
 	}
 
 	inline void ResetZeros() {
-		leading_zeros = std::numeric_limits<uint8_t>::max();
+		leading_zeros = NumericLimits<uint8_t>::Maximum();
 		trailing_zeros = 0;
 	}
 
@@ -290,7 +289,7 @@ public:
 			break;
 		}
 		default:
-			throw std::runtime_error("eek");
+			throw InternalException("Chimp compression flag with value %d not recognized", flag);
 		}
 		state.reference_value = result;
 		state.ring_buffer.InsertScan(result);
@@ -298,4 +297,4 @@ public:
 	}
 };
 
-} // namespace duckdb_chimp
+} // namespace duckdb

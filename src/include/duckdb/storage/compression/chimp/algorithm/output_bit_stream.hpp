@@ -8,13 +8,12 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
+#include "duckdb.h"
 #include "duckdb/common/assert.hpp"
 
 #include "duckdb/storage/compression/chimp/algorithm/bit_utils.hpp"
 
-namespace duckdb_chimp {
+namespace duckdb {
 
 // This class writes arbitrary amounts of bits to a stream
 // The way these bits are written is most-significant bit first
@@ -206,4 +205,4 @@ private:
 	size_t bits_written; //! The total amount of bits written to this stream
 };
 
-} // namespace duckdb_chimp
+} // namespace duckdb
