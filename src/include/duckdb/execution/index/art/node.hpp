@@ -10,7 +10,6 @@
 
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
-#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
@@ -20,6 +19,11 @@ namespace duckdb {
 enum class NodeType : uint8_t { NLeaf = 0, N4 = 1, N16 = 2, N48 = 3, N256 = 4 };
 class ART;
 class Node;
+
+// Note: SwizzleablePointer assumes top 33 bits of the block_id are 0. Use a different
+// pointer implementation if that does not hold.
+class SwizzleablePointer;
+using ARTPointer = SwizzleablePointer;
 
 struct InternalType {
 	explicit InternalType(Node *n);

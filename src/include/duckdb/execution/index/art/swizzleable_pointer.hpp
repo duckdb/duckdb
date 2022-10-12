@@ -47,8 +47,4 @@ private:
 	bool IsSwizzled();
 };
 
-// Note: SwizzleablePointer assumes top 33 bits of the block_id are 0. Use a different
-// pointer implementation if that does not hold.
-using ARTPointer = SwizzleablePointer;
-
 } // namespace duckdb
