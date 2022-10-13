@@ -41,17 +41,17 @@ public:
 		//! Unpack 'count' values of bitpacked data, unpacked per group of 32 values
 		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 		BitpackingPrimitives::UnPackBuffer<uint8_t>(byte_counts, bitpacked_data, value_count,
-		                                            PatasPrimitives::BYTECOUNT_BITSIZE);
+		                                            PatasPrimitives::BYTECOUNT_BITSIZE, true);
 	}
 	void LoadTrailingZeros(uint8_t *bitpacked_data, idx_t block_count) {
 		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 		BitpackingPrimitives::UnPackBuffer<uint8_t>(trailing_zeros, bitpacked_data, value_count,
-		                                            SignificantBits<EXACT_TYPE>::size);
+		                                            SignificantBits<EXACT_TYPE>::size, true);
 	}
 	void LoadIndexDifferences(uint8_t *bitpacked_data, idx_t block_count) {
 		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 		BitpackingPrimitives::UnPackBuffer<uint8_t>(index_diffs, bitpacked_data, value_count,
-		                                            PatasPrimitives::INDEX_BITSIZE);
+		                                            PatasPrimitives::INDEX_BITSIZE, true);
 	}
 
 	void Scan(uint8_t *dest, idx_t count) {
@@ -61,10 +61,11 @@ public:
 
 	// FIXME: could optimize this to scan directly to the result if the subsequent scan would scan the entire group
 	// anyways
-	void LoadValues(idx_t count) {
+	void LoadValues(EXACT_TYPE *value_buffer, idx_t count) {
+		value_buffer[0] = (EXACT_TYPE)0;
 		for (idx_t i = 0; i < count; i++) {
-			values[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(
-			    byte_reader, i, byte_counts, trailing_zeros, (i != 0) * values[i - index_diffs[i]]);
+			value_buffer[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(
+			    byte_reader, i, byte_counts, trailing_zeros, value_buffer[i - index_diffs[i]]);
 		}
 	}
 
@@ -84,7 +85,7 @@ struct PatasScanState : public SegmentScanState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 
-	explicit PatasScanState(ColumnSegment &segment) : segment(segment) {
+	explicit PatasScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
 		handle = buffer_manager.Pin(segment.block);
@@ -95,7 +96,7 @@ public:
 		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
 		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
 		group_state.Init(start_of_data_segment);
-		LoadGroup();
+		LoadGroup(group_state.values);
 	}
 
 	BufferHandle handle;
@@ -104,12 +105,13 @@ public:
 	PatasGroupState<EXACT_TYPE> group_state;
 
 	ColumnSegment &segment;
+	idx_t count;
 
 	idx_t LeftInGroup() const {
 		return PatasPrimitives::PATAS_GROUP_SIZE - (total_value_count % PatasPrimitives::PATAS_GROUP_SIZE);
 	}
 
-	bool GroupFinished() const {
+	inline bool GroupFinished() const {
 		return (total_value_count % PatasPrimitives::PATAS_GROUP_SIZE) == 0;
 	}
 
@@ -122,12 +124,12 @@ public:
 		group_state.Scan((uint8_t *)values, group_size);
 
 		total_value_count += group_size;
-		if (GroupFinished() && total_value_count < segment.count) {
-			LoadGroup();
+		if (GroupFinished() && total_value_count < count) {
+			LoadGroup(group_state.values);
 		}
 	}
 
-	void LoadGroup() {
+	void LoadGroup(EXACT_TYPE *value_buffer) {
 		group_state.Reset();
 
 		// Load the offset indicating where a groups data starts
@@ -164,8 +166,8 @@ public:
 		// Unpack and store the index differences for the entire group
 		group_state.LoadIndexDifferences(metadata_ptr, bitpacked_block_count);
 
-		idx_t group_size = MinValue((idx_t)PatasPrimitives::PATAS_GROUP_SIZE, (segment.count - total_value_count));
-		group_state.LoadValues(group_size);
+		idx_t group_size = MinValue((idx_t)PatasPrimitives::PATAS_GROUP_SIZE, (count - total_value_count));
+		group_state.LoadValues(value_buffer, group_size);
 	}
 
 public:

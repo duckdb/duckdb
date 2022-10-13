@@ -19,9 +19,6 @@ namespace duckdb_chimp {
 // If 41 bits are requested (5 bytes + 1 bit), we will read 6 bytes and increment the byte index by 6
 // With the assumption that the remainder of the last byte read is zero-initialized
 class ByteReader {
-private:
-	static constexpr uint8_t final_shifts[8] = {0, 7, 6, 5, 4, 3, 2, 1};
-
 public:
 	ByteReader() : buffer(nullptr), index(0) {
 	}
@@ -72,7 +69,7 @@ public:
 	}
 
 	template <class T>
-	T ReadValue(const uint8_t &bytes) {
+	inline T ReadValue(uint8_t bytes) {
 		T result = 0;
 		switch (bytes) {
 		case 1:

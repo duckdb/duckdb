@@ -38,8 +38,8 @@ void PatasFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 
 	scan_state.group_state.Scan((uint8_t *)(result_data + result_idx), 1);
 	scan_state.total_value_count++;
-	if (scan_state.GroupFinished() && scan_state.total_value_count < segment.count) {
-		scan_state.LoadGroup();
+	if (scan_state.GroupFinished() && scan_state.total_value_count < scan_state.count) {
+		scan_state.LoadGroup(scan_state.group_state.values);
 	}
 }
 
