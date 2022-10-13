@@ -1,0 +1,26 @@
+# name: test/optimizer/remove_unused_filter_column.test
+# description: Test removal of filter columns that are unused in the remainder of a query plan
+# group: [optimizer]
+
+require parquet
+
+#statement ok
+#PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+create table test as select range i, range j from range(5)
+
+# j should not be in the SEQ_SCAN in the physical plan
+query II
+explain select i from test where j=0
+----
+physical_plan	<!REGEX>:│ +j +│
+
+# same for parquet
+statement ok
+copy test TO '__TEST_DIR__/test.parquet' (FORMAT 'parquet')
+
+query II
+explain select i from '__TEST_DIR__/test.parquet' where j=0
+----
+physical_plan	<!REGEX>:│ +j +│

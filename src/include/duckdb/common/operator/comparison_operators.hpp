@@ -165,7 +165,7 @@ struct StringComparisonOperators {
 			}
 		} else {
 			// large string: first check prefix and length
-			if (memcmp(&a, &b, sizeof(uint32_t) + string_t::PREFIX_LENGTH) == 0) {
+			if (memcmp(&a, &b, string_t::HEADER_SIZE) == 0) {
 				// prefix and length are equal: check main string
 				if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
 					// entire string is equal

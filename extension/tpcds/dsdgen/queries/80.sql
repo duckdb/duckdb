@@ -54,60 +54,33 @@ WITH ssr AS
      AND i_current_price > 50
      AND ws_promo_sk = p_promo_sk
      AND p_channel_tv = 'N'
-   GROUP BY web_site_id),
-     results AS
-  (SELECT channel ,
-          id ,
-          sum(sales) AS sales ,
-          sum(returns_) AS returns_ ,
-          sum(profit) AS profit
-   FROM
-     (SELECT 'store channel' AS channel ,
-             concat('store', store_id) AS id ,
-             sales ,
-             returns_ ,
-             profit
-      FROM ssr
-      UNION ALL SELECT 'catalog channel' AS channel ,
-                       concat('catalog_page', catalog_page_id) AS id ,
-                       sales ,
-                       returns_ ,
-                       profit
-      FROM csr
-      UNION ALL SELECT 'web channel' AS channel ,
-                       concat('web_site', web_site_id) AS id ,
-                       sales ,
-                       returns_ ,
-                       profit
-      FROM wsr ) x
-   GROUP BY channel,
-            id)
+   GROUP BY web_site_id)
 SELECT channel ,
        id ,
-       sales ,
-       returns_ ,
-       profit
+       sum(sales) AS sales ,
+       sum(returns_) AS returns_ ,
+       sum(profit) AS profit
 FROM
-  ( SELECT channel,
-           id,
-           sales,
-           returns_,
-           profit
-   FROM results
-   UNION SELECT channel,
-                NULL AS id,
-                sum(sales) AS sales,
-                sum(returns_) AS returns_,
-                sum(profit) AS profit
-   FROM results
-   GROUP BY channel
-   UNION SELECT NULL AS channel,
-                NULL AS id,
-                sum(sales) AS sales,
-                sum(returns_) AS returns_,
-                sum(profit) AS profit
-   FROM results ) foo
+  (SELECT 'store channel' AS channel ,
+          concat('store', store_id) AS id ,
+          sales ,
+          returns_ ,
+          profit
+   FROM ssr
+   UNION ALL SELECT 'catalog channel' AS channel ,
+                    concat('catalog_page', catalog_page_id) AS id ,
+                    sales ,
+                    returns_ ,
+                    profit
+   FROM csr
+   UNION ALL SELECT 'web channel' AS channel ,
+                    concat('web_site', web_site_id) AS id ,
+                    sales ,
+                    returns_ ,
+                    profit
+   FROM wsr ) x
+GROUP BY ROLLUP (channel,
+                 id)
 ORDER BY channel NULLS FIRST,
          id NULLS FIRST
 LIMIT 100;
-

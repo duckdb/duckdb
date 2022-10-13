@@ -4,9 +4,10 @@
 
 namespace duckdb {
 
-StructColumnData::StructColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type_p,
-                                   ColumnData *parent)
-    : ColumnData(info, column_index, start_row, move(type_p), parent), validity(info, 0, start_row, this) {
+StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                   idx_t start_row, LogicalType type_p, ColumnData *parent)
+    : ColumnData(block_manager, info, column_index, start_row, move(type_p), parent),
+      validity(block_manager, info, 0, start_row, this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(child_types.size() > 0);
@@ -14,7 +15,7 @@ StructColumnData::StructColumnData(DataTableInfo &info, idx_t column_index, idx_
 	idx_t sub_column_index = 1;
 	for (auto &child_type : child_types) {
 		sub_columns.push_back(
-		    ColumnData::CreateColumnUnique(info, sub_column_index, start_row, child_type.second, this));
+		    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, start_row, child_type.second, this));
 		sub_column_index++;
 	}
 }
@@ -236,7 +237,7 @@ void StructColumnData::CommitDropColumn() {
 }
 
 struct StructColumnCheckpointState : public ColumnCheckpointState {
-	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
+	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, RowGroupWriter &writer)
 	    : ColumnCheckpointState(row_group, column_data, writer) {
 		global_stats = make_unique<StructStatistics>(column_data.type);
 	}
@@ -256,20 +257,19 @@ public:
 		return move(stats);
 	}
 
-	void FlushToDisk() override {
-		validity_state->FlushToDisk();
+	void WriteDataPointers() override {
+		validity_state->WriteDataPointers();
 		for (auto &state : child_states) {
-			state->FlushToDisk();
+			state->WriteDataPointers();
 		}
 	}
 };
 
-unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGroup &row_group,
-                                                                          TableDataWriter &writer) {
+unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer) {
 	return make_unique<StructColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
                                                                ColumnCheckpointInfo &checkpoint_info) {
 	auto checkpoint_state = make_unique<StructColumnCheckpointState>(row_group, *this, writer);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, writer, checkpoint_info);

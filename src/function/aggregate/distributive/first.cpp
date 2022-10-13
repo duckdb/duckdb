@@ -69,6 +69,9 @@ template <bool LAST, bool SKIP_NULLS>
 struct FirstFunctionString : public FirstFunctionBase {
 	template <class STATE>
 	static void SetValue(STATE *state, string_t value, bool is_null) {
+		if (LAST && state->is_set) {
+			Destroy(state);
+		}
 		if (is_null) {
 			if (!SKIP_NULLS) {
 				state->is_set = true;

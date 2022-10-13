@@ -16,7 +16,8 @@ class Node4 : public Node {
 public:
 	Node4();
 	uint8_t key[4];
-	SwizzleablePointer children[4];
+	// Pointers to the child nodes
+	ARTPointer children[4];
 
 public:
 	//! Get position of a byte, returns DConstants::INVALID_INDEX if not exists
@@ -38,7 +39,7 @@ public:
 	//! Erase the child at pos and (if necessary) merge with last child
 	static void EraseChild(Node *&node, int pos, ART &art);
 	//! Merge Node4 into l_node
-	static void Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos);
+	static bool Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos);
 	//! Returns the size (maximum capacity) of the Node4
 	static idx_t GetSize();
 };

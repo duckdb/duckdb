@@ -9,17 +9,27 @@
 
 namespace duckdb {
 
+PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
+                               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
+                               bool return_chunk)
+    : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
+      column_index_map(std::move(column_index_map)), table(table), bound_defaults(move(bound_defaults)),
+      return_chunk(return_chunk) {
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
 class InsertGlobalState : public GlobalSinkState {
 public:
 	explicit InsertGlobalState(ClientContext &context, const vector<LogicalType> &return_types)
-	    : insert_count(0), return_collection(context, return_types) {
+	    : insert_count(0), initialized(false), return_collection(context, return_types) {
 	}
 
 	mutex lock;
 	idx_t insert_count;
+	LocalAppendState append_state;
+	bool initialized;
 	ColumnDataCollection return_collection;
 };
 
@@ -35,12 +45,12 @@ public:
 	ExpressionExecutor default_executor;
 };
 
-PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
-                               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
-                               bool return_chunk)
-    : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
-      column_index_map(std::move(column_index_map)), table(table), bound_defaults(move(bound_defaults)),
-      return_chunk(return_chunk) {
+unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
+	return make_unique<InsertGlobalState>(context, GetTypes());
+}
+
+unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
+	return make_unique<InsertLocalState>(Allocator::Get(context.client), table->GetTypes(), bound_defaults);
 }
 
 SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -81,7 +91,11 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 	}
 
 	lock_guard<mutex> glock(gstate.lock);
-	table->storage->Append(*table, context.client, istate.insert_chunk);
+	if (!gstate.initialized) {
+		table->storage->InitializeLocalAppend(gstate.append_state, context.client);
+		gstate.initialized = true;
+	}
+	table->storage->LocalAppend(gstate.append_state, *table, context.client, istate.insert_chunk);
 
 	if (return_chunk) {
 		gstate.return_collection.Append(istate.insert_chunk);
@@ -91,19 +105,20 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<InsertGlobalState>(context, GetTypes());
-}
-
-unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<InsertLocalState>(Allocator::Get(context.client), table->GetTypes(), bound_defaults);
-}
-
 void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 	auto &state = (InsertLocalState &)lstate;
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
+}
+
+SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                          GlobalSinkState &state) const {
+	auto &gstate = (InsertGlobalState &)state;
+	if (gstate.initialized) {
+		table->storage->FinalizeLocalAppend(gstate.append_state);
+	}
+	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//

@@ -180,6 +180,7 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 			active_header = 1;
 			Initialize(h2);
 		}
+		LoadFreeList();
 	}
 }
 
@@ -199,7 +200,7 @@ void SingleFileBlockManager::LoadFreeList() {
 		// no free list
 		return;
 	}
-	MetaBlockReader reader(db, free_list_id);
+	MetaBlockReader reader(*this, free_list_id);
 	auto free_list_count = reader.Read<uint64_t>();
 	free_list.clear();
 	for (idx_t i = 0; i < free_list_count; i++) {
@@ -212,9 +213,6 @@ void SingleFileBlockManager::LoadFreeList() {
 		auto usage_count = reader.Read<uint32_t>();
 		multi_use_blocks[block_id] = usage_count;
 	}
-}
-
-void SingleFileBlockManager::StartCheckpoint() {
 }
 
 bool SingleFileBlockManager::IsRootBlock(block_id_t root) {
@@ -250,6 +248,10 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 		}
 		return;
 	}
+	// Check for multi-free
+	// TODO: Fix the bug that causes this assert to fire, then uncomment it.
+	// D_ASSERT(modified_blocks.find(block_id) == modified_blocks.end());
+	D_ASSERT(free_list.find(block_id) == free_list.end());
 	modified_blocks.insert(block_id);
 }
 
@@ -267,8 +269,13 @@ block_id_t SingleFileBlockManager::GetMetaBlock() {
 	return meta_block;
 }
 
-unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id) {
-	return make_unique<Block>(Allocator::Get(db), block_id);
+unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
+	if (source_buffer) {
+		D_ASSERT(source_buffer->AllocSize() == Storage::BLOCK_ALLOC_SIZE);
+		return make_unique<Block>(*source_buffer, block_id);
+	} else {
+		return make_unique<Block>(Allocator::Get(db), block_id);
+	}
 }
 
 void SingleFileBlockManager::Read(Block &block) {
@@ -316,8 +323,8 @@ vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {
 
 class FreeListBlockWriter : public MetaBlockWriter {
 public:
-	FreeListBlockWriter(DatabaseInstance &db_p, vector<block_id_t> &free_list_blocks_p)
-	    : MetaBlockWriter(db_p, free_list_blocks_p[0]), free_list_blocks(free_list_blocks_p), index(1) {
+	FreeListBlockWriter(BlockManager &block_manager, vector<block_id_t> &free_list_blocks_p)
+	    : MetaBlockWriter(block_manager, free_list_blocks_p[0]), free_list_blocks(free_list_blocks_p), index(1) {
 	}
 
 	vector<block_id_t> &free_list_blocks;
@@ -352,10 +359,11 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		// a normal MetaBlockWriter will fetch blocks to use from the free_list
 		// but since we are WRITING the free_list, this behavior is sub-optimal
 
-		FreeListBlockWriter writer(db, free_list_blocks);
+		FreeListBlockWriter writer(*this, free_list_blocks);
 
-		D_ASSERT(writer.block->id == free_list_blocks[0]);
-		header.free_list = writer.block->id;
+		auto ptr = writer.GetBlockPointer();
+		D_ASSERT(ptr.block_id == free_list_blocks[0]);
+		header.free_list = ptr.block_id;
 		for (auto &block_id : free_list_blocks) {
 			modified_blocks.insert(block_id);
 		}

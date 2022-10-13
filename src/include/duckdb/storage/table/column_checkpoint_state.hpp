@@ -21,12 +21,12 @@ class RowGroup;
 class TableDataWriter;
 
 struct ColumnCheckpointState {
-	ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer);
+	ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, RowGroupWriter &writer);
 	virtual ~ColumnCheckpointState();
 
 	RowGroup &row_group;
 	ColumnData &column_data;
-	TableDataWriter &writer;
+	RowGroupWriter &writer;
 	SegmentTree new_tree;
 	vector<DataPointer> data_pointers;
 	unique_ptr<BaseStatistics> global_stats;
@@ -35,7 +35,7 @@ public:
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
-	virtual void FlushToDisk();
+	virtual void WriteDataPointers();
 };
 
 } // namespace duckdb

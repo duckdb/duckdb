@@ -349,4 +349,20 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	return result;
 }
 
+unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
+	BufferedSerializer logical_op_serializer;
+	try {
+		this->Serialize(logical_op_serializer);
+	} catch (NotImplementedException &ex) {
+		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children to "
+		                              "be serializable: " +
+		                              std::string(ex.what()));
+	}
+	auto data = logical_op_serializer.GetData();
+	auto logical_op_deserializer = BufferedDeserializer(data.data.get(), data.size);
+	PlanDeserializationState state(context);
+	auto op_copy = LogicalOperator::Deserialize(logical_op_deserializer, state);
+	return op_copy;
+}
+
 } // namespace duckdb

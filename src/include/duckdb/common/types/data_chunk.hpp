@@ -107,7 +107,7 @@ public:
 	DUCKDB_API void Fuse(DataChunk &other);
 
 	//! Makes this DataChunk reference the specified columns in the other DataChunk
-	DUCKDB_API void ReferenceColumns(DataChunk &other, vector<column_t> column_ids);
+	DUCKDB_API void ReferenceColumns(DataChunk &other, const vector<column_t> &column_ids);
 
 	//! Turn all the vectors from the chunk into flat vectors
 	DUCKDB_API void Flatten();
