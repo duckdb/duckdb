@@ -403,6 +403,7 @@ if(WIN32)
 endif()
 if(UNIX AND NOT APPLE)
   set(OS_NAME "linux") # sorry BSD
+  set(BUILD_JEMALLOC_EXTENSION 1) # linux allocator sucks
 endif()
 
 

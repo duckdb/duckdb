@@ -4,7 +4,10 @@ import shutil
 import subprocess
 import platform
 
-extensions = ['parquet']
+extensions = ['parquet', 'jemalloc']
+
+if platform.system() == 'Windows':
+    extensions = ['parquet']
 
 # check if there are any additional extensions being requested
 if 'DUCKDB_R_EXTENSIONS' in os.environ:
