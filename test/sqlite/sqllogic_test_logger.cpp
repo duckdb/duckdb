@@ -1,4 +1,7 @@
 #include "sqllogic_test_logger.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "termcolor.hpp"
+#include "sqllogic_test_runner.hpp"
 
 namespace duckdb {
 

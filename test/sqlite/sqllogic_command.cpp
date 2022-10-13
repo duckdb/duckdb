@@ -7,6 +7,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "test_helpers.hpp"
+#include "sqllogic_test_logger.hpp"
+#include "catch.hpp"
 #include <list>
 #include <thread>
 

@@ -8,6 +8,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
@@ -162,7 +163,7 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 }
 
 void LocalTableStorage::CheckFlush(RowGroup *row_group) {
-	if (table.info->IsTemporary() || table.db.GetStorageManager().InMemory()) {
+	if (table.info->IsTemporary() || StorageManager::GetStorageManager(table.db).InMemory()) {
 		return;
 	}
 	if (row_group == prev_row_group) {
