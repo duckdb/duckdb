@@ -60,16 +60,16 @@ double Postgis::geography_distance(GSERIALIZED *geom1, GSERIALIZED *geom2, bool 
 	return duckdb::geography_distance(geom1, geom2, use_spheroid);
 }
 
-GSERIALIZED* Postgis::LWGEOM_from_text(char* text, int srid) {
-    return duckdb::LWGEOM_from_text(text, srid);
+GSERIALIZED *Postgis::LWGEOM_from_text(char *text, int srid) {
+	return duckdb::LWGEOM_from_text(text, srid);
 }
 
-GSERIALIZED* Postgis::LWGEOM_from_WKB(const char *bytea_wkb, size_t byte_size, int srid) {
-    return duckdb::LWGEOM_from_WKB(bytea_wkb, byte_size, srid);
+GSERIALIZED *Postgis::LWGEOM_from_WKB(const char *bytea_wkb, size_t byte_size, int srid) {
+	return duckdb::LWGEOM_from_WKB(bytea_wkb, byte_size, srid);
 }
 
-double Postgis::LWGEOM_x_point(const void* data, size_t size) {
-    return duckdb::LWGEOM_x_point(data, size);
+double Postgis::LWGEOM_x_point(const void *data, size_t size) {
+	return duckdb::LWGEOM_x_point(data, size);
 }
 
 } // namespace duckdb

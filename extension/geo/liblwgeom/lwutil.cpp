@@ -3,13 +3,13 @@
 namespace duckdb {
 
 static std::string lwgeomTypeName[] = {"Unknown",        "Point",
-                                 "LineString",     "Polygon",
-                                 "MultiPoint",     "MultiLineString",
-                                 "MultiPolygon",   "GeometryCollection",
-                                 "CircularString", "CompoundCurve",
-                                 "CurvePolygon",   "MultiCurve",
-                                 "MultiSurface",   "PolyhedralSurface",
-                                 "Triangle",       "Tin"};
+                                       "LineString",     "Polygon",
+                                       "MultiPoint",     "MultiLineString",
+                                       "MultiPolygon",   "GeometryCollection",
+                                       "CircularString", "CompoundCurve",
+                                       "CurvePolygon",   "MultiCurve",
+                                       "MultiSurface",   "PolyhedralSurface",
+                                       "Triangle",       "Tin"};
 
 const char *lwtype_name(uint8_t type) {
 	if (type > 15) {
