@@ -36,10 +36,11 @@ void PatasFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 	const auto index_diff = scan_state.group_state.index_diffs[scan_state.group_state.index];
 	const auto previous_index = scan_state.group_state.index - index_diff;
 
-	result_data[result_idx] = patas::PatasDecompression<EXACT_TYPE>::Load(
-	    scan_state.patas_state, scan_state.group_state.index, scan_state.group_state.byte_counts,
-	    scan_state.group_state.trailing_zeros, scan_state.group_state.previous_values[previous_index]);
-	scan_state.group_state.previous_values[scan_state.group_state.index] = result_data[result_idx];
+	scan_state.group_state.Scan((uint8_t *)(result_data + result_idx), 1);
+	scan_state.total_value_count++;
+	if (scan_state.GroupFinished() && scan_state.total_value_count < segment.count) {
+		scan_state.LoadGroup();
+	}
 }
 
 } // namespace duckdb

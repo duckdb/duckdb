@@ -29,18 +29,14 @@ using duckdb_chimp::SignificantBits;
 template <class EXACT_TYPE>
 struct PatasGroupState {
 public:
-	bool Started() const {
-		return !!index;
-	}
-	void Reset() {
-		index = 0;
-		previous_values[0] = (EXACT_TYPE)0;
+	void Init(uint8_t *data) {
+		byte_reader.SetStream(data);
 	}
 
-	// Assuming the group is completely full
-	idx_t RemainingInGroup() const {
-		return PatasPrimitives::PATAS_GROUP_SIZE - index;
+	void Reset() {
+		index = 0;
 	}
+
 	void LoadByteCounts(uint8_t *bitpacked_data, idx_t block_count) {
 		//! Unpack 'count' values of bitpacked data, unpacked per group of 32 values
 		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
@@ -58,12 +54,27 @@ public:
 		                                            PatasPrimitives::INDEX_BITSIZE);
 	}
 
+	void Scan(uint8_t *dest, idx_t count) {
+		memcpy(dest, (void *)(values + index), sizeof(EXACT_TYPE) * count);
+		index += count;
+	}
+
+	void LoadValues(idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			values[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(
+			    byte_reader, i, byte_counts, trailing_zeros, (i != 0) * values[i - index_diffs[i]]);
+		}
+	}
+
 public:
 	idx_t index;
 	uint8_t trailing_zeros[PatasPrimitives::PATAS_GROUP_SIZE];
 	uint8_t byte_counts[PatasPrimitives::PATAS_GROUP_SIZE];
 	uint8_t index_diffs[PatasPrimitives::PATAS_GROUP_SIZE];
-	EXACT_TYPE previous_values[PatasPrimitives::PATAS_GROUP_SIZE];
+	EXACT_TYPE values[PatasPrimitives::PATAS_GROUP_SIZE];
+
+private:
+	duckdb_chimp::ByteReader byte_reader;
 };
 
 template <class T>
@@ -79,13 +90,12 @@ public:
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		auto start_of_data_segment = dataptr + segment.GetBlockOffset() + PatasPrimitives::HEADER_SIZE;
-		patas_state.byte_reader.SetStream(start_of_data_segment);
 		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
 		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
+		group_state.Init(start_of_data_segment);
 		LoadGroup();
 	}
 
-	patas::PatasDecompressionState<EXACT_TYPE> patas_state;
 	BufferHandle handle;
 	data_ptr_t metadata_ptr;
 	idx_t total_value_count = 0;
@@ -101,85 +111,14 @@ public:
 		return (total_value_count % PatasPrimitives::PATAS_GROUP_SIZE) == 0;
 	}
 
-	//	// Scan a group from the start
-	//	template <class EXACT_TYPE>
-	//	void ScanGroup(EXACT_TYPE *values, idx_t group_size) {
-	//		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
-	//		D_ASSERT(group_size <= LeftInGroup());
-
-	//#ifdef DEBUG
-	//		const auto old_data_size = patas_state.byte_reader.Index();
-	//#endif
-	//		values[0] = patas::PatasDecompression<EXACT_TYPE>::LoadFirst(patas_state);
-	//		for (idx_t i = 1; i < group_size; i++) {
-	//			values[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(patas_state);
-	//		}
-	//		group_state.index += group_size;
-	//		total_value_count += group_size;
-	//#ifdef DEBUG
-	//		idx_t expected_change = 0;
-	//		idx_t start_idx = group_state.index - group_size;
-	//		for (idx_t i = 0; i < group_size; i++) {
-	//			uint8_t byte_count = patas_state.byte_counts[start_idx + i];
-	//			uint8_t trailing_zeros = patas_state.trailing_zeros[start_idx + i];
-	//			if (byte_count == 0) {
-	//				byte_count += sizeof(EXACT_TYPE);
-	//			}
-	//			if (byte_count == 1 && trailing_zeros == 0) {
-	//				byte_count -= 1;
-	//			}
-	//			expected_change += byte_count;
-	//		}
-	//		D_ASSERT(patas_state.byte_reader.Index() >= old_data_size);
-	//		D_ASSERT(expected_change == (patas_state.byte_reader.Index() - old_data_size));
-	//#endif
-	//		if (GroupFinished() && total_value_count < segment.count) {
-	//			LoadGroup();
-	//		}
-	//		// if (total_value_count == segment.count){
-	//		// printf("DECOMPRESS: DATA BYTES SIZE: %llu\n", patas_state.byte_reader.Index());
-	//		//}
-	//	}
-
 	// Scan up to a group boundary
-	template <class EXACT_TYPE, bool FROM_START = false>
+	template <class EXACT_TYPE>
 	void ScanGroup(EXACT_TYPE *values, idx_t group_size) {
 		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
-		if (FROM_START) {
-			D_ASSERT(!group_state.Started());
-			D_ASSERT(group_state.index == 0);
+		group_state.Scan((uint8_t *)values, group_size);
 
-			// Since we are scanning from the start, we can use the values array as our 'previous_values'
-			for (idx_t i = 0; i < group_size; i++) {
-				const auto index_diff = group_state.index_diffs[i];
-				D_ASSERT(index_diff <= i);
-				values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(patas_state, i, group_state.byte_counts,
-				                                                        group_state.trailing_zeros,
-				                                                        (i != 0) * values[i - index_diff]);
-				group_state.previous_values[i] = values[i];
-			}
-			if (!GroupFinished()) {
-				// We don't need to copy over the values to 'previous_values' if the group has already ended
-				// Even then, we're only interested in the last 128 values, so we can avoid copying most of these
-				const idx_t previous_value_count = MinValue((idx_t)PatasPrimitives::PATAS_GROUP_SIZE, group_size);
-				const idx_t start_index = group_size - previous_value_count;
-				memcpy(group_state.previous_values + start_index, values + start_index,
-				       sizeof(EXACT_TYPE) * previous_value_count);
-			}
-		} else {
-			// We need to reference and update the 'previous_values' array directly,
-			// because we are not scanning from the start of a group
-			for (idx_t i = 0; i < group_size; i++) {
-				const auto index_diff = group_state.index_diffs[group_state.index + i];
-				values[i] = patas::PatasDecompression<EXACT_TYPE>::Load(
-				    patas_state, group_state.index + i, group_state.byte_counts, group_state.trailing_zeros,
-				    ((group_state.index) + i != 0) * group_state.previous_values[group_state.index + i - index_diff]);
-				group_state.previous_values[group_state.index + i] = values[i];
-			}
-		}
-		group_state.index += group_size;
 		total_value_count += group_size;
 		if (GroupFinished() && total_value_count < segment.count) {
 			LoadGroup();
@@ -223,8 +162,8 @@ public:
 		// Unpack and store the index differences for the entire group
 		group_state.LoadIndexDifferences(metadata_ptr, bitpacked_block_count);
 
-		// First value of a group references this
-		group_state.previous_values[0] = (EXACT_TYPE)0;
+		idx_t group_size = MinValue((idx_t)PatasPrimitives::PATAS_GROUP_SIZE, (segment.count - total_value_count));
+		group_state.LoadValues(group_size);
 	}
 
 public:
@@ -264,31 +203,11 @@ void PatasScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 
 	idx_t scanned = 0;
 
-	// while (scanned < scan_count) {
-	//	const idx_t to_scan = MinValue(scan_count - scanned, scan_state.LeftInGroup());
+	while (scanned < scan_count) {
+		const idx_t to_scan = MinValue(scan_count - scanned, scan_state.LeftInGroup());
 
-	//	scan_state.template ScanGroup<EXACT_TYPE>(current_result_ptr + scanned, to_scan);
-
-	//	scanned += to_scan;
-	//}
-	const auto last_group_remainder = MinValue(scan_count, scan_state.LeftInGroup());
-	if (!scan_state.group_state.Started()) {
-		scan_state.template ScanGroup<EXACT_TYPE, true>(current_result_ptr, last_group_remainder);
-	} else {
-		scan_state.template ScanGroup<EXACT_TYPE>(current_result_ptr, last_group_remainder);
-	}
-
-	scanned += last_group_remainder;
-	const idx_t full_group_iterations = (scan_count - scanned) / PatasPrimitives::PATAS_GROUP_SIZE;
-
-	for (idx_t i = 0; i < full_group_iterations; i++) {
-		scan_state.template ScanGroup<EXACT_TYPE, true>(
-		    current_result_ptr + scanned + (i * PatasPrimitives::PATAS_GROUP_SIZE), PatasPrimitives::PATAS_GROUP_SIZE);
-	}
-
-	scanned += full_group_iterations * PatasPrimitives::PATAS_GROUP_SIZE;
-	if (scanned < scan_count) {
-		scan_state.template ScanGroup<EXACT_TYPE>(current_result_ptr + scanned, (scan_count - scanned));
+		scan_state.template ScanGroup<EXACT_TYPE>(current_result_ptr + scanned, to_scan);
+		scanned += to_scan;
 	}
 }
 

@@ -144,17 +144,9 @@ public:
 
 template <class EXACT_TYPE>
 struct PatasDecompression {
-	using State = PatasDecompressionState<EXACT_TYPE>;
-
-	static inline EXACT_TYPE Load(State &state, idx_t index, uint8_t byte_counts[], uint8_t trailing_zeros[],
-	                              EXACT_TYPE previous) {
-		return DecompressValue(state, index, byte_counts, trailing_zeros, previous);
-	}
-
-	static inline EXACT_TYPE DecompressValue(State &state, idx_t index, uint8_t byte_counts[], uint8_t trailing_zeros[],
-	                                         EXACT_TYPE previous) {
-		return (state.byte_reader.template ReadValue<EXACT_TYPE>(byte_counts[index]) << trailing_zeros[index]) ^
-		       previous;
+	static inline EXACT_TYPE DecompressValue(ByteReader &byte_reader, idx_t index, uint8_t byte_counts[],
+	                                         uint8_t trailing_zeros[], EXACT_TYPE previous) {
+		return (byte_reader.ReadValue<EXACT_TYPE>(byte_counts[index]) << trailing_zeros[index]) ^ previous;
 	}
 };
 
