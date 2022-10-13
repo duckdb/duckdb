@@ -155,7 +155,9 @@ public:
 			if (trailing_zeros_exceed_threshold) {
 				state.flag_buffer.Insert(TRAILING_EXCEEDS_THRESHOLD);
 				uint32_t significant_bits = BIT_SIZE - leading_zeros - trailing_zeros;
-				auto result = PackedDataUtils<CHIMP_TYPE>::Pack(reference_index, leading_zeros, significant_bits);
+				auto result = PackedDataUtils<CHIMP_TYPE>::Pack(
+				    reference_index, ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zeros],
+				    significant_bits);
 				state.packed_data_buffer.Insert(result & 0xFFFF);
 				state.output.template WriteValue<CHIMP_TYPE>(xor_result >> trailing_zeros, significant_bits);
 				state.SetLeadingZeros();

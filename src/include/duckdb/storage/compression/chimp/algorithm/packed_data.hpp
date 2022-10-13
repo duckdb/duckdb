@@ -31,7 +31,7 @@ struct UnpackedData {
 template <class CHIMP_TYPE>
 struct PackedDataUtils {
 public:
-	//|----------------|	//! INITIAL_FILL(16) bits
+	//|----------------|	//! packed_data(16) bits
 	// IIIIIII				//! Index (7 bits, shifted by 9)
 	//        LLL			//! LeadingZeros (3 bits, shifted by 6)
 	//           SSSSSS 	//! SignificantBits (6 bits)
@@ -42,6 +42,7 @@ public:
 		//  Verify that combined, this is not bigger than the full size of the type
 		D_ASSERT(dest.significant_bits + dest.leading_zero <= (sizeof(CHIMP_TYPE) * 8));
 	}
+
 	static inline uint16_t Pack(uint8_t index, uint8_t leading_zero, uint8_t significant_bits) {
 		static constexpr uint8_t BIT_SIZE = (sizeof(CHIMP_TYPE) * 8);
 

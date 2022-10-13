@@ -92,17 +92,16 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
 		handle = buffer_manager.Pin(segment.block);
-		auto dataptr = handle.Ptr();
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
-		auto start_of_data_segment = dataptr + segment.GetBlockOffset() + PatasPrimitives::HEADER_SIZE;
-		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
-		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
-		group_state.Init(start_of_data_segment);
+		segment_data = handle.Ptr() + segment.GetBlockOffset();
+		auto metadata_offset = Load<uint32_t>(segment_data);
+		metadata_ptr = segment_data + metadata_offset;
 	}
 
 	BufferHandle handle;
 	data_ptr_t metadata_ptr;
+	data_ptr_t segment_data;
 	idx_t total_value_count = 0;
 	PatasGroupState<EXACT_TYPE> group_state;
 
@@ -146,17 +145,21 @@ public:
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
 		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
-		group_state.Init(handle.Ptr() + segment.GetBlockOffset() + data_byte_offset);
+
+		// Initialize the byte_reader with the data values for the group
+		group_state.Init(segment_data + data_byte_offset);
+
 		idx_t group_size = MinValue((idx_t)PatasPrimitives::PATAS_GROUP_SIZE, (count - total_value_count));
+		// Read the compacted blocks of (7 + 6 + 3 bits) value stats
 		metadata_ptr -= sizeof(uint16_t) * group_size;
 		group_state.LoadPackedData((uint16_t *)metadata_ptr, group_size);
 
+		// Read all the values to the specified 'value_buffer'
 		group_state.template LoadValues<SKIP>(value_buffer, group_size);
 	}
 
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
-	// TODO: use the metadata to determine if we can skip a group
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
 		using EXACT_TYPE = typename FloatingToExact<T>::type;
 
