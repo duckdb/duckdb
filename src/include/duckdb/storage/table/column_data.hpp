@@ -23,6 +23,7 @@ class ColumnData;
 class ColumnSegment;
 class DatabaseInstance;
 class RowGroup;
+class RowGroupWriter;
 class TableDataWriter;
 struct TransactionData;
 
@@ -37,11 +38,13 @@ class ColumnData {
 	friend class ColumnDataCheckpointer;
 
 public:
-	ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent);
+	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
+	           ColumnData *parent);
 	ColumnData(ColumnData &other, idx_t start, ColumnData *parent);
-
 	virtual ~ColumnData();
 
+	//! The block manager
+	BlockManager &block_manager;
 	//! Table info for the column
 	DataTableInfo &info;
 	//! The column index of the column, either within the parent table or within the parent
@@ -105,25 +108,27 @@ public:
 
 	virtual void CommitDropColumn();
 
-	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
 	                                                     ColumnCheckpointInfo &checkpoint_info);
 
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
 
 	virtual void DeserializeColumn(Deserializer &source);
-	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                                          Deserializer &source, const LogicalType &type, ColumnData *parent);
+	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+	                                          idx_t start_row, Deserializer &source, const LogicalType &type,
+	                                          ColumnData *parent);
 
 	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result);
 	virtual void Verify(RowGroup &parent);
 
-	static shared_ptr<ColumnData> CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                                           const LogicalType &type, ColumnData *parent = nullptr);
+	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+	                                           idx_t start_row, const LogicalType &type, ColumnData *parent = nullptr);
 	static shared_ptr<ColumnData> CreateColumn(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
-	static unique_ptr<ColumnData> CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                                                 const LogicalType &type, ColumnData *parent = nullptr);
+	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
+	                                                 idx_t column_index, idx_t start_row, const LogicalType &type,
+	                                                 ColumnData *parent = nullptr);
 	static unique_ptr<ColumnData> CreateColumnUnique(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
 
 protected:

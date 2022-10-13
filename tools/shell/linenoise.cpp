@@ -670,6 +670,18 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 	std::string sql(buf, len);
 	auto tokens = duckdb::Parser::Tokenize(sql);
 	std::stringstream ss;
+	if (!tokens.empty() && tokens[0].start > 0) {
+		duckdb::SimplifiedToken new_token;
+		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		new_token.start = 0;
+		tokens.insert(tokens.begin(), new_token);
+	}
+	if (tokens.empty() && sql.size() > 0) {
+		duckdb::SimplifiedToken new_token;
+		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		new_token.start = 0;
+		tokens.push_back(new_token);
+	}
 	for (size_t i = 0; i < tokens.size(); i++) {
 		size_t next = i + 1 < tokens.size() ? tokens[i + 1].start : len;
 		if (next < start_pos) {

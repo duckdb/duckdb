@@ -169,6 +169,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("rle");
 		result.push_back("bitpacking");
 		result.push_back("dictionary");
+		result.push_back("fsst");
 		collection = true;
 	}
 	return collection;
@@ -472,6 +473,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				if (TestForceStorage()) {
 					return;
 				}
+			} else if (param == "strinline") {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+				return;
+#endif
 			} else if (param == "vector_size") {
 				if (token.parameters.size() != 2) {
 					parser.Fail("require vector_size requires a parameter");

@@ -17,13 +17,15 @@
 
 namespace duckdb {
 
-ColumnData::ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent)
-    : info(info), column_index(column_index), start(start_row), type(move(type)), parent(parent) {
+ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+                       LogicalType type, ColumnData *parent)
+    : block_manager(block_manager), info(info), column_index(column_index), start(start_row), type(move(type)),
+      parent(parent) {
 }
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
-    : info(other.info), column_index(other.column_index), start(start), type(move(other.type)), parent(parent),
-      updates(move(other.updates)) {
+    : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
+      type(move(other.type)), parent(parent), updates(move(other.updates)) {
 	idx_t offset = 0;
 	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->next.get()) {
 		auto &other = (ColumnSegment &)*segment;
@@ -219,6 +221,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
+	D_ASSERT(state.current->function->append);
 }
 
 void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
@@ -321,7 +324,6 @@ void ColumnData::AppendTransientSegment(idx_t start_row) {
 }
 
 void ColumnData::CommitDropColumn() {
-	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
 	auto segment = (ColumnSegment *)data.GetRootSegment();
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
@@ -334,7 +336,7 @@ void ColumnData::CommitDropColumn() {
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) {
+unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer) {
 	return make_unique<ColumnCheckpointState>(row_group, *this, writer);
 }
 
@@ -347,7 +349,7 @@ void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, 
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
                                                          ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
@@ -384,16 +386,17 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
-		    GetDatabase(), data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
+		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
 		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
 		    move(data_pointer.statistics));
 		data.AppendSegment(move(segment));
 	}
 }
 
-shared_ptr<ColumnData> ColumnData::Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                               Deserializer &source, const LogicalType &type, ColumnData *parent) {
-	auto entry = ColumnData::CreateColumn(info, column_index, start_row, type, parent);
+shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                               idx_t start_row, Deserializer &source, const LogicalType &type,
+                                               ColumnData *parent) {
+	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, parent);
 	entry->DeserializeColumn(source);
 	return entry;
 }
@@ -478,16 +481,16 @@ void ColumnData::Verify(RowGroup &parent) {
 }
 
 template <class RET, class OP>
-static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t start_row, const LogicalType &type,
-                                ColumnData *parent) {
+static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+                                const LogicalType &type, ColumnData *parent) {
 	if (type.InternalType() == PhysicalType::STRUCT) {
-		return OP::template Create<StructColumnData>(info, column_index, start_row, type, parent);
+		return OP::template Create<StructColumnData>(block_manager, info, column_index, start_row, type, parent);
 	} else if (type.InternalType() == PhysicalType::LIST) {
-		return OP::template Create<ListColumnData>(info, column_index, start_row, type, parent);
+		return OP::template Create<ListColumnData>(block_manager, info, column_index, start_row, type, parent);
 	} else if (type.id() == LogicalTypeId::VALIDITY) {
-		return OP::template Create<ValidityColumnData>(info, column_index, start_row, parent);
+		return OP::template Create<ValidityColumnData>(block_manager, info, column_index, start_row, parent);
 	}
-	return OP::template Create<StandardColumnData>(info, column_index, start_row, type, parent);
+	return OP::template Create<StandardColumnData>(block_manager, info, column_index, start_row, type, parent);
 }
 
 template <class RET, class OP>
@@ -502,18 +505,21 @@ static RET CreateColumnInternal(ColumnData &other, idx_t start_row, ColumnData *
 	return OP::template Create<StandardColumnData>(other, start_row, parent);
 }
 
-shared_ptr<ColumnData> ColumnData::CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                                const LogicalType &type, ColumnData *parent) {
-	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(info, column_index, start_row, type, parent);
+shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                                idx_t start_row, const LogicalType &type, ColumnData *parent) {
+	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(block_manager, info, column_index, start_row,
+	                                                                       type, parent);
 }
 
 shared_ptr<ColumnData> ColumnData::CreateColumn(ColumnData &other, idx_t start_row, ColumnData *parent) {
 	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(other, start_row, parent);
 }
 
-unique_ptr<ColumnData> ColumnData::CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                                      const LogicalType &type, ColumnData *parent) {
-	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(info, column_index, start_row, type, parent);
+unique_ptr<ColumnData> ColumnData::CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
+                                                      idx_t column_index, idx_t start_row, const LogicalType &type,
+                                                      ColumnData *parent) {
+	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(block_manager, info, column_index, start_row,
+	                                                                       type, parent);
 }
 
 unique_ptr<ColumnData> ColumnData::CreateColumnUnique(ColumnData &other, idx_t start_row, ColumnData *parent) {

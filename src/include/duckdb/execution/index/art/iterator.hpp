@@ -7,9 +7,9 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/common/stack.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
@@ -51,7 +51,7 @@ public:
 	ART *art = nullptr;
 
 	//! Scan the tree
-	bool Scan(Key *bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive);
+	bool Scan(Key &bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive);
 	//! Finds minimum value of the tree
 	void FindMinimum(Node &node);
 	//! Goes to lower bound
@@ -66,5 +66,7 @@ private:
 	bool Next();
 	//! Push part of the key to cur_key
 	void PushKey(Node *node, uint16_t pos);
+	//! Pop node
+	void PopNode();
 };
 } // namespace duckdb

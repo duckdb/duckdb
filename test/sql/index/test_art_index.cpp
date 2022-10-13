@@ -1,7 +1,5 @@
 #include "catch.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/radix.hpp"
-#include "duckdb/execution/index/art/art_key.hpp"
 #include "test_helpers.hpp"
 
 #include <cfloat>

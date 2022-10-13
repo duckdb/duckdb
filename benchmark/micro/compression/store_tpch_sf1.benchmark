@@ -1,0 +1,18 @@
+# name: benchmark/micro/compression/store_tpch_sf1.benchmark
+# description: Generating and storing a tpc-h sf1 database using default compression
+# group: [compression]
+
+name TPC-H Write benchmark
+group aggregate
+storage persistent
+require_reinit
+
+require tpch
+
+load
+PRAGMA force_compression='none';
+
+run
+call DBGEN(sf=1);
+checkpoint;
+

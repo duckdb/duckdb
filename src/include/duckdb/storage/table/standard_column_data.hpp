@@ -16,8 +16,8 @@ namespace duckdb {
 //! Standard column data represents a regular flat column (e.g. a column of type INTEGER or STRING)
 class StandardColumnData : public ColumnData {
 public:
-	StandardColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-	                   ColumnData *parent = nullptr);
+	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+	                   LogicalType type, ColumnData *parent = nullptr);
 	StandardColumnData(ColumnData &original, idx_t start_row, ColumnData *parent = nullptr);
 
 	//! The validity column data
@@ -47,8 +47,8 @@ public:
 
 	void CommitDropColumn() override;
 
-	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
 	                                             ColumnCheckpointInfo &checkpoint_info) override;
 	void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                    Vector &scan_vector) override;

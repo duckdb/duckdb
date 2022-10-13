@@ -9,7 +9,7 @@ require_reinit
 
 load
 PRAGMA force_compression='dictionary';
-DROP TABLE IF EXISTS integers;
+DROP TABLE IF EXISTS test;
 
 run
 CREATE TABLE test AS SELECT i::VARCHAR AS i FROM range(0, 50000000) tbl(i);

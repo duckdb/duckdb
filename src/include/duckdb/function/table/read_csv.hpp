@@ -48,6 +48,9 @@ struct ReadCSVData : public BaseCSVData {
 	//! The initial reader (if any): this is used when automatic detection is used during binding.
 	//! In this case, the CSV reader is already created and might as well be re-used.
 	unique_ptr<BufferedCSVReader> initial_reader;
+	//! The union readers is created(when csv union_by_name option is on) during binding
+	//! Those reader can be re-used during ReadCSVFunction
+	vector<unique_ptr<BufferedCSVReader>> union_readers;
 };
 
 struct CSVCopyFunction {
@@ -55,7 +58,8 @@ struct CSVCopyFunction {
 };
 
 struct ReadCSVTableFunction {
-	static TableFunction GetFunction();
+	static TableFunction GetFunction(bool list_parameter = false);
+	static TableFunction GetAutoFunction(bool list_parameter = false);
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
