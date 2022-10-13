@@ -134,6 +134,8 @@ struct ParallelExecuteContext {
 	LoopDefinition definition;
 	atomic<bool> success;
 	string error_message;
+	string error_file;
+	int error_line;
 };
 
 static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
@@ -146,13 +148,23 @@ static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
 		vector<LoopDefinition> running_loops {execute_context->definition};
 		ExecuteContext context(&con, move(running_loops));
 		for (auto &command : execute_context->loop_commands) {
+			execute_context->error_file = command->file_name;
+			execute_context->error_line = command->query_line;
 			command->Execute(context);
 		}
+		if (!context.error_file.empty()) {
+			execute_context->error_message = string();
+			execute_context->success = false;
+			execute_context->error_file = context.error_file;
+			execute_context->error_line = context.error_line;
+		}
 	} catch (std::exception &ex) {
-		execute_context->error_message = ex.what();
+		execute_context->error_message = StringUtil::Format("Failure at %s:%d: %s", execute_context->error_file,
+		                                                    execute_context->error_line, ex.what());
 		execute_context->success = false;
 	} catch (...) {
-		execute_context->error_message = "Unknown error message";
+		execute_context->error_message = StringUtil::Format("Failure at %s:%d: Unknown error message",
+		                                                    execute_context->error_file, execute_context->error_line);
 		execute_context->success = false;
 	}
 }
@@ -183,7 +195,11 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 		}
 		for (auto &context : contexts) {
 			if (!context.success) {
-				FAIL(context.error_message);
+				if (!context.error_message.empty()) {
+					FAIL(context.error_message);
+				} else {
+					FAIL_LINE(context.error_file, context.error_line, 0);
+				}
 			}
 		}
 	} else {
@@ -224,7 +240,15 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);
-	helper.CheckQueryResult(*this, context, move(result));
+	if (!helper.CheckQueryResult(*this, context, move(result))) {
+		if (context.is_parallel) {
+			runner.finished_processing_file = true;
+			context.error_file = file_name;
+			context.error_line = query_line;
+		} else {
+			FAIL_LINE(file_name, query_line, 0);
+		}
+	}
 }
 
 void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
@@ -276,7 +300,15 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);
-	helper.CheckStatementResult(*this, context, move(result));
+	if (!helper.CheckStatementResult(*this, context, move(result))) {
+		if (context.is_parallel) {
+			runner.finished_processing_file = true;
+			context.error_file = file_name;
+			context.error_line = query_line;
+		} else {
+			FAIL_LINE(file_name, query_line, 0);
+		}
+	}
 }
 
 } // namespace duckdb

@@ -13,7 +13,8 @@
 
 namespace duckdb {
 
-void TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &context, unique_ptr<MaterializedQueryResult> owned_result) {
+bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &context,
+                                        unique_ptr<MaterializedQueryResult> owned_result) {
 	auto &result = *owned_result;
 	auto &runner = query.runner;
 	auto expected_column_count = query.expected_column_count;
@@ -27,9 +28,9 @@ void TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		logger.UnexpectedFailure(result);
 		if (SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
-			return;
+			return true;
 		}
-		FAIL_LINE(query.file_name, query.query_line, 0);
+		return false;
 	}
 	idx_t row_count = result.RowCount();
 	idx_t column_count = result.ColumnCount();
@@ -92,7 +93,7 @@ void TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
 			logger.PrintErrorHeader(csv_error);
-			FAIL_LINE(query.file_name, query.query_line, 0);
+			return false;
 		}
 	} else {
 		comparison_values = values;
@@ -110,7 +111,7 @@ void TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		hash_value = to_string(total_value_count) + " values hashing to " + digest;
 		if (runner.output_hash_mode) {
 			logger.OutputHash(hash_value);
-			return;
+			return true;
 		}
 	}
 
@@ -147,18 +148,18 @@ void TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		} else if (comparison_values.size() % expected_column_count != 0) {
 			if (column_count_mismatch) {
 				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
-				FAIL_LINE(query.file_name, query.query_line, 0);
+			} else {
+				logger.NotCleanlyDivisible(expected_column_count, comparison_values.size());
 			}
-			logger.NotCleanlyDivisible(expected_column_count, comparison_values.size());
-			FAIL_LINE(query.file_name, query.query_line, 0);
+			return false;
 		}
 		if (expected_rows != result.RowCount()) {
 			if (column_count_mismatch) {
 				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
-				FAIL_LINE(query.file_name, query.query_line, 0);
+			} else {
+				logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise);
 			}
-			logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise);
-			FAIL_LINE(query.file_name, query.query_line, 0);
+			return false;
 		}
 
 		if (row_wise) {
@@ -171,14 +172,14 @@ void TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 						logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
 					}
 					logger.SplitMismatch(i + 1, expected_column_count, splits.size());
-					FAIL_LINE(query.file_name, query.query_line, 0);
+					return false;
 				}
 				for (idx_t c = 0; c < splits.size(); c++) {
-					bool success = CompareValues(logger, result, result_values_string[current_row * expected_column_count + c],
-					                             splits[c], current_row, c, comparison_values, expected_column_count,
-					                             row_wise, result_values_string);
+					bool success = CompareValues(
+					    logger, result, result_values_string[current_row * expected_column_count + c], splits[c],
+					    current_row, c, comparison_values, expected_column_count, row_wise, result_values_string);
 					if (!success) {
-						FAIL_LINE(query.file_name, query.query_line, 0);
+						return false;
 					}
 					// we do this just to increment the assertion counter
 					REQUIRE(success);
@@ -188,11 +189,12 @@ void TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		} else {
 			idx_t current_row = 0, current_column = 0;
 			for (idx_t i = 0; i < total_value_count && i < comparison_values.size(); i++) {
-				bool success = CompareValues(logger, result, result_values_string[current_row * expected_column_count + current_column],
+				bool success = CompareValues(logger, result,
+				                             result_values_string[current_row * expected_column_count + current_column],
 				                             comparison_values[i], current_row, current_column, comparison_values,
 				                             expected_column_count, row_wise, result_values_string);
 				if (!success) {
-					FAIL_LINE(query.file_name, query.query_line, 0);
+					return false;
 				}
 				// we do this just to increment the assertion counter
 				REQUIRE(success);
@@ -206,7 +208,7 @@ void TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		}
 		if (column_count_mismatch) {
 			logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
-			FAIL_LINE(query.file_name, query.query_line, 0);
+			return false;
 		}
 	} else {
 		bool hash_compare_error = false;
@@ -231,13 +233,15 @@ void TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				expected_result = runner.result_label_map[query_label].get();
 			}
 			logger.WrongResultHash(expected_result, result);
-			FAIL_LINE(query.file_name, query.query_line, 0);
+			return false;
 		}
 		REQUIRE(!hash_compare_error);
 	}
+	return true;
 }
 
-void TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteContext &context, unique_ptr<MaterializedQueryResult> owned_result) {
+bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteContext &context,
+                                            unique_ptr<MaterializedQueryResult> owned_result) {
 	auto &result = *owned_result;
 	bool error = result.HasError();
 
@@ -267,14 +271,16 @@ void TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		logger.UnexpectedStatement(expect_ok, result);
 		if (expect_ok && SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
-			return;
+			return true;
 		}
-		FAIL_LINE(statement.file_name, statement.query_line, 0);
+		return false;
 	}
 	REQUIRE(!error);
+	return true;
 }
 
-vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string> names, idx_t &expected_column_count, string &error) {
+vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string> names, idx_t &expected_column_count,
+                                                    string &error) {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.Query("PRAGMA threads=" + to_string(std::thread::hardware_concurrency()));
@@ -397,9 +403,9 @@ bool TestResultHelper::ResultIsFile(string result) {
 	return StringUtil::StartsWith(result, "<FILE>:");
 }
 
-bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string lvalue_str, string rvalue_str, idx_t current_row, idx_t current_column,
-                                     vector<string> &values, idx_t expected_column_count, bool row_wise,
-                                     vector<string> &result_values) {
+bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string lvalue_str,
+                                     string rvalue_str, idx_t current_row, idx_t current_column, vector<string> &values,
+                                     idx_t expected_column_count, bool row_wise, vector<string> &result_values) {
 	Value lvalue, rvalue;
 	bool error = false;
 	// simple first test: compare string value directly

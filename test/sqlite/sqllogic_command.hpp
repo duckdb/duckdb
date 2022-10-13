@@ -35,6 +35,8 @@ struct ExecuteContext {
 	vector<LoopDefinition> running_loops;
 	bool is_parallel;
 	string sql_query;
+	string error_file;
+	int error_line;
 };
 
 class Command {
