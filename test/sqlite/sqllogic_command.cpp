@@ -204,42 +204,27 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 	}
 }
 
-static void OutputSQLQuery(const string &sql_query) {
-	string query = sql_query;
-	if (StringUtil::EndsWith(sql_query, "\n")) {
-		// ends with a newline: don't add one
-		if (!StringUtil::EndsWith(sql_query, ";\n")) {
-			// no semicolon though
-			query[query.size() - 1] = ';';
-			query += "\n";
-		}
-	} else {
-		if (!StringUtil::EndsWith(sql_query, ";")) {
-			query += ";";
-		}
-		query += "\n";
-	}
-	fprintf(stderr, "%s", query.c_str());
-}
-
 void Query::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
 
-	if (runner.output_result_mode || runner.debug_mode) {
-		TestResultHelper::PrintLineSep();
-		TestResultHelper::PrintHeader("File " + file_name + ":" + to_string(query_line) + ")");
-		TestResultHelper::PrintSQL(context.sql_query);
-		TestResultHelper::PrintLineSep();
-	}
+	{
+		SQLLogicTestLogger logger(context, *this);
+		if (runner.output_result_mode || runner.debug_mode) {
+			logger.PrintLineSep();
+			logger.PrintFileHeader();
+			logger.PrintSQLFormatted();
+			logger.PrintLineSep();
+		}
 
-	if (runner.output_sql) {
-		OutputSQLQuery(context.sql_query);
-		return;
+		if (runner.output_sql) {
+			logger.PrintSQL();
+			return;
+		}
 	}
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
-	TestResultHelper helper(context, *this, *result);
-	helper.CheckQueryResult(context, move(result));
+	TestResultHelper helper(runner);
+	helper.CheckQueryResult(*this, context, move(result));
 }
 
 void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
@@ -273,22 +258,25 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto connection = CommandConnection(context);
 
-	if (runner.output_result_mode || runner.debug_mode) {
-		TestResultHelper::PrintLineSep();
-		TestResultHelper::PrintHeader("File " + file_name + ":" + to_string(query_line) + ")");
-		TestResultHelper::PrintSQL(context.sql_query);
-		TestResultHelper::PrintLineSep();
-	}
+	{
+		SQLLogicTestLogger logger(context, *this);
+		if (runner.output_result_mode || runner.debug_mode) {
+			logger.PrintLineSep();
+			logger.PrintFileHeader();
+			logger.PrintSQLFormatted();
+			logger.PrintLineSep();
+		}
 
-	query_break(query_line);
-	if (runner.output_sql) {
-		OutputSQLQuery(context.sql_query);
-		return;
+		query_break(query_line);
+		if (runner.output_sql) {
+			logger.PrintSQL();
+			return;
+		}
 	}
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
-	TestResultHelper helper(context, *this, *result);
-	helper.CheckStatementResult();
+	TestResultHelper helper(runner);
+	helper.CheckStatementResult(*this, context, move(result));
 }
 
 } // namespace duckdb

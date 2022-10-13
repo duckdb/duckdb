@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "sqllogic_command.hpp"
 
 namespace duckdb {
@@ -48,6 +49,7 @@ public:
 	//! The map converting the labels to the hash values
 	unordered_map<string, string> hash_label_map;
 	unordered_map<string, unique_ptr<QueryResult>> result_label_map;
+	mutex log_lock;
 
 public:
 	void ExecuteFile(string script);
