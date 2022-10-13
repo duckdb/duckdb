@@ -70,16 +70,19 @@ public:
 	bool NextParallelScan(ClientContext &context, DataTable *table, ParallelCollectionScanState &state,
 	                      CollectionScanState &scan_state);
 
+	//! Begin appending to the local storage
+	void InitializeAppend(LocalAppendState &state, DataTable *table);
 	//! Append a chunk to the local storage
-	void Append(DataTable *table, DataChunk &chunk);
+	static void Append(LocalAppendState &state, DataChunk &chunk);
+	//! Finish appending to the local storage
+	static void FinalizeAppend(LocalAppendState &state);
 	//! Delete a set of rows from the local storage
 	idx_t Delete(DataTable *table, Vector &row_ids, idx_t count);
 	//! Update a set of rows in the local storage
 	void Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
-	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log,
-	            transaction_t commit_id);
+	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction);
 
 	bool ChangesMade() noexcept {
 		return table_storage.size() > 0;

@@ -45,7 +45,7 @@ DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_on
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() {
+DatabaseInstance::DatabaseInstance() : is_invalidated(false) {
 }
 
 DatabaseInstance::~DatabaseInstance() {

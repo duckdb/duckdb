@@ -16,7 +16,8 @@ class Node4 : public Node {
 public:
 	Node4();
 	uint8_t key[4];
-	SwizzleablePointer children[4];
+	// Pointers to the child nodes
+	ARTPointer children[4];
 
 public:
 	//! Get position of a byte, returns DConstants::INVALID_INDEX if not exists

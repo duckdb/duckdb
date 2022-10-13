@@ -48,8 +48,14 @@ public:
 	void Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids,
 	           Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
 
+	//! Initialize an append of a variable number of rows. FinalizeAppend must be called after appending is done.
+	void InitializeAppend(TableAppendState &state);
+	//! Initialize an append with a known number of rows. FinalizeAppend should not be called after appending is done.
 	void InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count);
-	void Append(TransactionData transaction, DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
+	//! Append a chunk to a table.
+	void Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
+	//! FinalizeAppend flushes an append with a variable number of rows.
+	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row, idx_t count);
 

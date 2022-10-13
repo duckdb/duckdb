@@ -66,7 +66,7 @@ void Node16::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 		while (pos < node->count && n->key[pos] < key_byte) {
 			pos++;
 		}
-		if (n->children[pos] != 0) {
+		if (n->children[pos]) {
 			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];
 				n->children[i] = n->children[i - 1];
@@ -104,7 +104,7 @@ void Node16::EraseChild(Node *&node, int pos, ART &art) {
 	}
 	// set any remaining nodes as nullptr
 	for (; pos < 16; pos++) {
-		if (!n->children[pos].pointer) {
+		if (!n->children[pos]) {
 			break;
 		}
 		n->children[pos] = nullptr;

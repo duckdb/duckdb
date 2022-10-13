@@ -91,7 +91,7 @@ void Iterator::FindMinimum(Node &node) {
 	}
 	case NodeType::N256: {
 		auto &n256 = (Node256 &)node;
-		while (!n256.children[pos].pointer) {
+		while (!n256.children[pos]) {
 			pos++;
 		}
 		cur_key.Push(pos);
