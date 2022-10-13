@@ -134,7 +134,7 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
 		return NumericHelper::UnsignedLength<uint32_t>(Date::ExtractDayOfTheYear(date));
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
-		return NumericHelper::UnsignedLength<uint32_t>(Date::ExtractYear(date) % 100);
+		return NumericHelper::UnsignedLength<uint32_t>(AbsValue(Date::ExtractYear(date)) % 100);
 	default:
 		throw InternalException("Unimplemented specifier for GetSpecifierLength");
 	}
@@ -351,7 +351,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		break;
 	}
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY: {
-		target = Write2(target, data[0] % 100);
+		target = Write2(target, AbsValue(data[0]) % 100);
 		break;
 	}
 	case StrTimeSpecifier::HOUR_24_DECIMAL: {

@@ -254,6 +254,9 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 		return CreateJoinTree(set, possible_connections, right, left);
 	}
 	if (plan != plans.end()) {
+		if (!plan->second) {
+			throw InternalException("No plan: internal error in join order optimizer");
+		}
 		expected_cardinality = plan->second->GetCardinality();
 		best_connection = possible_connections.back();
 	} else if (possible_connections.empty()) {
@@ -290,6 +293,9 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	// get the left and right join plans
 	auto &left_plan = plans[left];
 	auto &right_plan = plans[right];
+	if (!left_plan || !right_plan) {
+		throw InternalException("No left or right plan: internal error in join order optimizer");
+	}
 	auto new_set = set_manager.Union(left, right);
 	// create the join tree based on combining the two plans
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
@@ -322,6 +328,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 			}
 		}
 
+		D_ASSERT(new_plan);
 		plans[new_set] = move(new_plan);
 		return result;
 	}
@@ -972,6 +979,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	cardinality_estimator.InitCardinalityEstimatorProps(&nodes_ops, &filter_infos);
 
 	for (auto &node_op : nodes_ops) {
+		D_ASSERT(node_op.node);
 		plans[node_op.node->set] = move(node_op.node);
 	}
 	// now we perform the actual dynamic programming to compute the final result

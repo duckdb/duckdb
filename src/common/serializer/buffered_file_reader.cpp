@@ -7,10 +7,9 @@
 
 namespace duckdb {
 
-BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path, FileOpener *opener)
+BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path, FileLockType lock_type, FileOpener *opener)
     : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0), read_data(0), total_read(0) {
-	handle =
-	    fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, FileLockType::READ_LOCK, FileSystem::DEFAULT_COMPRESSION, opener);
+	handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, lock_type, FileSystem::DEFAULT_COMPRESSION, opener);
 	file_size = fs.GetFileSize(*handle);
 }
 
@@ -42,6 +41,17 @@ void BufferedFileReader::ReadData(data_ptr_t target_buffer, uint64_t read_size) 
 
 bool BufferedFileReader::Finished() {
 	return total_read + offset == file_size;
+}
+
+void BufferedFileReader::Seek(uint64_t location) {
+	D_ASSERT(location <= file_size);
+	handle->Seek(location);
+	total_read = location;
+	read_data = offset = 0;
+}
+
+uint64_t BufferedFileReader::CurrentOffset() {
+	return total_read + offset;
 }
 
 } // namespace duckdb

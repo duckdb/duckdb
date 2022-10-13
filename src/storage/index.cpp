@@ -43,15 +43,15 @@ void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
 	Delete(state, entries, row_identifiers);
 }
 
-void Index::MergeIndexes(Index *other_index) {
+bool Index::MergeIndexes(Index *other_index) {
 
-	// create the global index
+	IndexLock state;
+	InitializeLock(state);
+
 	switch (this->type) {
 	case IndexType::ART: {
-		auto this_art = (ART *)this;
-		auto other_art = (ART *)other_index;
-		ART::Merge(this_art, other_art);
-		break;
+		auto art = (ART *)this;
+		return art->MergeIndexes(state, other_index);
 	}
 	default:
 		throw InternalException("Unimplemented index type for merge");

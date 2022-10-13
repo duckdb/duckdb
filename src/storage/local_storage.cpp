@@ -303,7 +303,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 			storage.Rollback();
 		}
 		bool constraint_violated = false;
-		table.InitializeAppend(append_state);
+		table.InitializeAppend(transaction, append_state, append_count);
 		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
 			if (!table.AppendToIndexes(chunk, append_state.current_row)) {
@@ -314,7 +314,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 			table.Append(chunk, append_state);
 			return true;
 		});
-		table.FinalizeAppend(transaction, append_state);
 		if (constraint_violated) {
 			// need to revert the append
 			row_t current_row = append_state.row_start;

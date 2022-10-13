@@ -37,7 +37,7 @@ public:
 	//! Erase the child at pos and (if necessary) shrink to Node48
 	static void EraseChild(Node *&node, int pos, ART &art);
 	//! Merge Node256 into l_node
-	static void Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos);
+	static bool Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos);
 	//! Returns the size (maximum capacity) of the Node256
 	static idx_t GetSize();
 };
