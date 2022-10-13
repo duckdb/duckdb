@@ -14,11 +14,11 @@ namespace duckdb {
 
 class WriteOverflowStringsToDisk : public OverflowStringWriter {
 public:
-	explicit WriteOverflowStringsToDisk(DatabaseInstance &db);
+	explicit WriteOverflowStringsToDisk(BlockManager &block_manager);
 	~WriteOverflowStringsToDisk() override;
 
-	//! The checkpoint manager
-	DatabaseInstance &db;
+	//! The block manager
+	BlockManager &block_manager;
 
 	//! Temporary buffer
 	BufferHandle handle;

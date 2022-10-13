@@ -29,6 +29,44 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/a*.csv', auto_detect=1) O
 2019-07-15
 2019-07-25
 
+# list parameter
+query I
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a1/a1.csv', 'test/sql/copy/csv/data/glob/a2/a2.csv'], auto_detect=1) ORDER BY 1
+----
+2019-06-05
+2019-06-15
+2019-06-25
+2019-07-05
+2019-07-15
+2019-07-25
+
+query I
+SELECT * FROM read_csv_auto(['test/sql/copy/csv/data/glob/a1/a1.csv', 'test/sql/copy/csv/data/glob/a2/a2.csv']) ORDER BY 1
+----
+2019-06-05
+2019-06-15
+2019-06-25
+2019-07-05
+2019-07-15
+2019-07-25
+
+# multiple globs
+query I
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a?/a*.csv', 'test/sql/copy/csv/data/glob/a?/a*.csv'], auto_detect=1) ORDER BY 1
+----
+2019-06-05
+2019-06-05
+2019-06-15
+2019-06-15
+2019-06-25
+2019-06-25
+2019-07-05
+2019-07-05
+2019-07-15
+2019-07-15
+2019-07-25
+2019-07-25
+
 # more asterisks for directories
 query I
 SELECT * FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_detect=1) ORDER BY 1
@@ -108,6 +146,12 @@ SELECT COUNT(*) FROM glob('test//sql////copy//csv/////data///glob///*//////*.csv
 # nothing matches the glob
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/a*a.csv', auto_detect=1) ORDER BY 1
+
+statement error
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/*/a*a.csv'], auto_detect=1) ORDER BY 1
+
+statement error
+SELECT * FROM read_csv_auto(['test/sql/copy/csv/data/glob/*/a*a.csv']) ORDER BY 1
 
 query I
 SELECT COUNT(*) FROM glob('test/sql/copy/csv/data/glob/*/a*a.csv')

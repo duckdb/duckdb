@@ -24,6 +24,12 @@ SELECT MIN(c['i']), MAX(c['i']), COUNT(*) FROM structs
 ----
 0	9999999	10000000
 
+statement ok
+CREATE TABLE block_count(count int)
+
+statement ok
+insert into block_count select total_blocks from pragma_database_size();
+
 loop i 0 10
 
 statement ok
@@ -40,8 +46,8 @@ SELECT MIN(c['i']), MAX(c['i']), COUNT(*) FROM structs
 statement ok
 CHECKPOINT;
 
-query I nosort expected_blocks
-select round(total_blocks / 100.0) from pragma_database_size();
+statement ok
+insert into block_count select total_blocks from pragma_database_size();
 
 query III
 SELECT MIN(c['i']), MAX(c['i']), COUNT(*) FROM structs
@@ -49,3 +55,9 @@ SELECT MIN(c['i']), MAX(c['i']), COUNT(*) FROM structs
 0	9999999	10000000
 
 endloop
+
+# ensure there is a small diff between min and max block counts
+query I
+select (max(count)-min(count))<20 from block_count
+----
+true

@@ -1,0 +1,20 @@
+# name: test/sql/copy/csv/empty_first_line.test
+# description: Issue #4933: Reading a CSV file with an empty header is problematic
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT * FROM read_csv_auto('data/csv/empty_first_line.csv', delim=' ');
+----
+a	1
+b	2
+c	3
+
+query I
+SELECT * FROM read_csv_auto('data/csv/empty_first_line.csv', delim='|');
+----
+a 1
+b 2
+c 3

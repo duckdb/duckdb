@@ -5,21 +5,21 @@
 # generate CSV file with default delimiter
 # create a table
 statement ok
-CREATE TABLE test_null_option (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));
+CREATE TABLE test_null_option (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10), col_e VARCHAR);
 
 # test COPY ... FROM ...
 # implicitly using default NULL value
 query I
-COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv';
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'NULL');
 ----
 3
 
-query ITTT
+query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	NULL	test	null
-1	NULL	test	null
-2	NULL	test	null
+0	(empty)	test	null	NULL
+1	(empty)	test	null	NULL
+2	(empty)	test	null	NULL
 
 statement ok
 DELETE FROM test_null_option;
@@ -30,28 +30,28 @@ COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (N
 ----
 3
 
-query ITTT
+query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	NULL	test	null
-1	NULL	test	null
-2	NULL	test	null
+0	NULL	test	null	NULL
+1	NULL	test	null	NULL
+2	NULL	test	null	NULL
 
 statement ok
 DELETE FROM test_null_option;
 
-# make sure a quoted null string is interpreted as a null value
+# make sure a quoted null string is not interpreted as a null value
 query I
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'test');
 ----
 3
 
-query ITTT
+query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	(empty)	NULL	null
-1	(empty)	NULL	null
-2	(empty)	NULL	null
+0	(empty)	test	null	NULL
+1	(empty)	test	null	NULL
+2	(empty)	test	null	NULL
 
 statement ok
 DELETE FROM test_null_option;
@@ -62,12 +62,12 @@ COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (N
 ----
 3
 
-query ITTT
+query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	(empty)	test	NULL
-1	(empty)	test	NULL
-2	(empty)	test	NULL
+0	(empty)	test	NULL	NULL
+1	(empty)	test	NULL	NULL
+2	(empty)	test	NULL	NULL
 
 # invalid parameter type
 statement error
@@ -109,12 +109,12 @@ COPY test_null_option FROM '__TEST_DIR__/test_null_option_2.csv';
 ----
 3
 
-query ITTT
+query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	NULL	test	NULL
-1	NULL	test	NULL
-2	NULL	test	NULL
+0	(empty)	test	NULL	NULL
+1	(empty)	test	NULL	NULL
+2	(empty)	test	NULL	NULL
 
 # explicitly using default NULL value
 query I
@@ -130,12 +130,12 @@ COPY test_null_option FROM '__TEST_DIR__/test_null_option_3.csv' (NULL '');
 ----
 3
 
-query ITTT
+query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	NULL	test	NULL
-1	NULL	test	NULL
-2	NULL	test	NULL
+0	(empty)	test	NULL	NULL
+1	(empty)	test	NULL	NULL
+2	(empty)	test	NULL	NULL
 
 # setting specific NULL value
 query I
@@ -151,10 +151,10 @@ COPY test_null_option FROM '__TEST_DIR__/test_null_option_4.csv' (NULL 'null');
 ----
 3
 
-query ITTT
+query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	NULL	test	NULL
-1	NULL	test	NULL
-2	NULL	test	NULL
+0	(empty)	test	NULL	NULL
+1	(empty)	test	NULL	NULL
+2	(empty)	test	NULL	NULL
 

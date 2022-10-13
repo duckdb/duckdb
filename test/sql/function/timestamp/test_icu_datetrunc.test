@@ -4,6 +4,10 @@
 
 require icu
 
+# Normalise the testing locale
+statement ok
+SET Calendar = 'gregorian';
+
 statement ok
 SET TimeZone = 'America/Los_Angeles';
 
@@ -55,7 +59,7 @@ NULL
 query T
 SELECT date_trunc('minute', TIMESTAMPTZ '1992-02-02 04:03:02') FROM timestamps LIMIT 1;
 ----
-1992-02-02 04:03:00+00
+1992-02-01 20:03:00 America/Los_Angeles
 
 # Test all truncate operators on timestamps
 # Note that the output is displayed as instants (UTC)
@@ -68,19 +72,19 @@ query II
 SELECT date_trunc(s, d), s FROM timestamps;
 ----
 -infinity	year
-1000-01-06 07:52:58+00	millennium
-1900-01-01 08:00:00+00	century
-1990-01-01 08:00:00+00	decade
-1992-01-01 08:00:00+00	year
-1992-01-01 08:00:00+00	quarter
-1992-02-01 08:00:00+00	month
-1992-01-27 08:00:00+00	week
-1992-02-02 08:00:00+00	day
-1992-02-02 10:00:00+00	hour
-1992-02-02 10:02:00+00	minute
-1992-02-02 10:02:03+00	second
-1992-02-02 10:02:03.123+00	milliseconds
-1992-02-02 10:02:03.123456+00	microseconds
+1000-01-01 00:00:00 America/Los_Angeles	millennium
+1900-01-01 00:00:00 America/Los_Angeles	century
+1990-01-01 00:00:00 America/Los_Angeles	decade
+1992-01-01 00:00:00 America/Los_Angeles	year
+1992-01-01 00:00:00 America/Los_Angeles	quarter
+1992-02-01 00:00:00 America/Los_Angeles	month
+1992-01-27 00:00:00 America/Los_Angeles	week
+1992-02-02 00:00:00 America/Los_Angeles	day
+1992-02-02 02:00:00 America/Los_Angeles	hour
+1992-02-02 02:02:00 America/Los_Angeles	minute
+1992-02-02 02:02:03 America/Los_Angeles	second
+1992-02-02 02:02:03.123 America/Los_Angeles	milliseconds
+1992-02-02 02:02:03.123456 America/Los_Angeles	microseconds
 infinity	month
 
 # Test alias
@@ -88,128 +92,128 @@ query II
 SELECT datetrunc(s, d), s FROM timestamps;
 ----
 -infinity	year
-1000-01-06 07:52:58+00	millennium
-1900-01-01 08:00:00+00	century
-1990-01-01 08:00:00+00	decade
-1992-01-01 08:00:00+00	year
-1992-01-01 08:00:00+00	quarter
-1992-02-01 08:00:00+00	month
-1992-01-27 08:00:00+00	week
-1992-02-02 08:00:00+00	day
-1992-02-02 10:00:00+00	hour
-1992-02-02 10:02:00+00	minute
-1992-02-02 10:02:03+00	second
-1992-02-02 10:02:03.123+00	milliseconds
-1992-02-02 10:02:03.123456+00	microseconds
+1000-01-01 00:00:00 America/Los_Angeles	millennium
+1900-01-01 00:00:00 America/Los_Angeles	century
+1990-01-01 00:00:00 America/Los_Angeles	decade
+1992-01-01 00:00:00 America/Los_Angeles	year
+1992-01-01 00:00:00 America/Los_Angeles	quarter
+1992-02-01 00:00:00 America/Los_Angeles	month
+1992-01-27 00:00:00 America/Los_Angeles	week
+1992-02-02 00:00:00 America/Los_Angeles	day
+1992-02-02 02:00:00 America/Los_Angeles	hour
+1992-02-02 02:02:00 America/Los_Angeles	minute
+1992-02-02 02:02:03 America/Los_Angeles	second
+1992-02-02 02:02:03.123 America/Los_Angeles	milliseconds
+1992-02-02 02:02:03.123456 America/Los_Angeles	microseconds
 infinity	month
 
 # Test week operator special cases
 query T
 SELECT date_trunc('week', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2018-12-31 08:00:00+00
+2018-12-31 00:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('yearweek', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2018-12-31 08:00:00+00
+2018-12-31 00:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('week', TIMESTAMPTZ '2020-01-01 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-12-30 08:00:00+00
+2019-12-30 00:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('yearweek', TIMESTAMPTZ '2020-01-01 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-12-30 08:00:00+00
+2019-12-30 00:00:00 America/Los_Angeles
 
 # Test quarter operator more thoroughly
 query T
 SELECT date_trunc('quarter', TIMESTAMPTZ '2020-12-02 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2020-10-01 07:00:00+00
+2020-10-01 00:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('quarter', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-01-01 08:00:00+00
+2019-01-01 00:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('millennium', TIMESTAMPTZ '1996-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-1000-01-06 07:52:58+00
+1000-01-01 00:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('century', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2000-01-01 08:00:00+00
+2000-01-01 00:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('decade', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2010-01-01 08:00:00+00
+2010-01-01 00:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('year', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-01-01 08:00:00+00
+2019-01-01 00:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('day', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-01-06 08:00:00+00
+2019-01-06 00:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('hour', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-01-06 12:00:00+00
+2019-01-06 04:00:00 America/Los_Angeles
 
 query T
 SELECT date_trunc('milliseconds', TIMESTAMPTZ '2019-01-06 04:03:02.123456-08') FROM timestamps LIMIT 1;
 ----
-2019-01-06 12:03:02.123+00
+2019-01-06 04:03:02.123 America/Los_Angeles
 
 query T
 SELECT date_trunc('microseconds', TIMESTAMPTZ '2019-01-06 04:03:02.123456-08');
 ----
-2019-01-06 12:03:02.123456+00
+2019-01-06 04:03:02.123456 America/Los_Angeles
 
 # Synonym for second
 query T
 SELECT date_trunc('epoch', TIMESTAMPTZ '2019-01-06 04:03:02.5-08') FROM timestamps LIMIT 1;
 ----
-2019-01-06 12:03:02+00
+2019-01-06 04:03:02 America/Los_Angeles
 
 # ISO Years
 query II
 SELECT ts, DATE_TRUNC('isoyear', ts::TIMESTAMPTZ)
 FROM generate_series('2000-01-01 00:00:00-08'::TIMESTAMP, '2023-01-01 00:00:00-08'::TIMESTAMP, INTERVAL 1 YEAR) tbl(ts);
 ----
-2000-01-01 08:00:00	1999-01-04 08:00:00+00
-2001-01-01 08:00:00	2001-01-01 08:00:00+00
-2002-01-01 08:00:00	2001-12-31 08:00:00+00
-2003-01-01 08:00:00	2002-12-30 08:00:00+00
-2004-01-01 08:00:00	2003-12-29 08:00:00+00
-2005-01-01 08:00:00	2003-12-29 08:00:00+00
-2006-01-01 08:00:00	2005-01-03 08:00:00+00
-2007-01-01 08:00:00	2007-01-01 08:00:00+00
-2008-01-01 08:00:00	2007-12-31 08:00:00+00
-2009-01-01 08:00:00	2008-12-29 08:00:00+00
-2010-01-01 08:00:00	2008-12-29 08:00:00+00
-2011-01-01 08:00:00	2010-01-04 08:00:00+00
-2012-01-01 08:00:00	2011-01-03 08:00:00+00
-2013-01-01 08:00:00	2012-12-31 08:00:00+00
-2014-01-01 08:00:00	2013-12-30 08:00:00+00
-2015-01-01 08:00:00	2014-12-29 08:00:00+00
-2016-01-01 08:00:00	2014-12-29 08:00:00+00
-2017-01-01 08:00:00	2016-01-04 08:00:00+00
-2018-01-01 08:00:00	2018-01-01 08:00:00+00
-2019-01-01 08:00:00	2018-12-31 08:00:00+00
-2020-01-01 08:00:00	2019-12-30 08:00:00+00
-2021-01-01 08:00:00	2019-12-30 08:00:00+00
-2022-01-01 08:00:00	2021-01-04 08:00:00+00
-2023-01-01 08:00:00	2022-01-03 08:00:00+00
+2000-01-01 08:00:00	1999-01-04 00:00:00 America/Los_Angeles
+2001-01-01 08:00:00	2001-01-01 00:00:00 America/Los_Angeles
+2002-01-01 08:00:00	2001-12-31 00:00:00 America/Los_Angeles
+2003-01-01 08:00:00	2002-12-30 00:00:00 America/Los_Angeles
+2004-01-01 08:00:00	2003-12-29 00:00:00 America/Los_Angeles
+2005-01-01 08:00:00	2003-12-29 00:00:00 America/Los_Angeles
+2006-01-01 08:00:00	2005-01-03 00:00:00 America/Los_Angeles
+2007-01-01 08:00:00	2007-01-01 00:00:00 America/Los_Angeles
+2008-01-01 08:00:00	2007-12-31 00:00:00 America/Los_Angeles
+2009-01-01 08:00:00	2008-12-29 00:00:00 America/Los_Angeles
+2010-01-01 08:00:00	2008-12-29 00:00:00 America/Los_Angeles
+2011-01-01 08:00:00	2010-01-04 00:00:00 America/Los_Angeles
+2012-01-01 08:00:00	2011-01-03 00:00:00 America/Los_Angeles
+2013-01-01 08:00:00	2012-12-31 00:00:00 America/Los_Angeles
+2014-01-01 08:00:00	2013-12-30 00:00:00 America/Los_Angeles
+2015-01-01 08:00:00	2014-12-29 00:00:00 America/Los_Angeles
+2016-01-01 08:00:00	2014-12-29 00:00:00 America/Los_Angeles
+2017-01-01 08:00:00	2016-01-04 00:00:00 America/Los_Angeles
+2018-01-01 08:00:00	2018-01-01 00:00:00 America/Los_Angeles
+2019-01-01 08:00:00	2018-12-31 00:00:00 America/Los_Angeles
+2020-01-01 08:00:00	2019-12-30 00:00:00 America/Los_Angeles
+2021-01-01 08:00:00	2019-12-30 00:00:00 America/Los_Angeles
+2022-01-01 08:00:00	2021-01-04 00:00:00 America/Los_Angeles
+2023-01-01 08:00:00	2022-01-03 00:00:00 America/Los_Angeles
 
 # Unknown specifier should fail
 statement error

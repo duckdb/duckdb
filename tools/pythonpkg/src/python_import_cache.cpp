@@ -10,12 +10,28 @@ py::handle PythonImportCacheItem::operator()(void) const {
 	return object;
 }
 
+bool PythonImportCacheItem::IsInstance(py::handle object) const {
+	auto type = (*this)();
+	if (type.ptr() == nullptr) {
+		//! Type was not imported
+		return false;
+	}
+	return py::isinstance(object, type);
+}
+
 PyObject *PythonImportCacheItem::AddCache(PythonImportCache &cache, py::object object) {
 	return cache.AddCache(move(object));
 }
 
 void PythonImportCacheItem::LoadModule(const string &name, PythonImportCache &cache) {
-	object = AddCache(cache, move(py::module::import(name.c_str())));
+	try {
+		object = AddCache(cache, move(py::module::import(name.c_str())));
+	} catch (py::error_already_set &e) {
+		if (IsRequired()) {
+			throw InvalidInputException("Required module '%s' failed to import", name);
+		}
+		return;
+	}
 	LoadSubtypes(cache);
 }
 void PythonImportCacheItem::LoadAttribute(const string &name, PythonImportCache &cache, PythonImportCacheItem &source) {

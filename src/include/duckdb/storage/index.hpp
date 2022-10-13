@@ -21,6 +21,7 @@
 namespace duckdb {
 
 class ClientContext;
+class TableIOManager;
 class Transaction;
 
 struct IndexLock;
@@ -28,12 +29,14 @@ struct IndexLock;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-	      IndexConstraintType constraint_type);
+	Index(IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids,
+	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type);
 	virtual ~Index() = default;
 
 	//! The type of the index
 	IndexType type;
+	//! Associated table io manager
+	TableIOManager &table_io_manager;
 	//! Column identifiers to extract from the base table
 	vector<column_t> column_ids;
 	//! unordered_set of column_ids used by the index
@@ -82,8 +85,13 @@ public:
 	virtual bool Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
 	//! Construct an index from sorted chunks of keys.
 	virtual void ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) = 0;
+
 	//! Merge other_index into this index.
-	void MergeIndexes(Index *other_index);
+	virtual bool MergeIndexes(IndexLock &state, Index *other_index) = 0;
+	bool MergeIndexes(Index *other_index);
+
+	//! Returns the string representation of an index
+	virtual string ToString() = 0;
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(const vector<column_t> &column_ids) const;

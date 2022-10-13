@@ -41,7 +41,7 @@ private:
 
 private:
 	template <class T>
-	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx);
+	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
 
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
