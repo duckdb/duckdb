@@ -19,16 +19,19 @@ namespace duckdb {
 enum class NodeType : uint8_t { NLeaf = 0, N4 = 1, N16 = 2, N48 = 3, N256 = 4 };
 class ART;
 class Node;
+
+// Note: SwizzleablePointer assumes top 33 bits of the block_id are 0. Use a different
+// pointer implementation if that does not hold.
 class SwizzleablePointer;
+using ARTPointer = SwizzleablePointer;
 
 struct InternalType {
 	explicit InternalType(Node *n);
 
-	void Set(uint8_t *key_p, uint16_t key_size_p, SwizzleablePointer *children_p, uint16_t children_size_p);
-
+	void Set(uint8_t *key_p, uint16_t key_size_p, ARTPointer *children_p, uint16_t children_size_p);
 	uint8_t *key;
 	uint16_t key_size;
-	SwizzleablePointer *children;
+	ARTPointer *children;
 	uint16_t children_size;
 };
 
