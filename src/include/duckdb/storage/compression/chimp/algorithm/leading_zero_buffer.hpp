@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <cstring>
+#include "duckdb.h"
+#include "duckdb/common/helper.hpp"
 #ifdef DEBUG
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
 #endif
 
-namespace duckdb_chimp {
+namespace duckdb {
 
 //! This class is in charge of storing the leading_zero_bits, which are of a fixed size
 //! These are packed together so that the rest of the data can be byte-aligned
@@ -107,13 +107,13 @@ public:
 			return;
 		}
 		const auto buffer_idx = BlockIndex();
-		std::memcpy((void *)(buffer + buffer_idx), (uint8_t *)&current, 3);
+		memcpy((void *)(buffer + buffer_idx), (uint8_t *)&current, 3);
 #ifdef DEBUG
 		// Verify that the bits are copied correctly
 
 		uint32_t temp_value = 0;
-		std::memcpy((uint8_t *)&temp_value, (void *)(buffer + buffer_idx), 3);
-		for (size_t i = 0; i < flags.size(); i++) {
+		memcpy((uint8_t *)&temp_value, (void *)(buffer + buffer_idx), 3);
+		for (idx_t i = 0; i < flags.size(); i++) {
 			D_ASSERT(flags[i] == ExtractValue(temp_value, i));
 		}
 		flags.clear();
@@ -148,10 +148,10 @@ public:
 		counter++;
 		return result;
 	}
-	size_t GetCount() const {
+	idx_t GetCount() const {
 		return counter;
 	}
-	size_t BlockCount() const {
+	idx_t BlockCount() const {
 		return (counter >> 3) + ((counter & 7) != 0);
 	}
 
@@ -161,8 +161,8 @@ private:
 	uint32_t counter = 0; // block_index * 8
 	uint8_t *buffer;
 #ifdef DEBUG
-	duckdb::vector<uint8_t> flags;
+	vector<uint8_t> flags;
 #endif
 };
 
-} // namespace duckdb_chimp
+} // namespace duckdb

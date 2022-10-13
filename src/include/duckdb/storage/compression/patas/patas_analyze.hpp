@@ -15,8 +15,6 @@ namespace duckdb {
 
 struct EmptyPatasWriter;
 
-using duckdb_chimp::SignificantBits;
-
 template <class T>
 struct PatasAnalyzeState : public AnalyzeState {
 public:

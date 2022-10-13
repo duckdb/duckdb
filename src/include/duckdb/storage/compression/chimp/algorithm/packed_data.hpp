@@ -9,8 +9,9 @@
 #pragma once
 
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
+#include "duckdb.h"
 
-namespace duckdb_chimp {
+namespace duckdb {
 
 static constexpr uint8_t INDEX_BITS_SIZE = 7;
 static constexpr uint8_t LEADING_BITS_SIZE = 3;
@@ -61,8 +62,6 @@ public:
 	}
 };
 
-#include <stdint.h>
-
 template <bool EMPTY>
 struct PackedDataBuffer {
 public:
@@ -86,8 +85,8 @@ public:
 		index++;
 	}
 
-	size_t index;
+	idx_t index;
 	uint16_t *buffer;
 };
 
-} // namespace duckdb_chimp
+} // namespace duckdb

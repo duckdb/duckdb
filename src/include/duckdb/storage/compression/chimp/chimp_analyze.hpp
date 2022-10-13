@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/chimp/chimp_analyze.hpp
+// duckdb/storage/compression/chimp/chimp_analyze.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -37,7 +37,7 @@ public:
 		if (!HasEnoughSpace()) {
 			StartNewSegment();
 		}
-		duckdb_chimp::Chimp128Compression<CHIMP_TYPE, true>::Store(value, state.chimp_state);
+		Chimp128Compression<CHIMP_TYPE, true>::Store(value, state.chimp_state);
 		group_idx++;
 		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
 			StartNewGroup();

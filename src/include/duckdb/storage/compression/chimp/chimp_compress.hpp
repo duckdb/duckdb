@@ -12,6 +12,7 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/compression/chimp/chimp_analyze.hpp"
 
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
@@ -169,7 +170,7 @@ public:
 			// store this as "value_identical", only using 9 bits for a NULL
 			value = state.chimp_state.previous_value;
 		}
-		duckdb_chimp::Chimp128Compression<CHIMP_TYPE, false>::Store(value, state.chimp_state);
+		Chimp128Compression<CHIMP_TYPE, false>::Store(value, state.chimp_state);
 		group_idx++;
 		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
 			FlushGroup();
@@ -254,7 +255,7 @@ public:
 		idx_t total_segment_size = metadata_offset + metadata_size;
 #ifdef DEBUG
 		uint32_t verify_bytes;
-		std::memcpy((void *)&verify_bytes, metadata_ptr, 4);
+		memcpy((void *)&verify_bytes, metadata_ptr, 4);
 #endif
 		memmove(dataptr + metadata_offset, metadata_ptr, metadata_size);
 #ifdef DEBUG

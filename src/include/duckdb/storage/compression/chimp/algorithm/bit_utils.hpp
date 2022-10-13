@@ -8,11 +8,11 @@
 
 #pragma once
 
-namespace duckdb_chimp {
+namespace duckdb {
 
 template <typename R>
 static constexpr R bitmask(unsigned int const bits) {
 	return (((uint64_t)(bits < (sizeof(R) * 8))) << (bits & ((sizeof(R) * 8) - 1))) - 1U;
 }
 
-} // namespace duckdb_chimp
+} // namespace duckdb

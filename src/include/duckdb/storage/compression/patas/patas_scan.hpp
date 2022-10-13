@@ -24,8 +24,6 @@
 
 namespace duckdb {
 
-using duckdb_chimp::SignificantBits;
-
 //! Do not change order of these variables
 struct PatasUnpackedValueStats {
 	uint8_t significant_bytes;
@@ -47,7 +45,7 @@ public:
 	void LoadPackedData(uint16_t *packed_data, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			auto &unpacked = unpacked_data[i];
-			duckdb_chimp::PackedDataUtils<EXACT_TYPE>::Unpack(packed_data[i], (duckdb_chimp::UnpackedData &)unpacked);
+			PackedDataUtils<EXACT_TYPE>::Unpack(packed_data[i], (UnpackedData &)unpacked);
 		}
 	}
 
@@ -71,7 +69,7 @@ public:
 	EXACT_TYPE values[PatasPrimitives::PATAS_GROUP_SIZE];
 
 private:
-	duckdb_chimp::ByteReader byte_reader;
+	ByteReader byte_reader;
 };
 
 template <class T>

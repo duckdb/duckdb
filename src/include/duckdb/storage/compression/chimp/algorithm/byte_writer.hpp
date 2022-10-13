@@ -8,11 +8,10 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <cstring>
-#include <iostream>
+#include "duckdb.h"
+#include "duckdb/common/helper.hpp"
 
-namespace duckdb_chimp {
+namespace duckdb {
 
 template <bool EMPTY>
 class ByteWriter {
@@ -21,7 +20,7 @@ public:
 	}
 
 public:
-	size_t BytesWritten() const {
+	idx_t BytesWritten() const {
 		return index;
 	}
 
@@ -40,7 +39,7 @@ public:
 	void WriteValue(const T &value) {
 		const uint8_t bytes = (SIZE >> 3) + ((SIZE & 7) != 0);
 		if (!EMPTY) {
-			std::memcpy((void *)(buffer + index), &value, bytes);
+			memcpy((void *)(buffer + index), &value, bytes);
 		}
 		index += bytes;
 	}
@@ -49,7 +48,7 @@ public:
 	void WriteValue(const T &value, const uint8_t &size) {
 		const uint8_t bytes = (size >> 3) + ((size & 7) != 0);
 		if (!EMPTY) {
-			std::memcpy((void *)(buffer + index), &value, bytes);
+			memcpy((void *)(buffer + index), &value, bytes);
 		}
 		index += bytes;
 	}
@@ -57,7 +56,7 @@ public:
 private:
 private:
 	uint8_t *buffer;
-	size_t index;
+	idx_t index;
 };
 
-} // namespace duckdb_chimp
+} // namespace duckdb

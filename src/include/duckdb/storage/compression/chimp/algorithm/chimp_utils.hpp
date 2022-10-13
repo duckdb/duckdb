@@ -8,7 +8,7 @@
 
 #pragma once
 
-namespace duckdb_chimp {
+namespace duckdb {
 
 #ifdef _MSC_VER
 #define __restrict__
@@ -144,4 +144,4 @@ constexpr uint8_t ChimpCompressionConstants::LEADING_REPRESENTATION[];
 
 constexpr uint8_t ChimpDecompressionConstants::LEADING_REPRESENTATION[];
 
-} // namespace duckdb_chimp
+} // namespace duckdb

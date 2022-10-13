@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/chimp/chimp_fetch.hpp
+// duckdb/storage/compression/chimp/chimp_fetch.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -31,7 +31,7 @@ void ChimpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 	ChimpScanState<T> scan_state(segment);
 	scan_state.Skip(segment, row_id);
 	auto result_data = FlatVector::GetData<INTERNAL_TYPE>(result);
-	result_data[result_idx] = duckdb_chimp::Chimp128Decompression<INTERNAL_TYPE>::Load(
+	result_data[result_idx] = Chimp128Decompression<INTERNAL_TYPE>::Load(
 	    scan_state.group_state.GetFlag(), scan_state.group_state.leading_zeros,
 	    scan_state.group_state.leading_zero_index, scan_state.group_state.unpacked_data_blocks,
 	    scan_state.group_state.unpacked_index, scan_state.chimp_state);

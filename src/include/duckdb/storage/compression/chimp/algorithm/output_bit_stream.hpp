@@ -8,13 +8,12 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
+#include "duckdb.h"
 #include "duckdb/common/assert.hpp"
 
 #include "duckdb/storage/compression/chimp/algorithm/bit_utils.hpp"
 
-namespace duckdb_chimp {
+namespace duckdb {
 
 // This class writes arbitrary amounts of bits to a stream
 // The way these bits are written is most-significant bit first
@@ -34,11 +33,11 @@ public:
 public:
 	static constexpr uint8_t INTERNAL_TYPE_BITSIZE = sizeof(INTERNAL_TYPE) * 8;
 
-	size_t BytesWritten() const {
+	idx_t BytesWritten() const {
 		return (bits_written >> 3) + ((bits_written & 7) != 0);
 	}
 
-	size_t BitsWritten() const {
+	idx_t BitsWritten() const {
 		return bits_written;
 	}
 
@@ -62,30 +61,38 @@ public:
 		return (uint64_t *)stream;
 	}
 
-	size_t BitSize() const {
+	idx_t BitSize() const {
 		return (stream_index * INTERNAL_TYPE_BITSIZE) + (INTERNAL_TYPE_BITSIZE - free_bits);
 	}
 
 	template <class T>
 	void WriteRemainder(T value, uint8_t i) {
 		if (sizeof(T) * 8 > 32) {
-			if (i == 64)
+			if (i == 64) {
 				WriteToStream(((uint64_t)value >> 56) & 0xFF);
-			if (i > 55)
+			}
+			if (i > 55) {
 				WriteToStream(((uint64_t)value >> 48) & 0xFF);
-			if (i > 47)
+			}
+			if (i > 47) {
 				WriteToStream(((uint64_t)value >> 40) & 0xFF);
-			if (i > 39)
+			}
+			if (i > 39) {
 				WriteToStream(((uint64_t)value >> 32) & 0xFF);
+			}
 		}
-		if (i > 31)
+		if (i > 31) {
 			WriteToStream((value >> 24) & 0xFF);
-		if (i > 23)
+		}
+		if (i > 23) {
 			WriteToStream((value >> 16) & 0xFF);
-		if (i > 15)
+		}
+		if (i > 15) {
 			WriteToStream((value >> 8) & 0xFF);
-		if (i > 7)
+		}
+		if (i > 7) {
 			WriteToStream(value);
+		}
 	}
 
 	template <class T, uint8_t VALUE_SIZE>
@@ -201,9 +208,9 @@ private:
 
 	INTERNAL_TYPE current; //! The current value we're writing into (zero-initialized)
 	uint8_t free_bits;     //! How many bits are still unwritten in 'current'
-	size_t stream_index;   //! Index used to keep track of which index we're at in the stream
+	idx_t stream_index;    //! Index used to keep track of which index we're at in the stream
 
-	size_t bits_written; //! The total amount of bits written to this stream
+	idx_t bits_written; //! The total amount of bits written to this stream
 };
 
-} // namespace duckdb_chimp
+} // namespace duckdb

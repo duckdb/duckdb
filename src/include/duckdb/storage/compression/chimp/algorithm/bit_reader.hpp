@@ -8,13 +8,9 @@
 
 #pragma once
 
-#include <stdint.h>
-#include "duckdb/storage/compression/chimp/algorithm/bit_utils.hpp"
-#include <assert.h>
-#include <exception>
-#include <stdexcept>
+#include "duckdb.h"
 
-namespace duckdb_chimp {
+namespace duckdb {
 
 //! Every byte read touches at most 2 bytes (1 if it's perfectly aligned)
 //! Within a byte we need to mask off the bits that we're interested in
@@ -171,4 +167,4 @@ public:
 	}
 };
 
-} // namespace duckdb_chimp
+} // namespace duckdb

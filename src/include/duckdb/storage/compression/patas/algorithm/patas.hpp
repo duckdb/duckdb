@@ -20,12 +20,6 @@ namespace duckdb {
 
 namespace patas {
 
-using duckdb_chimp::BUFFER_SIZE;
-using duckdb_chimp::ByteReader;
-using duckdb_chimp::ByteWriter;
-using duckdb_chimp::CountZeros;
-using duckdb_chimp::RingBuffer;
-
 template <class EXACT_TYPE, bool EMPTY>
 class PatasCompressionState {
 public:
@@ -50,15 +44,14 @@ public:
 public:
 	void UpdateMetadata(uint8_t trailing_zero, uint8_t byte_count, uint8_t index_diff) {
 		if (!EMPTY) {
-			packed_data_buffer.Insert(
-			    duckdb_chimp::PackedDataUtils<EXACT_TYPE>::Pack(index_diff, byte_count, trailing_zero));
+			packed_data_buffer.Insert(PackedDataUtils<EXACT_TYPE>::Pack(index_diff, byte_count, trailing_zero));
 		}
 		index++;
 	}
 
 public:
 	ByteWriter<EMPTY> byte_writer;
-	duckdb_chimp::PackedDataBuffer<EMPTY> packed_data_buffer;
+	PackedDataBuffer<EMPTY> packed_data_buffer;
 	idx_t index;
 	RingBuffer<EXACT_TYPE> ring_buffer;
 	bool first;
