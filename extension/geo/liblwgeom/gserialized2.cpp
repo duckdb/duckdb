@@ -5,6 +5,19 @@
 
 namespace duckdb {
 
+static inline void gserialized2_copy_point(double *dptr, lwflags_t flags, POINT4D *out_point) {
+	uint8_t dim = 0;
+	out_point->x = dptr[dim++];
+	out_point->y = dptr[dim++];
+
+	if (G2FLAGS_GET_Z(flags)) {
+		out_point->z = dptr[dim++];
+	}
+	if (G2FLAGS_GET_M(flags)) {
+		out_point->m = dptr[dim];
+	}
+}
+
 static size_t gserialized2_from_lwgeom_any(const LWGEOM *geom, uint8_t *buf);
 
 /* handle missaligned uint32_t data */
@@ -149,6 +162,39 @@ static size_t gserialized2_from_gbox(const GBOX *gbox, uint8_t *buf) {
 	}
 	return_size = (size_t)(loc - buf);
 	return return_size;
+}
+
+static size_t gserialized2_is_empty_recurse(const uint8_t *p, int *isempty) {
+	// int i;
+	int32_t type, num;
+
+	memcpy(&type, p, 4);
+	memcpy(&num, p + 4, 4);
+
+	// if (lwtype_is_collection(type))
+	// {
+	// 	size_t lz = 8;
+	// 	for ( i = 0; i < num; i++ )
+	// 	{
+	// 		lz += gserialized2_is_empty_recurse(p+lz, isempty);
+	// 		if (!*isempty)
+	// 			return lz;
+	// 	}
+	// 	*isempty = LW_TRUE;
+	// 	return lz;
+	// }
+	// else
+	{
+		*isempty = (num == 0 ? LW_TRUE : LW_FALSE);
+		return 8;
+	}
+}
+
+int gserialized2_is_empty(const GSERIALIZED *g) {
+	int isempty = 0;
+	uint8_t *p = gserialized2_get_geometry_p(g);
+	gserialized2_is_empty_recurse(p, &isempty);
+	return isempty;
 }
 
 int gserialized2_has_bbox(const GSERIALIZED *g) {
@@ -448,6 +494,32 @@ const float *gserialized2_get_float_box_p(const GSERIALIZED *g, size_t *ndims) {
 		ptr += 8;
 
 	return (const float *)(ptr);
+}
+
+int gserialized2_peek_first_point(const GSERIALIZED *g, POINT4D *out_point) {
+	uint8_t *geometry_start = gserialized2_get_geometry_p(g);
+
+	uint32_t isEmpty = (((uint32_t *)geometry_start)[1]) == 0;
+	if (isEmpty) {
+		return LW_FAILURE;
+	}
+
+	uint32_t type = (((uint32_t *)geometry_start)[0]);
+	/* Setup double_array_start depending on the geometry type */
+	double *double_array_start = NULL;
+	switch (type) {
+	case (POINTTYPE):
+		/* For points we only need to jump over the type and npoints 32b ints */
+		double_array_start = (double *)(geometry_start + 2 * sizeof(uint32_t));
+		break;
+
+	default:
+		// lwerror("%s is currently not implemented for type %d", __func__, type);
+		return LW_FAILURE;
+	}
+
+	gserialized2_copy_point(double_array_start, g->gflags, out_point);
+	return LW_SUCCESS;
 }
 
 } // namespace duckdb

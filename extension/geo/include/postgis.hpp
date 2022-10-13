@@ -22,5 +22,13 @@ public:
 	string LWGEOM_asBinary(const void *data, size_t size);
 	string LWGEOM_asGeoJson(const void *data, size_t size);
 	void LWGEOM_free(GSERIALIZED *gser);
+
+	GSERIALIZED *LWGEOM_makepoint(double x, double y);
+	GSERIALIZED *LWGEOM_makepoint(double x, double y, double z);
+	double ST_distance(GSERIALIZED *geom1, GSERIALIZED *geom2);
+	double geography_distance(GSERIALIZED *geom1, GSERIALIZED *geom2, bool use_spheroid);
+	GSERIALIZED *LWGEOM_from_text(char *text, int srid = 0);
+	GSERIALIZED *LWGEOM_from_WKB(const char *bytea_wkb, size_t byte_size, int srid = 0);
+	double LWGEOM_x_point(const void *data, size_t size);
 };
 } // namespace duckdb

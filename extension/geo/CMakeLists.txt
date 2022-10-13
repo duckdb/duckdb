@@ -14,6 +14,9 @@ set(GEO_EXTENSION_FILES
     postgis.cpp
     geometry.cpp
     postgis/lwgeom_inout.cpp
+    postgis/lwgeom_functions_basic.cpp
+    postgis/geography_measurement.cpp
+    postgis/lwgeom_ogc.cpp
     liblwgeom/lwin_wkt.cpp
     liblwgeom/lwin_wkb.cpp
     liblwgeom/lwutil.cpp
@@ -33,9 +36,13 @@ set(GEO_EXTENSION_FILES
     liblwgeom/lwprint.cpp
     liblwgeom/lwin_geojson.cpp
     liblwgeom/lwout_geojson.cpp
+    liblwgeom/measures.cpp
+    liblwgeom/lwgeodetic_tree.cpp
+    liblwgeom/lwspheroid.cpp
     parser/lwin_wkt_lex.cpp
     parser/lwin_wkt_parse.cpp
     libpgcommon/lwgeom_pg.cpp
+    libpgcommon/lwgeom_transform.cpp
     lib/ryu.cpp)
 
 add_library(geo_extension STATIC ${GEO_EXTENSION_FILES})

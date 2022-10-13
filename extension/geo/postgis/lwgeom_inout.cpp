@@ -96,6 +96,14 @@ GSERIALIZED *LWGEOM_in(char *input) {
 	return ret;
 }
 
+GSERIALIZED *LWGEOM_getGserialized(const void *base, size_t size) {
+	GSERIALIZED *ret;
+	LWGEOM *lwgeom = lwgeom_from_wkb(static_cast<const uint8_t *>(base), size, LW_PARSER_CHECK_NONE);
+	ret = geometry_serialize(lwgeom);
+	lwgeom_free(lwgeom);
+	return ret;
+}
+
 size_t LWGEOM_size(GSERIALIZED *gser) {
 	LWGEOM *lwgeom = lwgeom_from_gserialized(gser);
 	if (lwgeom == NULL) {

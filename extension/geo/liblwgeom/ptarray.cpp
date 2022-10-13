@@ -168,4 +168,8 @@ POINTARRAY *ptarray_force_dims(const POINTARRAY *pa, int hasz, int hasm, double 
 	return pa_out;
 }
 
+int ptarray_startpoint(const POINTARRAY *pa, POINT4D *pt) {
+	return getPoint4d_p(pa, 0, pt);
+}
+
 } // namespace duckdb

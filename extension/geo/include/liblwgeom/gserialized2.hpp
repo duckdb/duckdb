@@ -87,6 +87,14 @@ LWGEOM *lwgeom_from_gserialized2(const GSERIALIZED *g);
 void gserialized2_set_srid(GSERIALIZED *g, int32_t srid);
 
 /**
+ * Check if a #GSERIALIZED is empty without deserializing first.
+ * Only checks if the number of elements of the parent geometry
+ * is zero, will not catch collections of empty, eg:
+ * GEOMETRYCOLLECTION(POINT EMPTY)
+ */
+int gserialized2_is_empty(const GSERIALIZED *g);
+
+/**
  * Check if a #GSERIALIZED has a bounding box without deserializing first.
  */
 int gserialized2_has_bbox(const GSERIALIZED *gser);
@@ -105,5 +113,7 @@ const float *gserialized2_get_float_box_p(const GSERIALIZED *g, size_t *ndims);
  * Return the memory size a GSERIALIZED will occupy for a given LWGEOM.
  */
 size_t gserialized2_from_lwgeom_size(const LWGEOM *geom);
+
+int gserialized2_peek_first_point(const GSERIALIZED *g, POINT4D *out_point);
 
 } // namespace duckdb

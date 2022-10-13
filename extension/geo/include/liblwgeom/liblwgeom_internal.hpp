@@ -112,6 +112,8 @@ int lw_segment_side(const POINT2D *p1, const POINT2D *p2, const POINT2D *q);
  */
 LWGEOM *lwgeom_force_dims(const LWGEOM *lwgeom, int hasz, int hasm, double zval, double mval);
 LWPOINT *lwpoint_force_dims(const LWPOINT *lwpoint, int hasz, int hasm, double zval, double mval);
-POINTARRAY* ptarray_force_dims(const POINTARRAY *pa, int hasz, int hasm, double zval, double mval);
+POINTARRAY *ptarray_force_dims(const POINTARRAY *pa, int hasz, int hasm, double zval, double mval);
+
+int ptarray_startpoint(const POINTARRAY *pa, POINT4D *pt);
 
 } // namespace duckdb

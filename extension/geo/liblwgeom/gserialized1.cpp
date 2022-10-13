@@ -5,6 +5,19 @@
 
 namespace duckdb {
 
+static inline void gserialized1_copy_point(double *dptr, lwflags_t flags, POINT4D *out_point) {
+	uint8_t dim = 0;
+	out_point->x = dptr[dim++];
+	out_point->y = dptr[dim++];
+
+	if (G1FLAGS_GET_Z(flags)) {
+		out_point->z = dptr[dim++];
+	}
+	if (G1FLAGS_GET_M(flags)) {
+		out_point->m = dptr[dim];
+	}
+}
+
 lwflags_t gserialized1_get_lwflags(const GSERIALIZED *g) {
 	lwflags_t lwflags = 0;
 	uint8_t gflags = g->gflags;
@@ -84,6 +97,59 @@ int32_t gserialized1_get_srid(const GSERIALIZED *s) {
 		return SRID_UNKNOWN;
 	else
 		return srid;
+}
+
+void gserialized1_set_srid(GSERIALIZED *s, int32_t srid) {
+	srid = clamp_srid(srid);
+
+	/* 0 is our internal unknown value.
+	 * We'll map back and forth here for now */
+	if (srid == SRID_UNKNOWN)
+		srid = 0;
+
+	s->srid[0] = (srid & 0x001F0000) >> 16;
+	s->srid[1] = (srid & 0x0000FF00) >> 8;
+	s->srid[2] = (srid & 0x000000FF);
+}
+
+static size_t gserialized1_is_empty_recurse(const uint8_t *p, int *isempty) {
+	// int i;
+	int32_t type, num;
+
+	memcpy(&type, p, 4);
+	memcpy(&num, p + 4, 4);
+
+	// Need to do with postgis
+	// if ( lwtype_is_collection(type) )
+	// {
+	// 	size_t lz = 8;
+	// 	for ( i = 0; i < num; i++ )
+	// 	{
+	// 		lz += gserialized1_is_empty_recurse(p+lz, isempty);
+	// 		if ( ! *isempty )
+	// 			return lz;
+	// 	}
+	// 	*isempty = LW_TRUE;
+	// 	return lz;
+	// }
+	// else
+	{
+		*isempty = (num == 0 ? LW_TRUE : LW_FALSE);
+		return 8;
+	}
+}
+
+int gserialized1_is_empty(const GSERIALIZED *g) {
+	uint8_t *p = (uint8_t *)g;
+	int isempty = 0;
+	assert(g);
+
+	p += 8; /* Skip varhdr and srid/flags */
+	if (gserialized1_has_bbox(g))
+		p += gserialized1_box_size(g); /* Skip the box */
+
+	gserialized1_is_empty_recurse(p, &isempty);
+	return isempty;
 }
 
 uint32_t gserialized1_get_type(const GSERIALIZED *g) {
@@ -183,4 +249,34 @@ LWGEOM *lwgeom_from_gserialized1(const GSERIALIZED *g) {
 
 	return lwgeom;
 }
+
+int gserialized1_peek_first_point(const GSERIALIZED *g, POINT4D *out_point) {
+	uint8_t *geometry_start = ((uint8_t *)g->data);
+	if (gserialized1_has_bbox(g)) {
+		geometry_start += gserialized1_box_size(g);
+	}
+
+	uint32_t isEmpty = (((uint32_t *)geometry_start)[1]) == 0;
+	if (isEmpty) {
+		return LW_FAILURE;
+	}
+
+	uint32_t type = (((uint32_t *)geometry_start)[0]);
+	/* Setup double_array_start depending on the geometry type */
+	double *double_array_start = NULL;
+	switch (type) {
+	case (POINTTYPE):
+		/* For points we only need to jump over the type and npoints 32b ints */
+		double_array_start = (double *)(geometry_start + 2 * sizeof(uint32_t));
+		break;
+
+	default:
+		// lwerror("%s is currently not implemented for type %d", __func__, type);
+		return LW_FAILURE;
+	}
+
+	gserialized1_copy_point(double_array_start, g->gflags, out_point);
+	return LW_SUCCESS;
+}
+
 } // namespace duckdb

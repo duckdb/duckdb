@@ -109,4 +109,18 @@ int lwgeom_calculate_gbox(const LWGEOM *lwgeom, GBOX *gbox) {
 		return lwgeom_calculate_gbox_cartesian(lwgeom, gbox);
 }
 
+int lwgeom_startpoint(const LWGEOM *lwgeom, POINT4D *pt) {
+	if (!lwgeom)
+		return LW_FAILURE;
+
+	switch (lwgeom->type) {
+	case POINTTYPE:
+		return ptarray_startpoint(((LWPOINT *)lwgeom)->point, pt);
+	// Need to do with postgis
+	default:
+		lwerror("lwgeom_startpoint: unsupported geometry type: %s", lwtype_name(lwgeom->type));
+		return LW_FAILURE;
+	}
+}
+
 } // namespace duckdb

@@ -39,5 +39,27 @@ public:
 	static idx_t GetGeometrySize(GSERIALIZED *gser);
 
 	static void DestroyGeometry(GSERIALIZED *gser);
+
+	static data_ptr_t GetBase(GSERIALIZED *gser);
+
+	static GSERIALIZED *MakePoint(double x, double y);
+
+	static GSERIALIZED *MakePoint(double x, double y, double z);
+
+	static std::string AsText(data_ptr_t base, size_t size);
+
+	static double Distance(GSERIALIZED *g1, GSERIALIZED *g2);
+
+	static double Distance(GSERIALIZED *g1, GSERIALIZED *g2, bool use_spheroid);
+
+	static GSERIALIZED *FromText(char *text);
+
+	static GSERIALIZED *FromText(char *text, int srid);
+
+	static GSERIALIZED *FromWKB(const char *text, size_t byte_size);
+
+	static GSERIALIZED *FromWKB(const char *text, size_t byte_size, int srid);
+
+	static double XPoint(const void *data, size_t size);
 };
 } // namespace duckdb

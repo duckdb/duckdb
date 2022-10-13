@@ -183,6 +183,20 @@ typedef struct pg_varlena bytea;
  */
 extern int32_t clamp_srid(int32_t srid);
 
+/**********************************************************************
+** Spherical radius.
+** Moritz, H. (1980). Geodetic Reference System 1980, by resolution of
+** the XVII General Assembly of the IUGG in Canberra.
+** http://en.wikipedia.org/wiki/Earth_radius
+** http://en.wikipedia.org/wiki/World_Geodetic_System
+*/
+
+#define WGS84_MAJOR_AXIS         6378137.0
+#define WGS84_INVERSE_FLATTENING 298.257223563
+#define WGS84_MINOR_AXIS         (WGS84_MAJOR_AXIS - WGS84_MAJOR_AXIS / WGS84_INVERSE_FLATTENING)
+#define WGS84_RADIUS             ((2.0 * WGS84_MAJOR_AXIS + WGS84_MINOR_AXIS) / 3.0)
+#define WGS84_SRID               4326
+
 /******************************************************************
  * LWGEOM and GBOX both use LWFLAGS bit mask.
  * Serializations (may) use different bit mask schemes.
@@ -402,6 +416,10 @@ extern LWGEOM *lwgeom_force_2d(const LWGEOM *geom);
 extern float next_float_down(double d);
 extern float next_float_up(double d);
 
+/* general utilities 2D */
+extern double lwgeom_mindistance2d(const LWGEOM *lw1, const LWGEOM *lw2);
+extern double lwgeom_mindistance2d_tolerance(const LWGEOM *lw1, const LWGEOM *lw2, double tolerance);
+
 /*
  * Geometry constructors. These constructors to not copy the point arrays
  * passed to them, they just take references, so do not free them out
@@ -448,6 +466,10 @@ extern int getPoint4d_p(const POINTARRAY *pa, uint32_t n, POINT4D *point);
 extern LWGEOM *lwgeom_construct_empty(uint8_t type, int32_t srid, char hasz, char hasm);
 extern LWPOINT *lwpoint_construct_empty(int32_t srid, char hasz, char hasm);
 
+/* Other constructors */
+extern LWPOINT *lwpoint_make2d(int32_t srid, double x, double y);
+extern LWPOINT *lwpoint_make3dz(int32_t srid, double x, double y, double z);
+
 /**
  * Create an LWGEOM object from a GeoJSON representation
  *
@@ -458,6 +480,11 @@ extern LWPOINT *lwpoint_construct_empty(int32_t srid, char hasz, char hasm);
  *            If not null, the pointer must be freed with lwfree.
  */
 extern LWGEOM *lwgeom_from_geojson(const char *geojson, char **srs);
+
+/**
+ * Initialize a spheroid object for use in geodetic functions.
+ */
+extern void spheroid_init(SPHEROID *s, double a, double b);
 
 /**
  * Global functions for memory/logging handlers.
@@ -568,6 +595,12 @@ extern int lwgeom_parse_wkt(LWGEOM_PARSER_RESULT *parser_result, char *wktstr, i
 void lwgeom_parser_result_init(LWGEOM_PARSER_RESULT *parser_result);
 void lwgeom_parser_result_free(LWGEOM_PARSER_RESULT *parser_result);
 
+/**
+ * Return the type name string associated with a type number
+ * (e.g. Point, LineString, Polygon)
+ */
+extern const char *lwtype_name(uint8_t type);
+
 /*
 ** New parsing and unparsing functions.
 */
@@ -664,6 +697,17 @@ extern void gbox_duplicate(const GBOX *original, GBOX *duplicate);
 extern size_t gbox_serialized_size(lwflags_t flags);
 
 /**
+ * Extract the geometry type from the serialized form (it hides in
+ * the anonymous data area, so this is a handy function).
+ */
+extern uint32_t gserialized_get_type(const GSERIALIZED *g);
+
+/**
+ * Pull the first point values of a #GSERIALIZED. Only works for POINTTYPE
+ */
+extern int gserialized_peek_first_point(const GSERIALIZED *g, POINT4D *out_point);
+
+/**
  * @param geom geometry to convert to WKB
  * @param variant output format to use
  *                (WKB_ISO, WKB_SFSQL, WKB_EXTENDED, WKB_NDR, WKB_XDR)
@@ -679,6 +723,8 @@ extern void lwfree(void *mem);
 void lwerror(const char *fmt, ...);
 
 extern lwvarlena_t *lwgeom_to_geojson(const LWGEOM *geo, const char *srs, int precision, int has_bbox);
+
+extern int lwgeom_startpoint(const LWGEOM *lwgeom, POINT4D *pt);
 
 #endif /* !defined _LIBLWGEOM_H  */
 

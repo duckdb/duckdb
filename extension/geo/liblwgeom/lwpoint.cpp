@@ -14,6 +14,23 @@ LWPOINT *lwpoint_construct_empty(int32_t srid, char hasz, char hasm) {
 	return result;
 }
 
+LWPOINT *lwpoint_make2d(int32_t srid, double x, double y) {
+	POINT4D p = {x, y, 0.0, 0.0};
+	POINTARRAY *pa = ptarray_construct_empty(0, 0, 1);
+
+	ptarray_append_point(pa, &p, LW_TRUE);
+	return lwpoint_construct(srid, NULL, pa);
+}
+
+LWPOINT *lwpoint_make3dz(int32_t srid, double x, double y, double z) {
+	POINT4D p = {x, y, z, 0.0};
+	POINTARRAY *pa = ptarray_construct_empty(1, 0, 1);
+
+	ptarray_append_point(pa, &p, LW_TRUE);
+
+	return lwpoint_construct(srid, NULL, pa);
+}
+
 /*
  * Construct a new point.  point will not be copied
  * use SRID=SRID_UNKNOWN for unknown SRID (will have 8bit type's S = 0)

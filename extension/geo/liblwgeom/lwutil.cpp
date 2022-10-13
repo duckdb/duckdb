@@ -1,6 +1,24 @@
 #include "liblwgeom/liblwgeom.hpp"
 
 namespace duckdb {
+
+static std::string lwgeomTypeName[] = {"Unknown",        "Point",
+                                 "LineString",     "Polygon",
+                                 "MultiPoint",     "MultiLineString",
+                                 "MultiPolygon",   "GeometryCollection",
+                                 "CircularString", "CompoundCurve",
+                                 "CurvePolygon",   "MultiCurve",
+                                 "MultiSurface",   "PolyhedralSurface",
+                                 "Triangle",       "Tin"};
+
+const char *lwtype_name(uint8_t type) {
+	if (type > 15) {
+		/* assert(0); */
+		return "Invalid type";
+	}
+	return lwgeomTypeName[(int)type].c_str();
+}
+
 /* Default allocators */
 static void *default_allocator(size_t size);
 static void default_freeor(void *mem);
@@ -72,6 +90,13 @@ lwflags_t lwflags(int hasz, int hasm, int geodetic) {
 	if (geodetic)
 		FLAGS_SET_GEODETIC(flags, 1);
 	return flags;
+}
+
+void lwerror(const char *fmt, ...) {
+	va_list ap;
+	char buffer[100];
+	sprintf(buffer, fmt, ap);
+	throw std::runtime_error(buffer);
 }
 
 } // namespace duckdb

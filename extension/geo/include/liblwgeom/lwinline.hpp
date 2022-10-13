@@ -80,4 +80,13 @@ static inline int lwgeom_is_empty(const LWGEOM *geom) {
 	}
 }
 
+/**
+ * Return LWTYPE number
+ */
+static inline uint32_t lwgeom_get_type(const LWGEOM *geom) {
+	if (!geom)
+		return 0;
+	return geom->type;
+}
+
 } // namespace duckdb

@@ -54,6 +54,20 @@ int gserialized1_has_bbox(const GSERIALIZED *gser);
 int32_t gserialized1_get_srid(const GSERIALIZED *g);
 
 /**
+ * Write the SRID into the serialized form (it is packed into
+ * three bytes so this is a handy function).
+ */
+void gserialized1_set_srid(GSERIALIZED *g, int32_t srid);
+
+/**
+ * Check if a #GSERIALIZED is empty without deserializing first.
+ * Only checks if the number of elements of the parent geometry
+ * is zero, will not catch collections of empty, eg:
+ * GEOMETRYCOLLECTION(POINT EMPTY)
+ */
+int gserialized1_is_empty(const GSERIALIZED *g);
+
+/**
  * Extract the geometry type from the serialized form (it hides in
  * the anonymous data area, so this is a handy function).
  */
@@ -64,5 +78,7 @@ uint32_t gserialized1_get_type(const GSERIALIZED *g);
  * that are double aligned and suitable for direct reading using getPoint2d_p_ro
  */
 LWGEOM *lwgeom_from_gserialized1(const GSERIALIZED *g);
+
+int gserialized1_peek_first_point(const GSERIALIZED *g, POINT4D *out_point);
 
 } // namespace duckdb
