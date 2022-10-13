@@ -62,9 +62,7 @@ public:
 	// }
 
 	void LoadPackedData(uint16_t *packed_data, idx_t count) {
-		// printf("UNPACK\n");
 		for (idx_t i = 0; i < count; i++) {
-			// printf("[%llu]", i);
 			auto &unpacked = unpacked_data[i];
 			duckdb_chimp::PackedDataUtils<EXACT_TYPE>::Unpack(packed_data[i], (duckdb_chimp::UnpackedData &)unpacked);
 		}

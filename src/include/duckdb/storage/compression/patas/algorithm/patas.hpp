@@ -50,7 +50,6 @@ public:
 public:
 	void UpdateMetadata(uint8_t trailing_zero, uint8_t byte_count, uint8_t index_diff) {
 		if (!EMPTY) {
-			// printf("[%llu]", index);
 			packed_data_buffer.Insert(
 			    duckdb_chimp::PackedDataUtils<EXACT_TYPE>::Pack(index_diff, byte_count, trailing_zero));
 		}
@@ -118,10 +117,6 @@ struct PatasCompression {
 		state.ring_buffer.Insert(value);
 		const uint8_t index_difference = state.ring_buffer.Size() - reference_index;
 		state.UpdateMetadata(trailing_zero, significant_bytes, index_difference);
-		// if (!EMPTY) {
-		//	printf("COMPRESS: byte_count: %u | trailing_zero: %u\n", (uint32_t)significant_bytes,
-		//	       (uint32_t)trailing_zero);
-		// }
 	}
 };
 

@@ -156,7 +156,6 @@ public:
 		metadata_ptr = handle.Ptr() + Storage::BLOCK_SIZE;
 		state.AssignDataBuffer(segment_data);
 		state.patas_state.Reset();
-		// printf("PACK\n");
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {

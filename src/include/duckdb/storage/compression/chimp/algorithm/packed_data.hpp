@@ -38,22 +38,14 @@ public:
 		dest.index = packed_data >> INDEX_SHIFT_AMOUNT & INDEX_MASK;
 		dest.leading_zero = packed_data >> LEADING_SHIFT_AMOUNT & LEADING_MASK;
 		dest.significant_bits = packed_data & SignificantBits<CHIMP_TYPE>::mask;
-		// if (dest.significant_bits == 0) {
-		//	dest.significant_bits = 64;
-		// }
-		// printf("UNPACK: index: %u | leading_zero: %u | significant_bits: %u\n", (uint32_t)dest.index,
-		//   (uint32_t)dest.leading_zero, (uint32_t)dest.significant_bits);
 		//  Verify that combined, this is not bigger than the full size of the type
 		D_ASSERT(dest.significant_bits + dest.leading_zero <= (sizeof(CHIMP_TYPE) * 8));
 	}
 	static inline uint16_t Pack(uint8_t index, uint8_t leading_zero, uint8_t significant_bits) {
 		static constexpr uint8_t BIT_SIZE = (sizeof(CHIMP_TYPE) * 8);
 
-		// printf("PACK: index: %u | leading_zero: %u | significant_bits: %u\n", (uint32_t)index,
-		// (uint32_t)leading_zero,
-		//        (uint32_t)significant_bits);
-		//   Verify that combined (with significant bits set to full size of the type if it's 0), this is not bigger
-		//   than the full size of the type;
+		// Verify that combined (with significant bits set to full size of the type if it's 0), this is not bigger
+		// than the full size of the type;
 		D_ASSERT(leading_zero + ((!significant_bits) * (sizeof(CHIMP_TYPE) * 8)) + significant_bits <=
 		         (sizeof(CHIMP_TYPE) * 8));
 		uint16_t result = 0;
