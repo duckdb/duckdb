@@ -349,14 +349,14 @@ int Comparators::TemplatedCompareListLoop(data_ptr_t &left_ptr, data_ptr_t &righ
 
 void Comparators::UnswizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data_ptr += sizeof(uint32_t) + string_t::PREFIX_LENGTH;
+		data_ptr += string_t::HEADER_SIZE;
 	}
 	Store<data_ptr_t>(heap_ptr + Load<idx_t>(data_ptr), data_ptr);
 }
 
 void Comparators::SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data_ptr += sizeof(uint32_t) + string_t::PREFIX_LENGTH;
+		data_ptr += string_t::HEADER_SIZE;
 	}
 	Store<idx_t>(Load<data_ptr_t>(data_ptr) - heap_ptr, data_ptr);
 }

@@ -15,7 +15,7 @@ namespace duckdb {
 class Node256 : public Node {
 public:
 	explicit Node256();
-	SwizzleablePointer children[256];
+	ARTPointer children[256];
 
 public:
 	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists
@@ -37,7 +37,7 @@ public:
 	//! Erase the child at pos and (if necessary) shrink to Node48
 	static void EraseChild(Node *&node, int pos, ART &art);
 	//! Merge Node256 into l_node
-	static void Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos);
+	static bool Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos);
 	//! Returns the size (maximum capacity) of the Node256
 	static idx_t GetSize();
 };

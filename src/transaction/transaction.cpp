@@ -18,6 +18,13 @@
 
 namespace duckdb {
 
+TransactionData::TransactionData(Transaction &transaction_p) // NOLINT
+    : transaction(&transaction_p), transaction_id(transaction_p.transaction_id), start_time(transaction_p.start_time) {
+}
+TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t start_time_p)
+    : transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
+}
+
 Transaction::Transaction(weak_ptr<ClientContext> context_p, transaction_t start_time, transaction_t transaction_id,
                          timestamp_t start_timestamp, idx_t catalog_version)
     : context(move(context_p)), start_time(start_time), transaction_id(transaction_id), commit_id(0),
@@ -97,7 +104,7 @@ string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool c
 	LocalStorage::CommitState commit_state;
 	auto storage_commit_state = storage_manager.GenStorageCommitState(*this, checkpoint);
 	try {
-		storage.Commit(commit_state, *this, log, commit_id);
+		storage.Commit(commit_state, *this);
 		undo_buffer.Commit(iterator_state, log, commit_id);
 		if (log) {
 			// commit any sequences that were used to the WAL

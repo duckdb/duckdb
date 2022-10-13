@@ -717,6 +717,11 @@ void S3FileSystem::Verify() {
 		throw std::runtime_error("test3 fail");
 	}
 
+	// bug #4082
+	S3AuthParams auth_params4 = {
+	    "auto", "asdf", "asdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdf", "", "", "", true};
+	create_s3_header("/", "", "exampple.com", "s3", "GET", auth_params4);
+
 	if (UrlEncode("/category=Books/") != "/category%3DBooks/") {
 		throw std::runtime_error("test fail");
 	}

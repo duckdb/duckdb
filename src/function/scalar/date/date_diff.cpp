@@ -50,7 +50,7 @@ struct DateDiff {
 	struct DayOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::EpochDays(enddate) - Date::EpochDays(startdate);
+			return TR(Date::EpochDays(enddate)) - TR(Date::EpochDays(startdate));
 		}
 	};
 
@@ -106,16 +106,15 @@ struct DateDiff {
 	struct MicrosecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::EpochNanoseconds(enddate) / Interval::NANOS_PER_MICRO -
-			       Date::EpochNanoseconds(startdate) / Interval::NANOS_PER_MICRO;
+			return Date::EpochMicroseconds(enddate) - Date::EpochMicroseconds(startdate);
 		}
 	};
 
 	struct MillisecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::EpochNanoseconds(enddate) / Interval::NANOS_PER_MSEC -
-			       Date::EpochNanoseconds(startdate) / Interval::NANOS_PER_MSEC;
+			return Date::EpochMicroseconds(enddate) / Interval::MICROS_PER_MSEC -
+			       Date::EpochMicroseconds(startdate) / Interval::MICROS_PER_MSEC;
 		}
 	};
 

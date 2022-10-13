@@ -91,7 +91,7 @@ void Iterator::FindMinimum(Node &node) {
 	}
 	case NodeType::N256: {
 		auto &n256 = (Node256 &)node;
-		while (!n256.children[pos].pointer) {
+		while (!n256.children[pos]) {
 			pos++;
 		}
 		cur_key.Push(pos);
@@ -120,16 +120,16 @@ void Iterator::PushKey(Node *cur_node, uint16_t pos) {
 	}
 }
 
-bool Iterator::Scan(Key *bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive) {
+bool Iterator::Scan(Key &bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive) {
 	bool has_next;
 	do {
-		if (bound) {
+		if (!bound.Empty()) {
 			if (is_inclusive) {
-				if (cur_key > *bound) {
+				if (cur_key > bound) {
 					break;
 				}
 			} else {
-				if (cur_key >= *bound) {
+				if (cur_key >= bound) {
 					break;
 				}
 			}

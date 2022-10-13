@@ -81,7 +81,7 @@ public:
 	//! Finalize the segment for appending - no more appends can follow on this segment
 	//! The segment should be compacted as much as possible
 	//! Returns the number of bytes occupied within the segment
-	idx_t FinalizeAppend();
+	idx_t FinalizeAppend(ColumnAppendState &state);
 	//! Revert an append made to this segment
 	void RevertAppend(idx_t start_row);
 

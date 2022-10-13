@@ -531,13 +531,13 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 	}
 }
 
-void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t row_group_start, idx_t count,
-                                 transaction_t commit_id) {
+void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
+	idx_t row_group_start = this->count.load();
 	idx_t row_group_end = row_group_start + count;
+	if (row_group_end > RowGroup::ROW_GROUP_SIZE) {
+		row_group_end = RowGroup::ROW_GROUP_SIZE;
+	}
 	lock_guard<mutex> lock(row_group_lock);
-
-	this->count += count;
-	D_ASSERT(this->count <= RowGroup::ROW_GROUP_SIZE);
 
 	// create the version_info if it doesn't exist yet
 	if (!version_info) {
@@ -552,7 +552,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t row_group_st
 		if (start == 0 && end == STANDARD_VECTOR_SIZE) {
 			// entire vector is encapsulated by append: append a single constant
 			auto constant_info = make_unique<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
-			constant_info->insert_id = commit_id;
+			constant_info->insert_id = transaction.transaction_id;
 			constant_info->delete_id = NOT_DELETED_ID;
 			version_info->info[vector_idx] = move(constant_info);
 		} else {
@@ -568,9 +568,10 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t row_group_st
 				// use existing vector
 				info = (ChunkVectorInfo *)version_info->info[vector_idx].get();
 			}
-			info->Append(start, end, commit_id);
+			info->Append(start, end, transaction.transaction_id);
 		}
 	}
+	this->count = row_group_end;
 }
 
 void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count) {
@@ -606,8 +607,7 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	Verify();
 }
 
-void RowGroup::InitializeAppend(TransactionData transaction, RowGroupAppendState &append_state,
-                                idx_t remaining_append_count) {
+void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 	append_state.row_group = this;
 	append_state.offset_in_row_group = this->count;
 	// for each column, initialize the append state
@@ -615,9 +615,6 @@ void RowGroup::InitializeAppend(TransactionData transaction, RowGroupAppendState
 	for (idx_t i = 0; i < columns.size(); i++) {
 		columns[i]->InitializeAppend(append_state.states[i]);
 	}
-	// append the version info for this row_group
-	idx_t append_count = MinValue<idx_t>(remaining_append_count, RowGroup::ROW_GROUP_SIZE - this->count);
-	AppendVersionInfo(transaction, this->count, append_count, transaction.transaction_id);
 }
 
 void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append_count) {
