@@ -68,7 +68,7 @@ static string TypeVectorToString(vector<LogicalType> &types) {
 }
 
 OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
-                                                DataChunk &output) {
+                                                DataChunk &output, bool allow_cache) {
 	py::gil_scoped_acquire acquire;
 
 	if (input.size() == 0) {

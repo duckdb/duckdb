@@ -24,7 +24,7 @@ public:
 	                                                vector<LogicalType> &return_types, vector<string> &names);
 
 	static OperatorResultType MapFunctionExec(ExecutionContext &context, TableFunctionInput &data, DataChunk &input,
-	                                          DataChunk &output);
+	                                          DataChunk &output, bool allow_cache);
 };
 
 } // namespace duckdb
