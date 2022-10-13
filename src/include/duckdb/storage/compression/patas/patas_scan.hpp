@@ -44,23 +44,6 @@ public:
 		index = 0;
 	}
 
-	// void LoadByteCounts(uint8_t *bitpacked_data, idx_t block_count) {
-	//	//! Unpack 'count' values of bitpacked data, unpacked per group of 32 values
-	//	const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-	//	BitpackingPrimitives::UnPackBuffer<uint8_t>(byte_counts, bitpacked_data, value_count,
-	//	                                            PatasPrimitives::BYTECOUNT_BITSIZE, true);
-	// }
-	// void LoadTrailingZeros(uint8_t *bitpacked_data, idx_t block_count) {
-	//	const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-	//	BitpackingPrimitives::UnPackBuffer<uint8_t>(trailing_zeros, bitpacked_data, value_count,
-	//	                                            SignificantBits<EXACT_TYPE>::size, true);
-	// }
-	// void LoadIndexDifferences(uint8_t *bitpacked_data, idx_t block_count) {
-	//	const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-	//	BitpackingPrimitives::UnPackBuffer<uint8_t>(index_diffs, bitpacked_data, value_count,
-	//	                                            PatasPrimitives::INDEX_BITSIZE, true);
-	// }
-
 	void LoadPackedData(uint16_t *packed_data, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			auto &unpacked = unpacked_data[i];
@@ -73,8 +56,6 @@ public:
 		index += count;
 	}
 
-	// FIXME: could optimize this to scan directly to the result if the subsequent scan would scan the entire group
-	// anyways
 	void LoadValues(EXACT_TYPE *value_buffer, idx_t count) {
 		value_buffer[0] = (EXACT_TYPE)0;
 		for (idx_t i = 0; i < count; i++) {
