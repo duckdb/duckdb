@@ -31,7 +31,7 @@ public:
 public:
 	void WriteValue(EXACT_TYPE value, bool is_valid) {
 		// TODO: transform NULL values to a value that requires the least amount of bits to store
-		// 3 + 6 + 0 is probably possible
+		// 3 + 6 + 7 + 0 is probably possible
 
 		//! Keep track of when a segment would end, to accurately simulate Reset()s in compress step
 		if (!HasEnoughSpace()) {

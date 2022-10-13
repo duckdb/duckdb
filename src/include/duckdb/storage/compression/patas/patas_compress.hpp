@@ -141,6 +141,7 @@ public:
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
+		next_group_byte_index_start = PatasPrimitives::HEADER_SIZE;
 		group_idx = 0;
 		metadata_byte_size = 0;
 		auto &db = checkpointer.GetDatabase();
@@ -187,8 +188,9 @@ public:
 		metadata_byte_size += sizeof(byte_index_t);
 		// Store where this groups data starts, relative to the start of the segment
 		Store<byte_index_t>(next_group_byte_index_start, metadata_ptr);
-		next_group_byte_index_start = UsedSpace();
+		next_group_byte_index_start = PatasPrimitives::HEADER_SIZE + UsedSpace();
 
+		// Store the packed data blocks (7 + 6 + 3 bits)
 		metadata_ptr -= group_idx * sizeof(uint16_t);
 		metadata_byte_size += group_idx * sizeof(uint16_t);
 		memcpy(metadata_ptr, packed_data, sizeof(uint16_t) * group_idx);
@@ -199,7 +201,6 @@ public:
 
 	//! FIXME: only compact if the unused space meets a certain threshold (20%)
 	void FlushSegment() {
-		//! TODO: only flush the group if the group idx is not 0
 		if (group_idx != 0) {
 			FlushGroup();
 		}

@@ -38,6 +38,10 @@ public:
 		byte_reader.SetStream(data);
 	}
 
+	idx_t BytesRead() const {
+		return byte_reader.Index();
+	}
+
 	void Reset() {
 		index = 0;
 	}
@@ -49,12 +53,19 @@ public:
 		}
 	}
 
+	template <bool SKIP = false>
 	void Scan(uint8_t *dest, idx_t count) {
-		memcpy(dest, (void *)(values + index), sizeof(EXACT_TYPE) * count);
+		if (!SKIP) {
+			memcpy(dest, (void *)(values + index), sizeof(EXACT_TYPE) * count);
+		}
 		index += count;
 	}
 
+	template <bool SKIP>
 	void LoadValues(EXACT_TYPE *value_buffer, idx_t count) {
+		if (SKIP) {
+			return;
+		}
 		value_buffer[0] = (EXACT_TYPE)0;
 		for (idx_t i = 0; i < count; i++) {
 			value_buffer[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(
@@ -107,25 +118,27 @@ public:
 	}
 
 	// Scan up to a group boundary
-	template <class EXACT_TYPE>
+	template <class EXACT_TYPE, bool SKIP = false>
 	void ScanGroup(EXACT_TYPE *values, idx_t group_size) {
 		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
 		if (GroupFinished() && total_value_count < count) {
 			if (group_size == PatasPrimitives::PATAS_GROUP_SIZE) {
-				LoadGroup(values);
+				LoadGroup<SKIP>(values);
 				total_value_count += group_size;
 				return;
 			} else {
-				LoadGroup(group_state.values);
+				// Even if SKIP is given, group size is not big enough to be able to fully skip the entire group
+				LoadGroup<false>(group_state.values);
 			}
 		}
-		group_state.Scan((uint8_t *)values, group_size);
+		group_state.template Scan<SKIP>((uint8_t *)values, group_size);
 
 		total_value_count += group_size;
 	}
 
+	template <bool SKIP = false>
 	void LoadGroup(EXACT_TYPE *value_buffer) {
 		group_state.Reset();
 
@@ -133,14 +146,12 @@ public:
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
 		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
-		//  Only used for point queries
-		(void)data_byte_offset;
-
+		group_state.Init(handle.Ptr() + segment.GetBlockOffset() + data_byte_offset);
 		idx_t group_size = MinValue((idx_t)PatasPrimitives::PATAS_GROUP_SIZE, (count - total_value_count));
 		metadata_ptr -= sizeof(uint16_t) * group_size;
 		group_state.LoadPackedData((uint16_t *)metadata_ptr, group_size);
 
-		group_state.LoadValues(value_buffer, group_size);
+		group_state.template LoadValues<SKIP>(value_buffer, group_size);
 	}
 
 public:
@@ -148,11 +159,10 @@ public:
 	// TODO: use the metadata to determine if we can skip a group
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
 		using EXACT_TYPE = typename FloatingToExact<T>::type;
-		EXACT_TYPE buffer[PatasPrimitives::PATAS_GROUP_SIZE];
 
 		while (skip_count) {
-			auto skip_size = std::min(skip_count, LeftInGroup());
-			ScanGroup(buffer, skip_size);
+			auto skip_size = MinValue(skip_count, LeftInGroup());
+			ScanGroup<EXACT_TYPE, true>(nullptr, skip_size);
 			skip_count -= skip_size;
 		}
 	}
