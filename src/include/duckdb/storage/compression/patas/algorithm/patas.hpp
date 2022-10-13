@@ -127,22 +127,6 @@ struct PatasCompression {
 // Decompression
 
 template <class EXACT_TYPE>
-class PatasDecompressionState {
-public:
-	PatasDecompressionState() {
-	}
-
-public:
-	//! Set the array to read the significant bytes from
-	void SetInputBuffer(const uint8_t *buffer) {
-		// TODO: This can probably be passed as constructor parameter
-		// since the block of significant byte values is contiguous for the entire segment
-		byte_reader.SetStream(buffer);
-	}
-	ByteReader byte_reader;
-};
-
-template <class EXACT_TYPE>
 struct PatasDecompression {
 	static inline EXACT_TYPE DecompressValue(ByteReader &byte_reader, idx_t index, uint8_t byte_counts[],
 	                                         uint8_t trailing_zeros[], EXACT_TYPE previous) {
