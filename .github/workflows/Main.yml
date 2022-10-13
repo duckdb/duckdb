@@ -42,6 +42,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_PARQUET: 1
+      BUILD_GEO: 1
       GEN: ninja
 
     steps:
@@ -84,6 +85,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_GEO: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -124,6 +126,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_GEO: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -164,6 +167,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_GEO: 1
       DISABLE_STRING_INLINE: 1
 
     steps:
@@ -236,6 +240,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_GEO: 1
       TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
 
     steps:
