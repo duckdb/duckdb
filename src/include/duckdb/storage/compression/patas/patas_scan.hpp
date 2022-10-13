@@ -59,6 +59,8 @@ public:
 		index += count;
 	}
 
+	// FIXME: could optimize this to scan directly to the result if the subsequent scan would scan the entire group
+	// anyways
 	void LoadValues(idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			values[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(
