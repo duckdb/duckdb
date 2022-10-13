@@ -224,7 +224,7 @@ public:
 			if (!group_state.Started()) {
 				ScanGroup<CHIMP_TYPE, true>(buffer, skip_size);
 			} else {
-				ScanGroup > CHIMP_TYPE, false > (buffer, skip_size);
+				ScanGroup<CHIMP_TYPE, false>(buffer, skip_size);
 			}
 			skip_count -= skip_size;
 		}
