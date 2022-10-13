@@ -14,6 +14,7 @@
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 
 namespace duckdb {
 class SequenceCatalogEntry;
@@ -103,20 +104,6 @@ private:
 	UndoBuffer undo_buffer;
 
 	Transaction(const Transaction &) = delete;
-};
-
-struct TransactionData {
-	TransactionData(Transaction &transaction_p) // NOLINT
-	    : transaction(&transaction_p), transaction_id(transaction_p.transaction_id),
-	      start_time(transaction_p.start_time) {
-	}
-	TransactionData(transaction_t transaction_id_p, transaction_t start_time_p)
-	    : transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
-	}
-
-	Transaction *transaction;
-	transaction_t transaction_id;
-	transaction_t start_time;
 };
 
 } // namespace duckdb

@@ -475,14 +475,20 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 	}
 }
 
-void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
+void DataTable::InitializeLocalAppend(LocalAppendState &state, ClientContext &context) {
+	if (!is_root) {
+		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
+	}
+	auto &transaction = Transaction::GetTransaction(context);
+	transaction.storage.InitializeAppend(state, this);
+}
+
+void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+                            DataChunk &chunk) {
 	if (chunk.size() == 0) {
 		return;
 	}
-	// FIXME: could be an assertion instead?
-	if (chunk.ColumnCount() != table.StandardColumnCount()) {
-		throw InternalException("Mismatch in column count for append");
-	}
+	D_ASSERT(chunk.ColumnCount() == table.StandardColumnCount());
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
@@ -493,8 +499,27 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	VerifyAppendConstraints(table, context, chunk);
 
 	// append to the transaction local data
-	auto &transaction = Transaction::GetTransaction(context);
-	transaction.storage.Append(this, chunk);
+	LocalStorage::Append(state, chunk);
+}
+
+void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
+	LocalStorage::FinalizeAppend(state);
+}
+
+void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
+	LocalAppendState append_state;
+	table.storage->InitializeLocalAppend(append_state, context);
+	table.storage->LocalAppend(append_state, table, context, chunk);
+	table.storage->FinalizeLocalAppend(append_state);
+}
+
+void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection) {
+	LocalAppendState append_state;
+	table.storage->InitializeLocalAppend(append_state, context);
+	for (auto &chunk : collection.Chunks()) {
+		table.storage->LocalAppend(append_state, table, context, chunk);
+	}
+	table.storage->FinalizeLocalAppend(append_state);
 }
 
 void DataTable::AppendLock(TableAppendState &state) {
@@ -513,9 +538,9 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 	row_groups->InitializeAppend(transaction, state, append_count);
 }
 
-void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state) {
+void DataTable::Append(DataChunk &chunk, TableAppendState &state) {
 	D_ASSERT(is_root);
-	row_groups->Append(transaction, chunk, state, stats);
+	row_groups->Append(chunk, state, stats);
 }
 
 void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {

@@ -20,8 +20,16 @@ struct string_t {
 	friend class StringSegment;
 
 public:
-	static constexpr idx_t PREFIX_LENGTH = 4 * sizeof(char);
-	static constexpr idx_t INLINE_LENGTH = 12;
+	static constexpr idx_t PREFIX_BYTES = 4 * sizeof(char);
+	static constexpr idx_t INLINE_BYTES = 12 * sizeof(char);
+	static constexpr idx_t HEADER_SIZE = sizeof(uint32_t) + PREFIX_BYTES;
+#ifndef DUCKDB_DEBUG_NO_INLINE
+	static constexpr idx_t PREFIX_LENGTH = PREFIX_BYTES;
+	static constexpr idx_t INLINE_LENGTH = INLINE_BYTES;
+#else
+	static constexpr idx_t PREFIX_LENGTH = 0;
+	static constexpr idx_t INLINE_LENGTH = 0;
+#endif
 
 	string_t() = default;
 	explicit string_t(uint32_t len) {
@@ -33,7 +41,7 @@ public:
 		if (IsInlined()) {
 			// zero initialize the prefix first
 			// this makes sure that strings with length smaller than 4 still have an equal prefix
-			memset(value.inlined.inlined, 0, INLINE_LENGTH);
+			memset(value.inlined.inlined, 0, INLINE_BYTES);
 			if (GetSize() == 0) {
 				return;
 			}
@@ -41,7 +49,11 @@ public:
 			memcpy(value.inlined.inlined, data, GetSize());
 		} else {
 			// large string: store pointer
+#ifndef DUCKDB_DEBUG_NO_INLINE
 			memcpy(value.pointer.prefix, data, PREFIX_LENGTH);
+#else
+			memset(value.pointer.prefix, 0, PREFIX_BYTES);
+#endif
 			value.pointer.ptr = (char *)data;
 		}
 	}
@@ -82,15 +94,19 @@ public:
 
 	void Finalize() {
 		// set trailing NULL byte
-		auto dataptr = (char *)GetDataUnsafe();
 		if (GetSize() <= INLINE_LENGTH) {
 			// fill prefix with zeros if the length is smaller than the prefix length
-			for (idx_t i = GetSize(); i < INLINE_LENGTH; i++) {
+			for (idx_t i = GetSize(); i < INLINE_BYTES; i++) {
 				value.inlined.inlined[i] = '\0';
 			}
 		} else {
 			// copy the data into the prefix
+#ifndef DUCKDB_DEBUG_NO_INLINE
+			auto dataptr = (char *)GetDataUnsafe();
 			memcpy(value.pointer.prefix, dataptr, PREFIX_LENGTH);
+#else
+			memset(value.pointer.prefix, 0, PREFIX_BYTES);
+#endif
 		}
 	}
 

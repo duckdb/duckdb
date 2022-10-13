@@ -388,6 +388,12 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+static unique_ptr<CompressionAppendState> ValidityInitAppend(ColumnSegment &segment) {
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto handle = buffer_manager.Pin(segment.block);
+	return make_unique<CompressionAppendState>(move(handle));
+}
+
 unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
@@ -397,8 +403,8 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 	return nullptr;
 }
 
-idx_t ValidityAppend(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset,
-                     idx_t vcount) {
+idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
+                     UnifiedVectorFormat &data, idx_t offset, idx_t vcount) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
 	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
 
@@ -410,10 +416,8 @@ idx_t ValidityAppend(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVe
 		validity_stats.has_no_null = true;
 		return append_count;
 	}
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
 
-	ValidityMask mask((validity_t *)handle.Ptr());
+	ValidityMask mask((validity_t *)append_state.handle.Ptr());
 	for (idx_t i = 0; i < append_count; i++) {
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
@@ -463,8 +467,8 @@ CompressionFunction ValidityUncompressed::GetFunction(PhysicalType data_type) {
 	                           ValidityAnalyze, ValidityFinalAnalyze, UncompressedFunctions::InitCompression,
 	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
 	                           ValidityInitScan, ValidityScan, ValidityScanPartial, ValidityFetchRow,
-	                           UncompressedFunctions::EmptySkip, ValidityInitSegment, ValidityAppend,
-	                           ValidityFinalizeAppend, ValidityRevertAppend);
+	                           UncompressedFunctions::EmptySkip, ValidityInitSegment, ValidityInitAppend,
+	                           ValidityAppend, ValidityFinalizeAppend, ValidityRevertAppend);
 }
 
 } // namespace duckdb

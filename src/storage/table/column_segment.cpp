@@ -108,27 +108,33 @@ void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 	function->fetch_row(*this, state, row_id - this->start, result, result_idx);
 }
 
-void ColumnSegment::InitializeAppend(ColumnAppendState &state) {
-	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
-}
-
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+void ColumnSegment::InitializeAppend(ColumnAppendState &state) {
+	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
+	if (!function->init_append) {
+		throw InternalException("Attempting to init append to a segment without init_append method");
+	}
+	state.append_state = function->init_append(*this);
+}
+
 idx_t ColumnSegment::Append(ColumnAppendState &state, UnifiedVectorFormat &append_data, idx_t offset, idx_t count) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (!function->append) {
 		throw InternalException("Attempting to append to a segment without append method");
 	}
-	return function->append(*this, stats, append_data, offset, count);
+	return function->append(*state.append_state, *this, stats, append_data, offset, count);
 }
 
-idx_t ColumnSegment::FinalizeAppend() {
+idx_t ColumnSegment::FinalizeAppend(ColumnAppendState &state) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (!function->finalize_append) {
 		throw InternalException("Attempting to call FinalizeAppend on a segment without a finalize_append method");
 	}
-	return function->finalize_append(*this, stats);
+	auto result_count = function->finalize_append(*this, stats);
+	state.append_state.reset();
+	return result_count;
 }
 
 void ColumnSegment::RevertAppend(idx_t start_row) {

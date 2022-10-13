@@ -16,7 +16,7 @@ class Node16 : public Node {
 public:
 	explicit Node16();
 	uint8_t key[16];
-	SwizzleablePointer children[16];
+	ARTPointer children[16];
 
 public:
 	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists

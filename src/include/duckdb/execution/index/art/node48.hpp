@@ -16,7 +16,7 @@ class Node48 : public Node {
 public:
 	explicit Node48();
 	uint8_t child_index[256];
-	SwizzleablePointer children[48];
+	ARTPointer children[48];
 
 public:
 	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists
