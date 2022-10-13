@@ -99,11 +99,12 @@ statement ok
 CREATE TABLE null_tbl(col1 VARCHAR);
 
 statement ok
-INSERT INTO null_tbl VALUES(NULL);
+INSERT INTO null_tbl VALUES(NULL), (NULL);
 
 query I
 SELECT col1::INT[] FROM null_tbl;
 ----
+NULL
 NULL
 
 statement ok
@@ -365,9 +366,8 @@ SELECT cast(col1 as int[]) FROM tbl WHERE LEN(cast(col1 as int[])) < 4;
 
 
 # time_tz timestamp_tz 
-# dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob small_enum medium_enum large_enum 
-# int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array 
-# struct struct_of_arrays array_of_structs map
+# dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid small_enum medium_enum large_enum 
+# double_array date_array timestamp_array timestamptz_array 
 
 
 query I
@@ -384,12 +384,12 @@ SELECT CAST('[1,2,3]' AS ${type}[]);
 
 endloop
 
-foreach type DOUBLE FLOAT
+foreach type DOUBLE[] FLOAT[]
 
 query I
-SELECT CAST('[1,2,3]' AS ${type}[]);
+SELECT CAST('[[1,2,3], [3.333, 2.2, 1.1], [0]]' AS ${type}[]);
 ----
-[1.0, 2.0, 3.0]
+[[1.0, 2.0, 3.0], [3.333, 2.2, 1.1], [0.0]]
 
 endloop
 
@@ -434,3 +434,18 @@ SELECT CAST(list_value(timestamp_ns)::VARCHAR AS TIME[]) FROM test_all_types();
 [00:12:43.145225]
 [23:47:16.854775]
 [NULL]
+
+query I
+SELECT CAST(list_value(blob)::VARCHAR AS BLOB[]) FROM test_all_types();
+----
+[thisisalongblob\x00withnullbytes]
+[\x00\x00\x00a]
+[NULL]
+
+query I
+SELECT CAST(list_value(interval)::VARCHAR AS INTERVAL[]) FROM test_all_types();
+----
+[00:00:00]
+[83 years 3 months 999 days 00:16:39.999999]
+[NULL]
+

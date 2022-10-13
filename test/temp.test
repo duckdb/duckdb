@@ -1,25 +1,10 @@
 # name: test/temp.test
 # group: [test]
 
-# query I
-# SELECT CAST('[11, NULL, 9]' AS INT[]);
-# ----
-# [11, NULL, 9]
-#
-# query I
-# SELECT CAST('[[11, NULL], [9]]' AS INT[][]);
-# ----
-# [[11, NULL], [9]]
-#
-# query I
-# SELECT CAST('[[11, 20], NULL, [9]]' AS INT[][]);
-# ----
-# [[11, 20], NULL, [9]]
-
 statement ok
-CREATE TABLE varcharlists AS SELECT [i, i]::VARCHAR col FROM range(0, 10000) tbl(i);
+CREATE TABLE varcharlists AS SELECT [i, i+1, i+2]::VARCHAR col FROM range(0, 10000) tbl(i);
 
 query I
 SELECT MAX(CAST(col AS INT[])) FROM varcharlists;
 ----
-[9999]
+[9999, 10000, 10001]

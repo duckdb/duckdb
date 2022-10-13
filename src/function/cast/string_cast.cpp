@@ -111,15 +111,6 @@ static BoundCastInfo VectorStringCastNumericSwitch(BindCastInput &input, const L
 		return DefaultCasts::TryVectorNullCast;
 	}
 }
-//
-//void   parse_error(Vector &result, CastParameters &parameters) {
-//    if (parameters.error_message) { // TRY_CAST
-//        *parameters.error_message = "Error";
-//        ConstantVector::SetNull(result, true);
-//    } else { // CAST
-//        throw ConversionException("Oh no");
-//    }
-//}
 
 bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
@@ -146,16 +137,12 @@ bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters 
         }
         total_list_size += VectorStringifiedListParser::CountParts(source_data[idx]);
         if (!total_list_size) {
-//            HandleCastError::AssignError()
-//            parse_error(result, parameters);
-//            HandleVectorCastError::Operation<result.GetType()>(
-//                    CastExceptionText<source.GetType(), result.GetType()>(source_data[idx]), result.validity, idx,
-//                    parameters.error_message, data->all_converted);
-//            HandleVectorCastError::Operation<string_t>(CastExceptionText<string_t, int >(source_data[idx]),
-//                                                       ConstantVector::Validity(result), idx, parameters.error_message, all_converted);
-            string text = "Type VARCHAR with value " + source_data[idx].GetString() + " can't be cast to the destination type LIST";
+            string text = "Type VARCHAR with value '" + source_data[idx].GetString() + "' can't be cast to the destination type LIST";
             HandleVectorCastError::Operation<string_t>(text,
-                                                       ConstantVector::Validity(result), idx, parameters.error_message, all_converted);
+                                                       ConstantVector::Validity(result),
+                                                       idx,
+                                                       parameters.error_message,
+                                                       all_converted);
         }
     }
     Vector varchar_vector(LogicalType::VARCHAR, total_list_size);
@@ -176,7 +163,7 @@ bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters 
         }
 
 		list_data[i].offset = total;        // offset (start of list in child vector)
-        auto valid = VectorStringifiedListParser::SplitStringifiedList(source_data[idx], child_data, total, varchar_vector, false);
+        auto valid = VectorStringifiedListParser::SplitStringifiedList(source_data[idx], child_data, total, varchar_vector, true);
         if (!valid) {
             HandleVectorCastError::Operation<string_t>(CastExceptionText<string_t, string_t>(source_data[idx]),
                                                        ConstantVector::Validity(result), idx, parameters.error_message, all_converted);
@@ -188,48 +175,49 @@ bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters 
 	auto &result_child = ListVector::GetEntry(result);
 	auto &cast_data = (ListBoundCastData &)*parameters.cast_data;
     CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data.get());
-	return cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters);
+	return cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters) && all_converted;
 }
 
-bool StringToStringList(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
-	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-
-    UnifiedVectorFormat unified_source;
-    source.ToUnifiedFormat(count, unified_source);
-    auto source_data = (string_t *)unified_source.data;
-
-	auto &child = ListVector::GetEntry(result);
-	auto child_data = FlatVector::GetData<string_t>(child);
-	auto list_data = ListVector::GetData(result);
-
-    result.SetVectorType(source.GetVectorType());
-
-    bool all_converted = true;
-    idx_t total = 0;
-	for (idx_t i = 0; i < count; i++) {
-        auto idx = unified_source.sel->get_index(i);
-        if (!unified_source.validity.RowIsValid(idx)) {
-            FlatVector::SetNull(result, i, true);
-            continue;
-        }
-
-        list_data[i].offset = total;
-        auto valid = VectorStringifiedListParser::SplitStringifiedList(source_data[idx], child_data, total, child, true);
-        if (!valid) {
-            HandleVectorCastError::Operation<string_t>(CastExceptionText<string_t, string_t>(source_data[idx]),
-                                                       ConstantVector::Validity(result), idx, parameters.error_message, all_converted);
-        }
-        list_data[i].length = total - list_data[i].offset;
-    }
-    ListVector::SetListSize(result, total);
-	return true;
-}
+//bool StringToStringList(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+//	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
+//	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+//
+//    UnifiedVectorFormat unified_source;
+//    source.ToUnifiedFormat(count, unified_source);
+//    auto source_data = (string_t *)unified_source.data;
+//
+//	auto &child = ListVector::GetEntry(result);
+//	auto child_data = FlatVector::GetData<string_t>(child);
+//	auto list_data = ListVector::GetData(result);
+//
+//    result.SetVectorType(source.GetVectorType());
+//
+//    bool all_converted = true;
+//    idx_t total = 0;
+//	for (idx_t i = 0; i < count; i++) {
+//        auto idx = unified_source.sel->get_index(i);
+//        if (!unified_source.validity.RowIsValid(idx)) {
+//            FlatVector::SetNull(result, i, true);
+//            continue;
+//        }
+//
+//        list_data[i].offset = total;
+//        auto valid = VectorStringifiedListParser::SplitStringifiedList(source_data[idx], child_data, total, child, true);
+//        if (!valid) {
+//            HandleVectorCastError::Operation<string_t>(CastExceptionText<string_t, string_t>(source_data[idx]),
+//                                                       ConstantVector::Validity(result), idx, parameters.error_message, all_converted);
+//        }
+//        list_data[i].length = total - list_data[i].offset;
+//    }
+//    ListVector::SetListSize(result, total);
+//	return true;
+//}
 
 BoundCastInfo StringToListCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-	if (target == LogicalType::LIST(LogicalType::VARCHAR)) { // TODO look into alternative ways to check this
-		return BoundCastInfo(&StringToStringList);
-	}
+//	if (target == LogicalType::LIST(LogicalType::VARCHAR)) { // TODO look into alternative ways to check this
+//		return BoundCastInfo(&StringToStringList);
+//	}
+//   if (ListType::GetChildType(target) == LogicalType::VARCHAR) {
 
     // second argument allows for a secondary casting function to be passed in the CastParameters
 	return BoundCastInfo(&StringListCast,

@@ -1,0 +1,25 @@
+# name: benchmark/micro/cast/cast_string_list.benchmark
+# description: Cast string values to lists
+# group: [cast]
+
+name Cast VARCHAR -> LIST
+group cast
+
+load
+CREATE TABLE varchars AS SELECT [i, i+1, i+2]::VARCHAR col FROM range(0, 10000000) tbl(i);
+
+#run
+#SELECT MIN(CAST(col AS INT[])[1]) FROM varchars;
+
+#result I
+#0
+
+run
+SELECT MAX(CAST(col AS VARCHAR[])) FROM varchars
+
+result I
+[9999999, 10000000]
+
+
+#-------------------------------------------------------------------
+#For comparison: string to int cast and string-list to int-list cast
