@@ -408,7 +408,9 @@ if(WIN32)
 endif()
 if(UNIX AND NOT APPLE)
   set(OS_NAME "linux") # sorry BSD
-  set(BUILD_JEMALLOC_EXTENSION 1) # linux allocator sucks
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8) # this is apparently state-of-the-art in checking bitness
+    set(BUILD_JEMALLOC_EXTENSION 1) # linux allocator sucks
+  endif()
 endif()
 
 

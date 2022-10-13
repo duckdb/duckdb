@@ -11,7 +11,7 @@
 #include <execinfo.h>
 #endif
 
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+#if defined(BUILD_JEMALLOC_EXTENSION)
 #include "jemalloc-extension.hpp"
 #endif
 
