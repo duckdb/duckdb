@@ -66,7 +66,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 		auto &delim_join = (LogicalDelimJoin &)op;
 		auto decs = &delim_join.duplicate_eliminated_columns;
 		for (auto &cond : delim_join.conditions) {
-			if (!IsEqualityJoinCondition(cond) || InequalityDelimJoinCanBeEliminated(delim_join.join_type)) {
+			if (!IsEqualityJoinCondition(cond)) {
 				continue;
 			}
 			auto rhs = cond.right.get();
@@ -375,6 +375,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 			return false;
 		}
 		// try to find the corresponding child condition
+		// TODO: can be more flexible - allow CAST
 		auto child_expr = it->second;
 		bool found = false;
 		for (auto &child_cond : join.conditions) {
@@ -385,6 +386,18 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 		}
 		if (!found) {
 			// could not find the mapped expression in the child condition expressions
+			return false;
+		}
+	}
+
+	// TODO: we cannot perform the optimization here because our pure inequality joins don't implement
+	//  JoinType::SINGLE yet
+	if (parent_delim_join.join_type == JoinType::SINGLE) {
+		bool has_one_equality = false;
+		for (auto &cond : join.conditions) {
+			has_one_equality = has_one_equality || IsEqualityJoinCondition(cond);
+		}
+		if (!has_one_equality) {
 			return false;
 		}
 	}
@@ -406,7 +419,10 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 			break;
 		}
 	}
+
+	// no longer needs to be a delim join
 	parent_delim_join.duplicate_eliminated_columns.clear();
+	parent_delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
 
 	return true;
 }
