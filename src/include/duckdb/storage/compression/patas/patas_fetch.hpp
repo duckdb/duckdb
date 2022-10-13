@@ -33,9 +33,6 @@ void PatasFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 	auto result_data = FlatVector::GetData<EXACT_TYPE>(result);
 	result_data[result_idx] = (EXACT_TYPE)0;
 
-	const auto index_diff = scan_state.group_state.index_diffs[scan_state.group_state.index];
-	const auto previous_index = scan_state.group_state.index - index_diff;
-
 	if (scan_state.GroupFinished() && scan_state.total_value_count < scan_state.count) {
 		scan_state.LoadGroup(scan_state.group_state.values);
 	}

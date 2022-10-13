@@ -37,6 +37,7 @@ public:
 		index = 0;
 		first = true;
 		ring_buffer.Reset();
+		packed_data_buffer.Reset();
 	}
 	void SetOutputBuffer(uint8_t *output) {
 		byte_writer.SetStream(output);
@@ -48,17 +49,17 @@ public:
 
 public:
 	void UpdateMetadata(uint8_t trailing_zero, uint8_t byte_count, uint8_t index_diff) {
-		trailing_zeros[index] = trailing_zero;
-		byte_counts[index] = byte_count;
-		indices[index] = index_diff;
+		if (!EMPTY) {
+			// printf("[%llu]", index);
+			packed_data_buffer.Insert(
+			    duckdb_chimp::PackedDataUtils<EXACT_TYPE>::Pack(index_diff, byte_count, trailing_zero));
+		}
 		index++;
 	}
 
 public:
 	ByteWriter<EMPTY> byte_writer;
-	uint8_t trailing_zeros[PATAS_GROUP_SIZE];
-	uint8_t byte_counts[PATAS_GROUP_SIZE];
-	uint8_t indices[PATAS_GROUP_SIZE];
+	duckdb_chimp::PackedDataBuffer<EMPTY> packed_data_buffer;
 	idx_t index;
 	RingBuffer<EXACT_TYPE> ring_buffer;
 	bool first;
@@ -128,9 +129,9 @@ struct PatasCompression {
 
 template <class EXACT_TYPE>
 struct PatasDecompression {
-	static inline EXACT_TYPE DecompressValue(ByteReader &byte_reader, idx_t index, uint8_t byte_counts[],
-	                                         uint8_t trailing_zeros[], EXACT_TYPE previous) {
-		return (byte_reader.ReadValue<EXACT_TYPE>(byte_counts[index]) << trailing_zeros[index]) ^ previous;
+	static inline EXACT_TYPE DecompressValue(ByteReader &byte_reader, uint8_t byte_count, uint8_t trailing_zero,
+	                                         EXACT_TYPE previous) {
+		return (byte_reader.ReadValue<EXACT_TYPE>(byte_count) << trailing_zero) ^ previous;
 	}
 };
 

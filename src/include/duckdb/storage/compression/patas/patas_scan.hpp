@@ -26,6 +26,13 @@ namespace duckdb {
 
 using duckdb_chimp::SignificantBits;
 
+//! Do not change order of these variables
+struct PatasUnpackedValueStats {
+	uint8_t significant_bytes;
+	uint8_t trailing_zeros;
+	uint8_t index_diff;
+};
+
 template <class EXACT_TYPE>
 struct PatasGroupState {
 public:
@@ -37,21 +44,30 @@ public:
 		index = 0;
 	}
 
-	void LoadByteCounts(uint8_t *bitpacked_data, idx_t block_count) {
-		//! Unpack 'count' values of bitpacked data, unpacked per group of 32 values
-		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(byte_counts, bitpacked_data, value_count,
-		                                            PatasPrimitives::BYTECOUNT_BITSIZE, true);
-	}
-	void LoadTrailingZeros(uint8_t *bitpacked_data, idx_t block_count) {
-		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(trailing_zeros, bitpacked_data, value_count,
-		                                            SignificantBits<EXACT_TYPE>::size, true);
-	}
-	void LoadIndexDifferences(uint8_t *bitpacked_data, idx_t block_count) {
-		const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(index_diffs, bitpacked_data, value_count,
-		                                            PatasPrimitives::INDEX_BITSIZE, true);
+	// void LoadByteCounts(uint8_t *bitpacked_data, idx_t block_count) {
+	//	//! Unpack 'count' values of bitpacked data, unpacked per group of 32 values
+	//	const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	//	BitpackingPrimitives::UnPackBuffer<uint8_t>(byte_counts, bitpacked_data, value_count,
+	//	                                            PatasPrimitives::BYTECOUNT_BITSIZE, true);
+	// }
+	// void LoadTrailingZeros(uint8_t *bitpacked_data, idx_t block_count) {
+	//	const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	//	BitpackingPrimitives::UnPackBuffer<uint8_t>(trailing_zeros, bitpacked_data, value_count,
+	//	                                            SignificantBits<EXACT_TYPE>::size, true);
+	// }
+	// void LoadIndexDifferences(uint8_t *bitpacked_data, idx_t block_count) {
+	//	const auto value_count = block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	//	BitpackingPrimitives::UnPackBuffer<uint8_t>(index_diffs, bitpacked_data, value_count,
+	//	                                            PatasPrimitives::INDEX_BITSIZE, true);
+	// }
+
+	void LoadPackedData(uint16_t *packed_data, idx_t count) {
+		// printf("UNPACK\n");
+		for (idx_t i = 0; i < count; i++) {
+			// printf("[%llu]", i);
+			auto &unpacked = unpacked_data[i];
+			duckdb_chimp::PackedDataUtils<EXACT_TYPE>::Unpack(packed_data[i], (duckdb_chimp::UnpackedData &)unpacked);
+		}
 	}
 
 	void Scan(uint8_t *dest, idx_t count) {
@@ -65,15 +81,14 @@ public:
 		value_buffer[0] = (EXACT_TYPE)0;
 		for (idx_t i = 0; i < count; i++) {
 			value_buffer[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(
-			    byte_reader, i, byte_counts, trailing_zeros, value_buffer[i - index_diffs[i]]);
+			    byte_reader, unpacked_data[i].significant_bytes, unpacked_data[i].trailing_zeros,
+			    value_buffer[i - unpacked_data[i].index_diff]);
 		}
 	}
 
 public:
 	idx_t index;
-	uint8_t trailing_zeros[PatasPrimitives::PATAS_GROUP_SIZE];
-	uint8_t byte_counts[PatasPrimitives::PATAS_GROUP_SIZE];
-	uint8_t index_diffs[PatasPrimitives::PATAS_GROUP_SIZE];
+	PatasUnpackedValueStats unpacked_data[PatasPrimitives::PATAS_GROUP_SIZE];
 	EXACT_TYPE values[PatasPrimitives::PATAS_GROUP_SIZE];
 
 private:
@@ -144,34 +159,10 @@ public:
 		//  Only used for point queries
 		(void)data_byte_offset;
 
-		// Load how many blocks of bitpacked data we have
-		metadata_ptr -= sizeof(uint8_t);
-		auto bitpacked_block_count = Load<uint8_t>(metadata_ptr);
-		D_ASSERT(bitpacked_block_count <=
-		         PatasPrimitives::PATAS_GROUP_SIZE / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
-
-		const uint64_t trailing_zeros_bits =
-		    (SignificantBits<EXACT_TYPE>::size * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
-		    bitpacked_block_count;
-		const uint64_t byte_counts_bits =
-		    (PatasPrimitives::BYTECOUNT_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
-		    bitpacked_block_count;
-		const uint64_t index_diff_bits =
-		    (PatasPrimitives::INDEX_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) *
-		    bitpacked_block_count;
-		metadata_ptr -= AlignValue(trailing_zeros_bits) / 8;
-		// Unpack and store the trailing zeros for the entire group
-		group_state.LoadTrailingZeros(metadata_ptr, bitpacked_block_count);
-
-		metadata_ptr -= AlignValue(byte_counts_bits) / 8;
-		// Unpack and store the byte counts for the entire group
-		group_state.LoadByteCounts(metadata_ptr, bitpacked_block_count);
-
-		metadata_ptr -= AlignValue(index_diff_bits) / 8;
-		// Unpack and store the index differences for the entire group
-		group_state.LoadIndexDifferences(metadata_ptr, bitpacked_block_count);
-
 		idx_t group_size = MinValue((idx_t)PatasPrimitives::PATAS_GROUP_SIZE, (count - total_value_count));
+		metadata_ptr -= sizeof(uint16_t) * group_size;
+		group_state.LoadPackedData((uint16_t *)metadata_ptr, group_size);
+
 		group_state.LoadValues(value_buffer, group_size);
 	}
 
