@@ -96,7 +96,6 @@ public:
 		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
 		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
 		group_state.Init(start_of_data_segment);
-		LoadGroup(group_state.values);
 	}
 
 	BufferHandle handle;
@@ -121,12 +120,12 @@ public:
 		D_ASSERT(group_size <= PatasPrimitives::PATAS_GROUP_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
-		group_state.Scan((uint8_t *)values, group_size);
-
-		total_value_count += group_size;
 		if (GroupFinished() && total_value_count < count) {
 			LoadGroup(group_state.values);
 		}
+		group_state.Scan((uint8_t *)values, group_size);
+
+		total_value_count += group_size;
 	}
 
 	void LoadGroup(EXACT_TYPE *value_buffer) {
