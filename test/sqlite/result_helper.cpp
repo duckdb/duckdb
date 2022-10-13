@@ -12,24 +12,24 @@
 
 namespace duckdb {
 
-TestResultHelper::TestResultHelper(Command &command, MaterializedQueryResult &result_p)
+TestResultHelper::TestResultHelper(ExecuteContext &context, const Command &command, MaterializedQueryResult &result_p)
     : runner(command.runner), result(result_p), file_name(command.file_name), query_line(command.query_line),
-      sql_query(command.sql_query) {
+      sql_query(context.sql_query) {
 }
 
-TestResultHelper::TestResultHelper(Query &query, MaterializedQueryResult &result_p)
-    : TestResultHelper((Command &)query, result_p) {
+TestResultHelper::TestResultHelper(ExecuteContext &context, const Query &query, MaterializedQueryResult &result_p)
+    : TestResultHelper(context, (const Command &)query, result_p) {
 	query_ptr = &query;
 }
 
-TestResultHelper::TestResultHelper(Statement &stmt, MaterializedQueryResult &result_p)
-    : TestResultHelper((Command &)stmt, result_p) {
+TestResultHelper::TestResultHelper(ExecuteContext &context, const Statement &stmt, MaterializedQueryResult &result_p)
+    : TestResultHelper(context, (const Command &)stmt, result_p) {
 	expect_ok = stmt.expect_ok;
 }
 
-void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owned_result) {
+void TestResultHelper::CheckQueryResult(ExecuteContext &context, unique_ptr<MaterializedQueryResult> owned_result) {
 	D_ASSERT(query_ptr);
-	auto &expected_column_count = query_ptr->expected_column_count;
+	this->expected_column_count = query_ptr->expected_column_count;
 	auto &values = query_ptr->values;
 	auto &sort_style = query_ptr->sort_style;
 	auto &query_has_label = query_ptr->query_has_label;
@@ -131,7 +131,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
 		comparison_values =
-		    LoadResultFromFile(SQLLogicTestRunner::LoopReplacement(values[0], runner.running_loops), result.names);
+		    LoadResultFromFile(SQLLogicTestRunner::LoopReplacement(values[0], context.running_loops), result.names);
 	} else {
 		comparison_values = values;
 	}
@@ -379,7 +379,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 		PrintErrorHeader(error.c_str());
 		FAIL_LINE(file_name, query_line, 0);
 	}
-	query_ptr->expected_column_count = csv_result->ColumnCount();
+	this->expected_column_count = csv_result->ColumnCount();
 
 	vector<string> values;
 	while (true) {
@@ -396,7 +396,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 	return values;
 }
 
-void TestResultHelper::PrintExpectedResult(vector<string> &values, idx_t columns, bool row_wise) {
+void TestResultHelper::PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise) {
 	if (row_wise) {
 		for (idx_t r = 0; r < values.size(); r++) {
 			fprintf(stderr, "%s\n", values[r].c_str());
@@ -519,7 +519,7 @@ void TestResultHelper::PrintErrorHeader(const string &description) {
 	std::cerr << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset << std::endl;
 }
 
-void TestResultHelper::PrintResultError(vector<string> &result_values, vector<string> &values,
+void TestResultHelper::PrintResultError(const vector<string> &result_values, const vector<string> &values,
                                         idx_t expected_column_count, bool row_wise) {
 	PrintHeader("Expected result:");
 	PrintLineSep();
@@ -530,7 +530,7 @@ void TestResultHelper::PrintResultError(vector<string> &result_values, vector<st
 	PrintExpectedResult(result_values, expected_column_count, false);
 }
 
-void TestResultHelper::PrintResultError(MaterializedQueryResult &result, vector<string> &values,
+void TestResultHelper::PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
                                         idx_t expected_column_count, bool row_wise) {
 	PrintHeader("Expected result:");
 	PrintLineSep();

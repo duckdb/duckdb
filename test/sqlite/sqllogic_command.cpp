@@ -7,6 +7,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "test_helpers.hpp"
+#include <list>
+#include <thread>
 
 namespace duckdb {
 
@@ -33,15 +35,27 @@ Command::Command(SQLLogicTestRunner &runner) : runner(runner) {
 Command::~Command() {
 }
 
-Connection *Command::CommandConnection() {
+Connection *Command::CommandConnection(ExecuteContext &context) const {
 	if (connection_name.empty()) {
+		if (context.is_parallel) {
+			D_ASSERT(context.con);
+			return context.con;
+		}
+		D_ASSERT(!context.con);
 		return runner.con.get();
 	} else {
+		if (context.is_parallel) {
+			throw std::runtime_error("Named connections not supported in parallel loop");
+		}
 		return GetConnection(*runner.db, runner.named_connection_map, connection_name);
 	}
 }
 
-void Command::RestartDatabase(Connection *&connection, string sql_query) {
+void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, string sql_query) const {
+	if (context.is_parallel) {
+		// cannot restart in parallel
+		return;
+	}
 	vector<unique_ptr<SQLStatement>> statements;
 	bool query_fail = false;
 	try {
@@ -59,18 +73,18 @@ void Command::RestartDatabase(Connection *&connection, string sql_query) {
 		// We basically restart the database if no transaction is active and if the query is valid
 		auto command = make_unique<RestartCommand>(runner);
 		runner.ExecuteCommand(move(command));
-		connection = CommandConnection();
+		connection = CommandConnection(context);
 	}
 }
 
-unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection, string file_name, idx_t query_line,
-                                                          string sql_query) {
+unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &context, Connection *connection,
+                                                          string file_name, idx_t query_line) const {
 	query_break(query_line);
 	if (TestForceReload() && TestForceStorage()) {
-		RestartDatabase(connection, sql_query);
+		RestartDatabase(context, connection, context.sql_query);
 	}
 
-	auto result = connection->Query(sql_query);
+	auto result = connection->Query(context.sql_query);
 
 	if (result->HasError()) {
 		TestHelperExtension::SetLastError(result->GetError());
@@ -81,21 +95,19 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection
 	return result;
 }
 
-void Command::Execute() {
+void Command::Execute(ExecuteContext &context) const {
 	if (runner.finished_processing_file) {
 		return;
 	}
-	if (runner.running_loops.empty()) {
-		ExecuteInternal();
+	if (context.running_loops.empty()) {
+		context.sql_query = base_sql_query;
+		ExecuteInternal(context);
 		return;
 	}
-	auto original_query = sql_query;
 	// perform the string replacement
-	sql_query = SQLLogicTestRunner::LoopReplacement(sql_query, runner.running_loops);
+	context.sql_query = SQLLogicTestRunner::LoopReplacement(base_sql_query, context.running_loops);
 	// execute the iterated statement
-	ExecuteInternal();
-	// now restore the original query
-	sql_query = original_query;
+	ExecuteInternal(context);
 }
 
 Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {
@@ -111,22 +123,85 @@ LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p
     : Command(runner), definition(move(definition_p)) {
 }
 
-void LoopCommand::ExecuteInternal() {
-	definition.loop_idx = definition.loop_start;
-	runner.running_loops.push_back(&definition);
-	bool finished = false;
-	while (!finished && !runner.finished_processing_file) {
-		// execute the current iteration of the loop
-		for (auto &statement : loop_commands) {
-			statement->Execute();
+struct ParallelExecuteContext {
+	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<unique_ptr<Command>> &loop_commands,
+	                       LoopDefinition definition)
+	    : runner(runner), loop_commands(loop_commands), definition(move(definition)), success(true) {
+	}
+
+	SQLLogicTestRunner &runner;
+	const vector<unique_ptr<Command>> &loop_commands;
+	LoopDefinition definition;
+	atomic<bool> success;
+	string error_message;
+};
+
+static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
+	try {
+		auto &runner = execute_context->runner;
+
+		// construct a new connection to the database
+		Connection con(*runner.db);
+		// create a new parallel execute context
+		vector<LoopDefinition> running_loops {execute_context->definition};
+		ExecuteContext context(&con, move(running_loops));
+		for (auto &command : execute_context->loop_commands) {
+			command->Execute(context);
 		}
-		definition.loop_idx++;
-		if (definition.loop_idx >= definition.loop_end) {
-			// finished
-			break;
+	} catch (std::exception &ex) {
+		execute_context->error_message = ex.what();
+		execute_context->success = false;
+	} catch (...) {
+		execute_context->error_message = "Unknown error message";
+		execute_context->success = false;
+	}
+}
+
+void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
+	LoopDefinition loop_def = definition;
+	loop_def.loop_idx = definition.loop_start;
+	if (loop_def.is_parallel) {
+		if (context.is_parallel || !context.running_loops.empty()) {
+			throw std::runtime_error("Nested parallel loop commands not allowed");
+		}
+		// parallel loop: launch threads
+		std::list<ParallelExecuteContext> contexts;
+		while (true) {
+			contexts.emplace_back(runner, loop_commands, loop_def);
+			loop_def.loop_idx++;
+			if (loop_def.loop_idx >= loop_def.loop_end) {
+				// finished
+				break;
+			}
+		}
+		std::list<std::thread> threads;
+		for (auto &context : contexts) {
+			threads.emplace_back(ParallelExecuteLoop, &context);
+		}
+		for (auto &thread : threads) {
+			thread.join();
+		}
+		for (auto &context : contexts) {
+			if (!context.success) {
+				FAIL(context.error_message);
+			}
+		}
+	} else {
+		bool finished = false;
+		while (!finished && !runner.finished_processing_file) {
+			// execute the current iteration of the loop
+			context.running_loops.push_back(loop_def);
+			for (auto &statement : loop_commands) {
+				statement->Execute(context);
+			}
+			context.running_loops.pop_back();
+			loop_def.loop_idx++;
+			if (loop_def.loop_idx >= loop_def.loop_end) {
+				// finished
+				break;
+			}
 		}
 	}
-	runner.running_loops.pop_back();
 }
 
 static void OutputSQLQuery(const string &sql_query) {
@@ -147,27 +222,30 @@ static void OutputSQLQuery(const string &sql_query) {
 	fprintf(stderr, "%s", query.c_str());
 }
 
-void Query::ExecuteInternal() {
-	auto connection = CommandConnection();
+void Query::ExecuteInternal(ExecuteContext &context) const {
+	auto connection = CommandConnection(context);
 
 	if (runner.output_result_mode || runner.debug_mode) {
 		TestResultHelper::PrintLineSep();
 		TestResultHelper::PrintHeader("File " + file_name + ":" + to_string(query_line) + ")");
-		TestResultHelper::PrintSQL(sql_query);
+		TestResultHelper::PrintSQL(context.sql_query);
 		TestResultHelper::PrintLineSep();
 	}
 
 	if (runner.output_sql) {
-		OutputSQLQuery(sql_query);
+		OutputSQLQuery(context.sql_query);
 		return;
 	}
-	auto result = ExecuteQuery(connection, file_name, query_line, sql_query);
+	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
-	TestResultHelper helper(*this, *result);
-	helper.CheckQueryResult(move(result));
+	TestResultHelper helper(context, *this, *result);
+	helper.CheckQueryResult(context, move(result));
 }
 
-void RestartCommand::ExecuteInternal() {
+void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
+	if (context.is_parallel) {
+		throw std::runtime_error("Cannot restart database in parallel");
+	}
 	// We save the main connection configurations to pass it to the new connection
 	runner.config->options = runner.con->context->db->config.options;
 	auto client_config = runner.con->context->config;
@@ -192,24 +270,24 @@ void RestartCommand::ExecuteInternal() {
 	runner.con->context->client_data->prepared_statements = move(prepared_statements);
 }
 
-void Statement::ExecuteInternal() {
-	auto connection = CommandConnection();
+void Statement::ExecuteInternal(ExecuteContext &context) const {
+	auto connection = CommandConnection(context);
 
 	if (runner.output_result_mode || runner.debug_mode) {
 		TestResultHelper::PrintLineSep();
 		TestResultHelper::PrintHeader("File " + file_name + ":" + to_string(query_line) + ")");
-		TestResultHelper::PrintSQL(sql_query);
+		TestResultHelper::PrintSQL(context.sql_query);
 		TestResultHelper::PrintLineSep();
 	}
 
 	query_break(query_line);
 	if (runner.output_sql) {
-		OutputSQLQuery(sql_query);
+		OutputSQLQuery(context.sql_query);
 		return;
 	}
-	auto result = ExecuteQuery(connection, file_name, query_line, sql_query);
+	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
-	TestResultHelper helper(*this, *result);
+	TestResultHelper helper(context, *this, *result);
 	helper.CheckStatementResult();
 }
 
