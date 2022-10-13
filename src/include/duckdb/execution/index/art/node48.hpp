@@ -16,7 +16,7 @@ class Node48 : public Node {
 public:
 	explicit Node48();
 	uint8_t child_index[256];
-	SwizzleablePointer children[48];
+	ARTPointer children[48];
 
 public:
 	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists
@@ -38,7 +38,7 @@ public:
 	//! Erase the child at pos and (if necessary) shrink to Node16
 	static void EraseChild(Node *&node, int pos, ART &art);
 	//! Merge Node48 into l_node
-	static void Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos);
+	static bool Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos);
 	//! Returns the size (maximum capacity) of the Node48
 	static idx_t GetSize();
 };

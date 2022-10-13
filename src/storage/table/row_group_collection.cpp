@@ -52,10 +52,14 @@ void RowGroupCollection::AppendRowGroup(idx_t start_row) {
 
 void RowGroupCollection::Verify() {
 #ifdef DEBUG
+	idx_t current_total_rows = 0;
 	for (auto segment = row_groups->GetRootSegment(); segment; segment = segment->next.get()) {
 		auto &row_group = (RowGroup &)*segment;
 		row_group.Verify();
+		D_ASSERT(row_group.start == this->row_start + current_total_rows);
+		current_total_rows += row_group.count;
 	}
+	D_ASSERT(current_total_rows == total_rows.load());
 #endif
 }
 
@@ -157,14 +161,22 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+TableAppendState::TableAppendState()
+    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0), remaining(0) {
+}
+
+TableAppendState::~TableAppendState() {
+	D_ASSERT(Exception::UncaughtException() || remaining == 0);
+}
+
 bool RowGroupCollection::IsEmpty() const {
 	return row_groups->GetRootSegment() == nullptr;
 }
 
 void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count) {
-	state.remaining_append_count = append_count;
 	state.row_start = total_rows;
 	state.current_row = state.row_start;
+	state.total_append_count = 0;
 
 	// start writing to the row_groups
 	lock_guard<mutex> row_group_lock(row_groups->node_lock);
@@ -172,19 +184,29 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 		// empty row group collection: empty first row group
 		AppendRowGroup(row_start);
 	}
-	auto last_row_group = (RowGroup *)row_groups->GetLastSegment();
-	D_ASSERT(this->row_start + total_rows == last_row_group->start + last_row_group->count);
-	last_row_group->InitializeAppend(transaction, state.row_group_append_state, state.remaining_append_count);
-	total_rows += append_count;
+	state.start_row_group = (RowGroup *)row_groups->GetLastSegment();
+	D_ASSERT(this->row_start + total_rows == state.start_row_group->start + state.start_row_group->count);
+	state.start_row_group->InitializeAppend(state.row_group_append_state);
+	state.remaining = append_count;
+	if (state.remaining > 0) {
+		state.transaction = transaction;
+		state.start_row_group->AppendVersionInfo(transaction, state.remaining);
+		total_rows += state.remaining;
+	}
 }
 
-void RowGroupCollection::Append(TransactionData transaction, DataChunk &chunk, TableAppendState &state,
-                                TableStatistics &stats) {
+void RowGroupCollection::InitializeAppend(TableAppendState &state) {
+	TransactionData tdata(0, 0);
+	InitializeAppend(tdata, state, 0);
+}
+
+void RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats) {
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
 
 	idx_t append_count = chunk.size();
 	idx_t remaining = chunk.size();
+	state.total_append_count += append_count;
 	while (true) {
 		auto current_row_group = state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
@@ -198,8 +220,10 @@ void RowGroupCollection::Append(TransactionData transaction, DataChunk &chunk, T
 				current_row_group->MergeIntoStatistics(i, *stats.GetStats(i).stats);
 			}
 		}
-		state.remaining_append_count -= append_count;
 		remaining -= append_count;
+		if (state.remaining > 0) {
+			state.remaining -= append_count;
+		}
 		if (remaining > 0) {
 			// we expect max 1 iteration of this loop (i.e. a single chunk should never overflow more than one
 			// row_group)
@@ -213,11 +237,15 @@ void RowGroupCollection::Append(TransactionData transaction, DataChunk &chunk, T
 				chunk.Slice(sel, remaining);
 			}
 			// append a new row_group
-			AppendRowGroup(current_row_group->start + current_row_group->count);
+			auto next_start = current_row_group->start + state.row_group_append_state.offset_in_row_group;
+			AppendRowGroup(next_start);
 			// set up the append state for this row_group
 			lock_guard<mutex> row_group_lock(row_groups->node_lock);
 			auto last_row_group = (RowGroup *)row_groups->GetLastSegment();
-			last_row_group->InitializeAppend(transaction, state.row_group_append_state, state.remaining_append_count);
+			last_row_group->InitializeAppend(state.row_group_append_state);
+			if (state.remaining > 0) {
+				last_row_group->AppendVersionInfo(state.transaction, state.remaining);
+			}
 			continue;
 		} else {
 			break;
@@ -232,6 +260,22 @@ void RowGroupCollection::Append(TransactionData transaction, DataChunk &chunk, T
 		}
 		stats.GetStats(col_idx).stats->UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
+}
+
+void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
+	D_ASSERT(state.transaction.transaction_id == 0);
+	auto remaining = state.total_append_count;
+	auto row_group = state.start_row_group;
+	while (remaining > 0) {
+		auto append_count = MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - row_group->count);
+		row_group->AppendVersionInfo(transaction, append_count);
+		remaining -= append_count;
+		row_group = (RowGroup *)row_group->next.get();
+	}
+	total_rows += state.total_append_count;
+
+	state.total_append_count = 0;
+	state.start_row_group = nullptr;
 }
 
 void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {

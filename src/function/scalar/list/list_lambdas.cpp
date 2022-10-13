@@ -145,6 +145,15 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 		return;
 	}
 
+	// e.g. window functions in sub queries return dictionary vectors, which segfault on expression execution
+	// if not flattened first
+	for (idx_t i = 1; i < args.ColumnCount(); i++) {
+		if (args.data[i].GetVectorType() != VectorType::FLAT_VECTOR &&
+		    args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			args.data[i].Flatten(count);
+		}
+	}
+
 	// get the lists data
 	UnifiedVectorFormat lists_data;
 	lists.ToUnifiedFormat(count, lists_data);

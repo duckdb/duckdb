@@ -475,6 +475,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				if (TestForceStorage()) {
 					return;
 				}
+			} else if (param == "strinline") {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+				return;
+#endif
 			} else if (param == "vector_size") {
 				if (token.parameters.size() != 2) {
 					parser.Fail("require vector_size requires a parameter");

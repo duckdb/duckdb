@@ -67,10 +67,10 @@ void Node48::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 	if (node->count < 48) {
 		// Insert element
 		idx_t pos = n->count;
-		if (n->children[pos].pointer) {
+		if (n->children[pos]) {
 			// find an empty position in the node list if the current position is occupied
 			pos = 0;
-			while (n->children[pos].pointer) {
+			while (n->children[pos]) {
 				pos++;
 			}
 		}
@@ -114,7 +114,7 @@ void Node48::EraseChild(Node *&node, int pos, ART &art) {
 	}
 }
 
-void Node48::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
+bool Node48::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
 
 	Node48 *r_n = (Node48 *)info.r_node;
 
@@ -123,9 +123,12 @@ void Node48::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
 
 			auto l_child_pos = info.l_node->GetChildPos(i);
 			auto key_byte = (uint8_t)i;
-			Node::MergeAtByte(info, depth, l_child_pos, i, key_byte, l_parent, l_pos);
+			if (!Node::MergeAtByte(info, depth, l_child_pos, i, key_byte, l_parent, l_pos)) {
+				return false;
+			}
 		}
 	}
+	return true;
 }
 
 idx_t Node48::GetSize() {
