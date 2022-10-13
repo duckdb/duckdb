@@ -204,7 +204,7 @@ public:
 	}
 
 	inline void SetTrailingZeros(uint8_t value) {
-		assert(value <= sizeof(CHIMP_TYPE) * 8);
+		D_ASSERT(value <= sizeof(CHIMP_TYPE) * 8);
 		trailing_zeros = value;
 	}
 
