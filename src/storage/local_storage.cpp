@@ -159,10 +159,10 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	auto row_group = storage->row_groups->Append(chunk, state.append_state, storage->stats);
 
 	//! Check if we should pre-emptively flush blocks to disk
-	storage->CheckFlush(row_group);
+	storage->CheckFlushToDisk(row_group);
 }
 
-void LocalTableStorage::CheckFlush(RowGroup *row_group) {
+void LocalTableStorage::CheckFlushToDisk(RowGroup *row_group) {
 	if (table.info->IsTemporary() || StorageManager::GetStorageManager(table.db).InMemory()) {
 		return;
 	}
@@ -193,12 +193,21 @@ void LocalTableStorage::CheckFlush(RowGroup *row_group) {
 			compression_types.push_back(column.CompressionType());
 		}
 	}
+	FlushToDisk();
+	prev_row_group = row_group;
+}
+
+void LocalTableStorage::FlushToDisk() {
+	D_ASSERT(prev_row_group);
+	D_ASSERT(deleted_rows == 0);
+	D_ASSERT(table.info->indexes.Empty());
+	D_ASSERT(partial_manager);
 	auto row_group_pointer = prev_row_group->WriteToDisk(*partial_manager, compression_types);
 	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
 		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
 		stats.MergeStats(col_idx, *row_group_pointer.statistics[col_idx]);
 	}
-	prev_row_group = row_group;
+	prev_row_group = nullptr;
 }
 
 void LocalStorage::FinalizeAppend(LocalAppendState &state) {
@@ -293,6 +302,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		// table is currently empty OR we are bulk appending to a table with existing storage: move over the storage
 		// directly
 		if (storage.partial_manager) {
+			storage.FlushToDisk();
 			storage.partial_manager->FlushPartialBlocks();
 			storage.partial_manager.reset();
 		}
