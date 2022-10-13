@@ -53,7 +53,7 @@ public:
 	//! Initialize an append with a known number of rows. FinalizeAppend should not be called after appending is done.
 	void InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count);
 	//! Appends to the row group collection - writes a pointer to the last row group that has been written to
-	RowGroup * Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
+	RowGroup *Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
 	//! FinalizeAppend flushes an append with a variable number of rows.
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
