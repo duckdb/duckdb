@@ -30,7 +30,11 @@ private:
 	//! Find Joins with a DelimGet that can be removed
 	void FindCandidates(unique_ptr<LogicalOperator> *op_ptr, vector<unique_ptr<LogicalOperator> *> &candidates);
 	//! Try to remove a Join with a DelimGet, returns true if it was successful
-	bool RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, DeliminatorPlanUpdater &updater);
+	bool RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<LogicalOperator> *candidate,
+	                     DeliminatorPlanUpdater &updater);
+	//! Try to remove an inequality Join with a DelimGet, returns true if it was successful
+	bool RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<LogicalOperator> *candidate,
+	                               DeliminatorPlanUpdater &updater);
 };
 
 } // namespace duckdb

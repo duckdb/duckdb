@@ -1,0 +1,22 @@
+# name: test/issues/general/test_4950.test
+# description: Issue 4950: Subquery is not transformed into an anti-join by the optimizer
+# group: [general]
+
+statement ok
+create table lineitem (l_orderkey int, l_suppkey int);
+
+statement ok
+insert into lineitem values (1,1),(1,2),(3,3),(4,5),(5,5),(6,5);
+
+statement ok
+pragma explain_output = optimized_only
+
+query II
+explain select * from lineitem l1 where exists (
+    select * from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+logical_opt	<!REGEX>:.*INNER.*
