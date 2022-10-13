@@ -121,7 +121,13 @@ public:
 		D_ASSERT(group_size <= LeftInGroup());
 
 		if (GroupFinished() && total_value_count < count) {
-			LoadGroup(group_state.values);
+			if (group_size == PatasPrimitives::PATAS_GROUP_SIZE) {
+				LoadGroup(values);
+				total_value_count += group_size;
+				return;
+			} else {
+				LoadGroup(group_state.values);
+			}
 		}
 		group_state.Scan((uint8_t *)values, group_size);
 
