@@ -3,14 +3,29 @@
 # group: [general]
 
 statement ok
+pragma explain_output = optimized_only
+
+statement ok
+pragma enable_verification
+
+statement ok
 create table lineitem (l_orderkey int, l_suppkey int);
 
 statement ok
 insert into lineitem values (1,1),(1,2),(3,3),(4,5),(5,5),(6,5);
 
-statement ok
-pragma explain_output = optimized_only
+query II
+select * from lineitem l1 where exists (
+    select * from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+1	1
+1	2
 
+# deliminator should remove INNER
 query II
 explain select * from lineitem l1 where exists (
     select * from lineitem l2
@@ -20,3 +35,87 @@ explain select * from lineitem l1 where exists (
 );
 ----
 logical_opt	<!REGEX>:.*INNER.*
+
+# deliminator should remove DELIM_JOIN as well
+query II
+explain select * from lineitem l1 where exists (
+    select * from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# SINGLE join - same story
+query II
+select * from lineitem l1 where (
+    select l_orderkey from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+1	1
+1	2
+
+query II
+explain select * from lineitem l1 where (
+    select l_orderkey from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+logical_opt	<!REGEX>:.*INNER.*
+
+statement ok
+drop table lineitem
+
+require tpch
+
+statement ok
+call dbgen(sf=0.01)
+
+# now the real kicker, tpch q21, should not have any DELIM_JOIN
+query II
+EXPLAIN SELECT
+    s_name,
+    count(*) AS numwait
+FROM
+    supplier,
+    lineitem l1,
+    orders,
+    nation
+WHERE
+    s_suppkey = l1.l_suppkey
+    AND o_orderkey = l1.l_orderkey
+    AND o_orderstatus = 'F'
+    AND l1.l_receiptdate > l1.l_commitdate
+    AND EXISTS (
+        SELECT
+            *
+        FROM
+            lineitem l2
+        WHERE
+            l2.l_orderkey = l1.l_orderkey
+            AND l2.l_suppkey <> l1.l_suppkey)
+    AND NOT EXISTS (
+        SELECT
+            *
+        FROM
+            lineitem l3
+        WHERE
+            l3.l_orderkey = l1.l_orderkey
+            AND l3.l_suppkey <> l1.l_suppkey
+            AND l3.l_receiptdate > l3.l_commitdate)
+    AND s_nationkey = n_nationkey
+    AND n_name = 'SAUDI ARABIA'
+GROUP BY
+    s_name
+ORDER BY
+    numwait DESC,
+    s_name
+LIMIT 100;
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
