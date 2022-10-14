@@ -2,12 +2,6 @@
 # description: Test large interleaved transactions
 # group: [storage]
 
-# this is a temporary restriction: we currently do not allow committing commits when deletes/updates have been made to the non-committed data
-# this is because with interleaved transactions we get incorrect row ids in the deletes/updates in the WAL which leads to errors on reload
-# for this reason this test is currently skipped
-# once this is fixed this test should be re-enabled
-mode skip
-
 # load the DB from disk
 load __TEST_DIR__/test_large_interleaved.db
 
