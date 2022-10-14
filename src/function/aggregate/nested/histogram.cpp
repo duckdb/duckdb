@@ -163,7 +163,14 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
-	D_ASSERT(arguments.size() == 1);
+    D_ASSERT(arguments.size() == 1);
+
+    if (arguments[0]->return_type.id() == LogicalTypeId::LIST ||
+    arguments[0]->return_type.id() == LogicalTypeId::STRUCT ||
+    arguments[0]->return_type.id() == LogicalTypeId::MAP) {
+        throw NotImplementedException("Unimplemented type for histogram %s", arguments[0]->return_type.ToString());
+    }
+
 	child_list_t<LogicalType> struct_children;
 	struct_children.push_back({"key", LogicalType::LIST(arguments[0]->return_type)});
 	struct_children.push_back({"value", LogicalType::LIST(LogicalType::UBIGINT)});
