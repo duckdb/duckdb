@@ -27,21 +27,34 @@ public:
 	idx_t group_idx = 0;
 	idx_t data_byte_size = 0;
 	idx_t metadata_byte_size = 0;
+	//! To optimally store NULL, we keep track of the directly previous value
+	EXACT_TYPE previous_value;
 
 public:
 	void WriteValue(EXACT_TYPE value, bool is_valid) {
-		// TODO: transform NULL values to a value that requires the least amount of bits to store
-		// 3 + 6 + 7 + 0 is probably possible
-
+		if (!is_valid) {
+			value = previous_value;
+		}
 		//! Keep track of when a segment would end, to accurately simulate Reset()s in compress step
 		if (!HasEnoughSpace()) {
 			StartNewSegment();
 		}
 		patas::PatasCompression<EXACT_TYPE, true>::Store(value, state.patas_state);
+		previous_value = value;
 		group_idx++;
 		if (group_idx == PatasPrimitives::PATAS_GROUP_SIZE) {
 			StartNewGroup();
 		}
+	}
+
+	idx_t CurrentGroupMetadataSize() const {
+		idx_t metadata_size = 0;
+
+		// Offset to the data of the group
+		metadata_size += sizeof(uint32_t);
+		// Packed Trailing zeros + significant bytes + index_offsets for group
+		metadata_size += 2 * group_idx;
+		return metadata_size;
 	}
 
 	void StartNewSegment() {
@@ -51,32 +64,17 @@ public:
 		state.patas_state.byte_writer.SetStream(nullptr);
 	}
 
-	idx_t CurrentGroupMetadataSize() const {
-		// Metadata size is constant, we require only 3 + 6 bits of metadata per value, aligned to bitpacking algorithm
-		// group size (32)
-		const uint64_t byte_count_bits =
-		    AlignValue<uint64_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(state.patas_state.Index()) *
-		    PatasPrimitives::BYTECOUNT_BITSIZE;
-		const uint64_t trailing_zero_bits =
-		    AlignValue<uint64_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(state.patas_state.Index()) *
-		    SignificantBits<EXACT_TYPE>::size;
-		return byte_count_bits + trailing_zero_bits;
-	}
-
 	idx_t RequiredSpace() const {
-		idx_t required_space = sizeof(EXACT_TYPE);
-		// Any value could be the last,
-		// so the cost of flushing metadata should be factored into the cost
-		// byte offset of data
-		required_space += sizeof(byte_index_t);
-		// amount of bitpacked blocks (can probably be removed!!)
-		required_space += sizeof(uint8_t);
+		idx_t required_space = 0;
+		required_space += sizeof(EXACT_TYPE);
+		required_space += sizeof(uint16_t);
 		return required_space;
 	}
 
 	void StartNewGroup() {
-		group_idx = 0;
+		previous_value = 0;
 		metadata_byte_size += CurrentGroupMetadataSize();
+		group_idx = 0;
 		state.patas_state.Reset();
 	}
 
@@ -86,8 +84,7 @@ public:
 
 	bool HasEnoughSpace() {
 		idx_t total_bytes_used = 0;
-		total_bytes_used += PatasPrimitives::HEADER_SIZE;
-		total_bytes_used += AlignValue(UsedSpace() + RequiredSpace());
+		total_bytes_used += AlignValue(PatasPrimitives::HEADER_SIZE + UsedSpace() + RequiredSpace());
 		total_bytes_used += CurrentGroupMetadataSize();
 		total_bytes_used += metadata_byte_size;
 		return total_bytes_used <= Storage::BLOCK_SIZE;
@@ -134,6 +131,7 @@ idx_t PatasFinalAnalyze(AnalyzeState &state) {
 	// Finish the last "segment"
 	patas_state.StartNewSegment();
 	const auto final_analyze_size = patas_state.TotalUsedBytes();
+	printf("ANALYZE: ROWGROUP_SIZE: %llu\n", final_analyze_size);
 	return final_analyze_size;
 }
 

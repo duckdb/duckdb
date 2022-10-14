@@ -79,8 +79,8 @@ public:
 	}
 
 	void StartNewGroup() {
-		group_idx = 0;
 		metadata_byte_size += CurrentGroupMetadataSize();
+		group_idx = 0;
 		state.chimp_state.Reset();
 	}
 
