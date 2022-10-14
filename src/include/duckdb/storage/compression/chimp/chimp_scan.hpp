@@ -141,7 +141,6 @@ public:
 		group_state.Init(start_of_data_segment);
 		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
 		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
-		LoadGroup();
 	}
 
 	BufferHandle handle;
@@ -165,12 +164,12 @@ public:
 		D_ASSERT(group_size <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
-		group_state.Scan(values, group_size);
-
-		total_value_count += group_size;
 		if (GroupFinished() && total_value_count < segment_count) {
 			LoadGroup();
 		}
+		group_state.Scan(values, group_size);
+
+		total_value_count += group_size;
 	}
 
 	void LoadGroup() {

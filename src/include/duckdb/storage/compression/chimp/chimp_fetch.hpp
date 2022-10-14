@@ -32,12 +32,12 @@ void ChimpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 	scan_state.Skip(segment, row_id);
 	auto result_data = FlatVector::GetData<INTERNAL_TYPE>(result);
 
-	scan_state.group_state.Scan(&result_data[result_idx], 1);
-
-	scan_state.total_value_count++;
 	if (scan_state.GroupFinished() && scan_state.total_value_count < scan_state.segment_count) {
 		scan_state.LoadGroup();
 	}
+	scan_state.group_state.Scan(&result_data[result_idx], 1);
+
+	scan_state.total_value_count++;
 }
 
 } // namespace duckdb
