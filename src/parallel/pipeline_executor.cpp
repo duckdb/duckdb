@@ -175,9 +175,7 @@ void PipelineExecutor::PushFinalize() {
 	// we still need to flush caches from the CROSS_PRODUCT
 	D_ASSERT(in_process_operators.empty());
 
-	if (can_cache_in_pipeline) {
-		FlushCachingOperatorsPush();
-	}
+	FlushCachingOperatorsPush();
 
 	D_ASSERT(local_sink_state);
 	// run the combine for the sink
@@ -204,9 +202,7 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 				source_chunk.Reset();
 				FetchFromSource(source_chunk);
 				if (source_chunk.size() == 0) {
-					if (can_cache_in_pipeline) {
-						FlushCachingOperatorsPull(result);
-					}
+					FlushCachingOperatorsPull(result);
 					break;
 				}
 			}
