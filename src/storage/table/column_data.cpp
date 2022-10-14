@@ -25,7 +25,7 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
     : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
-      type(move(other.type)), parent(parent), updates(move(other.updates)), version(parent->version + 1) {
+      type(move(other.type)), parent(parent), updates(move(other.updates)), version(parent ? parent->version + 1 : 0) {
 	idx_t offset = 0;
 	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->next.get()) {
 		auto &other = (ColumnSegment &)*segment;
@@ -50,6 +50,10 @@ const LogicalType &ColumnData::RootType() const {
 		return parent->RootType();
 	}
 	return type;
+}
+
+void ColumnData::IncrementVersion() {
+	version++;
 }
 
 idx_t ColumnData::GetMaxEntry() {

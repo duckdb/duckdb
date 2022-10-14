@@ -63,6 +63,8 @@ public:
 	DataTableInfo &GetTableInfo() const;
 	virtual idx_t GetMaxEntry();
 
+	void IncrementVersion();
+
 	//! The root type of the column
 	const LogicalType &RootType() const;
 

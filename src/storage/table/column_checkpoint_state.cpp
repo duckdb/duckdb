@@ -29,13 +29,15 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 
 struct PartialBlockForCheckpoint : PartialBlock {
 	struct PartialColumnSegment {
+		ColumnData *data;
 		ColumnSegment *segment;
 		uint32_t offset_in_block;
 	};
 
 public:
-	PartialBlockForCheckpoint(ColumnSegment *first_segment, BlockManager &block_manager, PartialBlockState state)
-	    : PartialBlock(state), first_segment(first_segment), block_manager(block_manager) {
+	PartialBlockForCheckpoint(ColumnData *first_data, ColumnSegment *first_segment, BlockManager &block_manager,
+	                          PartialBlockState state)
+	    : PartialBlock(state), first_data(first_data), first_segment(first_segment), block_manager(block_manager) {
 	}
 
 	~PartialBlockForCheckpoint() override {
@@ -48,6 +50,7 @@ public:
 	// the block to get written to storage (via BlockManger::ConvertToPersistent),
 	// and all segments to have their references updated
 	// (via ColumnSegment::ConvertToPersistent)
+	ColumnData *first_data;
 	ColumnSegment *first_segment;
 	BlockManager &block_manager;
 	vector<PartialColumnSegment> tail_segments;
@@ -62,10 +65,12 @@ public:
 		// At this point, we've already copied all data from tail_segments
 		// into the page owned by first_segment. We flush all segment data to
 		// disk with the following call.
+		first_data->IncrementVersion();
 		first_segment->ConvertToPersistent(&block_manager, state.block_id);
 		// Now that the page is persistent, update tail_segments to point to the
 		// newly persistent block.
 		for (auto e : tail_segments) {
+			e.data->IncrementVersion();
 			e.segment->MarkAsPersistent(first_segment->block, e.offset_in_block);
 		}
 		first_segment = nullptr;
@@ -73,12 +78,13 @@ public:
 	}
 
 	void Clear() override {
+		first_data = nullptr;
 		first_segment = nullptr;
 		tail_segments.clear();
 	}
 
-	void AddSegmentToTail(ColumnSegment *segment, uint32_t offset_in_block) {
-		tail_segments.push_back({segment, offset_in_block});
+	void AddSegmentToTail(ColumnData *data, ColumnSegment *segment, uint32_t offset_in_block) {
+		tail_segments.push_back({data, segment, offset_in_block});
 	}
 };
 
@@ -114,12 +120,12 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 			auto new_handle = buffer_manager.Pin(pstate->first_segment->block);
 			// memcpy the contents of the old block to the new block
 			memcpy(new_handle.Ptr() + offset_in_block, old_handle.Ptr(), segment_size);
-			pstate->AddSegmentToTail(segment.get(), offset_in_block);
+			pstate->AddSegmentToTail(&column_data, segment.get(), offset_in_block);
 		} else {
 			// Create a new block for future reuse.
 			D_ASSERT(offset_in_block == 0);
-			allocation.partial_block =
-			    make_unique<PartialBlockForCheckpoint>(segment.get(), *allocation.block_manager, allocation.state);
+			allocation.partial_block = make_unique<PartialBlockForCheckpoint>(
+			    &column_data, segment.get(), *allocation.block_manager, allocation.state);
 		}
 		// Writer will decide whether to reuse this block.
 		partial_block_manager.RegisterPartialBlock(move(allocation));
