@@ -45,8 +45,6 @@ public:
 	idx_t deleted_rows;
 	//! The partial block manager (if we created one yet)
 	unique_ptr<PartialBlockManager> partial_manager;
-	//! The set of column compression types (if any)
-	vector<CompressionType> compression_types;
 	//! The set of blocks that have been pre-emptively written to disk
 	unordered_set<block_id_t> written_blocks;
 

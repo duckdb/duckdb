@@ -44,8 +44,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
                                      const LogicalType &target_type, const vector<column_t> &bound_columns,
                                      Expression &cast_expr)
     : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows),
-      partial_manager(move(parent.partial_manager)), compression_types(move(parent.compression_types)),
-      written_blocks(move(parent.written_blocks)) {
+      partial_manager(move(parent.partial_manager)), written_blocks(move(parent.written_blocks)) {
 	if (partial_manager) {
 		partial_manager->FlushPartialBlocks();
 	}
@@ -58,8 +57,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
     : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows),
-      partial_manager(move(parent.partial_manager)), compression_types(move(parent.compression_types)),
-      written_blocks(move(parent.written_blocks)) {
+      partial_manager(move(parent.partial_manager)), written_blocks(move(parent.written_blocks)) {
 	if (partial_manager) {
 		partial_manager->FlushPartialBlocks();
 	}
@@ -72,8 +70,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column,
                                      Expression *default_value)
     : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows),
-      partial_manager(move(parent.partial_manager)), compression_types(move(parent.compression_types)),
-      written_blocks(move(parent.written_blocks)) {
+      partial_manager(move(parent.partial_manager)), written_blocks(move(parent.written_blocks)) {
 	idx_t new_column_idx = parent.table.column_definitions.size();
 	stats.InitializeAddColumn(parent.stats, new_column.GetType());
 	row_groups = parent.row_groups->AddColumn(new_column, default_value, stats.GetStats(new_column_idx));
@@ -198,12 +195,8 @@ void LocalTableStorage::CheckFlushToDisk() {
 	// we should! write the second-to-last row group to disk
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
-		D_ASSERT(compression_types.empty());
 		auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
 		partial_manager = make_unique<PartialBlockManager>(block_manager);
-		for (auto &column : table.column_definitions) {
-			compression_types.push_back(column.CompressionType());
-		}
 	}
 	// flush second-to-last row group
 	auto row_group = row_groups->GetRowGroup(-2);
@@ -216,6 +209,12 @@ void LocalTableStorage::FlushToDisk(RowGroup *row_group) {
 	D_ASSERT(deleted_rows == 0);
 	D_ASSERT(table.info->indexes.Empty());
 	D_ASSERT(partial_manager);
+	//! The set of column compression types (if any)
+	vector<CompressionType> compression_types;
+	D_ASSERT(compression_types.empty());
+	for (auto &column : table.column_definitions) {
+		compression_types.push_back(column.CompressionType());
+	}
 	auto row_group_pointer = row_group->WriteToDisk(*partial_manager, compression_types);
 	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
 		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
