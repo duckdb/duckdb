@@ -557,6 +557,8 @@ struct GetNextArrowIpcTask : public Task {
 		auto deleter = [](Napi::Env, void* finalizeData, void* hint){ delete static_cast<std::unique_ptr<duckdb::DataChunk>*>(hint);};
 		auto array_buffer = Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(), deleter,
 		                                           data_chunk_ptr);
+		// TODO duckdb in debug mode seems to complain about moving these buffers out of the query result?
+
 
 		deferred.Resolve(array_buffer);
 	}

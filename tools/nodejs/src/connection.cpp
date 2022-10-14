@@ -354,6 +354,8 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 		force_register = info[2].As<Napi::Boolean>().Value();
 	}
 
+	array_references[name] = Napi::Persistent(array);
+
 	if (!force_register && buffers.find(name) != buffers.end()) {
 		Napi::TypeError::New(env, "Buffer with this name already exists").ThrowAsJavaScriptException();
 		return env.Null();

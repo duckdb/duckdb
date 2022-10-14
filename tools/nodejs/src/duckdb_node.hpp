@@ -135,6 +135,7 @@ public:
 	Database *database_ref;
 	std::unordered_map<std::string, duckdb_node_udf_function_t> udfs;
 	std::unordered_map<std::string, std::vector<std::pair<uint64_t, uint64_t>>> buffers;
+	std::unordered_map<std::string, Napi::Reference<Napi::Array>> array_references;
 };
 
 struct StatementParam;
