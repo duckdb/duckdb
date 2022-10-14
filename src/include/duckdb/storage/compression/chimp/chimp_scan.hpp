@@ -159,7 +159,7 @@ public:
 		return (total_value_count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE) == 0;
 	}
 
-	template <class CHIMP_TYPE, bool FROM_START = true>
+	template <class CHIMP_TYPE>
 	void ScanGroup(CHIMP_TYPE *values, idx_t group_size) {
 		D_ASSERT(group_size <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
@@ -234,11 +234,7 @@ public:
 
 		while (skip_count) {
 			auto skip_size = MinValue(skip_count, LeftInGroup());
-			if (!group_state.Started()) {
-				ScanGroup<CHIMP_TYPE, true>(buffer, skip_size);
-			} else {
-				ScanGroup<CHIMP_TYPE, false>(buffer, skip_size);
-			}
+			ScanGroup<CHIMP_TYPE>(buffer, skip_size);
 			skip_count -= skip_size;
 		}
 	}
@@ -264,24 +260,10 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 
 	auto current_result_ptr = (INTERNAL_TYPE *)(result_data + result_offset);
 
-	auto scanned = MinValue(scan_count, scan_state.LeftInGroup());
-
-	if (!scan_state.group_state.Started()) {
-		scan_state.template ScanGroup<INTERNAL_TYPE, true>(current_result_ptr, scanned);
-	} else {
-		scan_state.template ScanGroup<INTERNAL_TYPE, false>(current_result_ptr, scanned);
-	}
-	scan_count -= scanned;
-	if (!scan_count) {
-		//! Already scanned everything
-		return;
-	}
-	// We know for sure that the last group has ended
-	D_ASSERT(!scan_state.group_state.Started());
-	while (scan_count) {
-		auto to_scan = MinValue<idx_t>(scan_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
-		scan_state.template ScanGroup<INTERNAL_TYPE, true>(current_result_ptr + scanned, to_scan);
-		scan_count -= to_scan;
+	idx_t scanned = 0;
+	while (scanned < scan_count) {
+		idx_t to_scan = MinValue(scan_count - scanned, LeftInGroup());
+		ScanGroup<CHIMP_TYPE>(current_result_ptr + scanned, to_scan);
 		scanned += to_scan;
 	}
 }
