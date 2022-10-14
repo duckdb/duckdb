@@ -6,19 +6,19 @@ name Cast VARCHAR -> LIST
 group cast
 
 load
-CREATE TABLE varchars AS SELECT [i, i+1, i+2]::VARCHAR col FROM range(0, 10000000) tbl(i);
-
-#run
-#SELECT MIN(CAST(col AS INT[])[1]) FROM varchars;
-
-#result I
-#0
+CREATE TABLE varchars AS SELECT [i, NULL, i+2]::VARCHAR col FROM range(0, 10000000) tbl(i);
 
 run
-SELECT MAX(CAST(col AS VARCHAR[])) FROM varchars
+SELECT MIN(CAST(col AS INT[])[1]) FROM varchars;
 
 result I
-[9999999, 10000000]
+0
+
+#run
+#SELECT MAX(CAST(col AS VARCHAR[])) FROM varchars
+
+#result I
+#[9999999, 10000000]
 
 
 #-------------------------------------------------------------------

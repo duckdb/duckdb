@@ -5,8 +5,6 @@
 # statement ok
 # PRAGMA enable_verification
 
-# This already works. Casting to list makes LEN() and other list functions possible
-# https://duckdb.org/docs/sql/functions/nested
 # list_value() creates a list variable
 query I
 SELECT LEN( CAST(list_value(12.25, 13.45) AS INTEGER[]) );
@@ -17,7 +15,7 @@ SELECT LEN( CAST(list_value(12.25, 13.45) AS INTEGER[]) );
 query I
 SELECT LEN( list_value(12.25)::INT[] );
 ----
-1   
+1
 
 # Casting string to int already works
 statement ok
@@ -77,20 +75,19 @@ SELECT CAST('[ [12,13,14], [8, 9], [4], [2,  1,  0] ]' AS VARCHAR[]);
 [[12,13,14], [8, 9], [4], [2,  1,  0] ]
 
 query I
-SELECT CAST('[ [🦆, 🦆, 🦆], [duck, db, 🦆], [🦆], [🦆,  duck,  db] ]' AS VARCHAR[][]);
+SELECT CAST('[[ [🦆, 🦆, 🦆]], [[duck, db, 🦆], [🦆]], [[🦆, duck, db]]]' AS VARCHAR[][][]);
 ----
-[[🦆, 🦆, 🦆], [duck, db, 🦆], [🦆], [🦆, duck, db]]
+[[[🦆, 🦆, 🦆]], [[duck, db, 🦆], [🦆]], [[🦆, duck, db]]]
 
 
 #               Empty list
 # ---------------------------------------------------
 statement error
 SELECT CAST('[]' AS INT[]);
-#should prob not be an error...
+#should prob not be an error, not sure...
 
 statement ok
 SELECT CAST('[]' AS VARCHAR[]);
-
 
 
 #               NULL values
@@ -99,32 +96,44 @@ statement ok
 CREATE TABLE null_tbl(col1 VARCHAR);
 
 statement ok
-INSERT INTO null_tbl VALUES(NULL), (NULL);
+INSERT INTO null_tbl VALUES(NULL), (NULL), ('[NULL]');
 
 query I
 SELECT col1::INT[] FROM null_tbl;
 ----
 NULL
 NULL
+[NULL]
 
-statement ok
+query I
 SELECT CAST(NULL AS INT[]);
+----
+NULL
 
-statement ok
+query I
 SELECT CAST('[NULL]' AS INT[]);
+----
+[NULL]
 
-statement ok
+query I
 SELECT CAST('[NULL]' AS INT[][]);
+----
+[NULL]
 
-statement ok
+query I
 SELECT CAST('[[12,13,14], [8, 9], NULL, [2, 1]]' AS INT[][]);
+----
+[[12, 13, 14], [8, 9], NULL, [2, 1]]
 
-statement ok
+query I
 SELECT CAST('[[12,13,14], [8, 9], [2, NULL, 1]]' AS INT[][]);
+----
+[[12, 13, 14], [8, 9], [2, NULL, 1]]
 
-statement ok
+query I
 SELECT CAST('[ [[12,13,14], NULL], [[4]], NULL, [[2, NULL, 1, 0], [99]] ]' AS INT[][][]);
-
+----
+[[[12, 13, 14], NULL], [[4]], NULL, [[2, NULL, 1, 0], [99]]]
 
 
 #               Try Cast
@@ -178,6 +187,25 @@ SELECT CAST('[''hello'',''world'', ''!'']' AS VARCHAR[]);
 ----
 ['hello', 'world', '!']
 
+query I
+SELECT CAST('[''''hello'''',''''world'''', ''''!'''']' AS VARCHAR[]);
+----
+[''hello'', ''world'', ''!'']
+
+query I
+SELECT CAST('[[ [''🦆, 🦆, 🦆'']], [[duck, db, ''🦆''] ]]' AS VARCHAR[][][]);
+----
+[[['🦆, 🦆, 🦆']], [[duck, db, '🦆']]]
+
+# query I
+# SELECT CAST('[can''t, you''re, i''m]' AS VARCHAR[]);
+# ----
+# [can't, you're, i'm]
+
+query I
+SELECT CAST('["can''t", "you''re", "i''m"]' AS VARCHAR[]);
+----
+["can't", "you're", "i'm"]
 
 
 #               Test for whitespaces
@@ -193,9 +221,9 @@ SELECT CAST('[          [ [12,     13,14], [8, 9         ]  ],[[ 4    ]   ],    
 [[[12, 13, 14], [8, 9]], [[4]], [[2, 1, 0]]]
 
 query I
-SELECT CAST('["   hello","            world", "!         "]' AS VARCHAR[]);
+SELECT CAST('["   hello","          ''  world", "!         "]' AS VARCHAR[]);
 ----
-["   hello", "            world", "!         "]
+["   hello", "          '  world", "!         "]
 
 query I
 SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);     
@@ -328,47 +356,9 @@ SELECT cast(col1 as int[]) FROM tbl WHERE LEN(cast(col1 as int[])) < 4;
 [1, 2, 2]
 [5, 6, 7]
 
-# statement ok
-# CREATE TABLE tbl2 (col1 VARCHAR[]);
-
-# statement ok
-# INSERT INTO tbl2 VALUES ('[2, 3, 8, 1]'), ('[9]'), ('[4]');
-
-# query I
-# SELECT CAST(col1 AS INT[]) FROM tbl2 WHERE LEN(col1 AS int[]) > 3;
-# ----
-# [2, 3, 8, 1]
-
-
-
 
 #               All types:
 # ---------------------------------------------------
-# statement ok
-# CREATE TABLE all_types AS SELECT * FROM test_all_types();
-
-# # foreach colname bool tinyint smallint int bigint hugeint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map
-# foreach colname bool tinyint smallint int bigint hugeint utinyint usmallint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns float double uuid interval varchar blob
-
-# statement ok
-# CREATE TABLE a AS SELECT [${colname}]::VARCHAR varcharlist FROM all_types WHERE ${colname} IS NOT NULL;
-
-# query I
-# SELECT LEN(CAST varcharlist AS typeof(${colname})[]) FROM a;
-# ----
-# 1
-# 1
-
-# statement ok
-# DROP TABLE a;
-
-# endloop
-
-
-# time_tz timestamp_tz 
-# dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid small_enum medium_enum large_enum 
-# double_array date_array timestamp_array timestamptz_array 
-
 
 query I
 SELECT CAST('[[True,False], [true], [FALSE], [false, true]]' AS BOOL[][]);
@@ -392,6 +382,17 @@ SELECT CAST('[[1,2,3], [3.333, 2.2, 1.1], [0]]' AS ${type}[]);
 [[1.0, 2.0, 3.0], [3.333, 2.2, 1.1], [0.0]]
 
 endloop
+
+statement ok
+CREATE TYPE mood AS ENUM('ok', 'sad', 'happy');
+
+query I
+SELECT '[ok,happy]'::MOOD[]
+----
+[ok, happy]
+
+statement error
+SELECT '[nothappy]'::MOOD[]
 
 query I
 SELECT CAST(list_value(date)::VARCHAR AS DATE[]) FROM test_all_types();
@@ -449,3 +450,14 @@ SELECT CAST(list_value(interval)::VARCHAR AS INTERVAL[]) FROM test_all_types();
 [83 years 3 months 999 days 00:16:39.999999]
 [NULL]
 
+
+#               Larger input test
+# ---------------------------------------------------
+
+statement ok
+CREATE TABLE varchars AS SELECT [i, NULL]::VARCHAR col FROM range(0, 10000) tbl(i);
+
+query I
+SELECT MAX(CAST(col AS INT[])[1]) FROM varchars;
+----
+9999
