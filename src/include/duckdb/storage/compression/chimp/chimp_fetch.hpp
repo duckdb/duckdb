@@ -35,7 +35,7 @@ void ChimpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 	scan_state.group_state.Scan(&result_data[result_idx], 1);
 
 	scan_state.total_value_count++;
-	if (scan_state.GroupFinished() && scan_state.total_value_count < segment.count) {
+	if (scan_state.GroupFinished() && scan_state.total_value_count < scan_state.segment_count) {
 		scan_state.LoadGroup();
 	}
 }

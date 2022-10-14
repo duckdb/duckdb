@@ -130,7 +130,7 @@ struct ChimpScanState : public SegmentScanState {
 public:
 	using CHIMP_TYPE = typename ChimpType<T>::type;
 
-	explicit ChimpScanState(ColumnSegment &segment) : segment(segment) {
+	explicit ChimpScanState(ColumnSegment &segment) : segment(segment), segment_count(segment.count) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
 		handle = buffer_manager.Pin(segment.block);
@@ -150,6 +150,7 @@ public:
 	ChimpGroupState<CHIMP_TYPE> group_state;
 
 	ColumnSegment &segment;
+	idx_t segment_count;
 
 	idx_t LeftInGroup() const {
 		return ChimpPrimitives::CHIMP_SEQUENCE_SIZE - (total_value_count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
@@ -167,7 +168,7 @@ public:
 		group_state.Scan(values, group_size);
 
 		total_value_count += group_size;
-		if (GroupFinished() && total_value_count < segment.count) {
+		if (GroupFinished() && total_value_count < segment_count) {
 			LoadGroup();
 		}
 	}
@@ -195,8 +196,8 @@ public:
 		const auto leading_zero_block_ptr = metadata_ptr;
 
 		// Figure out how many flags there are
-		D_ASSERT(segment.count >= total_value_count);
-		auto group_size = MinValue<idx_t>(segment.count - total_value_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
+		D_ASSERT(segment_count >= total_value_count);
+		auto group_size = MinValue<idx_t>(segment_count - total_value_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 		// Reduce by one, because the first value of a group does not have a flag
 		auto flag_count = group_size - 1;
 		uint16_t flag_byte_count = (AlignValue<uint16_t, 4>(flag_count) / 4);
