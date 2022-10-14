@@ -150,6 +150,8 @@ protected:
 	mutex update_lock;
 	//! The updates for this column segment
 	unique_ptr<UpdateSegment> updates;
+	//! The internal version of the column data
+	idx_t version;
 };
 
 } // namespace duckdb

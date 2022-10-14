@@ -71,8 +71,10 @@ public:
 	};
 
 public:
-	explicit LocalStorage(Transaction &transaction) : transaction(transaction) {
-	}
+	explicit LocalStorage(Transaction &transaction);
+
+	static LocalStorage &Get(Transaction &transaction);
+	static LocalStorage &Get(ClientContext &context);
 
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable *table, CollectionScanState &state, TableFilterSet *table_filters);

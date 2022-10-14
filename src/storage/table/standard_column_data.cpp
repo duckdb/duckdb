@@ -63,6 +63,9 @@ idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, 
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	auto scan_count = ColumnData::Scan(transaction, vector_index, state, result);
 	validity.Scan(transaction, vector_index, state.child_states[0], result);
+	if (FlatVector::GetData<int32_t>(result)[1] == 241665) {
+		result.Print(scan_count);
+	}
 	return scan_count;
 }
 

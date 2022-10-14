@@ -41,6 +41,8 @@ public:
 	SegmentBase *GetSegment(idx_t row_number);
 	//! Append a column segment to the tree
 	void AppendSegment(unique_ptr<SegmentBase> segment);
+	//! Debug method, check whether the segment is in the segment tree
+	bool HasSegment(SegmentBase *segment);
 
 	//! Replace this tree with another tree, taking over its nodes in-place
 	void Replace(SegmentTree &other);

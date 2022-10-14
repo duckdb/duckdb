@@ -14,6 +14,9 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// Local Table Storage
+//===--------------------------------------------------------------------===//
 LocalTableStorage::LocalTableStorage(DataTable &table)
     : table(table), allocator(Allocator::Get(table.db)), deleted_rows(0) {
 	auto types = table.GetTypes();
@@ -100,6 +103,20 @@ idx_t LocalTableStorage::EstimatedSize() {
 		row_size += GetTypeIdSize(type.InternalType());
 	}
 	return appended_rows * row_size;
+}
+
+//===--------------------------------------------------------------------===//
+// LocalStorage
+//===--------------------------------------------------------------------===//
+LocalStorage::LocalStorage(Transaction &transaction) : transaction(transaction) {
+}
+
+LocalStorage &LocalStorage::Get(Transaction &transaction) {
+	return transaction.GetLocalStorage();
+}
+
+LocalStorage &LocalStorage::Get(ClientContext &context) {
+	return Transaction::GetTransaction(context).GetLocalStorage();
 }
 
 void LocalStorage::InitializeScan(DataTable *table, CollectionScanState &state, TableFilterSet *table_filters) {

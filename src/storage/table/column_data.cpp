@@ -20,12 +20,12 @@ namespace duckdb {
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type, ColumnData *parent)
     : block_manager(block_manager), info(info), column_index(column_index), start(start_row), type(move(type)),
-      parent(parent) {
+      parent(parent), version(0) {
 }
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
     : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
-      type(move(other.type)), parent(parent), updates(move(other.updates)) {
+      type(move(other.type)), parent(parent), updates(move(other.updates)), version(parent->version + 1) {
 	idx_t offset = 0;
 	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->next.get()) {
 		auto &other = (ColumnSegment &)*segment;
@@ -69,6 +69,8 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.row_index = state.current ? state.current->start : 0;
 	state.internal_index = state.row_index;
 	state.initialized = false;
+	state.version = version;
+	state.scan_state.reset();
 }
 
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
@@ -76,15 +78,23 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 	state.row_index = row_idx;
 	state.internal_index = state.current->start;
 	state.initialized = false;
+	state.version = version;
+	state.scan_state.reset();
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining) {
-	if (!state.initialized) {
+	if (state.version != version) {
+		InitializeScanWithOffset(state, state.row_index);
+		state.current->InitializeScan(state);
+		state.initialized = true;
+	} else if (!state.initialized) {
 		D_ASSERT(state.current);
 		state.current->InitializeScan(state);
 		state.internal_index = state.current->start;
 		state.initialized = true;
 	}
+	D_ASSERT(data.HasSegment(state.current));
+	D_ASSERT(state.version == version);
 	D_ASSERT(state.internal_index <= state.row_index);
 	if (state.internal_index < state.row_index) {
 		state.current->Skip(state);
@@ -369,6 +379,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 
 	// replace the old tree with the new one
 	data.Replace(checkpoint_state->new_tree);
+	version++;
 
 	return checkpoint_state;
 }

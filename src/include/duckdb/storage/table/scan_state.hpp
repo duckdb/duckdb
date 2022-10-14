@@ -20,11 +20,13 @@ class LocalTableStorage;
 class CollectionScanState;
 class Index;
 class RowGroup;
+class RowGroupCollection;
 class UpdateSegment;
 class TableScanState;
 class ColumnSegment;
 class ValiditySegment;
 class TableFilterSet;
+class ColumnData;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
@@ -53,6 +55,10 @@ struct ColumnScanState {
 	bool initialized = false;
 	//! If this segment has already been checked for skipping purposes
 	bool segment_checked = false;
+	//! The version of the column data that we are scanning.
+	//! This is used to detect if the ColumnData has been changed out from under us during a scan
+	//! If this is the case, we re-initialize the scan
+	idx_t version;
 
 public:
 	//! Move the scan state forward by "count" rows (including all child states)
@@ -144,6 +150,8 @@ private:
 };
 
 struct ParallelCollectionScanState {
+	//! The row group collection we are scanning
+	RowGroupCollection *collection;
 	RowGroup *current_row_group;
 	idx_t vector_index;
 	idx_t max_row;

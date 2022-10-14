@@ -39,6 +39,16 @@ idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
 	throw InternalException("Could not find node in column segment tree!");
 }
 
+bool SegmentTree::HasSegment(SegmentBase *segment) {
+	lock_guard<mutex> tree_lock(node_lock);
+	for (auto &node : nodes) {
+		if (node.node == segment) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
 	D_ASSERT(segment);
 	// add the node to the list of nodes
