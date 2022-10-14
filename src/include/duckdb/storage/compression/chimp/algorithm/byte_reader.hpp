@@ -65,7 +65,7 @@ public:
 	}
 
 	template <class T>
-	inline T ReadValue(uint8_t bytes) {
+	inline T ReadValue(uint8_t bytes, uint8_t trailing_zero) {
 		T result = 0;
 		switch (bytes) {
 		case 1:
@@ -97,8 +97,10 @@ public:
 			index += 7;
 			return result;
 		default:
-			result = duckdb::Load<T>(buffer + index);
-			index += sizeof(T);
+			if (sizeof(T) == 8 && trailing_zero < 8) {
+				result = duckdb::Load<T>(buffer + index);
+				index += sizeof(T);
+			}
 			return result;
 		}
 	}

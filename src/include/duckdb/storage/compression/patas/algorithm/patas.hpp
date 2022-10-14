@@ -101,7 +101,7 @@ struct PatasCompression {
 		const bool is_equal = xor_result == 0;
 
 		// Figure out the significant bytes (max 3 bits)
-		const uint8_t significant_bits = is_equal + (!is_equal * (EXACT_TYPE_BITSIZE - trailing_zero - leading_zero));
+		const uint8_t significant_bits = !is_equal * (EXACT_TYPE_BITSIZE - trailing_zero - leading_zero);
 		const uint8_t significant_bytes = (significant_bits >> 3) + ((significant_bits & 7) != 0);
 
 		// Avoid an invalid shift error when xor_result is 0
@@ -109,7 +109,7 @@ struct PatasCompression {
 
 		state.ring_buffer.Insert(value);
 		const uint8_t index_difference = state.ring_buffer.Size() - reference_index;
-		state.UpdateMetadata(trailing_zero, significant_bytes, index_difference);
+		state.UpdateMetadata(trailing_zero - is_equal, significant_bytes, index_difference);
 	}
 };
 
@@ -119,7 +119,7 @@ template <class EXACT_TYPE>
 struct PatasDecompression {
 	static inline EXACT_TYPE DecompressValue(ByteReader &byte_reader, uint8_t byte_count, uint8_t trailing_zero,
 	                                         EXACT_TYPE previous) {
-		return (byte_reader.ReadValue<EXACT_TYPE>(byte_count) << trailing_zero) ^ previous;
+		return (byte_reader.ReadValue<EXACT_TYPE>(byte_count, trailing_zero) << trailing_zero) ^ previous;
 	}
 };
 
