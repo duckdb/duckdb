@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -13,6 +14,12 @@
 namespace duckdb {
 
 struct DateSub {
+	static int64_t SubtractMicros(timestamp_t startdate, timestamp_t enddate) {
+		const auto start = Timestamp::GetEpochMicroSeconds(startdate);
+		const auto end = Timestamp::GetEpochMicroSeconds(enddate);
+		return SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(end, start);
+	}
+
 	template <class TA, class TB, class TR, class OP>
 	static inline void BinaryExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
 		BinaryExecutor::ExecuteWithNulls<TA, TB, TR>(
@@ -99,55 +106,49 @@ struct DateSub {
 	struct DayOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
-			       Interval::MICROS_PER_DAY;
+			return SubtractMicros(startdate, enddate) / Interval::MICROS_PER_DAY;
 		}
 	};
 
 	struct WeekOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
-			       Interval::MICROS_PER_WEEK;
+			return SubtractMicros(startdate, enddate) / Interval::MICROS_PER_WEEK;
 		}
 	};
 
 	struct MicrosecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate));
+			return SubtractMicros(startdate, enddate);
 		}
 	};
 
 	struct MillisecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
-			       Interval::MICROS_PER_MSEC;
+			return SubtractMicros(startdate, enddate) / Interval::MICROS_PER_MSEC;
 		}
 	};
 
 	struct SecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
-			       Interval::MICROS_PER_SEC;
+			return SubtractMicros(startdate, enddate) / Interval::MICROS_PER_SEC;
 		}
 	};
 
 	struct MinutesOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
-			       Interval::MICROS_PER_MINUTE;
+			return SubtractMicros(startdate, enddate) / Interval::MICROS_PER_MINUTE;
 		}
 	};
 
 	struct HoursOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
-			       Interval::MICROS_PER_HOUR;
+			return SubtractMicros(startdate, enddate) / Interval::MICROS_PER_HOUR;
 		}
 	};
 };
