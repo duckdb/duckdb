@@ -48,6 +48,7 @@
  * want the inclusion of hooks to happen early, so that we hook as much as
  * possible.
  */
+/*
 #ifndef JEMALLOC_NO_PRIVATE_NAMESPACE
 #  ifndef JEMALLOC_JET
 #    include "jemalloc/internal/private_namespace.h"
@@ -56,6 +57,7 @@
 #include "jemalloc/internal/priva"
 #  endif
 #endif
+ */
 #include "jemalloc/internal/test_hooks.h"
 
 #ifdef JEMALLOC_DEFINE_MADVISE_FREE

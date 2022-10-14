@@ -84,7 +84,7 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 // Allocator
 //===--------------------------------------------------------------------===//
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+#if defined(BUILD_JEMALLOC_EXTENSION)
 Allocator::Allocator()
     : Allocator(JEMallocExtension::Allocate, JEMallocExtension::Free, JEMallocExtension::Reallocate, nullptr) {
 }

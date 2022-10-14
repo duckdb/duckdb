@@ -408,9 +408,14 @@ if(WIN32)
 endif()
 if(UNIX AND NOT APPLE)
   set(OS_NAME "linux") # sorry BSD
-  if(CMAKE_SIZEOF_VOID_P EQUAL 8) # this is apparently state-of-the-art in checking bitness
-    set(BUILD_JEMALLOC_EXTENSION 1) # linux allocator sucks
-  endif()
+endif()
+
+if (OS_NAME STREQUAL "linux" AND CMAKE_SIZEOF_VOID_P EQUAL 8) # this is apparently state-of-the-art in checking bitness
+  # linux allocator sucks, always build jemalloc
+  set(BUILD_JEMALLOC_EXTENSION 1)
+elseif(CMAKE_SIZEOF_VOID_P EQUAL 4 AND BUILD_JEMALLOC_EXTENSION EQUAL 1)
+  # have to throw an error because this will crash at runtime
+  message(FATAL_ERROR "The jemalloc extension is not supported for 32bit CPU architecture")
 endif()
 
 

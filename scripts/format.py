@@ -74,6 +74,11 @@ def can_format_file(full_path):
     # check ignored files
     if fname in ignored_files:
         return False
+    # check ignored directories
+    dirnames = full_path.split(os.path.sep)[:-1]
+    for i in range(1, len(dirnames)):
+        if os.path.join(*dirnames[:i]) in ignored_directories:
+            return False
     found = False
     # check file extension
     for ext in extensions:
