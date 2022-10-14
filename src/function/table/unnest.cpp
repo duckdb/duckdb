@@ -71,7 +71,7 @@ static unique_ptr<GlobalTableFunctionState> UnnestInit(ClientContext &context, T
 }
 
 static OperatorResultType UnnestFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
-                                         DataChunk &output, bool enable_caching) {
+                                         DataChunk &output) {
 	auto &state = (UnnestGlobalState &)*data_p.global_state;
 	auto &lstate = (UnnestLocalState &)*data_p.local_state;
 	return PhysicalUnnest::ExecuteInternal(context, input, output, *lstate.operator_state, state.select_list, false);

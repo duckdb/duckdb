@@ -22,7 +22,7 @@ static unique_ptr<FunctionData> SummaryFunctionBind(ClientContext &context, Tabl
 }
 
 static OperatorResultType SummaryFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
-                                          DataChunk &output, bool enable_caching) {
+                                          DataChunk &output) {
 	output.SetCardinality(input.size());
 
 	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {

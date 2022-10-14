@@ -5,15 +5,13 @@
 namespace duckdb {
 
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p)
-    : pipeline(pipeline_p), thread(context_p), context(context_p, thread) {
+    : pipeline(pipeline_p), thread(context_p), context(context_p, thread, &pipeline_p) {
 	D_ASSERT(pipeline.source_state);
 	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
 		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
 	}
-
-	can_cache_in_pipeline = !pipeline.IsOrderDependent() && !requires_batch_index;
 
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
@@ -26,7 +24,6 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		intermediate_chunks.push_back(move(chunk));
 
 		auto op_state = current_operator->GetOperatorState(context);
-		op_state->AllowCaching(can_cache_in_pipeline);
 		intermediate_states.push_back(std::move(op_state));
 
 		if (current_operator->IsSink() && current_operator->sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {

@@ -31,10 +31,6 @@ public:
 
 	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
 	}
-
-	virtual void AllowCaching(bool val) {
-		(void)val;
-	}
 };
 
 class GlobalOperatorState {
@@ -239,12 +235,7 @@ public:
 	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
 	}
 
-	void AllowCaching(bool val) final {
-		caching_allowed = val;
-	}
-
 	unique_ptr<DataChunk> cached_chunk;
-	bool caching_allowed = true;
 };
 
 //! Base class that caches output from child Operator class. Note that Operators inheriting from this class should also
