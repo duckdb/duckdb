@@ -27,19 +27,31 @@
 
 namespace duckdb {
 
+template <class CHIMP_TYPE>
 struct ChimpGroupState {
 public:
+	void Init(uint8_t *data) {
+		chimp_state.input.SetStream(data);
+		Reset();
+	}
+
+	void Reset() {
+		chimp_state.Reset();
+		index = 0;
+	}
+
 	bool Started() const {
 		return !!index;
 	}
-	uint8_t GetFlag() {
-		D_ASSERT(index <= max_flags_to_read);
-		D_ASSERT(index <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
-		return flags[index++];
-	}
+
 	// Assuming the group is completely full
 	idx_t RemainingInGroup() const {
 		return ChimpPrimitives::CHIMP_SEQUENCE_SIZE - index;
+	}
+
+	void Scan(CHIMP_TYPE *dest, idx_t count) {
+		memcpy(dest, (void *)(values + index), count * sizeof(CHIMP_TYPE));
+		index += count;
 	}
 
 	void LoadFlags(uint8_t *packed_data, idx_t group_size) {
@@ -52,13 +64,14 @@ public:
 		max_flags_to_read = group_size;
 		index = 0;
 	}
+
 	void LoadLeadingZeros(uint8_t *packed_data, idx_t leading_zero_block_size) {
 #ifdef DEBUG
 		idx_t flag_one_count = 0;
 		for (idx_t i = 0; i < max_flags_to_read; i++) {
 			flag_one_count += flags[1 + i] == LEADING_ZERO_LOAD;
 		}
-		// There are 8 leading zero values packed in one block, the block could not be entire filled
+		// There are 8 leading zero values packed in one block, the block could be partially filled
 		flag_one_count = AlignValue<idx_t, 8>(flag_one_count);
 		D_ASSERT(flag_one_count == leading_zero_block_size);
 #endif
@@ -79,7 +92,6 @@ public:
 		return count;
 	}
 
-	template <class CHIMP_TYPE>
 	void LoadPackedData(uint16_t *packed_data, idx_t packed_data_block_count) {
 		for (idx_t i = 0; i < packed_data_block_count; i++) {
 			PackedDataUtils<CHIMP_TYPE>::Unpack(packed_data[i], unpacked_data_blocks[i]);
@@ -88,18 +100,29 @@ public:
 		max_packed_data_to_read = packed_data_block_count;
 	}
 
+	void LoadValues(CHIMP_TYPE *result, idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			result[i] = Chimp128Decompression<CHIMP_TYPE>::Load(flags[i], leading_zeros, leading_zero_index,
+			                                                    unpacked_data_blocks, unpacked_index, chimp_state);
+		}
+	}
+
 public:
 	idx_t index;
-	uint8_t flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
-	uint8_t leading_zeros[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
 	uint32_t leading_zero_index;
 	uint32_t unpacked_index;
+
+	uint8_t flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
+	uint8_t leading_zeros[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
 	UnpackedData unpacked_data_blocks[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
-	idx_t max_leading_zeros_to_read;
+
+	CHIMP_TYPE values[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
 
 private:
+	idx_t max_leading_zeros_to_read;
 	idx_t max_flags_to_read;
 	idx_t max_packed_data_to_read;
+	Chimp128DecompressionState<CHIMP_TYPE> chimp_state;
 };
 
 template <class T>
@@ -115,17 +138,16 @@ public:
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		auto start_of_data_segment = dataptr + segment.GetBlockOffset() + ChimpPrimitives::HEADER_SIZE;
-		chimp_state.input.SetStream(start_of_data_segment);
+		group_state.Init(start_of_data_segment);
 		auto metadata_offset = Load<uint32_t>(dataptr + segment.GetBlockOffset());
 		metadata_ptr = dataptr + segment.GetBlockOffset() + metadata_offset;
 		LoadGroup();
 	}
 
-	Chimp128DecompressionState<CHIMP_TYPE> chimp_state;
 	BufferHandle handle;
 	data_ptr_t metadata_ptr;
 	idx_t total_value_count = 0;
-	ChimpGroupState group_state;
+	ChimpGroupState<CHIMP_TYPE> group_state;
 
 	ColumnSegment &segment;
 
@@ -142,21 +164,8 @@ public:
 		D_ASSERT(group_size <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 		D_ASSERT(group_size <= LeftInGroup());
 
-		if (FROM_START) {
-			values[0] = Chimp128Decompression<CHIMP_TYPE>::LoadFirst(chimp_state);
-			for (idx_t i = 1; i < group_size; i++) {
-				values[i] = Chimp128Decompression<CHIMP_TYPE>::DecompressValue(
-				    group_state.flags[i], group_state.leading_zeros, group_state.leading_zero_index,
-				    group_state.unpacked_data_blocks, group_state.unpacked_index, chimp_state);
-				D_ASSERT(group_state.leading_zero_index <= group_state.max_leading_zeros_to_read);
-			}
-		} else {
-			for (idx_t i = 0; i < group_size; i++) {
-				values[i] = Chimp128Decompression<CHIMP_TYPE>::Load(
-				    group_state.flags[group_state.index + i], group_state.leading_zeros, group_state.leading_zero_index,
-				    group_state.unpacked_data_blocks, group_state.unpacked_index, chimp_state);
-			}
-		}
+		group_state.Scan(values, group_size);
+
 		group_state.index += group_size;
 		total_value_count += group_size;
 		if (GroupFinished() && total_value_count < segment.count) {
@@ -165,7 +174,6 @@ public:
 	}
 
 	void LoadGroup() {
-		chimp_state.Reset();
 
 		//! FIXME: If we change the order of this to flag -> leading_zero_blocks -> packed_data
 		//! We can leave out the leading zero block count as well, because it can be derived from
@@ -189,9 +197,9 @@ public:
 
 		// Figure out how many flags there are
 		D_ASSERT(segment.count >= total_value_count);
-		uint16_t flag_count = MinValue<idx_t>(segment.count - total_value_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
+		auto group_size = MinValue<idx_t>(segment.count - total_value_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 		// Reduce by one, because the first value of a group does not have a flag
-		flag_count--;
+		auto flag_count = group_size - 1;
 		uint16_t flag_byte_count = (AlignValue<uint16_t, 4>(flag_count) / 4);
 
 		// Load the flags
@@ -209,7 +217,12 @@ public:
 			// Align on a two-byte boundary
 			metadata_ptr--;
 		}
-		group_state.LoadPackedData<CHIMP_TYPE>((uint16_t *)metadata_ptr, packed_data_block_count);
+		group_state.LoadPackedData((uint16_t *)metadata_ptr, packed_data_block_count);
+
+		group_state.Reset();
+
+		// Load all values for the group
+		group_state.LoadValues(group_state.values, group_size);
 	}
 
 public:
