@@ -165,14 +165,19 @@ public:
 		D_ASSERT(group_size <= LeftInGroup());
 
 		if (GroupFinished() && total_value_count < segment_count) {
-			LoadGroup();
+			if (group_size == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
+				LoadGroup(values);
+				total_value_count += group_size;
+				return;
+			} else {
+				LoadGroup(group_state.values);
+			}
 		}
 		group_state.Scan(values, group_size);
-
 		total_value_count += group_size;
 	}
 
-	void LoadGroup() {
+	void LoadGroup(CHIMP_TYPE *value_buffer) {
 
 		//! FIXME: If we change the order of this to flag -> leading_zero_blocks -> packed_data
 		//! We can leave out the leading zero block count as well, because it can be derived from
@@ -221,7 +226,7 @@ public:
 		group_state.Reset();
 
 		// Load all values for the group
-		group_state.LoadValues(group_state.values, group_size);
+		group_state.LoadValues(value_buffer, group_size);
 	}
 
 public:
