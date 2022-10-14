@@ -1,4 +1,4 @@
-# name: test/sql/storage/optimistic_write/optimistic_write_cyclic_dictionary.test
+# name: test/sql/storage/optimistic_write/optimistic_write_cyclic_dictionary.test_slow
 # description: Test optimistic write with a cyclic scan
 # group: [optimistic_write]
 
