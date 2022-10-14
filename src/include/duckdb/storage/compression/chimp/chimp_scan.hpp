@@ -108,17 +108,17 @@ public:
 	}
 
 public:
-	idx_t index;
 	uint32_t leading_zero_index;
 	uint32_t unpacked_index;
 
-	uint8_t flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
-	uint8_t leading_zeros[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
+	uint8_t flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
+	uint8_t leading_zeros[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
 	UnpackedData unpacked_data_blocks[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
 
 	CHIMP_TYPE values[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
 
 private:
+	idx_t index;
 	idx_t max_leading_zeros_to_read;
 	idx_t max_flags_to_read;
 	idx_t max_packed_data_to_read;
@@ -166,7 +166,6 @@ public:
 
 		group_state.Scan(values, group_size);
 
-		group_state.index += group_size;
 		total_value_count += group_size;
 		if (GroupFinished() && total_value_count < segment.count) {
 			LoadGroup();
@@ -262,8 +261,8 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 
 	idx_t scanned = 0;
 	while (scanned < scan_count) {
-		idx_t to_scan = MinValue(scan_count - scanned, LeftInGroup());
-		ScanGroup<CHIMP_TYPE>(current_result_ptr + scanned, to_scan);
+		idx_t to_scan = MinValue(scan_count - scanned, scan_state.LeftInGroup());
+		scan_state.template ScanGroup<INTERNAL_TYPE>(current_result_ptr + scanned, to_scan);
 		scanned += to_scan;
 	}
 }
