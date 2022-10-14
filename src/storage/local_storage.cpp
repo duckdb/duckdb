@@ -44,8 +44,8 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
                                      const LogicalType &target_type, const vector<column_t> &bound_columns,
                                      Expression &cast_expr)
     : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows),
-      prev_row_group(parent.prev_row_group), partial_manager(move(parent.partial_manager)),
-      compression_types(move(parent.compression_types)), written_blocks(move(parent.written_blocks)) {
+      partial_manager(move(parent.partial_manager)), compression_types(move(parent.compression_types)),
+      written_blocks(move(parent.written_blocks)) {
 	if (partial_manager) {
 		partial_manager->FlushPartialBlocks();
 	}
@@ -58,8 +58,8 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
     : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows),
-      prev_row_group(parent.prev_row_group), partial_manager(move(parent.partial_manager)),
-      compression_types(move(parent.compression_types)), written_blocks(move(parent.written_blocks)) {
+      partial_manager(move(parent.partial_manager)), compression_types(move(parent.compression_types)),
+      written_blocks(move(parent.written_blocks)) {
 	if (partial_manager) {
 		partial_manager->FlushPartialBlocks();
 	}
@@ -72,8 +72,8 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column,
                                      Expression *default_value)
     : table(new_dt), allocator(Allocator::Get(table.db)), deleted_rows(parent.deleted_rows),
-      prev_row_group(parent.prev_row_group), partial_manager(move(parent.partial_manager)),
-      compression_types(move(parent.compression_types)), written_blocks(move(parent.written_blocks)) {
+      partial_manager(move(parent.partial_manager)), compression_types(move(parent.compression_types)),
+      written_blocks(move(parent.written_blocks)) {
 	idx_t new_column_idx = parent.table.column_definitions.size();
 	stats.InitializeAddColumn(parent.stats, new_column.GetType());
 	row_groups = parent.row_groups->AddColumn(new_column, default_value, stats.GetStats(new_column_idx));
@@ -173,22 +173,18 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	}
 
 	//! Append the chunk to the local storage
-	auto row_group = storage->row_groups->Append(chunk, state.append_state, storage->stats);
+	auto new_row_group = storage->row_groups->Append(chunk, state.append_state, storage->stats);
 
 	//! Check if we should pre-emptively flush blocks to disk
-	storage->CheckFlushToDisk(row_group);
+	if (new_row_group) {
+		storage->CheckFlushToDisk();
+	}
 }
 
-void LocalTableStorage::CheckFlushToDisk(RowGroup *row_group) {
+void LocalTableStorage::CheckFlushToDisk() {
+	// we finished writing a complete row group
+	// check if we should pre-emptively write it to disk
 	if (table.info->IsTemporary() || StorageManager::GetStorageManager(table.db).InMemory()) {
-		return;
-	}
-	if (row_group == prev_row_group) {
-		return;
-	}
-	if (!prev_row_group) {
-		// first time encountering a row group
-		prev_row_group = row_group;
 		return;
 	}
 	if (!table.info->indexes.Empty()) {
@@ -199,8 +195,7 @@ void LocalTableStorage::CheckFlushToDisk(RowGroup *row_group) {
 		// we have deletes - we cannot merge
 		return;
 	}
-	// we finished writing a complete row group
-	// write previous row group to disk
+	// we should! write the second-to-last row group to disk
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		D_ASSERT(compression_types.empty());
@@ -210,21 +205,33 @@ void LocalTableStorage::CheckFlushToDisk(RowGroup *row_group) {
 			compression_types.push_back(column.CompressionType());
 		}
 	}
-	FlushToDisk();
-	prev_row_group = row_group;
+	// flush second-to-last row group
+	auto row_group = row_groups->GetRowGroup(-2);
+	FlushToDisk(row_group);
 }
 
-void LocalTableStorage::FlushToDisk() {
-	D_ASSERT(prev_row_group);
+void LocalTableStorage::FlushToDisk(RowGroup *row_group) {
+	// flush the specified row group
+	D_ASSERT(row_group);
 	D_ASSERT(deleted_rows == 0);
 	D_ASSERT(table.info->indexes.Empty());
 	D_ASSERT(partial_manager);
-	auto row_group_pointer = prev_row_group->WriteToDisk(*partial_manager, compression_types);
+	auto row_group_pointer = row_group->WriteToDisk(*partial_manager, compression_types);
 	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
 		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
 		stats.MergeStats(col_idx, *row_group_pointer.statistics[col_idx]);
 	}
-	prev_row_group = nullptr;
+}
+void LocalTableStorage::FlushToDisk() {
+	// no partial manager - nothing to flush
+	if (!partial_manager) {
+		return;
+	}
+	// flush the last row group
+	FlushToDisk(row_groups->GetRowGroup(-1));
+	// then flush the partial manager
+	partial_manager->FlushPartialBlocks();
+	partial_manager.reset();
 }
 
 void LocalStorage::FinalizeAppend(LocalAppendState &state) {
@@ -316,13 +323,9 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	table.AppendLock(append_state);
 	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
 	    storage.table.info->indexes.Empty() && storage.deleted_rows == 0) {
-		// table is currently empty OR we are bulk appending to a table with existing storage: move over the storage
-		// directly
-		if (storage.partial_manager) {
-			storage.FlushToDisk();
-			storage.partial_manager->FlushPartialBlocks();
-			storage.partial_manager.reset();
-		}
+		// table is currently empty OR we are bulk appending: move over the storage directly
+		// first flush any out-standing storage nodes
+		storage.FlushToDisk();
 		table.MergeStorage(*storage.row_groups, storage.indexes, storage.stats);
 	} else {
 		if (storage.partial_manager || !storage.written_blocks.empty()) {

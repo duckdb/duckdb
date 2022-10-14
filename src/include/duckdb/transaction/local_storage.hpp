@@ -43,8 +43,6 @@ public:
 	TableStatistics stats;
 	//! The number of deleted rows
 	idx_t deleted_rows;
-	//! The previously written row group
-	RowGroup *prev_row_group = nullptr;
 	//! The partial block manager (if we created one yet)
 	unique_ptr<PartialBlockManager> partial_manager;
 	//! The set of column compression types (if any)
@@ -55,7 +53,10 @@ public:
 public:
 	void InitializeScan(CollectionScanState &state, TableFilterSet *table_filters = nullptr);
 	//! Check if we should flush the previously written row-group to disk
-	void CheckFlushToDisk(RowGroup *row_group);
+	void CheckFlushToDisk();
+	//! Flushes a specific row group to disk
+	void FlushToDisk(RowGroup *row_group);
+	//! Flushes the final row group to disk (if any)
 	void FlushToDisk();
 	//! Whether or not the local table storag ehas optimistically written blocks
 	bool HasWrittenBlocks();

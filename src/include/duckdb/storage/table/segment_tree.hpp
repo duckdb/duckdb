@@ -35,6 +35,8 @@ public:
 public:
 	//! Gets a pointer to the first segment. Useful for scans.
 	SegmentBase *GetRootSegment();
+	//! Gets a pointer to the nth segment. Negative numbers start from the back.
+	SegmentBase *GetSegmentByIndex(int64_t index);
 	//! Gets a pointer to the last segment. Useful for appends.
 	SegmentBase *GetLastSegment();
 	//! Gets a pointer to a specific column segment for the given row

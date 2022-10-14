@@ -7,6 +7,21 @@ SegmentBase *SegmentTree::GetRootSegment() {
 	return root_node.get();
 }
 
+SegmentBase *SegmentTree::GetSegmentByIndex(int64_t index) {
+	if (index < 0) {
+		index = nodes.size() + index;
+		if (index < 0) {
+			return nullptr;
+		}
+		return nodes[index].node;
+	} else {
+		if (idx_t(index) >= nodes.size()) {
+			return nullptr;
+		}
+		return nodes[index].node;
+	}
+}
+
 SegmentBase *SegmentTree::GetLastSegment() {
 	return nodes.empty() ? nullptr : nodes.back().node;
 }

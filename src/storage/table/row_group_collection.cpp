@@ -50,6 +50,10 @@ void RowGroupCollection::AppendRowGroup(idx_t start_row) {
 	row_groups->AppendSegment(move(new_row_group));
 }
 
+RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
+	return (RowGroup *)row_groups->GetSegmentByIndex(index);
+}
+
 void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;
@@ -200,16 +204,16 @@ void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 	InitializeAppend(tdata, state, 0);
 }
 
-RowGroup *RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats) {
+bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats) {
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
 
-	RowGroup *current_row_group;
+	bool new_row_group = false;
 	idx_t append_count = chunk.size();
 	idx_t remaining = chunk.size();
 	state.total_append_count += append_count;
 	while (true) {
-		current_row_group = state.row_group_append_state.row_group;
+		auto current_row_group = state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
 		idx_t append_count =
 		    MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
@@ -238,6 +242,7 @@ RowGroup *RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, 
 				chunk.Slice(sel, remaining);
 			}
 			// append a new row_group
+			new_row_group = true;
 			auto next_start = current_row_group->start + state.row_group_append_state.offset_in_row_group;
 			AppendRowGroup(next_start);
 			// set up the append state for this row_group
@@ -261,7 +266,7 @@ RowGroup *RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, 
 		}
 		stats.GetStats(col_idx).stats->UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
-	return current_row_group;
+	return new_row_group;
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
