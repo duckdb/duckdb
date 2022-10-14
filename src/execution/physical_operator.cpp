@@ -248,10 +248,10 @@ CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vect
                                                  idx_t estimated_cardinality)
     : PhysicalOperator(type, move(types_p), estimated_cardinality) {
 
-	enable_cache = true;
+	caching_supported = true;
 	for (auto &col_type : types) {
 		if (!CanCacheType(col_type)) {
-			enable_cache = false;
+			caching_supported = false;
 			break;
 		}
 	}
@@ -261,13 +261,13 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
                                                     GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (CachingOperatorState &)state_p;
 
-	// Fetch result form child
+	// Execute child operator
 	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
 
 #if STANDARD_VECTOR_SIZE >= 128
-	if (enable_cache && state.allow_caching && chunk.size() < CACHE_THRESHOLD) {
-		    // we have filtered out a significant amount of tuples
-		    // add this chunk to the cache and continue
+	if (caching_supported && state.caching_allowed && chunk.size() < CACHE_THRESHOLD) {
+		// we have filtered out a significant amount of tuples
+		// add this chunk to the cache and continue
 
 		if (!state.cached_chunk) {
 			state.cached_chunk = make_unique<DataChunk>();
@@ -277,7 +277,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		state.cached_chunk->Append(chunk);
 
 		if (state.cached_chunk->size() >= (STANDARD_VECTOR_SIZE - CACHE_THRESHOLD) ||
-		    child_result == OperatorResultType::FINISHED)  {
+		    child_result == OperatorResultType::FINISHED) {
 			// chunk cache full: return it
 			chunk.Move(*state.cached_chunk);
 			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());

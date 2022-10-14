@@ -18,6 +18,13 @@
 
 namespace duckdb {
 
+TransactionData::TransactionData(Transaction &transaction_p) // NOLINT
+    : transaction(&transaction_p), transaction_id(transaction_p.transaction_id), start_time(transaction_p.start_time) {
+}
+TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t start_time_p)
+    : transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
+}
+
 Transaction::Transaction(weak_ptr<ClientContext> context_p, transaction_t start_time, transaction_t transaction_id,
                          timestamp_t start_timestamp, idx_t catalog_version)
     : context(move(context_p)), start_time(start_time), transaction_id(transaction_id), commit_id(0),
@@ -80,67 +87,35 @@ bool Transaction::ChangesMade() {
 }
 
 bool Transaction::AutomaticCheckpoint(DatabaseInstance &db) {
-	auto &config = DBConfig::GetConfig(db);
 	auto &storage_manager = StorageManager::GetStorageManager(db);
-	auto log = storage_manager.GetWriteAheadLog();
-	if (!log) {
-		return false;
-	}
-
-	auto initial_size = log->GetWALSize();
-	idx_t expected_wal_size = initial_size + storage.EstimatedSize() + undo_buffer.EstimatedSize();
-	return expected_wal_size > config.options.checkpoint_wal_size;
+	return storage_manager.AutomaticCheckpoint(storage.EstimatedSize() + undo_buffer.EstimatedSize());
 }
 
 string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool checkpoint) noexcept {
+	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
+	//    true: Then this function will NOT write to the WAL or flush/persist.
+	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
+	//    false: Then this function WILL write to the WAL and Flush/Persist it.
 	this->commit_id = commit_id;
 	auto &storage_manager = StorageManager::GetStorageManager(db);
 	auto log = storage_manager.GetWriteAheadLog();
 
 	UndoBuffer::IteratorState iterator_state;
 	LocalStorage::CommitState commit_state;
-	idx_t initial_wal_size = 0;
-	idx_t initial_written = 0;
-	if (log) {
-		auto initial_size = log->GetWALSize();
-		initial_written = log->GetTotalWritten();
-		initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
-	} else {
-		D_ASSERT(!checkpoint);
-	}
+	auto storage_commit_state = storage_manager.GenStorageCommitState(*this, checkpoint);
 	try {
-		if (checkpoint) {
-			// check if we are checkpointing after this commit
-			// if we are checkpointing, we don't need to write anything to the WAL
-			// this saves us a lot of unnecessary writes to disk in the case of large commits
-			log->skip_writing = true;
-		}
-		storage.Commit(commit_state, *this, log, commit_id);
+		storage.Commit(commit_state, *this);
 		undo_buffer.Commit(iterator_state, log, commit_id);
 		if (log) {
 			// commit any sequences that were used to the WAL
 			for (auto &entry : sequence_usage) {
 				log->WriteSequenceValue(entry.first, entry.second);
 			}
-			// flush the WAL if any changes were made
-			if (log->GetTotalWritten() > initial_written) {
-				D_ASSERT(!checkpoint);
-				D_ASSERT(!log->skip_writing);
-				log->Flush();
-			}
-			log->skip_writing = false;
 		}
+		storage_commit_state->FlushCommit();
 		return string();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, transaction_id);
-		if (log) {
-			log->skip_writing = false;
-			if (log->GetTotalWritten() > initial_written) {
-				// remove any entries written into the WAL by truncating it
-				log->Truncate(initial_wal_size);
-			}
-		}
-		D_ASSERT(!log || !log->skip_writing);
 		return ex.what();
 	}
 }

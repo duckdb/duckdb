@@ -14,7 +14,7 @@ BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, uin
 }
 
 int64_t BufferedFileWriter::GetFileSize() {
-	return fs.GetFileSize(*handle);
+	return fs.GetFileSize(*handle) + offset;
 }
 
 idx_t BufferedFileWriter::GetTotalWritten() {
@@ -51,10 +51,17 @@ void BufferedFileWriter::Sync() {
 }
 
 void BufferedFileWriter::Truncate(int64_t size) {
-	// truncate the physical file on disk
-	handle->Truncate(size);
-	// reset anything written in the buffer
-	offset = 0;
+	uint64_t persistent = fs.GetFileSize(*handle);
+	D_ASSERT((uint64_t)size <= persistent + offset);
+	if (persistent <= (uint64_t)size) {
+		// truncating into the pending write buffer.
+		offset = size - persistent;
+	} else {
+		// truncate the physical file on disk
+		handle->Truncate(size);
+		// reset anything written in the buffer
+		offset = 0;
+	}
 }
 
 } // namespace duckdb

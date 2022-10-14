@@ -631,6 +631,254 @@ test('''
 SELECT lsmode(1) AS lsmode;
 ''', out='lsmode')
 
+
+# test auto-complete
+test("""
+CALL sql_auto_complete('SEL')
+""", out="SELECT"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('SELECT my_') LIMIT 1;
+""", out="my_column"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('SELECT my_column FROM my_') LIMIT 1;
+""", out="my_table"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('SELECT my_column FROM my_table WH') LIMIT 1;
+""", out="WHERE"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('INS') LIMIT 1;
+""", out="INSERT"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('INSERT IN') LIMIT 1;
+""", out="INTO"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('INSERT INTO my_t') LIMIT 1;
+""", out="my_table"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('INSERT INTO my_table VAL') LIMIT 1;
+""", out="VALUES"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('DEL') LIMIT 1;
+""", out="DELETE"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('DELETE F') LIMIT 1;
+""", out="FROM"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('DELETE FROM m') LIMIT 1;
+""", out="my_table"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('DELETE FROM my_table WHERE m') LIMIT 1;
+""", out="my_column"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('U') LIMIT 1;
+""", out="UPDATE"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('UPDATE m') LIMIT 1;
+""", out="my_table"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('UPDATE "m') LIMIT 1;
+""", out="my_table"
+)
+
+test("""
+CREATE TABLE my_table(my_column INTEGER);
+SELECT * FROM sql_auto_complete('UPDATE my_table SET m') LIMIT 1;
+""", out="my_column"
+)
+
+
+test("""
+CREATE TABLE "Funky Table With Spaces"(my_column INTEGER);
+SELECT * FROM sql_auto_complete('SELECT * FROM F') LIMIT 1;
+""", out="\"Funky Table With Spaces\""
+)
+
+test("""
+CREATE TABLE "Funky Table With Spaces"("Funky Column" int);
+SELECT * FROM sql_auto_complete('select f') LIMIT 1;
+""", out="\"Funky Column\""
+)
+
+test("""
+CREATE TABLE "Funky Table With Spaces"("Funky Column" int);
+SELECT * FROM sql_auto_complete('select "Funky Column" FROM f') LIMIT 1;
+""", out="\"Funky Table With Spaces\""
+)
+
+# semicolon
+test("""
+SELECT * FROM sql_auto_complete('SELECT 42; SEL') LIMIT 1;
+""", out="SELECT"
+)
+
+# comments
+test("""
+SELECT * FROM sql_auto_complete('--SELECT * FROM
+SEL') LIMIT 1;
+""", out="SELECT"
+)
+
+# scalar functions
+test("""
+SELECT * FROM sql_auto_complete('SELECT regexp_m') LIMIT 1;
+""", out="regexp_matches"
+)
+
+# aggregate functions
+test("""
+SELECT * FROM sql_auto_complete('SELECT approx_c') LIMIT 1;
+""", out="approx_count_distinct"
+)
+
+# built-in views
+test("""
+SELECT * FROM sql_auto_complete('SELECT * FROM sqlite_ma') LIMIT 1;
+""", out="sqlite_master"
+)
+
+# table functions
+test("""
+SELECT * FROM sql_auto_complete('SELECT * FROM read_csv_a') LIMIT 1;
+""", out="read_csv_auto"
+)
+
+test("""
+CREATE TABLE partsupp(ps_suppkey int);
+CREATE TABLE supplier(s_suppkey int);
+CREATE TABLE nation(n_nationkey int);
+SELECT * FROM sql_auto_complete('DROP TABLE na') LIMIT 1;
+""", out="nation"
+)
+
+test("""
+CREATE TABLE partsupp(ps_suppkey int);
+CREATE TABLE supplier(s_suppkey int);
+CREATE TABLE nation(n_nationkey int);
+SELECT * FROM sql_auto_complete('SELECT s_supp') LIMIT 1;
+""", out="s_suppkey"
+)
+
+# joins
+test("""
+CREATE TABLE partsupp(ps_suppkey int);
+CREATE TABLE supplier(s_suppkey int);
+CREATE TABLE nation(n_nationkey int);
+SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supp') LIMIT 1;
+""", out="supplier"
+)
+
+test("""
+CREATE TABLE partsupp(ps_suppkey int);
+CREATE TABLE supplier(s_suppkey int);
+CREATE TABLE nation(n_nationkey int);
+.mode csv
+SELECT l,l FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier ON (s_supp') t(l) LIMIT 1;
+""", out="s_suppkey,s_suppkey"
+)
+
+test("""
+CREATE TABLE partsupp(ps_suppkey int);
+CREATE TABLE supplier(s_suppkey int);
+CREATE TABLE nation(n_nationkey int);
+SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_') LIMIT 1;
+""", out="ps_suppkey"
+)
+
+test("""
+SELECT * FROM sql_auto_complete('SELECT * FR') LIMIT 1;
+""", out="FROM"
+)
+
+test("""
+CREATE TABLE MyTable(MyColumn Varchar);
+SELECT * FROM sql_auto_complete('SELECT My') LIMIT 1;
+""", out="MyColumn"
+)
+
+test("""
+CREATE TABLE MyTable(MyColumn Varchar);
+SELECT * FROM sql_auto_complete('SELECT MyColumn FROM My') LIMIT 1;
+""", out="MyTable"
+)
+
+if os.name != 'nt':
+     shell_test_dir = 'shell_test_dir'
+     try:
+          os.mkdir(shell_test_dir)
+     except:
+          pass
+     try:
+          os.mkdir(os.path.join(shell_test_dir, 'extra_path'))
+     except:
+          pass
+
+     base_files = ['extra.parquet', 'extra.file']
+     for fname in base_files:
+          with open(os.path.join(shell_test_dir, fname), 'w+') as f:
+               f.write('')
+
+     test("""
+     CREATE TABLE MyTable(MyColumn Varchar);
+     SELECT * FROM sql_auto_complete('SELECT * FROM ''shell_test') LIMIT 1;
+     """, out="shell_test_dir/"
+          )
+
+     test("""
+     CREATE TABLE MyTable(MyColumn Varchar);
+     SELECT * FROM sql_auto_complete('SELECT * FROM ''shell_test_dir/extra') LIMIT 1;
+     """, out="extra_path/"
+          )
+
+     test("""
+     CREATE TABLE MyTable(MyColumn Varchar);
+     SELECT * FROM sql_auto_complete('SELECT * FROM ''shell_test_dir/extra.par') LIMIT 1;
+     """, out="extra.parquet"
+          )
+
+     shutil.rmtree(shell_test_dir)
+
 if os.name != 'nt':
      test('''
 create table mytable as select * from

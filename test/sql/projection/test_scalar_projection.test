@@ -40,9 +40,10 @@ SELECT CASE WHEN 43 > 33 THEN 43 ELSE 33 END;
 ----
 43
 
-# cannot reference columns like this
-statement error
+query II
 SELECT 1 AS a, a * 2
+----
+1	2
 
 # query without selection list
 statement error

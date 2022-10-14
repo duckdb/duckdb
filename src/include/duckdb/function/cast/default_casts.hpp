@@ -47,6 +47,7 @@ struct CastParameters {
 typedef bool (*cast_function_t)(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 struct BoundCastInfo {
+	DUCKDB_API
 	BoundCastInfo(cast_function_t function,
 	              unique_ptr<BoundCastData> cast_data = nullptr); // NOLINT: allow explicit cast from cast_function_t
 
@@ -58,11 +59,14 @@ public:
 };
 
 struct BindCastInput {
-	BindCastInput(CastFunctionSet &function_set, BindCastInfo *info) : function_set(function_set), info(info) {
-	}
+	DUCKDB_API BindCastInput(CastFunctionSet &function_set, BindCastInfo *info, ClientContext *context);
 
 	CastFunctionSet &function_set;
 	BindCastInfo *info;
+	ClientContext *context;
+
+public:
+	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);
 };
 
 struct DefaultCasts {

@@ -8,27 +8,30 @@
 
 #pragma once
 
+#include "duckdb/common/common.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
-#include "duckdb/common/common.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 enum class NodeType : uint8_t { NLeaf = 0, N4 = 1, N16 = 2, N48 = 3, N256 = 4 };
 class ART;
 class Node;
+
+// Note: SwizzleablePointer assumes top 33 bits of the block_id are 0. Use a different
+// pointer implementation if that does not hold.
 class SwizzleablePointer;
+using ARTPointer = SwizzleablePointer;
 
 struct InternalType {
 	explicit InternalType(Node *n);
 
-	void Set(uint8_t *key_p, uint16_t key_size_p, SwizzleablePointer *children_p, uint16_t children_size_p);
-
+	void Set(uint8_t *key_p, uint16_t key_size_p, ARTPointer *children_p, uint16_t children_size_p);
 	uint8_t *key;
 	uint16_t key_size;
-	SwizzleablePointer *children;
+	ARTPointer *children;
 	uint16_t children_size;
 };
 
@@ -98,16 +101,18 @@ public:
 	//! Create a new node of the specified type
 	static void New(NodeType &type, Node *&node);
 
+	//! Returns the string representation of a node
+	string ToString(ART &art);
 	//! Serialize this node
 	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer);
+
 	//! Deserialize this node
 	static Node *Deserialize(ART &art, idx_t block_id, idx_t offset);
-
 	//! Merge r_node into l_node at the specified byte
-	static void MergeAtByte(MergeInfo &info, idx_t depth, idx_t &l_child_pos, idx_t &r_pos, uint8_t &key_byte,
+	static bool MergeAtByte(MergeInfo &info, idx_t depth, idx_t &l_child_pos, idx_t &r_pos, uint8_t &key_byte,
 	                        Node *&l_parent, idx_t l_pos);
 	//! Merge two ART
-	static void MergeARTs(ART *l_art, ART *r_art);
+	static bool MergeARTs(ART *l_art, ART *r_art);
 
 private:
 	//! Serialize internal nodes

@@ -104,8 +104,8 @@ public:
 };
 
 unique_ptr<BoundCastData> BindEnumCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-	auto to_varchar_cast = input.function_set.GetCastFunction(source, LogicalType::VARCHAR);
-	auto from_varchar_cast = input.function_set.GetCastFunction(LogicalType::VARCHAR, target);
+	auto to_varchar_cast = input.GetCastFunction(source, LogicalType::VARCHAR);
+	auto from_varchar_cast = input.GetCastFunction(LogicalType::VARCHAR, target);
 	return make_unique<EnumBoundCastData>(move(to_varchar_cast), move(from_varchar_cast));
 }
 

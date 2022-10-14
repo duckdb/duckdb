@@ -19,24 +19,27 @@ namespace duckdb {
 constexpr const idx_t RowGroup::ROW_GROUP_VECTOR_COUNT;
 constexpr const idx_t RowGroup::ROW_GROUP_SIZE;
 
-RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count)
-    : SegmentBase(start, count), db(db), table_info(table_info) {
+RowGroup::RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start,
+                   idx_t count)
+    : SegmentBase(start, count), db(db), block_manager(block_manager), table_info(table_info) {
 
 	Verify();
 }
 
-RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector<LogicalType> &types,
-                   RowGroupPointer &pointer)
-    : SegmentBase(pointer.row_start, pointer.tuple_count), db(db), table_info(table_info) {
+RowGroup::RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info,
+                   const vector<LogicalType> &types, RowGroupPointer &&pointer)
+    : SegmentBase(pointer.row_start, pointer.tuple_count), db(db), block_manager(block_manager),
+      table_info(table_info) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != types.size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
 	}
 	for (idx_t i = 0; i < pointer.data_pointers.size(); i++) {
 		auto &block_pointer = pointer.data_pointers[i];
-		MetaBlockReader column_data_reader(db, block_pointer.block_id);
+		MetaBlockReader column_data_reader(block_manager, block_pointer.block_id);
 		column_data_reader.offset = block_pointer.offset;
-		this->columns.push_back(ColumnData::Deserialize(table_info, i, start, column_data_reader, types[i], nullptr));
+		this->columns.push_back(
+		    ColumnData::Deserialize(block_manager, table_info, i, start, column_data_reader, types[i], nullptr));
 	}
 
 	// set up the statistics
@@ -50,8 +53,8 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector
 }
 
 RowGroup::RowGroup(RowGroup &row_group, idx_t start)
-    : SegmentBase(start, row_group.count), db(row_group.db), table_info(row_group.table_info),
-      version_info(move(row_group.version_info)), stats(move(row_group.stats)) {
+    : SegmentBase(start, row_group.count), db(row_group.db), block_manager(row_group.block_manager),
+      table_info(row_group.table_info), version_info(move(row_group.version_info)), stats(move(row_group.stats)) {
 	for (auto &column : row_group.columns) {
 		this->columns.push_back(ColumnData::CreateColumn(*column, start));
 	}
@@ -77,7 +80,7 @@ RowGroup::~RowGroup() {
 void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = ColumnData::CreateColumn(GetTableInfo(), i, start, types[i]);
+		auto column_data = ColumnData::CreateColumn(block_manager, GetTableInfo(), i, start, types[i]);
 		stats.push_back(make_shared<SegmentStatistics>(types[i]));
 		columns.push_back(move(column_data));
 	}
@@ -139,7 +142,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 	Verify();
 
 	// construct a new column data for this type
-	auto column_data = ColumnData::CreateColumn(GetTableInfo(), changed_idx, start, target_type);
+	auto column_data = ColumnData::CreateColumn(block_manager, GetTableInfo(), changed_idx, start, target_type);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -162,7 +165,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 	}
 
 	// set up the row_group based on this row_group
-	auto row_group = make_unique<RowGroup>(db, table_info, this->start, this->count);
+	auto row_group = make_unique<RowGroup>(db, block_manager, table_info, this->start, this->count);
 	row_group->version_info = version_info;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (i == changed_idx) {
@@ -184,7 +187,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, Expressio
 	Verify();
 
 	// construct a new column data for the new column
-	auto added_column = ColumnData::CreateColumn(GetTableInfo(), columns.size(), start, new_column.Type());
+	auto added_column =
+	    ColumnData::CreateColumn(block_manager, GetTableInfo(), columns.size(), start, new_column.Type());
 	auto added_col_stats = make_shared<SegmentStatistics>(
 	    new_column.Type(), BaseStatistics::CreateEmpty(new_column.Type(), StatisticsType::LOCAL_STATS));
 
@@ -205,7 +209,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, Expressio
 	}
 
 	// set up the row_group based on this row_group
-	auto row_group = make_unique<RowGroup>(db, table_info, this->start, this->count);
+	auto row_group = make_unique<RowGroup>(db, block_manager, table_info, this->start, this->count);
 	row_group->version_info = version_info;
 	row_group->columns = columns;
 	row_group->stats = stats;
@@ -222,7 +226,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(idx_t removed_column) {
 
 	D_ASSERT(removed_column < columns.size());
 
-	auto row_group = make_unique<RowGroup>(db, table_info, this->start, this->count);
+	auto row_group = make_unique<RowGroup>(db, block_manager, table_info, this->start, this->count);
 	row_group->version_info = version_info;
 	row_group->columns = columns;
 	row_group->stats = stats;
@@ -527,13 +531,13 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 	}
 }
 
-void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t row_group_start, idx_t count,
-                                 transaction_t commit_id) {
+void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
+	idx_t row_group_start = this->count.load();
 	idx_t row_group_end = row_group_start + count;
+	if (row_group_end > RowGroup::ROW_GROUP_SIZE) {
+		row_group_end = RowGroup::ROW_GROUP_SIZE;
+	}
 	lock_guard<mutex> lock(row_group_lock);
-
-	this->count += count;
-	D_ASSERT(this->count <= RowGroup::ROW_GROUP_SIZE);
 
 	// create the version_info if it doesn't exist yet
 	if (!version_info) {
@@ -548,7 +552,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t row_group_st
 		if (start == 0 && end == STANDARD_VECTOR_SIZE) {
 			// entire vector is encapsulated by append: append a single constant
 			auto constant_info = make_unique<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
-			constant_info->insert_id = commit_id;
+			constant_info->insert_id = transaction.transaction_id;
 			constant_info->delete_id = NOT_DELETED_ID;
 			version_info->info[vector_idx] = move(constant_info);
 		} else {
@@ -564,9 +568,10 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t row_group_st
 				// use existing vector
 				info = (ChunkVectorInfo *)version_info->info[vector_idx].get();
 			}
-			info->Append(start, end, commit_id);
+			info->Append(start, end, transaction.transaction_id);
 		}
 	}
+	this->count = row_group_end;
 }
 
 void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count) {
@@ -602,8 +607,7 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	Verify();
 }
 
-void RowGroup::InitializeAppend(TransactionData transaction, RowGroupAppendState &append_state,
-                                idx_t remaining_append_count) {
+void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 	append_state.row_group = this;
 	append_state.offset_in_row_group = this->count;
 	// for each column, initialize the append state
@@ -611,9 +615,6 @@ void RowGroup::InitializeAppend(TransactionData transaction, RowGroupAppendState
 	for (idx_t i = 0; i < columns.size(); i++) {
 		columns[i]->InitializeAppend(append_state.states[i]);
 	}
-	// append the version info for this row_group
-	idx_t append_count = MinValue<idx_t>(remaining_append_count, RowGroup::ROW_GROUP_SIZE - this->count);
-	AppendVersionInfo(transaction, this->count, append_count, transaction.transaction_id);
 }
 
 void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append_count) {
@@ -679,12 +680,19 @@ void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	other.Merge(*stats[column_idx]->statistics);
 }
 
-RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
 	RowGroupPointer row_group_pointer;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
 
-	// checkpoint the individual columns of the row group
+	// Checkpoint the individual columns of the row group
+	// Here we're iterating over columns. Each column can have multiple segments.
+	// (Some columns will be wider than others, and require different numbers
+	// of blocks to encode.) Segments cannot span blocks.
+	//
+	// Some of these columns are composite (list, struct). The data is written
+	// first sequentially, and the pointers are written later, so that the
+	// pointers all end up densely packed, and thus more cache-friendly.
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
 		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(column_idx)};
@@ -704,15 +712,18 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
 	for (auto &state : states) {
-		// get the current position of the meta data writer
-		auto &meta_writer = writer.GetTableWriter();
-		auto pointer = meta_writer.GetBlockPointer();
+		// get the current position of the table data writer
+		auto &data_writer = writer.GetPayloadWriter();
+		auto pointer = data_writer.GetBlockPointer();
 
 		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
 
-		// now flush the actual column data to disk
-		state->FlushToDisk();
+		// Write pointers to the column segments.
+		//
+		// Just as above, the state can refer to many other states, so this
+		// can cascade recursively into more pointer writes.
+		state->WriteDataPointers();
 	}
 	row_group_pointer.versions = version_info;
 	Verify();

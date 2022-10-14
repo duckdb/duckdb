@@ -11,7 +11,7 @@ public:
 	bool allow_caching = true;
 
 public:
-	void AllowCaching(bool val) final{
+	void AllowCaching(bool val) final {
 		allow_caching = val;
 	}
 };
@@ -35,7 +35,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 	auto &gstate = (TableInOutGlobalState &)*op_state;
 	auto result = make_unique<TableInOutLocalState>();
 	if (function.init_local) {
-		TableFunctionInitInput input(bind_data.get(), column_ids, nullptr);
+		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
 		result->local_state = function.init_local(context, input, gstate.global_state.get());
 	}
 	return move(result);
@@ -44,7 +44,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorState(ClientContext &context) const {
 	auto result = make_unique<TableInOutGlobalState>();
 	if (function.init_global) {
-		TableFunctionInitInput input(bind_data.get(), column_ids, nullptr);
+		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
 		result->global_state = function.init_global(context, input);
 	}
 	return move(result);

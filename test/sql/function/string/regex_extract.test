@@ -11,6 +11,17 @@ SELECT regexp_extract('foobarbaz', 'b..')
 bar
 
 query T
+SELECT regexp_extract('foobarbaz', 'B..')
+----
+(empty)
+
+# pass in regex options
+query T
+SELECT regexp_extract('foobarbaz', 'B..', 0, 'i')
+----
+bar
+
+query T
 SELECT regexp_extract('foobarbaz', 'b..', 1)
 ----
 (empty)
@@ -75,7 +86,7 @@ SELECT regexp_extract(s, '(b..)(b..)', i) FROM test
 query T
 SELECT regexp_extract('foobarbaz', NULL, 0)
 ----
-(empty)
+NULL
 
 query T
 SELECT regexp_extract('foobarbaz', 'b..', NULL)

@@ -27,9 +27,15 @@ public:
 	}
 
 public:
+	bool IsInstance(py::handle object) const;
 	py::handle operator()(void) const;
 	void LoadModule(const string &name, PythonImportCache &cache);
 	void LoadAttribute(const string &name, PythonImportCache &cache, PythonImportCacheItem &source);
+
+protected:
+	virtual bool IsRequired() const {
+		return true;
+	}
 
 private:
 	PyObject *AddCache(PythonImportCache &cache, py::object object);
@@ -42,6 +48,73 @@ private:
 //===--------------------------------------------------------------------===//
 // Modules
 //===--------------------------------------------------------------------===//
+
+struct PandasCacheItem : public PythonImportCacheItem {
+public:
+	~PandasCacheItem() override {
+	}
+	virtual void LoadSubtypes(PythonImportCache &cache) override {
+		DataFrame.LoadAttribute("DataFrame", cache, *this);
+	}
+
+public:
+	//! pandas.DataFrame
+	PythonImportCacheItem DataFrame;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
+};
+
+struct ArrowLibCacheItem : public PythonImportCacheItem {
+public:
+	~ArrowLibCacheItem() override {
+	}
+	virtual void LoadSubtypes(PythonImportCache &cache) override {
+		Table.LoadAttribute("Table", cache, *this);
+		RecordBatchReader.LoadAttribute("RecordBatchReader", cache, *this);
+	}
+
+public:
+	PythonImportCacheItem Table;
+	PythonImportCacheItem RecordBatchReader;
+};
+
+struct ArrowDatasetCacheItem : public PythonImportCacheItem {
+public:
+	~ArrowDatasetCacheItem() override {
+	}
+	virtual void LoadSubtypes(PythonImportCache &cache) override {
+		FileSystemDataset.LoadAttribute("FileSystemDataset", cache, *this);
+		InMemoryDataset.LoadAttribute("InMemoryDataset", cache, *this);
+		Scanner.LoadAttribute("Scanner", cache, *this);
+	}
+
+public:
+	PythonImportCacheItem FileSystemDataset;
+	PythonImportCacheItem InMemoryDataset;
+	PythonImportCacheItem Scanner;
+};
+
+struct ArrowCacheItem : public PythonImportCacheItem {
+public:
+	~ArrowCacheItem() override {
+	}
+	virtual void LoadSubtypes(PythonImportCache &cache) override {
+		lib.LoadAttribute("lib", cache, *this);
+		dataset.LoadModule("pyarrow.dataset", cache);
+	}
+
+public:
+	ArrowLibCacheItem lib;
+	ArrowDatasetCacheItem dataset;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
+};
 
 struct DecimalCacheItem : public PythonImportCacheItem {
 public:
@@ -111,6 +184,8 @@ public:
 		datetime.LoadModule("datetime", *this);
 		decimal.LoadModule("decimal", *this);
 		uuid.LoadModule("uuid", *this);
+		pandas.LoadModule("pandas", *this);
+		arrow.LoadModule("pyarrow", *this);
 	}
 	~PythonImportCache();
 
@@ -119,6 +194,8 @@ public:
 	DatetimeCacheItem datetime;
 	DecimalCacheItem decimal;
 	UUIDCacheItem uuid;
+	PandasCacheItem pandas;
+	ArrowCacheItem arrow;
 
 public:
 	PyObject *AddCache(py::object item);

@@ -217,6 +217,10 @@ Executor &ClientContext::GetExecutor() {
 	return *active_query->executor;
 }
 
+FileOpener *FileOpener::Get(ClientContext &context) {
+	return ClientData::Get(context).file_opener.get();
+}
+
 const string &ClientContext::GetCurrentQuery() {
 	D_ASSERT(active_query);
 	return active_query->query;
@@ -956,9 +960,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}
 		}
-		for (auto &chunk : collection.Chunks()) {
-			table_entry->storage->Append(*table_entry, *this, chunk);
-		}
+		table_entry->storage->LocalAppend(*table_entry, *this, collection);
 	});
 }
 

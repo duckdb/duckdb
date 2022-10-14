@@ -1,101 +1,101 @@
 i_category|i_class|i_brand|i_product_name|d_year|d_qoy|d_moy|s_store_id|sumsales|rk
-Books|arts|amalgmaxi #12|antipri|2000|3|9|AAAAAAAABAAAAAAA|304.72|73
-Books|arts|amalgmaxi #12|antipri|2000|3|9|NULL|304.72|73
-Books|arts|amalgmaxi #12|antipri|2000|3|NULL|NULL|486.15|53
-Books|arts|amalgmaxi #12|antipri|2000|4|NULL|NULL|403.46|61
-Books|arts|amalgmaxi #12|antipri|2000|NULL|NULL|NULL|1081.05|25
-Books|arts|amalgmaxi #12|antipri|NULL|NULL|NULL|NULL|1081.05|25
-Books|arts|amalgmaxi #12|ationbarought|2000|4|NULL|NULL|378.44|65
-Books|arts|amalgmaxi #12|ationbarought|2000|NULL|NULL|NULL|836.92|45
-Books|arts|amalgmaxi #12|ationbarought|NULL|NULL|NULL|NULL|836.92|45
-Books|arts|amalgmaxi #12|NULL|NULL|NULL|NULL|NULL|1917.97|6
-Books|arts|NULL|NULL|NULL|NULL|NULL|NULL|1917.97|6
-Books|fiction|scholarunivamalg #2|ationn st|2000|3|NULL|NULL|264.57|83
-Books|fiction|scholarunivamalg #2|ationn st|2000|4|NULL|NULL|393.03|63
-Books|fiction|scholarunivamalg #2|ationn st|2000|NULL|NULL|NULL|873.13|41
-Books|fiction|scholarunivamalg #2|ationn st|NULL|NULL|NULL|NULL|873.13|41
-Books|fiction|scholarunivamalg #2|NULL|NULL|NULL|NULL|NULL|873.13|41
-Books|fiction|scholarunivamalg #8|ationcally|2000|3|8|AAAAAAAABAAAAAAA|288.34|79
-Books|fiction|scholarunivamalg #8|ationcally|2000|3|8|NULL|288.34|79
-Books|fiction|scholarunivamalg #8|ationcally|2000|3|9|AAAAAAAABAAAAAAA|243.64|91
-Books|fiction|scholarunivamalg #8|ationcally|2000|3|9|NULL|243.64|91
-Books|fiction|scholarunivamalg #8|ationcally|2000|3|NULL|NULL|599.87|49
-Books|fiction|scholarunivamalg #8|ationcally|2000|4|11|AAAAAAAABAAAAAAA|238.25|95
-Books|fiction|scholarunivamalg #8|ationcally|2000|4|11|NULL|238.25|95
-Books|fiction|scholarunivamalg #8|ationcally|2000|4|12|AAAAAAAABAAAAAAA|360.61|68
-Books|fiction|scholarunivamalg #8|ationcally|2000|4|12|NULL|360.61|68
-Books|fiction|scholarunivamalg #8|ationcally|2000|4|NULL|NULL|768.05|47
-Books|fiction|scholarunivamalg #8|ationcally|2000|NULL|NULL|NULL|1607.88|8
-Books|fiction|scholarunivamalg #8|ationcally|NULL|NULL|NULL|NULL|1607.88|8
-Books|fiction|scholarunivamalg #8|n stpriought|2000|4|12|AAAAAAAABAAAAAAA|346.92|70
-Books|fiction|scholarunivamalg #8|n stpriought|2000|4|12|NULL|346.92|70
-Books|fiction|scholarunivamalg #8|n stpriought|2000|4|NULL|NULL|562.62|50
-Books|fiction|scholarunivamalg #8|n stpriought|2000|NULL|NULL|NULL|1084.68|23
-Books|fiction|scholarunivamalg #8|n stpriought|NULL|NULL|NULL|NULL|1084.68|23
-Books|fiction|scholarunivamalg #8|NULL|NULL|NULL|NULL|NULL|2692.56|4
-Books|fiction|NULL|NULL|NULL|NULL|NULL|NULL|3565.69|2
-Books|mystery|corpunivamalg #9|esebarought|2000|3|9|AAAAAAAABAAAAAAA|240.88|93
-Books|mystery|corpunivamalg #9|esebarought|2000|3|9|NULL|240.88|93
-Books|mystery|corpunivamalg #9|esebarought|2000|3|NULL|NULL|368.31|67
-Books|mystery|corpunivamalg #9|esebarought|2000|4|11|AAAAAAAABAAAAAAA|295.19|75
-Books|mystery|corpunivamalg #9|esebarought|2000|4|11|NULL|295.19|75
-Books|mystery|corpunivamalg #9|esebarought|2000|4|12|AAAAAAAABAAAAAAA|288.64|77
-Books|mystery|corpunivamalg #9|esebarought|2000|4|12|NULL|288.64|77
-Books|mystery|corpunivamalg #9|esebarought|2000|4|NULL|NULL|726.36|48
-Books|mystery|corpunivamalg #9|esebarought|2000|NULL|NULL|NULL|1410.85|14
-Books|mystery|corpunivamalg #9|esebarought|NULL|NULL|NULL|NULL|1410.85|14
-Books|mystery|corpunivamalg #9|NULL|NULL|NULL|NULL|NULL|1410.85|14
-Books|mystery|NULL|NULL|NULL|NULL|NULL|NULL|1410.85|14
-Books|parenting|corpmaxi #3|ableableought|2000|1|NULL|NULL|247.68|90
-Books|parenting|corpmaxi #3|ableableought|2000|2|NULL|NULL|258.93|86
-Books|parenting|corpmaxi #3|ableableought|2000|3|9|AAAAAAAABAAAAAAA|425.66|59
-Books|parenting|corpmaxi #3|ableableought|2000|3|9|NULL|425.66|59
-Books|parenting|corpmaxi #3|ableableought|2000|3|NULL|NULL|537.78|52
-Books|parenting|corpmaxi #3|ableableought|2000|4|NULL|NULL|464.42|55
-Books|parenting|corpmaxi #3|ableableought|2000|NULL|NULL|NULL|1508.81|10
-Books|parenting|corpmaxi #3|ableableought|NULL|NULL|NULL|NULL|1508.81|10
-Books|parenting|corpmaxi #3|NULL|NULL|NULL|NULL|NULL|1508.81|10
-Books|parenting|NULL|NULL|NULL|NULL|NULL|NULL|1508.81|10
-Books|reference|brandmaxi #2|ationantiought|2000|3|9|AAAAAAAABAAAAAAA|248.50|88
-Books|reference|brandmaxi #2|ationantiought|2000|3|9|NULL|248.50|88
-Books|reference|brandmaxi #2|ationantiought|2000|3|NULL|NULL|320.37|72
-Books|reference|brandmaxi #2|ationantiought|2000|4|11|AAAAAAAABAAAAAAA|224.10|98
-Books|reference|brandmaxi #2|ationantiought|2000|4|11|NULL|224.10|98
-Books|reference|brandmaxi #2|ationantiought|2000|4|NULL|NULL|373.77|66
-Books|reference|brandmaxi #2|ationantiought|2000|NULL|NULL|NULL|946.32|37
-Books|reference|brandmaxi #2|ationantiought|NULL|NULL|NULL|NULL|946.32|37
-Books|reference|brandmaxi #2|NULL|NULL|NULL|NULL|NULL|946.32|37
-Books|reference|NULL|NULL|NULL|NULL|NULL|NULL|946.32|37
-Books|self-help|exportiunivamalg #2|antieseought|2000|4|NULL|NULL|470.98|54
-Books|self-help|exportiunivamalg #2|antieseought|2000|NULL|NULL|NULL|965.26|35
-Books|self-help|exportiunivamalg #2|antieseought|NULL|NULL|NULL|NULL|965.26|35
-Books|self-help|exportiunivamalg #2|oughtableought|2000|3|NULL|NULL|399.96|62
-Books|self-help|exportiunivamalg #2|oughtableought|2000|4|12|AAAAAAAABAAAAAAA|222.24|100
-Books|self-help|exportiunivamalg #2|oughtableought|2000|4|12|NULL|222.24|100
-Books|self-help|exportiunivamalg #2|oughtableought|2000|4|NULL|NULL|557.99|51
-Books|self-help|exportiunivamalg #2|oughtableought|2000|NULL|NULL|NULL|1114.91|21
-Books|self-help|exportiunivamalg #2|oughtableought|NULL|NULL|NULL|NULL|1114.91|21
-Books|self-help|exportiunivamalg #2|NULL|NULL|NULL|NULL|NULL|2080.17|5
-Books|self-help|exportiunivamalg #6|ationpriought|2000|1|NULL|NULL|253.86|87
-Books|self-help|exportiunivamalg #6|ationpriought|2000|4|11|AAAAAAAABAAAAAAA|454.35|57
-Books|self-help|exportiunivamalg #6|ationpriought|2000|4|11|NULL|454.35|57
-Books|self-help|exportiunivamalg #6|ationpriought|2000|4|12|AAAAAAAABAAAAAAA|283.28|81
-Books|self-help|exportiunivamalg #6|ationpriought|2000|4|12|NULL|283.28|81
-Books|self-help|exportiunivamalg #6|ationpriought|2000|4|NULL|NULL|837.35|44
-Books|self-help|exportiunivamalg #6|ationpriought|2000|NULL|NULL|NULL|1377.72|18
-Books|self-help|exportiunivamalg #6|ationpriought|NULL|NULL|NULL|NULL|1377.72|18
-Books|self-help|exportiunivamalg #6|NULL|NULL|NULL|NULL|NULL|1377.72|18
-Books|self-help|NULL|NULL|NULL|NULL|NULL|NULL|3457.89|3
-Books|sports|edu packunivamalg #12|oughtation|2000|2|NULL|NULL|230.36|97
-Books|sports|edu packunivamalg #12|oughtation|2000|3|NULL|NULL|379.60|64
-Books|sports|edu packunivamalg #12|oughtation|2000|NULL|NULL|NULL|1008.00|27
-Books|sports|edu packunivamalg #12|oughtation|NULL|NULL|NULL|NULL|1008.00|27
-Books|sports|edu packunivamalg #12|NULL|NULL|NULL|NULL|NULL|1008.00|27
-Books|sports|NULL|NULL|NULL|NULL|NULL|NULL|1008.00|27
-Books|travel|univunivamalg #8|priese|2000|4|12|AAAAAAAABAAAAAAA|261.04|84
-Books|travel|univunivamalg #8|priese|2000|4|12|NULL|261.04|84
-Books|travel|univunivamalg #8|priese|2000|4|NULL|NULL|461.89|56
-Books|travel|univunivamalg #8|priese|2000|NULL|NULL|NULL|995.01|31
-Books|travel|univunivamalg #8|priese|NULL|NULL|NULL|NULL|995.01|31
-Books|travel|univunivamalg #8|NULL|NULL|NULL|NULL|NULL|995.01|31
-Books|travel|NULL|NULL|NULL|NULL|NULL|NULL|995.01|31
+NULL|NULL|NULL|NULL|NULL|NULL|NULL|NULL|11332462.26|1
+Books|NULL|NULL|NULL|NULL|NULL|NULL|NULL|1480754.12|1
+Books|arts|NULL|NULL|NULL|NULL|NULL|NULL|191751.70|6
+Books|arts|amalgmaxi #12|NULL|NULL|NULL|NULL|NULL|191751.70|6
+Books|arts|amalgmaxi #12|antipri|NULL|NULL|NULL|NULL|108042.70|25
+Books|arts|amalgmaxi #12|antipri|2000|NULL|NULL|NULL|108042.70|25
+Books|arts|amalgmaxi #12|antipri|2000|3|NULL|NULL|48527.83|53
+Books|arts|amalgmaxi #12|antipri|2000|3|9|NULL|30406.69|73
+Books|arts|amalgmaxi #12|antipri|2000|3|9|AAAAAAAABAAAAAAA|30406.69|73
+Books|arts|amalgmaxi #12|antipri|2000|4|NULL|NULL|40372.63|61
+Books|arts|amalgmaxi #12|ationbarought|NULL|NULL|NULL|NULL|83709.00|45
+Books|arts|amalgmaxi #12|ationbarought|2000|NULL|NULL|NULL|83709.00|45
+Books|arts|amalgmaxi #12|ationbarought|2000|4|NULL|NULL|37897.88|65
+Books|fiction|NULL|NULL|NULL|NULL|NULL|NULL|356542.34|2
+Books|fiction|scholarunivamalg #2|NULL|NULL|NULL|NULL|NULL|87317.15|41
+Books|fiction|scholarunivamalg #2|ationn st|NULL|NULL|NULL|NULL|87317.15|41
+Books|fiction|scholarunivamalg #2|ationn st|2000|NULL|NULL|NULL|87317.15|41
+Books|fiction|scholarunivamalg #2|ationn st|2000|3|NULL|NULL|26518.96|83
+Books|fiction|scholarunivamalg #2|ationn st|2000|4|NULL|NULL|39207.88|63
+Books|fiction|scholarunivamalg #8|NULL|NULL|NULL|NULL|NULL|269225.19|4
+Books|fiction|scholarunivamalg #8|ationcally|NULL|NULL|NULL|NULL|160803.21|8
+Books|fiction|scholarunivamalg #8|ationcally|2000|NULL|NULL|NULL|160803.21|8
+Books|fiction|scholarunivamalg #8|ationcally|2000|3|NULL|NULL|59977.46|49
+Books|fiction|scholarunivamalg #8|ationcally|2000|3|8|NULL|28848.49|77
+Books|fiction|scholarunivamalg #8|ationcally|2000|3|8|AAAAAAAABAAAAAAA|28848.49|77
+Books|fiction|scholarunivamalg #8|ationcally|2000|3|9|NULL|24342.28|91
+Books|fiction|scholarunivamalg #8|ationcally|2000|3|9|AAAAAAAABAAAAAAA|24342.28|91
+Books|fiction|scholarunivamalg #8|ationcally|2000|4|NULL|NULL|76843.72|47
+Books|fiction|scholarunivamalg #8|ationcally|2000|4|11|NULL|23915.41|95
+Books|fiction|scholarunivamalg #8|ationcally|2000|4|11|AAAAAAAABAAAAAAA|23915.41|95
+Books|fiction|scholarunivamalg #8|ationcally|2000|4|12|NULL|36062.42|68
+Books|fiction|scholarunivamalg #8|ationcally|2000|4|12|AAAAAAAABAAAAAAA|36062.42|68
+Books|fiction|scholarunivamalg #8|n stpriought|NULL|NULL|NULL|NULL|108421.98|23
+Books|fiction|scholarunivamalg #8|n stpriought|2000|NULL|NULL|NULL|108421.98|23
+Books|fiction|scholarunivamalg #8|n stpriought|2000|4|NULL|NULL|56209.79|50
+Books|fiction|scholarunivamalg #8|n stpriought|2000|4|12|NULL|34656.30|70
+Books|fiction|scholarunivamalg #8|n stpriought|2000|4|12|AAAAAAAABAAAAAAA|34656.30|70
+Books|mystery|NULL|NULL|NULL|NULL|NULL|NULL|140757.99|14
+Books|mystery|corpunivamalg #9|NULL|NULL|NULL|NULL|NULL|140757.99|14
+Books|mystery|corpunivamalg #9|esebarought|NULL|NULL|NULL|NULL|140757.99|14
+Books|mystery|corpunivamalg #9|esebarought|2000|NULL|NULL|NULL|140757.99|14
+Books|mystery|corpunivamalg #9|esebarought|2000|3|NULL|NULL|36771.70|67
+Books|mystery|corpunivamalg #9|esebarought|2000|3|9|NULL|24051.70|93
+Books|mystery|corpunivamalg #9|esebarought|2000|3|9|AAAAAAAABAAAAAAA|24051.70|93
+Books|mystery|corpunivamalg #9|esebarought|2000|4|NULL|NULL|72375.86|48
+Books|mystery|corpunivamalg #9|esebarought|2000|4|11|NULL|29458.37|75
+Books|mystery|corpunivamalg #9|esebarought|2000|4|11|AAAAAAAABAAAAAAA|29458.37|75
+Books|mystery|corpunivamalg #9|esebarought|2000|4|12|NULL|28733.97|79
+Books|mystery|corpunivamalg #9|esebarought|2000|4|12|AAAAAAAABAAAAAAA|28733.97|79
+Books|parenting|NULL|NULL|NULL|NULL|NULL|NULL|150994.60|10
+Books|parenting|corpmaxi #3|NULL|NULL|NULL|NULL|NULL|150994.60|10
+Books|parenting|corpmaxi #3|ableableought|NULL|NULL|NULL|NULL|150994.60|10
+Books|parenting|corpmaxi #3|ableableought|2000|NULL|NULL|NULL|150994.60|10
+Books|parenting|corpmaxi #3|ableableought|2000|1|NULL|NULL|24844.36|88
+Books|parenting|corpmaxi #3|ableableought|2000|2|NULL|NULL|25978.68|86
+Books|parenting|corpmaxi #3|ableableought|2000|3|NULL|NULL|53748.28|52
+Books|parenting|corpmaxi #3|ableableought|2000|3|9|NULL|42534.99|59
+Books|parenting|corpmaxi #3|ableableought|2000|3|9|AAAAAAAABAAAAAAA|42534.99|59
+Books|parenting|corpmaxi #3|ableableought|2000|4|NULL|NULL|46423.28|55
+Books|reference|NULL|NULL|NULL|NULL|NULL|NULL|94371.70|37
+Books|reference|brandmaxi #2|NULL|NULL|NULL|NULL|NULL|94371.70|37
+Books|reference|brandmaxi #2|ationantiought|NULL|NULL|NULL|NULL|94371.70|37
+Books|reference|brandmaxi #2|ationantiought|2000|NULL|NULL|NULL|94371.70|37
+Books|reference|brandmaxi #2|ationantiought|2000|3|NULL|NULL|31974.69|72
+Books|reference|brandmaxi #2|ationantiought|2000|3|9|NULL|24820.01|89
+Books|reference|brandmaxi #2|ationantiought|2000|3|9|AAAAAAAABAAAAAAA|24820.01|89
+Books|reference|brandmaxi #2|ationantiought|2000|4|NULL|NULL|37284.09|66
+Books|reference|brandmaxi #2|ationantiought|2000|4|11|NULL|22351.65|98
+Books|reference|brandmaxi #2|ationantiought|2000|4|11|AAAAAAAABAAAAAAA|22351.65|98
+Books|self-help|NULL|NULL|NULL|NULL|NULL|NULL|345808.39|3
+Books|self-help|exportiunivamalg #2|NULL|NULL|NULL|NULL|NULL|208057.43|5
+Books|self-help|exportiunivamalg #2|antieseought|NULL|NULL|NULL|NULL|96511.47|35
+Books|self-help|exportiunivamalg #2|antieseought|2000|NULL|NULL|NULL|96511.47|35
+Books|self-help|exportiunivamalg #2|antieseought|2000|4|NULL|NULL|47177.82|54
+Books|self-help|exportiunivamalg #2|oughtableought|NULL|NULL|NULL|NULL|111545.96|21
+Books|self-help|exportiunivamalg #2|oughtableought|2000|NULL|NULL|NULL|111545.96|21
+Books|self-help|exportiunivamalg #2|oughtableought|2000|3|NULL|NULL|40117.11|62
+Books|self-help|exportiunivamalg #2|oughtableought|2000|4|NULL|NULL|55820.56|51
+Books|self-help|exportiunivamalg #2|oughtableought|2000|4|12|NULL|22230.93|100
+Books|self-help|exportiunivamalg #2|oughtableought|2000|4|12|AAAAAAAABAAAAAAA|22230.93|100
+Books|self-help|exportiunivamalg #6|NULL|NULL|NULL|NULL|NULL|137750.96|18
+Books|self-help|exportiunivamalg #6|ationpriought|NULL|NULL|NULL|NULL|137750.96|18
+Books|self-help|exportiunivamalg #6|ationpriought|2000|NULL|NULL|NULL|137750.96|18
+Books|self-help|exportiunivamalg #6|ationpriought|2000|1|NULL|NULL|25333.30|87
+Books|self-help|exportiunivamalg #6|ationpriought|2000|4|NULL|NULL|83792.67|44
+Books|self-help|exportiunivamalg #6|ationpriought|2000|4|11|NULL|45533.83|57
+Books|self-help|exportiunivamalg #6|ationpriought|2000|4|11|AAAAAAAABAAAAAAA|45533.83|57
+Books|self-help|exportiunivamalg #6|ationpriought|2000|4|12|NULL|28333.80|81
+Books|self-help|exportiunivamalg #6|ationpriought|2000|4|12|AAAAAAAABAAAAAAA|28333.80|81
+Books|sports|NULL|NULL|NULL|NULL|NULL|NULL|100852.47|27
+Books|sports|edu packunivamalg #12|NULL|NULL|NULL|NULL|NULL|100852.47|27
+Books|sports|edu packunivamalg #12|oughtation|NULL|NULL|NULL|NULL|100852.47|27
+Books|sports|edu packunivamalg #12|oughtation|2000|NULL|NULL|NULL|100852.47|27
+Books|sports|edu packunivamalg #12|oughtation|2000|2|NULL|NULL|22998.13|97
+Books|sports|edu packunivamalg #12|oughtation|2000|3|NULL|NULL|37972.42|64
+Books|travel|NULL|NULL|NULL|NULL|NULL|NULL|99674.93|31
+Books|travel|univunivamalg #8|NULL|NULL|NULL|NULL|NULL|99674.93|31
+Books|travel|univunivamalg #8|priese|NULL|NULL|NULL|NULL|99674.93|31
+Books|travel|univunivamalg #8|priese|2000|NULL|NULL|NULL|99674.93|31
+Books|travel|univunivamalg #8|priese|2000|4|NULL|NULL|46253.77|56

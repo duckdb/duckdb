@@ -18,6 +18,7 @@ namespace duckdb {
 class CastFunctionSet;
 class Deserializer;
 class Serializer;
+struct GetCastFunctionInput;
 
 //! The Value object holds a single arbitrary value of any type that can be
 //! stored in the database.
@@ -197,18 +198,20 @@ public:
 	DUCKDB_API uintptr_t GetPointer() const;
 
 	//! Cast this value to another type, throws exception if its not possible
-	DUCKDB_API Value CastAs(CastFunctionSet &set, const LogicalType &target_type, bool strict = false) const;
+	DUCKDB_API Value CastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
+	                        bool strict = false) const;
 	DUCKDB_API Value CastAs(ClientContext &context, const LogicalType &target_type, bool strict = false) const;
 	DUCKDB_API Value DefaultCastAs(const LogicalType &target_type, bool strict = false) const;
 	//! Tries to cast this value to another type, and stores the result in "new_value"
-	DUCKDB_API bool TryCastAs(CastFunctionSet &set, const LogicalType &target_type, Value &new_value,
-	                          string *error_message, bool strict = false) const;
+	DUCKDB_API bool TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
+	                          Value &new_value, string *error_message, bool strict = false) const;
 	DUCKDB_API bool TryCastAs(ClientContext &context, const LogicalType &target_type, Value &new_value,
 	                          string *error_message, bool strict = false) const;
 	DUCKDB_API bool DefaultTryCastAs(const LogicalType &target_type, Value &new_value, string *error_message,
 	                                 bool strict = false) const;
 	//! Tries to cast this value to another type, and stores the result in THIS value again
-	DUCKDB_API bool TryCastAs(CastFunctionSet &set, const LogicalType &target_type, bool strict = false);
+	DUCKDB_API bool TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
+	                          bool strict = false);
 	DUCKDB_API bool TryCastAs(ClientContext &context, const LogicalType &target_type, bool strict = false);
 	DUCKDB_API bool DefaultTryCastAs(const LogicalType &target_type, bool strict = false);
 
@@ -251,7 +254,8 @@ public:
 
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
-	DUCKDB_API static bool ValuesAreEqual(CastFunctionSet &set, const Value &result_value, const Value &value);
+	DUCKDB_API static bool ValuesAreEqual(CastFunctionSet &set, GetCastFunctionInput &get_input,
+	                                      const Value &result_value, const Value &value);
 	DUCKDB_API static bool ValuesAreEqual(ClientContext &context, const Value &result_value, const Value &value);
 	DUCKDB_API static bool DefaultValuesAreEqual(const Value &result_value, const Value &value);
 	//! Returns true if the values are not distinct from each other, following SQL semantics for NOT DISTINCT FROM.

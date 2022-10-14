@@ -41,25 +41,11 @@ static void test_helper(string sql, vector<string> fixtures = vector<string>()) 
 		Optimizer optimizer(*planner.binder, *con.context);
 
 		plan = optimizer.Optimize(move(plan));
-		//		printf("[%d] Optimized plan\n", i);
 
-		BufferedSerializer serializer;
-		serializer.SetVersion(PLAN_SERIALIZATION_VERSION);
-		plan->Serialize(serializer);
-		//		printf("[%d] Serialized plan\n", i);
-
-		auto data = serializer.GetData();
-		auto deserializer = BufferedDeserializer(data.data.get(), data.size);
-		deserializer.SetVersion(serializer.GetVersion());
-		PlanDeserializationState state(*con.context);
-		auto new_plan = LogicalOperator::Deserialize(deserializer, state);
-		//		printf("[%d] Deserialized plan\n", i);
-
-		//		printf("[%d] Original plan:\n%s\n", i, plan->ToString().c_str());
-		//		printf("[%d] New plan:\n%s\n", i, new_plan->ToString().c_str());
+		// LogicalOperator's copy utilizes its serialize and deserialize methods
+		auto new_plan = plan->Copy(*con.context);
 
 		auto optimized_plan = optimizer.Optimize(move(new_plan));
-		//		printf("[%d] Optimized plan:\n%s\n", i, optimized_plan->ToString().c_str());
 		con.context->transaction.Commit();
 		++i;
 	}
