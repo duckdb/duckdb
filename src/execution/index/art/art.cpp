@@ -21,6 +21,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	} else {
 		tree = nullptr;
 	}
+	serialized_data_pointer = BlockPointer(block_id, block_offset);
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
 		case PhysicalType::BOOL:
@@ -906,9 +907,11 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
 	if (tree) {
-		return tree->Serialize(*this, writer);
+		serialized_data_pointer = tree->Serialize(*this, writer);
+	} else {
+		serialized_data_pointer = {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 	}
-	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
+	return serialized_data_pointer;
 }
 
 //===--------------------------------------------------------------------===//
