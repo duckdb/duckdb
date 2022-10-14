@@ -52,7 +52,7 @@ OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChun
 	throw InternalException("Calling Execute on a node that is not an operator!");
 }
 
-void PhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+OperatorFinalizeResultType PhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
                                     OperatorState &state) const {
 	throw InternalException("Calling FinalExecute on a node that is not an operator!");
 }
@@ -304,7 +304,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	return child_result;
 }
 
-void CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+OperatorFinalizeResultType CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
                                            OperatorState &state_p) const {
 	auto &state = (CachingOperatorState &)state_p;
 	if (state.cached_chunk) {
@@ -313,6 +313,7 @@ void CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk 
 	} else {
 		chunk.SetCardinality(0);
 	}
+	return OperatorFinalizeResultType::FINISHED;
 }
 
 } // namespace duckdb

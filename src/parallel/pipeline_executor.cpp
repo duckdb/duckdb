@@ -1,6 +1,7 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/limits.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -128,22 +129,36 @@ DataChunk *PipelineExecutor::GetIntermediateChunk(unique_ptr<DataChunk> &tmp_chu
 
 void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
-	for (idx_t op_idx = start_idx; op_idx < pipeline.operators.size(); op_idx++) {
+
+	idx_t op_idx = start_idx;
+	while(op_idx < pipeline.operators.size()) {
 		if (pipeline.operators[op_idx]->RequiresFinalExecute()) {
 			unique_ptr<DataChunk> tmp_chunk;
 			auto &curr_chunk = *GetIntermediateChunk(tmp_chunk, op_idx);
-			pipeline.operators[op_idx]->FinalExecute(context, curr_chunk, *pipeline.operators[op_idx]->op_state,
+			auto finalize_result = pipeline.operators[op_idx]->FinalExecute(context, curr_chunk, *pipeline.operators[op_idx]->op_state,
 			                                         *intermediate_states[op_idx]);
-			auto state = Execute(curr_chunk, result, op_idx + 1);
-			if (state == OperatorResultType::FINISHED) {
-				FinishProcessing(op_idx);
-				break;
+			auto execute_result = Execute(curr_chunk, result, op_idx + 1);
+
+			// TODO: handle this edge case where a chunk resulting from a flush is pushed into an operator that
+			//		wants to see it again, we need to cache it somehow
+			if (execute_result == OperatorResultType::HAVE_MORE_OUTPUT) {
+				throw NotImplementedException("Pulling from a Cached operator into an operator that emits HAVE_MORE_OUTPUT doesn't currently work");
 			}
+
+			if (finalize_result == OperatorFinalizeResultType::FINISHED) {
+				FinishProcessing(op_idx);
+				op_idx++;
+			} else {
+				throw NotImplementedException("HEH?");
+			}
+
 
 			// Some non-empty result was pulled from some caching operator, we're done for this pull
 			if (result.size() > 0) {
 				break;
 			}
+		} else {
+			op_idx++;
 		}
 	}
 }
@@ -151,15 +166,23 @@ void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 void PipelineExecutor::FlushCachingOperatorsPush() {
 	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
 	for (idx_t op_idx = start_idx; op_idx < pipeline.operators.size(); op_idx++) {
-		if (pipeline.operators[op_idx]->RequiresFinalExecute()) {
+		if (!pipeline.operators[op_idx]->RequiresFinalExecute()) {
+			continue;
+		}
+
+		OperatorFinalizeResultType finalize_result;
+		OperatorResultType push_result;
+
+		do {
 			unique_ptr<DataChunk> tmp_chunk;
 			auto &curr_chunk = *GetIntermediateChunk(tmp_chunk, op_idx);
-			pipeline.operators[op_idx]->FinalExecute(context, curr_chunk, *pipeline.operators[op_idx]->op_state,
-			                                         *intermediate_states[op_idx]);
-			auto result = ExecutePushInternal(curr_chunk, op_idx + 1);
-			if (result == OperatorResultType::FINISHED) {
-				break;
-			}
+			finalize_result = pipeline.operators[op_idx]->FinalExecute(context, curr_chunk, *pipeline.operators[op_idx]->op_state,
+			                                                                *intermediate_states[op_idx]);
+			push_result = ExecutePushInternal(curr_chunk, op_idx + 1);
+		} while (finalize_result != OperatorFinalizeResultType::FINISHED && push_result != OperatorResultType::FINISHED);
+
+		if (push_result == OperatorResultType::FINISHED) {
+			break;
 		}
 	}
 }
@@ -170,7 +193,7 @@ void PipelineExecutor::PushFinalize() {
 	}
 	finalized = true;
 	// flush all caching operators
-	// note that even if an operator has finished, we might still need to flush caches AFTER that operator
+	// note that even if an operator has finished, we might still need to flush caches AFTER thphysical_tableinout_function.cppat operator
 	// e.g. if we have SOURCE -> LIMIT -> CROSS_PRODUCT -> SINK, if the LIMIT reports no more rows will be passed on
 	// we still need to flush caches from the CROSS_PRODUCT
 	D_ASSERT(in_process_operators.empty());

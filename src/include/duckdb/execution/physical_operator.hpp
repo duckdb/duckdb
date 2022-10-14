@@ -139,7 +139,7 @@ public:
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
-	virtual void FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
 	                          OperatorState &state) const;
 
 	virtual bool ParallelOperator() const {
@@ -250,7 +250,7 @@ public:
 public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const final;
-	void FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
 	                  OperatorState &state) const final;
 
 	bool RequiresFinalExecute() const final {
