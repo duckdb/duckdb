@@ -39,4 +39,7 @@ public class DuckDBDatabase {
 
 	protected ByteBuffer db_ref;
 
+	public boolean isShutdown() {
+		return db_ref == null;
+	}
 }
