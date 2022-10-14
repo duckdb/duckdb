@@ -177,12 +177,6 @@ public:
 		}
 	}
 
-	template <uint8_t BITWIDTH>
-	void FlushBitpackedData(uint8_t *src, uint8_t *dest, uint8_t block_count) {
-		BitpackingPrimitives::PackBuffer<uint8_t>(
-		    dest, src, block_count * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, BITWIDTH);
-	}
-
 	void FlushGroup() {
 		metadata_ptr -= sizeof(byte_index_t);
 		metadata_byte_size += sizeof(byte_index_t);
