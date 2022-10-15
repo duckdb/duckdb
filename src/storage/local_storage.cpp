@@ -337,11 +337,12 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 		mock_chunk.InitializeEmpty(table->GetTypes());
 		ScanTableStorage(transaction, columns, [&](DataChunk &chunk) -> bool {
 			// construct the mock chunk by referencing the required columns
-			for (idx_t i = 0; i < chunk.size(); i++) {
+			for (idx_t i = 0; i < columns.size(); i++) {
 				mock_chunk.data[columns[i]].Reference(chunk.data[i]);
 			}
+			mock_chunk.SetCardinality(chunk);
 			// append this chunk to the indexes of the table
-			if (!table->AppendToIndexes(chunk, append_state.current_row)) {
+			if (!table->AppendToIndexes(mock_chunk, append_state.current_row)) {
 				constraint_violated = true;
 				return false;
 			}
