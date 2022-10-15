@@ -67,6 +67,8 @@ public:
 private:
 	template <class T>
 	bool ScanTableStorage(Transaction &transaction, T &&fun);
+	template <class T>
+	bool ScanTableStorage(Transaction &transaction, const vector<column_t> &column_ids, T &&fun);
 };
 
 //! The LocalStorage class holds appends that have not been committed yet

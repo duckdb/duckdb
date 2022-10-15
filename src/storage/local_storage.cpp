@@ -274,15 +274,14 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column
 }
 
 template <class T>
-bool LocalTableStorage::ScanTableStorage(Transaction &transaction, T &&fun) {
-	vector<column_t> column_ids;
-	column_ids.reserve(table->column_definitions.size());
-	for (idx_t i = 0; i < table->column_definitions.size(); i++) {
-		column_ids.push_back(i);
+bool LocalTableStorage::ScanTableStorage(Transaction &transaction, const vector<column_t> &column_ids, T &&fun) {
+	auto all_types = table->GetTypes();
+	vector<LogicalType> scan_types;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		scan_types.push_back(all_types[column_ids[i]]);
 	}
-
 	DataChunk chunk;
-	chunk.Initialize(allocator, table->GetTypes());
+	chunk.Initialize(allocator, scan_types);
 
 	// initialize the scan
 	TableScanState state;
@@ -301,26 +300,55 @@ bool LocalTableStorage::ScanTableStorage(Transaction &transaction, T &&fun) {
 	}
 }
 
+template <class T>
+bool LocalTableStorage::ScanTableStorage(Transaction &transaction, T &&fun) {
+	vector<column_t> column_ids;
+	column_ids.reserve(table->column_definitions.size());
+	for (idx_t i = 0; i < table->column_definitions.size(); i++) {
+		column_ids.push_back(i);
+	}
+	return ScanTableStorage(transaction, column_ids, fun);
+}
+
 void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
                                         bool append_to_table) {
 	bool constraint_violated = false;
 	if (append_to_table) {
 		table->InitializeAppend(transaction, append_state, append_count);
 	}
-	ScanTableStorage(transaction, [&](DataChunk &chunk) -> bool {
-		// append this chunk to the indexes of the table
-		if (!table->AppendToIndexes(chunk, append_state.current_row)) {
-			constraint_violated = true;
-			return false;
-		}
-		// append to base table
-		if (append_to_table) {
+	if (append_to_table) {
+		// appending: need to scan entire
+		ScanTableStorage(transaction, [&](DataChunk &chunk) -> bool {
+			// append this chunk to the indexes of the table
+			if (!table->AppendToIndexes(chunk, append_state.current_row)) {
+				constraint_violated = true;
+				return false;
+			}
+			// append to base table
 			table->Append(chunk, append_state);
-		} else {
+			return true;
+		});
+	} else {
+		// only need to scan for index append
+		// figure out which columns we need to scan for the set of indexes
+		auto columns = table->info->indexes.GetRequiredColumns();
+		// create an empty mock chunk that contains all the correct types for the table
+		DataChunk mock_chunk;
+		mock_chunk.InitializeEmpty(table->GetTypes());
+		ScanTableStorage(transaction, columns, [&](DataChunk &chunk) -> bool {
+			// construct the mock chunk by referencing the required columns
+			for (idx_t i = 0; i < chunk.size(); i++) {
+				mock_chunk.data[columns[i]].Reference(chunk.data[i]);
+			}
+			// append this chunk to the indexes of the table
+			if (!table->AppendToIndexes(chunk, append_state.current_row)) {
+				constraint_violated = true;
+				return false;
+			}
 			append_state.current_row += chunk.size();
-		}
-		return true;
-	});
+			return true;
+		});
+	}
 	if (constraint_violated) {
 		// need to revert the append
 		row_t current_row = append_state.row_start;
