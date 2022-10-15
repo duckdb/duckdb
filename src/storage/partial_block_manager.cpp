@@ -2,6 +2,12 @@
 
 namespace duckdb {
 
+PartialBlockManager::PartialBlockManager(BlockManager &block_manager, uint32_t max_partial_block_size,
+                                         uint32_t max_use_count)
+    : block_manager(block_manager), max_partial_block_size(max_partial_block_size), max_use_count(max_use_count) {
+}
+PartialBlockManager::~PartialBlockManager() {
+}
 //===--------------------------------------------------------------------===//
 // Partial Blocks
 //===--------------------------------------------------------------------===//
@@ -76,6 +82,14 @@ void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
 		e.second->Flush();
 	}
+	partially_filled_blocks.clear();
+}
+
+void PartialBlockManager::Clear() {
+	for (auto &e : partially_filled_blocks) {
+		e.second->Clear();
+	}
+	partially_filled_blocks.clear();
 }
 
 } // namespace duckdb

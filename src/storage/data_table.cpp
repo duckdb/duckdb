@@ -59,11 +59,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// add the column definitions from this DataTable
 	column_definitions.emplace_back(new_column.Copy());
 
-	auto &transaction = Transaction::GetTransaction(context);
 	this->row_groups = parent.row_groups->AddColumn(new_column, default_value, stats.GetStats(new_column_idx));
 
 	// also add this column to client local storage
-	transaction.storage.AddColumn(&parent, this, new_column, default_value);
+	auto &local_storage = LocalStorage::Get(context);
+	local_storage.AddColumn(&parent, this, new_column, default_value);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
@@ -110,8 +110,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	this->row_groups = parent.row_groups->RemoveColumn(removed_column);
 
 	// scan the original table, and fill the new column with the transformed value
-	auto &transaction = Transaction::GetTransaction(context);
-	transaction.storage.DropColumn(&parent, this, removed_column);
+	auto &local_storage = LocalStorage::Get(context);
+	local_storage.DropColumn(&parent, this, removed_column);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
@@ -131,8 +131,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 	VerifyNewConstraint(context, parent, constraint.get());
 
 	// Get the local data ownership from old dt
-	auto &transaction = Transaction::GetTransaction(context);
-	transaction.storage.MoveStorage(&parent, this);
+	auto &local_storage = LocalStorage::Get(context);
+	local_storage.MoveStorage(&parent, this);
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
 }
@@ -165,8 +165,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	    parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr, stats.GetStats(changed_idx));
 
 	// scan the original table, and fill the new column with the transformed value
-	auto &transaction = Transaction::GetTransaction(context);
-	transaction.storage.ChangeType(&parent, this, changed_idx, target_type, bound_columns, cast_expr);
+	auto &local_storage = LocalStorage::Get(context);
+	local_storage.ChangeType(&parent, this, changed_idx, target_type, bound_columns, cast_expr);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
@@ -196,7 +196,8 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
 	InitializeScan(state, column_ids, table_filters);
-	transaction.storage.InitializeScan(this, state.local_state, table_filters);
+	auto &local_storage = LocalStorage::Get(transaction);
+	local_storage.InitializeScan(this, state.local_state, table_filters);
 }
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
@@ -216,16 +217,17 @@ idx_t DataTable::MaxThreads(ClientContext &context) {
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
 	row_groups->InitializeParallelScan(state.scan_state);
-	auto &transaction = Transaction::GetTransaction(context);
-	transaction.storage.InitializeParallelScan(this, state.local_state);
+
+	auto &local_storage = LocalStorage::Get(context);
+	local_storage.InitializeParallelScan(this, state.local_state);
 }
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state) {
 	if (row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state)) {
 		return true;
 	}
-	auto &transaction = Transaction::GetTransaction(context);
-	if (transaction.storage.NextParallelScan(context, this, state.local_state, scan_state.local_state)) {
+	auto &local_storage = LocalStorage::Get(context);
+	if (local_storage.NextParallelScan(context, this, state.local_state, scan_state.local_state)) {
 		return true;
 	} else {
 		// finished all scans: no more scans remaining
@@ -241,7 +243,8 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 	}
 
 	// scan the transaction-local segments
-	transaction.storage.Scan(state.local_state, state.GetColumnIds(), result);
+	auto &local_storage = LocalStorage::Get(transaction);
+	local_storage.Scan(state.local_state, state.GetColumnIds(), result);
 }
 
 bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type) {
@@ -363,10 +366,10 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 
 	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, err_msgs);
 	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
-	auto &transaction = Transaction::GetTransaction(context);
-	bool transaction_check = transaction.storage.Find(data_table);
+	auto &local_storage = LocalStorage::Get(context);
+	bool transaction_check = local_storage.Find(data_table);
 	if (transaction_check) {
-		auto &transact_index = transaction.storage.GetIndexes(data_table);
+		auto &transact_index = local_storage.GetIndexes(data_table);
 		transact_index.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, tran_err_msgs);
 	}
 
@@ -418,8 +421,8 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 	}
 
 	parent.row_groups->VerifyNewConstraint(parent, *constraint);
-	auto &transaction = Transaction::GetTransaction(context);
-	transaction.storage.VerifyNewConstraint(parent, *constraint);
+	auto &local_storage = LocalStorage::Get(context);
+	local_storage.VerifyNewConstraint(parent, *constraint);
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
@@ -479,8 +482,8 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, ClientContext &co
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
-	auto &transaction = Transaction::GetTransaction(context);
-	transaction.storage.InitializeAppend(state, this);
+	auto &local_storage = LocalStorage::Get(context);
+	local_storage.InitializeAppend(state, this);
 }
 
 void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
@@ -740,6 +743,7 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 	}
 
 	auto &transaction = Transaction::GetTransaction(context);
+	auto &local_storage = LocalStorage::Get(context);
 
 	row_identifiers.Flatten(count);
 	auto ids = FlatVector::GetData<row_t>(row_identifiers);
@@ -750,7 +754,7 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 	// and we only need to fetch columns that are part of this constraint
 	DataChunk verify_chunk;
 	if (first_id >= MAX_ROW_ID) {
-		transaction.storage.FetchChunk(this, row_identifiers, count, verify_chunk);
+		local_storage.FetchChunk(this, row_identifiers, count, verify_chunk);
 	} else {
 		ColumnFetchState fetch_state;
 		vector<column_t> col_ids;
@@ -766,7 +770,7 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 
 	if (first_id >= MAX_ROW_ID) {
 		// deletion is in transaction-local storage: push delete into local chunk collection
-		return transaction.storage.Delete(this, row_identifiers, count);
+		return local_storage.Delete(this, row_identifiers, count);
 	} else {
 		return row_groups->Delete(transaction, this, ids, count);
 	}
@@ -881,7 +885,8 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {
 		// update is in transaction-local storage: push update into local storage
-		transaction.storage.Update(this, row_ids, column_ids, updates);
+		auto &local_storage = LocalStorage::Get(context);
+		local_storage.Update(this, row_ids, column_ids, updates);
 		return;
 	}
 
