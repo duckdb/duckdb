@@ -247,6 +247,7 @@ static Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
 
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
 duckdb::DBInstanceCache instance_cache;
+std::mutex db_map_lock;
 //! A map of pointer to shared_ptr, to ensure we keep the DuckDB object alive
 std::unordered_map<duckdb::DuckDB *, shared_ptr<duckdb::DuckDB>> db_map;
 
@@ -284,6 +285,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 		bool cache_instance = database != ":memory:" && !database.empty();
 		auto shared_db = instance_cache.CreateInstance(database, config, cache_instance);
 		auto db = shared_db.get();
+		std::lock_guard<std::mutex> lock(db_map_lock);
 		db_map[db] = move(shared_db);
 
 		return env->NewDirectByteBuffer(db, 0);
@@ -297,9 +299,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1shutdown(JNIEnv *env, jclass, jobject db_ref_buf) {
 	auto db_ref = (DuckDB *)env->GetDirectBufferAddress(db_ref_buf);
 	if (db_ref) {
+		std::lock_guard<std::mutex> lock(db_map_lock);
 		D_ASSERT(db_map.find(db_ref) != db_map.end());
 		db_map.erase(db_ref);
-		delete db_ref;
 	}
 }
 
