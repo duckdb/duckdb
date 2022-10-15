@@ -27,12 +27,12 @@ public:
 	                  const vector<column_t> &bound_columns, Expression &cast_expr);
 	// Create a LocalTableStorage from a DROP COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
-	// Create a LocalTableStorage from a ADD COLUMN
+	// Create a LocalTableStorage from an ADD COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  Expression *default_value);
 	~LocalTableStorage();
 
-	DataTable &table;
+	DataTable *table;
 
 	Allocator &allocator;
 	//! The main chunk collection holding the data
