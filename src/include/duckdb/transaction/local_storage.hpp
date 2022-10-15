@@ -30,7 +30,6 @@ public:
 	// Create a LocalTableStorage from a ADD COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  Expression *default_value);
-
 	~LocalTableStorage();
 
 	DataTable &table;
@@ -44,9 +43,22 @@ public:
 	TableStatistics stats;
 	//! The number of deleted rows
 	idx_t deleted_rows;
+	//! The partial block manager (if we created one yet)
+	unique_ptr<PartialBlockManager> partial_manager;
+	//! The set of blocks that have been pre-emptively written to disk
+	unordered_set<block_id_t> written_blocks;
 
 public:
 	void InitializeScan(CollectionScanState &state, TableFilterSet *table_filters = nullptr);
+	//! Check if we should flush the previously written row-group to disk
+	void CheckFlushToDisk();
+	//! Flushes a specific row group to disk
+	void FlushToDisk(RowGroup *row_group);
+	//! Flushes the final row group to disk (if any)
+	void FlushToDisk();
+	//! Whether or not the local table storag ehas optimistically written blocks
+	bool HasWrittenBlocks();
+	void Rollback();
 	idx_t EstimatedSize();
 };
 
@@ -58,8 +70,10 @@ public:
 	};
 
 public:
-	explicit LocalStorage(Transaction &transaction) : transaction(transaction) {
-	}
+	explicit LocalStorage(Transaction &transaction);
+
+	static LocalStorage &Get(Transaction &transaction);
+	static LocalStorage &Get(ClientContext &context);
 
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable *table, CollectionScanState &state, TableFilterSet *table_filters);
@@ -83,6 +97,8 @@ public:
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
 	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction);
+	//! Rollback the local storage
+	void Rollback();
 
 	bool ChangesMade() noexcept {
 		return table_storage.size() > 0;

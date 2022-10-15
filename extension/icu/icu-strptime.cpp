@@ -165,7 +165,6 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &cast_data = (CastData &)*parameters.cast_data;
 		auto info = (BindData *)cast_data.info.get();
 		CalendarPtr cal(info->calendar->clone());
-		const auto tz_name = info->tz_setting.c_str();
 
 		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
 		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {

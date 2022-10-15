@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/main/extension.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 
@@ -22,6 +23,7 @@ public:
 	static void ClearLastError();
 
 	static unique_ptr<string> last_error;
+	static mutex last_error_lock;
 };
 
 } // namespace duckdb

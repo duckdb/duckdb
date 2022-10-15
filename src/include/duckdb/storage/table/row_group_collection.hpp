@@ -33,7 +33,10 @@ public:
 
 	bool IsEmpty() const;
 
+	RowGroup *GetSecondToLastRowGroup();
 	void AppendRowGroup(idx_t start_row);
+	//! Get the nth row-group, negative numbers start from the back (so -1 is the last row group, etc)
+	RowGroup *GetRowGroup(int64_t index);
 	void Verify();
 
 	void InitializeScan(CollectionScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters);
@@ -52,8 +55,8 @@ public:
 	void InitializeAppend(TableAppendState &state);
 	//! Initialize an append with a known number of rows. FinalizeAppend should not be called after appending is done.
 	void InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count);
-	//! Append a chunk to a table.
-	void Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
+	//! Appends to the row group collection. Returns true if a new row group has been created to append to
+	bool Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
 	//! FinalizeAppend flushes an append with a variable number of rows.
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
