@@ -181,7 +181,7 @@ public:
 			ScanGroup<EXACT_TYPE, true>(nullptr, to_skip);
 		}
 		idx_t groups_to_skip = skip_count / PatasPrimitives::PATAS_GROUP_SIZE;
-		for (idx_t i = 0; i < groups_to_skip) {
+		for (idx_t i = 0; i < groups_to_skip; i++) {
 			SkipGroup();
 		}
 		skip_count -= PatasPrimitives::PATAS_GROUP_SIZE * groups_to_skip;
