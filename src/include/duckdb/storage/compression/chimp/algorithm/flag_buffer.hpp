@@ -64,7 +64,7 @@ public:
 		return counter * 2;
 	}
 
-	void Insert(ChimpCompressionFlags value) {
+	void Insert(ChimpConstants::Flags value) {
 		if (!EMPTY) {
 			if ((counter & 3) == 0) {
 				// Start the new byte fresh

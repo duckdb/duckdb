@@ -38,7 +38,7 @@ public:
 	static inline void Unpack(uint16_t packed_data, UnpackedData &dest) {
 		dest.index = packed_data >> INDEX_SHIFT_AMOUNT & INDEX_MASK;
 		dest.leading_zero = packed_data >> LEADING_SHIFT_AMOUNT & LEADING_MASK;
-		dest.leading_zero = ChimpDecompressionConstants::LEADING_REPRESENTATION[dest.leading_zero];
+		dest.leading_zero = ChimpConstants::Decompression::LEADING_REPRESENTATION[dest.leading_zero];
 		dest.significant_bits = packed_data & SignificantBits<CHIMP_TYPE>::mask;
 		if (dest.significant_bits == 0) {
 			dest.significant_bits = 64;
@@ -54,8 +54,8 @@ public:
 		D_ASSERT(leading_zero + ((!significant_bits) * (sizeof(CHIMP_TYPE) * 8)) + significant_bits <=
 		         (sizeof(CHIMP_TYPE) * 8));
 		uint16_t result = 0;
-		result += ((uint32_t)BIT_SIZE * 8) * (BUFFER_SIZE + index);
-		result += BIT_SIZE * ChimpCompressionConstants::LEADING_REPRESENTATION[leading_zero];
+		result += ((uint32_t)BIT_SIZE * 8) * (ChimpConstants::BUFFER_SIZE + index);
+		result += BIT_SIZE * ChimpConstants::Compression::LEADING_REPRESENTATION[leading_zero];
 		if (BIT_SIZE == 32) {
 			// Shift the result by 1 to occupy the 16th bit
 			result <<= 1;

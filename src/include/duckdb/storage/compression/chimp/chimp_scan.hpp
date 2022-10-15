@@ -57,9 +57,9 @@ public:
 	void LoadFlags(uint8_t *packed_data, idx_t group_size) {
 		FlagBuffer<false> flag_buffer;
 		flag_buffer.SetBuffer(packed_data);
-		flags[0] = ChimpCompressionFlags::VALUE_IDENTICAL; // First value doesn't require a flag
+		flags[0] = ChimpConstants::Flags::VALUE_IDENTICAL; // First value doesn't require a flag
 		for (idx_t i = 0; i < group_size; i++) {
-			flags[1 + i] = (ChimpCompressionFlags)flag_buffer.Extract();
+			flags[1 + i] = (ChimpConstants::Flags)flag_buffer.Extract();
 		}
 		max_flags_to_read = group_size;
 		index = 0;
@@ -78,7 +78,7 @@ public:
 		LeadingZeroBuffer<false> leading_zero_buffer;
 		leading_zero_buffer.SetBuffer(packed_data);
 		for (idx_t i = 0; i < leading_zero_block_size; i++) {
-			leading_zeros[i] = ChimpDecompressionConstants::LEADING_REPRESENTATION[leading_zero_buffer.Extract()];
+			leading_zeros[i] = ChimpConstants::Decompression::LEADING_REPRESENTATION[leading_zero_buffer.Extract()];
 		}
 		max_leading_zeros_to_read = leading_zero_block_size;
 		leading_zero_index = 0;
@@ -87,7 +87,7 @@ public:
 	idx_t CalculatePackedDataCount() const {
 		idx_t count = 0;
 		for (idx_t i = 0; i < max_flags_to_read; i++) {
-			count += flags[1 + i] == ChimpCompressionFlags::TRAILING_EXCEEDS_THRESHOLD;
+			count += flags[1 + i] == ChimpConstants::Flags::TRAILING_EXCEEDS_THRESHOLD;
 		}
 		return count;
 	}
@@ -111,7 +111,7 @@ public:
 	uint32_t leading_zero_index;
 	uint32_t unpacked_index;
 
-	ChimpCompressionFlags flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
+	ChimpConstants::Flags flags[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
 	uint8_t leading_zeros[ChimpPrimitives::CHIMP_SEQUENCE_SIZE + 1];
 	UnpackedData unpacked_data_blocks[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
 
