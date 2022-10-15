@@ -221,8 +221,6 @@ public:
 		// Store the offset to the metadata
 		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
-		// uint64_t count = current_segment->count;
-		// printf("SIZE: %llu | COUNT: %llu\n", total_segment_size, count);
 		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);
 	}
 

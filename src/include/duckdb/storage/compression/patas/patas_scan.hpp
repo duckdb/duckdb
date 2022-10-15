@@ -137,6 +137,17 @@ public:
 		total_value_count += group_size;
 	}
 
+	// Using the metadata, we can avoid loading any of the data if we don't care about the group at all
+	void SkipGroup() {
+		// Skip the offset indicating where the data starts
+		metadata_ptr -= sizeof(uint32_t);
+		idx_t group_size = MinValue((idx_t)PatasPrimitives::PATAS_GROUP_SIZE, count - total_value_count);
+		// Skip the blocks of packed data
+		metadata_ptr -= sizeof(uint16_t) * group_size;
+
+		total_value_count += group_size;
+	}
+
 	template <bool SKIP = false>
 	void LoadGroup(EXACT_TYPE *value_buffer) {
 		group_state.Reset();
@@ -163,11 +174,22 @@ public:
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
 		using EXACT_TYPE = typename FloatingToExact<T>::type;
 
-		while (skip_count) {
-			auto skip_size = MinValue(skip_count, LeftInGroup());
-			ScanGroup<EXACT_TYPE, true>(nullptr, skip_size);
-			skip_count -= skip_size;
+		if (total_value_count != 0 && !GroupFinished()) {
+			// Finish skipping the current group
+			idx_t to_skip = LeftInGroup();
+			skip_count -= to_skip;
+			ScanGroup<EXACT_TYPE, true>(nullptr, to_skip);
 		}
+		idx_t groups_to_skip = skip_count / PatasPrimitives::PATAS_GROUP_SIZE;
+		for (idx_t i = 0; i < groups_to_skip) {
+			SkipGroup();
+		}
+		skip_count -= PatasPrimitives::PATAS_GROUP_SIZE * groups_to_skip;
+		if (skip_count == 0) {
+			return;
+		}
+		LoadGroup(group_state.values);
+		ScanGroup<EXACT_TYPE, true>(nullptr, skip_count);
 	}
 };
 

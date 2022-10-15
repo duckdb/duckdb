@@ -131,7 +131,7 @@ idx_t PatasFinalAnalyze(AnalyzeState &state) {
 	// Finish the last "segment"
 	patas_state.StartNewSegment();
 	const auto final_analyze_size = patas_state.TotalUsedBytes();
-	printf("ANALYZE: ROWGROUP_SIZE: %llu\n", final_analyze_size);
+	// printf("ANALYZE: ROWGROUP_SIZE: %llu\n", final_analyze_size);
 	return final_analyze_size;
 }
 
