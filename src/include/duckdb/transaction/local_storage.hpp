@@ -60,6 +60,13 @@ public:
 	bool HasWrittenBlocks();
 	void Rollback();
 	idx_t EstimatedSize();
+
+	void AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
+	                     bool append_to_table);
+
+private:
+	template <class T>
+	bool ScanTableStorage(Transaction &transaction, T &&fun);
 };
 
 //! The LocalStorage class holds appends that have not been committed yet
@@ -124,9 +131,6 @@ public:
 
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
-
-	template <class T>
-	bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
 
 private:
 	Transaction &transaction;
