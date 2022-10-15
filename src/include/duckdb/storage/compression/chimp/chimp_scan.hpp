@@ -69,7 +69,7 @@ public:
 #ifdef DEBUG
 		idx_t flag_one_count = 0;
 		for (idx_t i = 0; i < max_flags_to_read; i++) {
-			flag_one_count += flags[1 + i] == LEADING_ZERO_LOAD;
+			flag_one_count += flags[1 + i] == ChimpConstants::Flags::LEADING_ZERO_LOAD;
 		}
 		// There are 8 leading zero values packed in one block, the block could be partially filled
 		flag_one_count = AlignValue<idx_t, 8>(flag_one_count);
