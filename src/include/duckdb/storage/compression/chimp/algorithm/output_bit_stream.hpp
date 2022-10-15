@@ -191,7 +191,7 @@ private:
 	void WriteInCurrent(INTERNAL_TYPE value, uint8_t value_size) {
 		D_ASSERT(INTERNAL_TYPE_BITSIZE >= value_size);
 		const auto shift_amount = free_bits - value_size;
-		current |= (value & bitmask<INTERNAL_TYPE>(value_size)) << shift_amount;
+		current |= (value & BitUtils<INTERNAL_TYPE>::Mask(value_size)) << shift_amount;
 		DecreaseFreeBits(value_size);
 	}
 
@@ -199,7 +199,7 @@ private:
 	void WriteInCurrent(INTERNAL_TYPE value) {
 		D_ASSERT(INTERNAL_TYPE_BITSIZE >= VALUE_SIZE);
 		const auto shift_amount = free_bits - VALUE_SIZE;
-		current |= (value & bitmask<INTERNAL_TYPE>(VALUE_SIZE)) << shift_amount;
+		current |= (value & BitUtils<INTERNAL_TYPE>::Mask(VALUE_SIZE)) << shift_amount;
 		DecreaseFreeBits(VALUE_SIZE);
 	}
 
