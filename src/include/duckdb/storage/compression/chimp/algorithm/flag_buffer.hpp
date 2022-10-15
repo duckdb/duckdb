@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.h"
+#include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 #ifdef DEBUG
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
@@ -63,7 +64,7 @@ public:
 		return counter * 2;
 	}
 
-	void Insert(const uint8_t &value) {
+	void Insert(ChimpCompressionFlags value) {
 		if (!EMPTY) {
 			if ((counter & 3) == 0) {
 				// Start the new byte fresh
@@ -73,9 +74,9 @@ public:
 #endif
 			}
 #ifdef DEBUG
-			flags.push_back(value);
+			flags.push_back((uint8_t)value);
 #endif
-			buffer[counter >> 2] |= ((value & 3) << FlagBufferConstants::SHIFTS[counter & 3]);
+			buffer[counter >> 2] |= (((uint8_t)value & 3) << FlagBufferConstants::SHIFTS[counter & 3]);
 #ifdef DEBUG
 			// Verify that the bits are serialized correctly
 			D_ASSERT(flags[counter & 3] == ExtractValue(buffer[counter >> 2], counter & 3));

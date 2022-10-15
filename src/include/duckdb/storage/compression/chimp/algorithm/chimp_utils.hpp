@@ -72,6 +72,13 @@ static inline int __builtin_clz(unsigned int value) {
 
 #endif
 
+enum class ChimpCompressionFlags : uint8_t {
+	VALUE_IDENTICAL = 0,
+	TRAILING_EXCEEDS_THRESHOLD = 1,
+	LEADING_ZERO_EQUALITY = 2,
+	LEADING_ZERO_LOAD = 3
+};
+
 static constexpr uint8_t BUFFER_SIZE = 128;
 
 template <class T>
