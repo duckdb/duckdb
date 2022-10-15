@@ -184,6 +184,7 @@ static void GetDatabaseNameFromDSN(duckdb::OdbcHandleDbc *dbc, SQLCHAR *conn_str
 #endif
 }
 
+//! The database instance cache, used so that multiple connections to the same file point to the same database object
 duckdb::DBInstanceCache instance_cache;
 
 static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
