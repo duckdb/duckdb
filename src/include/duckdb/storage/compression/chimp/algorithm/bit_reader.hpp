@@ -168,4 +168,7 @@ public:
 	}
 };
 
+constexpr uint8_t BitReader::remainder_masks[];
+constexpr uint8_t BitReader::masks[];
+
 } // namespace duckdb
