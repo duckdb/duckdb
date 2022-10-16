@@ -116,7 +116,7 @@ bool StringListCastLoop(string_t *source_data, ValidityMask &source_mask, Vector
                         idx_t count, CastParameters &parameters, const SelectionVector *sel) {
 
 	idx_t total_list_size = 0;
-	for (idx_t i = 0; i < count; i++) { // sum of the elements in each list to allocate this amount
+	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = i;
 		if (sel) {
 			idx = sel->get_index(i);
@@ -127,15 +127,11 @@ bool StringListCastLoop(string_t *source_data, ValidityMask &source_mask, Vector
 		total_list_size += VectorStringifiedListParser::CountParts(source_data[idx]);
 	}
 
-	Vector varchar_vector(LogicalType::VARCHAR, total_list_size); // intermediate cast vector
-	if (total_list_size > count) {
-		varchar_vector.Resize(count, total_list_size); // the Vector constructor does not resize validity mask.
-	}
+	Vector varchar_vector(LogicalType::VARCHAR, total_list_size);
 
 	ListVector::Reserve(result, total_list_size);
 	ListVector::SetListSize(result, total_list_size);
 
-	// list_data contains for each row an offset and length that reference indexes of the child vector
 	auto list_data = ListVector::GetData(result);
 	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
 
@@ -201,7 +197,8 @@ bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters 
 
 BoundCastInfo StringToListCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	// second argument allows for a secondary casting function to be passed in the CastParameters
-	return BoundCastInfo(&StringListCast, BindListToListCast(input, LogicalType::LIST(LogicalType::VARCHAR), target));
+	return BoundCastInfo(&StringListCast,
+	                     ListBoundCastData::BindListToListCast(input, LogicalType::LIST(LogicalType::VARCHAR), target));
 }
 
 BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const LogicalType &source,
@@ -233,7 +230,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::JSON:
 		return &DefaultCasts::ReinterpretCast;
-	case LogicalTypeId::LIST: // my case
+	case LogicalTypeId::LIST:
 		return StringToListCast(input, source, target);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);

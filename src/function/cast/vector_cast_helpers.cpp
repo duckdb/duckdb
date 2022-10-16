@@ -2,37 +2,6 @@
 
 namespace duckdb {
 
-static bool SkipToClose(idx_t &idx, const char *buf, idx_t &len, idx_t &lvl) {
-	while (idx < len) {
-		if (buf[idx] == '[') {
-			if (!SkipToClose(++idx, buf, len, lvl)) {
-				return false;
-			}
-			lvl++;
-			idx++;
-		}
-		if (buf[idx] == ']') {
-			lvl--;
-			return true;
-		}
-		idx++;
-	}
-	return false;
-}
-
-static bool SkipToCloseQuotes(idx_t &pos, const char *buf, idx_t &len) {
-	char quote = buf[pos];
-	pos++;
-
-	while (pos < len) {
-		if (buf[pos] == quote) {
-			return true;
-		}
-		pos++;
-	}
-	return false;
-}
-
 struct CountPartOperation {
 	idx_t count = 0;
 
@@ -51,14 +20,51 @@ struct SplitStringOperation {
 	Vector &child;
 
 	void HandleValue(const char *buf, idx_t start_pos, idx_t pos) {
-		child_data[child_start] = StringVector::AddString(child, buf + start_pos, pos - start_pos);
-		if (child_data[child_start].GetSize() >= 4 && buf[start_pos] == 'N' && buf[start_pos + 1] == 'U' &&
-		    buf[start_pos + 2] == 'L' && buf[start_pos + 3] == 'L') {
+
+		if ((pos - start_pos) >= 4 && buf[start_pos] == 'N' && buf[start_pos + 1] == 'U' && buf[start_pos + 2] == 'L' &&
+		    buf[start_pos + 3] == 'L') {
 			FlatVector::SetNull(child, child_start, true);
+			child_start++;
+			return;
 		}
+		child_data[child_start] = StringVector::AddString(child, buf + start_pos, pos - start_pos);
 		child_start++;
 	}
 };
+
+static bool SkipToCloseQuotes(idx_t &pos, const char *buf, idx_t &len) {
+	char quote = buf[pos];
+	pos++;
+
+	while (pos < len) {
+		if (buf[pos] == quote) {
+			return true;
+		}
+		pos++;
+	}
+	return false;
+}
+
+static bool SkipToClose(idx_t &idx, const char *buf, idx_t &len, idx_t &lvl) {
+	while (idx < len) {
+		if (buf[idx] == '[') {
+			if (!SkipToClose(++idx, buf, len, lvl)) {
+				return false;
+			}
+			lvl++;
+			idx++;
+		}
+		if (buf[idx] == '"' || buf[idx] == '\'') {
+			SkipToCloseQuotes(idx, buf, len);
+		}
+		if (buf[idx] == ']') {
+			lvl--;
+			return true;
+		}
+		idx++;
+	}
+	return false;
+}
 
 template <class OP>
 static bool SplitStringifiedListInternal(const string_t &input, OP &state) {
@@ -87,7 +93,13 @@ static bool SplitStringifiedListInternal(const string_t &input, OP &state) {
 		} else if (buf[pos] == '"' || buf[pos] == '\'') {
 			SkipToCloseQuotes(pos, buf, len);
 		} else if (buf[pos] == ',' || buf[pos] == ']') {
-			state.HandleValue(buf, start_pos, pos);
+			idx_t trailing_whitespace = 0;
+			while (StringUtil::CharacterIsSpace(buf[pos - trailing_whitespace - 1])) {
+				trailing_whitespace++;
+			}
+			if (!(buf[pos] == ']' && start_pos == (pos))) {
+				state.HandleValue(buf, start_pos, pos - trailing_whitespace);
+			} // else the list is empty
 			if (buf[pos] == ']') {
 				lvl--;
 				break;
@@ -99,7 +111,6 @@ static bool SplitStringifiedListInternal(const string_t &input, OP &state) {
 		}
 		pos++;
 	}
-	// check if it ends with a ']' (followed by optional whitespace)
 	pos++;
 	while (pos < len) {
 		if (!StringUtil::CharacterIsSpace(buf[pos])) {
