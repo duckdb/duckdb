@@ -531,6 +531,7 @@ void DataTable::AppendLock(TableAppendState &state) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
 	state.row_start = row_groups->GetTotalRows();
+	state.current_row = state.row_start;
 }
 
 void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
@@ -594,9 +595,6 @@ void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &indexes, 
 	row_groups->MergeStorage(data);
 	stats.MergeStats(other_stats);
 	row_groups->Verify();
-	if (!indexes.Empty()) {
-		throw InternalException("FIXME: merge indexes");
-	}
 }
 
 void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {

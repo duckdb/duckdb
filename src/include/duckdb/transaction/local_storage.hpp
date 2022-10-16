@@ -27,12 +27,12 @@ public:
 	                  const vector<column_t> &bound_columns, Expression &cast_expr);
 	// Create a LocalTableStorage from a DROP COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
-	// Create a LocalTableStorage from a ADD COLUMN
+	// Create a LocalTableStorage from an ADD COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  Expression *default_value);
 	~LocalTableStorage();
 
-	DataTable &table;
+	DataTable *table;
 
 	Allocator &allocator;
 	//! The main chunk collection holding the data
@@ -60,6 +60,15 @@ public:
 	bool HasWrittenBlocks();
 	void Rollback();
 	idx_t EstimatedSize();
+
+	void AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
+	                     bool append_to_table);
+
+private:
+	template <class T>
+	bool ScanTableStorage(Transaction &transaction, T &&fun);
+	template <class T>
+	bool ScanTableStorage(Transaction &transaction, const vector<column_t> &column_ids, T &&fun);
 };
 
 //! The LocalStorage class holds appends that have not been committed yet
@@ -124,9 +133,6 @@ public:
 
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
-
-	template <class T>
-	bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
 
 private:
 	Transaction &transaction;
