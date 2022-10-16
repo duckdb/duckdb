@@ -71,8 +71,9 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 		}
 	}
 	vector<column_t> result;
+	result.reserve(unique_indexes.size());
 	for (auto column_index : unique_indexes) {
-		result.push_back(column_index);
+		result.emplace_back(column_index);
 	}
 	return result;
 }
