@@ -2,8 +2,8 @@
 # description: cast strings into (nested) list structures
 # group: [cast]
 
-# statement ok
-# PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 #               Basic tests:
 # ---------------------------------------------------
