@@ -12,7 +12,7 @@
 #include <unordered_set>
 
 namespace duckdb {
-class BenchmarkFileReader;
+struct BenchmarkFileReader;
 class MaterializedQueryResult;
 
 //! Interpreted benchmarks read the benchmark from a file
