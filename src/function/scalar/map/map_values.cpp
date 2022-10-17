@@ -7,7 +7,6 @@
 
 namespace duckdb {
 
-// Reverse of map_from_values
 static void MapValuesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	idx_t count = args.size();
@@ -25,9 +24,6 @@ static void MapValuesFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 	D_ASSERT(values.GetType().id() == ListType::GetChildType(map_values.GetType()).id());
 
-	// Reference the map's keys and values, so we can do a zero-copy
-	// This might be a problem if the maps values get altered in this query, but they *should* be immutable
-	// Or if the resulting struct vectors get altered, it could have an effect on the projection results of the map
 	values.Reference(ListVector::GetEntry(map_values));
 
 	// Reference the data for the list_entry_t's

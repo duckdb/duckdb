@@ -1,0 +1,35 @@
+# name: test/sql/types/nested/map/map_values/constant.test
+# group: [map_values]
+
+statement ok
+pragma enable_verification;
+
+# Empty
+query I
+select map_values(MAP([],[]));
+----
+[]
+
+# Single entry
+query I
+select map_values(MAP(['a'],[5]));
+----
+[5]
+
+# Multiple entries
+query I
+select map_values(MAP(['a', 'b', 'c', 'd'], [5,1,8,3]))
+----
+[5, 1, 8, 3]
+
+# Null
+query I
+select map_values(NULL)
+----
+NULL
+
+# Mixed nulls
+query I
+select map_values(MAP(['a', 'b', 'c', 'd', 'e'], [NULL, 0, 1, NULL, 3]))
+----
+[NULL, 0, 1, NULL, 3]

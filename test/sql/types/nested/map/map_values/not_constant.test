@@ -1,0 +1,45 @@
+# name: test/sql/types/nested/map/map_values/not_constant.test
+# group: [map_values]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+CREATE TABLE t1 AS (
+	SELECT ARRAY[
+		(1, 'x'),
+		(2, 'y'),
+		(4, 's')
+	] AS list
+);
+
+# Single row
+query I
+SELECT map_values(MAP_FROM_ENTRIES(list)) FROM t1;
+----
+[x, y, s]
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[(2, 'a'), (3,'b')])
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[(6, 'h'), (7,'g')])
+
+# Three rows
+query I
+SELECT map_values(MAP_FROM_ENTRIES(list)) FROM t1;
+----
+[x, y, s]
+[a, b]
+[h, g]
+
+statement ok
+INSERT INTO t1 VALUES (NULL)
+
+query I
+SELECT map_values(MAP_FROM_ENTRIES(list)) FROM t1;
+----
+[x, y, s]
+[a, b]
+[h, g]
+NULL

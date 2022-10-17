@@ -86,9 +86,9 @@ struct MapValuesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-// struct MapKeysFun {
-//	static void RegisterFunction(BuiltinFunctions &set);
-// };
+struct MapKeysFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
 
 struct MapExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
