@@ -191,7 +191,8 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	                           UncompressedStringStorage::StringInitScan, UncompressedStringStorage::StringScan,
 	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
 	                           UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
-	                           UncompressedStringStorage::StringAppend, UncompressedStringStorage::FinalizeAppend);
+	                           UncompressedStringStorage::StringInitAppend, UncompressedStringStorage::StringAppend,
+	                           UncompressedStringStorage::FinalizeAppend);
 }
 
 //===--------------------------------------------------------------------===//

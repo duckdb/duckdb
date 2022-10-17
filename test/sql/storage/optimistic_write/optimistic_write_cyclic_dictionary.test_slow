@@ -1,0 +1,64 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_cyclic_dictionary.test_slow
+# description: Test optimistic write with a cyclic scan
+# group: [optimistic_write]
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_cyclic_dictionary.db
+
+statement ok
+CREATE TABLE test (c VARCHAR);
+
+statement ok
+BEGIN TRANSACTION
+
+# 250k
+statement ok
+INSERT INTO test SELECT case i%4 when 0 then 'a' when 1 then 'bb' when 2 then 'ccc' else NULL end c FROM range(250000) t(i)
+
+# 500k
+statement ok
+INSERT INTO test SELECT * FROM test;
+
+# 1m
+statement ok
+INSERT INTO test SELECT * FROM test;
+
+# 2m
+statement ok
+INSERT INTO test SELECT * FROM test;
+
+statement ok
+COMMIT
+
+query IIIII
+SELECT MIN(c), MAX(c), SUM(LENGTH(c)), COUNT(c), COUNT(*) FROM test
+----
+a	ccc	3000000	1500000	2000000
+
+restart
+
+query IIIII
+SELECT MIN(c), MAX(c), SUM(LENGTH(c)), COUNT(c), COUNT(*) FROM test
+----
+a	ccc	3000000	1500000	2000000
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT * FROM test;
+
+statement ok
+ROLLBACK
+
+query IIIII
+SELECT MIN(c), MAX(c), SUM(LENGTH(c)), COUNT(c), COUNT(*) FROM test
+----
+a	ccc	3000000	1500000	2000000
+
+restart
+
+query IIIII
+SELECT MIN(c), MAX(c), SUM(LENGTH(c)), COUNT(c), COUNT(*) FROM test
+----
+a	ccc	3000000	1500000	2000000

@@ -14,7 +14,8 @@ add_library_unity(
   struct_cast.cpp
   time_casts.cpp
   union_casts.cpp
-  uuid_casts.cpp)
+  uuid_casts.cpp
+  vector_cast_helpers.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_cast>

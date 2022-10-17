@@ -64,7 +64,7 @@ void Node4::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 		while ((pos < node->count) && (n->key[pos] < key_byte)) {
 			pos++;
 		}
-		if (n->children[pos] != 0) {
+		if (n->children[pos]) {
 			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];
 				n->children[i] = n->children[i - 1];

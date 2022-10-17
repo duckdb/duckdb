@@ -67,10 +67,10 @@ void Node48::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 	if (node->count < 48) {
 		// Insert element
 		idx_t pos = n->count;
-		if (n->children[pos].pointer) {
+		if (n->children[pos]) {
 			// find an empty position in the node list if the current position is occupied
 			pos = 0;
-			while (n->children[pos].pointer) {
+			while (n->children[pos]) {
 				pos++;
 			}
 		}

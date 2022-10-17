@@ -220,6 +220,7 @@ bool SingleFileBlockManager::IsRootBlock(block_id_t root) {
 }
 
 block_id_t SingleFileBlockManager::GetFreeBlockId() {
+	lock_guard<mutex> lock(block_lock);
 	block_id_t block;
 	if (!free_list.empty()) {
 		// free list is non empty
@@ -234,6 +235,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 }
 
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
+	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
 
 	// check if the block is a multi-use block
@@ -256,6 +258,7 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 }
 
 void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
+	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(free_list.find(block_id) == free_list.end());
 	auto entry = multi_use_blocks.find(block_id);
 	if (entry != multi_use_blocks.end()) {
@@ -267,6 +270,16 @@ void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
 
 block_id_t SingleFileBlockManager::GetMetaBlock() {
 	return meta_block;
+}
+
+idx_t SingleFileBlockManager::TotalBlocks() {
+	lock_guard<mutex> lock(block_lock);
+	return max_block;
+}
+
+idx_t SingleFileBlockManager::FreeBlocks() {
+	lock_guard<mutex> lock(block_lock);
+	return free_list.size();
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {

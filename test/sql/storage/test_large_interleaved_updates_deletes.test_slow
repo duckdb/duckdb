@@ -2,9 +2,6 @@
 # description: Test large interleaved transactions
 # group: [storage]
 
-require skip_reload
-
-
 # load the DB from disk
 load __TEST_DIR__/test_large_interleaved.db
 

@@ -134,8 +134,10 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows as a list of tuples")
 	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
 	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
-	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
-	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
+	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
+	         py::arg("date_as_object") = false)
+	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
+	         py::arg("date_as_object") = false)
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
 	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
@@ -493,7 +495,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const DataFrame &df, D
 	return conn->FromDF(df)->Distinct();
 }
 
-DataFrame DuckDBPyRelation::ToDF() {
+DataFrame DuckDBPyRelation::ToDF(bool date_as_object) {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
@@ -502,7 +504,7 @@ DataFrame DuckDBPyRelation::ToDF() {
 	if (res->result->HasError()) {
 		res->result->ThrowError();
 	}
-	return res->FetchDF();
+	return res->FetchDF(date_as_object);
 }
 
 py::object DuckDBPyRelation::Fetchone() {
