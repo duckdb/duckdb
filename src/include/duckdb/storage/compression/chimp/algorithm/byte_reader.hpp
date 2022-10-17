@@ -62,23 +62,49 @@ public:
 			index += 4;
 			return result;
 		case 5:
-			memcpy(&result, (void *)(buffer + index), 5);
-			index += 5;
-			return result;
+			return MemcpyWrap<T>(
+			    [&]() {
+				    memcpy(&result, (void *)(buffer + index), 5);
+				    index += 5;
+				    return result;
+			    },
+			    5);
 		case 6:
-			memcpy(&result, (void *)(buffer + index), 6);
-			index += 6;
-			return result;
+			return MemcpyWrap<T>(
+			    [&]() {
+				    memcpy(&result, (void *)(buffer + index), 6);
+				    index += 6;
+				    return result;
+			    },
+			    6);
 		case 7:
-			memcpy(&result, (void *)(buffer + index), 7);
-			index += 7;
-			return result;
+			return MemcpyWrap<T>(
+			    [&]() {
+				    memcpy(&result, (void *)(buffer + index), 7);
+				    index += 7;
+				    return result;
+			    },
+			    7);
 		default:
-			if (sizeof(T) == 8 && trailing_zero < 8) {
-				result = Load<T>(buffer + index);
-				index += sizeof(T);
-			}
-			return result;
+			return MemcpyWrap<T>(
+			    [&]() {
+				    if (sizeof(T) == 8 && trailing_zero < 8) {
+					    result = Load<T>(buffer + index);
+					    index += sizeof(T);
+				    }
+				    return result;
+			    },
+			    8);
+		}
+	}
+
+private:
+	template <class T>
+	inline T MemcpyWrap(std::function<T(void)> func, idx_t size) {
+		if (sizeof(T) > 4) {
+			return func();
+		} else {
+			throw InternalException("Memcpy of size %d would exceed size %d of the return type", size, sizeof(T));
 		}
 	}
 
