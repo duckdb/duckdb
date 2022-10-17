@@ -31,31 +31,8 @@ public:
 
 	template <class T>
 	T ReadValue() {
-		throw InternalException("Specialization for ReadValue is not implemented");
-	}
-
-	template <>
-	uint8_t ReadValue<uint8_t>() {
-		auto result = Load<uint8_t>(buffer + index);
-		index++;
-		return result;
-	}
-	template <>
-	uint16_t ReadValue<uint16_t>() {
-		auto result = Load<uint16_t>(buffer + index);
-		index += 2;
-		return result;
-	}
-	template <>
-	uint32_t ReadValue<uint32_t>() {
-		auto result = Load<uint32_t>(buffer + index);
-		index += 4;
-		return result;
-	}
-	template <>
-	uint64_t ReadValue<uint64_t>() {
-		auto result = Load<uint64_t>(buffer + index);
-		index += 8;
+		auto result = Load<T>(buffer + index);
+		index += sizeof(T);
 		return result;
 	}
 
