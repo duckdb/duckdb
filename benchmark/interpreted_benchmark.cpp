@@ -182,6 +182,50 @@ void InterpretedBenchmark::LoadBenchmark() {
 			} else {
 				subgroup = result;
 			}
+		} else if (splits[0] == "result_query") {
+			if (result_column_count > 0) {
+				throw std::runtime_error(reader.FormatException("multiple results found"));
+			}
+			// count the amount of columns
+			if (splits.size() <= 1 || splits[1].size() == 0) {
+				throw std::runtime_error(
+				    reader.FormatException("result_query must be followed by a column count (e.g. result III)"));
+			}
+			for (idx_t i = 0; i < splits[1].size(); i++) {
+				if (splits[1][i] != 'i') {
+					throw std::runtime_error(
+					    reader.FormatException("result_query must be followed by a column count (e.g. result III)"));
+				}
+			}
+			result_column_count = splits[1].size();
+			// read the actual query
+			bool found_end = false;
+			string sql;
+			while (reader.ReadLine(line)) {
+				if (line == "----") {
+					found_end = true;
+					break;
+				}
+				sql += "\n" + line;
+			}
+			result_query = sql;
+			if (!found_end) {
+				throw std::runtime_error(reader.FormatException(
+				    "result_query must be followed by a query and a result (separated by ----)"));
+			}
+			// read the expected result
+			while (reader.ReadLine(line)) {
+				if (line.empty()) {
+					break;
+				}
+				auto result_splits = StringUtil::Split(line, "\t");
+				if ((int64_t)result_splits.size() != result_column_count) {
+					throw std::runtime_error(reader.FormatException("expected " + std::to_string(result_splits.size()) +
+					                                                " values but got " +
+					                                                std::to_string(result_column_count)));
+				}
+				result_values.push_back(move(result_splits));
+			}
 		} else if (splits[0] == "result") {
 			if (result_column_count > 0) {
 				throw std::runtime_error(reader.FormatException("multiple results found"));
@@ -360,31 +404,22 @@ string InterpretedBenchmark::GetDatabasePath() {
 	}
 }
 
-string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
+string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, MaterializedQueryResult &result) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	if (state.result->HasError()) {
-		return state.result->GetError();
-	}
-	if (result_column_count == 0) {
-		// no result specified
-		return string();
-	}
 	// compare the column count
-	if (result_column_count >= 0 && (int64_t)state.result->ColumnCount() != result_column_count) {
+	if (result_column_count >= 0 && (int64_t)result.ColumnCount() != result_column_count) {
 		return StringUtil::Format("Error in result: expected %lld columns but got %lld\nObtained result: %s",
-		                          (int64_t)result_column_count, (int64_t)state.result->ColumnCount(),
-		                          state.result->ToString());
+		                          (int64_t)result_column_count, (int64_t)result.ColumnCount(), result.ToString());
 	}
 	// compare row count
-	if (state.result->RowCount() != result_values.size()) {
+	if (result.RowCount() != result_values.size()) {
 		return StringUtil::Format("Error in result: expected %lld rows but got %lld\nObtained result: %s",
-		                          (int64_t)result_values.size(), (int64_t)state.result->RowCount(),
-		                          state.result->ToString());
+		                          (int64_t)result_values.size(), (int64_t)result.RowCount(), result.ToString());
 	}
 	// compare values
 	for (int64_t r = 0; r < (int64_t)result_values.size(); r++) {
 		for (int64_t c = 0; c < result_column_count; c++) {
-			auto value = state.result->GetValue(c, r);
+			auto value = result.GetValue(c, r);
 			if (result_values[r][c] == "NULL" && value.IsNull()) {
 				continue;
 			}
@@ -408,6 +443,27 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		}
 	}
 	return string();
+}
+
+string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
+	if (result_column_count == 0) {
+		// no result specified
+		return string();
+	}
+	auto &state = (InterpretedBenchmarkState &)*state_p;
+	if (state.result->HasError()) {
+		return state.result->GetError();
+	}
+	if (!result_query.empty()) {
+		// we are running a result query
+		auto new_result = state.con.Query(result_query);
+		if (new_result->HasError()) {
+			return new_result->GetError();
+		}
+		return VerifyInternal(state_p, *new_result);
+	} else {
+		return VerifyInternal(state_p, *state.result);
+	}
 }
 
 void InterpretedBenchmark::Interrupt(BenchmarkState *state_p) {
