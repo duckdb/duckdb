@@ -1,0 +1,38 @@
+# name: test/sql/storage/compression/patas/patas_min_max.test
+# group: [patas]
+
+# load the DB from disk
+load __TEST_DIR__/patas_min_max.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma force_compression='patas';
+
+foreach type DOUBLE FLOAT
+
+statement ok
+CREATE TABLE all_types AS SELECT ${type} FROM test_all_types();
+
+loop i 0 15
+
+
+statement ok
+INSERT INTO all_types SELECT ${type} FROM all_types;
+
+statement ok
+checkpoint
+
+query IIIIIIIIIIIIII
+SELECT * FROM pragma_storage_info('all_types') WHERE segment_type == '${type}' AND compression != 'Patas';
+----
+
+# i
+endloop
+
+statement ok
+DROP TABLE all_types;
+
+#type
+endloop
