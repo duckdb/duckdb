@@ -15,40 +15,41 @@ namespace duckdb {
 //! Every byte read touches at most 2 bytes (1 if it's perfectly aligned)
 //! Within a byte we need to mask off the bits that we're interested in
 
-//! Align the masks to the right
-static constexpr uint8_t masks[] = {
-    0,   // 0b00000000,
-    128, // 0b10000000,
-    192, // 0b11000000,
-    224, // 0b11100000,
-    240, // 0b11110000,
-    248, // 0b11111000,
-    252, // 0b11111100,
-    254, // 0b11111110,
-    255, // 0b11111111,
-    // These later masks are for the cases where index + SIZE exceeds 8
-    254, // 0b11111110,
-    252, // 0b11111100,
-    248, // 0b11111000,
-    240, // 0b11110000,
-    224, // 0b11100000,
-    192, // 0b11000000,
-    128, // 0b10000000,
-};
-
-static const uint8_t remainder_masks[] = {
-    0,   0, 0, 0, 0, 0, 0, 0, 0,
-    128, // 0b10000000,
-    192, // 0b11000000,
-    224, // 0b11100000,
-    240, // 0b11110000,
-    248, // 0b11111000,
-    252, // 0b11111100,
-    254, // 0b11111110,
-    255, // 0b11111111,
-};
-
 struct BitReader {
+private:
+	//! Align the masks to the right
+	static constexpr uint8_t masks[] = {
+	    0,   // 0b00000000,
+	    128, // 0b10000000,
+	    192, // 0b11000000,
+	    224, // 0b11100000,
+	    240, // 0b11110000,
+	    248, // 0b11111000,
+	    252, // 0b11111100,
+	    254, // 0b11111110,
+	    255, // 0b11111111,
+	    // These later masks are for the cases where index + SIZE exceeds 8
+	    254, // 0b11111110,
+	    252, // 0b11111100,
+	    248, // 0b11111000,
+	    240, // 0b11110000,
+	    224, // 0b11100000,
+	    192, // 0b11000000,
+	    128, // 0b10000000,
+	};
+
+	static constexpr uint8_t remainder_masks[] = {
+	    0,   0, 0, 0, 0, 0, 0, 0, 0,
+	    128, // 0b10000000,
+	    192, // 0b11000000,
+	    224, // 0b11100000,
+	    240, // 0b11110000,
+	    248, // 0b11111000,
+	    252, // 0b11111100,
+	    254, // 0b11111110,
+	    255, // 0b11111111,
+	};
+
 public:
 public:
 	BitReader() : input(nullptr), index(0) {
@@ -166,5 +167,8 @@ public:
 		return ReadBytes<T>(bytes, remainder);
 	}
 };
+
+constexpr uint8_t BitReader::remainder_masks[];
+constexpr uint8_t BitReader::masks[];
 
 } // namespace duckdb

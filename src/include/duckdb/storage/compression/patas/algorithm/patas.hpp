@@ -12,6 +12,7 @@
 #include "duckdb/storage/compression/chimp/algorithm/ring_buffer.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/byte_reader.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/packed_data.hpp"
 #include "duckdb/storage/compression/patas/shared.hpp"
 
 static constexpr uint32_t PATAS_GROUP_SIZE = duckdb::PatasPrimitives::PATAS_GROUP_SIZE;
@@ -84,12 +85,13 @@ struct PatasCompression {
 
 		// Find the reference value to use when compressing the current value
 		const bool exceeds_highest_index = reference_index > state.ring_buffer.Size();
-		const bool difference_too_big = ((state.ring_buffer.Size() + 1) - reference_index) >= BUFFER_SIZE;
+		const bool difference_too_big =
+		    ((state.ring_buffer.Size() + 1) - reference_index) >= ChimpConstants::BUFFER_SIZE;
 		if (exceeds_highest_index || difference_too_big) {
 			// Reference index is not in range, use the directly previous value
 			reference_index = state.ring_buffer.Size();
 		}
-		const auto reference_value = state.ring_buffer.Value(reference_index % BUFFER_SIZE);
+		const auto reference_value = state.ring_buffer.Value(reference_index % ChimpConstants::BUFFER_SIZE);
 
 		// XOR with previous value
 		EXACT_TYPE xor_result = value ^ reference_value;

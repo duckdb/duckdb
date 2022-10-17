@@ -13,15 +13,6 @@
 
 namespace duckdb {
 
-static constexpr uint8_t INDEX_BITS_SIZE = 7;
-static constexpr uint8_t LEADING_BITS_SIZE = 3;
-
-static constexpr uint8_t INDEX_MASK = ((uint8_t)1 << INDEX_BITS_SIZE) - 1;
-static constexpr uint8_t LEADING_MASK = ((uint8_t)1 << LEADING_BITS_SIZE) - 1;
-
-static constexpr uint8_t INDEX_SHIFT_AMOUNT = (sizeof(uint16_t) * 8) - INDEX_BITS_SIZE;
-static constexpr uint8_t LEADING_SHIFT_AMOUNT = INDEX_SHIFT_AMOUNT - LEADING_BITS_SIZE;
-
 struct UnpackedData {
 	uint8_t leading_zero;
 	uint8_t significant_bits;
@@ -30,6 +21,16 @@ struct UnpackedData {
 
 template <class CHIMP_TYPE>
 struct PackedDataUtils {
+private:
+	static constexpr uint8_t INDEX_BITS_SIZE = 7;
+	static constexpr uint8_t LEADING_BITS_SIZE = 3;
+
+	static constexpr uint8_t INDEX_MASK = ((uint8_t)1 << INDEX_BITS_SIZE) - 1;
+	static constexpr uint8_t LEADING_MASK = ((uint8_t)1 << LEADING_BITS_SIZE) - 1;
+
+	static constexpr uint8_t INDEX_SHIFT_AMOUNT = (sizeof(uint16_t) * 8) - INDEX_BITS_SIZE;
+	static constexpr uint8_t LEADING_SHIFT_AMOUNT = INDEX_SHIFT_AMOUNT - LEADING_BITS_SIZE;
+
 public:
 	//|----------------|	//! packed_data(16) bits
 	// IIIIIII				//! Index (7 bits, shifted by 9)
@@ -51,7 +52,7 @@ public:
 		D_ASSERT(leading_zero + ((!significant_bits) * (sizeof(CHIMP_TYPE) * 8)) + significant_bits <=
 		         (sizeof(CHIMP_TYPE) * 8));
 		uint16_t result = 0;
-		result += ((uint32_t)BIT_SIZE * 8) * (BUFFER_SIZE + index);
+		result += ((uint32_t)BIT_SIZE * 8) * (ChimpConstants::BUFFER_SIZE + index);
 		result += BIT_SIZE * (leading_zero & 7);
 		if (BIT_SIZE == 32) {
 			// Shift the result by 1 to occupy the 16th bit
