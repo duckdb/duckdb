@@ -15,8 +15,6 @@
 #include "duckdb/storage/compression/chimp/algorithm/packed_data.hpp"
 #include "duckdb/storage/compression/patas/shared.hpp"
 
-static constexpr uint32_t PATAS_GROUP_SIZE = duckdb::PatasPrimitives::PATAS_GROUP_SIZE;
-
 namespace duckdb {
 
 namespace patas {

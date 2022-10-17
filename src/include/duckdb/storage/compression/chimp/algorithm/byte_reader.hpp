@@ -69,11 +69,11 @@ public:
 		T result = 0;
 		switch (bytes) {
 		case 1:
-			result = duckdb::Load<uint8_t>(buffer + index);
+			result = Load<uint8_t>(buffer + index);
 			index++;
 			return result;
 		case 2:
-			result = duckdb::Load<uint16_t>(buffer + index);
+			result = Load<uint16_t>(buffer + index);
 			index += 2;
 			return result;
 		case 3:
@@ -81,7 +81,7 @@ public:
 			index += 3;
 			return result;
 		case 4:
-			result = duckdb::Load<uint32_t>(buffer + index);
+			result = Load<uint32_t>(buffer + index);
 			index += 4;
 			return result;
 		case 5:
@@ -98,7 +98,7 @@ public:
 			return result;
 		default:
 			if (sizeof(T) == 8 && trailing_zero < 8) {
-				result = duckdb::Load<T>(buffer + index);
+				result = Load<T>(buffer + index);
 				index += sizeof(T);
 			}
 			return result;
