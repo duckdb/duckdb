@@ -35,7 +35,7 @@ InternalType::InternalType(Node *n) {
 	}
 }
 
-void InternalType::Set(uint8_t *key_p, uint16_t key_size_p, SwizzleablePointer *children_p, uint16_t children_size_p) {
+void InternalType::Set(uint8_t *key_p, uint16_t key_size_p, ARTPointer *children_p, uint16_t children_size_p) {
 	key = key_p;
 	key_size = key_size_p;
 	children = children_p;
@@ -216,7 +216,7 @@ void Node::DeserializeInternal(duckdb::MetaBlockReader &reader) {
 	}
 	// Get Child offsets
 	for (idx_t i = 0; i < internal_type.children_size; i++) {
-		internal_type.children[i] = SwizzleablePointer(reader);
+		internal_type.children[i] = ARTPointer(reader);
 	}
 }
 

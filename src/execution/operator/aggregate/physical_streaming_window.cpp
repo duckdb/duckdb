@@ -133,8 +133,9 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			if (wexpr.children.empty()) {
 				D_ASSERT(GetTypeIdSize(result.GetType().InternalType()) == sizeof(int64_t));
 				auto data = FlatVector::GetData<int64_t>(result);
+				int64_t start_row = gstate.row_number;
 				for (idx_t i = 0; i < input.size(); ++i) {
-					data[i] = gstate.row_number + i;
+					data[i] = start_row + i;
 				}
 				break;
 			}
@@ -181,9 +182,10 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
 			// Set row numbers
+			int64_t start_row = gstate.row_number;
 			auto rdata = FlatVector::GetData<int64_t>(chunk.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
-				rdata[i] = gstate.row_number + i;
+				rdata[i] = start_row + i;
 			}
 			break;
 		}

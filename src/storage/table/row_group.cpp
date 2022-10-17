@@ -531,13 +531,13 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 	}
 }
 
-void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t row_group_start, idx_t count,
-                                 transaction_t commit_id) {
+void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
+	idx_t row_group_start = this->count.load();
 	idx_t row_group_end = row_group_start + count;
+	if (row_group_end > RowGroup::ROW_GROUP_SIZE) {
+		row_group_end = RowGroup::ROW_GROUP_SIZE;
+	}
 	lock_guard<mutex> lock(row_group_lock);
-
-	this->count += count;
-	D_ASSERT(this->count <= RowGroup::ROW_GROUP_SIZE);
 
 	// create the version_info if it doesn't exist yet
 	if (!version_info) {
@@ -552,7 +552,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t row_group_st
 		if (start == 0 && end == STANDARD_VECTOR_SIZE) {
 			// entire vector is encapsulated by append: append a single constant
 			auto constant_info = make_unique<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
-			constant_info->insert_id = commit_id;
+			constant_info->insert_id = transaction.transaction_id;
 			constant_info->delete_id = NOT_DELETED_ID;
 			version_info->info[vector_idx] = move(constant_info);
 		} else {
@@ -568,9 +568,10 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t row_group_st
 				// use existing vector
 				info = (ChunkVectorInfo *)version_info->info[vector_idx].get();
 			}
-			info->Append(start, end, commit_id);
+			info->Append(start, end, transaction.transaction_id);
 		}
 	}
+	this->count = row_group_end;
 }
 
 void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count) {
@@ -606,8 +607,7 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	Verify();
 }
 
-void RowGroup::InitializeAppend(TransactionData transaction, RowGroupAppendState &append_state,
-                                idx_t remaining_append_count) {
+void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 	append_state.row_group = this;
 	append_state.offset_in_row_group = this->count;
 	// for each column, initialize the append state
@@ -615,9 +615,6 @@ void RowGroup::InitializeAppend(TransactionData transaction, RowGroupAppendState
 	for (idx_t i = 0; i < columns.size(); i++) {
 		columns[i]->InitializeAppend(append_state.states[i]);
 	}
-	// append the version info for this row_group
-	idx_t append_count = MinValue<idx_t>(remaining_append_count, RowGroup::ROW_GROUP_SIZE - this->count);
-	AppendVersionInfo(transaction, this->count, append_count, transaction.transaction_id);
 }
 
 void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append_count) {
@@ -683,10 +680,11 @@ void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	other.Merge(*stats[column_idx]->statistics);
 }
 
-RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
-	RowGroupPointer row_group_pointer;
-	vector<unique_ptr<ColumnCheckpointState>> states;
-	states.reserve(columns.size());
+RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
+                                        const vector<CompressionType> &compression_types) {
+	RowGroupWriteData result;
+	result.states.reserve(columns.size());
+	result.statistics.reserve(columns.size());
 
 	// Checkpoint the individual columns of the row group
 	// Here we're iterating over columns. Each column can have multiple segments.
@@ -698,23 +696,39 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<B
 	// pointers all end up densely packed, and thus more cache-friendly.
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
-		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(column_idx)};
-		auto checkpoint_state = column->Checkpoint(*this, writer, checkpoint_info);
+		ColumnCheckpointInfo checkpoint_info {compression_types[column_idx]};
+		auto checkpoint_state = column->Checkpoint(*this, manager, checkpoint_info);
 		D_ASSERT(checkpoint_state);
 
 		auto stats = checkpoint_state->GetStatistics();
 		D_ASSERT(stats);
 
-		global_stats[column_idx]->Merge(*stats);
-		row_group_pointer.statistics.push_back(move(stats));
-		states.push_back(move(checkpoint_state));
+		result.statistics.push_back(move(stats));
+		result.states.push_back(move(checkpoint_state));
 	}
+	D_ASSERT(result.states.size() == result.statistics.size());
+	return result;
+}
+
+RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+	RowGroupPointer row_group_pointer;
+
+	vector<CompressionType> compression_types;
+	compression_types.reserve(columns.size());
+	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
+	}
+	auto result = WriteToDisk(writer.GetPartialBlockManager(), compression_types);
+	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+		global_stats[column_idx]->Merge(*result.statistics[column_idx]);
+	}
+	row_group_pointer.statistics = move(result.statistics);
 
 	// construct the row group pointer and write the column meta data to disk
-	D_ASSERT(states.size() == columns.size());
+	D_ASSERT(result.states.size() == columns.size());
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
-	for (auto &state : states) {
+	for (auto &state : result.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
 		auto pointer = data_writer.GetBlockPointer();
@@ -726,7 +740,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<B
 		//
 		// Just as above, the state can refer to many other states, so this
 		// can cascade recursively into more pointer writes.
-		state->WriteDataPointers();
+		state->WriteDataPointers(writer);
 	}
 	row_group_pointer.versions = version_info;
 	Verify();

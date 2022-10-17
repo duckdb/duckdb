@@ -197,4 +197,9 @@ struct VectorCastHelpers {
 	}
 };
 
+struct VectorStringifiedListParser {
+	static idx_t CountParts(const string_t &input);
+	static bool SplitStringifiedList(const string_t &input, string_t *child_data, idx_t &child_start, Vector &child);
+};
+
 } // namespace duckdb

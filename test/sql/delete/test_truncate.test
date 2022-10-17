@@ -1,0 +1,54 @@
+# name: test/sql/delete/test_truncate.test
+# description: Test truncate
+# group: [delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE a(i INTEGER);
+
+statement ok
+INSERT INTO a VALUES (42);
+
+query I
+TRUNCATE TABLE a
+----
+1
+
+# delete everything
+statement ok
+TRUNCATE a
+
+query I
+SELECT COUNT(*) FROM a;
+----
+0
+
+statement ok
+INSERT INTO a VALUES (42);
+
+query I
+SELECT COUNT(*) FROM a;
+----
+1
+
+# now test rollback of deletion
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+TRUNCATE a
+
+query I
+SELECT COUNT(*) FROM a;
+----
+0
+
+statement ok
+ROLLBACK
+
+query I
+SELECT COUNT(*) FROM a;
+----
+1

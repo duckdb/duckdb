@@ -34,7 +34,6 @@ public:
 
 	virtual MetaBlockWriter &GetMetaBlockWriter() = 0;
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) = 0;
-	virtual BlockPointer WriteIndexData(IndexCatalogEntry &index_catalog) = 0;
 
 protected:
 	virtual void WriteSchema(SchemaCatalogEntry &schema);
@@ -96,7 +95,6 @@ public:
 
 	virtual MetaBlockWriter &GetMetaBlockWriter() override;
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
-	virtual BlockPointer WriteIndexData(IndexCatalogEntry &index_catalog) override;
 
 	BlockManager &GetBlockManager();
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 class SQLStatement;
