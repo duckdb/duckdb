@@ -28,7 +28,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	// filter operator for IS_NOT_NULL on each key column
 	vector<LogicalType> filter_types;
 	vector<unique_ptr<Expression>> filter_select_list;
-	for (idx_t i = 0; i < op.info->scan_types.size(); i++) {
+	for (idx_t i = 0; i < op.info->column_ids.size(); i++) {
 		filter_types.push_back(op.info->scan_types[i]);
 		auto is_not_null_expr =
 		    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
