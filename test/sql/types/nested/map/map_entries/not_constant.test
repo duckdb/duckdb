@@ -1,0 +1,46 @@
+# name: test/sql/types/nested/map/map_entries/not_constant.test
+# group: [map_entries]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+CREATE TABLE t1 AS (
+	SELECT ARRAY[
+		(1, 'x'),
+		(2, 'y'),
+		(4, 's')
+	] AS list
+);
+
+# Single row
+query I
+SELECT MAP_ENTRIES(MAP_FROM_ENTRIES(list)) FROM t1;
+----
+[{'k': 1, 'v': x}, {'k': 2, 'v': y}, {'k': 4, 'v': s}]
+
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[(2, 'a'), (3,'b')])
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[(6, 'h'), (7,'g')])
+
+# Three rows
+query I
+SELECT MAP_ENTRIES(MAP_FROM_ENTRIES(list)) FROM t1;
+----
+[{'k': 1, 'v': x}, {'k': 2, 'v': y}, {'k': 4, 'v': s}]
+[{'k': 2, 'v': a}, {'k': 3, 'v': b}]
+[{'k': 6, 'v': h}, {'k': 7, 'v': g}]
+
+statement ok
+INSERT INTO t1 VALUES (NULL)
+
+query I
+SELECT MAP_ENTRIES(MAP_FROM_ENTRIES(list)) FROM t1;
+----
+[{'k': 1, 'v': x}, {'k': 2, 'v': y}, {'k': 4, 'v': s}]
+[{'k': 2, 'v': a}, {'k': 3, 'v': b}]
+[{'k': 6, 'v': h}, {'k': 7, 'v': g}]
+NULL

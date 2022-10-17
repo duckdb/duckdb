@@ -1,0 +1,53 @@
+# name: test/sql/types/nested/map/map_entries/basic.test
+# description: Show expected behavior with an empty arguments list
+# group: [map_entries]
+
+statement ok
+PRAGMA enable_verification
+
+# Empty
+query I
+select map_entries(MAP())
+----
+[]
+
+# One element
+query I
+SELECT map_entries(map_from_entries([('a', 5)]));
+----
+[{'k': a, 'v': 5}]
+
+# Multiple elements
+query I
+SELECT map_entries(map_from_entries([
+	('a', 5), ('b', 6), ('x', 21), ('abc', 0)
+]));
+----
+[{'k': a, 'v': 5}, {'k': b, 'v': 6}, {'k': x, 'v': 21}, {'k': abc, 'v': 0}]
+
+# Value NULL
+query I
+SELECT map_entries(map([5], [NULL]))
+----
+[{'k': 5, 'v': NULL}]
+
+# Pair NULL
+query I
+select map_entries(map_from_entries([NULL::ROW(a text, b integer)]))
+----
+NULL
+
+# Mixed NULLs
+query I
+SELECT map_entries(map_from_entries(
+	[
+		('a', 5),
+		NULL::ROW(a text, b integer),
+		('b', 6),
+		('x', 21),
+		NULL::ROW(a text, b integer),
+		('abc', 0)
+	]
+));
+----
+[{'k': a, 'v': 5}, {'k': b, 'v': 6}, {'k': x, 'v': 21}, {'k': abc, 'v': 0}]

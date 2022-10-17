@@ -78,6 +78,7 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	// Get the arguments vector
 	auto &input_list = args.data[0];
+	// FIXME: this is assuming the input argument is always a flat vector, where is this asserted?
 	auto arg_data = FlatVector::GetData<list_entry_t>(input_list);
 	auto &entries = ListVector::GetEntry(input_list);
 

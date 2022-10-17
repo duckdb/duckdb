@@ -78,6 +78,10 @@ struct MapFromEntriesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct MapEntriesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct MapExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
