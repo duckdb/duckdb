@@ -586,7 +586,7 @@ struct UnionType {
 	DUCKDB_API static idx_t GetMemberCount(const LogicalType &type);
 	DUCKDB_API static const LogicalType &GetMemberType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetMemberName(const LogicalType &type, idx_t index);
-	DUCKDB_API static const child_list_t<LogicalType> GetMemberTypes(const LogicalType &type);
+	DUCKDB_API static const child_list_t<LogicalType> CopyMemberTypes(const LogicalType &type);
 };
 
 struct AggregateStateType {

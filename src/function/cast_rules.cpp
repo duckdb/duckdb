@@ -232,14 +232,19 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	if (from.id() == LogicalTypeId::UNION && to.id() == LogicalTypeId::UNION) {
 		// Unions can be cast if the source tags are a subset of the target tags
 		// in which case the most expensive cost is used
-		auto from_children = UnionType::GetMemberTypes(from);
-		auto to_children = UnionType::GetMemberTypes(to);
 		int cost = -1;
-		for (auto &from_child : from_children) {
+		for (idx_t from_member_idx = 0; from_member_idx < UnionType::GetMemberCount(from); from_member_idx++) {
+			auto &from_member_name = UnionType::GetMemberName(from, from_member_idx);
+
 			bool found = false;
-			for (auto &to_child : to_children) {
-				if (from_child.first == to_child.first) {
-					int child_cost = ImplicitCast(from_child.second, to_child.second);
+			for (idx_t to_member_idx = 0; to_member_idx < UnionType::GetMemberCount(to); to_member_idx++) {
+				auto &to_member_name = UnionType::GetMemberName(to, to_member_idx);
+
+				if (from_member_name == to_member_name) {
+					auto &from_member_type = UnionType::GetMemberType(from, from_member_idx);
+					auto &to_member_type = UnionType::GetMemberType(to, to_member_idx);
+
+					int child_cost = ImplicitCast(from_member_type, to_member_type);
 					if (child_cost > cost) {
 						cost = child_cost;
 					}
@@ -254,28 +259,15 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return cost;
 	}
 
-	// TODO: Do we want to recursively implictly cast to members?
-	// - if the source type is a member of the union, or /can be cast/ to a member of the union
 	if (to.id() == LogicalTypeId::UNION) {
 		// every type can be implicitly be cast to a union if the source type is a member of the union
-		auto to_children = UnionType::GetMemberTypes(to);
-		for (auto &to_child : to_children) {
-			if (to_child.second == from) {
+		for (idx_t i = 0; i < UnionType::GetMemberCount(to); i++) {
+			auto member = UnionType::GetMemberType(to, i);
+			if (from == member) {
 				return 0;
 			}
 		}
 	}
-	/*
-	if(from.id() == LogicalTypeId::UNION) {
-	    // a union can always be cast to one of its member types (the non-matching members simply cast to NULL)
-	    auto from_children = UnionType::GetMemberTypes(from);
-	    for(auto &from_child : from_children) {
-	        if (from_child.second == to) {
-	            return 0;
-	        }
-	    }
-	}
-	*/
 
 	if ((from.id() == LogicalTypeId::TIMESTAMP_SEC || from.id() == LogicalTypeId::TIMESTAMP_MS ||
 	     from.id() == LogicalTypeId::TIMESTAMP_NS) &&

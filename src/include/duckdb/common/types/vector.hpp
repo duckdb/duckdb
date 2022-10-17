@@ -412,32 +412,21 @@ struct StructVector {
 };
 
 struct UnionVector {
-	static inline union_tag_t *GetTags(Vector &v) {
-		// the tag vector is always the first struct child.
-		auto &tag_vector = *StructVector::GetEntries(v)[0];
-		if (tag_vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			auto &child = DictionaryVector::Child(tag_vector);
-			return FlatVector::GetData<union_tag_t>(child);
-		}
-		return FlatVector::GetData<union_tag_t>(tag_vector);
-	}
+	//! Get the tags of the union vector
+	//! Note: this does not do anything special for ConstantVector, so you need
+	//! to be careful when offsetting the returned pointer.
+	DUCKDB_API static union_tag_t *GetTags(Vector &v);
+	DUCKDB_API static const union_tag_t *GetTags(const Vector &v);
 
-	static inline const union_tag_t *GetTags(const Vector &v) {
-		// the tag vector is always the first struct child.
-		auto &tag_vector = *StructVector::GetEntries(v)[0];
-		if (tag_vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			auto &child = DictionaryVector::Child(tag_vector);
-			return FlatVector::GetData<union_tag_t>(child);
-		}
-		return FlatVector::GetData<union_tag_t>(tag_vector);
-	}
+	//! Get the tag at the specific index of the union vector
+	//! Note: this will handle a ConstantVector correctly.
+	DUCKDB_API static union_tag_t GetTag(const Vector &v, idx_t index);
+
+	//! Set the tag at the specific index of the union vector
+	DUCKDB_API static void SetTag(Vector &v, idx_t index, union_tag_t tag);
 
 	//! Set every entry in the the UnionVector to a specific tag
-	DUCKDB_API static inline void SetTags(Vector &vector, union_tag_t tag, idx_t count) {
-		D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
-		auto tags = GetTags(vector);
-		memset(tags, tag, count);
-	};
+	DUCKDB_API static void SetTags(Vector &vector, union_tag_t tag);
 
 	//! Get the union members vector by index
 	DUCKDB_API static const Vector &GetMember(const Vector &vector, idx_t index);

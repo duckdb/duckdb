@@ -45,8 +45,8 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 		throw ParameterNotResolvedException();
 	}
 	D_ASSERT(LogicalTypeId::UNION == arguments[0]->return_type.id());
-	auto &union_children = UnionType::GetMemberTypes(arguments[0]->return_type);
-	if (union_children.empty()) {
+	idx_t union_member_count = UnionType::GetMemberCount(arguments[0]->return_type);
+	if (union_member_count == 0) {
 		throw InternalException("Can't extract something from an empty union");
 	}
 	bound_function.arguments[0] = arguments[0]->return_type;
@@ -71,21 +71,21 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 	idx_t key_index = 0;
 	bool found_key = false;
 
-	for (size_t i = 0; i < union_children.size(); i++) {
-		auto &child = union_children[i];
-		if (StringUtil::Lower(child.first) == key) {
+	for (size_t i = 0; i < union_member_count; i++) {
+		auto &member_name = UnionType::GetMemberName(arguments[0]->return_type, i);
+		if (StringUtil::Lower(member_name) == key) {
 			found_key = true;
 			key_index = i;
-			return_type = child.second;
+			return_type = UnionType::GetMemberType(arguments[0]->return_type, i);
 			break;
 		}
 	}
 
 	if (!found_key) {
 		vector<string> candidates;
-		candidates.reserve(union_children.size());
-		for (auto &union_child : union_children) {
-			candidates.push_back(union_child.first);
+		candidates.reserve(union_member_count);
+		for (idx_t i = 0; i < union_member_count; i++) {
+			candidates.push_back(UnionType::GetMemberName(arguments[0]->return_type, i));
 		}
 		auto closest_settings = StringUtil::TopNLevenshtein(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");

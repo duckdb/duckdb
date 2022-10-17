@@ -542,6 +542,12 @@ Value Value::MAP(Value key, Value value) {
 }
 
 Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) {
+	D_ASSERT(members.size() > 0);
+	D_ASSERT(members.size() < 256);
+	D_ASSERT(members.size() > tag);
+
+	D_ASSERT(value.type() == members[tag].second);
+
 	Value result;
 	result.is_null = false;
 	// add the tag to the front of the struct

@@ -73,11 +73,9 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 		return;
 	}
 	for (auto &type : op.children[1]->types) {
-		switch (type.id()) {
-		case LogicalTypeId::STRUCT:
-		case LogicalTypeId::LIST:
-		case LogicalTypeId::MAP:
-		case LogicalTypeId::UNION:
+		switch (type.InternalType()) {
+		case PhysicalType::STRUCT:
+		case PhysicalType::LIST:
 			return;
 		default:
 			break;

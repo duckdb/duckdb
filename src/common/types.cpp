@@ -764,11 +764,11 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		                                        : LogicalType::MAP(move(child_types));
 	}
 	if (type_id == LogicalTypeId::UNION) {
-		auto left_member_types = UnionType::GetMemberTypes(left);
-		auto right_member_types = UnionType::GetMemberTypes(right);
-		if (left_member_types.size() != right_member_types.size()) {
+		auto left_member_count = UnionType::GetMemberCount(left);
+		auto right_member_count = UnionType::GetMemberCount(right);
+		if (left_member_count != right_member_count) {
 			// return the "larger" type, with the most members
-			return left_member_types.size() > right_member_types.size() ? left : right;
+			return left_member_count > right_member_count ? left : right;
 		}
 		// otherwise, keep left, dont try to meld the two together.
 		return left;
@@ -1216,6 +1216,8 @@ const LogicalType &MapType::ValueType(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 
 LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
+	D_ASSERT(members.size() > 0);
+	D_ASSERT(members.size() < 256);
 	// union types always have a hidden "tag" field in front
 	members.insert(members.begin(), {"", LogicalType::TINYINT});
 	auto info = make_shared<StructTypeInfo>(move(members));
@@ -1240,7 +1242,7 @@ idx_t UnionType::GetMemberCount(const LogicalType &type) {
 	// dont count the "tag" field
 	return StructType::GetChildTypes(type).size() - 1;
 }
-const child_list_t<LogicalType> UnionType::GetMemberTypes(const LogicalType &type) {
+const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &type) {
 	auto child_types = StructType::GetChildTypes(type);
 	child_types.erase(child_types.begin());
 	return child_types;

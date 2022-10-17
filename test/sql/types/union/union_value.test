@@ -13,7 +13,7 @@ statement error
 INSERT INTO tbl VALUES (union_value());
 
 statement error
-INSERT INTO tbl VALEUS (union_value(num := 1, other := 2))
+INSERT INTO tbl VALUES (union_value(num := 1, other := 2))
 
 # unions can only be cast to eachother if their member sets overlap
 statement error

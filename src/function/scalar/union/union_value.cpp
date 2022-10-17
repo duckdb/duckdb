@@ -25,7 +25,7 @@ static void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &
 	UnionVector::GetMember(result, 0).Reference(args.data[0]);
 
 	// Reset tags
-	UnionVector::SetTags(result, 0, args.size());
+	UnionVector::SetTags(result, 0);
 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

@@ -4,6 +4,17 @@
 
 namespace duckdb {
 
+static void CopyValidity(Vector &source, Vector &result, idx_t count) {
+
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+	} else {
+		source.Flatten(count);
+		FlatVector::Validity(result) = FlatVector::Validity(source);
+	}
+}
+
 //--------------------------------------------------------------------------------------------------
 // ??? -> UNION
 //--------------------------------------------------------------------------------------------------
@@ -106,15 +117,9 @@ static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParamet
 	}
 
 	// cast succeeded, update union tags
-	UnionVector::SetTags(result, cast_data.tag, count);
+	UnionVector::SetTags(result, cast_data.tag);
 
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-	} else {
-		source.Flatten(count);
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-	}
+	CopyValidity(source, result, count);
 
 	return true;
 };
@@ -205,13 +210,7 @@ static bool FromUnionCast(Vector &source, Vector &result, idx_t count, CastParam
 		return false;
 	}
 
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-	} else {
-		source.Flatten(count);
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-	}
+	CopyValidity(source, result, count);
 
 	return true;
 }
@@ -231,16 +230,16 @@ static bool FromUnionCast(Vector &source, Vector &result, idx_t count, CastParam
 
 struct UnionToUnionBoundCastData : public BoundCastData {
 
-	vector<idx_t> source_member_index;
-	vector<idx_t> target_member_index;
+	// mapping from source member index to target member index
+	// these are always the same size as the source member count
+	// (since all source members must be present in the target)
+	vector<idx_t> tag_map;
 	vector<BoundCastInfo> member_casts;
-	idx_t member_count;
+
 	LogicalType target_type;
 
-	UnionToUnionBoundCastData(vector<idx_t> source_member_index, vector<idx_t> target_member_index,
-	                          vector<BoundCastInfo> member_casts, idx_t member_count, LogicalType target_type)
-	    : source_member_index(move(source_member_index)), target_member_index(move(target_member_index)),
-	      member_casts(move(member_casts)), member_count(member_count), target_type(target_type) {
+	UnionToUnionBoundCastData(vector<idx_t> tag_map, vector<BoundCastInfo> member_casts, LogicalType target_type)
+	    : tag_map(move(tag_map)), member_casts(move(member_casts)), target_type(target_type) {
 	}
 
 public:
@@ -249,8 +248,7 @@ public:
 		for (auto &member_cast : member_casts) {
 			member_casts_copy.push_back(member_cast.Copy());
 		}
-		return make_unique<UnionToUnionBoundCastData>(source_member_index, target_member_index, move(member_casts_copy),
-		                                              member_count, target_type);
+		return make_unique<UnionToUnionBoundCastData>(tag_map, move(member_casts_copy), target_type);
 	}
 };
 
@@ -259,33 +257,34 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 	D_ASSERT(source.id() == LogicalTypeId::UNION);
 	D_ASSERT(target.id() == LogicalTypeId::UNION);
 
-	vector<idx_t> source_member_tags;
-	vector<idx_t> target_member_tags;
-	vector<BoundCastInfo> member_casts;
+	auto source_member_count = UnionType::GetMemberCount(source);
 
-	auto source_members = UnionType::GetMemberTypes(source);
-	auto target_members = UnionType::GetMemberTypes(target);
+	auto tag_map = vector<idx_t>(source_member_count);
+	auto member_casts = vector<BoundCastInfo>();
 
-	for (idx_t source_idx = 0; source_idx < source_members.size(); source_idx++) {
-		auto &source_member = source_members[source_idx];
+	for (idx_t source_idx = 0; source_idx < source_member_count; source_idx++) {
+		auto &source_member_type = UnionType::GetMemberType(source, source_idx);
+		auto &source_member_name = UnionType::GetMemberName(source, source_idx);
+
 		bool found = false;
-		for (idx_t target_idx = 0; target_idx < target_members.size(); target_idx++) {
-			auto &target_member = target_members[target_idx];
+		for (idx_t target_idx = 0; target_idx < UnionType::GetMemberCount(target); target_idx++) {
+			auto &target_member_name = UnionType::GetMemberName(target, target_idx);
 
 			// found a matching member, check if the types are castable
-			if (source_member.first == target_member.first) {
-				if (input.function_set.ImplicitCastCost(source_member.second, target_member.second) < 0) {
+			if (source_member_name == target_member_name) {
+				auto &target_member_type = UnionType::GetMemberType(target, target_idx);
+
+				if (input.function_set.ImplicitCastCost(source_member_type, target_member_type) < 0) {
 
 					auto message = StringUtil::Format(
 					    "Type %s can't be cast as %s. The member %s can't be implicitly cast from %s to %s",
-					    source.ToString(), target.ToString(), source_member.first, source_member.second.ToString(),
-					    target_member.second.ToString());
+					    source.ToString(), target.ToString(), source_member_name, source_member_type.ToString(),
+					    target_member_type.ToString());
 					throw CastException(message);
 				}
 
-				source_member_tags.push_back(source_idx);
-				target_member_tags.push_back(target_idx);
-				member_casts.push_back(input.GetCastFunction(source_member.second, target_member.second));
+				tag_map[source_idx] = target_idx;
+				member_casts.push_back(input.GetCastFunction(source_member_type, target_member_type));
 				found = true;
 				break;
 			}
@@ -294,56 +293,55 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 			// no matching member tag found in the target set
 			auto message = StringUtil::Format(
 			    "Type %s can't be cast as %s. The member %s is not present in target union", source.ToString(),
-			    target.ToString(), source_member.first, source_member.second.ToString());
+			    target.ToString(), source_member_name, source_member_type.ToString());
 			throw CastException(message);
 		}
 	}
 
-	return make_unique<UnionToUnionBoundCastData>(source_member_tags, target_member_tags, move(member_casts),
-	                                              member_casts.size(), target);
+	return make_unique<UnionToUnionBoundCastData>(tag_map, move(member_casts), target);
 }
 
 static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = (UnionToUnionBoundCastData &)*parameters.cast_data;
 
-	for (idx_t member_idx = 0; member_idx < cast_data.member_count; member_idx++) {
-		auto source_member_idx = cast_data.source_member_index[member_idx];
-		auto result_member_idx = cast_data.target_member_index[member_idx];
+	auto source_member_count = UnionType::GetMemberCount(source.GetType());
+	for (idx_t member_idx = 0; member_idx < source_member_count; member_idx++) {
+		auto target_member_idx = cast_data.tag_map[member_idx];
+
+		auto &source_member_vector = UnionVector::GetMember(source, member_idx);
+		auto &target_member_vector = UnionVector::GetMember(result, target_member_idx);
 		auto &member_cast = cast_data.member_casts[member_idx];
 
-		auto &source_member_vector = UnionVector::GetMember(source, source_member_idx);
-		auto &result_member_vector = UnionVector::GetMember(result, result_member_idx);
-
 		CastParameters child_parameters(parameters, member_cast.cast_data.get());
-		if (!member_cast.function(source_member_vector, result_member_vector, count, child_parameters)) {
+		if (!member_cast.function(source_member_vector, target_member_vector, count, child_parameters)) {
 			return false;
 		}
 	}
 
 	// cast succeeded, update union tags
+	UnifiedVectorFormat f;
+	source.ToUnifiedFormat(count, f);
+	auto validity = f.validity;
+
 	auto source_tags = UnionVector::GetTags(source);
 	auto result_tags = UnionVector::GetTags(result);
 
-	for (idx_t member_idx = 0; member_idx < cast_data.member_count; member_idx++) {
+	// fast path
+	if (validity.AllValid()) {
+		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+			result_tags[row_idx] = cast_data.tag_map[source_tags[row_idx]];
+		}
+	} else {
+		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 
-		auto source_member_tag = cast_data.source_member_index[member_idx];
-		auto result_member_tag = cast_data.target_member_index[member_idx];
-
-		// map source tag to target tag
-		for (idx_t i = 0; i < count; i++) {
-			if (source_tags[i] == source_member_tag) {
-				result_tags[i] = result_member_tag;
+			// map source tag to target tag
+			if (f.validity.RowIsValid(row_idx)) {
+				result_tags[row_idx] = cast_data.tag_map[source_tags[row_idx]];
 			}
 		}
 	}
 
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-	} else {
-		source.Flatten(count);
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-	}
+	CopyValidity(source, result, count);
 
 	return true;
 }

@@ -71,7 +71,14 @@ static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParame
 BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const LogicalType &source,
                                                    const LogicalType &target) {
 	D_ASSERT(source != target);
-	// first switch on source type
+
+	// first check if were casting to a union
+	if (source.id() != LogicalTypeId::UNION && source.id() != LogicalTypeId::SQLNULL &&
+	    target.id() == LogicalTypeId::UNION) {
+		return ImplicitToUnionCast(input, source, target);
+	}
+
+	// else, switch on source type
 	switch (source.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:

@@ -36,26 +36,9 @@ static unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunct
 static void UnionTagFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::ENUM);
 	auto &union_vector = args.data[0];
-	auto enums = FlatVector::GetData<uint8_t>(result);
-	auto tags = UnionVector::GetTags(union_vector);
-
-	UnifiedVectorFormat sdata;
-	args.data[0].ToUnifiedFormat(args.size(), sdata);
-
-	for (idx_t i = 0; i < args.size(); i++) {
-		auto idx = sdata.sel->get_index(i);
-		auto tag = tags[idx];
-		if (sdata.validity.RowIsValid(idx)) {
-			enums[i] = tag;
-		} else {
-			FlatVector::SetNull(result, i, true);
-		}
-	}
-
-	if (args.size() == 1) {
-		result.Flatten(args.size());
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
+	// the tags vector is always the first child of the union vector
+	auto &tags = *StructVector::GetEntries(union_vector)[0];
+	result.Reinterpret(tags);
 }
 
 void UnionTagFun::RegisterFunction(BuiltinFunctions &set) {

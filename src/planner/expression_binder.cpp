@@ -160,7 +160,7 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 		                                       : LogicalType::STRUCT(move(child_types));
 	}
 	case LogicalTypeId::UNION: {
-		auto member_types = UnionType::GetMemberTypes(type);
+		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
 			member_type.second = ExchangeType(member_type.second, target, new_type);
 		}

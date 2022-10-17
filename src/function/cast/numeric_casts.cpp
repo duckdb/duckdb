@@ -45,10 +45,6 @@ static BoundCastInfo InternalNumericCastSwitch(const LogicalType &source, const 
 
 BoundCastInfo DefaultCasts::NumericCastSwitch(BindCastInput &input, const LogicalType &source,
                                               const LogicalType &target) {
-
-	if (target.id() == LogicalTypeId::UNION) {
-		return DefaultCasts::ImplicitToUnionCast(input, source, target);
-	}
 	switch (source.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return InternalNumericCastSwitch<bool>(source, target);
