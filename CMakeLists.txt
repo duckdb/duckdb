@@ -410,7 +410,7 @@ if(UNIX AND NOT APPLE)
   set(OS_NAME "linux") # sorry BSD
 endif()
 
-if(OS_NAME STREQUAL "linux")
+if(NOT CLAN_TIDY AND OS_NAME STREQUAL "linux")
   if(CMAKE_SIZEOF_VOID_P EQUAL 4 OR FORCE_32_BIT)
     if(BUILD_JEMALLOC_EXTENSION EQUAL 1)
       # have to throw an error because this will crash at runtime
