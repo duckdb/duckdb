@@ -1,4 +1,5 @@
 #include "sqlite3.h"
+#include "sql_auto_complete_extension.hpp"
 #include "udf_struct_sqlite3.h"
 #include "sqlite3_udf_wrapper.hpp"
 #include "cast_sqlite.hpp"
@@ -99,6 +100,7 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 			config.options.allow_unsigned_extensions = true;
 		}
 		pDb->db = make_unique<DuckDB>(filename, &config);
+		pDb->db->LoadExtension<SQLAutoCompleteExtension>();
 		pDb->con = make_unique<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
@@ -238,7 +240,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		    pStmt->current_chunk->size() > 0) {
 			// update total changes
 			auto row_changes = pStmt->current_chunk->GetValue(0, 0);
-			if (!row_changes.IsNull() && row_changes.TryCastAs(LogicalType::BIGINT)) {
+			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
 				pStmt->db->last_changes = row_changes.GetValue<int64_t>();
 				pStmt->db->total_changes += row_changes.GetValue<int64_t>();
 			}
@@ -446,7 +448,8 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType 
 		return false;
 	}
 	try {
-		val = pStmt->current_chunk->data[iCol].GetValue(pStmt->current_row).CastAs(target_type);
+		val =
+		    pStmt->current_chunk->data[iCol].GetValue(pStmt->current_row).CastAs(*pStmt->db->con->context, target_type);
 	} catch (...) {
 		return false;
 	}
@@ -1683,7 +1686,7 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 
 	if (pVal->type == SQLiteTypeValue::INTEGER || pVal->type == SQLiteTypeValue::FLOAT) {
 		Value value = (pVal->type == SQLiteTypeValue::INTEGER) ? Value::BIGINT(pVal->u.i) : Value::DOUBLE(pVal->u.r);
-		if (!value.TryCastAs(LogicalType::VARCHAR)) {
+		if (!value.DefaultTryCastAs(LogicalType::VARCHAR)) {
 			pVal->db->errCode = SQLITE_NOMEM;
 			return nullptr;
 		}

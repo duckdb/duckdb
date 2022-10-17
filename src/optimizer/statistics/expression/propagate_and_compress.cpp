@@ -79,7 +79,7 @@ unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, 
 	                                                       move(arguments), nullptr, true);
 
 	// Cast to smaller type
-	return make_unique<BoundCastExpression>(move(minus_expr), cast_type);
+	return BoundCastExpression::AddDefaultCastToType(move(minus_expr), cast_type);
 }
 
 unique_ptr<Expression> CastToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {

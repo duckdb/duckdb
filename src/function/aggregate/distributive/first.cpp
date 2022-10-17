@@ -69,6 +69,9 @@ template <bool LAST, bool SKIP_NULLS>
 struct FirstFunctionString : public FirstFunctionBase {
 	template <class STATE>
 	static void SetValue(STATE *state, string_t value, bool is_null) {
+		if (LAST && state->is_set) {
+			Destroy(state);
+		}
 		if (is_null) {
 			if (!SKIP_NULLS) {
 				state->is_set = true;
@@ -306,24 +309,45 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
 	return nullptr;
 }
 
+template <bool LAST, bool SKIP_NULLS>
+static AggregateFunction GetFirstOperator(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::DECIMAL) {
+		throw InternalException("FIXME: this shouldn't happen...");
+	}
+	return GetFirstFunction<LAST, SKIP_NULLS>(type);
+}
+
+template <bool LAST, bool SKIP_NULLS>
+unique_ptr<FunctionData> BindFirst(ClientContext &context, AggregateFunction &function,
+                                   vector<unique_ptr<Expression>> &arguments) {
+	auto input_type = arguments[0]->return_type;
+	auto name = move(function.name);
+	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
+	function.name = move(name);
+	if (function.bind) {
+		return function.bind(context, function, arguments);
+	} else {
+		return nullptr;
+	}
+}
+
+template <bool LAST, bool SKIP_NULLS>
+static void AddFirstOperator(AggregateFunctionSet &set) {
+	set.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
+	                                  nullptr, nullptr, nullptr, BindDecimalFirst<LAST, SKIP_NULLS>));
+	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                                  nullptr, BindFirst<LAST, SKIP_NULLS>));
+}
+
 void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("first");
 	AggregateFunctionSet last("last");
 	AggregateFunctionSet any_value("any_value");
-	for (auto &type : LogicalType::AllTypes()) {
-		if (type.id() == LogicalTypeId::DECIMAL) {
-			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                    BindDecimalFirst<false, false>, nullptr, nullptr, nullptr));
-			last.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                   BindDecimalFirst<true, false>, nullptr, nullptr, nullptr));
-			any_value.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                        BindDecimalFirst<false, true>, nullptr, nullptr, nullptr));
-		} else {
-			first.AddFunction(GetFirstFunction<false, false>(type));
-			last.AddFunction(GetFirstFunction<true, false>(type));
-			any_value.AddFunction(GetFirstFunction<false, true>(type));
-		}
-	}
+
+	AddFirstOperator<false, false>(first);
+	AddFirstOperator<true, false>(last);
+	AddFirstOperator<false, true>(any_value);
+
 	set.AddFunction(first);
 	first.name = "arbitrary";
 	set.AddFunction(first);

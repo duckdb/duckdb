@@ -31,7 +31,7 @@ public:
 protected:
 	vector<ColumnBinding> GetColumnBindings() override {
 		if (return_chunk) {
-			return GenerateColumnBindings(table_index, table->columns.size());
+			return GenerateColumnBindings(table_index, table->GetTypes().size());
 		}
 		return {ColumnBinding(0, 0)};
 	}

@@ -9,6 +9,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include <thread>
 
@@ -319,7 +320,7 @@ idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, S
 		executor.Execute(scanned, keys);
 
 		// Mark the rid column
-		payload.data[0].Sequence(rid, increment);
+		payload.data[0].Sequence(rid, increment, scan_count);
 		payload.SetCardinality(scan_count);
 		keys.Fuse(payload);
 		rid += increment * scan_count;

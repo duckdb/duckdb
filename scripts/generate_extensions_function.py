@@ -14,8 +14,13 @@ parser.add_argument('--validate', action=argparse.BooleanOptionalAction,
 
 args = parser.parse_args()
 
+stored_functions = {
+    'substrait': ["from_substrait", "get_substrait", "get_substrait_json"]
+}
+
 functions = {}
-reader = csv.reader(open(os.path.join("..",'extensions.csv')))
+ext_dir = os.path.join('..', '.github', 'config', 'extensions.csv')
+reader = csv.reader(open(ext_dir))
 # This skips the first row (i.e., the header) of the CSV file.
 next(reader)
 
@@ -34,6 +39,18 @@ for filename in glob.iglob('/tmp/' + '**/*.duckdb_extension', recursive=True):
 
 for extension in reader:
     extension_name = extension[0]
+    if extension_name not in extension_path:
+        if extension_name not in stored_functions:
+            print(f"Missing extension {extension_name}")
+            exit(1)
+        extension_functions = stored_functions[extension_name]
+        print(f"Loading {extension_name} from stored functions: {extension_functions}")
+        function_map.update({
+            extension_function: extension_name
+            for extension_function in (set(extension_functions) - base_functions)
+        })
+        continue
+
     print(f"Load {extension_name} at {extension_path[extension_name]}")
     load = f"LOAD '{extension_path[extension_name]}';"
     extension_functions = os.popen(f'{duckdb_path} -unsigned -csv -c "{load}{get_func}" ').read().split("\n")[1:-1]
@@ -47,10 +64,23 @@ if args.validate:
     pattern = re.compile("{\"(.*?)\", \"(.*?)\"},")
     cur_function_map = dict(pattern.findall(file.read()))
     print("Cur Function Map: ")
-    print(cur_function_map)
+    print(sorted(list(cur_function_map)))
     print("Function Map: ")
-    print(function_map)
-    assert cur_function_map == function_map and len(cur_function_map) != 0
+    print(sorted(list(function_map)))
+    if len(cur_function_map) == 0:
+        print("Current function map is empty?")
+        exit(1)
+    if cur_function_map != function_map:
+        print("Difference between current functions and function map")
+        print(f"Current function map length: {len(cur_function_map)}")
+        print(f"Function map length: {len(function_map)}")
+        for f in function_map:
+            if f not in cur_function_map:
+                print(f"Function {f} of function_map does not exist in cur_function_map")
+        for f in cur_function_map:
+            if f not in function_map:
+                print(f"Function {f} of cur_function_map does not exist in function_map")
+        exit(1)
 else:
     # Generate Header
     file = open(os.path.join("..","src","include","extension_functions.hpp"),'w')

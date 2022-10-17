@@ -136,6 +136,10 @@ AggregateFunction GetApproximateQuantileAggregateFunction(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int64_t, int64_t,
 		                                                   ApproxQuantileScalarOperation>(LogicalType::BIGINT,
 		                                                                                  LogicalType::BIGINT);
+	case PhysicalType::INT128:
+		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, hugeint_t, hugeint_t,
+		                                                   ApproxQuantileScalarOperation>(LogicalType::HUGEINT,
+		                                                                                  LogicalType::HUGEINT);
 	case PhysicalType::DOUBLE:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, double, double,
 		                                                   ApproxQuantileScalarOperation>(LogicalType::DOUBLE,
@@ -352,6 +356,7 @@ void ApproximateQuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT16));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT32));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT64));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT128));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::DOUBLE));
 
 	// List variants

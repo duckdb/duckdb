@@ -71,6 +71,10 @@ public:
 	//! Closes the file handle.
 	DUCKDB_API virtual void Close() = 0;
 
+	string GetPath() const {
+		return path;
+	}
+
 public:
 	FileSystem &file_system;
 	string path;
@@ -164,6 +168,8 @@ public:
 	DUCKDB_API static idx_t GetAvailableMemory();
 	//! Path separator for the current file system
 	DUCKDB_API static string PathSeparator();
+	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)
+	DUCKDB_API static bool IsPathAbsolute(const string &path);
 	//! Join two paths together
 	DUCKDB_API static string JoinPath(const string &a, const string &path);
 	//! Convert separators in a path to the local separators (e.g. convert "/" into \\ on windows)

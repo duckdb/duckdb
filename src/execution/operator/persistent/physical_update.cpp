@@ -100,7 +100,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 		for (idx_t i = 0; i < columns.size(); i++) {
 			mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
 		}
-		table.Append(tableref, context.client, mock_chunk);
+		table.LocalAppend(tableref, context.client, mock_chunk);
 	} else {
 		if (return_chunk) {
 			mock_chunk.SetCardinality(update_chunk);

@@ -34,6 +34,7 @@ jobs:
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       BUILD_VISUALIZER: 1
+      BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
@@ -75,6 +76,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
+      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
@@ -114,6 +116,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
+      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
@@ -143,6 +146,47 @@ jobs:
     - name: Test
       shell: bash
       run: build/reldebug/test/unittest "*" --force-reload --force-storage
+
+ no-string-inline:
+    name: No String Inline
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      DISABLE_STRING_INLINE: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make debug
+
+    - name: Test
+      shell: bash
+      run: build/debug/test/unittest
 
  linux-arrow:
       name: Linux Debug (Arrow Tests)
@@ -185,6 +229,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
+      BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
@@ -393,7 +438,7 @@ jobs:
       shell: bash
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout 50097b950e6cbdfaaf13208fbc7160538f796912 && make debug)
+        (cd psqlodbc && git checkout 70fa016bde0b326d98803742aa570a1e5b3f6e89 && make debug)
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main

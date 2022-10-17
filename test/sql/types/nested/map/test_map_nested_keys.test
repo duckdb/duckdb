@@ -70,7 +70,7 @@ SELECT MAP(
 	]
 );
 ----
-{{'foo': True}=4, {'foo': False}=2, {'foo': NULL}=0}
+{{'foo': true}=4, {'foo': false}=2, {'foo': NULL}=0}
 
 # Nested keys (struct) not succesfull (duplicate)
 statement error

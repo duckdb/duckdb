@@ -2,13 +2,6 @@
 # description: Test large interleaved transactions
 # group: [storage]
 
-# this test is related to test/sql/storage/test_large_interleaved_transactions.test_slow
-# but verifies that deletes/updates made to interleaved sections fail on commit
-# this test should be deleted once that behavior is fixed
-
-require skip_reload
-
-
 # load the DB from disk
 load __TEST_DIR__/test_large_interleaved.db
 
@@ -30,11 +23,15 @@ statement ok con2
 INSERT INTO test SELECT a, b FROM (VALUES (14, 27), (10, 28), (13, 24)) tbl1(a,b), repeat(0, 218983) tbl2(c)
 
 # both con1 and con2 do some deletes
-statement error con1
+query I con1
 DELETE FROM test WHERE a=12
+----
+138345
 
-statement error con2
+query I con2
 DELETE FROM test WHERE a=13
+----
+218983
 
 statement ok con1
 ROLLBACK

@@ -15,9 +15,10 @@ namespace duckdb {
 
 class Leaf : public Node {
 public:
-	Leaf(Key &value, unsigned depth, row_t row_id);
-
+	Leaf(Key &value, uint32_t depth, row_t row_id);
+	Leaf(Key &value, uint32_t depth, unique_ptr<row_t[]> row_ids, idx_t num_elements);
 	Leaf(unique_ptr<row_t[]> row_ids, idx_t num_elements, Prefix &prefix);
+
 	idx_t capacity;
 
 	row_t GetRowId(idx_t index) {
@@ -25,11 +26,19 @@ public:
 	}
 
 public:
+	//! Insert a row_id into a leaf
 	void Insert(row_t row_id);
+	//! Remove a row_id from a leaf
 	void Remove(row_t row_id);
 
-	BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
+	//! Returns the string representation of a leaf
+	static string ToString(Node *node);
+	//! Merge two NLeaf nodes
+	static void Merge(Node *&l_node, Node *&r_node);
 
+	//! Serialize a leaf
+	BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
+	// Deserialize a leaf
 	static Leaf *Deserialize(duckdb::MetaBlockReader &reader);
 
 private:

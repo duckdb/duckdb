@@ -373,6 +373,11 @@ SELECT strftime(date '-99999-01-01', '%y')
 ----
 99
 
+query I
+SELECT strftime(DATE '-4869706-10-11','%-yi');
+----
+6i
+
 statement error
 SELECT strftime(date '-99999-01-01', random()::varchar)
 

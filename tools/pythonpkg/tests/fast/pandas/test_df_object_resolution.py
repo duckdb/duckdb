@@ -275,6 +275,7 @@ class TestResolveObjectColumns(object):
         )
         duckdb_col = duckdb.query("select {'5':1, '-25':3, '32':3, '32456':7} as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        duckdb.query("drop view if exists tbl")
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_correct(self, duckdb_cursor):
@@ -285,6 +286,7 @@ class TestResolveObjectColumns(object):
         )
         duckdb_col = duckdb.query("select [[5], [34], [-245]] as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        duckdb.query("drop view if exists tbl")
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_contains_null(self, duckdb_cursor):
@@ -295,6 +297,7 @@ class TestResolveObjectColumns(object):
         )
         duckdb_col = duckdb.query("select [[5], NULL, [-245]] as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        duckdb.query("drop view if exists tbl")
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_starts_with_null(self, duckdb_cursor):
@@ -305,6 +308,7 @@ class TestResolveObjectColumns(object):
         )
         duckdb_col = duckdb.query("select [NULL, [5], [-245]] as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        duckdb.query("drop view if exists tbl")
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_value_upgrade(self, duckdb_cursor):
@@ -315,6 +319,7 @@ class TestResolveObjectColumns(object):
         )
         duckdb_col = duckdb.query("select [['5'], ['34'], ['-245']] as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        duckdb.query("drop view if exists tbl")
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_column_value_upgrade(self, duckdb_cursor):

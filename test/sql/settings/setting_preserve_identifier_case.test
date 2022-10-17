@@ -5,7 +5,7 @@
 query I
 SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
 ----
-True
+true
 
 statement ok
 CREATE SCHEMA MYSCHEMA;
@@ -27,7 +27,7 @@ SET preserve_identifier_case TO false;
 query I
 SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
 ----
-False
+false
 
 statement ok
 CREATE SCHEMA MYSCHEMA;

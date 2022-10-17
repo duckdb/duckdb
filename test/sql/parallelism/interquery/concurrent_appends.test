@@ -1,0 +1,19 @@
+# name: test/sql/parallelism/interquery/concurrent_appends.test
+# description: Test concurrent small appends to persistent storage
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+concurrentloop threadid 0 20
+
+statement ok
+INSERT INTO integers SELECT * FROM range(100);
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+2000	99000
+

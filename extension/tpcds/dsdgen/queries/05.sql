@@ -80,60 +80,33 @@ WITH ssr AS
    WHERE date_sk = d_date_sk
      AND d_date BETWEEN cast('2000-08-23' AS date) AND cast('2000-09-06' AS date)
      AND wsr_web_site_sk = web_site_sk
-   GROUP BY web_site_id) ,
-     results AS
-  (SELECT channel ,
-          id ,
-          sum(sales) AS sales ,
-          sum(returns_) AS returns_ ,
-          sum(profit) AS profit
-   FROM
-     (SELECT 'store channel' AS channel ,
-             concat('store', s_store_id) AS id ,
-             sales ,
-             returns_ ,
-             (profit - profit_loss) AS profit
-      FROM ssr
-      UNION ALL SELECT 'catalog channel' AS channel ,
-                       concat('catalog_page', cp_catalog_page_id) AS id ,
-                       sales ,
-                       returns_ ,
-                       (profit - profit_loss) AS profit
-      FROM csr
-      UNION ALL SELECT 'web channel' AS channel ,
-                       concat('web_site', web_site_id) AS id ,
-                       sales ,
-                       returns_ ,
-                       (profit - profit_loss) AS profit
-      FROM wsr ) x
-   GROUP BY channel,
-            id)
-SELECT channel,
-       id,
-       sales,
-       returns_,
-       profit
+   GROUP BY web_site_id)
+SELECT channel ,
+       id ,
+       sum(sales) AS sales ,
+       sum(returns_) AS returns_ ,
+       sum(profit) AS profit
 FROM
-  (SELECT channel,
-          id,
-          sales,
-          returns_,
-          profit
-   FROM results
-   UNION SELECT channel,
-                NULL AS id,
-                sum(sales),
-                sum(returns_),
-                sum(profit)
-   FROM results
-   GROUP BY channel
-   UNION SELECT NULL AS channel,
-                NULL AS id,
-                sum(sales),
-                sum(returns_),
-                sum(profit)
-   FROM results) foo
+  (SELECT 'store channel' AS channel ,
+          concat('store', s_store_id) AS id ,
+          sales ,
+          returns_ ,
+          (profit - profit_loss) AS profit
+   FROM ssr
+   UNION ALL SELECT 'catalog channel' AS channel ,
+                    concat('catalog_page', cp_catalog_page_id) AS id ,
+                    sales ,
+                    returns_ ,
+                    (profit - profit_loss) AS profit
+   FROM csr
+   UNION ALL SELECT 'web channel' AS channel ,
+                    concat('web_site', web_site_id) AS id ,
+                    sales ,
+                    returns_ ,
+                    (profit - profit_loss) AS profit
+   FROM wsr ) x
+GROUP BY ROLLUP (channel,
+                 id)
 ORDER BY channel NULLS FIRST,
          id NULLS FIRST
 LIMIT 100;
-

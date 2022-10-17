@@ -61,7 +61,7 @@ void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
 	auto &fs = db.GetFileSystem();
 	Connection con(db);
 	auto result = con.Query(
-	    StringUtil::Format("EXPORT DATABASE '%s' (FORMAT CSV)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
+	    StringUtil::Format("EXPORT DATABASE '%s' (FORMAT PARQUET)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
 	if (result->HasError()) {
 		result->ThrowError("Failed to save database: ");
 	}
@@ -240,7 +240,7 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 		} else if (StringUtil::StartsWith(arg, "--threads=")) {
 			// write info of benchmark
 			auto splits = StringUtil::Split(arg, '=');
-			instance.threads = Value(splits[1]).CastAs(LogicalType::UINTEGER).GetValue<uint32_t>();
+			instance.threads = Value(splits[1]).DefaultCastAs(LogicalType::UINTEGER).GetValue<uint32_t>();
 		} else if (arg == "--query") {
 			// write group of benchmark
 			instance.configuration.meta = BenchmarkMetaType::QUERY;

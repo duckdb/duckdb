@@ -534,6 +534,7 @@ void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 		}
 	}
 
+	(void)check;
 	D_ASSERT(check == count);
 }
 
@@ -1133,7 +1134,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 struct WindowExecutor {
 	WindowExecutor(BoundWindowExpression *wexpr, Allocator &allocator, const idx_t count);
 
-	void Sink(DataChunk &input_chunk, const idx_t input_idx);
+	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count);
 	void Finalize(WindowAggregationMode mode);
 
 	void Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &result, const ValidityMask &partition_mask,
@@ -1207,7 +1208,7 @@ WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, Allocator &allocato
 	PrepareInputExpressions(exprs.data(), exprs.size(), payload_executor, payload_chunk);
 }
 
-void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx) {
+void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) {
 	// Single pass over the input to produce the global data.
 	// Vectorisation for the win...
 
@@ -1242,7 +1243,7 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx) {
 			if (!vdata.validity.AllValid()) {
 				//	Lazily materialise the contents when we find the first NULL
 				if (ignore_nulls.AllValid()) {
-					ignore_nulls.Initialize(payload_collection.Count());
+					ignore_nulls.Initialize(total_count);
 				}
 				// Write to the current position
 				// Chunks in a collection are full, so we don't have to worry about raggedness
@@ -1771,7 +1772,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 
 		//	TODO: Parallelization opportunity
 		for (auto &wexec : window_execs) {
-			wexec->Sink(input_chunk, input_idx);
+			wexec->Sink(input_chunk, input_idx, scanner->Count());
 		}
 		input_idx += input_chunk.size();
 	}

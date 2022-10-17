@@ -324,7 +324,6 @@ public:
 
 	BufferHandle handle;
 
-	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t, bool skip_sign_extension);
 	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 
 	idx_t position_in_group = 0;
@@ -342,7 +341,6 @@ public:
 		bitpacking_metadata_ptr -= sizeof(T);
 		current_frame_of_reference = Load<T>(bitpacking_metadata_ptr);
 		bitpacking_metadata_ptr -= sizeof(bitpacking_width_t);
-		LoadDecompressFunction();
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
@@ -363,10 +361,6 @@ public:
 				skip_count -= skipping;
 			}
 		}
-	}
-
-	void LoadDecompressFunction() {
-		decompress_function = &BitpackingPrimitives::UnPackBlock<T>;
 	}
 };
 
@@ -438,13 +432,13 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
 			// Decompress directly into result vector
-			scan_state.decompress_function((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
-			                               scan_state.current_width, skip_sign_extend);
+			BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
+			                                     scan_state.current_width, skip_sign_extend);
 		} else {
 			// Decompress compression algorithm to buffer
-			scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer,
-			                               decompression_group_start_pointer, scan_state.current_width,
-			                               skip_sign_extend);
+			BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer,
+			                                     decompression_group_start_pointer, scan_state.current_width,
+			                                     skip_sign_extend);
 
 			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
 			       to_scan * sizeof(T));
@@ -482,8 +476,8 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
 	bool skip_sign_extend = true;
 
-	scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
-	                               scan_state.current_width, skip_sign_extend);
+	BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
+	                                     scan_state.current_width, skip_sign_extend);
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
 	//! Apply FOR to result

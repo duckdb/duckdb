@@ -10,6 +10,7 @@
 
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -53,8 +54,8 @@ public:
 		}
 
 		auto functions = (CATALOG_ENTRY *)func_catalog;
-		auto function =
-		    functions->functions.GetFunctionByArguments(original_arguments.empty() ? arguments : original_arguments);
+		auto function = functions->functions.GetFunctionByArguments(
+		    state.context, original_arguments.empty() ? arguments : original_arguments);
 		function.arguments = move(arguments);
 		function.original_arguments = move(original_arguments);
 

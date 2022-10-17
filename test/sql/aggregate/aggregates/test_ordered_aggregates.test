@@ -115,3 +115,7 @@ select percentile_disc('duck') within group(order by i) from generate_series(0,1
 # No function matches the given name and argument types 'quantile_cont(BIGINT, VARCHAR)'
 statement error
 select percentile_cont('duck') within group(order by i) from generate_series(0,100) tbl(i);
+
+# aggregate function calls cannot be nested
+statement error
+SELECT percentile_disc(sum(1)) WITHIN GROUP (ORDER BY 1 DESC);

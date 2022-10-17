@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/art/iterator.hpp"
+
 #include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
@@ -90,7 +91,7 @@ void Iterator::FindMinimum(Node &node) {
 	}
 	case NodeType::N256: {
 		auto &n256 = (Node256 &)node;
-		while (!n256.children[pos].pointer) {
+		while (!n256.children[pos]) {
 			pos++;
 		}
 		cur_key.Push(pos);
@@ -119,16 +120,16 @@ void Iterator::PushKey(Node *cur_node, uint16_t pos) {
 	}
 }
 
-bool Iterator::Scan(Key *bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive) {
+bool Iterator::Scan(Key &bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive) {
 	bool has_next;
 	do {
-		if (bound) {
+		if (!bound.Empty()) {
 			if (is_inclusive) {
-				if (cur_key > *bound) {
+				if (cur_key > bound) {
 					break;
 				}
 			} else {
-				if (cur_key >= *bound) {
+				if (cur_key >= bound) {
 					break;
 				}
 			}
@@ -146,14 +147,19 @@ bool Iterator::Scan(Key *bound, idx_t max_count, vector<row_t> &result_ids, bool
 	return true;
 }
 
+void Iterator::PopNode() {
+	auto cur_node = nodes.top();
+	idx_t elements_to_pop = cur_node.node->prefix.Size() + (nodes.size() != 1);
+	cur_key.Pop(elements_to_pop);
+	nodes.pop();
+}
+
 bool Iterator::Next() {
 	if (!nodes.empty()) {
 		auto cur_node = nodes.top().node;
 		if (cur_node->type == NodeType::NLeaf) {
 			// Pop Leaf (We must pop the prefix size + the key to the node (unless we are popping the root)
-			idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
-			cur_key.Pop(elements_to_pop);
-			nodes.pop();
+			PopNode();
 		}
 	}
 
@@ -181,17 +187,14 @@ bool Iterator::Next() {
 			nodes.push(IteratorEntry(next_node, DConstants::INVALID_INDEX));
 		} else {
 			// no node found: move up the tree and Pop prefix and key of current node
-			auto cur_node = nodes.top().node;
-			idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
-			cur_key.Pop(elements_to_pop);
-			nodes.pop();
+			PopNode();
 		}
 	}
 	return false;
 }
 
 bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
-	bool equal = false;
+	bool equal = true;
 	if (!node) {
 		return false;
 	}
@@ -203,6 +206,7 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 		for (idx_t i = 0; i < top.node->prefix.Size(); i++) {
 			cur_key.Push(top.node->prefix[i]);
 		}
+		// greater case: find leftmost leaf node directly
 		if (!equal) {
 			while (node->type != NodeType::NLeaf) {
 				auto min_pos = node->GetMin();
@@ -235,28 +239,21 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 			if (cur_key > key) {
 				return true;
 			}
-			// Leaf is lower than key
-			// Check if next leaf is still lower than key
-			while (Next()) {
-				if (cur_key == key) {
-					// if it's not inclusive check if there is a next leaf
-					if (!inclusive && !Next()) {
-						return false;
-					} else {
-						return true;
-					}
-				} else if (cur_key > key) {
-					// if it's not inclusive check if there is a next leaf
-					return true;
-				}
-			}
-			return false;
+			// Case1: When the ART has only one leaf node, the Next() will return false
+			// Case2: This means the previous node prefix(if any) + a_key(one element of of key array of previous node)
+			// == key[q..=w].
+			// But key[w+1..=z] maybe greater than leaf node prefix.
+			// One fact is key[w] is alawys equal to a_key and the next element
+			// of key array of previous node is always > a_key So we just call Next() once.
+
+			return Next();
 		}
+		// equal case:
 		uint32_t mismatch_pos = node->prefix.KeyMismatchPosition(key, depth);
 		if (mismatch_pos != node->prefix.Size()) {
 			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
 				// Less
-				nodes.pop();
+				PopNode();
 				return Next();
 			} else {
 				// Greater
@@ -264,14 +261,18 @@ bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 				return Next();
 			}
 		}
+
 		// prefix matches, search inside the child for the key
 		depth += node->prefix.Size();
 
 		top.pos = node->GetChildGreaterEqual(key[depth], equal);
+		// The maximum key byte of the current node is less than the key
+		// So fall back to the previous node
 		if (top.pos == DConstants::INVALID_INDEX) {
-			// Find min leaf
-			top.pos = node->GetMin();
+			PopNode();
+			return Next();
 		}
+		PushKey(node, top.pos);
 		node = node->GetChild(*art, top.pos);
 		// This means all children of this node qualify as geq
 		depth++;

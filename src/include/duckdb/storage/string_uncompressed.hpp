@@ -57,9 +57,15 @@ public:
 	                           idx_t result_idx);
 	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id);
 
-	static idx_t StringAppend(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset,
-	                          idx_t count) {
-		return StringAppendBase(segment, stats, data, offset, count);
+	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto handle = buffer_manager.Pin(segment.block);
+		return make_unique<CompressionAppendState>(move(handle));
+	}
+
+	static idx_t StringAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
+	                          UnifiedVectorFormat &data, idx_t offset, idx_t count) {
+		return StringAppendBase(append_state.handle, segment, stats, data, offset, count);
 	}
 
 	template <bool DUPLICATE_ELIMINATE = false>
@@ -68,7 +74,12 @@ public:
 	                              std::unordered_map<string, int32_t> *seen_strings = nullptr) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
-
+		return StringAppendBase(handle, segment, stats, data, offset, count);
+	}
+	template <bool DUPLICATE_ELIMINATE = false>
+	static idx_t StringAppendBase(BufferHandle &handle, ColumnSegment &segment, SegmentStatistics &stats,
+	                              UnifiedVectorFormat &data, idx_t offset, idx_t count,
+	                              std::unordered_map<string, int32_t> *seen_strings = nullptr) {
 		D_ASSERT(segment.GetBlockOffset() == 0);
 		auto source_data = (string_t *)data.data;
 		auto result_data = (int32_t *)(handle.Ptr() + DICTIONARY_HEADER_SIZE);
