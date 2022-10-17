@@ -6,6 +6,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -13,8 +15,22 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *tab
                                vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
                                bool return_chunk)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
-      column_index_map(std::move(column_index_map)), table(table), bound_defaults(move(bound_defaults)),
-      return_chunk(return_chunk) {
+      column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
+      bound_defaults(move(bound_defaults)), return_chunk(return_chunk) {
+}
+
+PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info_p,
+                               idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::INSERT, op.types, estimated_cardinality), insert_table(nullptr),
+      return_chunk(false), schema(schema), info(move(info_p)) {
+	auto &create_info = (CreateTableInfo &)*info->base;
+	for (auto &col : create_info.columns) {
+		if (col.Generated()) {
+			continue;
+		}
+		insert_types.push_back(col.GetType());
+		bound_defaults.push_back(make_unique<BoundConstantExpression>(Value(col.GetType())));
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -27,6 +43,7 @@ public:
 	}
 
 	mutex lock;
+	TableCatalogEntry *table;
 	idx_t insert_count;
 	LocalAppendState append_state;
 	bool initialized;
@@ -46,11 +63,21 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<InsertGlobalState>(context, GetTypes());
+	auto result = make_unique<InsertGlobalState>(context, GetTypes());
+	if (info) {
+		// CREATE TABLE AS
+		D_ASSERT(!insert_table);
+		auto &catalog = Catalog::GetCatalog(context);
+		result->table = (TableCatalogEntry *)catalog.CreateTable(context, schema, info.get());
+	} else {
+		D_ASSERT(insert_table);
+		result->table = insert_table;
+	}
+	return move(result);
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<InsertLocalState>(Allocator::Get(context.client), table->GetTypes(), bound_defaults);
+	return make_unique<InsertLocalState>(Allocator::Get(context.client), insert_types, bound_defaults);
 }
 
 SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -64,6 +91,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 	istate.insert_chunk.Reset();
 	istate.insert_chunk.SetCardinality(chunk);
 
+	auto table = gstate.table;
 	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
 		for (idx_t i = 0; i < table->columns.size(); i++) {
@@ -116,6 +144,7 @@ SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, Clie
                                           GlobalSinkState &state) const {
 	auto &gstate = (InsertGlobalState &)state;
 	if (gstate.initialized) {
+		auto table = gstate.table;
 		table->storage->FinalizeLocalAppend(gstate.append_state);
 	}
 	return SinkFinalizeType::READY;
