@@ -49,28 +49,21 @@ struct ConcatFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ConcatWSFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct LengthFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+	static inline bool IsCharacter(char c) {
+		return (c & 0xc0) != 0x80;
+	}
+
 	template <class TA, class TR>
 	static inline TR Length(TA input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
+		TR length = 0;
 		for (idx_t i = 0; i < input_length; i++) {
-			if (input_data[i] & 0x80) {
-				int64_t length = 0;
-				// non-ascii character: use grapheme iterator on remainder of string
-				utf8proc_grapheme_callback(input_data, input_length, [&](size_t start, size_t end) {
-					length++;
-					return true;
-				});
-				return length;
-			}
+			length += IsCharacter(input_data[i]);
 		}
-		return input_length;
+		return length;
 	}
 };
 

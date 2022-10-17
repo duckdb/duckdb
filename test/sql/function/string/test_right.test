@@ -16,11 +16,6 @@ SELECT RIGHT('🦆ab', 0), RIGHT('🦆ab', 1), RIGHT('🦆ab', 2), RIGHT('🦆ab
 ----
 (empty)	b	ab	🦆ab	🦆ab
 
-query TTTT
-SELECT RIGHT('🦆🤦S̈', 0), RIGHT('🦆🤦S̈', 1), RIGHT('🦆🤦S̈', 2), RIGHT('🦆🤦S̈', 3)
-----
-(empty)	S̈	🤦S̈	🦆🤦S̈
-
 # test RIGHT on negative positions
 query TTTTT
 SELECT RIGHT('abcd', 0), RIGHT('abc', -1), RIGHT('abc', -2), RIGHT('abc', -3), RIGHT('abc', -4)
@@ -31,11 +26,6 @@ query TTTTT
 SELECT RIGHT('🦆ab', 0), RIGHT('🦆ab', -1), RIGHT('🦆ab', -2), RIGHT('🦆ab', -3), RIGHT('🦆ab', -4)
 ----
 (empty)	ab	b	(empty)	(empty)
-
-query TTTT
-SELECT RIGHT('🦆🤦S̈', 0), RIGHT('🦆🤦S̈', -1), RIGHT('🦆🤦S̈', -2), RIGHT('🦆🤦S̈', -3)
-----
-(empty)	🤦S̈	S̈	(empty)
 
 # test RIGHT on NULL values
 query TTT

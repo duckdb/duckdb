@@ -9,11 +9,31 @@
 
 namespace duckdb {
 
-// length returns the size in characters
+// length returns the number of unicode codepoints
 struct StringLengthOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return LengthFun::Length<TA, TR>(input);
+	}
+};
+
+struct GraphemeCountOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		auto input_data = input.GetDataUnsafe();
+		auto input_length = input.GetSize();
+		for (idx_t i = 0; i < input_length; i++) {
+			if (input_data[i] & 0x80) {
+				int64_t length = 0;
+				// non-ascii character: use grapheme iterator on remainder of string
+				utf8proc_grapheme_callback(input_data, input_length, [&](size_t start, size_t end) {
+					length++;
+					return true;
+				});
+				return length;
+			}
+		}
+		return input_length;
 	}
 };
 
@@ -86,6 +106,12 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(length);
 	length.name = "len";
 	set.AddFunction(length);
+
+	ScalarFunctionSet grapheme_count("grapheme_count");
+	grapheme_count.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                                          ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
+	                                          nullptr, nullptr, LengthPropagateStats));
+	set.AddFunction(grapheme_count);
 
 	ScalarFunctionSet array_length("array_length");
 	array_length.AddFunction(array_length_unary);

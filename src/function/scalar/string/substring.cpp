@@ -73,59 +73,83 @@ string_t SubstringFun::SubstringScalarFunction(Vector &result, string_t input, i
 	auto input_data = input.GetDataUnsafe();
 	auto input_size = input.GetSize();
 
-	// we don't know yet if the substring is ascii, but we assume it is (for now)
-	// first get the start and end as if this was an ascii string
-	int64_t start, end;
-	if (!SubstringStartEnd(input_size, offset, length, start, end)) {
+	if (length == 0) {
 		return SubstringEmptyString(result);
 	}
-
-	// now check if all the characters between 0 and end are ascii characters
-	// note that we scan one further to check for a potential combining diacritics (e.g. i + diacritic is ï)
-	bool is_ascii = true;
-	idx_t ascii_end = MinValue<idx_t>(end + 1, input_size);
-	for (idx_t i = 0; i < ascii_end; i++) {
-		if (input_data[i] & 0x80) {
-			// found a non-ascii character: eek
-			is_ascii = false;
-			break;
-		}
-	}
-	if (is_ascii) {
-		// all characters are ascii, we can just slice the substring
-		return SubstringSlice(result, input_data, start, end - start);
-	}
-	// if the characters are not ascii, we need to scan grapheme clusters
 	// first figure out which direction we need to scan
-	// offset = 0 case is taken care of in SubstringStartEnd
+	idx_t start_pos;
+	idx_t end_pos;
 	if (offset < 0) {
-		// negative offset, this case is more difficult
-		// we first need to count the number of characters in the string
-		idx_t num_characters = 0;
-		utf8proc_grapheme_callback(input_data, input_size, [&](size_t start, size_t end) {
-			num_characters++;
-			return true;
-		});
-		// now call substring start and end again, but with the number of unicode characters this time
-		SubstringStartEnd(num_characters, offset, length, start, end);
-	}
+		start_pos = 0;
+		end_pos = DConstants::INVALID_INDEX;
 
-	// now scan the graphemes of the string to find the positions of the start and end characters
-	int64_t current_character = 0;
-	idx_t start_pos = DConstants::INVALID_INDEX, end_pos = input_size;
-	utf8proc_grapheme_callback(input_data, input_size, [&](size_t gstart, size_t gend) {
-		if (current_character == start) {
-			start_pos = gstart;
-		} else if (current_character == end) {
-			end_pos = gstart;
-			return false;
+		// negative offset: scan backwards
+		int64_t start, end;
+
+		// we express start and end as unicode codepoints from the back
+		offset--;
+		if (length < 0) {
+			// negative length
+			start = -offset - length;
+			end = -offset;
+		} else {
+			// positive length
+			start = -offset;
+			end = -offset - length;
 		}
-		current_character++;
-		return true;
-	});
-	if (start_pos == DConstants::INVALID_INDEX) {
-		return SubstringEmptyString(result);
+		if (end <= 0) {
+			end_pos = input_size;
+		}
+		int64_t current_character = 0;
+		for (idx_t i = input_size; i > 0; i--) {
+			if (LengthFun::IsCharacter(input_data[i - 1])) {
+				current_character++;
+				if (current_character == start) {
+					start_pos = i;
+					break;
+				} else if (current_character == end) {
+					end_pos = i;
+				}
+			}
+		}
+		if (end_pos == DConstants::INVALID_INDEX) {
+			return SubstringEmptyString(result);
+		}
+	} else {
+		start_pos = DConstants::INVALID_INDEX;
+		end_pos = input_size;
+
+		// positive offset: scan forwards
+		int64_t start, end;
+
+		// we express start and end as unicode codepoints from the front
+		if (length < 0) {
+			// negative length
+			start = MaxValue<int64_t>(0, offset + length - 1);
+			end = offset - 1;
+		} else {
+			// positive length
+			start = MaxValue<int64_t>(0, offset - 1);
+			end = offset + length - 1;
+		}
+
+		int64_t current_character = 0;
+		for (idx_t i = 0; i < input_size; i++) {
+			if (LengthFun::IsCharacter(input_data[i])) {
+				if (current_character == start) {
+					start_pos = i;
+				} else if (current_character == end) {
+					end_pos = i;
+					break;
+				}
+				current_character++;
+			}
+		}
+		if (start_pos == DConstants::INVALID_INDEX || end == 0) {
+			return SubstringEmptyString(result);
+		}
 	}
+	D_ASSERT(end_pos >= start_pos);
 	// after we have found these, we can slice the substring
 	return SubstringSlice(result, input_data, start_pos, end_pos - start_pos);
 }
