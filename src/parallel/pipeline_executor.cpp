@@ -127,8 +127,6 @@ DataChunk *PipelineExecutor::GetIntermediateChunk(unique_ptr<DataChunk> &tmp_chu
 	}
 }
 
-// TODO: ALSO WHY DO EXCEPTIONS get slurped up by calling code?
-// TODO clean up
 // Pull a single DataChunk from the pipeline by flushing any operators holding cached output
 void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
@@ -145,7 +143,9 @@ void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 				finalize_result = cached_flush_chunk_result;
 			} else {
 				// Flush the current operator
-				curr_chunk = GetIntermediateChunk(tmp_chunk, op_idx);
+				tmp_chunk = make_unique<DataChunk>();
+				tmp_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[op_idx]->GetTypes());
+				curr_chunk = tmp_chunk.get();
 				finalize_result = pipeline.operators[op_idx]->FinalExecute(context, *curr_chunk, *pipeline.operators[op_idx]->op_state,
 				                                                                *intermediate_states[op_idx]);
 			}
@@ -156,10 +156,6 @@ void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 				if (tmp_chunk) {
 					// We have a tmp_chunk that we want to continue Executing with
 					cached_flush_chunk = move(tmp_chunk);
-				} else if (!cached_flush_chunk) {
-					cached_flush_chunk = make_unique<DataChunk>();
-					cached_flush_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[op_idx]->GetTypes());
-					curr_chunk->Copy(*cached_flush_chunk);
 				}
 				cached_flush_chunk_result = finalize_result;
 			} else {
