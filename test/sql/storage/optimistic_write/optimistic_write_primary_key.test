@@ -32,6 +32,9 @@ SELECT SUM(a) FROM test
 ----
 499999500000
 
+statement error
+INSERT INTO test VALUES (42)
+
 restart
 
 query I
@@ -43,3 +46,6 @@ query I
 SELECT SUM(a) FROM test
 ----
 499999500000
+
+statement error
+INSERT INTO test VALUES (42)
