@@ -1,0 +1,43 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_temp_table.test
+# description: Test large writes on temporary tables
+# group: [optimistic_write]
+
+# temp table
+require skip_reload
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_temp.db
+
+statement ok
+CREATE TABLE integers AS SELECT 42 i
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT total_blocks < 10 FROM pragma_database_size();
+----
+true
+
+# ensure temporary tables are not actually written to the main storage
+statement ok
+CREATE TEMPORARY TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000)
+
+query I
+SELECT total_blocks < 10 FROM pragma_database_size();
+----
+true
+
+statement ok
+CREATE TEMPORARY TABLE test2 (a INTEGER);
+
+statement ok
+INSERT INTO test2 SELECT * FROM range(1000000)
+
+query I
+SELECT total_blocks < 10 FROM pragma_database_size();
+----
+true

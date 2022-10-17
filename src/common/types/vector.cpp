@@ -229,6 +229,9 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 			memset(data, 0, capacity * type_size);
 		}
 	}
+	if (capacity > STANDARD_VECTOR_SIZE) {
+		validity.Resize(STANDARD_VECTOR_SIZE, capacity);
+	}
 }
 
 struct DataArrays {

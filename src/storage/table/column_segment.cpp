@@ -155,6 +155,7 @@ void ColumnSegment::ConvertToPersistent(BlockManager *block_manager, block_id_t 
 	block_id = block_id_p;
 	offset = 0;
 
+	D_ASSERT(stats.statistics);
 	if (block_id == INVALID_BLOCK) {
 		// constant block: reset the block buffer
 		D_ASSERT(stats.statistics->IsConstant());

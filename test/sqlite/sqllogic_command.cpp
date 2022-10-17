@@ -7,6 +7,10 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "test_helpers.hpp"
+#include "sqllogic_test_logger.hpp"
+#include "catch.hpp"
+#include <list>
+#include <thread>
 
 namespace duckdb {
 
@@ -33,15 +37,27 @@ Command::Command(SQLLogicTestRunner &runner) : runner(runner) {
 Command::~Command() {
 }
 
-Connection *Command::CommandConnection() {
+Connection *Command::CommandConnection(ExecuteContext &context) const {
 	if (connection_name.empty()) {
+		if (context.is_parallel) {
+			D_ASSERT(context.con);
+			return context.con;
+		}
+		D_ASSERT(!context.con);
 		return runner.con.get();
 	} else {
+		if (context.is_parallel) {
+			throw std::runtime_error("Named connections not supported in parallel loop");
+		}
 		return GetConnection(*runner.db, runner.named_connection_map, connection_name);
 	}
 }
 
-void Command::RestartDatabase(Connection *&connection, string sql_query) {
+void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, string sql_query) const {
+	if (context.is_parallel) {
+		// cannot restart in parallel
+		return;
+	}
 	vector<unique_ptr<SQLStatement>> statements;
 	bool query_fail = false;
 	try {
@@ -59,18 +75,18 @@ void Command::RestartDatabase(Connection *&connection, string sql_query) {
 		// We basically restart the database if no transaction is active and if the query is valid
 		auto command = make_unique<RestartCommand>(runner);
 		runner.ExecuteCommand(move(command));
-		connection = CommandConnection();
+		connection = CommandConnection(context);
 	}
 }
 
-unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection, string file_name, idx_t query_line,
-                                                          string sql_query) {
+unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &context, Connection *connection,
+                                                          string file_name, idx_t query_line) const {
 	query_break(query_line);
 	if (TestForceReload() && TestForceStorage()) {
-		RestartDatabase(connection, sql_query);
+		RestartDatabase(context, connection, context.sql_query);
 	}
 
-	auto result = connection->Query(sql_query);
+	auto result = connection->Query(context.sql_query);
 
 	if (result->HasError()) {
 		TestHelperExtension::SetLastError(result->GetError());
@@ -81,21 +97,19 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection
 	return result;
 }
 
-void Command::Execute() {
+void Command::Execute(ExecuteContext &context) const {
 	if (runner.finished_processing_file) {
 		return;
 	}
-	if (runner.running_loops.empty()) {
-		ExecuteInternal();
+	if (context.running_loops.empty()) {
+		context.sql_query = base_sql_query;
+		ExecuteInternal(context);
 		return;
 	}
-	auto original_query = sql_query;
 	// perform the string replacement
-	sql_query = SQLLogicTestRunner::LoopReplacement(sql_query, runner.running_loops);
+	context.sql_query = SQLLogicTestRunner::LoopReplacement(base_sql_query, context.running_loops);
 	// execute the iterated statement
-	ExecuteInternal();
-	// now restore the original query
-	sql_query = original_query;
+	ExecuteInternal(context);
 }
 
 Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {
@@ -111,63 +125,138 @@ LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p
     : Command(runner), definition(move(definition_p)) {
 }
 
-void LoopCommand::ExecuteInternal() {
-	definition.loop_idx = definition.loop_start;
-	runner.running_loops.push_back(&definition);
-	bool finished = false;
-	while (!finished && !runner.finished_processing_file) {
-		// execute the current iteration of the loop
-		for (auto &statement : loop_commands) {
-			statement->Execute();
-		}
-		definition.loop_idx++;
-		if (definition.loop_idx >= definition.loop_end) {
-			// finished
-			break;
-		}
+struct ParallelExecuteContext {
+	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<unique_ptr<Command>> &loop_commands,
+	                       LoopDefinition definition)
+	    : runner(runner), loop_commands(loop_commands), definition(move(definition)), success(true) {
 	}
-	runner.running_loops.pop_back();
+
+	SQLLogicTestRunner &runner;
+	const vector<unique_ptr<Command>> &loop_commands;
+	LoopDefinition definition;
+	atomic<bool> success;
+	string error_message;
+	string error_file;
+	int error_line;
+};
+
+static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
+	try {
+		auto &runner = execute_context->runner;
+
+		// construct a new connection to the database
+		Connection con(*runner.db);
+		// create a new parallel execute context
+		vector<LoopDefinition> running_loops {execute_context->definition};
+		ExecuteContext context(&con, move(running_loops));
+		for (auto &command : execute_context->loop_commands) {
+			execute_context->error_file = command->file_name;
+			execute_context->error_line = command->query_line;
+			command->Execute(context);
+		}
+		if (!context.error_file.empty()) {
+			execute_context->error_message = string();
+			execute_context->success = false;
+			execute_context->error_file = context.error_file;
+			execute_context->error_line = context.error_line;
+		}
+	} catch (std::exception &ex) {
+		execute_context->error_message = StringUtil::Format("Failure at %s:%d: %s", execute_context->error_file,
+		                                                    execute_context->error_line, ex.what());
+		execute_context->success = false;
+	} catch (...) {
+		execute_context->error_message = StringUtil::Format("Failure at %s:%d: Unknown error message",
+		                                                    execute_context->error_file, execute_context->error_line);
+		execute_context->success = false;
+	}
 }
 
-static void OutputSQLQuery(const string &sql_query) {
-	string query = sql_query;
-	if (StringUtil::EndsWith(sql_query, "\n")) {
-		// ends with a newline: don't add one
-		if (!StringUtil::EndsWith(sql_query, ";\n")) {
-			// no semicolon though
-			query[query.size() - 1] = ';';
-			query += "\n";
+void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
+	LoopDefinition loop_def = definition;
+	loop_def.loop_idx = definition.loop_start;
+	if (loop_def.is_parallel) {
+		if (context.is_parallel || !context.running_loops.empty()) {
+			throw std::runtime_error("Nested parallel loop commands not allowed");
+		}
+		// parallel loop: launch threads
+		std::list<ParallelExecuteContext> contexts;
+		while (true) {
+			contexts.emplace_back(runner, loop_commands, loop_def);
+			loop_def.loop_idx++;
+			if (loop_def.loop_idx >= loop_def.loop_end) {
+				// finished
+				break;
+			}
+		}
+		std::list<std::thread> threads;
+		for (auto &context : contexts) {
+			threads.emplace_back(ParallelExecuteLoop, &context);
+		}
+		for (auto &thread : threads) {
+			thread.join();
+		}
+		for (auto &context : contexts) {
+			if (!context.success) {
+				if (!context.error_message.empty()) {
+					FAIL(context.error_message);
+				} else {
+					FAIL_LINE(context.error_file, context.error_line, 0);
+				}
+			}
 		}
 	} else {
-		if (!StringUtil::EndsWith(sql_query, ";")) {
-			query += ";";
+		bool finished = false;
+		while (!finished && !runner.finished_processing_file) {
+			// execute the current iteration of the loop
+			context.running_loops.push_back(loop_def);
+			for (auto &statement : loop_commands) {
+				statement->Execute(context);
+			}
+			context.running_loops.pop_back();
+			loop_def.loop_idx++;
+			if (loop_def.loop_idx >= loop_def.loop_end) {
+				// finished
+				break;
+			}
 		}
-		query += "\n";
 	}
-	fprintf(stderr, "%s", query.c_str());
 }
 
-void Query::ExecuteInternal() {
-	auto connection = CommandConnection();
+void Query::ExecuteInternal(ExecuteContext &context) const {
+	auto connection = CommandConnection(context);
 
-	if (runner.output_result_mode || runner.debug_mode) {
-		TestResultHelper::PrintLineSep();
-		TestResultHelper::PrintHeader("File " + file_name + ":" + to_string(query_line) + ")");
-		TestResultHelper::PrintSQL(sql_query);
-		TestResultHelper::PrintLineSep();
+	{
+		SQLLogicTestLogger logger(context, *this);
+		if (runner.output_result_mode || runner.debug_mode) {
+			logger.PrintLineSep();
+			logger.PrintFileHeader();
+			logger.PrintSQLFormatted();
+			logger.PrintLineSep();
+		}
+
+		if (runner.output_sql) {
+			logger.PrintSQL();
+			return;
+		}
 	}
+	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
-	if (runner.output_sql) {
-		OutputSQLQuery(sql_query);
-		return;
+	TestResultHelper helper(runner);
+	if (!helper.CheckQueryResult(*this, context, move(result))) {
+		if (context.is_parallel) {
+			runner.finished_processing_file = true;
+			context.error_file = file_name;
+			context.error_line = query_line;
+		} else {
+			FAIL_LINE(file_name, query_line, 0);
+		}
 	}
-	auto result = ExecuteQuery(connection, file_name, query_line, sql_query);
-
-	TestResultHelper helper(*this, *result);
-	helper.CheckQueryResult(move(result));
 }
 
-void RestartCommand::ExecuteInternal() {
+void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
+	if (context.is_parallel) {
+		throw std::runtime_error("Cannot restart database in parallel");
+	}
 	// We save the main connection configurations to pass it to the new connection
 	runner.config->options = runner.con->context->db->config.options;
 	auto client_config = runner.con->context->config;
@@ -192,25 +281,36 @@ void RestartCommand::ExecuteInternal() {
 	runner.con->context->client_data->prepared_statements = move(prepared_statements);
 }
 
-void Statement::ExecuteInternal() {
-	auto connection = CommandConnection();
+void Statement::ExecuteInternal(ExecuteContext &context) const {
+	auto connection = CommandConnection(context);
 
-	if (runner.output_result_mode || runner.debug_mode) {
-		TestResultHelper::PrintLineSep();
-		TestResultHelper::PrintHeader("File " + file_name + ":" + to_string(query_line) + ")");
-		TestResultHelper::PrintSQL(sql_query);
-		TestResultHelper::PrintLineSep();
+	{
+		SQLLogicTestLogger logger(context, *this);
+		if (runner.output_result_mode || runner.debug_mode) {
+			logger.PrintLineSep();
+			logger.PrintFileHeader();
+			logger.PrintSQLFormatted();
+			logger.PrintLineSep();
+		}
+
+		query_break(query_line);
+		if (runner.output_sql) {
+			logger.PrintSQL();
+			return;
+		}
 	}
+	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
-	query_break(query_line);
-	if (runner.output_sql) {
-		OutputSQLQuery(sql_query);
-		return;
+	TestResultHelper helper(runner);
+	if (!helper.CheckStatementResult(*this, context, move(result))) {
+		if (context.is_parallel) {
+			runner.finished_processing_file = true;
+			context.error_file = file_name;
+			context.error_line = query_line;
+		} else {
+			FAIL_LINE(file_name, query_line, 0);
+		}
 	}
-	auto result = ExecuteQuery(connection, file_name, query_line, sql_query);
-
-	TestResultHelper helper(*this, *result);
-	helper.CheckStatementResult();
 }
 
 } // namespace duckdb
