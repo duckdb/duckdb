@@ -226,9 +226,10 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 	state.storage->row_groups->FinalizeAppend(transaction_data, state.append_state);
 }
 
-void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection) {
+void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection, TableStatistics &stats) {
 	auto storage = GetOrCreateStorage(table);
 	storage->row_groups->MergeStorage(collection);
+	storage->stats.MergeStats(stats);
 }
 
 LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {

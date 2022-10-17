@@ -100,7 +100,7 @@ public:
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
-	void LocalMerge(DataTable *table, RowGroupCollection &collection);
+	void LocalMerge(DataTable *table, RowGroupCollection &collection, TableStatistics &stats);
 
 	//! Delete a set of rows from the local storage
 	idx_t Delete(DataTable *table, Vector &row_ids, idx_t count);

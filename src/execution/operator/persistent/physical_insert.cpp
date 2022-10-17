@@ -166,7 +166,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 		lock_guard<mutex> lock(gstate.lock);
 		auto table = gstate.table;
-		table->storage->LocalMerge(context.client, *lstate.local_collection);
+		table->storage->LocalMerge(context.client, *lstate.local_collection, lstate.local_statistics);
 	}
 }
 
