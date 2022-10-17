@@ -312,14 +312,16 @@ bool RadixPartitionedHashTable::ForceSingleHT(GlobalSinkState &state) const {
 class RadixHTGlobalSourceState : public GlobalSourceState {
 public:
 	explicit RadixHTGlobalSourceState(Allocator &allocator, const RadixPartitionedHashTable &ht)
-	    : ht_index(0), ht_scan_position(0), finished(false) {
+	    : ht_index(0), initialized(false), finished(false) {
 	}
 
 	//! Heavy handed for now.
 	mutex lock;
 	//! The current position to scan the HT for output tuples
-	idx_t ht_index;
-	idx_t ht_scan_position;
+	atomic<idx_t> ht_index;
+	//! The set of aggregate scan states
+	unique_ptr<AggregateHTScanState[]> ht_scan_states;
+	atomic<bool> initialized;
 	atomic<bool> finished;
 };
 
@@ -405,23 +407,42 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 	idx_t elements_found = 0;
 
 	lstate.scan_chunk.Reset();
+	if (!state.initialized) {
+		lock_guard<mutex> l(state.lock);
+		if (!state.ht_scan_states) {
+			state.ht_scan_states =
+			    unique_ptr<AggregateHTScanState[]>(new AggregateHTScanState[gstate.finalized_hts.size()]);
+		} else {
+			D_ASSERT(state.initialized);
+		}
+		state.initialized = true;
+	}
 	while (true) {
-		lock_guard<mutex> glock(state.lock);
-		if (state.ht_index == gstate.finalized_hts.size()) {
+		idx_t ht_index = state.ht_index;
+		if (ht_index >= gstate.finalized_hts.size()) {
 			state.finished = true;
 			return;
 		}
 		D_ASSERT(gstate.finalized_hts[state.ht_index]);
-		elements_found = gstate.finalized_hts[state.ht_index]->Scan(state.ht_scan_position, lstate.scan_chunk);
-
+		elements_found =
+		    gstate.finalized_hts[state.ht_index]->Scan(state.ht_scan_states[state.ht_index], lstate.scan_chunk);
 		if (elements_found > 0) {
 			break;
 		}
-		if (!gstate.multi_scan) {
-			gstate.finalized_hts[state.ht_index].reset();
+		// move to the next hash table
+		ht_index++;
+		{
+			lock_guard<mutex> l(state.lock);
+			if (ht_index < state.ht_index) {
+				// other threads have already completed the table we wanted to work on
+				// move forwards to the current table instead
+				ht_index = state.ht_index;
+			} else if (ht_index > state.ht_index) {
+				// we have not yet worked on the table
+				// move the global index forwards
+				state.ht_index = ht_index;
+			}
 		}
-		state.ht_index++;
-		state.ht_scan_position = 0;
 	}
 
 	// compute the final projection list

@@ -219,7 +219,8 @@ public:
 	}
 
 	const PhysicalHashAggregate &op;
-	std::atomic<size_t> state_index;
+	mutex lock;
+	atomic<idx_t> state_index;
 
 	vector<unique_ptr<GlobalSourceState>> radix_states;
 
@@ -235,8 +236,7 @@ public:
 		for (size_t sidx = 0; sidx < op.radix_tables.size(); ++sidx) {
 			count += op.radix_tables[sidx].Size(*ht_state.radix_states[sidx]);
 		}
-
-		return (count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+		return MaxValue<idx_t>(1, count / RowGroup::ROW_GROUP_SIZE);
 	}
 };
 
@@ -265,11 +265,29 @@ void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
 	auto &ht_state = (HashAggregateGlobalState &)*sink_state;
 	auto &gstate = (PhysicalHashAggregateGlobalSourceState &)gstate_p;
 	auto &lstate = (PhysicalHashAggregateLocalSourceState &)lstate_p;
-	for (size_t sidx = gstate.state_index; sidx < radix_tables.size(); sidx = ++gstate.state_index) {
-		radix_tables[sidx].GetData(context, chunk, *ht_state.radix_states[sidx], *gstate.radix_states[sidx],
-		                           *lstate.radix_states[sidx]);
+	while (true) {
+		idx_t radix_idx = gstate.state_index;
+		if (radix_idx >= radix_tables.size()) {
+			break;
+		}
+		radix_tables[radix_idx].GetData(context, chunk, *ht_state.radix_states[radix_idx],
+		                                *gstate.radix_states[radix_idx], *lstate.radix_states[radix_idx]);
 		if (chunk.size() != 0) {
 			return;
+		}
+		// move to the next table
+		radix_idx++;
+		{
+			lock_guard<mutex> l(gstate.lock);
+			if (radix_idx < gstate.state_index) {
+				// other threads have already completed the table we wanted to work on
+				// move forwards to the current table instead
+				radix_idx = gstate.state_index;
+			} else if (radix_idx > gstate.state_index) {
+				// we have not yet worked on the table
+				// move the global index forwards
+				gstate.state_index = radix_idx;
+			}
 		}
 	}
 }
