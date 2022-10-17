@@ -608,6 +608,29 @@ class TestResolveObjectColumns(object):
         assert(conversion == reference)
         assert(isinstance(conversion[0][0], float))
 
+    def test_numeric_decimal_castfail(self):
+        duckdb_conn = duckdb.connect()
+        data = [
+            Decimal("""
+            9.1e300
+            """)
+        ]
+        decimals = pd.DataFrame(
+            data ={
+                "0": data
+            }
+        )
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                    (123)
+            ) tbl(a);
+        """
+        duckdb_conn.execute(reference_query)
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        with pytest.raises(duckdb.ConversionException):
+            conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
+
     def test_numeric_decimal_double_mixed(self):
         duckdb_conn = duckdb.connect()
         data = [
@@ -618,6 +641,7 @@ class TestResolveObjectColumns(object):
             Decimal("1234543534535213412342342.2345456"),
             Decimal("123456789123456789123456789123456789123456789123456789123456789123456789"),
             Decimal("1232354.000000000000000000000000000035"),
+			Decimal("123.5e300")
         ]
         decimals = pd.DataFrame(
             data={
@@ -633,7 +657,8 @@ class TestResolveObjectColumns(object):
                     (0.00000000000000000000000000000000000000000000000000000000000123456789),
                     (1234543534535213412342342.2345456),
                     (123456789123456789123456789123456789123456789123456789123456789123456789),
-                    (1232354.000000000000000000000000000035)
+                    (1232354.000000000000000000000000000035),
+					(123.5e300)
             ) tbl(a);
         """
         duckdb_conn.execute(reference_query)

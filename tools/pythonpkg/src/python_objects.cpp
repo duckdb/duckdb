@@ -24,10 +24,10 @@ PyTimeDelta::PyTimeDelta(py::handle &obj) {
 interval_t PyTimeDelta::ToInterval() {
 	interval_t interval;
 
-	//! Timedelta stores any amount of seconds lower than a day only
+	// Timedelta stores any amount of seconds lower than a day only
 	D_ASSERT(seconds < Interval::SECS_PER_DAY);
 
-	//! Convert overflow of days to months
+	// Convert overflow of days to months
 	interval.months = days / Interval::DAYS_PER_MONTH;
 	days -= interval.months * Interval::DAYS_PER_MONTH;
 
@@ -65,8 +65,8 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 			width += scale;
 		}
 		if (scale > width) {
-			//! The value starts with 1 or more zeros, which are optimized out of the 'digits' array
-			//! 0.001 - width=1, exponent=-3
+			// The value starts with 1 or more zeros, which are optimized out of the 'digits' array
+			// 0.001 - width=1, exponent=-3
 			width = scale + 1; // DECIMAL(4,3) - add 1 for the non-decimal values
 		}
 		if (width > Decimal::MAX_WIDTH_INT128) {
@@ -142,15 +142,14 @@ Value PyDecimalCastSwitch(PyDecimal &decimal, uint8_t width, uint8_t scale) {
 	return OP::template Operation<int16_t>(decimal.signed_value, decimal.digits, width, scale);
 }
 
-//! Wont fit in a DECIMAL, fall back to DOUBLE
+// Wont fit in a DECIMAL, fall back to DOUBLE
 static Value CastToDouble(py::handle &obj) {
 	string converted = py::str(obj);
 	string_t decimal_string(converted);
 	double double_val;
 	bool try_cast = TryCast::Operation<string_t, double>(decimal_string, double_val, true);
-	if (!try_cast) {
-		DoubleConversionFail(converted);
-	}
+	(void)try_cast;
+	D_ASSERT(try_cast);
 	return Value::DOUBLE(double_val);
 }
 
@@ -164,8 +163,8 @@ Value PyDecimal::ToDuckValue() {
 		uint8_t scale = exponent_value;
 		D_ASSERT(WidthFitsInDecimal(width));
 		if (scale > width) {
-			//! Values like '0.001'
-			width = scale + 1; //! leave 1 room for the non-decimal value
+			// Values like '0.001'
+			width = scale + 1; // leave 1 room for the non-decimal value
 		}
 		if (!WidthFitsInDecimal(width)) {
 			return CastToDouble(obj);
@@ -207,7 +206,7 @@ Value PyTime::ToDuckValue() {
 	auto duckdb_time = this->ToDuckTime();
 	if (this->timezone_obj != Py_None) {
 		auto utc_offset = PyTimezone::GetUTCOffset(this->timezone_obj);
-		//! 'Add' requires a date_t for overflows
+		// 'Add' requires a date_t for overflows
 		date_t ignored_date;
 		utc_offset = Interval::Invert(utc_offset);
 		duckdb_time = Interval::Add(duckdb_time, utc_offset, ignored_date);
@@ -244,7 +243,7 @@ Value PyDateTime::ToDuckValue() {
 	auto timestamp = ToTimestamp();
 	if (tzone_obj != Py_None) {
 		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
-		//! Need to subtract the UTC offset, so we invert the interval
+		// Need to subtract the UTC offset, so we invert the interval
 		utc_offset = Interval::Invert(utc_offset);
 		timestamp = Interval::Add(timestamp, utc_offset);
 	}
