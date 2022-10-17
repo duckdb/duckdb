@@ -5,6 +5,7 @@ add_library_unity(
   map_extract.cpp
   map_from_entries.cpp
   map_entries.cpp
+  map_values.cpp
   cardinality.cpp)
 
 set(ALL_OBJECT_FILES
