@@ -1,0 +1,104 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_alter_type.test_slow
+# description: Test optimistic write with alter type in transaction-local storage
+# group: [optimistic_write]
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_alter_type.db
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT i FROM range(1000000) tbl(i)
+
+statement ok
+ALTER TABLE test ALTER a SET TYPE BIGINT USING a+1
+
+statement ok
+COMMIT
+
+query I
+SELECT SUM(a) FROM test
+----
+500000500000
+
+restart
+
+query I
+SELECT SUM(a) FROM test
+----
+500000500000
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT i FROM range(1000000) t(i)
+
+statement ok
+ALTER TABLE test ALTER a SET TYPE VARCHAR USING concat('hello', a)
+
+statement ok
+ROLLBACK
+
+query I
+SELECT SUM(a) FROM test
+----
+500000500000
+
+# temp table
+require skip_reload
+
+# ensure the alter type does not lead to leaking blocks
+statement ok
+CREATE TEMPORARY TABLE blocks AS SELECT total_blocks FROM pragma_database_size();
+
+loop i 0 10
+
+statement ok
+DROP TABLE test
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT i FROM range(1000000) tbl(i)
+
+statement ok
+ALTER TABLE test ALTER a SET TYPE BIGINT USING a+1
+
+statement ok
+COMMIT
+
+query I
+SELECT SUM(a) FROM test
+----
+500000500000
+
+statement ok
+CREATE TEMPORARY TABLE new_blocks AS SELECT total_blocks FROM pragma_database_size();
+
+query I
+SELECT new_blocks.total_blocks - blocks.total_blocks < 20 FROM blocks, new_blocks
+----
+true
+
+statement ok
+DROP TABLE blocks;
+
+statement ok
+CREATE TEMPORARY TABLE blocks AS SELECT * FROM new_blocks;
+
+statement ok
+DROP TABLE new_blocks
+
+statement ok
+CHECKPOINT;
+
+endloop

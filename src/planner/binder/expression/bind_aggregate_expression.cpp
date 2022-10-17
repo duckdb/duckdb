@@ -2,6 +2,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 

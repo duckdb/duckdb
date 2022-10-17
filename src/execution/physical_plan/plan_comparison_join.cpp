@@ -24,7 +24,8 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 		return false;
 	}
 	auto table = bind_data->table;
-	if (transaction.storage.Find(table->storage.get())) {
+	auto &local_storage = LocalStorage::Get(transaction);
+	if (local_storage.Find(table->storage.get())) {
 		// transaction local appends: skip index join
 		return false;
 	}

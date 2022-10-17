@@ -1,0 +1,32 @@
+# name: test/sql/storage/test_index_checkpoint.test
+# description: Verify that database footprint remains within expected bounds when writing index data.
+# group: [storage]
+
+require skip_reload
+
+load __TEST_DIR__/test_index_checkpoint.db
+
+# Ensure we do not checkpoint early (which would throw off the total_blocks stat)
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+create table t2 (i integer,  uid varchar);
+create unique index iu on t2(uid);
+
+statement ok
+insert into t2 select i.range as i, gen_random_uuid() as uid FROM range(10000) as i;
+
+statement ok
+CHECKPOINT;
+
+statement ok
+select * from pragma_database_size();
+
+# A prior version of index checkpoint caused index data to be written twice,
+# which results in a database size of 2.8MB (11 blocks). When the data is not
+# duplicated, the size is just under 1.8MB (7 blocks). This verifies we do not regress.
+query I
+select total_blocks * block_size < 2100000 from pragma_database_size();
+----
+true
