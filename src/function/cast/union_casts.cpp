@@ -23,7 +23,7 @@ static void CopyValidity(Vector &source, Vector &result, idx_t count) {
 struct UnionMemberBoundCastData : public BoundCastData {
 	UnionMemberBoundCastData(union_tag_t member_idx, string name, LogicalType type, int64_t cost,
 	                         BoundCastInfo member_cast_info)
-	    : tag(member_idx), name(name), type(type), cost(cost), member_cast_info(move(member_cast_info)) {
+	    : tag(member_idx), name(move(name)), type(move(type)), cost(cost), member_cast_info(move(member_cast_info)) {
 	}
 
 	union_tag_t tag;
@@ -53,13 +53,12 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 		auto member_cast_cost = input.function_set.ImplicitCastCost(source, member_type);
 		if (member_cast_cost != -1) {
 			auto member_cast_info = input.GetCastFunction(source, member_type);
-			candidates.push_back(UnionMemberBoundCastData(member_idx, member_name, member_type, member_cast_cost,
-			                                              move(member_cast_info)));
+			candidates.emplace_back(member_idx, member_name, member_type, member_cast_cost, move(member_cast_info));
 		}
 	};
 
 	// no possible casts found!
-	if (candidates.size() == 0) {
+	if (candidates.empty()) {
 		auto message = StringUtil::Format(
 		    "Type %s can't be cast as %s. %s can't be implicitly cast to any of the union member types: ",
 		    source.ToString(), target.ToString(), source.ToString());
@@ -104,7 +103,7 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 
 	// otherwise, return the selected cast
 	return make_unique<UnionMemberBoundCastData>(move(selected_cast));
-};
+}
 
 static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::UNION);
@@ -122,7 +121,7 @@ static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParamet
 	CopyValidity(source, result, count);
 
 	return true;
-};
+}
 
 BoundCastInfo DefaultCasts::ImplicitToUnionCast(BindCastInput &input, const LogicalType &source,
                                                 const LogicalType &target) {
@@ -146,13 +145,12 @@ unique_ptr<BoundCastData> BindFromUnionCast(BindCastInput &input, const LogicalT
 		auto member_cast_cost = input.function_set.ImplicitCastCost(member_type, target);
 		if (member_cast_cost != -1) {
 			auto member_cast_info = input.GetCastFunction(member_type, target);
-			candidates.push_back(UnionMemberBoundCastData(member_idx, member_name, member_type, member_cast_cost,
-			                                              move(member_cast_info)));
+			candidates.emplace_back(member_idx, member_name, member_type, member_cast_cost, move(member_cast_info));
 		}
 	};
 
 	// no possible casts found!
-	if (candidates.size() == 0) {
+	if (candidates.empty()) {
 		auto message = StringUtil::Format(
 		    "Type %s can't be cast as %s. %s can't be implicitly cast from any of the union member types: ",
 		    target.ToString(), source.ToString(), target.ToString());
@@ -197,7 +195,7 @@ unique_ptr<BoundCastData> BindFromUnionCast(BindCastInput &input, const LogicalT
 
 	// otherwise, return the selected cast
 	return make_unique<UnionMemberBoundCastData>(move(selected_cast));
-};
+}
 
 static bool FromUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::UNION);
@@ -239,7 +237,7 @@ struct UnionToUnionBoundCastData : public BoundCastData {
 	LogicalType target_type;
 
 	UnionToUnionBoundCastData(vector<idx_t> tag_map, vector<BoundCastInfo> member_casts, LogicalType target_type)
-	    : tag_map(move(tag_map)), member_casts(move(member_casts)), target_type(target_type) {
+	    : tag_map(move(tag_map)), member_casts(move(member_casts)), target_type(move(target_type)) {
 	}
 
 public:

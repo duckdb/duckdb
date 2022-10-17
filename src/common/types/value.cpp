@@ -551,14 +551,16 @@ Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) 
 	Value result;
 	result.is_null = false;
 	// add the tag to the front of the struct
-	result.struct_value.push_back(Value::TINYINT(tag));
+	result.struct_value.emplace_back(Value::TINYINT(tag));
 	for (idx_t i = 0; i < members.size(); i++) {
-		if (i == tag) {
-			result.struct_value.push_back(move(value));
+		if (i != tag) {
+			result.struct_value.emplace_back(members[i].second);
 		} else {
-			result.struct_value.push_back(Value(members[i].second));
+			result.struct_value.emplace_back(nullptr);
 		}
 	}
+	result.struct_value[tag + 1] = move(value);
+
 	result.type_ = LogicalType::UNION(move(members));
 	return result;
 }
