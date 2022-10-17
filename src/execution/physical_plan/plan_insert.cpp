@@ -21,6 +21,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		// not for tables with indexes currently
 		parallel_streaming_insert = false;
 	}
+	if (op.return_chunk) {
+		// not supported for RETURNING
+		parallel_streaming_insert = false;
+	}
 
 	dependencies.insert(op.table);
 	auto insert = make_unique<PhysicalInsert>(op.types, op.table, op.column_index_map, move(op.bound_defaults),

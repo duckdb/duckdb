@@ -134,6 +134,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 		}
 		gstate.insert_count += chunk.size();
 	} else {
+		D_ASSERT(!return_chunk);
 		// parallel append
 		if (!lstate.local_collection) {
 			auto &table_info = table->storage->info;
