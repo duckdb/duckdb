@@ -99,6 +99,9 @@ public:
 	static void Append(LocalAppendState &state, DataChunk &chunk);
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
+	//! Merge a row group collection into the transaction-local storage
+	void LocalMerge(DataTable *table, RowGroupCollection &collection);
+
 	//! Delete a set of rows from the local storage
 	idx_t Delete(DataTable *table, Vector &row_ids, idx_t count);
 	//! Update a set of rows in the local storage
@@ -133,6 +136,7 @@ public:
 
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
+	LocalTableStorage *GetOrCreateStorage(DataTable *table);
 
 private:
 	Transaction &transaction;

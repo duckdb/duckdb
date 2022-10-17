@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -32,9 +33,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.schema, create_info.table, true);
 	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
 	if ((!existing_entry || replace) && !op.children.empty()) {
-		D_ASSERT(op.children.size() == 1);
-		auto create = make_unique<PhysicalInsert>(op, op.schema, move(op.info), op.estimated_cardinality);
 		auto plan = CreatePlan(*op.children[0]);
+
+		auto &config = DBConfig::GetConfig(context);
+		bool plan_preserves_order = plan->AllOperatorsPreserveOrder();
+		bool parallel_streaming_insert = !config.options.preserve_insertion_order || !plan_preserves_order;
+
+		D_ASSERT(op.children.size() == 1);
+		auto create = make_unique<PhysicalInsert>(op, op.schema, move(op.info), op.estimated_cardinality,
+		                                          parallel_streaming_insert);
 		create->children.push_back(move(plan));
 		return move(create);
 	} else {

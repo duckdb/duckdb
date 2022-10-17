@@ -8,21 +8,22 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
 
 PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
                                vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
-                               bool return_chunk)
+                               bool return_chunk, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
-      bound_defaults(move(bound_defaults)), return_chunk(return_chunk) {
+      bound_defaults(move(bound_defaults)), return_chunk(return_chunk), parallel(parallel) {
 }
 
 PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info_p,
-                               idx_t estimated_cardinality)
+                               idx_t estimated_cardinality, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::INSERT, op.types, estimated_cardinality), insert_table(nullptr),
-      return_chunk(false), schema(schema), info(move(info_p)) {
+      return_chunk(false), schema(schema), info(move(info_p)), parallel(parallel) {
 	auto &create_info = (CreateTableInfo &)*info->base;
 	for (auto &col : create_info.columns) {
 		if (col.Generated()) {
@@ -45,21 +46,24 @@ public:
 	mutex lock;
 	TableCatalogEntry *table;
 	idx_t insert_count;
-	LocalAppendState append_state;
 	bool initialized;
+	LocalAppendState append_state;
 	ColumnDataCollection return_collection;
 };
 
 class InsertLocalState : public LocalSinkState {
 public:
-	InsertLocalState(Allocator &allocator, const vector<LogicalType> &types,
+	InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                 const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(allocator, bound_defaults) {
-		insert_chunk.Initialize(allocator, types);
+	    : default_executor(Allocator::Get(context), bound_defaults) {
+		insert_chunk.Initialize(Allocator::Get(context), types);
 	}
 
 	DataChunk insert_chunk;
 	ExpressionExecutor default_executor;
+	TableAppendState local_append_state;
+	unique_ptr<RowGroupCollection> local_collection;
+	TableStatistics local_statistics;
 };
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
@@ -77,19 +81,19 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<InsertLocalState>(Allocator::Get(context.client), insert_types, bound_defaults);
+	return make_unique<InsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
-SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                     DataChunk &chunk) const {
 	auto &gstate = (InsertGlobalState &)state;
-	auto &istate = (InsertLocalState &)lstate;
+	auto &lstate = (InsertLocalState &)lstate_p;
 
 	chunk.Flatten();
-	istate.default_executor.SetChunk(chunk);
+	lstate.default_executor.SetChunk(chunk);
 
-	istate.insert_chunk.Reset();
-	istate.insert_chunk.SetCardinality(chunk);
+	lstate.insert_chunk.Reset();
+	lstate.insert_chunk.SetCardinality(chunk);
 
 	auto table = gstate.table;
 	if (!column_index_map.empty()) {
@@ -102,48 +106,73 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			auto storage_idx = col.StorageOid();
 			if (column_index_map[i] == DConstants::INVALID_INDEX) {
 				// insert default value
-				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[storage_idx]);
+				lstate.default_executor.ExecuteExpression(i, lstate.insert_chunk.data[storage_idx]);
 			} else {
 				// get value from child chunk
 				D_ASSERT((idx_t)column_index_map[i] < chunk.ColumnCount());
-				D_ASSERT(istate.insert_chunk.data[storage_idx].GetType() == chunk.data[column_index_map[i]].GetType());
-				istate.insert_chunk.data[storage_idx].Reference(chunk.data[column_index_map[i]]);
+				D_ASSERT(lstate.insert_chunk.data[storage_idx].GetType() == chunk.data[column_index_map[i]].GetType());
+				lstate.insert_chunk.data[storage_idx].Reference(chunk.data[column_index_map[i]]);
 			}
 		}
 	} else {
 		// no columns specified, just append directly
-		for (idx_t i = 0; i < istate.insert_chunk.ColumnCount(); i++) {
-			D_ASSERT(istate.insert_chunk.data[i].GetType() == chunk.data[i].GetType());
-			istate.insert_chunk.data[i].Reference(chunk.data[i]);
+		for (idx_t i = 0; i < lstate.insert_chunk.ColumnCount(); i++) {
+			D_ASSERT(lstate.insert_chunk.data[i].GetType() == chunk.data[i].GetType());
+			lstate.insert_chunk.data[i].Reference(chunk.data[i]);
 		}
 	}
 
-	lock_guard<mutex> glock(gstate.lock);
-	if (!gstate.initialized) {
-		table->storage->InitializeLocalAppend(gstate.append_state, context.client);
-		gstate.initialized = true;
-	}
-	table->storage->LocalAppend(gstate.append_state, *table, context.client, istate.insert_chunk);
+	if (!parallel) {
+		if (!gstate.initialized) {
+			table->storage->InitializeLocalAppend(gstate.append_state, context.client);
+			gstate.initialized = true;
+		}
+		table->storage->LocalAppend(gstate.append_state, *table, context.client, lstate.insert_chunk);
 
-	if (return_chunk) {
-		gstate.return_collection.Append(istate.insert_chunk);
+		if (return_chunk) {
+			gstate.return_collection.Append(lstate.insert_chunk);
+		}
+		gstate.insert_count += chunk.size();
+	} else {
+		// parallel append
+		if (!lstate.local_collection) {
+			auto &table_info = table->storage->info;
+			auto &block_manager = TableIOManager::Get(*table->storage).GetBlockManagerForRowData();
+			lstate.local_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, 0);
+			lstate.local_collection->InitializeAppend(lstate.local_append_state);
+			lstate.local_statistics.InitializeEmpty(insert_types);
+		}
+		lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state, lstate.local_statistics);
 	}
 
-	gstate.insert_count += chunk.size();
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
-	auto &state = (InsertLocalState &)lstate;
+void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
+	auto &gstate = (InsertGlobalState &)gstate_p;
+	auto &lstate = (InsertLocalState &)lstate_p;
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
+	context.thread.profiler.Flush(this, &lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
+
+	if (parallel) {
+		if (!lstate.local_collection) {
+			return;
+		}
+		// parallel append: finalize the append
+		TransactionData tdata(0, 0);
+		lstate.local_collection->FinalizeAppend(tdata, lstate.local_append_state);
+
+		lock_guard<mutex> lock(gstate.lock);
+		auto table = gstate.table;
+		table->storage->LocalMerge(context.client, *lstate.local_collection);
+	}
 }
 
 SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           GlobalSinkState &state) const {
 	auto &gstate = (InsertGlobalState &)state;
-	if (gstate.initialized) {
+	if (!parallel && gstate.initialized) {
 		auto table = gstate.table;
 		table->storage->FinalizeLocalAppend(gstate.append_state);
 	}

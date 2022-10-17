@@ -509,6 +509,11 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
+void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
+	auto &local_storage = LocalStorage::Get(context);
+	local_storage.LocalMerge(this, collection);
+}
+
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	LocalAppendState append_state;
 	table.storage->InitializeLocalAppend(append_state, context);

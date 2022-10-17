@@ -150,14 +150,7 @@ bool LocalStorage::NextParallelScan(ClientContext &context, DataTable *table, Pa
 }
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable *table) {
-	auto entry = table_storage.find(table);
-	if (entry == table_storage.end()) {
-		auto new_storage = make_shared<LocalTableStorage>(*table);
-		state.storage = new_storage.get();
-		table_storage.insert(make_pair(table, move(new_storage)));
-	} else {
-		state.storage = entry->second.get();
-	}
+	state.storage = GetOrCreateStorage(table);
 	state.storage->row_groups->InitializeAppend(state.append_state);
 }
 
@@ -233,9 +226,26 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 	state.storage->row_groups->FinalizeAppend(transaction_data, state.append_state);
 }
 
+void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection) {
+	auto storage = GetOrCreateStorage(table);
+	storage->row_groups->MergeStorage(collection);
+}
+
 LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
 	auto entry = table_storage.find(table);
 	return entry == table_storage.end() ? nullptr : entry->second.get();
+}
+
+LocalTableStorage *LocalStorage::GetOrCreateStorage(DataTable *table) {
+	auto entry = table_storage.find(table);
+	if (entry == table_storage.end()) {
+		auto new_storage = make_shared<LocalTableStorage>(*table);
+		auto storage = new_storage.get();
+		table_storage.insert(make_pair(table, move(new_storage)));
+		return storage;
+	} else {
+		return entry->second.get();
+	}
 }
 
 idx_t LocalStorage::EstimatedSize() {

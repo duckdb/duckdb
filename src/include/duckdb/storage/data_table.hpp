@@ -94,6 +94,8 @@ public:
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 	//! Append a column data collection to the transaction-local storage of this table
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection);
+	//! Merge a row group collection into the transaction-local storage
+	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
 
 	//! Delete the entries with the specified row identifier from the table
 	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);

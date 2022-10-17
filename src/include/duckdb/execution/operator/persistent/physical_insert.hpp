@@ -19,10 +19,11 @@ class PhysicalInsert : public PhysicalOperator {
 public:
 	//! INSERT INTO
 	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
-	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, bool return_chunk);
+	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, bool return_chunk,
+	               bool parallel);
 	//! CREATE TABLE AS
 	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info,
-	               idx_t estimated_cardinality);
+	               idx_t estimated_cardinality, bool parallel);
 
 	//! The map from insert column index to table column index
 	vector<idx_t> column_index_map;
@@ -38,6 +39,9 @@ public:
 	SchemaCatalogEntry *schema;
 	//! Create table info, in case of CREATE TABLE AS
 	unique_ptr<BoundCreateTableInfo> info;
+	//! Whether or not the INSERT can be executed in parallel
+	//! This insert is not order preserving if executed in parallel
+	bool parallel;
 
 public:
 	// Source interface
@@ -60,7 +64,7 @@ public:
 	}
 
 	bool ParallelSink() const override {
-		return false;
+		return parallel;
 	}
 };
 
