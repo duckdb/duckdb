@@ -224,7 +224,6 @@ public:
 	vector<unique_ptr<GlobalSourceState>> radix_states;
 
 public:
-#if 0
 	idx_t MaxThreads() override {
 		// If there are no tables, we only need one thread.
 		if (op.radix_tables.empty()) {
@@ -237,9 +236,8 @@ public:
 			count += op.radix_tables[sidx].Size(*ht_state.radix_states[sidx]);
 		}
 
-		return (count + STANDARD_VECTOR_SIZE - 1 ) / STANDARD_VECTOR_SIZE;
+		return (count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 	}
-#endif
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(ClientContext &context) const {
