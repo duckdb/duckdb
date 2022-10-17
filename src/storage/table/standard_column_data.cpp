@@ -159,8 +159,9 @@ void StandardColumnData::CommitDropColumn() {
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
-	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, RowGroupWriter &writer)
-	    : ColumnCheckpointState(row_group, column_data, writer) {
+	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
+	                              PartialBlockManager &partial_block_manager)
+	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -172,21 +173,27 @@ public:
 		return move(global_stats);
 	}
 
-	void WriteDataPointers() override {
-		ColumnCheckpointState::WriteDataPointers();
-		validity_state->WriteDataPointers();
+	void WriteDataPointers(RowGroupWriter &writer) override {
+		ColumnCheckpointState::WriteDataPointers(writer);
+		validity_state->WriteDataPointers(writer);
+	}
+
+	void GetBlockIds(unordered_set<block_id_t> &result) override {
+		ColumnCheckpointState::GetBlockIds(result);
+		validity_state->GetBlockIds(result);
 	}
 };
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowGroup &row_group,
-                                                                            RowGroupWriter &writer) {
-	return make_unique<StandardColumnCheckpointState>(row_group, *this, writer);
+unique_ptr<ColumnCheckpointState>
+StandardColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager) {
+	return make_unique<StandardColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
+unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,
+                                                                 PartialBlockManager &partial_block_manager,
                                                                  ColumnCheckpointInfo &checkpoint_info) {
-	auto validity_state = validity.Checkpoint(row_group, writer, checkpoint_info);
-	auto base_state = ColumnData::Checkpoint(row_group, writer, checkpoint_info);
+	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto &checkpoint_state = (StandardColumnCheckpointState &)*base_state;
 	checkpoint_state.validity_state = move(validity_state);
 	return base_state;

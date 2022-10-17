@@ -22,14 +22,21 @@ class BlockManager;
 class ColumnData;
 class DatabaseInstance;
 class DataTable;
+class PartialBlockManager;
 struct DataTableInfo;
 class ExpressionExecutor;
 class RowGroupWriter;
 class UpdateSegment;
 class Vector;
+struct ColumnCheckpointState;
 struct RowGroupPointer;
 struct TransactionData;
 struct VersionNode;
+
+struct RowGroupWriteData {
+	vector<unique_ptr<ColumnCheckpointState>> states;
+	vector<unique_ptr<BaseStatistics>> statistics;
+};
 
 class RowGroup : public SegmentBase {
 public:
@@ -123,6 +130,7 @@ public:
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(TransactionData transaction, DataTable *table, row_t *row_ids, idx_t count);
 
+	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
 	RowGroupPointer Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);

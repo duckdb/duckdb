@@ -22,6 +22,7 @@ void TestHelperLastError(DataChunk &args, ExpressionState &state, Vector &result
 }
 
 unique_ptr<string> TestHelperExtension::last_error = nullptr;
+mutex TestHelperExtension::last_error_lock;
 
 void TestHelperExtension::Load(DuckDB &db) {
 	CreateScalarFunctionInfo hello_info(ScalarFunction("test_helper_hello", {}, LogicalType::VARCHAR, TestHelperHello));
@@ -38,10 +39,12 @@ void TestHelperExtension::Load(DuckDB &db) {
 }
 
 void TestHelperExtension::SetLastError(const string &error) {
+	lock_guard<mutex> l(last_error_lock);
 	last_error = make_unique<string>(error);
 }
 
 void TestHelperExtension::ClearLastError() {
+	lock_guard<mutex> l(last_error_lock);
 	last_error.reset();
 }
 

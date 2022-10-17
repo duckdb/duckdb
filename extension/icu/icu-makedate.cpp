@@ -7,6 +7,8 @@
 #include "include/icu-datefunc.hpp"
 #include "include/icu-datetrunc.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {

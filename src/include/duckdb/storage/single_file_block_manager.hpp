@@ -47,13 +47,9 @@ public:
 	void WriteHeader(DatabaseHeader header) override;
 
 	//! Returns the number of total blocks
-	idx_t TotalBlocks() override {
-		return max_block;
-	}
+	idx_t TotalBlocks() override;
 	//! Returns the number of free blocks
-	idx_t FreeBlocks() override {
-		return free_list.size();
-	}
+	idx_t FreeBlocks() override;
 
 private:
 	//! Load the free list from the file
@@ -94,5 +90,7 @@ private:
 	bool read_only;
 	//! Whether or not to use Direct IO to read the blocks
 	bool use_direct_io;
+	//! Lock for performing various operations in the single file block manager
+	mutex block_lock;
 };
 } // namespace duckdb
