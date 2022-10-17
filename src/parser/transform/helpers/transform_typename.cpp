@@ -1,6 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -25,7 +25,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			throw ParserException("Struct needs a name and entries");
 		}
 		child_list_t<LogicalType> children;
-		unordered_set<string> name_collision_set;
+		case_insensitive_set_t name_collision_set;
 
 		for (auto node = type_name->typmods->head; node; node = node->next) {
 			auto &type_val = *((duckdb_libpgquery::PGList *)node->data.ptr_value);
@@ -72,7 +72,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			throw ParserException("Union needs at least one member");
 		}
 		child_list_t<LogicalType> children;
-		unordered_set<string> name_collision_set;
+		case_insensitive_set_t name_collision_set;
 
 		for (auto node = type_name->typmods->head; node; node = node->next) {
 			auto &type_val = *((duckdb_libpgquery::PGList *)node->data.ptr_value);
