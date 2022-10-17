@@ -269,7 +269,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		return child_result;
 	}
 
-	if (context.pipeline->GetSink()->RequiresBatchIndex() && context.pipeline->GetSource()->SupportsBatchIndex()) {
+	if (context.pipeline->GetSink() && context.pipeline->GetSink()->RequiresBatchIndex() && context.pipeline->GetSource()->SupportsBatchIndex()) {
 		return child_result;
 	}
 

@@ -77,7 +77,7 @@ void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 }
 
 bool PipelineExecutor::IsFinished() {
-	return finished_processing_idx >= 0;
+	return finished_processing_idx >= 0 && !cached_flush_chunk;
 }
 
 OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t initial_idx) {
@@ -127,31 +127,49 @@ DataChunk *PipelineExecutor::GetIntermediateChunk(unique_ptr<DataChunk> &tmp_chu
 	}
 }
 
+// TODO: ALSO WHY DO EXCEPTIONS get slurped up by calling code?
+// TODO clean up
+// Pull a single DataChunk from the pipeline by flushing any operators holding cached output
 void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
-
 	idx_t op_idx = start_idx;
 	while(op_idx < pipeline.operators.size()) {
 		if (pipeline.operators[op_idx]->RequiresFinalExecute()) {
 			unique_ptr<DataChunk> tmp_chunk;
-			auto &curr_chunk = *GetIntermediateChunk(tmp_chunk, op_idx);
-			auto finalize_result = pipeline.operators[op_idx]->FinalExecute(context, curr_chunk, *pipeline.operators[op_idx]->op_state,
-			                                         *intermediate_states[op_idx]);
-			auto execute_result = Execute(curr_chunk, result, op_idx + 1);
+			DataChunk* curr_chunk;
+			OperatorFinalizeResultType finalize_result;
 
-			// TODO: handle this edge case where a chunk resulting from a flush is pushed into an operator that
-			//		wants to see it again, we need to cache it somehow
-			if (execute_result == OperatorResultType::HAVE_MORE_OUTPUT) {
-				throw NotImplementedException("Pulling from a Cached operator into an operator that emits HAVE_MORE_OUTPUT doesn't currently work");
-			}
-
-			if (finalize_result == OperatorFinalizeResultType::FINISHED) {
-				FinishProcessing(op_idx);
-				op_idx++;
+			if (cached_flush_chunk) {
+				// Still have a cached chunk from a last pull
+				curr_chunk = cached_flush_chunk.get();
+				finalize_result = cached_flush_chunk_result;
 			} else {
-				throw NotImplementedException("HEH?");
+				// Flush the current operator
+				curr_chunk = GetIntermediateChunk(tmp_chunk, op_idx);
+				finalize_result = pipeline.operators[op_idx]->FinalExecute(context, *curr_chunk, *pipeline.operators[op_idx]->op_state,
+				                                                                *intermediate_states[op_idx]);
 			}
 
+			auto execute_result = Execute(*curr_chunk, result, op_idx + 1);
+
+			if (execute_result == OperatorResultType::HAVE_MORE_OUTPUT) {
+				if (tmp_chunk) {
+					// We have a tmp_chunk that we want to continue Executing with
+					cached_flush_chunk = move(tmp_chunk);
+				} else if (!cached_flush_chunk) {
+					cached_flush_chunk = make_unique<DataChunk>();
+					cached_flush_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[op_idx]->GetTypes());
+					curr_chunk->Copy(*cached_flush_chunk);
+				}
+				cached_flush_chunk_result = finalize_result;
+			} else {
+				cached_flush_chunk.reset();
+				if (finalize_result == OperatorFinalizeResultType::FINISHED) {
+					FinishProcessing(op_idx);
+					op_idx++;
+				}
+				// TODO add test case for flush with multiple output chunks
+			}
 
 			// Some non-empty result was pulled from some caching operator, we're done for this pull
 			if (result.size() > 0) {
@@ -163,6 +181,7 @@ void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 	}
 }
 
+// Push all remaining cached operator output through the pipeline
 void PipelineExecutor::FlushCachingOperatorsPush() {
 	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
 	for (idx_t op_idx = start_idx; op_idx < pipeline.operators.size(); op_idx++) {
@@ -221,14 +240,21 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 		D_ASSERT(!pipeline.sink);
 		auto &source_chunk = pipeline.operators.empty() ? result : *intermediate_chunks[0];
 		while (result.size() == 0) {
+			if (source_empty) {
+				FlushCachingOperatorsPull(result);
+				break;
+			}
+
 			if (in_process_operators.empty()) {
 				source_chunk.Reset();
 				FetchFromSource(source_chunk);
+
 				if (source_chunk.size() == 0) {
-					FlushCachingOperatorsPull(result);
-					break;
+					source_empty = true;
+					continue;
 				}
 			}
+
 			if (!pipeline.operators.empty()) {
 				auto state = Execute(source_chunk, result);
 				if (state == OperatorResultType::FINISHED) {

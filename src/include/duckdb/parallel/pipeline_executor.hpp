@@ -22,8 +22,6 @@ class Executor;
 
 //! The Pipeline class represents an execution pipeline
 class PipelineExecutor {
-	static constexpr const idx_t CACHE_THRESHOLD = 64;
-
 public:
 	PipelineExecutor(ClientContext &context, Pipeline &pipeline);
 
@@ -70,6 +68,13 @@ private:
 
 	//! The final chunk used for moving data into the sink
 	DataChunk final_chunk;
+
+	//! In some edge cases in streaming results, we need to cache
+	unique_ptr<DataChunk> cached_flush_chunk;
+	OperatorFinalizeResultType cached_flush_chunk_result;
+	//! Source has been exhausted
+	bool source_empty = false;
+
 
 	//! The operators that are not yet finished executing and have data remaining
 	//! If the stack of in_process_operators is empty, we fetch from the source instead
