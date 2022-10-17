@@ -92,6 +92,39 @@ InterpretedBenchmark::InterpretedBenchmark(string full_path)
 	replacement_mapping["BENCHMARK_DIR"] = BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY;
 }
 
+void InterpretedBenchmark::ReadResultFromFile(BenchmarkFileReader &reader, const string &file) {
+	// read the results from the file
+	DuckDB db;
+	Connection con(db);
+	auto result =
+	    con.Query("SELECT * FROM read_csv_auto('" + file + "', delim='|', header=1, nullstr='NULL', all_varchar=1)");
+	result_column_count = result->ColumnCount();
+	for (auto &row : *result) {
+		vector<string> row_values;
+		for (idx_t col_idx = 0; col_idx < result->ColumnCount(); col_idx++) {
+			row_values.push_back(row.GetValue<string>(col_idx));
+		}
+		result_values.push_back(move(row_values));
+	}
+}
+
+void InterpretedBenchmark::ReadResultFromReader(BenchmarkFileReader &reader, const string &header) {
+	result_column_count = header.size();
+	// keep reading results until eof
+	string line;
+	while (reader.ReadLine(line)) {
+		if (line.empty()) {
+			break;
+		}
+		auto result_splits = StringUtil::Split(line, "\t");
+		if ((int64_t)result_splits.size() != result_column_count) {
+			throw std::runtime_error(reader.FormatException("expected " + std::to_string(result_splits.size()) +
+			                                                " values but got " + std::to_string(result_column_count)));
+		}
+		result_values.push_back(move(result_splits));
+	}
+}
+
 void InterpretedBenchmark::LoadBenchmark() {
 	if (is_loaded) {
 		return;
@@ -191,13 +224,16 @@ void InterpretedBenchmark::LoadBenchmark() {
 				throw std::runtime_error(
 				    reader.FormatException("result_query must be followed by a column count (e.g. result III)"));
 			}
+			bool is_file = false;
 			for (idx_t i = 0; i < splits[1].size(); i++) {
 				if (splits[1][i] != 'i') {
-					throw std::runtime_error(
-					    reader.FormatException("result_query must be followed by a column count (e.g. result III)"));
+					is_file = true;
+					break;
 				}
 			}
-			result_column_count = splits[1].size();
+			if (is_file) {
+				ReadResultFromFile(reader, splits[1]);
+			}
 			// read the actual query
 			bool found_end = false;
 			string sql;
@@ -213,18 +249,8 @@ void InterpretedBenchmark::LoadBenchmark() {
 				throw std::runtime_error(reader.FormatException(
 				    "result_query must be followed by a query and a result (separated by ----)"));
 			}
-			// read the expected result
-			while (reader.ReadLine(line)) {
-				if (line.empty()) {
-					break;
-				}
-				auto result_splits = StringUtil::Split(line, "\t");
-				if ((int64_t)result_splits.size() != result_column_count) {
-					throw std::runtime_error(reader.FormatException("expected " + std::to_string(result_splits.size()) +
-					                                                " values but got " +
-					                                                std::to_string(result_column_count)));
-				}
-				result_values.push_back(move(result_splits));
+			if (!is_file) {
+				ReadResultFromReader(reader, splits[1]);
 			}
 		} else if (splits[0] == "result") {
 			if (result_column_count > 0) {
@@ -244,41 +270,17 @@ void InterpretedBenchmark::LoadBenchmark() {
 				}
 			}
 			if (is_file) {
-				// read the results from the file
-				DuckDB db;
-				Connection con(db);
-				auto result = con.Query("SELECT * FROM read_csv_auto('" + splits[1] +
-				                        "', delim='|', header=1, nullstr='NULL', all_varchar=1)");
-				result_column_count = result->ColumnCount();
-				for (auto &row : *result) {
-					vector<string> row_values;
-					for (idx_t col_idx = 0; col_idx < result->ColumnCount(); col_idx++) {
-						row_values.push_back(row.GetValue<string>(col_idx));
-					}
-					result_values.push_back(move(row_values));
-				}
+				ReadResultFromFile(reader, splits[1]);
 
 				// read the main file until we encounter an empty line
+				string line;
 				while (reader.ReadLine(line)) {
 					if (line.empty()) {
 						break;
 					}
 				}
 			} else {
-				result_column_count = splits[1].size();
-				// keep reading results until eof
-				while (reader.ReadLine(line)) {
-					if (line.empty()) {
-						break;
-					}
-					auto result_splits = StringUtil::Split(line, "\t");
-					if ((int64_t)result_splits.size() != result_column_count) {
-						throw std::runtime_error(
-						    reader.FormatException("expected " + std::to_string(result_splits.size()) +
-						                           " values but got " + std::to_string(result_column_count)));
-					}
-					result_values.push_back(move(result_splits));
-				}
+				ReadResultFromReader(reader, splits[1]);
 			}
 		} else if (splits[0] == "template") {
 			// template: update the path to read
@@ -436,9 +438,10 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, Materialize
 			} catch (...) {
 			}
 			if (!Value::ValuesAreEqual(*state.con.context, verify_val, value)) {
-				return StringUtil::Format(
-				    "Error in result on row %lld column %lld: expected value \"%s\" but got value \"%s\"", r + 1, c + 1,
-				    verify_val.ToString().c_str(), value.ToString().c_str());
+				return StringUtil::Format("Error in result on row %lld column %lld: expected value \"%s\" but got "
+				                          "value \"%s\"\nObtained result:\n%s",
+				                          r + 1, c + 1, verify_val.ToString().c_str(), value.ToString().c_str(),
+				                          result.ToString().c_str());
 			}
 		}
 	}
@@ -456,7 +459,31 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	}
 	if (!result_query.empty()) {
 		// we are running a result query
-		auto new_result = state.con.Query(result_query);
+		// store the current result in a table called "__answer"
+		auto &collection = state.result->Collection();
+		auto &names = state.result->names;
+		auto &types = state.result->types;
+		// first create the (empty) table
+		string create_tbl = "CREATE OR REPLACE TABLE __answer(";
+		for (idx_t i = 0; i < names.size(); i++) {
+			if (i > 0) {
+				create_tbl += ", ";
+			}
+			create_tbl += KeywordHelper::WriteOptionallyQuoted(names[i]);
+			create_tbl += " ";
+			create_tbl += types[i].ToString();
+		}
+		create_tbl += ")";
+		auto new_result = state.con.Query(create_tbl);
+		if (new_result->HasError()) {
+			return new_result->GetError();
+		}
+		// now append the result to the answer table
+		auto table_info = state.con.TableInfo("__answer");
+		state.con.Append(*table_info, collection);
+
+		// finally run the result query and verify the result of that query
+		new_result = state.con.Query(result_query);
 		if (new_result->HasError()) {
 			return new_result->GetError();
 		}

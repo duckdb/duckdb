@@ -12,6 +12,7 @@
 #include <unordered_set>
 
 namespace duckdb {
+class BenchmarkFileReader;
 class MaterializedQueryResult;
 
 //! Interpreted benchmarks read the benchmark from a file
@@ -53,6 +54,9 @@ public:
 
 private:
 	string VerifyInternal(BenchmarkState *state_p, MaterializedQueryResult &result);
+
+	void ReadResultFromFile(BenchmarkFileReader &reader, const string &file);
+	void ReadResultFromReader(BenchmarkFileReader &reader, const string &file);
 
 private:
 	bool is_loaded = false;

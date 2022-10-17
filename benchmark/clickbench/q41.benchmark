@@ -5,3 +5,4 @@
 template benchmark/clickbench/clickbench-noresult.benchmark.in
 QUERY_NUMBER=41
 QUERY_NUMBER_PADDED=41
+RESULT_QUERY=SELECT * FROM __answer ORDER BY PageViews DESC, URLHash OFFSET 3 LIMIT 6
