@@ -410,12 +410,21 @@ if(UNIX AND NOT APPLE)
   set(OS_NAME "linux") # sorry BSD
 endif()
 
-if (OS_NAME STREQUAL "linux" AND CMAKE_SIZEOF_VOID_P EQUAL 8) # this is apparently state-of-the-art in checking bitness
-  # linux allocator sucks, always build jemalloc
-  set(BUILD_JEMALLOC_EXTENSION 1)
-elseif(CMAKE_SIZEOF_VOID_P EQUAL 4 AND BUILD_JEMALLOC_EXTENSION EQUAL 1)
-  # have to throw an error because this will crash at runtime
-  message(FATAL_ERROR "The jemalloc extension is not supported for 32bit CPU architecture")
+if(OS_NAME STREQUAL "linux")
+  if(CMAKE_SIZEOF_VOID_P EQUAL 4 OR FORCE_32_BIT)
+    if(BUILD_JEMALLOC_EXTENSION EQUAL 1)
+      # have to throw an error because this will crash at runtime
+      message(FATAL_ERROR "The jemalloc extension is not supported for 32bit CPU architecture")
+    endif()
+  else()
+    # always build jemalloc for 64bit linux
+    set(BUILD_JEMALLOC_EXTENSION 1)
+  endif()
+elseif(OS_NAME STREQUAL "windows")
+  if(BUILD_JEMALLOC_EXTENSION EQUAL 1)
+    # have to throw an error because this will crash at runtime
+    message(FATAL_ERROR "The jemalloc extension is not supported on Windows")
+  endif()
 endif()
 
 
@@ -636,6 +645,11 @@ function(add_extension_dependencies LIBRARY)
 endfunction()
 
 function(link_extension_libraries LIBRARY)
+  # special case for our static-only jemalloc extension
+  if(${BUILD_JEMALLOC_EXTENSION})
+    target_link_libraries(${LIBRARY} jemalloc_extension)
+  endif()
+
   if(${DISABLE_BUILTIN_EXTENSIONS})
     return()
   endif()
@@ -671,10 +685,6 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_JSON_EXTENSION})
     target_link_libraries(${LIBRARY} json_extension)
-  endif()
-
-  if(${BUILD_JEMALLOC_EXTENSION})
-    target_link_libraries(${LIBRARY} jemalloc_extension)
   endif()
 
   if(${BUILD_EXCEL_EXTENSION})
