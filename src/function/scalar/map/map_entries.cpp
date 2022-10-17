@@ -90,4 +90,4 @@ void MapEntriesFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(fun);
 }
 
-}; // namespace duckdb
+} // namespace duckdb
