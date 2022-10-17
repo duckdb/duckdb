@@ -124,7 +124,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 		auto &lambda_column_ref = (ColumnRefExpression &)*base;
 		D_ASSERT(!lambda_column_ref.column_names.empty());
 
-		if (lambda_column_ref.column_names[0].find("0_macro_parameters") != string::npos) {
+		if (lambda_column_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos) {
 			D_ASSERT(lambda_column_ref.column_names.size() == 2);
 			auto lambda_param_name = lambda_column_ref.column_names.back();
 			lambda_column_ref.column_names.clear();
