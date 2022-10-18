@@ -52,7 +52,7 @@ witness_lock_error_impl(const witness_list_t *witnesses,
 	malloc_printf("<jemalloc>: Lock rank order reversal:");
 	witness_print_witnesses(witnesses);
 	malloc_printf(" %s(%u)\n", witness->name, witness->rank);
-	abort();
+	exit();
 }
 witness_lock_error_t *JET_MUTABLE witness_lock_error = witness_lock_error_impl;
 
@@ -60,7 +60,7 @@ static void
 witness_owner_error_impl(const witness_t *witness) {
 	malloc_printf("<jemalloc>: Should own %s(%u)\n", witness->name,
 	    witness->rank);
-	abort();
+	exit();
 }
 witness_owner_error_t *JET_MUTABLE witness_owner_error =
     witness_owner_error_impl;
@@ -69,7 +69,7 @@ static void
 witness_not_owner_error_impl(const witness_t *witness) {
 	malloc_printf("<jemalloc>: Should not own %s(%u)\n", witness->name,
 	    witness->rank);
-	abort();
+	exit();
 }
 witness_not_owner_error_t *JET_MUTABLE witness_not_owner_error =
     witness_not_owner_error_impl;
@@ -81,7 +81,7 @@ witness_depth_error_impl(const witness_list_t *witnesses,
 	    (depth != 1) ?  "s" : "", rank_inclusive);
 	witness_print_witnesses(witnesses);
 	malloc_printf("\n");
-	abort();
+	exit();
 }
 witness_depth_error_t *JET_MUTABLE witness_depth_error =
     witness_depth_error_impl;

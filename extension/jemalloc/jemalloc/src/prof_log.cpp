@@ -452,7 +452,7 @@ prof_log_start(tsdn_t *tsdn, const char *filename) {
 			malloc_write("<jemalloc>: Error in atexit() "
 			    "for logging\n");
 			if (opt_abort) {
-				abort();
+				exit();
 			}
 			ret = true;
 			goto label_done;
@@ -604,7 +604,7 @@ prof_log_emit_metadata(emitter_t *emitter) {
 	uint64_t ns = nstime_ns(&now) - nstime_ns(&log_start_timestamp);
 	emitter_json_kv(emitter, "duration", emitter_type_uint64, &ns);
 
-	char *vers = JEMALLOC_VERSION;
+	const char *vers = JEMALLOC_VERSION;
 	emitter_json_kv(emitter, "version",
 	    emitter_type_string, &vers);
 
@@ -662,7 +662,7 @@ prof_log_stop(tsdn_t *tsdn) {
 		malloc_printf("<jemalloc>: creat() for log file \"%s\" "
 			      " failed with %d\n", log_filename, errno);
 		if (opt_abort) {
-			abort();
+			exit();
 		}
 		return true;
 	}

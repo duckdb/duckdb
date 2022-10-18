@@ -209,7 +209,7 @@ malloc_mutex_postfork_child(tsdn_t *tsdn, malloc_mutex_t *mutex) {
 		malloc_printf("<jemalloc>: Error re-initializing mutex in "
 		    "child\n");
 		if (opt_abort) {
-			abort();
+			exit();
 		}
 	}
 #endif

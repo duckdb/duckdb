@@ -1881,7 +1881,7 @@ stats_print(write_cb_t *write_cb, void *cbopaque, const char *opts) {
 		}
 		malloc_write("<jemalloc>: Failure in mallctl(\"epoch\", "
 		    "...)\n");
-		abort();
+		exit();
 	}
 
 	if (opts != NULL) {

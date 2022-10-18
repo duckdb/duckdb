@@ -27,14 +27,14 @@ namespace duckdb_jemalloc {
 #define assert(e) do {							\
 	if (config_debug && !(e)) {					\
 		malloc_write("<jemalloc>: Failed assertion\n");		\
-		abort();						\
+		exit();						\
 	}								\
 } while (0)
 
 #define not_reached() do {						\
 	if (config_debug) {						\
 		malloc_write("<jemalloc>: Unreachable code reached\n");	\
-		abort();						\
+		exit();						\
 	}								\
 	unreachable();							\
 } while (0)
@@ -42,7 +42,7 @@ namespace duckdb_jemalloc {
 #define not_implemented() do {						\
 	if (config_debug) {						\
 		malloc_write("<jemalloc>: Not implemented\n");		\
-		abort();						\
+		exit();						\
 	}								\
 } while (0)
 

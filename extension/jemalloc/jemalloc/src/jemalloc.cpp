@@ -432,7 +432,7 @@ arena_new_create_background_thread(tsdn_t *tsdn, unsigned ind) {
 		if (background_thread_create(tsdn_tsd(tsdn), ind)) {
 			malloc_printf("<jemalloc>: error in background thread "
 				      "creation for arena %u. Abort.\n", ind);
-			abort();
+			exit();
 		}
 	}
 }
@@ -943,7 +943,7 @@ malloc_abort_invalid_conf(void) {
 	assert(opt_abort_conf);
 	malloc_printf("<jemalloc>: Abort (abort_conf:true) on invalid conf "
 	    "value (see above).\n");
-	abort();
+	exit();
 }
 
 static void
@@ -1825,7 +1825,7 @@ malloc_init_hard_a0_locked() {
 		if (atexit(stats_print_atexit) != 0) {
 			malloc_write("<jemalloc>: Error in atexit()\n");
 			if (opt_abort) {
-				abort();
+				exit();
 			}
 		}
 	}
@@ -1946,7 +1946,7 @@ malloc_init_hard_recursible(void) {
 					malloc_abort_invalid_conf();
 				}
 				if (opt_abort) {
-					abort();
+					exit();
 				}
 			}
 		}
@@ -1960,7 +1960,7 @@ malloc_init_hard_recursible(void) {
 	    jemalloc_postfork_child) != 0) {
 		malloc_write("<jemalloc>: Error in pthread_atfork()\n");
 		if (opt_abort) {
-			abort();
+			exit();
 		}
 		return true;
 	}
@@ -2018,14 +2018,14 @@ malloc_init_narenas(void) {
 			    "available. Setting narenas to %u.\n", opt_narenas ?
 			    opt_narenas : malloc_narenas_default());
 			if (opt_abort) {
-				abort();
+				exit();
 			}
 		} else {
 			if (ncpus >= MALLOCX_ARENA_LIMIT) {
 				malloc_printf("<jemalloc>: narenas w/ percpu"
 				    "arena beyond limit (%d)\n", ncpus);
 				if (opt_abort) {
-					abort();
+					exit();
 				}
 				return true;
 			}
@@ -2037,7 +2037,7 @@ malloc_init_narenas(void) {
 				    "with odd number (%u) of CPUs (no hyper "
 				    "threading?).\n", ncpus);
 				if (opt_abort)
-					abort();
+					exit();
 			}
 			unsigned n = percpu_arena_ind_limit(
 			    percpu_arena_as_initialized(opt_percpu_arena));
@@ -2610,7 +2610,7 @@ imalloc_body(static_opts_t *sopts, dynamic_opts_t *dopts, tsd_t *tsd) {
 label_oom:
 	if (unlikely(sopts->slow) && config_xmalloc && unlikely(opt_xmalloc)) {
 		malloc_write(sopts->oom_string);
-		abort();
+		exit();
 	}
 
 	if (sopts->slow) {
@@ -2637,7 +2637,7 @@ label_oom:
 label_invalid_alignment:
 	if (config_xmalloc && unlikely(opt_xmalloc)) {
 		malloc_write(sopts->invalid_alignment_string);
-		abort();
+		exit();
 	}
 
 	if (sopts->set_errno_on_error) {
@@ -2662,7 +2662,7 @@ imalloc_init_check(static_opts_t *sopts, dynamic_opts_t *dopts) {
 	if (unlikely(!malloc_initialized()) && unlikely(malloc_init())) {
 		if (config_xmalloc && unlikely(opt_xmalloc)) {
 			malloc_write(sopts->oom_string);
-			abort();
+			exit();
 		}
 		UTRACE(NULL, dopts->num_items * dopts->item_size, NULL);
 		set_errno(ENOMEM);
@@ -3553,7 +3553,7 @@ do_rallocx(void *ptr, size_t size, int flags, bool is_realloc) {
 label_oom:
 	if (config_xmalloc && unlikely(opt_xmalloc)) {
 		malloc_write("<jemalloc>: Error in rallocx(): out of memory\n");
-		abort();
+		exit();
 	}
 	UTRACE(ptr, size, 0);
 	check_entry_exit_locking(tsd_tsdn(tsd));

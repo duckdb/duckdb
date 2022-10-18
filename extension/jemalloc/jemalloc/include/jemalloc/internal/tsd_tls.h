@@ -56,7 +56,7 @@ tsd_set(tsd_t *val) {
 	if (pthread_setspecific(tsd_tsd, (void *)(&tsd_tls)) != 0) {
 		malloc_write("<jemalloc>: Error setting tsd.\n");
 		if (opt_abort) {
-			abort();
+			exit();
 		}
 	}
 }
