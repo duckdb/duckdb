@@ -144,4 +144,14 @@ double Geometry::XPoint(const void *data, size_t size) {
 	return postgis.LWGEOM_x_point(data, size);
 }
 
+GSERIALIZED* Geometry::Centroid(GSERIALIZED *g) {
+	Postgis postgis;
+	return postgis.centroid(g);
+}
+
+GSERIALIZED* Geometry::Centroid(GSERIALIZED *g, bool use_spheroid) {
+	Postgis postgis;
+	return postgis.geography_centroid(g, use_spheroid);
+}
+
 } // namespace duckdb

@@ -61,5 +61,9 @@ public:
 	static GSERIALIZED *FromWKB(const char *text, size_t byte_size, int srid);
 
 	static double XPoint(const void *data, size_t size);
+
+	static GSERIALIZED *Centroid(GSERIALIZED *g);
+
+	static GSERIALIZED *Centroid(GSERIALIZED *g, bool use_spheroid);
 };
 } // namespace duckdb

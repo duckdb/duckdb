@@ -17,6 +17,8 @@ set(GEO_EXTENSION_FILES
     postgis/lwgeom_functions_basic.cpp
     postgis/geography_measurement.cpp
     postgis/lwgeom_ogc.cpp
+    postgis/lwgeom_geos.cpp
+    postgis/geography_centroid.cpp
     liblwgeom/lwin_wkt.cpp
     liblwgeom/lwin_wkb.cpp
     liblwgeom/lwutil.cpp

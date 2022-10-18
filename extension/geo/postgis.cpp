@@ -4,6 +4,8 @@
 #include "postgis/lwgeom_functions_basic.hpp"
 #include "postgis/lwgeom_inout.hpp"
 #include "postgis/lwgeom_ogc.hpp"
+#include "postgis/lwgeom_geos.hpp"
+#include "postgis/geography_centroid.hpp"
 
 namespace duckdb {
 Postgis::Postgis() {
@@ -70,6 +72,14 @@ GSERIALIZED *Postgis::LWGEOM_from_WKB(const char *bytea_wkb, size_t byte_size, i
 
 double Postgis::LWGEOM_x_point(const void *data, size_t size) {
 	return duckdb::LWGEOM_x_point(data, size);
+}
+
+GSERIALIZED *Postgis::centroid(GSERIALIZED *geom) {
+	return duckdb::centroid(geom);
+}
+
+GSERIALIZED *Postgis::geography_centroid(GSERIALIZED *geom, bool use_spheroid) {
+	return duckdb::geography_centroid(geom, use_spheroid);
 }
 
 } // namespace duckdb

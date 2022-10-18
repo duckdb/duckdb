@@ -15,6 +15,7 @@ GSERIALIZED *LWGEOM_makepoint(double x, double y) {
 	point = lwpoint_make2d(SRID_UNKNOWN, x, y);
 
 	result = geometry_serialize((LWGEOM *)point);
+	lwgeom_free((LWGEOM *)point);
 
 	return result;
 }
@@ -26,6 +27,7 @@ GSERIALIZED *LWGEOM_makepoint(double x, double y, double z) {
 	point = lwpoint_make3dz(SRID_UNKNOWN, x, y, z);
 
 	result = geometry_serialize((LWGEOM *)point);
+	lwgeom_free((LWGEOM *)point);
 
 	return result;
 }

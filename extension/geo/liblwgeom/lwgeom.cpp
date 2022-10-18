@@ -29,6 +29,12 @@ void lwgeom_set_srid(LWGEOM *geom, int32_t srid) {
 	// }
 }
 
+int32_t lwgeom_get_srid(const LWGEOM *geom) {
+	if (!geom)
+		return SRID_UNKNOWN;
+	return geom->srid;
+}
+
 int lwgeom_needs_bbox(const LWGEOM *geom) {
 	assert(geom);
 	if (geom->type == POINTTYPE) {

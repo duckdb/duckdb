@@ -30,5 +30,7 @@ public:
 	GSERIALIZED *LWGEOM_from_text(char *text, int srid = 0);
 	GSERIALIZED *LWGEOM_from_WKB(const char *bytea_wkb, size_t byte_size, int srid = 0);
 	double LWGEOM_x_point(const void *data, size_t size);
+	GSERIALIZED *centroid(GSERIALIZED *geom);
+	GSERIALIZED *geography_centroid(GSERIALIZED *geom, bool use_spheroid);
 };
 } // namespace duckdb
