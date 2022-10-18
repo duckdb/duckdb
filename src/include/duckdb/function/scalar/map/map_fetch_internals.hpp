@@ -56,6 +56,9 @@ void MapFetchInternals(DataChunk &args, ExpressionState &state, Vector &result) 
 		auto list_size = ListVector::GetListSize(map_internals);
 		ListVector::SetListSize(result, list_size);
 	}
+	if (map.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		result.Slice(*map_data.sel, count);
+	}
 }
 
 } // namespace duckdb
