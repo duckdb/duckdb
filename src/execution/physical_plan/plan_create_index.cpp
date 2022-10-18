@@ -46,7 +46,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	}
 
 	auto null_filter = make_unique<PhysicalFilter>(move(filter_types), move(filter_select_list), STANDARD_VECTOR_SIZE);
-	null_filter->types.push_back(LogicalType::ROW_TYPE);
+	null_filter->types.emplace_back(LogicalType::ROW_TYPE);
 	null_filter->children.push_back(move(table_scan));
 
 	// actual physical create index operator
