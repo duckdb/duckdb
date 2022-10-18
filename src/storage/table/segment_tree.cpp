@@ -65,7 +65,10 @@ SegmentBase *SegmentTree::GetSegment(idx_t row_number) {
 	return GetSegment(l, row_number);
 }
 
-idx_t SegmentTree::GetSegmentIndex(SegmentLock &, idx_t row_number) {
+bool SegmentTree::TryGetSegmentIndex(SegmentLock &, idx_t row_number, idx_t &result) {
+	if (nodes.empty()) {
+		return false;
+	}
 	D_ASSERT(!nodes.empty());
 	D_ASSERT(row_number >= nodes[0].row_start);
 	D_ASSERT(row_number < nodes.back().row_start + nodes.back().node->count);
@@ -82,8 +85,17 @@ idx_t SegmentTree::GetSegmentIndex(SegmentLock &, idx_t row_number) {
 		} else if (row_number >= entry.row_start + entry.node->count) {
 			lower = index + 1;
 		} else {
-			return index;
+			result = index;
+			return true;
 		}
+	}
+	return false;
+}
+
+idx_t SegmentTree::GetSegmentIndex(SegmentLock &l, idx_t row_number) {
+	idx_t segment_index;
+	if (TryGetSegmentIndex(l, row_number, segment_index)) {
+		return segment_index;
 	}
 	string error;
 	error = StringUtil::Format("Attempting to find row number \"%lld\" in %lld nodes\n", row_number, nodes.size());

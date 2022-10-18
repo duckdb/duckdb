@@ -159,7 +159,16 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 	idx_t count = 0;
 	for (idx_t i = 0; i < fetch_count; i++) {
 		auto row_id = row_ids[i];
-		auto row_group = (RowGroup *)row_groups->GetSegment(row_id);
+		RowGroup *row_group;
+		{
+			idx_t segment_index;
+			auto l = row_groups->Lock();
+			if (!row_groups->TryGetSegmentIndex(l, row_id, segment_index)) {
+				// in parallel append scenarios it is possible for the row_id
+				continue;
+			}
+			row_group = (RowGroup *)row_groups->GetSegmentByIndex(l, segment_index);
+		}
 		if (!row_group->Fetch(transaction, row_id - row_group->start)) {
 			continue;
 		}
