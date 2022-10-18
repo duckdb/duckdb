@@ -79,7 +79,6 @@ GSERIALIZED *LWGEOM_in(char *input) {
 		if (!lwgeom) {
 			return NULL;
 		}
-		LWPOINT *point = (LWPOINT *)lwgeom;
 		if (lwgeom_needs_bbox(lwgeom))
 			lwgeom_add_bbox(lwgeom);
 		ret = geometry_serialize(lwgeom);
