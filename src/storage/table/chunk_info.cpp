@@ -180,9 +180,6 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 			// tuple was already deleted by another transaction
 			throw TransactionException("Conflict on tuple deletion!");
 		}
-		if (inserted[rows[i]] >= TRANSACTION_ID_START) {
-			throw TransactionException("Deleting non-committed tuples is not supported (for now...)");
-		}
 		// after verifying that there are no conflicts we mark the tuple as deleted
 		deleted[rows[i]] = transaction_id;
 		rows[deleted_tuples] = rows[i];

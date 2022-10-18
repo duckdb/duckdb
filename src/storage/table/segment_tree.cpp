@@ -13,7 +13,6 @@ bool SegmentTree::IsEmpty(SegmentLock &) {
 }
 
 SegmentBase *SegmentTree::GetRootSegment(SegmentLock &l) {
-	Verify(l);
 	return nodes.empty() ? nullptr : nodes[0].node.get();
 }
 
@@ -49,7 +48,6 @@ SegmentBase *SegmentTree::GetLastSegment(SegmentLock &l) {
 	if (nodes.empty()) {
 		return nullptr;
 	}
-	Verify(l);
 	return nodes.back().node.get();
 }
 
