@@ -18,10 +18,10 @@ namespace duckdb {
 #endif
 
 static int CircTreePIP(const CIRC_NODE *tree1, const GSERIALIZED *g1, const POINT4D *in_point) {
-	int tree1_type = gserialized_get_type(g1);
-	GBOX gbox1;
-	GEOGRAPHIC_POINT in_gpoint;
-	POINT3D in_point3d;
+	// int tree1_type = gserialized_get_type(g1);
+	// GBOX gbox1;
+	// GEOGRAPHIC_POINT in_gpoint;
+	// POINT3D in_point3d;
 
 	// Need to do with postgis
 
