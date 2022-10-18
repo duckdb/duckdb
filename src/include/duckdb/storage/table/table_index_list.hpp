@@ -42,6 +42,8 @@ public:
 	//! Serialize all indexes owned by this table, returns a vector of block info of all indexes
 	vector<BlockPointer> SerializeIndexes(duckdb::MetaBlockWriter &writer);
 
+	vector<column_t> GetRequiredColumns();
+
 private:
 	//! Indexes associated with the current table
 	mutex indexes_lock;

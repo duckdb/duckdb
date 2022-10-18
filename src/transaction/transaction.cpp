@@ -11,6 +11,7 @@
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
@@ -29,11 +30,19 @@ Transaction::Transaction(weak_ptr<ClientContext> context_p, transaction_t start_
                          timestamp_t start_timestamp, idx_t catalog_version)
     : context(move(context_p)), start_time(start_time), transaction_id(transaction_id), commit_id(0),
       highest_active_query(0), active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp),
-      catalog_version(catalog_version), storage(*this), is_invalidated(false), undo_buffer(context.lock()) {
+      catalog_version(catalog_version), is_invalidated(false), undo_buffer(context.lock()),
+      storage(make_unique<LocalStorage>(*this)) {
+}
+
+Transaction::~Transaction() {
 }
 
 Transaction &Transaction::GetTransaction(ClientContext &context) {
 	return context.ActiveTransaction();
+}
+
+LocalStorage &Transaction::GetLocalStorage() {
+	return *storage;
 }
 
 void Transaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, idx_t extra_data_size) {
@@ -83,12 +92,12 @@ UpdateInfo *Transaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 }
 
 bool Transaction::ChangesMade() {
-	return undo_buffer.ChangesMade() || storage.ChangesMade();
+	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
 
 bool Transaction::AutomaticCheckpoint(DatabaseInstance &db) {
 	auto &storage_manager = StorageManager::GetStorageManager(db);
-	return storage_manager.AutomaticCheckpoint(storage.EstimatedSize() + undo_buffer.EstimatedSize());
+	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + undo_buffer.EstimatedSize());
 }
 
 string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool checkpoint) noexcept {
@@ -104,7 +113,7 @@ string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool c
 	LocalStorage::CommitState commit_state;
 	auto storage_commit_state = storage_manager.GenStorageCommitState(*this, checkpoint);
 	try {
-		storage.Commit(commit_state, *this);
+		storage->Commit(commit_state, *this);
 		undo_buffer.Commit(iterator_state, log, commit_id);
 		if (log) {
 			// commit any sequences that were used to the WAL
@@ -118,6 +127,22 @@ string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool c
 		undo_buffer.RevertCommit(iterator_state, transaction_id);
 		return ex.what();
 	}
+}
+
+void Transaction::Rollback() noexcept {
+	storage->Rollback();
+	undo_buffer.Rollback();
+}
+
+void Transaction::Cleanup() {
+	undo_buffer.Cleanup();
+}
+
+void Transaction::Invalidate() {
+	is_invalidated = true;
+}
+bool Transaction::IsInvalidated() {
+	return is_invalidated;
 }
 
 } // namespace duckdb

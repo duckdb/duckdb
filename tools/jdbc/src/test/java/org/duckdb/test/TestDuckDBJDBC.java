@@ -2389,6 +2389,18 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_dont_leak_database() throws Exception {
+		DuckDBDatabase database;
+
+		try (DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:")) {
+			conn.duplicate().close();
+
+			database = conn.getDatabase();
+		}
+
+		assertTrue(database.isShutdown());
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();

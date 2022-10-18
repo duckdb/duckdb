@@ -1,0 +1,56 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_add_column.test
+# description: Test optimistic write with add column in transaction-local storage
+# group: [optimistic_write]
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_add_col.db
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000)
+
+statement ok
+ALTER TABLE test ADD COLUMN b INTEGER
+
+statement ok
+UPDATE test SET b=a+1
+
+statement ok
+COMMIT
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+499999500000	500000500000
+
+restart
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+499999500000	500000500000
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT i, i FROM range(1000000) t(i)
+
+statement ok
+ALTER TABLE test ADD COLUMN c INTEGER
+
+statement ok
+UPDATE test SET c=a+1
+
+statement ok
+ROLLBACK
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+499999500000	500000500000

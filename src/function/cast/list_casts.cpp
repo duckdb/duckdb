@@ -3,20 +3,8 @@
 
 namespace duckdb {
 
-struct ListBoundCastData : public BoundCastData {
-	explicit ListBoundCastData(BoundCastInfo child_cast) : child_cast_info(move(child_cast)) {
-	}
-
-	BoundCastInfo child_cast_info;
-
-public:
-	unique_ptr<BoundCastData> Copy() const override {
-		return make_unique<ListBoundCastData>(child_cast_info.Copy());
-	}
-};
-
-unique_ptr<BoundCastData> BindListToListCast(BindCastInput &input, const LogicalType &source,
-                                             const LogicalType &target) {
+unique_ptr<BoundCastData> ListBoundCastData::BindListToListCast(BindCastInput &input, const LogicalType &source,
+                                                                const LogicalType &target) {
 	vector<BoundCastInfo> child_cast_info;
 	auto &source_child_type = ListType::GetChildType(source);
 	auto &result_child_type = ListType::GetChildType(target);
@@ -127,11 +115,11 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 BoundCastInfo DefaultCasts::ListCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	switch (target.id()) {
 	case LogicalTypeId::LIST:
-		return BoundCastInfo(ListToListCast, BindListToListCast(input, source, target));
+		return BoundCastInfo(ListToListCast, ListBoundCastData::BindListToListCast(input, source, target));
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::JSON:
-		return BoundCastInfo(ListToVarcharCast,
-		                     BindListToListCast(input, source, LogicalType::LIST(LogicalType::VARCHAR)));
+		return BoundCastInfo(ListToVarcharCast, ListBoundCastData::BindListToListCast(
+		                                            input, source, LogicalType::LIST(LogicalType::VARCHAR)));
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}

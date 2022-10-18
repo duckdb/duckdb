@@ -112,9 +112,97 @@ static BoundCastInfo VectorStringCastNumericSwitch(BindCastInput &input, const L
 	}
 }
 
+bool StringListCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result, ValidityMask &result_mask,
+                        idx_t count, CastParameters &parameters, const SelectionVector *sel) {
+
+	idx_t total_list_size = 0;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = i;
+		if (sel) {
+			idx = sel->get_index(i);
+		}
+		if (!source_mask.RowIsValid(idx)) {
+			continue;
+		}
+		total_list_size += VectorStringifiedListParser::CountParts(source_data[idx]);
+	}
+
+	Vector varchar_vector(LogicalType::VARCHAR, total_list_size);
+
+	ListVector::Reserve(result, total_list_size);
+	ListVector::SetListSize(result, total_list_size);
+
+	auto list_data = ListVector::GetData(result);
+	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
+
+	bool all_converted = true;
+	idx_t total = 0;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = i;
+		if (sel) {
+			idx = sel->get_index(i);
+		}
+		if (!source_mask.RowIsValid(idx)) {
+			result_mask.SetInvalid(i);
+			continue;
+		}
+
+		list_data[i].offset = total;
+		auto valid =
+		    VectorStringifiedListParser::SplitStringifiedList(source_data[idx], child_data, total, varchar_vector);
+		if (!valid) {
+			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
+			              "' can't be cast to the destination type LIST";
+			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, parameters.error_message, all_converted);
+		}
+		list_data[i].length = total - list_data[i].offset; // length is the amount of parts coming from this string
+	}
+	D_ASSERT(total_list_size == total);
+
+	auto &result_child = ListVector::GetEntry(result);
+	auto &cast_data = (ListBoundCastData &)*parameters.cast_data;
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data.get());
+	return cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters) &&
+	       all_converted;
+}
+
+bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
+	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+
+	switch (source.GetVectorType()) {
+	case VectorType::CONSTANT_VECTOR: {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+		auto source_data = ConstantVector::GetData<string_t>(source);
+		auto &source_mask = ConstantVector::Validity(source);
+		auto &result_mask = ConstantVector::Validity(result);
+
+		return StringListCastLoop(source_data, source_mask, result, result_mask, 1, parameters, nullptr);
+	}
+	default: {
+		UnifiedVectorFormat unified_source;
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+
+		source.ToUnifiedFormat(count, unified_source);
+		auto source_sel = unified_source.sel;
+		auto source_data = (string_t *)unified_source.data;
+		auto &source_mask = unified_source.validity;
+		auto &result_mask = FlatVector::Validity(result);
+
+		return StringListCastLoop(source_data, source_mask, result, result_mask, count, parameters, source_sel);
+	}
+	}
+}
+
+BoundCastInfo StringToListCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	// second argument allows for a secondary casting function to be passed in the CastParameters
+	return BoundCastInfo(&StringListCast,
+	                     ListBoundCastData::BindListToListCast(input, LogicalType::LIST(LogicalType::VARCHAR), target));
+}
+
 BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const LogicalType &source,
                                              const LogicalType &target) {
-	// now switch on the target type
 	switch (target.id()) {
 	case LogicalTypeId::DATE:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, date_t, duckdb::TryCastErrorMessage>);
@@ -142,6 +230,8 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::JSON:
 		return &DefaultCasts::ReinterpretCast;
+	case LogicalTypeId::LIST:
+		return StringToListCast(input, source, target);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
 	}

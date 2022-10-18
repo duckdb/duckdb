@@ -237,8 +237,9 @@ void StructColumnData::CommitDropColumn() {
 }
 
 struct StructColumnCheckpointState : public ColumnCheckpointState {
-	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, RowGroupWriter &writer)
-	    : ColumnCheckpointState(row_group, column_data, writer) {
+	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
+	                            PartialBlockManager &partial_block_manager)
+	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
 		global_stats = make_unique<StructStatistics>(column_data.type);
 	}
 
@@ -257,24 +258,33 @@ public:
 		return move(stats);
 	}
 
-	void WriteDataPointers() override {
-		validity_state->WriteDataPointers();
+	void WriteDataPointers(RowGroupWriter &writer) override {
+		validity_state->WriteDataPointers(writer);
 		for (auto &state : child_states) {
-			state->WriteDataPointers();
+			state->WriteDataPointers(writer);
+		}
+	}
+	void GetBlockIds(unordered_set<block_id_t> &result) override {
+		validity_state->GetBlockIds(result);
+		for (auto &state : child_states) {
+			state->GetBlockIds(result);
 		}
 	}
 };
 
-unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer) {
-	return make_unique<StructColumnCheckpointState>(row_group, *this, writer);
+unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGroup &row_group,
+                                                                          PartialBlockManager &partial_block_manager) {
+	return make_unique<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
+unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group,
+                                                               PartialBlockManager &partial_block_manager,
                                                                ColumnCheckpointInfo &checkpoint_info) {
-	auto checkpoint_state = make_unique<StructColumnCheckpointState>(row_group, *this, writer);
-	checkpoint_state->validity_state = validity.Checkpoint(row_group, writer, checkpoint_info);
+	auto checkpoint_state = make_unique<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
+	checkpoint_state->validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	for (auto &sub_column : sub_columns) {
-		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, writer, checkpoint_info));
+		checkpoint_state->child_states.push_back(
+		    sub_column->Checkpoint(row_group, partial_block_manager, checkpoint_info));
 	}
 	return move(checkpoint_state);
 }

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "sqllogic_command.hpp"
 
 namespace duckdb {
@@ -31,11 +32,10 @@ public:
 	bool output_hash_mode = false;
 	bool output_result_mode = false;
 	bool debug_mode = false;
-	bool finished_processing_file = false;
+	atomic<bool> finished_processing_file;
 	int32_t hash_threshold = 0;
 	vector<LoopCommand *> active_loops;
 	unique_ptr<Command> top_level_loop;
-	vector<LoopDefinition *> running_loops;
 	bool original_sqlite_test = false;
 	bool output_sql = false;
 	bool enable_verification = false;
@@ -49,6 +49,7 @@ public:
 	//! The map converting the labels to the hash values
 	unordered_map<string, string> hash_label_map;
 	unordered_map<string, unique_ptr<QueryResult>> result_label_map;
+	mutex log_lock;
 
 public:
 	void ExecuteFile(string script);
@@ -63,7 +64,7 @@ public:
 	void StartLoop(LoopDefinition loop);
 	void EndLoop();
 	static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
-	static string LoopReplacement(string text, const vector<LoopDefinition *> &loops);
+	static string LoopReplacement(string text, const vector<LoopDefinition> &loops);
 	static bool ForEachTokenReplace(const string &parameter, vector<string> &result);
 };
 
