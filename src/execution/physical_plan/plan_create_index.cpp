@@ -28,8 +28,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	dependencies.insert(&op.table);
 	op.info->column_ids.pop_back();
 
-	D_ASSERT(op.info->scan_types.size() - 1 == op.info->names.size());
-	D_ASSERT(op.info->scan_types.size() - 1 == op.info->column_ids.size());
+	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->names.size());
+	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->column_ids.size());
 
 	// filter operator for IS_NOT_NULL on each key column
 	vector<LogicalType> filter_types;
@@ -39,7 +39,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 		filter_types.push_back(op.info->scan_types[i]);
 		auto is_not_null_expr =
 		    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-		auto bound_ref = make_unique<BoundReferenceExpression>(op.info->names[i], op.info->scan_types[i], i);
+		auto bound_ref =
+		    make_unique<BoundReferenceExpression>(op.info->names[op.info->column_ids[i]], op.info->scan_types[i], i);
 		is_not_null_expr->children.push_back(move(bound_ref));
 		filter_select_list.push_back(move(is_not_null_expr));
 	}
