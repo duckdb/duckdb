@@ -1,84 +1,82 @@
-// declare module "duckdb" {
+/**
+ * TypeScript declarations for Node.JS bindings for DuckDb.
+ * See https://duckdb.org/docs/api/nodejs/overview for details
+ * on Node.JS API
+ */
+export class DuckDbError extends Error {
+  errno: number;
+  code: string;
+}
+
+type Callback<T> = (err: DuckDbError | null, res: T) => void;
+
+export type RowData = {
+  [columnName: string]: any;
+};
+
+export type TableData = RowData[];
+
 export class Connection {
-  constructor(db: Database);
+  constructor(db: Database, callback?: Callback<any>);
 
-  all(sql: any, ...args: any[]): any;
+  all(sql: string, ...args: [...any, Callback<TableData>] | []): void;
+  each(sql: string, ...args: [...any, Callback<RowData>] | []): void;
+  exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
-  each(sql: any, ...args: any[]): any;
+  prepare(sql: string, ...args: [...any, Callback<Statement>] | []): Statement;
+  run(sql: string, ...args: [...any, Callback<void>] | []): Statement;
 
-  // Native method; no parameter or return type inference available
-  exec(): any;
+  register(
+    name: string,
+    return_type: string,
+    fun: (...args: any[]) => any
+  ): void;
 
-  // Native method; no parameter or return type inference available
-  prepare(): any;
+  register_bulk(
+    name: string,
+    return_type: string,
+    fun: (...args: any[]) => any
+  ): void;
+  unregister(name: string, callback: Callback<any>): void;
 
-  register(name: any, return_type: any, fun: any): any;
+  stream(sql: any, ...args: any[]): QueryResult;
+}
 
-  // Native method; no parameter or return type inference available
-  register_bulk(): any;
-
-  run(sql: any, ...args: any[]): any;
-
-  stream(sql: any, ...args: any[]): any;
-
-  // Native method; no parameter or return type inference available
-  unregister(): any;
+export class QueryResult {
+  [Symbol.asyncIterator](): AsyncIterator<RowData>;
 }
 
 export class Database {
-  constructor(path: string, cb: any);
+  constructor(path: string, callback?: Callback<any>);
 
-  all(...args: any[]): any;
+  close(callback: Callback<void>): void;
 
-  // Native method; no parameter or return type inference available
-  close(): any;
+  connect(): Connection;
 
-  // Native method; no parameter or return type inference available
-  connect(): any;
+  all(sql: string, ...args: [...any, Callback<TableData>] | []): void;
+  each(sql: string, ...args: [...any, Callback<RowData>] | []): void;
+  exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
-  each(...args: any[]): any;
+  prepare(sql: string, ...args: [...any, Callback<Statement>] | []): Statement;
+  run(sql: string, ...args: [...any, Callback<void>] | []): Statement;
 
-  exec(...args: any[]): any;
-
-  get(): void;
-
-  // Native method; no parameter or return type inference available
-  interrupt(): any;
-
-  // Native method; no parameter or return type inference available
-  parallelize(): any;
-
-  prepare(...args: any[]): any;
-
-  register(...args: any[]): any;
-
-  run(...args: any[]): any;
-
-  // Native method; no parameter or return type inference available
-  serialize(): any;
-
-  unregister(...args: any[]): any;
-
-  // Native method; no parameter or return type inference available
-  wait(): any;
+  register(
+    name: string,
+    return_type: string,
+    fun: (...args: any[]) => any
+  ): void;
+  unregister(name: string, callback: Callback<any>): void;
 }
 
 export class Statement {
   constructor();
 
-  // Native method; no parameter or return type inference available
-  all(): any;
+  all(...args: [...any, Callback<TableData>] | []): void;
+  each(...args: [...any, Callback<RowData>] | []): void;
 
-  // Native method; no parameter or return type inference available
-  each(): any;
+  finalize(callback?: Callback<void>): void;
 
-  // Native method; no parameter or return type inference available
-  finalize(): any;
-
-  get(): void;
-
-  // Native method; no parameter or return type inference available
-  run(): any;
+  run(...args: [...any, Callback<void>] | []): Statement;
 }
 
 export const ERROR: number;
@@ -94,4 +92,3 @@ export const OPEN_READONLY: number;
 export const OPEN_READWRITE: number;
 
 export const OPEN_SHAREDCACHE: number;
-// }

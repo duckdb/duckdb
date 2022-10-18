@@ -1,8 +1,10 @@
 {
   "compilerOptions": {
     "allowJs": false,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "strict": true,
     "outDir": "./dist",
-    "rootDir": "./lib",
     "types": ["node", "mocha"]
   },
   "include": ["test/**/*"],
