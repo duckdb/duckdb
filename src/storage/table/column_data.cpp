@@ -482,6 +482,7 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, v
 void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	D_ASSERT(this->start == parent.start);
+	data.Verify();
 	auto root = data.GetRootSegment();
 	if (root) {
 		D_ASSERT(root != nullptr);

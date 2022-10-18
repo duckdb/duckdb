@@ -9,6 +9,7 @@ SegmentLock SegmentTree::Lock() {
 }
 
 bool SegmentTree::IsEmpty(SegmentLock &) {
+	D_ASSERT(nodes.empty() == (root_node.get() == nullptr));
 	return nodes.empty();
 }
 
@@ -145,6 +146,27 @@ void SegmentTree::Replace(SegmentLock &, SegmentTree &other) {
 void SegmentTree::Replace(SegmentTree &other) {
 	auto l = Lock();
 	Replace(l, other);
+}
+
+void SegmentTree::Verify() {
+#ifdef DEBUG
+	auto l = Lock();
+	auto segment = root_node.get();
+	if (!segment) {
+		D_ASSERT(nodes.empty());
+		return;
+	}
+	idx_t segment_idx = 0;
+	idx_t base_start = segment->start;
+	while(segment) {
+		D_ASSERT(segment_idx < nodes.size());
+		D_ASSERT(nodes[segment_idx].node == segment);
+		D_ASSERT(nodes[segment_idx].row_start == segment->start);
+		D_ASSERT(segment->start == base_start);
+		base_start += segment->count;
+		segment = segment->next.get();
+	}
+#endif
 }
 
 } // namespace duckdb

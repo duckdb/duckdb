@@ -33,13 +33,14 @@ Allocator &RowGroupCollection::GetAllocator() const {
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Initialize(PersistentTableData &data) {
 	D_ASSERT(this->row_start == 0);
+	auto l = row_groups->Lock();
 	for (auto &row_group_pointer : data.row_groups) {
 		auto new_row_group = make_unique<RowGroup>(info->db, block_manager, *info, types, move(row_group_pointer));
 		auto row_group_count = new_row_group->start + new_row_group->count;
 		if (row_group_count > this->total_rows) {
 			this->total_rows = row_group_count;
 		}
-		row_groups->AppendSegment(move(new_row_group));
+		row_groups->AppendSegment(l, move(new_row_group));
 	}
 	stats.Initialize(types, data);
 }
@@ -62,6 +63,7 @@ RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
 void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;
+	row_groups->Verify();
 	for (auto segment = row_groups->GetRootSegment(); segment; segment = segment->next.get()) {
 		auto &row_group = (RowGroup &)*segment;
 		row_group.Verify();
