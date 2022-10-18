@@ -3,41 +3,19 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/function/scalar/map/map_fetch_internals.hpp"
 #include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
 static void MapValuesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	idx_t count = args.size();
-
-	// Get the arguments vector
-	auto &map = args.data[0];
-	auto &map_values = MapVector::GetValues(map);
-
-	UnifiedVectorFormat map_values_data;
-	UnifiedVectorFormat map_data;
-	map_values.ToUnifiedFormat(count, map_values_data);
-	map.ToUnifiedFormat(count, map_data);
-
-	auto &values = ListVector::GetEntry(result);
-
-	D_ASSERT(values.GetType().id() == ListType::GetChildType(map_values.GetType()).id());
-
-	values.Reference(ListVector::GetEntry(map_values));
-
-	// Reference the data for the list_entry_t's
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	FlatVector::SetData(result, map_values_data.data);
-	FlatVector::SetValidity(result, map_data.validity);
-
-	auto list_size = ListVector::GetListSize(map_values);
-	ListVector::SetListSize(result, list_size);
+	auto count = args.size();
+	MapFetchInternals<MapValuesFunctor, ListEntryFunctor>(args, state, result);
 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-
 	result.Verify(count);
 }
 
