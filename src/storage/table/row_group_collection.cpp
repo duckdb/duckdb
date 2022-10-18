@@ -41,6 +41,11 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 		}
 		row_groups->AppendSegment(move(new_row_group));
 	}
+	stats.Initialize(types, data);
+}
+
+void RowGroupCollection::InitializeEmpty() {
+	stats.InitializeEmpty(types);
 }
 
 void RowGroupCollection::AppendRowGroup(idx_t start_row) {
@@ -204,7 +209,7 @@ void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 	InitializeAppend(tdata, state, 0);
 }
 
-bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats) {
+bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
 
@@ -334,6 +339,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
 		index += new_group->count;
 		row_groups->AppendSegment(move(new_group));
 	}
+	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();
 }
 
@@ -371,7 +377,7 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable *table, 
 // Update
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const vector<column_t> &column_ids,
-                                DataChunk &updates, TableStatistics &stats) {
+                                DataChunk &updates) {
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
@@ -443,7 +449,7 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 }
 
 void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
-                                      DataChunk &updates, TableStatistics &stats) {
+                                      DataChunk &updates) {
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {
 		throw NotImplementedException("Cannot update a column-path on transaction local data");
@@ -508,8 +514,7 @@ vector<vector<Value>> RowGroupCollection::GetStorageInfo() {
 //===--------------------------------------------------------------------===//
 // Alter
 //===--------------------------------------------------------------------===//
-shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ColumnDefinition &new_column, Expression *default_value,
-                                                             ColumnStatistics &stats) {
+shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ColumnDefinition &new_column, Expression *default_value) {
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	new_types.push_back(new_column.GetType());
@@ -524,13 +529,16 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ColumnDefinition &n
 		executor.AddExpression(*default_value);
 	}
 
+	result->stats.InitializeAddColumn(stats, new_column.GetType());
+	auto &new_column_stats = result->stats.GetStats(new_column_idx);
+
 	// fill the column with its DEFAULT value, or NULL if none is specified
 	auto new_stats = make_unique<SegmentStatistics>(new_column.GetType());
 	auto current_row_group = (RowGroup *)row_groups->GetRootSegment();
 	while (current_row_group) {
 		auto new_row_group = current_row_group->AddColumn(new_column, executor, default_value, default_vector);
 		// merge in the statistics
-		new_row_group->MergeIntoStatistics(new_column_idx, *stats.stats);
+		new_row_group->MergeIntoStatistics(new_column_idx, *new_column_stats.stats);
 
 		result->row_groups->AppendSegment(move(new_row_group));
 		current_row_group = (RowGroup *)current_row_group->next.get();
@@ -544,6 +552,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	new_types.erase(new_types.begin() + col_idx);
 
 	auto result = make_shared<RowGroupCollection>(info, block_manager, move(new_types), row_start, total_rows.load());
+	result->stats.InitializeRemoveColumn(stats, col_idx);
 
 	auto current_row_group = (RowGroup *)row_groups->GetRootSegment();
 	while (current_row_group) {
@@ -555,13 +564,13 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 }
 
 shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, const LogicalType &target_type,
-                                                             vector<column_t> bound_columns, Expression &cast_expr,
-                                                             ColumnStatistics &stats) {
+                                                             vector<column_t> bound_columns, Expression &cast_expr) {
 	D_ASSERT(changed_idx < types.size());
 	auto new_types = types;
 	new_types[changed_idx] = target_type;
 
 	auto result = make_shared<RowGroupCollection>(info, block_manager, move(new_types), row_start, total_rows.load());
+	result->stats.InitializeAlterType(stats, changed_idx, target_type);
 
 	vector<LogicalType> scan_types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
@@ -583,10 +592,11 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 
 	// now alter the type of the column within all of the row_groups individually
 	auto current_row_group = (RowGroup *)row_groups->GetRootSegment();
+	auto &changed_stats = result->stats.GetStats(changed_idx);
 	while (current_row_group) {
 		auto new_row_group = current_row_group->AlterType(target_type, changed_idx, executor,
 		                                                  scan_state.table_state.row_group_state, scan_chunk);
-		new_row_group->MergeIntoStatistics(changed_idx, *stats.stats);
+		new_row_group->MergeIntoStatistics(changed_idx, *changed_stats.stats);
 		result->row_groups->AppendSegment(move(new_row_group));
 		current_row_group = (RowGroup *)current_row_group->next.get();
 	}
@@ -625,6 +635,19 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 			                          parent.column_definitions[not_null_constraint.index].GetName());
 		}
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Statistics
+//===--------------------------------------------------------------------===//
+unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
+	return stats.CopyStats(column_id);
+}
+
+void RowGroupCollection::SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun) {
+	D_ASSERT(column_id != COLUMN_IDENTIFIER_ROW_ID);
+	auto stats_guard = stats.GetLock();
+	set_fun(*stats.GetStats(column_id).stats);
 }
 
 } // namespace duckdb

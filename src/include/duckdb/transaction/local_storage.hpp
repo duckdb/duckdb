@@ -39,8 +39,6 @@ public:
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The set of unique indexes
 	TableIndexList indexes;
-	//! Stats
-	TableStatistics stats;
 	//! The number of deleted rows
 	idx_t deleted_rows;
 	//! The partial block manager (if we created one yet)
@@ -100,7 +98,7 @@ public:
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
-	void LocalMerge(DataTable *table, RowGroupCollection &collection, TableStatistics &stats);
+	void LocalMerge(DataTable *table, RowGroupCollection &collection);
 
 	//! Delete a set of rows from the local storage
 	idx_t Delete(DataTable *table, Vector &row_ids, idx_t count);

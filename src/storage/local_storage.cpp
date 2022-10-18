@@ -22,8 +22,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	auto types = table.GetTypes();
 	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
 	                                             types, MAX_ROW_ID, 0);
-
-	stats.InitializeEmpty(types);
+	row_groups->InitializeEmpty();
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
 		auto &art = (ART &)index;
@@ -48,9 +47,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 	if (partial_manager) {
 		partial_manager->FlushPartialBlocks();
 	}
-	stats.InitializeAlterType(parent.stats, changed_idx, target_type);
-	row_groups =
-	    parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr, stats.GetStats(changed_idx));
+	row_groups = parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
 }
@@ -61,7 +58,6 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 	if (partial_manager) {
 		partial_manager->FlushPartialBlocks();
 	}
-	stats.InitializeRemoveColumn(parent.stats, drop_idx);
 	row_groups = parent.row_groups->RemoveColumn(drop_idx);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -71,9 +67,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
                                      Expression *default_value)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
       partial_manager(move(parent.partial_manager)), written_blocks(move(parent.written_blocks)) {
-	idx_t new_column_idx = parent.table->column_definitions.size();
-	stats.InitializeAddColumn(parent.stats, new_column.GetType());
-	row_groups = parent.row_groups->AddColumn(new_column, default_value, stats.GetStats(new_column_idx));
+	row_groups = parent.row_groups->AddColumn(new_column, default_value);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
 }
@@ -163,7 +157,7 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	}
 
 	//! Append the chunk to the local storage
-	auto new_row_group = storage->row_groups->Append(chunk, state.append_state, storage->stats);
+	auto new_row_group = storage->row_groups->Append(chunk, state.append_state);
 
 	//! Check if we should pre-emptively flush blocks to disk
 	if (new_row_group) {
@@ -206,7 +200,6 @@ void LocalTableStorage::FlushToDisk(RowGroup *row_group) {
 	auto row_group_pointer = row_group->WriteToDisk(*partial_manager, compression_types);
 	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
 		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
-		stats.MergeStats(col_idx, *row_group_pointer.statistics[col_idx]);
 	}
 }
 void LocalTableStorage::FlushToDisk() {
@@ -226,10 +219,9 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 	state.storage->row_groups->FinalizeAppend(transaction_data, state.append_state);
 }
 
-void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection, TableStatistics &stats) {
+void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection) {
 	auto storage = GetOrCreateStorage(table);
 	storage->row_groups->MergeStorage(collection);
-	storage->stats.MergeStats(stats);
 }
 
 LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
@@ -281,7 +273,7 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column
 	D_ASSERT(storage);
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
-	storage->row_groups->Update(TransactionData(0, 0), ids, column_ids, updates, storage->stats);
+	storage->row_groups->Update(TransactionData(0, 0), ids, column_ids, updates);
 }
 
 template <class T>
@@ -409,7 +401,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 			storage.AppendToIndexes(transaction, append_state, append_count, false);
 		}
 		// finally move over the row groups
-		table.MergeStorage(*storage.row_groups, storage.indexes, storage.stats);
+		table.MergeStorage(*storage.row_groups, storage.indexes);
 	} else {
 		if (storage.partial_manager || !storage.written_blocks.empty()) {
 			// we have written data but cannot merge to disk after all

@@ -63,7 +63,6 @@ public:
 	ExpressionExecutor default_executor;
 	TableAppendState local_append_state;
 	unique_ptr<RowGroupCollection> local_collection;
-	TableStatistics local_statistics;
 };
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
@@ -140,10 +139,10 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			auto &table_info = table->storage->info;
 			auto &block_manager = TableIOManager::Get(*table->storage).GetBlockManagerForRowData();
 			lstate.local_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, 0);
+			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
-			lstate.local_statistics.InitializeEmpty(insert_types);
 		}
-		lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state, lstate.local_statistics);
+		lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -166,7 +165,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 		lock_guard<mutex> lock(gstate.lock);
 		auto table = gstate.table;
-		table->storage->LocalMerge(context.client, *lstate.local_collection, lstate.local_statistics);
+		table->storage->LocalMerge(context.client, *lstate.local_collection);
 	}
 }
 
