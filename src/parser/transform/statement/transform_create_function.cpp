@@ -35,7 +35,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	info->schema = qname.schema;
 	info->name = qname.name;
 
-	switch (stmt->relpersistence) {
+	// temporary macro
+	switch (stmt->name->relpersistence) {
 	case duckdb_libpgquery::PG_RELPERSISTENCE_TEMP:
 		info->temporary = true;
 		break;
@@ -46,6 +47,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 		info->temporary = false;
 		break;
 	}
+
+	// what to do on conflict
+	info->on_conflict = TransformOnConflict(stmt->onconflict);
 
 	if (stmt->params) {
 		vector<unique_ptr<ParsedExpression>> parameters;
