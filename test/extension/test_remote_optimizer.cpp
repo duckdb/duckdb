@@ -84,7 +84,15 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 		config.options.allow_unsigned_extensions = true;
 		DuckDB db1(nullptr, &config);
 		Connection con1(db1);
-		REQUIRE_NO_FAIL(con1.Query("LOAD 'parquet'"));
+		auto load_parquet = con1.Query("LOAD 'parquet'");
+		if (load_parquet->HasError()) {
+			// Do not execute the test.
+			if (kill(pid, SIGKILL) != 0) {
+				FAIL();
+			}
+			return;
+		}
+
 		REQUIRE_NO_FAIL(con1.Query("LOAD '" DUCKDB_BUILD_DIRECTORY
 		                           "/test/extension/loadable_extension_optimizer_demo.duckdb_extension'"));
 		REQUIRE_NO_FAIL(con1.Query("SET waggle_location_host='127.0.0.1'"));
