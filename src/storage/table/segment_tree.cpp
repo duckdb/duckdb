@@ -1,13 +1,31 @@
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
+
 namespace duckdb {
 
-SegmentBase *SegmentTree::GetRootSegment() {
+SegmentLock SegmentTree::Lock() {
+	return SegmentLock(node_lock);
+}
+
+bool SegmentTree::IsEmpty(SegmentLock &) {
+	return nodes.empty();
+}
+
+SegmentBase *SegmentTree::GetRootSegment(SegmentLock &) {
 	return root_node.get();
 }
 
-SegmentBase *SegmentTree::GetSegmentByIndex(int64_t index) {
+unique_ptr<SegmentBase> SegmentTree::GrabRootSegment(SegmentLock &) {
+	return move(root_node);
+}
+
+SegmentBase *SegmentTree::GetRootSegment() {
+	auto l = Lock();
+	return GetRootSegment(l);
+}
+
+SegmentBase *SegmentTree::GetSegmentByIndex(SegmentLock &, int64_t index) {
 	if (index < 0) {
 		index = nodes.size() + index;
 		if (index < 0) {
@@ -21,17 +39,34 @@ SegmentBase *SegmentTree::GetSegmentByIndex(int64_t index) {
 		return nodes[index].node;
 	}
 }
+SegmentBase *SegmentTree::GetSegmentByIndex(int64_t index) {
+	auto l = Lock();
+	return GetSegmentByIndex(l, index);
+}
+
+SegmentBase *SegmentTree::GetLastSegment(SegmentLock &) {
+	if (nodes.empty()) {
+		return nullptr;
+	}
+	D_ASSERT(nodes.back().row_start == nodes.back().row_start);
+	return nodes.back().node;
+}
 
 SegmentBase *SegmentTree::GetLastSegment() {
-	return nodes.empty() ? nullptr : nodes.back().node;
+	auto l = Lock();
+	return GetRootSegment(l);
+}
+
+SegmentBase *SegmentTree::GetSegment(SegmentLock &l, idx_t row_number) {
+	return nodes[GetSegmentIndex(l, row_number)].node;
 }
 
 SegmentBase *SegmentTree::GetSegment(idx_t row_number) {
-	lock_guard<mutex> tree_lock(node_lock);
-	return nodes[GetSegmentIndex(row_number)].node;
+	auto l = Lock();
+	return GetSegment(l, row_number);
 }
 
-idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
+idx_t SegmentTree::GetSegmentIndex(SegmentLock &, idx_t row_number) {
 	D_ASSERT(!nodes.empty());
 	D_ASSERT(row_number >= nodes[0].row_start);
 	D_ASSERT(row_number < nodes.back().row_start + nodes.back().node->count);
@@ -54,8 +89,12 @@ idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
 	throw InternalException("Could not find node in column segment tree!");
 }
 
-bool SegmentTree::HasSegment(SegmentBase *segment) {
-	lock_guard<mutex> tree_lock(node_lock);
+idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
+	auto l = Lock();
+	return GetSegmentIndex(l, row_number);
+}
+
+bool SegmentTree::HasSegment(SegmentLock &, SegmentBase *segment) {
 	for (auto &node : nodes) {
 		if (node.node == segment) {
 			return true;
@@ -64,7 +103,12 @@ bool SegmentTree::HasSegment(SegmentBase *segment) {
 	return false;
 }
 
-void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
+bool SegmentTree::HasSegment(SegmentBase *segment) {
+	auto l = Lock();
+	return HasSegment(l, segment);
+}
+
+void SegmentTree::AppendSegment(SegmentLock &, unique_ptr<SegmentBase> segment) {
 	D_ASSERT(segment);
 	// add the node to the list of nodes
 	SegmentNode node;
@@ -81,9 +125,26 @@ void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
 	}
 }
 
-void SegmentTree::Replace(SegmentTree &other) {
+void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
+	auto l = Lock();
+	AppendSegment(l, move(segment));
+}
+
+void SegmentTree::EraseSegments(SegmentLock &, idx_t segment_start) {
+	if (segment_start >= nodes.size() - 1) {
+		return;
+	}
+	nodes.erase(nodes.begin() + segment_start + 1, nodes.end());
+}
+
+void SegmentTree::Replace(SegmentLock &, SegmentTree &other) {
 	root_node = move(other.root_node);
 	nodes = move(other.nodes);
+}
+
+void SegmentTree::Replace(SegmentTree &other) {
+	auto l = Lock();
+	Replace(l, other);
 }
 
 } // namespace duckdb

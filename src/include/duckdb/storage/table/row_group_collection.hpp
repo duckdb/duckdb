@@ -34,7 +34,7 @@ public:
 
 	bool IsEmpty() const;
 
-	void AppendRowGroup(idx_t start_row);
+	void AppendRowGroup(SegmentLock &l, idx_t start_row);
 	//! Get the nth row-group, negative numbers start from the back (so -1 is the last row group, etc)
 	RowGroup *GetRowGroup(int64_t index);
 	void Verify();
@@ -87,6 +87,9 @@ public:
 
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
 	void SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun);
+
+private:
+	bool IsEmpty(SegmentLock &) const;
 
 private:
 	//! BlockManager

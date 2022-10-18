@@ -2,8 +2,7 @@
 # description: Test concurrent appends on persistent storage
 # group: [interquery]
 
-#load test.db
-mode skip
+load __TEST_DIR__/concurrent_batch_append_transactions.db
 
 statement ok
 CREATE TABLE integers(i INTEGER)
@@ -41,3 +40,5 @@ endloop
 
 query II
 SELECT COUNT(*), SUM(i) FROM integers
+----
+1000	49500

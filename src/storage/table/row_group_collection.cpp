@@ -48,11 +48,11 @@ void RowGroupCollection::InitializeEmpty() {
 	stats.InitializeEmpty(types);
 }
 
-void RowGroupCollection::AppendRowGroup(idx_t start_row) {
+void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	D_ASSERT(start_row >= row_start);
 	auto new_row_group = make_unique<RowGroup>(info->db, block_manager, *info, start_row, 0);
 	new_row_group->InitializeEmpty(types);
-	row_groups->AppendSegment(move(new_row_group));
+	row_groups->AppendSegment(l, move(new_row_group));
 }
 
 RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
@@ -86,7 +86,7 @@ void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector
 }
 
 void RowGroupCollection::InitializeCreateIndexScan(CreateIndexScanState &state) {
-	state.delete_lock = std::unique_lock<mutex>(row_groups->node_lock);
+	state.segment_lock = row_groups->Lock();
 }
 
 void RowGroupCollection::InitializeScanWithOffset(CollectionScanState &state, const vector<column_t> &column_ids,
@@ -179,7 +179,12 @@ TableAppendState::~TableAppendState() {
 }
 
 bool RowGroupCollection::IsEmpty() const {
-	return row_groups->GetRootSegment() == nullptr;
+	auto l = row_groups->Lock();
+	return IsEmpty(l);
+}
+
+bool RowGroupCollection::IsEmpty(SegmentLock &l) const {
+	return row_groups->IsEmpty(l);
 }
 
 void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count) {
@@ -188,12 +193,12 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	state.total_append_count = 0;
 
 	// start writing to the row_groups
-	lock_guard<mutex> row_group_lock(row_groups->node_lock);
-	if (IsEmpty()) {
+	auto l = row_groups->Lock();
+	if (IsEmpty(l)) {
 		// empty row group collection: empty first row group
-		AppendRowGroup(row_start);
+		AppendRowGroup(l, row_start);
 	}
-	state.start_row_group = (RowGroup *)row_groups->GetLastSegment();
+	state.start_row_group = (RowGroup *)row_groups->GetLastSegment(l);
 	D_ASSERT(this->row_start + total_rows == state.start_row_group->start + state.start_row_group->count);
 	state.start_row_group->InitializeAppend(state.row_group_append_state);
 	state.remaining = append_count;
@@ -249,10 +254,11 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			// append a new row_group
 			new_row_group = true;
 			auto next_start = current_row_group->start + state.row_group_append_state.offset_in_row_group;
-			AppendRowGroup(next_start);
+
+			auto l = row_groups->Lock();
+			AppendRowGroup(l, next_start);
 			// set up the append state for this row_group
-			lock_guard<mutex> row_group_lock(row_groups->node_lock);
-			auto last_row_group = (RowGroup *)row_groups->GetLastSegment();
+			auto last_row_group = (RowGroup *)row_groups->GetLastSegment(l);
 			last_row_group->InitializeAppend(state.row_group_append_state);
 			if (state.remaining > 0) {
 				last_row_group->AppendVersionInfo(state.transaction, state.remaining);
@@ -316,16 +322,15 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
 	}
 	total_rows = start_row;
 
-	lock_guard<mutex> tree_lock(row_groups->node_lock);
+	auto l = row_groups->Lock();
 	// find the segment index that the current row belongs to
-	idx_t segment_index = row_groups->GetSegmentIndex(start_row);
-	auto segment = row_groups->nodes[segment_index].node;
+	idx_t segment_index = row_groups->GetSegmentIndex(l, start_row);
+	auto segment = row_groups->GetSegmentByIndex(l, segment_index);
 	auto &info = (RowGroup &)*segment;
 
 	// remove any segments AFTER this segment: they should be deleted entirely
-	if (segment_index < row_groups->nodes.size() - 1) {
-		row_groups->nodes.erase(row_groups->nodes.begin() + segment_index + 1, row_groups->nodes.end());
-	}
+	row_groups->EraseSegments(l, segment_index);
+
 	info.next = nullptr;
 	info.RevertAppend(start_row);
 }
@@ -620,9 +625,9 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 	vector<column_t> cids;
 	cids.push_back(not_null_constraint.index);
 	// Use ScanCommitted to scan the latest committed data
-	InitializeCreateIndexScan(state);
 	state.Initialize(cids, nullptr);
 	InitializeScan(state.table_state, cids, nullptr);
+	InitializeCreateIndexScan(state);
 	while (true) {
 		scan_chunk.Reset();
 		state.table_state.ScanCommitted(scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
