@@ -27,7 +27,7 @@ SELECT ST_CENTROID('{"type":"Point","coordinates":[-71.064544,10.2323]}')
 query I
 SELECT ST_CENTROID('')
 ----
-(empty)
+NULL
 
 query I 
 SELECT ST_CENTROID(NULL)

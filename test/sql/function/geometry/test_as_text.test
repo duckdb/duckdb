@@ -50,4 +50,4 @@ NULL
 
 #test with invalid input
 statement error
-SELECT ST_ASTEXT('invalid')
+SELECT ST_ASTEXT(22)
