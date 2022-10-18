@@ -86,15 +86,16 @@ public:
 			    },
 			    7);
 		default:
-			return MemcpyWrap<T>(
-			    [&]() {
-				    if (sizeof(T) == 8 && trailing_zero < 8) {
+			if (sizeof(T) == 8 && trailing_zero < 8) {
+				return MemcpyWrap<T>(
+				    [&]() {
 					    result = Load<T>(buffer + index);
 					    index += sizeof(T);
-				    }
-				    return result;
-			    },
-			    8);
+					    return result;
+				    },
+				    8);
+			}
+			return result;
 		}
 	}
 
