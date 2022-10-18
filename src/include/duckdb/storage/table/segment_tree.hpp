@@ -66,7 +66,9 @@ public:
 	idx_t GetSegmentIndex(idx_t row_number);
 	idx_t GetSegmentIndex(SegmentLock &, idx_t row_number);
 
+	void Verify(SegmentLock &);
 	void Verify();
+
 private:
 	//! The initial segment of the tree
 	unique_ptr<SegmentBase> root_node;

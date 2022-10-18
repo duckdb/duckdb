@@ -13,7 +13,8 @@ bool SegmentTree::IsEmpty(SegmentLock &) {
 	return nodes.empty();
 }
 
-SegmentBase *SegmentTree::GetRootSegment(SegmentLock &) {
+SegmentBase *SegmentTree::GetRootSegment(SegmentLock &l) {
+	Verify(l);
 	return root_node.get();
 }
 
@@ -45,17 +46,17 @@ SegmentBase *SegmentTree::GetSegmentByIndex(int64_t index) {
 	return GetSegmentByIndex(l, index);
 }
 
-SegmentBase *SegmentTree::GetLastSegment(SegmentLock &) {
+SegmentBase *SegmentTree::GetLastSegment(SegmentLock &l) {
 	if (nodes.empty()) {
 		return nullptr;
 	}
-	D_ASSERT(nodes.back().row_start == nodes.back().row_start);
+	Verify(l);
 	return nodes.back().node;
 }
 
 SegmentBase *SegmentTree::GetLastSegment() {
 	auto l = Lock();
-	return GetRootSegment(l);
+	return GetLastSegment(l);
 }
 
 SegmentBase *SegmentTree::GetSegment(SegmentLock &l, idx_t row_number) {
@@ -148,9 +149,8 @@ void SegmentTree::Replace(SegmentTree &other) {
 	Replace(l, other);
 }
 
-void SegmentTree::Verify() {
+void SegmentTree::Verify(SegmentLock &) {
 #ifdef DEBUG
-	auto l = Lock();
 	auto segment = root_node.get();
 	if (!segment) {
 		D_ASSERT(nodes.empty());
@@ -158,14 +158,22 @@ void SegmentTree::Verify() {
 	}
 	idx_t segment_idx = 0;
 	idx_t base_start = segment->start;
-	while(segment) {
+	while (segment) {
 		D_ASSERT(segment_idx < nodes.size());
 		D_ASSERT(nodes[segment_idx].node == segment);
 		D_ASSERT(nodes[segment_idx].row_start == segment->start);
 		D_ASSERT(segment->start == base_start);
 		base_start += segment->count;
 		segment = segment->next.get();
+		segment_idx++;
 	}
+#endif
+}
+
+void SegmentTree::Verify() {
+#ifdef DEBUG
+	auto l = Lock();
+	Verify(l);
 #endif
 }
 
