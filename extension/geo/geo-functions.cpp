@@ -185,36 +185,38 @@ void GeoFunctions::GeometryDistanceFunction(DataChunk &args, ExpressionState &st
 struct CentroidUnaryOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA geom) {
-		if (geom.GetSize() == 0) {
-			return NULL;
-		}
-		auto gser = Geometry::GetGserialized(geom);
-		if (!gser) {
-			throw ConversionException("Failure in geometry centroid: could not calculate centroid from geometry");
-		}
-		auto result = Geometry::Centroid(gser);
-		idx_t rv_size = Geometry::GetGeometrySize(result);
-		auto base = Geometry::GetBase(result);
-		Geometry::DestroyGeometry(result);
-		return string_t((const char *)base, rv_size);
+		return geom;
+		// if (geom.GetSize() == 0) {
+		// 	return NULL;
+		// }
+		// auto gser = Geometry::GetGserialized(geom);
+		// if (!gser) {
+		// 	throw ConversionException("Failure in geometry centroid: could not calculate centroid from geometry");
+		// }
+		// auto result = Geometry::Centroid(gser);
+		// idx_t rv_size = Geometry::GetGeometrySize(result);
+		// auto base = Geometry::GetBase(result);
+		// Geometry::DestroyGeometry(result);
+		// return string_t((const char *)base, rv_size);
 	}
 };
 
 struct CentroidBinaryOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA geom, TB use_spheroid) {
-		if (geom.GetSize() == 0) {
-			return NULL;
-		}
-		auto gser = Geometry::GetGserialized(geom);
-		if (!gser) {
-			throw ConversionException("Failure in geometry centroid: could not calculate centroid from geometry");
-		}
-		auto result = Geometry::Centroid(gser, use_spheroid);
-		idx_t rv_size = Geometry::GetGeometrySize(result);
-		auto base = Geometry::GetBase(result);
-		Geometry::DestroyGeometry(result);
-		return string_t((const char *)base, rv_size);
+		return geom;
+		// if (geom.GetSize() == 0) {
+		// 	return NULL;
+		// }
+		// auto gser = Geometry::GetGserialized(geom);
+		// if (!gser) {
+		// 	throw ConversionException("Failure in geometry centroid: could not calculate centroid from geometry");
+		// }
+		// auto result = Geometry::Centroid(gser, use_spheroid);
+		// idx_t rv_size = Geometry::GetGeometrySize(result);
+		// auto base = Geometry::GetBase(result);
+		// Geometry::DestroyGeometry(result);
+		// return string_t((const char *)base, rv_size);
 	}
 };
 
