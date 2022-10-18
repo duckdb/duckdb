@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/statistics/column_statistics.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
 struct ParallelTableScanState;
