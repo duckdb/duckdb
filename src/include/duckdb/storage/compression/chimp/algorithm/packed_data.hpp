@@ -47,12 +47,8 @@ public:
 	static inline uint16_t Pack(uint8_t index, uint8_t leading_zero, uint8_t significant_bits) {
 		static constexpr uint8_t BIT_SIZE = (sizeof(CHIMP_TYPE) * 8);
 
-		// Verify that combined (with significant bits set to full size of the type if it's 0), this is not bigger
-		// than the full size of the type;
-		D_ASSERT(leading_zero + ((!significant_bits) * (sizeof(CHIMP_TYPE) * 8)) + significant_bits <=
-		         (sizeof(CHIMP_TYPE) * 8));
 		uint16_t result = 0;
-		result += ((uint32_t)BIT_SIZE * 8) * (ChimpConstants::BUFFER_SIZE + index);
+		result += ((uint32_t)BIT_SIZE << 3) * (ChimpConstants::BUFFER_SIZE + index);
 		result += BIT_SIZE * (leading_zero & 7);
 		if (BIT_SIZE == 32) {
 			// Shift the result by 1 to occupy the 16th bit
