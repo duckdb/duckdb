@@ -48,7 +48,6 @@ GSERIALIZED *LWGEOM_in(char *input) {
 			return NULL;
 		}
 		/* If we picked up an SRID at the head of the WKB set it manually */
-		char *wkt = lwgeom_to_wkt(lwgeom, WKT_EXTENDED, 15, NULL);
 		if (srid)
 			lwgeom_set_srid(lwgeom, srid);
 		/* Add a bbox if necessary */
@@ -66,9 +65,6 @@ GSERIALIZED *LWGEOM_in(char *input) {
 			return NULL;
 		} else {
 		}
-		auto buffer = lwgeom_to_wkb_buffer(lwgeom, WKB_EXTENDED);
-		auto buf_size = lwgeom_to_wkb_size(lwgeom, WKB_EXTENDED);
-		char *wkt = lwgeom_to_wkt(lwgeom, WKT_EXTENDED, 15, NULL);
 		ret = geometry_serialize(lwgeom);
 		lwgeom_free(lwgeom);
 	}
@@ -84,9 +80,6 @@ GSERIALIZED *LWGEOM_in(char *input) {
 			return NULL;
 		}
 		LWPOINT *point = (LWPOINT *)lwgeom;
-		auto buffer = lwgeom_to_wkb_buffer(lwgeom, WKB_EXTENDED);
-		auto buf_size = lwgeom_to_wkb_size(lwgeom, WKB_EXTENDED);
-		char *wkt = lwgeom_to_wkt(lwgeom, WKT_EXTENDED, 15, NULL);
 		if (lwgeom_needs_bbox(lwgeom))
 			lwgeom_add_bbox(lwgeom);
 		ret = geometry_serialize(lwgeom);

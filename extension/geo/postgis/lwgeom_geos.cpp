@@ -10,7 +10,7 @@ GSERIALIZED *centroid(GSERIALIZED *geom) {
 	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 
 	result = geometry_serialize(lwgeom);
-    lwgeom_free(lwgeom);
+	lwgeom_free(lwgeom);
 
 	return result;
 }

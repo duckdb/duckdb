@@ -393,8 +393,8 @@ extern lwflags_t lwflags(int hasz, int hasm, int geodetic);
 extern void lwgeom_set_srid(LWGEOM *geom, int32_t srid);
 
 /**
-* Return SRID number
-*/
+ * Return SRID number
+ */
 extern int32_t lwgeom_get_srid(const LWGEOM *geom);
 
 /****************************************************************
