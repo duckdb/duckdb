@@ -1,0 +1,8 @@
+# name: test/sql/copy/parquet/parquet_4859.test
+# description: Issue #4442: Parquet reader converts timestamp to i64 *sometimes*
+# group: [parquet]
+
+require parquet
+
+statement ok
+select "repositoryTopics.edges" from "data/parquet-testing/bug4859.parquet"
