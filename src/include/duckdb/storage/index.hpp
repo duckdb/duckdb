@@ -111,11 +111,19 @@ public:
 	//! Serializes the index and returns the pair of block_id offset positions
 	virtual BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
 
+	//! Returns block/offset of where index was most recently serialized.
+	BlockPointer GetSerializedDataPointer() const {
+		return serialized_data_pointer;
+	}
+
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
 
 	//! Lock used for updating the index
 	mutex lock;
+
+	//! Pointer to most recently checkpointed index data.
+	BlockPointer serialized_data_pointer;
 
 private:
 	//! Bound expressions used by the index

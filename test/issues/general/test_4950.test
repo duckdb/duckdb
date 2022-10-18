@@ -1,0 +1,208 @@
+# name: test/issues/general/test_4950.test
+# description: Issue 4950: Subquery is not transformed into an anti-join by the optimizer
+# group: [general]
+
+statement ok
+pragma explain_output = optimized_only
+
+statement ok
+pragma enable_verification
+
+statement ok
+create table lineitem (l_orderkey int, l_suppkey int, l_partkey int);
+
+statement ok
+insert into lineitem values (1,1,42),(1,2,43),(3,3,44),(4,5,45),(5,5,46),(6,5,47);
+
+query III
+select * from lineitem l1 where exists (
+    select * from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+1	1	42
+1	2	43
+
+# deliminator should remove INNER
+query II
+explain select * from lineitem l1 where exists (
+    select * from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+logical_opt	<!REGEX>:.*INNER.*
+
+# deliminator should remove DELIM_JOIN as well
+query II
+explain select * from lineitem l1 where exists (
+    select * from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# SINGLE join - same story
+query III
+select * from lineitem l1 where (
+    select l_orderkey from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+1	1	42
+1	2	43
+
+query II
+explain select * from lineitem l1 where (
+    select l_orderkey from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+logical_opt	<!REGEX>:.*INNER.*
+
+# operations on the columns - we can't do the optimization here,
+# but with enable_verification we check the results are the same with/without optimizer
+query I
+select count(*) from lineitem l1 where exists (
+     select * from lineitem l2
+     where
+         l2.l_orderkey = l1.l_orderkey + 1
+         and l2.l_suppkey <> l1.l_suppkey + 1
+);
+----
+3
+
+# more correlated columns
+query I
+select count(*) from lineitem l1 where exists (
+     select * from (SELECT l2.l_orderkey AS l_orderkey, l2.l_suppkey + l1.l_suppkey AS l_suppkey FROM lineitem l2) AS l3
+     where
+         l3.l_orderkey = l1.l_orderkey
+         and l3.l_suppkey <> l1.l_suppkey
+);
+----
+6
+
+# more correlated columns + operations
+query I
+select count(*) from lineitem l1 where exists (
+     select * from (SELECT l2.l_orderkey AS l_orderkey, l2.l_suppkey + l1.l_suppkey AS l_suppkey FROM lineitem l2) AS l3
+     where
+         l3.l_orderkey = l1.l_orderkey + 1
+         and l3.l_suppkey <> l1.l_suppkey + 1
+);
+----
+3
+
+# select other columns + operations
+query I
+select count(*) from lineitem l1 where exists (
+     select l_partkey from lineitem l2
+     where
+         l2.l_orderkey = l1.l_orderkey + 1
+         and l2.l_suppkey <> l1.l_suppkey + 1
+);
+----
+3
+
+# select other columns, but no operations (we can perform the optimization here!
+query I
+select count(*) from lineitem l1 where exists (
+     select l_partkey from lineitem l2
+     where
+         l2.l_orderkey = l1.l_orderkey
+         and l2.l_suppkey <> l1.l_suppkey
+);
+----
+2
+
+query II
+explain select count(*) from lineitem l1 where exists (
+     select l_partkey from lineitem l2
+     where
+         l2.l_orderkey = l1.l_orderkey
+         and l2.l_suppkey <> l1.l_suppkey
+);
+----
+logical_opt	<!REGEX>:.*INNER.*
+
+query II
+explain select count(*) from lineitem l1 where exists (
+     select l_partkey from lineitem l2
+     where
+         l2.l_orderkey = l1.l_orderkey
+         and l2.l_suppkey <> l1.l_suppkey
+);
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# aggregate within the subquery
+query I
+select count(*) from lineitem l1 where exists (
+     select sum(l2.l_orderkey) from lineitem l2
+     where
+         l2.l_orderkey = l1.l_orderkey + 1
+         and l2.l_suppkey <> l1.l_suppkey + 1
+);
+----
+6
+
+statement ok
+drop table lineitem
+
+require tpch
+
+statement ok
+call dbgen(sf=0.01)
+
+# now the real kicker, tpch q21, should not have any DELIM_JOIN
+query II
+EXPLAIN SELECT
+    s_name,
+    count(*) AS numwait
+FROM
+    supplier,
+    lineitem l1,
+    orders,
+    nation
+WHERE
+    s_suppkey = l1.l_suppkey
+    AND o_orderkey = l1.l_orderkey
+    AND o_orderstatus = 'F'
+    AND l1.l_receiptdate > l1.l_commitdate
+    AND EXISTS (
+        SELECT
+            *
+        FROM
+            lineitem l2
+        WHERE
+            l2.l_orderkey = l1.l_orderkey
+            AND l2.l_suppkey <> l1.l_suppkey)
+    AND NOT EXISTS (
+        SELECT
+            *
+        FROM
+            lineitem l3
+        WHERE
+            l3.l_orderkey = l1.l_orderkey
+            AND l3.l_suppkey <> l1.l_suppkey
+            AND l3.l_receiptdate > l3.l_commitdate)
+    AND s_nationkey = n_nationkey
+    AND n_name = 'SAUDI ARABIA'
+GROUP BY
+    s_name
+ORDER BY
+    numwait DESC,
+    s_name
+LIMIT 100;
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*

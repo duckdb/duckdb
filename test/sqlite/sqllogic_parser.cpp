@@ -135,6 +135,8 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_SET:
 	case SQLLogicTokenType::SQLLOGIC_LOOP:
 	case SQLLogicTokenType::SQLLOGIC_FOREACH:
+	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP:
+	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_FOREACH:
 	case SQLLogicTokenType::SQLLOGIC_ENDLOOP:
 	case SQLLogicTokenType::SQLLOGIC_REQUIRE:
 	case SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV:
@@ -173,8 +175,12 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_SET;
 	} else if (token == "loop") {
 		return SQLLogicTokenType::SQLLOGIC_LOOP;
+	} else if (token == "concurrentloop") {
+		return SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP;
 	} else if (token == "foreach") {
 		return SQLLogicTokenType::SQLLOGIC_FOREACH;
+	} else if (token == "concurrentforeach") {
+		return SQLLogicTokenType::SQLLOGIC_CONCURRENT_FOREACH;
 	} else if (token == "endloop") {
 		return SQLLogicTokenType::SQLLOGIC_ENDLOOP;
 	} else if (token == "require") {

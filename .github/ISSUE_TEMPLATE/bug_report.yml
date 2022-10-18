@@ -1,6 +1,16 @@
 name: Bug report
 description: Create a report to help us improve
 body:
+  - type: markdown
+    attributes:
+      value: >
+        DuckDB has several repositories for different components, please make sure you're raising your issue in the correct one:
+         * [Our docs/website](https://github.com/duckdb/duckdb-web/issues/new)
+         * [SQLite scanner](https://github.com/duckdblabs/sqlite_scanner/issues/new)
+         * [Postgres scanner](https://github.com/duckdblabs/postgres_scanner/issues/new)
+
+        If none of the above repositories are applicable, feel free to raise it in this one
+
   - type: textarea
     attributes:
       label: What happens?

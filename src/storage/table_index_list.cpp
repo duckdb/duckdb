@@ -62,6 +62,22 @@ void TableIndexList::VerifyForeignKey(const vector<idx_t> &fk_keys, bool is_appe
 	}
 }
 
+vector<column_t> TableIndexList::GetRequiredColumns() {
+	lock_guard<mutex> lock(indexes_lock);
+	set<column_t> unique_indexes;
+	for (auto &index : indexes) {
+		for (auto col_index : index->column_ids) {
+			unique_indexes.insert(col_index);
+		}
+	}
+	vector<column_t> result;
+	result.reserve(unique_indexes.size());
+	for (auto column_index : unique_indexes) {
+		result.emplace_back(column_index);
+	}
+	return result;
+}
+
 vector<BlockPointer> TableIndexList::SerializeIndexes(duckdb::MetaBlockWriter &writer) {
 	vector<BlockPointer> blocks_info;
 	for (auto &index : indexes) {

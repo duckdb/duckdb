@@ -50,6 +50,10 @@ void RowGroupCollection::AppendRowGroup(idx_t start_row) {
 	row_groups->AppendSegment(move(new_row_group));
 }
 
+RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
+	return (RowGroup *)row_groups->GetSegmentByIndex(index);
+}
+
 void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;
@@ -200,10 +204,11 @@ void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 	InitializeAppend(tdata, state, 0);
 }
 
-void RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats) {
+bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, TableStatistics &stats) {
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
 
+	bool new_row_group = false;
 	idx_t append_count = chunk.size();
 	idx_t remaining = chunk.size();
 	state.total_append_count += append_count;
@@ -237,6 +242,7 @@ void RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, Table
 				chunk.Slice(sel, remaining);
 			}
 			// append a new row_group
+			new_row_group = true;
 			auto next_start = current_row_group->start + state.row_group_append_state.offset_in_row_group;
 			AppendRowGroup(next_start);
 			// set up the append state for this row_group
@@ -260,6 +266,7 @@ void RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state, Table
 		}
 		stats.GetStats(col_idx).stats->UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
+	return new_row_group;
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
@@ -300,12 +307,7 @@ void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, 
 
 void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
 	if (total_rows != start_row + count) {
-		// interleaved append: don't do anything
-		// in this case the rows will stay as "inserted by transaction X", but will never be committed
-		// they will never be used by any other transaction and will essentially leave a gap
-		// this situation is rare, and as such we don't care about optimizing it (yet?)
-		// it only happens if C1 appends a lot of data -> C2 appends a lot of data -> C1 rolls back
-		return;
+		throw InternalException("Interleaved appends: this should no longer happen");
 	}
 	total_rows = start_row;
 
