@@ -145,7 +145,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 				current_character++;
 			}
 		}
-		if (start_pos == DConstants::INVALID_INDEX || end == 0) {
+		if (start_pos == DConstants::INVALID_INDEX || end == 0 || end <= start) {
 			return SubstringEmptyString(result);
 		}
 	}

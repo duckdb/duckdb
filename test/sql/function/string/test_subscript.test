@@ -121,7 +121,12 @@ NULL
 query T
 SELECT s[-2147483647] FROM strings
 ----
-h
-w
-b
+(empty)
+(empty)
+(empty)
+NULL
+
+query T
+SELECT ([1,2,3])[-2147483647]
+----
 NULL
