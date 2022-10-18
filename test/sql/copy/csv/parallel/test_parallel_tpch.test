@@ -1,0 +1,21 @@
+# name: test/sql/copy/csv/parallel/test_parallel_tpch.test
+# description: Test read CSV function
+# group: [parallel]
+
+statement ok
+PRAGMA enable_verification
+
+
+query III
+SELECT * FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='false', delim = '|', bytes_per_thread=1)
+----
+1	15519	785
+1	6731	732
+1	6370	371
+1	214	465
+1	2403	160
+1	1564	67
+2	10617	138
+3	430	181
+3	1904	658
+3	12845	370

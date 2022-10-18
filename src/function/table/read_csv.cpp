@@ -73,6 +73,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.include_file_name = BooleanValue::Get(kv.second);
 		} else if (loption == "hive_partitioning") {
 			options.include_parsed_hive_partitions = BooleanValue::Get(kv.second);
+		} else if (loption == "bytes_per_thread") {
+			options.bytes_per_thread = kv.second.GetValue<uint64_t>();
 		} else {
 			options.SetReadOption(loption, kv.second, names);
 		}
@@ -172,7 +174,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	return move(result);
 }
 
-struct ReadCSVOperatorData : public GlobalTableFunctionState {
+struct ReadCSVGlobalState : public GlobalTableFunctionState {
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
 	//! The index of the next file to read (i.e. current file + 1)
@@ -181,11 +183,33 @@ struct ReadCSVOperatorData : public GlobalTableFunctionState {
 	idx_t file_size;
 	//! How many bytes were read up to this point
 	atomic<idx_t> bytes_read;
+	//! Mutex to lock when getting next batch of bytes (Parallel Only)
+	mutex main_mutex;
+	//! Starting Byte of Next Thread
+	idx_t next_byte;
 };
 
-static unique_ptr<GlobalTableFunctionState> ReadCSVInit(ClientContext &context, TableFunctionInitInput &input) {
+struct ReadCSVLocalState : public LocalTableFunctionState {
+	ReadCSVLocalState(idx_t start_byte, idx_t bytes_per_thread) {
+		Initialize(start_byte, bytes_per_thread);
+	}
+
+	void Initialize(idx_t start_byte_p, idx_t bytes_per_thread_p) {
+		start_byte = start_byte_p;
+		end_byte = start_byte_p + bytes_per_thread_p;
+		cur_byte = start_byte_p;
+	}
+	//! Start Byte
+	idx_t start_byte;
+	//! End Byte
+	idx_t end_byte;
+	//! Current Byte
+	idx_t cur_byte;
+};
+
+static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
-	auto result = make_unique<ReadCSVOperatorData>();
+	auto result = make_unique<ReadCSVGlobalState>();
 	if (bind_data.initial_reader) {
 		result->csv_reader = move(bind_data.initial_reader);
 	} else if (bind_data.files.empty()) {
@@ -200,6 +224,33 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInit(ClientContext &context, 
 	return move(result);
 }
 
+bool ReadCSVParallelStateNext(ClientContext &context, const FunctionData *bind_data_p, ReadCSVLocalState &state,
+                              ReadCSVGlobalState &parallel_state) {
+	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
+	if (parallel_state.next_byte >= parallel_state.file_size) {
+		// Threads don't have data to read
+		return false;
+	}
+	auto csv_data = (ReadCSVData *)bind_data_p;
+	state.Initialize(parallel_state.next_byte, csv_data->options.bytes_per_thread);
+	parallel_state.next_byte += csv_data->options.bytes_per_thread;
+	return true;
+}
+
+unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
+                                                     GlobalTableFunctionState *global_state_p) {
+	auto &global_state = (ReadCSVGlobalState &)*global_state_p;
+	auto csv_data = (ReadCSVData *)input.bind_data;
+	lock_guard<mutex> parallel_lock(global_state.main_mutex);
+	if (global_state.next_byte >= global_state.file_size) {
+		// Threads don't have data to read
+		return nullptr;
+	}
+	auto result = make_unique<ReadCSVLocalState>(global_state.next_byte, csv_data->options.bytes_per_thread);
+	global_state.next_byte += csv_data->options.bytes_per_thread;
+	return move(result);
+}
+
 static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFunctionBindInput &input,
                                                 vector<LogicalType> &return_types, vector<string> &names) {
 	input.named_parameters["auto_detect"] = Value::BOOLEAN(true);
@@ -208,7 +259,7 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 
 static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (ReadCSVData &)*data_p.bind_data;
-	auto &data = (ReadCSVOperatorData &)*data_p.global_state;
+	auto &data = (ReadCSVGlobalState &)*data_p.global_state;
 
 	if (!data.csv_reader) {
 		// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files
@@ -291,11 +342,12 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["bytes_per_thread"] = LogicalType::UBIGINT;
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
-	auto &data = (const ReadCSVOperatorData &)*global_state;
+	auto &data = (const ReadCSVGlobalState &)*global_state;
 	if (data.file_size == 0) {
 		return 100;
 	}
@@ -411,7 +463,7 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, Fie
 
 TableFunction ReadCSVTableFunction::GetFunction(bool list_parameter) {
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction read_csv("read_csv", {parameter}, ReadCSVFunction, ReadCSVBind, ReadCSVInit);
+	TableFunction read_csv("read_csv", {parameter}, ReadCSVFunction, ReadCSVBind, ReadCSVInitGlobal, ReadCSVInitLocal);
 	read_csv.table_scan_progress = CSVReaderProgress;
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
@@ -422,7 +474,8 @@ TableFunction ReadCSVTableFunction::GetFunction(bool list_parameter) {
 
 TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction read_csv_auto("read_csv_auto", {parameter}, ReadCSVFunction, ReadCSVAutoBind, ReadCSVInit);
+	TableFunction read_csv_auto("read_csv_auto", {parameter}, ReadCSVFunction, ReadCSVAutoBind, ReadCSVInitGlobal,
+	                            ReadCSVInitLocal);
 	read_csv_auto.table_scan_progress = CSVReaderProgress;
 	read_csv_auto.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv_auto.serialize = CSVReaderSerialize;

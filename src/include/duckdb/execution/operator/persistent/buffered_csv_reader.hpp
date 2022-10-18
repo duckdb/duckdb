@@ -117,6 +117,8 @@ struct BufferedCSVReaderOptions {
 	bool include_parsed_hive_partitions = false;
 	//! Whether or not to union files with different (but compatible) columns
 	bool union_by_name = false;
+	//! Number of bytes used per thread (Parallel Scan)
+	idx_t bytes_per_thread = 100000000;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
