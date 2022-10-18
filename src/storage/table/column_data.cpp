@@ -27,7 +27,7 @@ ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
     : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
       type(move(other.type)), parent(parent), updates(move(other.updates)), version(parent ? parent->version + 1 : 0) {
 	idx_t offset = 0;
-	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->next.get()) {
+	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->Next()) {
 		auto &other = (ColumnSegment &)*segment;
 		this->data.AppendSegment(ColumnSegment::CreateSegment(other, start + offset));
 		offset += segment->count;
@@ -57,8 +57,9 @@ void ColumnData::IncrementVersion() {
 }
 
 idx_t ColumnData::GetMaxEntry() {
-	auto first_segment = data.GetRootSegment();
-	auto last_segment = data.GetLastSegment();
+	auto l = data.Lock();
+	auto first_segment = data.GetRootSegment(l);
+	auto last_segment = data.GetLastSegment(l);
 	if (!first_segment) {
 		D_ASSERT(!last_segment);
 		return 0;
@@ -118,7 +119,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			if (!state.current->next) {
 				break;
 			}
-			state.current = (ColumnSegment *)state.current->next.get();
+			state.current = (ColumnSegment *)state.current->Next();
 			state.current->InitializeScan(state);
 			state.segment_checked = false;
 			D_ASSERT(state.row_index >= state.current->start &&
@@ -346,7 +347,7 @@ void ColumnData::CommitDropColumn() {
 				block_manager.MarkBlockAsModified(block_id);
 			}
 		}
-		segment = (ColumnSegment *)segment->next.get();
+		segment = (ColumnSegment *)segment->Next();
 	}
 }
 
@@ -373,15 +374,15 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type, StatisticsType::LOCAL_STATS);
 
 	auto l = data.Lock();
-	auto root_segment = data.GrabRootSegment(l);
-	if (!root_segment) {
+	auto nodes = data.MoveSegments(l);
+	if (nodes.empty()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
 	lock_guard<mutex> update_guard(update_lock);
 
 	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
-	checkpointer.Checkpoint(move(root_segment));
+	checkpointer.Checkpoint(move(nodes));
 
 	// replace the old tree with the new one
 	data.Replace(l, checkpoint_state->new_tree);
@@ -475,7 +476,7 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, v
 		result.push_back(move(column_info));
 
 		segment_idx++;
-		segment = (ColumnSegment *)segment->next.get();
+		segment = (ColumnSegment *)segment->Next();
 	}
 }
 
@@ -494,7 +495,7 @@ void ColumnData::Verify(RowGroup &parent) {
 			if (!root->next) {
 				D_ASSERT(prev_end == parent.start + parent.count);
 			}
-			root = root->next.get();
+			root = root->Next();
 		}
 	}
 #endif

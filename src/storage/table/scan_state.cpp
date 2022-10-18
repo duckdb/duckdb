@@ -35,7 +35,7 @@ void ColumnScanState::NextInternal(idx_t count) {
 	}
 	row_index += count;
 	while (row_index >= current->start + current->count) {
-		current = (ColumnSegment *)current->next.get();
+		current = (ColumnSegment *)current->Next();
 		initialized = false;
 		segment_checked = false;
 		if (!current) {
@@ -92,7 +92,7 @@ bool CollectionScanState::Scan(Transaction &transaction, DataChunk &result) {
 			return true;
 		} else {
 			do {
-				current_row_group = row_group_state.row_group = (RowGroup *)current_row_group->next.get();
+				current_row_group = row_group_state.row_group = (RowGroup *)current_row_group->Next();
 				if (current_row_group) {
 					bool scan_row_group = current_row_group->InitializeScan(row_group_state);
 					if (scan_row_group) {
@@ -113,7 +113,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 		if (result.size() > 0) {
 			return true;
 		} else {
-			current_row_group = row_group_state.row_group = (RowGroup *)current_row_group->next.get();
+			current_row_group = row_group_state.row_group = (RowGroup *)current_row_group->Next();
 			if (current_row_group) {
 				current_row_group->InitializeScan(row_group_state);
 			}

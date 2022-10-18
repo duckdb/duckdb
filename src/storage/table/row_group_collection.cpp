@@ -64,7 +64,7 @@ void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;
 	row_groups->Verify();
-	for (auto segment = row_groups->GetRootSegment(); segment; segment = segment->next.get()) {
+	for (auto segment = row_groups->GetRootSegment(); segment; segment = segment->Next()) {
 		auto &row_group = (RowGroup &)*segment;
 		row_group.Verify();
 		D_ASSERT(row_group.start == this->row_start + current_total_rows);
@@ -83,7 +83,7 @@ void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector
 	D_ASSERT(row_group);
 	state.max_row = row_start + total_rows;
 	while (row_group && !row_group->InitializeScan(state.row_group_state)) {
-		row_group = (RowGroup *)row_group->next.get();
+		row_group = (RowGroup *)row_group->Next();
 	}
 }
 
@@ -134,11 +134,11 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		if (ClientConfig::GetConfig(context).verify_parallelism) {
 			state.vector_index++;
 			if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
-				state.current_row_group = (RowGroup *)state.current_row_group->next.get();
+				state.current_row_group = (RowGroup *)state.current_row_group->Next();
 				state.vector_index = 0;
 			}
 		} else {
-			state.current_row_group = (RowGroup *)state.current_row_group->next.get();
+			state.current_row_group = (RowGroup *)state.current_row_group->Next();
 		}
 		if (!need_to_scan) {
 			// filters allow us to skip this row group: move to the next row group
@@ -204,8 +204,8 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	D_ASSERT(this->row_start + total_rows == state.start_row_group->start + state.start_row_group->count);
 	state.start_row_group->InitializeAppend(state.row_group_append_state);
 	state.remaining = append_count;
+	state.transaction = transaction;
 	if (state.remaining > 0) {
-		state.transaction = transaction;
 		state.start_row_group->AppendVersionInfo(transaction, state.remaining);
 		total_rows += state.remaining;
 	}
@@ -283,14 +283,13 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
-	D_ASSERT(state.transaction.transaction_id == 0);
 	auto remaining = state.total_append_count;
 	auto row_group = state.start_row_group;
 	while (remaining > 0) {
 		auto append_count = MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - row_group->count);
 		row_group->AppendVersionInfo(transaction, append_count);
 		remaining -= append_count;
-		row_group = (RowGroup *)row_group->next.get();
+		row_group = (RowGroup *)row_group->Next();
 	}
 	total_rows += state.total_append_count;
 
@@ -314,7 +313,7 @@ void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, 
 		if (remaining == 0) {
 			break;
 		}
-		row_group = (RowGroup *)row_group->next.get();
+		row_group = (RowGroup *)row_group->Next();
 	}
 }
 
@@ -340,7 +339,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
 void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
 	D_ASSERT(data.types == types);
 	auto index = row_start + total_rows.load();
-	for (auto segment = data.row_groups->GetRootSegment(); segment; segment = segment->next.get()) {
+	for (auto segment = data.row_groups->GetRootSegment(); segment; segment = segment->Next()) {
 		auto &row_group = (RowGroup &)*segment;
 		auto new_group = make_unique<RowGroup>(row_group, index);
 		index += new_group->count;
@@ -474,7 +473,7 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
 	for (auto row_group = (RowGroup *)row_groups->GetRootSegment(); row_group;
-	     row_group = (RowGroup *)row_group->next.get()) {
+	     row_group = (RowGroup *)row_group->Next()) {
 		auto rowg_writer = writer.GetRowGroupWriter(*row_group);
 		auto pointer = row_group->Checkpoint(*rowg_writer, global_stats);
 		writer.AddRowGroup(move(pointer), move(rowg_writer));
@@ -488,7 +487,7 @@ void RowGroupCollection::CommitDropColumn(idx_t index) {
 	auto segment = (RowGroup *)row_groups->GetRootSegment();
 	while (segment) {
 		segment->CommitDropColumn(index);
-		segment = (RowGroup *)segment->next.get();
+		segment = (RowGroup *)segment->Next();
 	}
 }
 
@@ -496,7 +495,7 @@ void RowGroupCollection::CommitDropTable() {
 	auto segment = (RowGroup *)row_groups->GetRootSegment();
 	while (segment) {
 		segment->CommitDrop();
-		segment = (RowGroup *)segment->next.get();
+		segment = (RowGroup *)segment->Next();
 	}
 }
 
@@ -512,7 +511,7 @@ vector<vector<Value>> RowGroupCollection::GetStorageInfo() {
 		row_group->GetStorageInfo(row_group_index, result);
 		row_group_index++;
 
-		row_group = (RowGroup *)row_group->next.get();
+		row_group = (RowGroup *)row_group->Next();
 	}
 
 	return result;
@@ -548,7 +547,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ColumnDefinition &n
 		new_row_group->MergeIntoStatistics(new_column_idx, *new_column_stats.stats);
 
 		result->row_groups->AppendSegment(move(new_row_group));
-		current_row_group = (RowGroup *)current_row_group->next.get();
+		current_row_group = (RowGroup *)current_row_group->Next();
 	}
 	return result;
 }
@@ -565,7 +564,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	while (current_row_group) {
 		auto new_row_group = current_row_group->RemoveColumn(col_idx);
 		result->row_groups->AppendSegment(move(new_row_group));
-		current_row_group = (RowGroup *)current_row_group->next.get();
+		current_row_group = (RowGroup *)current_row_group->Next();
 	}
 	return result;
 }
@@ -605,7 +604,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 		                                                  scan_state.table_state.row_group_state, scan_chunk);
 		new_row_group->MergeIntoStatistics(changed_idx, *changed_stats.stats);
 		result->row_groups->AppendSegment(move(new_row_group));
-		current_row_group = (RowGroup *)current_row_group->next.get();
+		current_row_group = (RowGroup *)current_row_group->Next();
 	}
 
 	return result;

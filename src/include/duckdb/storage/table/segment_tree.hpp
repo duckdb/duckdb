@@ -19,7 +19,7 @@ namespace duckdb {
 
 struct SegmentNode {
 	idx_t row_start;
-	SegmentBase *node;
+	unique_ptr<SegmentBase> node;
 };
 
 //! The SegmentTree maintains a list of all segments of a specific column in a table, and allows searching for a segment
@@ -35,8 +35,8 @@ public:
 	//! Gets a pointer to the first segment. Useful for scans.
 	SegmentBase *GetRootSegment();
 	SegmentBase *GetRootSegment(SegmentLock &);
-	//! Obtains ownership of the root sgment of the segment tree
-	unique_ptr<SegmentBase> GrabRootSegment(SegmentLock &);
+	//! Obtains ownership of the data of the segment tree
+	vector<SegmentNode> MoveSegments(SegmentLock &);
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
 	SegmentBase *GetSegmentByIndex(int64_t index);
 	SegmentBase *GetSegmentByIndex(SegmentLock &, int64_t index);
@@ -70,8 +70,6 @@ public:
 	void Verify();
 
 private:
-	//! The initial segment of the tree
-	unique_ptr<SegmentBase> root_node;
 	//! The nodes in the tree, can be binary searched
 	vector<SegmentNode> nodes;
 	//! Lock to access or modify the nodes

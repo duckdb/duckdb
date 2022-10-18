@@ -9,17 +9,16 @@ SegmentLock SegmentTree::Lock() {
 }
 
 bool SegmentTree::IsEmpty(SegmentLock &) {
-	D_ASSERT(nodes.empty() == (root_node.get() == nullptr));
 	return nodes.empty();
 }
 
 SegmentBase *SegmentTree::GetRootSegment(SegmentLock &l) {
 	Verify(l);
-	return root_node.get();
+	return nodes.empty() ? nullptr : nodes[0].node.get();
 }
 
-unique_ptr<SegmentBase> SegmentTree::GrabRootSegment(SegmentLock &) {
-	return move(root_node);
+vector<SegmentNode> SegmentTree::MoveSegments(SegmentLock &) {
+	return move(nodes);
 }
 
 SegmentBase *SegmentTree::GetRootSegment() {
@@ -33,12 +32,12 @@ SegmentBase *SegmentTree::GetSegmentByIndex(SegmentLock &, int64_t index) {
 		if (index < 0) {
 			return nullptr;
 		}
-		return nodes[index].node;
+		return nodes[index].node.get();
 	} else {
 		if (idx_t(index) >= nodes.size()) {
 			return nullptr;
 		}
-		return nodes[index].node;
+		return nodes[index].node.get();
 	}
 }
 SegmentBase *SegmentTree::GetSegmentByIndex(int64_t index) {
@@ -51,7 +50,7 @@ SegmentBase *SegmentTree::GetLastSegment(SegmentLock &l) {
 		return nullptr;
 	}
 	Verify(l);
-	return nodes.back().node;
+	return nodes.back().node.get();
 }
 
 SegmentBase *SegmentTree::GetLastSegment() {
@@ -60,7 +59,7 @@ SegmentBase *SegmentTree::GetLastSegment() {
 }
 
 SegmentBase *SegmentTree::GetSegment(SegmentLock &l, idx_t row_number) {
-	return nodes[GetSegmentIndex(l, row_number)].node;
+	return nodes[GetSegmentIndex(l, row_number)].node.get();
 }
 
 SegmentBase *SegmentTree::GetSegment(idx_t row_number) {
@@ -88,7 +87,13 @@ idx_t SegmentTree::GetSegmentIndex(SegmentLock &, idx_t row_number) {
 			return index;
 		}
 	}
-	throw InternalException("Could not find node in column segment tree!");
+	string error;
+	error = StringUtil::Format("Attempting to find row number \"%lld\" in %lld nodes\n", row_number, nodes.size());
+	for (idx_t i = 0; i < nodes.size(); i++) {
+		error +=
+		    StringUtil::Format("Node %lld: Start %lld, Count %lld", i, nodes[i].row_start, nodes[i].node->count.load());
+	}
+	throw InternalException("Could not find node in column segment tree!\n%s%s", error, Exception::GetStackTrace());
 }
 
 idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
@@ -98,7 +103,7 @@ idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
 
 bool SegmentTree::HasSegment(SegmentLock &, SegmentBase *segment) {
 	for (auto &node : nodes) {
-		if (node.node == segment) {
+		if (node.node.get() == segment) {
 			return true;
 		}
 	}
@@ -113,18 +118,13 @@ bool SegmentTree::HasSegment(SegmentBase *segment) {
 void SegmentTree::AppendSegment(SegmentLock &, unique_ptr<SegmentBase> segment) {
 	D_ASSERT(segment);
 	// add the node to the list of nodes
+	if (!nodes.empty()) {
+		nodes.back().node->next = segment.get();
+	}
 	SegmentNode node;
 	node.row_start = segment->start;
-	node.node = segment.get();
-	nodes.push_back(node);
-
-	if (nodes.size() > 1) {
-		// add the node as the next pointer of the last node
-		D_ASSERT(!nodes[nodes.size() - 2].node->next);
-		nodes[nodes.size() - 2].node->next = move(segment);
-	} else {
-		root_node = move(segment);
-	}
+	node.node = move(segment);
+	nodes.push_back(move(node));
 }
 
 void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
@@ -140,7 +140,6 @@ void SegmentTree::EraseSegments(SegmentLock &, idx_t segment_start) {
 }
 
 void SegmentTree::Replace(SegmentLock &, SegmentTree &other) {
-	root_node = move(other.root_node);
 	nodes = move(other.nodes);
 }
 
@@ -151,21 +150,11 @@ void SegmentTree::Replace(SegmentTree &other) {
 
 void SegmentTree::Verify(SegmentLock &) {
 #ifdef DEBUG
-	auto segment = root_node.get();
-	if (!segment) {
-		D_ASSERT(nodes.empty());
-		return;
-	}
-	idx_t segment_idx = 0;
-	idx_t base_start = segment->start;
-	while (segment) {
-		D_ASSERT(segment_idx < nodes.size());
-		D_ASSERT(nodes[segment_idx].node == segment);
-		D_ASSERT(nodes[segment_idx].row_start == segment->start);
-		D_ASSERT(segment->start == base_start);
-		base_start += segment->count;
-		segment = segment->next.get();
-		segment_idx++;
+	idx_t base_start = nodes.empty() ? 0 : nodes[0].node->start;
+	for (idx_t i = 0; i < nodes.size(); i++) {
+		D_ASSERT(nodes[i].row_start == nodes[i].node->start);
+		D_ASSERT(nodes[i].node->start == base_start);
+		base_start += nodes[i].node->count;
 	}
 #endif
 }

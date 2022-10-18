@@ -145,7 +145,7 @@ bool LocalStorage::NextParallelScan(ClientContext &context, DataTable *table, Pa
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable *table) {
 	state.storage = GetOrCreateStorage(table);
-	state.storage->row_groups->InitializeAppend(state.append_state);
+	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state, 0);
 }
 
 void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
@@ -215,8 +215,7 @@ void LocalTableStorage::FlushToDisk() {
 }
 
 void LocalStorage::FinalizeAppend(LocalAppendState &state) {
-	TransactionData transaction_data(0, 0);
-	state.storage->row_groups->FinalizeAppend(transaction_data, state.append_state);
+	state.storage->row_groups->FinalizeAppend(state.append_state.transaction, state.append_state);
 }
 
 void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection) {
