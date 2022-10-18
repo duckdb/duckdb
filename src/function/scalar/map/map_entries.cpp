@@ -42,7 +42,7 @@ static unique_ptr<FunctionData> MapEntriesBind(ClientContext &context, ScalarFun
 	child_list_t<LogicalType> child_types;
 
 	if (arguments.size() != 1) {
-		throw InvalidInputException("The input argument must be a map");
+		throw InvalidInputException("Too many arguments provided, only expecting a single map");
 	}
 	auto &map = arguments[0]->return_type;
 
