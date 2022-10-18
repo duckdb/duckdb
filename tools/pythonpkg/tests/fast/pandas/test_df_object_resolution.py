@@ -608,29 +608,6 @@ class TestResolveObjectColumns(object):
         assert(conversion == reference)
         assert(isinstance(conversion[0][0], float))
 
-    def test_numeric_decimal_castfail(self):
-        duckdb_conn = duckdb.connect()
-        data = [
-            Decimal("""
-            9.1e300
-            """)
-        ]
-        decimals = pd.DataFrame(
-            data ={
-                "0": data
-            }
-        )
-        reference_query = """
-            CREATE TABLE tbl AS SELECT * FROM (
-                VALUES
-                    (123)
-            ) tbl(a);
-        """
-        duckdb_conn.execute(reference_query)
-        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
-        with pytest.raises(duckdb.ConversionException):
-            conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
-
     def test_numeric_decimal_double_mixed(self):
         duckdb_conn = duckdb.connect()
         data = [
