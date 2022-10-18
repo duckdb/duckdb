@@ -30,7 +30,7 @@ INSERT INTO geometries VALUES(''), (NULL)
 query R
 select ST_ASTEXT(g) from geometries
 ----
-(empty)
+NULL
 NULL
 
 query I
@@ -46,7 +46,7 @@ NULL
 query I
 SELECT ST_ASTEXT('')
 ----
-(empty)
+NULL
 
 #test with invalid input
 statement error

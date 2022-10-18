@@ -8,6 +8,9 @@ namespace duckdb {
 string Geometry::GetString(string_t geometry, DataFormatType ftype) {
 	auto data = (const_data_ptr_t)geometry.GetDataUnsafe();
 	auto len = geometry.GetSize();
+	if (len == 0) {
+		return "";
+	}
 	Postgis postgis;
 	string text = "";
 	switch (ftype) {
