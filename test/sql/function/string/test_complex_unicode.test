@@ -5,19 +5,19 @@
 statement ok
 PRAGMA enable_verification
 
-# grapheme_count returns the number of grapheme clusters
+# length_grapheme returns the number of grapheme clusters
 query I
-SELECT grapheme_count('S̈a')
+SELECT length_grapheme('S̈a')
 ----
 2
 
 query I
-SELECT grapheme_count('🤦🏼‍♂️')
+SELECT length_grapheme('🤦🏼‍♂️')
 ----
 1
 
 query I
-SELECT grapheme_count('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️')
+SELECT length_grapheme('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️')
 ----
 7
 

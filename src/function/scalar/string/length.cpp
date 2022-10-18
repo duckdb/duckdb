@@ -94,11 +94,11 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	length.name = "len";
 	set.AddFunction(length);
 
-	ScalarFunctionSet grapheme_count("grapheme_count");
-	grapheme_count.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                          ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
-	                                          nullptr, nullptr, LengthPropagateStats));
-	set.AddFunction(grapheme_count);
+	ScalarFunctionSet length_grapheme("length_grapheme");
+	length_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                                           ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
+	                                           nullptr, nullptr, LengthPropagateStats));
+	set.AddFunction(length_grapheme);
 
 	ScalarFunctionSet array_length("array_length");
 	array_length.AddFunction(array_length_unary);
