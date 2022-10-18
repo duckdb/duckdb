@@ -1,0 +1,68 @@
+# name: test/sql/function/geometry/test_centroid.test
+# description: ST_CENTROID test
+# group: [geometry]
+
+require geo
+
+statement ok
+PRAGMA enable_verification
+
+#test with POINT
+query I
+SELECT ST_CENTROID('POINT(30 10.2323)')
+----
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\xBB\xB8\x8D\x06\xF0v$@
+
+query I 
+SELECT ST_CENTROID('010100000000000000000024400000000000004B40')
+----
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00K@
+
+query I 
+SELECT ST_CENTROID('{"type":"Point","coordinates":[-71.064544,10.2323]}')
+----
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xBB\xB8\x8D\x06\xF0v$@
+
+#test with NULL and empty value
+query I
+SELECT ST_CENTROID('')
+----
+(empty)
+
+query I 
+SELECT ST_CENTROID(NULL)
+----
+NULL
+
+# test with invalid input
+statement error
+SELECT ST_CENTROID(22)
+
+# test with table
+statement ok
+CREATE TABLE geometries (g Geometry);
+
+statement ok
+INSERT INTO geometries VALUES('010100000000000000000024400000000000004B40'), ('01010000000000000000003E40BBB88D06F0762440'), ('0101000000CB49287D21C451C0F0BF95ECD8244540'), ('0101000000CB49287D21C451C0F0BF95ECD8A44540')
+
+query R
+SELECT ST_CENTROID(g) FROM geometries
+----
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00K@
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\xBB\xB8\x8D\x06\xF0v$@
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xF0\xBF\x95\xEC\xD8$E@
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xF0\xBF\x95\xEC\xD8\xA4E@
+
+statement ok
+INSERT INTO geometries VALUES(''::GEOMETRY), (NULL::GEOMETRY), ('POINT(10 54)')
+
+query R
+SELECT ST_CENTROID(g) FROM geometries
+----
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00K@
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\xBB\xB8\x8D\x06\xF0v$@
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xF0\xBF\x95\xEC\xD8$E@
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xF0\xBF\x95\xEC\xD8\xA4E@
+NULL
+NULL
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00K@

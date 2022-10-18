@@ -1,0 +1,57 @@
+# name: test/sql/function/geometry/test_from_text.test
+# description: ST_GEOMFROMTEXT test
+# group: [geometry]
+
+require geo
+
+statement ok
+PRAGMA enable_verification
+
+# test with valid text string
+query I
+SELECT ST_GEOMFROMTEXT('POINT(50.23233 -43.45454)')
+----
+\x01\x01\x00\x00\x00\x99\xF0K\xFD\xBC\x1DI@\xA7\x5C\xE1].\xBAE\xC0
+
+#test with srid
+query I 
+SELECT ST_GEOMFROMTEXT('POINT(50.23233 -43.45454)', 4321)
+----
+\x01\x01\x00\x00 \xE1\x10\x00\x00\x99\xF0K\xFD\xBC\x1DI@\xA7\x5C\xE1].\xBAE\xC0
+
+# test with NULL and empty value
+query I 
+SELECT ST_GEOMFROMTEXT('')
+----
+(empty)
+
+query I 
+SELECT ST_GEOMFROMTEXT(NULL)
+----
+NULL
+
+#test with invalid string
+statement error
+SELECT ST_GEOMFROMTEXT('PAOINT(12.2323 -34.7565)')
+
+# test with string in table
+statement ok
+CREATE TABLE geometries(g VARCHAR)
+
+statement ok
+INSERT INTO geometries VALUES('POINT(50.23233 -43.45454)'), (''), (NULL), ('POINT(-71.064544 42.28787)')
+
+query I
+SELECT ST_GEOMFROMTEXT(g) FROM geometries
+----
+\x01\x01\x00\x00\x00\x99\xF0K\xFD\xBC\x1DI@\xA7\x5C\xE1].\xBAE\xC0
+(empty)
+NULL
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xF0\xBF\x95\xEC\xD8$E@
+
+#test with invalid string
+statement ok
+INSERT INTO geometries VALUES('POAINT(50.23233 -43.45454)')
+
+statement error
+SELECT ST_GEOMFROMTEXT(g) FROM geometries

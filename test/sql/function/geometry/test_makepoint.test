@@ -1,0 +1,53 @@
+# name: test/sql/function/geometry/test_makepoint.test
+# description: ST_MAKEPOINT test
+# group: [geometry]
+
+require geo
+
+statement ok
+PRAGMA enable_verification
+
+# test basic 2D make point
+query I
+SELECT ST_MAKEPOINT(5, 6)
+----
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x18@
+
+# test basic #D make point
+query I
+SELECT ST_MAKEPOINT(5, 6, 7)
+----
+\x01\x01\x00\x00\x80\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x18@\x00\x00\x00\x00\x00\x00\x1C@
+
+# test invalid decodes
+statement error
+SELECT ST_MAKEPOINT(5, 'a')
+
+# test make point with table 
+statement ok
+CREATE TABLE tbl_doubles(p1 DOUBLE, p2 DOUBLE)
+
+statement ok
+INSERT INTO tbl_doubles VALUES (42.123456, 10.54), (-73.34343, 50.3432242)
+
+query R
+SELECT ST_MAKEPOINT(p1, p2) from tbl_doubles
+----
+\x01\x01\x00\x00\x00[?\xFDg\xCD\x0FE@\x14\xAEG\xE1z\x14%@
+\x01\x01\x00\x00\x00\xC7\x9D\xD2\xC1\xFAUR\xC0\x0F\x19E\xC5\xEE+I@
+
+#test make point with null value 
+#statement ok
+#DELETE FROM tbl_doubles
+
+statement ok
+INSERT INTO tbl_doubles VALUES(1.0, NULL), (-73.34343, 50.3432242)
+
+query R
+SELECT ST_MAKEPOINT(p1, p2) from tbl_doubles
+----
+\x01\x01\x00\x00\x00[?\xFDg\xCD\x0FE@\x14\xAEG\xE1z\x14%@
+\x01\x01\x00\x00\x00\xC7\x9D\xD2\xC1\xFAUR\xC0\x0F\x19E\xC5\xEE+I@
+NULL
+\x01\x01\x00\x00\x00\xC7\x9D\xD2\xC1\xFAUR\xC0\x0F\x19E\xC5\xEE+I@
+

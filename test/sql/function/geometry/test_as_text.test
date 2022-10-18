@@ -1,0 +1,53 @@
+# name: test/sql/function/geometry/test_as_text.test
+# description: ST_ASTEXT test
+# group: [geometry]
+
+require geo
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE geometries(g Geometry)
+
+statement ok
+INSERT INTO geometries VALUES('{"type":"Point","coordinates":[30,10.2323]}'), ('{"type":"Point","coordinates":[-71.064544,10.2323]}'), ('{"type":"Point","coordinates":[30,43.28787]}')
+
+query R
+select ST_ASTEXT(g) from geometries
+----
+POINT(30 10.2323)
+POINT(-71.064544 10.2323)
+POINT(30 43.28787)
+
+# test with null and empty
+statement ok
+DELETE FROM geometries
+
+statement ok
+INSERT INTO geometries VALUES(''), (NULL)
+
+query R
+select ST_ASTEXT(g) from geometries
+----
+(empty)
+NULL
+
+query I
+SELECT ST_ASTEXT(ST_MAKEPOINT(5.04, 10.94))
+----
+POINT(5.04 10.94)
+
+query I
+SELECT ST_ASTEXT(NULL)
+----
+NULL
+
+query I
+SELECT ST_ASTEXT('')
+----
+(empty)
+
+#test with invalid input
+statement error
+SELECT ST_ASTEXT('invalid')

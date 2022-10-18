@@ -8,10 +8,10 @@ namespace duckdb {
 
 GSERIALIZED *geography_centroid(GSERIALIZED *g, bool use_spheroid) {
 	LWGEOM *lwgeom = NULL;
-	LWGEOM *lwgeom_out = NULL;
-	LWPOINT *lwpoint_out = NULL;
-	GSERIALIZED *g_out = NULL;
-	int32_t srid;
+	// LWGEOM *lwgeom_out = NULL;
+	// LWPOINT *lwpoint_out = NULL;
+	// GSERIALIZED *g_out = NULL;
+	// int32_t srid;
 	SPHEROID s;
 
 	/* Get our geometry object loaded into memory. */
@@ -21,7 +21,7 @@ GSERIALIZED *geography_centroid(GSERIALIZED *g, bool use_spheroid) {
 		return nullptr;
 	}
 
-	srid = lwgeom_get_srid(lwgeom);
+	// srid = lwgeom_get_srid(lwgeom);
 
 	/* on empty input, return empty output */
 	// if (gserialized_is_empty(g)) {

@@ -1,0 +1,91 @@
+# name: test/sql/types/geometry/test_geometry.test
+# description: GEOMETRY tests
+# group: [geometry]
+
+require geo
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE geometries (g Geometry);
+
+# Insert valid geometry strings
+statement ok
+INSERT INTO geometries VALUES('010100000000000000000024400000000000004B40'), ('01010000000000000000003E40BBB88D06F0762440'), ('0101000000CB49287D21C451C0F0BF95ECD8244540'), ('0101000000CB49287D21C451C0F0BF95ECD8A44540')
+
+query T
+SELECT * FROM geometries
+----
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00K@
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\xBB\xB8\x8D\x06\xF0v$@
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xF0\xBF\x95\xEC\xD8$E@
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xF0\xBF\x95\xEC\xD8\xA4E@
+
+# Insert valid strings with text
+statement ok
+DELETE FROM geometries
+
+statement ok
+INSERT INTO geometries VALUES('POINT(10 54)'), ('POINT(-71.064544 42.28787)'), ('POINT(-71.064544 43.28787)')
+
+query T
+SELECT * FROM geometries
+----
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00K@
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xF0\xBF\x95\xEC\xD8$E@
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xF0\xBF\x95\xEC\xD8\xA4E@
+
+# Insert valid strings with geojson
+statement ok
+DELETE FROM geometries
+
+statement ok
+INSERT INTO geometries VALUES('{"type":"Point","coordinates":[30,10.2323]}'), ('{"type":"Point","coordinates":[-71.064544,10.2323]}'), ('{"type":"Point","coordinates":[30,43.28787]}')
+
+query T
+SELECT * FROM geometries
+----
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\xBB\xB8\x8D\x06\xF0v$@
+\x01\x01\x00\x00\x00\xCBI(}!\xC4Q\xC0\xBB\xB8\x8D\x06\xF0v$@
+\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\xF0\xBF\x95\xEC\xD8\xA4E@
+
+# Insert invalid binary string (invalid hex chars: G, H, I)
+statement error
+INSERT INTO geometries('010100000000000G0000003E40BBB8HD06F07I2440')
+
+# Insert invalid text string
+statement error
+INSERT INTO geometries(('PAOINT(-71.064544 42.28787)'))
+
+# Insert invalid geojson string
+statement error
+INSERT INTO geometries(('{"type":"Pointttttt","coordinates":[30,10.2323]}'))
+
+# GEOMETRY null and empty values
+query T
+SELECT ''::GEOMETRY
+----
+NULL
+
+query T
+SELECT NULL::GEOMETRY
+----
+NULL
+
+statement ok
+CREATE TABLE geometry_empty (g Geometry);
+
+statement ok
+INSERT INTO geometry_empty VALUES(''), (''::GEOMETRY)
+
+statement ok
+INSERT INTO geometry_empty VALUES(NULL), (NULL::GEOMETRY)
+
+query T
+SELECT * FROM geometry_empty
+----
+NULL
+NULL
+NULL
+NULL
