@@ -73,3 +73,29 @@ query T
 SELECT REVERSE('MotörHead')
 ----
 daeHrötoM
+
+# substring with grapheme clusters
+query T
+SELECT substring_grapheme('🤦🏼‍♂️🤦🏼‍♂️🤦🏼‍♂️', 1, 1)
+----
+🤦🏼‍♂️
+
+query T
+SELECT substring_grapheme('S̈a︍', 2, 1)
+----
+a︍
+
+query T
+SELECT substring_grapheme('test: 🤦🏼‍♂️hello🤦🏼‍♂️ world', 7, 7)
+----
+🤦🏼‍♂️hello🤦🏼‍♂️
+
+query T
+SELECT substring_grapheme('S̈a', 1, 1)
+----
+S̈
+
+query T
+SELECT substring_grapheme('S̈a︍', -1, 1)
+----
+a︍

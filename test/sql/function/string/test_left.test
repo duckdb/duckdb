@@ -16,6 +16,11 @@ SELECT LEFT('🦆ab', 0), LEFT('🦆ab', 1), LEFT('🦆ab', 2), LEFT('🦆ab', 3
 ----
 (empty)	🦆	🦆a	🦆ab	🦆ab
 
+query TTTT
+SELECT LEFT_GRAPHEME('🦆🤦S̈', 0), LEFT_GRAPHEME('🦆🤦S̈', 1), LEFT_GRAPHEME('🦆🤦S̈', 2), LEFT_GRAPHEME('🦆🤦S̈', 3)
+----
+(empty)	🦆	🦆🤦	🦆🤦S̈
+
 # test LEFT on negative positions
 query TTTTT
 SELECT LEFT('abcd', 0), LEFT('abc', -1), LEFT('abc', -2), LEFT('abc', -3), LEFT('abc', -4)
@@ -26,6 +31,11 @@ query TTTTT
 SELECT LEFT('🦆ab', 0), LEFT('🦆ab', -1), LEFT('🦆ab', -2), LEFT('🦆ab', -3), LEFT('🦆ab', -4)
 ----
 (empty)	🦆a	🦆	(empty)	(empty)
+
+query TTTT
+SELECT LEFT_GRAPHEME('🦆🤦S̈', 0), LEFT_GRAPHEME('🦆🤦S̈', -1), LEFT_GRAPHEME('🦆🤦S̈', -2), LEFT_GRAPHEME('🦆🤦S̈', -3)
+----
+(empty)	🦆🤦	🦆	(empty)
 
 # test LEFT on NULL values
 query TTT

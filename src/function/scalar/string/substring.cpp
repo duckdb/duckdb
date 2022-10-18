@@ -69,7 +69,7 @@ string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t 
 	return SubstringSlice(result, input_data, start, end - start);
 }
 
-string_t SubstringFun::SubstringScalarFunction(Vector &result, string_t input, int64_t offset, int64_t length) {
+string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length) {
 	auto input_data = input.GetDataUnsafe();
 	auto input_size = input.GetSize();
 
@@ -154,6 +154,80 @@ string_t SubstringFun::SubstringScalarFunction(Vector &result, string_t input, i
 	return SubstringSlice(result, input_data, start_pos, end_pos - start_pos);
 }
 
+string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length) {
+	auto input_data = input.GetDataUnsafe();
+	auto input_size = input.GetSize();
+
+	// we don't know yet if the substring is ascii, but we assume it is (for now)
+	// first get the start and end as if this was an ascii string
+	int64_t start, end;
+	if (!SubstringStartEnd(input_size, offset, length, start, end)) {
+		return SubstringEmptyString(result);
+	}
+
+	// now check if all the characters between 0 and end are ascii characters
+	// note that we scan one further to check for a potential combining diacritics (e.g. i + diacritic is ï)
+	bool is_ascii = true;
+	idx_t ascii_end = MinValue<idx_t>(end + 1, input_size);
+	for (idx_t i = 0; i < ascii_end; i++) {
+		if (input_data[i] & 0x80) {
+			// found a non-ascii character: eek
+			is_ascii = false;
+			break;
+		}
+	}
+	if (is_ascii) {
+		// all characters are ascii, we can just slice the substring
+		return SubstringSlice(result, input_data, start, end - start);
+	}
+	// if the characters are not ascii, we need to scan grapheme clusters
+	// first figure out which direction we need to scan
+	// offset = 0 case is taken care of in SubstringStartEnd
+	if (offset < 0) {
+		// negative offset, this case is more difficult
+		// we first need to count the number of characters in the string
+		idx_t num_characters = 0;
+		utf8proc_grapheme_callback(input_data, input_size, [&](size_t start, size_t end) {
+			num_characters++;
+			return true;
+		});
+		// now call substring start and end again, but with the number of unicode characters this time
+		SubstringStartEnd(num_characters, offset, length, start, end);
+	}
+
+	// now scan the graphemes of the string to find the positions of the start and end characters
+	int64_t current_character = 0;
+	idx_t start_pos = DConstants::INVALID_INDEX, end_pos = input_size;
+	utf8proc_grapheme_callback(input_data, input_size, [&](size_t gstart, size_t gend) {
+		if (current_character == start) {
+			start_pos = gstart;
+		} else if (current_character == end) {
+			end_pos = gstart;
+			return false;
+		}
+		current_character++;
+		return true;
+	});
+	if (start_pos == DConstants::INVALID_INDEX) {
+		return SubstringEmptyString(result);
+	}
+	// after we have found these, we can slice the substring
+	return SubstringSlice(result, input_data, start_pos, end_pos - start_pos);
+}
+
+struct SubstringUnicodeOp {
+	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
+		return SubstringFun::SubstringUnicode(result, input, offset, length);
+	}
+};
+
+struct SubstringGraphemeOp {
+	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
+		return SubstringFun::SubstringGrapheme(result, input, offset, length);
+	}
+};
+
+template <class OP>
 static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
@@ -163,13 +237,12 @@ static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &r
 		TernaryExecutor::Execute<string_t, int64_t, int64_t, string_t>(
 		    input_vector, offset_vector, length_vector, result, args.size(),
 		    [&](string_t input_string, int64_t offset, int64_t length) {
-			    return SubstringFun::SubstringScalarFunction(result, input_string, offset, length);
+			    return OP::Substring(result, input_string, offset, length);
 		    });
 	} else {
 		BinaryExecutor::Execute<string_t, int64_t, string_t>(
 		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int64_t offset) {
-			    return SubstringFun::SubstringScalarFunction(result, input_string, offset,
-			                                                 NumericLimits<int64_t>::Maximum() - offset);
+			    return OP::Substring(result, input_string, offset, NumericLimits<int64_t>::Maximum() - offset);
 		    });
 	}
 }
@@ -211,13 +284,23 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet substr("substring");
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                  LogicalType::VARCHAR, SubstringFunction, nullptr, nullptr,
+	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
 	                                  SubstringPropagateStats));
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                                  SubstringFunction, nullptr, nullptr, SubstringPropagateStats));
+	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
+	                                  SubstringPropagateStats));
 	set.AddFunction(substr);
 	substr.name = "substr";
 	set.AddFunction(substr);
+
+	ScalarFunctionSet substr_grapheme("substring_grapheme");
+	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
+	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, nullptr,
+	                                           nullptr, SubstringPropagateStats));
+	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                                           SubstringFunction<SubstringGraphemeOp>, nullptr, nullptr,
+	                                           SubstringPropagateStats));
+	set.AddFunction(substr_grapheme);
 }
 
 } // namespace duckdb

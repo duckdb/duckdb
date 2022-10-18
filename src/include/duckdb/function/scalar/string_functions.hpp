@@ -65,6 +65,24 @@ struct LengthFun {
 		}
 		return length;
 	}
+
+	template <class TA, class TR>
+	static inline TR GraphemeCount(TA input) {
+		auto input_data = input.GetDataUnsafe();
+		auto input_length = input.GetSize();
+		for (idx_t i = 0; i < input_length; i++) {
+			if (input_data[i] & 0x80) {
+				int64_t length = 0;
+				// non-ascii character: use grapheme iterator on remainder of string
+				utf8proc_grapheme_callback(input_data, input_length, [&](size_t start, size_t end) {
+					length++;
+					return true;
+				});
+				return length;
+			}
+		}
+		return input_length;
+	}
 };
 
 struct LikeFun {
@@ -103,7 +121,8 @@ struct RegexpFun {
 
 struct SubstringFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static string_t SubstringScalarFunction(Vector &result, string_t input, int64_t offset, int64_t length);
+	static string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length);
+	static string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length);
 };
 
 struct PrintfFun {
