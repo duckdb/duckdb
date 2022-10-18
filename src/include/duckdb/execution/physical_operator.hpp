@@ -139,8 +139,8 @@ public:
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
-	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-	                          OperatorState &state) const;
+	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk,
+	                                                GlobalOperatorState &gstate, OperatorState &state) const;
 
 	virtual bool ParallelOperator() const {
 		return false;
@@ -251,7 +251,7 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const final;
 	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-	                  OperatorState &state) const final;
+	                                        OperatorState &state) const final;
 
 	bool RequiresFinalExecute() const final {
 		return caching_supported;

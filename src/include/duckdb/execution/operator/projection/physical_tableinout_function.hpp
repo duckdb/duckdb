@@ -27,7 +27,7 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-	                  OperatorState &state) const override;
+	                                        OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
 		return true;

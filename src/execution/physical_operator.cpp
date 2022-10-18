@@ -52,8 +52,8 @@ OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChun
 	throw InternalException("Calling Execute on a node that is not an operator!");
 }
 
-OperatorFinalizeResultType PhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-                                    OperatorState &state) const {
+OperatorFinalizeResultType PhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk,
+                                                          GlobalOperatorState &gstate, OperatorState &state) const {
 	throw InternalException("Calling FinalExecute on a node that is not an operator!");
 }
 // LCOV_EXCL_STOP
@@ -265,11 +265,12 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
 
 #if STANDARD_VECTOR_SIZE >= 128
-   	if (!context.pipeline || !caching_supported) {
+	if (!context.pipeline || !caching_supported) {
 		return child_result;
 	}
 
-	if (context.pipeline->GetSink() && context.pipeline->GetSink()->RequiresBatchIndex() && context.pipeline->GetSource()->SupportsBatchIndex()) {
+	if (context.pipeline->GetSink() && context.pipeline->GetSink()->RequiresBatchIndex() &&
+	    context.pipeline->GetSource()->SupportsBatchIndex()) {
 		return child_result;
 	}
 
@@ -304,8 +305,9 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	return child_result;
 }
 
-OperatorFinalizeResultType CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-                                           OperatorState &state_p) const {
+OperatorFinalizeResultType CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk,
+                                                                 GlobalOperatorState &gstate,
+                                                                 OperatorState &state_p) const {
 	auto &state = (CachingOperatorState &)state_p;
 	if (state.cached_chunk) {
 		chunk.Move(*state.cached_chunk);

@@ -131,10 +131,10 @@ DataChunk *PipelineExecutor::GetIntermediateChunk(unique_ptr<DataChunk> &tmp_chu
 void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
 	idx_t op_idx = start_idx;
-	while(op_idx < pipeline.operators.size()) {
+	while (op_idx < pipeline.operators.size()) {
 		if (pipeline.operators[op_idx]->RequiresFinalExecute()) {
 			unique_ptr<DataChunk> tmp_chunk;
-			DataChunk* curr_chunk;
+			DataChunk *curr_chunk;
 			OperatorFinalizeResultType finalize_result;
 
 			if (cached_flush_chunk) {
@@ -146,8 +146,8 @@ void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 				tmp_chunk = make_unique<DataChunk>();
 				tmp_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[op_idx]->GetTypes());
 				curr_chunk = tmp_chunk.get();
-				finalize_result = pipeline.operators[op_idx]->FinalExecute(context, *curr_chunk, *pipeline.operators[op_idx]->op_state,
-				                                                                *intermediate_states[op_idx]);
+				finalize_result = pipeline.operators[op_idx]->FinalExecute(
+				    context, *curr_chunk, *pipeline.operators[op_idx]->op_state, *intermediate_states[op_idx]);
 			}
 
 			auto execute_result = Execute(*curr_chunk, result, op_idx + 1);
@@ -191,10 +191,11 @@ void PipelineExecutor::FlushCachingOperatorsPush() {
 		do {
 			unique_ptr<DataChunk> tmp_chunk;
 			auto &curr_chunk = *GetIntermediateChunk(tmp_chunk, op_idx);
-			finalize_result = pipeline.operators[op_idx]->FinalExecute(context, curr_chunk, *pipeline.operators[op_idx]->op_state,
-			                                                                *intermediate_states[op_idx]);
+			finalize_result = pipeline.operators[op_idx]->FinalExecute(
+			    context, curr_chunk, *pipeline.operators[op_idx]->op_state, *intermediate_states[op_idx]);
 			push_result = ExecutePushInternal(curr_chunk, op_idx + 1);
-		} while (finalize_result != OperatorFinalizeResultType::FINISHED && push_result != OperatorResultType::FINISHED);
+		} while (finalize_result != OperatorFinalizeResultType::FINISHED &&
+		         push_result != OperatorResultType::FINISHED);
 
 		if (push_result == OperatorResultType::FINISHED) {
 			break;
@@ -208,9 +209,9 @@ void PipelineExecutor::PushFinalize() {
 	}
 	finalized = true;
 	// flush all caching operators
-	// note that even if an operator has finished, we might still need to flush caches AFTER thphysical_tableinout_function.cppat operator
-	// e.g. if we have SOURCE -> LIMIT -> CROSS_PRODUCT -> SINK, if the LIMIT reports no more rows will be passed on
-	// we still need to flush caches from the CROSS_PRODUCT
+	// note that even if an operator has finished, we might still need to flush caches AFTER
+	// thphysical_tableinout_function.cppat operator e.g. if we have SOURCE -> LIMIT -> CROSS_PRODUCT -> SINK, if the
+	// LIMIT reports no more rows will be passed on we still need to flush caches from the CROSS_PRODUCT
 	D_ASSERT(in_process_operators.empty());
 
 	FlushCachingOperatorsPush();
