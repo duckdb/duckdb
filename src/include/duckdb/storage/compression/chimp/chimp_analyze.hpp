@@ -20,7 +20,7 @@ struct ChimpAnalyzeState : public AnalyzeState {
 public:
 	using CHIMP_TYPE = typename ChimpType<T>::type;
 
-	ChimpAnalyzeState() : state((void *)this) {
+	ChimpAnalyzeState() : state() {
 		state.AssignDataBuffer(nullptr);
 	}
 	ChimpState<T, true> state;
@@ -102,17 +102,6 @@ public:
 	}
 };
 
-struct EmptyChimpWriter {
-
-	template <class VALUE_TYPE>
-	static void Operation(VALUE_TYPE uncompressed_value, bool is_valid, void *state_p) {
-		using CHIMP_TYPE = typename ChimpType<VALUE_TYPE>::type;
-
-		auto state_wrapper = (ChimpAnalyzeState<VALUE_TYPE> *)state_p;
-		state_wrapper->WriteValue(*(CHIMP_TYPE *)(&uncompressed_value), is_valid);
-	}
-};
-
 template <class T>
 unique_ptr<AnalyzeState> ChimpInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	return make_unique<ChimpAnalyzeState<T>>();
@@ -120,14 +109,15 @@ unique_ptr<AnalyzeState> ChimpInitAnalyze(ColumnData &col_data, PhysicalType typ
 
 template <class T>
 bool ChimpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+	using CHIMP_TYPE = typename ChimpType<T>::type;
 	auto &analyze_state = (ChimpAnalyzeState<T> &)state;
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
-	auto data = (T *)vdata.data;
+	auto data = (CHIMP_TYPE *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		analyze_state.state.template Update<EmptyChimpWriter>(data[idx], vdata.validity.RowIsValid(idx));
+		analyze_state.WriteValue(data[idx], vdata.validity.RowIsValid(idx));
 	}
 	return true;
 }

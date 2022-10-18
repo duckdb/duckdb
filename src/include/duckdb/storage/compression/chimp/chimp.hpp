@@ -49,10 +49,8 @@ struct ChimpState {
 public:
 	using CHIMP_TYPE = typename ChimpType<T>::type;
 
-	ChimpState(void *state_p = nullptr) : data_ptr(state_p), chimp_state() {
+	ChimpState() : chimp_state() {
 	}
-	//! The Compress/Analyze State
-	void *data_ptr;
 	Chimp128CompressionState<CHIMP_TYPE, EMPTY> chimp_state;
 
 public:
@@ -75,12 +73,6 @@ public:
 	template <class OP>
 	void Flush() {
 		chimp_state.output.Flush();
-	}
-
-	template <class OP>
-	bool Update(T uncompressed_value, bool is_valid) {
-		OP::template Operation<T>(uncompressed_value, is_valid, data_ptr);
-		return true;
 	}
 };
 

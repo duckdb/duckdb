@@ -32,28 +32,6 @@ struct ChimpCompressionState : public CompressionState {
 public:
 	using CHIMP_TYPE = typename ChimpType<T>::type;
 
-	struct ChimpWriter {
-
-		template <class VALUE_TYPE>
-		static void Operation(VALUE_TYPE value, bool is_valid, void *state_p) {
-			//! Need access to the CompressionState to be able to flush the segment
-			auto state_wrapper = (ChimpCompressionState<VALUE_TYPE> *)state_p;
-
-			if (!state_wrapper->HasEnoughSpace()) {
-				// Segment is full
-				auto row_start = state_wrapper->current_segment->start + state_wrapper->current_segment->count;
-				state_wrapper->FlushSegment();
-				state_wrapper->CreateEmptySegment(row_start);
-			}
-
-			if (is_valid) {
-				NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
-			}
-
-			state_wrapper->WriteValue(*(CHIMP_TYPE *)(&value), is_valid);
-		}
-	};
-
 	explicit ChimpCompressionState(ColumnDataCheckpointer &checkpointer, ChimpAnalyzeState<T> *analyze_state)
 	    : checkpointer(checkpointer) {
 
@@ -67,8 +45,6 @@ public:
 		state.AssignLeadingZeroBuffer((uint8_t *)leading_zero_blocks);
 		state.AssignFlagBuffer((uint8_t *)flags);
 		state.AssignPackedDataBuffer((uint16_t *)packed_data_blocks);
-
-		state.data_ptr = (void *)this;
 	}
 
 	ColumnDataCheckpointer &checkpointer;
@@ -155,21 +131,32 @@ public:
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
+		auto data = (CHIMP_TYPE *)vdata.data;
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			state.template Update<ChimpWriter>(data[idx], vdata.validity.RowIsValid(idx));
+			WriteValue(data[idx], vdata.validity.RowIsValid(idx));
 		}
 	}
 
 	void WriteValue(CHIMP_TYPE value, bool is_valid) {
+		if (!HasEnoughSpace()) {
+			// Segment is full
+			auto row_start = current_segment->start + current_segment->count;
+			FlushSegment();
+			CreateEmptySegment(row_start);
+		}
 		current_segment->count++;
-		if (!is_valid) {
+
+		if (is_valid) {
+			T floating_point_value = *(T *)(&value);
+			NumericStatistics::Update<T>(current_segment->stats, floating_point_value);
+		} else {
 			//! FIXME: find a cheaper alternative to storing a NULL
 			// store this as "value_identical", only using 9 bits for a NULL
 			value = state.chimp_state.previous_value;
 		}
+
 		Chimp128Compression<CHIMP_TYPE, false>::Store(value, state.chimp_state);
 		group_idx++;
 		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
