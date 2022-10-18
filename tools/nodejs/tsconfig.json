@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "outDir": "./dist",
+    "rootDir": "./lib",
+    "types": ["node", "mocha"]
+  },
+  "include": ["test/**/*"],
+  "exclude": ["node_modules"]
+}

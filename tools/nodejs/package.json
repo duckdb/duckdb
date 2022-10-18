@@ -1,6 +1,7 @@
 {
   "name": "duckdb",
   "main": "./lib/duckdb.js",
+  "types": "./lib/duckdb.d.ts",
   "version": "0.2.4",
   "description": "DuckDB node.js API",
   "gypfile": true,
@@ -25,14 +26,24 @@
     "test": "test"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.0",
+    "@types/node": "^18.11.0",
     "aws-sdk": "^2.790.0",
     "chai": "^4.3.6",
     "jsdoc3-parser": "^2.0.0",
-    "mocha": "^8.3.0"
+    "mocha": "^8.3.0",
+    "ts-node": "^10.9.1",
+    "tsconfig-paths": "^4.0.0",
+    "typescript": "^4.8.4"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cwida/duckdb.git"
+  },
+  "ts-node": {
+    "require": [
+      "tsconfig-paths/register"
+    ]
   },
   "keywords": [
     "database",
