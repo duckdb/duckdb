@@ -104,7 +104,7 @@ public:
 
 	// The current segment has enough space to fit this new value
 	bool HasEnoughSpace() {
-		if (handle.Ptr() + ChimpPrimitives::HEADER_SIZE + AlignValue(UsedSpace() + RequiredSpace()) >=
+		if (handle.Ptr() + AlignValue(ChimpPrimitives::HEADER_SIZE + UsedSpace() + RequiredSpace()) >=
 		    (metadata_ptr - CurrentGroupMetadataSize())) {
 			return false;
 		}

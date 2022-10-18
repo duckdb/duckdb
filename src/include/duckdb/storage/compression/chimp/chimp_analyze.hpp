@@ -90,8 +90,7 @@ public:
 
 	bool HasEnoughSpace() {
 		idx_t total_bytes_used = 0;
-		total_bytes_used += ChimpPrimitives::HEADER_SIZE;
-		total_bytes_used += AlignValue(UsedSpace() + RequiredSpace());
+		total_bytes_used += AlignValue(ChimpPrimitives::HEADER_SIZE + UsedSpace() + RequiredSpace());
 		total_bytes_used += CurrentGroupMetadataSize();
 		total_bytes_used += metadata_byte_size;
 		return total_bytes_used <= Storage::BLOCK_SIZE;
