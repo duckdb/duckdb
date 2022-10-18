@@ -37,7 +37,7 @@ public:
 		if (!HasEnoughSpace()) {
 			StartNewSegment();
 		}
-		Chimp128Compression<CHIMP_TYPE, true>::Store(value, state.chimp_state);
+		Chimp128Compression<CHIMP_TYPE, true>::Store(value, state.chimp);
 		group_idx++;
 		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
 			StartNewGroup();
@@ -45,19 +45,19 @@ public:
 	}
 
 	void StartNewSegment() {
-		state.template Flush<EmptyChimpWriter>();
+		state.Flush();
 		StartNewGroup();
 		data_byte_size += UsedSpace();
 		metadata_byte_size += ChimpPrimitives::HEADER_SIZE;
-		state.chimp_state.output.SetStream(nullptr);
+		state.chimp.output.SetStream(nullptr);
 	}
 
 	idx_t CurrentGroupMetadataSize() const {
 		idx_t metadata_size = 0;
 
-		metadata_size += 3 * state.chimp_state.leading_zero_buffer.BlockCount();
-		metadata_size += state.chimp_state.flag_buffer.BytesUsed();
-		metadata_size += 2 * state.chimp_state.packed_data_buffer.index;
+		metadata_size += 3 * state.chimp.leading_zero_buffer.BlockCount();
+		metadata_size += state.chimp.flag_buffer.BytesUsed();
+		metadata_size += 2 * state.chimp.packed_data_buffer.index;
 		return metadata_size;
 	}
 
@@ -81,11 +81,11 @@ public:
 	void StartNewGroup() {
 		group_idx = 0;
 		metadata_byte_size += CurrentGroupMetadataSize();
-		state.chimp_state.Reset();
+		state.chimp.Reset();
 	}
 
 	idx_t UsedSpace() const {
-		return state.chimp_state.output.BytesWritten();
+		return state.chimp.output.BytesWritten();
 	}
 
 	bool HasEnoughSpace() {
@@ -123,10 +123,10 @@ bool ChimpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 template <class T>
 idx_t ChimpFinalAnalyze(AnalyzeState &state) {
-	auto &chimp_state = (ChimpAnalyzeState<T> &)state;
+	auto &chimp = (ChimpAnalyzeState<T> &)state;
 	// Finish the last "segment"
-	chimp_state.StartNewSegment();
-	const auto final_analyze_size = chimp_state.TotalUsedBytes();
+	chimp.StartNewSegment();
+	const auto final_analyze_size = chimp.TotalUsedBytes();
 	return final_analyze_size;
 }
 

@@ -37,10 +37,9 @@ class ChimpPrimitives {
 public:
 	static constexpr uint32_t CHIMP_SEQUENCE_SIZE = 1024;
 	static constexpr uint8_t MAX_BYTES_PER_VALUE = sizeof(double) + 1; // extra wiggle room
-	static constexpr uint8_t CACHELINE_SIZE = 64;
 	static constexpr uint8_t HEADER_SIZE = sizeof(uint32_t);
 	static constexpr uint8_t FLAG_BIT_SIZE = 2;
-	static constexpr uint32_t LEADING_ZERO_BLOCK_BUFFERSIZE = 385;
+	static constexpr uint32_t LEADING_ZERO_BLOCK_BUFFERSIZE = 1 + (CHIMP_SEQUENCE_SIZE / 8) * 3;
 };
 
 //! Where all the magic happens
@@ -49,30 +48,29 @@ struct ChimpState {
 public:
 	using CHIMP_TYPE = typename ChimpType<T>::type;
 
-	ChimpState() : chimp_state() {
+	ChimpState() : chimp() {
 	}
-	Chimp128CompressionState<CHIMP_TYPE, EMPTY> chimp_state;
+	Chimp128CompressionState<CHIMP_TYPE, EMPTY> chimp;
 
 public:
 	void AssignDataBuffer(uint8_t *data_out) {
-		chimp_state.output.SetStream(data_out);
+		chimp.output.SetStream(data_out);
 	}
 
 	void AssignFlagBuffer(uint8_t *flag_out) {
-		chimp_state.flag_buffer.SetBuffer(flag_out);
+		chimp.flag_buffer.SetBuffer(flag_out);
 	}
 
 	void AssignPackedDataBuffer(uint16_t *packed_data_out) {
-		chimp_state.packed_data_buffer.SetBuffer(packed_data_out);
+		chimp.packed_data_buffer.SetBuffer(packed_data_out);
 	}
 
 	void AssignLeadingZeroBuffer(uint8_t *leading_zero_out) {
-		chimp_state.leading_zero_buffer.SetBuffer(leading_zero_out);
+		chimp.leading_zero_buffer.SetBuffer(leading_zero_out);
 	}
 
-	template <class OP>
 	void Flush() {
-		chimp_state.output.Flush();
+		chimp.output.Flush();
 	}
 };
 
