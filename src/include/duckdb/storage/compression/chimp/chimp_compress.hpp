@@ -32,28 +32,6 @@ struct ChimpCompressionState : public CompressionState {
 public:
 	using CHIMP_TYPE = typename ChimpType<T>::type;
 
-	struct ChimpWriter {
-
-		template <class VALUE_TYPE>
-		static void Operation(VALUE_TYPE value, bool is_valid, void *state_p) {
-			//! Need access to the CompressionState to be able to flush the segment
-			auto state_wrapper = (ChimpCompressionState<VALUE_TYPE> *)state_p;
-
-			if (!state_wrapper->HasEnoughSpace()) {
-				// Segment is full
-				auto row_start = state_wrapper->current_segment->start + state_wrapper->current_segment->count;
-				state_wrapper->FlushSegment();
-				state_wrapper->CreateEmptySegment(row_start);
-			}
-
-			if (is_valid) {
-				NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
-			}
-
-			state_wrapper->WriteValue(*(CHIMP_TYPE *)(&value), is_valid);
-		}
-	};
-
 	explicit ChimpCompressionState(ColumnDataCheckpointer &checkpointer, ChimpAnalyzeState<T> *analyze_state)
 	    : checkpointer(checkpointer) {
 
@@ -67,8 +45,6 @@ public:
 		state.AssignLeadingZeroBuffer((uint8_t *)leading_zero_blocks);
 		state.AssignFlagBuffer((uint8_t *)flags);
 		state.AssignPackedDataBuffer((uint16_t *)packed_data_blocks);
-
-		state.data_ptr = (void *)this;
 	}
 
 	ColumnDataCheckpointer &checkpointer;
@@ -110,7 +86,7 @@ public:
 
 	// How many bytes the data occupies for the current segment
 	idx_t UsedSpace() const {
-		return state.chimp_state.output.BytesWritten();
+		return state.chimp.output.BytesWritten();
 	}
 
 	idx_t RemainingSpace() const {
@@ -120,15 +96,15 @@ public:
 	idx_t CurrentGroupMetadataSize() const {
 		idx_t metadata_size = 0;
 
-		metadata_size += 3 * state.chimp_state.leading_zero_buffer.BlockCount();
-		metadata_size += state.chimp_state.flag_buffer.BytesUsed();
-		metadata_size += 2 * state.chimp_state.packed_data_buffer.index;
+		metadata_size += 3 * state.chimp.leading_zero_buffer.BlockCount();
+		metadata_size += state.chimp.flag_buffer.BytesUsed();
+		metadata_size += 2 * state.chimp.packed_data_buffer.index;
 		return metadata_size;
 	}
 
 	// The current segment has enough space to fit this new value
 	bool HasEnoughSpace() {
-		if (handle.Ptr() + ChimpPrimitives::HEADER_SIZE + AlignValue(UsedSpace() + RequiredSpace()) >=
+		if (handle.Ptr() + AlignValue(ChimpPrimitives::HEADER_SIZE + UsedSpace() + RequiredSpace()) >=
 		    (metadata_ptr - CurrentGroupMetadataSize())) {
 			return false;
 		}
@@ -151,26 +127,37 @@ public:
 		segment_data = handle.Ptr() + current_segment->GetBlockOffset() + ChimpPrimitives::HEADER_SIZE;
 		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE;
 		state.AssignDataBuffer(segment_data);
-		state.chimp_state.Reset();
+		state.chimp.Reset();
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
+		auto data = (CHIMP_TYPE *)vdata.data;
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			state.template Update<ChimpWriter>(data[idx], vdata.validity.RowIsValid(idx));
+			WriteValue(data[idx], vdata.validity.RowIsValid(idx));
 		}
 	}
 
 	void WriteValue(CHIMP_TYPE value, bool is_valid) {
+		if (!HasEnoughSpace()) {
+			// Segment is full
+			auto row_start = current_segment->start + current_segment->count;
+			FlushSegment();
+			CreateEmptySegment(row_start);
+		}
 		current_segment->count++;
-		if (!is_valid) {
+
+		if (is_valid) {
+			T floating_point_value = *(T *)(&value);
+			NumericStatistics::Update<T>(current_segment->stats, floating_point_value);
+		} else {
 			//! FIXME: find a cheaper alternative to storing a NULL
 			// store this as "value_identical", only using 9 bits for a NULL
-			value = state.chimp_state.previous_value;
+			value = state.chimp.previous_value;
 		}
-		Chimp128Compression<CHIMP_TYPE, false>::Store(value, state.chimp_state);
+
+		Chimp128Compression<CHIMP_TYPE, false>::Store(value, state.chimp);
 		group_idx++;
 		if (group_idx == ChimpPrimitives::CHIMP_SEQUENCE_SIZE) {
 			FlushGroup();
@@ -179,7 +166,7 @@ public:
 
 	void FlushGroup() {
 		// Has to be called first to flush the last values in the LeadingZeroBuffer
-		state.chimp_state.Flush();
+		state.chimp.Flush();
 
 		metadata_ptr -= sizeof(byte_index_t);
 		metadata_byte_size += sizeof(byte_index_t);
@@ -187,7 +174,7 @@ public:
 		Store<byte_index_t>(next_group_byte_index_start, metadata_ptr);
 		next_group_byte_index_start = UsedSpace();
 
-		const uint8_t leading_zero_block_count = state.chimp_state.leading_zero_buffer.BlockCount();
+		const uint8_t leading_zero_block_count = state.chimp.leading_zero_buffer.BlockCount();
 		// Every 8 values are packed in one block
 		D_ASSERT(leading_zero_block_count <= ChimpPrimitives::CHIMP_SEQUENCE_SIZE / 8);
 		metadata_ptr -= sizeof(uint8_t);
@@ -202,7 +189,7 @@ public:
 		memcpy((void *)metadata_ptr, (void *)leading_zero_blocks, bytes_used_by_leading_zero_blocks);
 
 		//! This is max 1024, because it's the amount of flags there are, not the amount of bytes that takes up
-		const uint16_t flag_bytes = state.chimp_state.flag_buffer.BytesUsed();
+		const uint16_t flag_bytes = state.chimp.flag_buffer.BytesUsed();
 #ifdef DEBUG
 		const idx_t padding = (current_segment->count % ChimpPrimitives::CHIMP_SEQUENCE_SIZE) == 0
 		                          ? ChimpPrimitives::CHIMP_SEQUENCE_SIZE
@@ -222,7 +209,7 @@ public:
 
 		// FIXME: this does stop us from skipping groups with point queries,
 		// because the metadata has a variable size, and we have to extract all flags + iterate them to know this size
-		const uint16_t packed_data_blocks_count = state.chimp_state.packed_data_buffer.index;
+		const uint16_t packed_data_blocks_count = state.chimp.packed_data_buffer.index;
 		metadata_ptr -= packed_data_blocks_count * 2;
 		metadata_byte_size += packed_data_blocks_count * 2;
 		if ((uint64_t)metadata_ptr & 1) {
@@ -232,7 +219,7 @@ public:
 		}
 		memcpy((void *)metadata_ptr, (void *)packed_data_blocks, packed_data_blocks_count * sizeof(uint16_t));
 
-		state.chimp_state.Reset();
+		state.chimp.Reset();
 		group_idx = 0;
 	}
 
@@ -242,7 +229,7 @@ public:
 			// Only call this when the group actually has data that needs to be flushed
 			FlushGroup();
 		}
-		state.chimp_state.output.Flush();
+		state.chimp.output.Flush();
 		auto &checkpoint_state = checkpointer.GetCheckpointState();
 		auto dataptr = handle.Ptr();
 
@@ -250,7 +237,7 @@ public:
 		idx_t bytes_used_by_data = ChimpPrimitives::HEADER_SIZE + UsedSpace();
 		idx_t metadata_offset = AlignValue(bytes_used_by_data);
 		// Verify that the metadata_ptr does not cross this threshold
-		D_ASSERT(dataptr + metadata_offset < metadata_ptr);
+		D_ASSERT(dataptr + metadata_offset <= metadata_ptr);
 		idx_t metadata_size = dataptr + Storage::BLOCK_SIZE - metadata_ptr;
 		idx_t total_segment_size = metadata_offset + metadata_size;
 #ifdef DEBUG

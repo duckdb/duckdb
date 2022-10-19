@@ -859,7 +859,7 @@ static bool TypeHasExactRowCount(const LogicalType &type) {
 		return false;
 	case LogicalTypeId::STRUCT:
 		for (auto &kv : StructType::GetChildTypes(type)) {
-			if (TypeHasExactRowCount(kv.second.id())) {
+			if (TypeHasExactRowCount(kv.second)) {
 				return true;
 			}
 		}
