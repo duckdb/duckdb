@@ -75,6 +75,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("view", &DuckDBPyConnection::View, "Create a relation object for the name'd view", py::arg("view_name"))
 	    .def("values", &DuckDBPyConnection::Values, "Create a relation object from the passed values",
 	         py::arg("values"))
+	    .def("value_rows", &DuckDBPyConnection::ValuesRows, "Create a relation object from the passed values (as a rowset)",
+	         py::arg("values"))
 	    .def("table_function", &DuckDBPyConnection::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
 	         py::arg("parameters") = py::none())
@@ -296,6 +298,23 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 		throw InvalidInputException("Type of object passed to parameter 'values' must be iterable");
 	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
+	return make_unique<DuckDBPyRelation>(connection->Values(values));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ValuesRows(py::list params) {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	if (params.is_none()) {
+		params = py::list();
+	}
+	if (!py::hasattr(params, "__len__")) {
+		throw InvalidInputException("Type of object passed to parameter 'values' must be iterable");
+	}
+	vector<vector<Value>> values;
+	for(py::handle sublist : params) {
+	  values.push_back(DuckDBPyConnection::TransformPythonParamList(sublist.cast<py::list>()));
+	}
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
 }
 
