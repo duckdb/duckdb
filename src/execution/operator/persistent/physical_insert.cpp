@@ -164,6 +164,8 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		lstate.local_collection->FinalizeAppend(tdata, lstate.local_append_state);
 
 		lock_guard<mutex> lock(gstate.lock);
+		gstate.insert_count += lstate.local_collection->GetTotalRows();
+
 		auto table = gstate.table;
 		table->storage->LocalMerge(context.client, *lstate.local_collection);
 	}

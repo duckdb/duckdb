@@ -22,6 +22,7 @@ class OptimisticDataWriter {
 public:
 	OptimisticDataWriter(DataTable *table);
 	OptimisticDataWriter(DataTable *table, OptimisticDataWriter &parent);
+	~OptimisticDataWriter();
 
 	void CheckFlushToDisk(RowGroupCollection &row_groups);
 	//! Flushes a specific row group to disk

@@ -9,11 +9,15 @@ PRAGMA force_compression='uncompressed'
 statement ok
 PRAGMA preserve_insertion_order=false
 
-statement ok
+query I
 CREATE TABLE integers AS SELECT * FROM range(1000000) tbl(i);
+----
+1000000
 
-statement ok
+query I
 CREATE TABLE integers2 AS SELECT * FROM integers
+----
+1000000
 
 query I
 SELECT SUM(i) FROM integers

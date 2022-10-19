@@ -27,6 +27,9 @@ OptimisticDataWriter::OptimisticDataWriter(DataTable *table, OptimisticDataWrite
 	}
 }
 
+OptimisticDataWriter::~OptimisticDataWriter() {
+}
+
 void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
 	// we finished writing a complete row group
 	// check if we should pre-emptively write it to disk
@@ -450,9 +453,6 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	// bulk append threshold: a full row group
 	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE;
-
-	auto storage_entry = table_manager.MoveEntry(&table);
-	D_ASSERT(storage_entry);
 
 	if (storage.row_groups->GetTotalRows() <= storage.deleted_rows) {
 		return;
