@@ -276,18 +276,12 @@ void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
 			return;
 		}
 		// move to the next table
+		lock_guard<mutex> l(gstate.lock);
 		radix_idx++;
-		{
-			lock_guard<mutex> l(gstate.lock);
-			if (radix_idx < gstate.state_index) {
-				// other threads have already completed the table we wanted to work on
-				// move forwards to the current table instead
-				radix_idx = gstate.state_index;
-			} else if (radix_idx > gstate.state_index) {
-				// we have not yet worked on the table
-				// move the global index forwards
-				gstate.state_index = radix_idx;
-			}
+		if (radix_idx > gstate.state_index) {
+			// we have not yet worked on the table
+			// move the global index forwards
+			gstate.state_index = radix_idx;
 		}
 	}
 }

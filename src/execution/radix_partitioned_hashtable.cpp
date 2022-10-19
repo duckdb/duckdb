@@ -433,14 +433,12 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 			break;
 		}
 		// move to the next hash table
+		lock_guard<mutex> l(state.lock);
 		ht_index++;
-		{
-			lock_guard<mutex> l(state.lock);
-			if (ht_index > state.ht_index) {
-				// we have not yet worked on the table
-				// move the global index forwards
-				state.ht_index = ht_index;
-			}
+		if (ht_index > state.ht_index) {
+			// we have not yet worked on the table
+			// move the global index forwards
+			state.ht_index = ht_index;
 		}
 	}
 

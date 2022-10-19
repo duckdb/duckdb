@@ -43,7 +43,7 @@ public:
 		if (validity.RowIsValid(idx)) {
 			if (all_null) {
 				// no value seen yet
-				// assign the current value, and set the seen_count to 1
+				// assign the current value, and increment the seen_count
 				// note that we increment last_seen_count rather than setting it to 1
 				// this is intentional: this is the first VALID value we see
 				// but it might not be the first value in case of nulls!
