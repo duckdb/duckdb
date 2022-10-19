@@ -436,11 +436,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 		ht_index++;
 		{
 			lock_guard<mutex> l(state.lock);
-			if (ht_index < state.ht_index) {
-				// other threads have already completed the table we wanted to work on
-				// move forwards to the current table instead
-				ht_index = state.ht_index;
-			} else if (ht_index > state.ht_index) {
+			if (ht_index > state.ht_index) {
 				// we have not yet worked on the table
 				// move the global index forwards
 				state.ht_index = ht_index;

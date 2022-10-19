@@ -83,16 +83,15 @@ void OptimisticDataWriter::FinalFlush() {
 }
 
 void OptimisticDataWriter::Rollback() {
-	if (!partial_manager || written_blocks.empty()) {
-		return;
-	}
 	if (partial_manager) {
 		partial_manager->Clear();
 		partial_manager.reset();
 	}
-	auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
-	for (auto block_id : written_blocks) {
-		block_manager.MarkBlockAsModified(block_id);
+	if (!written_blocks.empty()) {
+		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
+		for (auto block_id : written_blocks) {
+			block_manager.MarkBlockAsModified(block_id);
+		}
 	}
 }
 
