@@ -1,5 +1,7 @@
 #pragma one
 
+#include "duckdb.hpp"
+
 #include <cstring>
 #include <limits.h>
 #include <stdlib.h> // pulls in declaration of malloc, free

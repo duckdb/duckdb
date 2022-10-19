@@ -1,5 +1,7 @@
 #pragma one
 
+#include "duckdb.hpp"
+
 namespace json {
 
 /* Define to 1 if you have the <unistd.h> header file. */

@@ -1,5 +1,7 @@
 #pragma one
 
+#include "duckdb.hpp"
+
 #include <cassert>
 #include <errno.h>
 #include <math.h>

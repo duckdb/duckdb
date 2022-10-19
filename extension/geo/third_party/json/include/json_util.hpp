@@ -1,5 +1,7 @@
 #pragma one
 
+#include "duckdb.hpp"
+
 #include <inttypes.h>
 
 namespace json {

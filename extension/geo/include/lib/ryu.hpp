@@ -1,4 +1,7 @@
 #pragma one
+
+#include "duckdb.hpp"
+
 #include <cassert>
 #include <cstring>
 #include <inttypes.h>

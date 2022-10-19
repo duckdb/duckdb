@@ -1,5 +1,7 @@
 #pragma one
 
+#include "duckdb.hpp"
+
 #include <stddef.h>
 #include <stdlib.h>
 
