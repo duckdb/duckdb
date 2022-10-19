@@ -81,7 +81,7 @@ public:
 	void StartNewGroup() {
 		metadata_byte_size += CurrentGroupMetadataSize();
 		group_idx = 0;
-		state.chimp_state.Reset();
+		state.chimp.Reset();
 	}
 
 	idx_t UsedSpace() const {

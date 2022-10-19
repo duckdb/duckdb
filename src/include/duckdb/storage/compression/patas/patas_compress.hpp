@@ -91,17 +91,8 @@ public:
 		idx_t required_space = sizeof(EXACT_TYPE);
 		// byte offset of data
 		required_space += sizeof(byte_index_t);
-		// amount of bitpacking blocks
-		required_space += sizeof(uint8_t);
-		// first bitpacked 'trailing_zero' block
-		required_space +=
-		    ((SignificantBits<EXACT_TYPE>::size * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) / 8); // 24
-		// first bitpacked 'byte_count' block
-		required_space +=
-		    ((PatasPrimitives::BYTECOUNT_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) / 8); // 12
-		// first bitpacked 'index' block
-		required_space +=
-		    ((PatasPrimitives::INDEX_BITSIZE * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) / 8); // 28
+		// byte size of the packed_data_block
+		required_space += sizeof(uint16_t);
 		return required_space;
 	}
 
@@ -117,17 +108,8 @@ public:
 	idx_t CurrentGroupMetadataSize() const {
 		idx_t metadata_size = 0;
 
-		const idx_t effective_bitpack_block_index =
-		    AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(state.patas_state.index);
-
-		// Current bytes taken up by the bitpacked 'trailing_zero' blocks
-		metadata_size += (effective_bitpack_block_index * SignificantBits<EXACT_TYPE>::size) / 8;
-
-		// Current bytes taken up by the bitpacked 'byte_count' blocks
-		metadata_size += (effective_bitpack_block_index * PatasPrimitives::BYTECOUNT_BITSIZE) / 8;
-
-		// Current bytes taken up by the bitpacked 'index_diff' blocks
-		metadata_size += (effective_bitpack_block_index * PatasPrimitives::INDEX_BITSIZE) / 8;
+		metadata_size += sizeof(byte_index_t);
+		metadata_size += sizeof(uint16_t) * group_idx;
 		return metadata_size;
 	}
 
@@ -205,7 +187,7 @@ public:
 		idx_t bytes_used_by_data = PatasPrimitives::HEADER_SIZE + UsedSpace();
 		idx_t metadata_offset = AlignValue(bytes_used_by_data);
 		// Verify that the metadata_ptr does not cross this threshold
-		D_ASSERT(dataptr + metadata_offset < metadata_ptr);
+		D_ASSERT(dataptr + metadata_offset <= metadata_ptr);
 		idx_t metadata_size = dataptr + Storage::BLOCK_SIZE - metadata_ptr;
 		idx_t total_segment_size = metadata_offset + metadata_size;
 #ifdef DEBUG
