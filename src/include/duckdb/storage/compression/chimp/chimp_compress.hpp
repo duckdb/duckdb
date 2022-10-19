@@ -237,7 +237,7 @@ public:
 		idx_t bytes_used_by_data = ChimpPrimitives::HEADER_SIZE + UsedSpace();
 		idx_t metadata_offset = AlignValue(bytes_used_by_data);
 		// Verify that the metadata_ptr does not cross this threshold
-		D_ASSERT(dataptr + metadata_offset < metadata_ptr);
+		D_ASSERT(dataptr + metadata_offset <= metadata_ptr);
 		idx_t metadata_size = dataptr + Storage::BLOCK_SIZE - metadata_ptr;
 		idx_t total_segment_size = metadata_offset + metadata_size;
 #ifdef DEBUG
