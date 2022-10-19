@@ -1,13 +1,15 @@
-# name: benchmark/tpch/parquet/parquet_load.benchmark
+# name: benchmark/tpch/parquet/parquet_load_persistent.benchmark
 # description: Import data from Parquet
 # group: [parquet]
 
-name Parquet Data Import (In-Memory)
+name Parquet Data Import (Persistent)
 group parquet
 subgroup tpch
 
 require parquet
 require tpch
+
+storage persistent
 
 load
 CALL dbgen(sf=1);

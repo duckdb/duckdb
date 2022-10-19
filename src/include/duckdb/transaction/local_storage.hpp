@@ -35,7 +35,6 @@ public:
 	void Rollback();
 
 private:
-	mutex optimistic_lock;
 	//! The table
 	DataTable *table;
 	//! The partial block manager (if we created one yet)
