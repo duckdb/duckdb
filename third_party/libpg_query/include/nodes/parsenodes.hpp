@@ -1687,7 +1687,7 @@ typedef struct PGCreateFunctionStmt {
 	PGList *params;
 	PGNode *function;
   	PGNode *query;
-	char relpersistence;
+	PGOnCreateConflict onconflict;
 } PGCreateFunctionStmt;
 
 /* ----------------------
