@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/main/db_instance_cache.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -244,6 +245,12 @@ static Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
 	return nullptr;
 }
 
+//! The database instance cache, used so that multiple connections to the same file point to the same database object
+duckdb::DBInstanceCache instance_cache;
+std::mutex db_map_lock;
+//! A map of pointer to shared_ptr, to ensure we keep the DuckDB object alive
+std::unordered_map<duckdb::DuckDB *, shared_ptr<duckdb::DuckDB>> db_map;
+
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv *env, jclass, jbyteArray database_j,
                                                                              jboolean read_only, jobject props) {
 	auto database = byte_array_to_string(env, database_j);
@@ -275,8 +282,12 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 				    StringUtil::CandidatesErrorMessage(DBConfig::GetOptionNames(), key_str, "Did you mean"));
 			}
 		}
+		bool cache_instance = database != ":memory:" && !database.empty();
+		auto shared_db = instance_cache.CreateInstance(database, config, cache_instance);
+		auto db = shared_db.get();
+		std::lock_guard<std::mutex> lock(db_map_lock);
+		db_map[db] = move(shared_db);
 
-		auto db = new DuckDB(database, &config);
 		return env->NewDirectByteBuffer(db, 0);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
@@ -288,7 +299,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1shutdown(JNIEnv *env, jclass, jobject db_ref_buf) {
 	auto db_ref = (DuckDB *)env->GetDirectBufferAddress(db_ref_buf);
 	if (db_ref) {
-		delete db_ref;
+		std::lock_guard<std::mutex> lock(db_map_lock);
+		D_ASSERT(db_map.find(db_ref) != db_map.end());
+		db_map.erase(db_ref);
 	}
 }
 
