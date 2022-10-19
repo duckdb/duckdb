@@ -62,6 +62,10 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	protected DuckDBColumnTypeMetaData[] column_types_meta;
 	protected final StatementReturnType return_type;
 
+	public StatementReturnType getReturnType() {
+		return return_type;
+	}
+
 	public int getColumnCount() throws SQLException {
 		return column_count;
 	}
