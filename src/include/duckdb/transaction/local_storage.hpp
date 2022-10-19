@@ -29,10 +29,14 @@ public:
 	void FlushToDisk(RowGroup *row_group);
 	//! Flushes the final row group to disk (if any)
 	void FlushToDisk(RowGroupCollection &row_groups);
+	//! Final flush: flush the partial block manager to disk
+	void FinalFlush();
 
 	void Rollback();
 
 private:
+	mutex optimistic_lock;
+	//! The table
 	DataTable *table;
 	//! The partial block manager (if we created one yet)
 	unique_ptr<PartialBlockManager> partial_manager;

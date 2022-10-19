@@ -9,6 +9,7 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
@@ -49,6 +50,8 @@ public:
 	bool initialized;
 	LocalAppendState append_state;
 	ColumnDataCollection return_collection;
+	unique_ptr<OptimisticDataWriter> writer;
+	vector<unique_ptr<RowGroupCollection>> collections;
 };
 
 class InsertLocalState : public LocalSinkState {
@@ -75,6 +78,9 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 	} else {
 		D_ASSERT(insert_table);
 		result->table = insert_table;
+	}
+	if (parallel) {
+		result->writer = make_unique<OptimisticDataWriter>(result->table->storage.get());
 	}
 	return move(result);
 }
@@ -142,7 +148,10 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 		}
-		lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
+		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
+		if (new_row_group) {
+			gstate.writer->CheckFlushToDisk(*lstate.local_collection);
+		}
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -163,11 +172,11 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		TransactionData tdata(0, 0);
 		lstate.local_collection->FinalizeAppend(tdata, lstate.local_append_state);
 
+		gstate.writer->FlushToDisk(*lstate.local_collection);
+
 		lock_guard<mutex> lock(gstate.lock);
 		gstate.insert_count += lstate.local_collection->GetTotalRows();
-
-		auto table = gstate.table;
-		table->storage->LocalMerge(context.client, *lstate.local_collection);
+		gstate.collections.push_back(move(lstate.local_collection));
 	}
 }
 
@@ -177,6 +186,14 @@ SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, Clie
 	if (!parallel && gstate.initialized) {
 		auto table = gstate.table;
 		table->storage->FinalizeLocalAppend(gstate.append_state);
+	}
+	if (gstate.writer) {
+		gstate.writer->FinalFlush();
+
+		auto table = gstate.table;
+		for (auto &collection : gstate.collections) {
+			table->storage->LocalMerge(context, *collection);
+		}
 	}
 	return SinkFinalizeType::READY;
 }

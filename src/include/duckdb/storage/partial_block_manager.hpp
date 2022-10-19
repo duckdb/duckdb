@@ -84,8 +84,6 @@ public:
 
 	PartialBlockAllocation GetBlockAllocation(uint32_t segment_size);
 
-	virtual void AllocateBlock(PartialBlockState &state, uint32_t segment_size);
-
 	//! Register a partially filled block that is filled with "segment_size" entries
 	void RegisterPartialBlock(PartialBlockAllocation &&allocation);
 
@@ -93,6 +91,7 @@ public:
 	void Clear();
 
 protected:
+	mutex partial_lock;
 	BlockManager &block_manager;
 	//! A map of (available space -> PartialBlock) for partially filled blocks
 	//! This is a multimap because there might be outstanding partial blocks with
@@ -108,6 +107,8 @@ protected:
 	//! If successful, returns true and returns the block_id and offset_in_block to write to
 	//! Otherwise, returns false
 	bool GetPartialBlock(idx_t segment_size, unique_ptr<PartialBlock> &state);
+
+	virtual void AllocateBlock(PartialBlockState &state, uint32_t segment_size);
 };
 
 } // namespace duckdb

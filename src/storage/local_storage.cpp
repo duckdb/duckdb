@@ -38,9 +38,13 @@ void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
 	}
 	// we should! write the second-to-last row group to disk
 	// allocate the partial block-manager if none is allocated yet
-	if (!partial_manager) {
-		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
-		partial_manager = make_unique<PartialBlockManager>(block_manager);
+	{
+		// create the partial manager if it does not yet exist
+		lock_guard<mutex> l(optimistic_lock);
+		if (!partial_manager) {
+			auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
+			partial_manager = make_unique<PartialBlockManager>(block_manager);
+		}
 	}
 	// flush second-to-last row group
 	auto row_group = row_groups.GetRowGroup(-2);
@@ -50,7 +54,6 @@ void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
 void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 	// flush the specified row group
 	D_ASSERT(row_group);
-	D_ASSERT(partial_manager);
 	//! The set of column compression types (if any)
 	vector<CompressionType> compression_types;
 	D_ASSERT(compression_types.empty());
@@ -58,18 +61,31 @@ void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 		compression_types.push_back(column.CompressionType());
 	}
 	auto row_group_pointer = row_group->WriteToDisk(*partial_manager, compression_types);
+
+	// update the set of written blocks
+	lock_guard<mutex> l(optimistic_lock);
 	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
 		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
 	}
 }
 
 void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups) {
-	// no partial manager - nothing to flush
-	if (!partial_manager) {
-		return;
+	{
+		lock_guard<mutex> l(optimistic_lock);
+		if (!partial_manager) {
+			// no partial manager - nothing to flush
+			return;
+		}
 	}
 	// flush the last row group
 	FlushToDisk(row_groups.GetRowGroup(-1));
+}
+
+void OptimisticDataWriter::FinalFlush() {
+	lock_guard<mutex> l(optimistic_lock);
+	if (!partial_manager) {
+		return;
+	}
 	// then flush the partial manager
 	partial_manager->FlushPartialBlocks();
 	partial_manager.reset();
@@ -175,6 +191,7 @@ void LocalTableStorage::CheckFlushToDisk() {
 
 void LocalTableStorage::FlushToDisk() {
 	optimistic_writer.FlushToDisk(*row_groups);
+	optimistic_writer.FinalFlush();
 }
 
 template <class T>
