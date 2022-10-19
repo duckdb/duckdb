@@ -80,12 +80,6 @@ public:
 
 	void AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
 	                     bool append_to_table);
-
-private:
-	template <class T>
-	bool ScanTableStorage(Transaction &transaction, T &&fun);
-	template <class T>
-	bool ScanTableStorage(Transaction &transaction, const vector<column_t> &column_ids, T &&fun);
 };
 
 class LocalTableManager {
@@ -105,6 +99,10 @@ private:
 
 //! The LocalStorage class holds appends that have not been committed yet
 class LocalStorage {
+public:
+	// Threshold to merge row groups instead of appending
+	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE / 2;
+
 public:
 	struct CommitState {
 		unordered_map<DataTable *, unique_ptr<TableAppendState>> append_states;

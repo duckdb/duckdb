@@ -149,6 +149,41 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 	return false;
 }
 
+bool RowGroupCollection::Scan(Transaction &transaction, const vector<column_t> &column_ids,
+                              const std::function<bool(DataChunk &chunk)> &fun) {
+	vector<LogicalType> scan_types;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		scan_types.push_back(types[column_ids[i]]);
+	}
+	DataChunk chunk;
+	chunk.Initialize(GetAllocator(), scan_types);
+
+	// initialize the scan
+	TableScanState state;
+	state.Initialize(column_ids, nullptr);
+	InitializeScan(state.local_state, column_ids, nullptr);
+
+	while (true) {
+		chunk.Reset();
+		state.local_state.Scan(transaction, chunk);
+		if (chunk.size() == 0) {
+			return true;
+		}
+		if (!fun(chunk)) {
+			return false;
+		}
+	}
+}
+
+bool RowGroupCollection::Scan(Transaction &transaction, const std::function<bool(DataChunk &chunk)> &fun) {
+	vector<column_t> column_ids;
+	column_ids.reserve(types.size());
+	for (idx_t i = 0; i < types.size(); i++) {
+		column_ids.push_back(i);
+	}
+	return Scan(transaction, column_ids, fun);
+}
+
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//

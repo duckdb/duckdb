@@ -1,0 +1,46 @@
+# name: test/sql/storage/parallel/parallel_insert_selective_filter.test
+# description: Test parallel non order-preserving insert with a selective filter
+# group: [parallel]
+
+load __TEST_DIR__/parallel_insert_selective.db
+
+statement ok
+PRAGMA preserve_insertion_order=false
+
+query I
+CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
+----
+10000000
+
+# insert values with a selective filter
+# not many values are inserted
+# verify that we are not creating many small row-groups due to the parallel insertion
+query I
+CREATE TABLE integers2 AS SELECT * FROM integers WHERE i%100=0
+----
+100000
+
+loop i 0 10
+
+query I
+INSERT INTO integers2 SELECT * FROM integers WHERE i%100=0
+----
+100000
+
+endloop
+
+query I
+SELECT SUM(i) FROM integers
+----
+49999995000000
+
+query I
+SELECT SUM(i) FROM integers2
+----
+5499945000000
+
+# we have a total of 1.1M values - this should not be more than 20 row groups (ideally it is 11)
+query I
+select count(distinct row_group_id) < 20 from pragma_storage_info('integers2');
+----
+true

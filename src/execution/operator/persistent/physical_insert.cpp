@@ -161,19 +161,38 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 	context.thread.profiler.Flush(this, &lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 
-	if (parallel) {
-		if (!lstate.local_collection) {
-			return;
-		}
-		// parallel append: finalize the append
-		TransactionData tdata(0, 0);
-		lstate.local_collection->FinalizeAppend(tdata, lstate.local_append_state);
+	if (!parallel) {
+		return;
+	}
+	if (!lstate.local_collection) {
+		return;
+	}
+	// parallel append: finalize the append
+	TransactionData tdata(0, 0);
+	lstate.local_collection->FinalizeAppend(tdata, lstate.local_append_state);
 
+	auto append_count = lstate.local_collection->GetTotalRows();
+
+	if (append_count < LocalStorage::MERGE_THRESHOLD) {
+		// we have few rows - append to the local storage directly
+		lock_guard<mutex> lock(gstate.lock);
+		gstate.insert_count += append_count;
+		auto table = gstate.table;
+		table->storage->InitializeLocalAppend(gstate.append_state, context.client);
+		auto &transaction = Transaction::GetTransaction(context.client);
+		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
+			table->storage->LocalAppend(gstate.append_state, *table, context.client, insert_chunk);
+			return true;
+		});
+		table->storage->FinalizeLocalAppend(gstate.append_state);
+	} else {
+		// we have many rows - flush the row group collection to disk (if required) and merge into the transaction-local
+		// state
 		lstate.writer->FlushToDisk(*lstate.local_collection);
 		lstate.writer->FinalFlush();
 
 		lock_guard<mutex> lock(gstate.lock);
-		gstate.insert_count += lstate.local_collection->GetTotalRows();
+		gstate.insert_count += append_count;
 		gstate.table->storage->LocalMerge(context.client, *lstate.local_collection);
 	}
 }

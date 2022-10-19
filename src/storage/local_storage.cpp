@@ -185,43 +185,6 @@ void LocalTableStorage::FlushToDisk() {
 	optimistic_writer.FinalFlush();
 }
 
-template <class T>
-bool LocalTableStorage::ScanTableStorage(Transaction &transaction, const vector<column_t> &column_ids, T &&fun) {
-	auto all_types = table->GetTypes();
-	vector<LogicalType> scan_types;
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		scan_types.push_back(all_types[column_ids[i]]);
-	}
-	DataChunk chunk;
-	chunk.Initialize(allocator, scan_types);
-
-	// initialize the scan
-	TableScanState state;
-	state.Initialize(column_ids, nullptr);
-	InitializeScan(state.local_state, nullptr);
-
-	while (true) {
-		chunk.Reset();
-		state.local_state.Scan(transaction, chunk);
-		if (chunk.size() == 0) {
-			return true;
-		}
-		if (!fun(chunk)) {
-			return false;
-		}
-	}
-}
-
-template <class T>
-bool LocalTableStorage::ScanTableStorage(Transaction &transaction, T &&fun) {
-	vector<column_t> column_ids;
-	column_ids.reserve(table->column_definitions.size());
-	for (idx_t i = 0; i < table->column_definitions.size(); i++) {
-		column_ids.push_back(i);
-	}
-	return ScanTableStorage(transaction, column_ids, fun);
-}
-
 void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
                                         bool append_to_table) {
 	bool constraint_violated = false;
@@ -230,7 +193,7 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 	}
 	if (append_to_table) {
 		// appending: need to scan entire
-		ScanTableStorage(transaction, [&](DataChunk &chunk) -> bool {
+		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
 			if (!table->AppendToIndexes(chunk, append_state.current_row)) {
 				constraint_violated = true;
@@ -247,7 +210,7 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 		// create an empty mock chunk that contains all the correct types for the table
 		DataChunk mock_chunk;
 		mock_chunk.InitializeEmpty(table->GetTypes());
-		ScanTableStorage(transaction, columns, [&](DataChunk &chunk) -> bool {
+		row_groups->Scan(transaction, columns, [&](DataChunk &chunk) -> bool {
 			// construct the mock chunk by referencing the required columns
 			for (idx_t i = 0; i < columns.size(); i++) {
 				mock_chunk.data[columns[i]].Reference(chunk.data[i]);
@@ -266,7 +229,7 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 		// need to revert the append
 		row_t current_row = append_state.row_start;
 		// remove the data from the indexes, if there are any indexes
-		ScanTableStorage(transaction, [&](DataChunk &chunk) -> bool {
+		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
 			table->RemoveFromIndexes(append_state, chunk, current_row);
 
@@ -459,9 +422,6 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
-	// bulk append threshold: a full row group
-	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE;
-
 	if (storage.row_groups->GetTotalRows() <= storage.deleted_rows) {
 		return;
 	}
