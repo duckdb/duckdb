@@ -24,8 +24,11 @@ public:
 	EstimatedProperties(double cardinality, double cost) : cardinality(cardinality), cost(cost) {};
 	EstimatedProperties() : cardinality(0), cost(0) {};
 
-	double GetCardinality();
-	double GetCost();
+	template <class T>
+	T GetCardinality() const {
+		throw NotImplementedException("Unsupported type for GetCardinality");
+	}
+	double GetCost() const;
 	void SetCost(double new_cost);
 	void SetCardinality(double cardinality);
 
@@ -36,4 +39,11 @@ private:
 public:
 	unique_ptr<EstimatedProperties> Copy();
 };
+
+template <>
+double EstimatedProperties::GetCardinality() const;
+
+template <>
+idx_t EstimatedProperties::GetCardinality() const;
+
 } // namespace duckdb
