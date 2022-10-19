@@ -24,6 +24,7 @@
  **********************************************************************/
 
 #pragma once
+#include "duckdb.hpp"
 #include "liblwgeom/liblwgeom_internal.hpp"
 
 #include <cstring>

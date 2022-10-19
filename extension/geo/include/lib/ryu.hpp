@@ -1,5 +1,4 @@
 #pragma one
-
 #include "duckdb.hpp"
 
 #include <cassert>

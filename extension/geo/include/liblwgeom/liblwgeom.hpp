@@ -26,7 +26,7 @@
  **********************************************************************/
 
 #pragma once
-
+#include "duckdb.hpp"
 #include "postgres.hpp"
 
 #include <iostream>

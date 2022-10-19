@@ -1,4 +1,5 @@
 #pragma once
+#include "duckdb.hpp"
 #include "liblwgeom/lwgeodetic.hpp"
 
 namespace duckdb {
