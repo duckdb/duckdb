@@ -1,5 +1,6 @@
 #pragma one
 
+#include "duckdb.hpp"
 #include "liblwgeom/lwinline.hpp"
 
 namespace duckdb {
