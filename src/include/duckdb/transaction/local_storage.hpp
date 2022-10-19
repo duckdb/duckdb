@@ -69,6 +69,21 @@ private:
 	bool ScanTableStorage(Transaction &transaction, const vector<column_t> &column_ids, T &&fun);
 };
 
+class LocalTableManager {
+public:
+	shared_ptr<LocalTableStorage> MoveEntry(DataTable *table);
+	unordered_map<DataTable *, shared_ptr<LocalTableStorage>> MoveEntries();
+	LocalTableStorage *GetStorage(DataTable *table);
+	LocalTableStorage *GetOrCreateStorage(DataTable *table);
+	idx_t EstimatedSize();
+	bool IsEmpty();
+	void InsertEntry(DataTable *table, shared_ptr<LocalTableStorage> entry);
+
+private:
+	mutex table_storage_lock;
+	unordered_map<DataTable *, shared_ptr<LocalTableStorage>> table_storage;
+};
+
 //! The LocalStorage class holds appends that have not been committed yet
 class LocalStorage {
 public:
@@ -110,14 +125,10 @@ public:
 	//! Rollback the local storage
 	void Rollback();
 
-	bool ChangesMade() noexcept {
-		return table_storage.size() > 0;
-	}
+	bool ChangesMade() noexcept;
 	idx_t EstimatedSize();
 
-	bool Find(DataTable *table) {
-		return table_storage.find(table) != table_storage.end();
-	}
+	bool Find(DataTable *table);
 
 	idx_t AddedRows(DataTable *table);
 
@@ -133,12 +144,8 @@ public:
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 private:
-	LocalTableStorage *GetStorage(DataTable *table);
-	LocalTableStorage *GetOrCreateStorage(DataTable *table);
-
-private:
 	Transaction &transaction;
-	unordered_map<DataTable *, shared_ptr<LocalTableStorage>> table_storage;
+	LocalTableManager table_manager;
 
 	void Flush(DataTable &table, LocalTableStorage &storage);
 };

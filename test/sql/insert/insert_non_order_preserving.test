@@ -2,6 +2,10 @@
 # description: Test parallel non order-preserving insert
 # group: [insert]
 
+# FIXME: this is required because of a bug in FSST, remove when that bug is fixed
+statement ok
+PRAGMA force_compression='uncompressed'
+
 statement ok
 PRAGMA preserve_insertion_order=false
 
@@ -43,3 +47,20 @@ query I
 SELECT SUM(i) FROM integers2
 ----
 250000000000
+
+# varchars
+statement ok
+CREATE TABLE varchars AS SELECT case when i%2=0 then null else concat('thisismyvarchar-', i/4) end AS v  FROM range(1000000) tbl(i);
+
+statement ok
+CREATE TABLE varchars2 AS SELECT * FROM varchars
+
+query IIIII
+SELECT MIN(v), MAX(v), COUNT(*), COUNT(v), COUNT(DISTINCT v) FROM varchars
+----
+thisismyvarchar-0	thisismyvarchar-99999	1000000	500000	250000
+
+query IIIII
+SELECT MIN(v), MAX(v), COUNT(*), COUNT(v), COUNT(DISTINCT v) FROM varchars2
+----
+thisismyvarchar-0	thisismyvarchar-99999	1000000	500000	250000
