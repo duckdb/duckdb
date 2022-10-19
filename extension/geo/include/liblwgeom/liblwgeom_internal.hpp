@@ -1,3 +1,5 @@
+#pragma once
+
 #include "liblwgeom/liblwgeom.hpp"
 
 #include <float.h>
