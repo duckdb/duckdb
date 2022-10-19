@@ -3,6 +3,7 @@
 #include "liblwgeom/gserialized.hpp"
 #include "liblwgeom/liblwgeom.hpp"
 #include "liblwgeom/lwinline.hpp"
+#include "libpgcommon/lwgeom_transform.hpp"
 
 namespace duckdb {
 
@@ -32,7 +33,7 @@ GSERIALIZED *geography_centroid(GSERIALIZED *g, bool use_spheroid) {
 	// }
 
 	/* Initialize spheroid */
-	// spheroid_init_from_srid(fcinfo, srid, &s);
+	spheroid_init_from_srid(gserialized_get_srid(g), &s);
 
 	/* Set to sphere if requested */
 	if (!use_spheroid)
