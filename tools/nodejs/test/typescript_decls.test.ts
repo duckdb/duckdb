@@ -109,20 +109,12 @@ describe("TypeScript declarataions", function () {
     );
     db.unregister("udf", done);
   });
-});
-
-describe("typescript: each", function () {
-  var db: duckdb.Database;
-  before(function (done) {
-    db = new duckdb.Database("test/support/big.db", done);
-  });
-
   it("typescript: retrieve 100,000 rows with Statement#each", function (done) {
     var total = 100000;
     var retrieved = 0;
 
     db.each(
-      "SELECT id, txt FROM foo WHERE ROWID < ?",
+      "SELECT * FROM range(0, ?)",
       total,
       function (err: duckdb.DuckDbError | null, row: any) {
         if (err) throw err;
@@ -139,20 +131,6 @@ describe("typescript: each", function () {
       }
     );
   });
-
-  /**
-   * This seems to always hang indefinitely, which is probably a bug:
-
-  it("typescript: each with no results", (done) => {
-    db.each(
-      "SELECT id, txt FROM foo WHERE 1=0",
-      function (err: duckdb.DuckDbError | null, row: any) {
-        console.log("each with empty results: ", err, row);
-        done();
-      }
-    );
-  });
-  */
 });
 
 describe("typescript: simple prepared statement", function () {
