@@ -1,11 +1,13 @@
-#pragma one
-
 #include "liblwgeom/liblwgeom.hpp"
 
 #include <float.h>
 #include <math.h>
 
 namespace duckdb {
+
+#ifndef _LIBLWGEOM_INTERNAL_H
+#define _LIBLWGEOM_INTERNAL_H 1
+
 /**
  * Macro that returns:
  * -1 if n < 0,
@@ -115,5 +117,7 @@ LWPOINT *lwpoint_force_dims(const LWPOINT *lwpoint, int hasz, int hasm, double z
 POINTARRAY *ptarray_force_dims(const POINTARRAY *pa, int hasz, int hasm, double zval, double mval);
 
 int ptarray_startpoint(const POINTARRAY *pa, POINT4D *pt);
+
+#endif /* !defined _LIBLWGEOM_INTERNAL_H  */
 
 } // namespace duckdb
