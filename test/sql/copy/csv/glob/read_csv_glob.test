@@ -168,6 +168,8 @@ select count(*) from glob('~/rewoiarwiouw3rajkawrasdf790273489*.py') limit 10;
 ----
 0
 
+require skip_reload
+
 # file_search_path with one path
 statement ok
 set file_search_path='test/sql/copy/csv/data/glob';
