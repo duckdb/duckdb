@@ -1,6 +1,6 @@
 # name: test/sql/storage/parallel/insert_many_grouping_sets.test
 # description: Test parallel insert from many groups
-# group: [insert]
+# group: [parallel]
 
 load __TEST_DIR__/insert_many_grouping_sets.db
 
