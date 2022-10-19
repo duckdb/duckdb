@@ -18,6 +18,27 @@ class DataTable;
 class WriteAheadLog;
 struct TableAppendState;
 
+class OptimisticDataWriter {
+public:
+	OptimisticDataWriter(DataTable *table);
+	OptimisticDataWriter(DataTable *table, OptimisticDataWriter &parent);
+
+	void CheckFlushToDisk(RowGroupCollection &row_groups);
+	//! Flushes a specific row group to disk
+	void FlushToDisk(RowGroup *row_group);
+	//! Flushes the final row group to disk (if any)
+	void FlushToDisk(RowGroupCollection &row_groups);
+
+	void Rollback();
+
+private:
+	DataTable *table;
+	//! The partial block manager (if we created one yet)
+	unique_ptr<PartialBlockManager> partial_manager;
+	//! The set of blocks that have been pre-emptively written to disk
+	unordered_set<block_id_t> written_blocks;
+};
+
 class LocalTableStorage : public std::enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
@@ -41,21 +62,15 @@ public:
 	TableIndexList indexes;
 	//! The number of deleted rows
 	idx_t deleted_rows;
-	//! The partial block manager (if we created one yet)
-	unique_ptr<PartialBlockManager> partial_manager;
-	//! The set of blocks that have been pre-emptively written to disk
-	unordered_set<block_id_t> written_blocks;
+	//! The optimistic data writer
+	OptimisticDataWriter optimistic_writer;
 
 public:
 	void InitializeScan(CollectionScanState &state, TableFilterSet *table_filters = nullptr);
 	//! Check if we should flush the previously written row-group to disk
 	void CheckFlushToDisk();
-	//! Flushes a specific row group to disk
-	void FlushToDisk(RowGroup *row_group);
 	//! Flushes the final row group to disk (if any)
 	void FlushToDisk();
-	//! Whether or not the local table storag ehas optimistically written blocks
-	bool HasWrittenBlocks();
 	void Rollback();
 	idx_t EstimatedSize();
 
