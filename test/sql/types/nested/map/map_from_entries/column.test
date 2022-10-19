@@ -44,3 +44,32 @@ SELECT MAP_FROM_ENTRIES(list) FROM t1;
 {6=h, 7=g}
 NULL
 {6=h, 7=g}
+
+# Filters
+
+statement ok
+create table filtered (
+	col ROW(a integer, b integer)[],
+	idx integer
+);
+
+statement ok
+insert into filtered VALUES (
+	[(7,NULL),(4,4),(9,7),(1,5)],
+	0
+), (
+	[(6,0),(3,NULL),(87,5),(2,NULL)],
+	1
+), (
+	[(7,8),(4,3),(9,4)],
+	2
+), (
+	[(9,NULL),(2,NULL),(7,4),(5,5),(8,6),(1,7)],
+	3
+);
+
+query I
+select map_from_entries(col) from filtered where idx % 2 != 0;
+----
+{6=0, 3=NULL, 87=5, 2=NULL}
+{9=NULL, 2=NULL, 7=4, 5=5, 8=6, 1=7}

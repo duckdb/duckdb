@@ -75,48 +75,50 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 
 	result.SetVectorType(duckdb::VectorType::FLAT_VECTOR);
-
-	// Get the arguments vector
-	auto &input_list = args.data[0];
-	// FIXME: this is assuming the input argument is always a flat vector, where is this asserted?
-	auto arg_data = FlatVector::GetData<list_entry_t>(input_list);
-	auto &entries = ListVector::GetEntry(input_list);
-
-	// Prepare the result vectors
-	auto &child_entries = StructVector::GetEntries(result);
-	D_ASSERT(child_entries.size() == 2);
-	auto &key_vector = *child_entries[0];
-	auto &value_vector = *child_entries[1];
-	auto &result_validity = FlatVector::Validity(result);
-
-	// Get the offset+length data for the list(s)
-	auto key_data = FlatVector::GetData<list_entry_t>(key_vector);
-	auto value_data = FlatVector::GetData<list_entry_t>(value_vector);
-
-	auto &key_validity = FlatVector::Validity(key_vector);
-	auto &value_validity = FlatVector::Validity(value_vector);
-
 	auto count = args.size();
 
-	UnifiedVectorFormat input_list_data;
-	input_list.ToUnifiedFormat(count, input_list_data);
+	// Get the arguments vector
+	auto &list = args.data[0];
+	auto &list_entry = ListVector::GetEntry(list);
+
+	// Prepare the result vectors
+	auto &keys = MapVector::GetKeys(result);
+	auto &values = MapVector::GetValues(result);
+	auto &result_validity = FlatVector::Validity(result);
+
+	UnifiedVectorFormat keys_data;
+	UnifiedVectorFormat values_data;
+	// Get the offset+length data for the list(s)
+	keys.ToUnifiedFormat(count, keys_data);
+	values.ToUnifiedFormat(count, values_data);
+
+	auto &key_validity = FlatVector::Validity(keys);
+	auto &value_validity = FlatVector::Validity(values);
+
+	UnifiedVectorFormat list_data;
+	list.ToUnifiedFormat(count, list_data);
 
 	// Current offset into the keys/values list
 	idx_t offset = 0;
 
 	// Transform to mapped values
 	for (idx_t i = 0; i < count; i++) {
-		VectorInfo input {entries, arg_data[i]};
-		VectorInfo keys {key_vector, key_data[i]};
-		VectorInfo values {value_vector, value_data[i]};
+		idx_t row = list_data.sel->get_index(i);
+		auto *list_entries_array = (list_entry_t *)list_data.data;
+		auto *keys_entries_array = (list_entry_t *)keys_data.data;
+		auto *values_entries_array = (list_entry_t *)values_data.data;
 
-		keys.data.offset = offset;
-		values.data.offset = offset;
-		auto row_valid = MapSingleList(input, keys, values);
-		offset += keys.data.length;
+		VectorInfo list_info {list_entry, list_entries_array[row]};
+		VectorInfo keys_info {keys, keys_entries_array[i]};
+		VectorInfo values_info {values, values_entries_array[i]};
+
+		keys_info.data.offset = offset;
+		values_info.data.offset = offset;
+		auto row_valid = MapSingleList(list_info, keys_info, values_info);
+		offset += keys_info.data.length;
 
 		// Check validity
-		if (!row_valid || !input_list_data.validity.RowIsValid(i)) {
+		if (!row_valid || !list_data.validity.RowIsValid(row)) {
 			key_validity.SetInvalid(i);
 			value_validity.SetInvalid(i);
 			result_validity.SetInvalid(i);
