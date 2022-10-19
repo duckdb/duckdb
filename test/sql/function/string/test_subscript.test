@@ -17,27 +17,6 @@ SELECT '🦆ab'[1], 'abc'[2]
 ----
 🦆	b
 
-# test grapheme clusters
-query I
-SELECT '🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️'[4]
-----
-🤦🏼‍♂️
-
-query I
-SELECT 'S̈a'[1]
-----
-S̈
-
-query I
-SELECT 'MotörHead'[4]
-----
-ö
-
-query I
-SELECT 'Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢'[2]
-----
-A̴̵̜̰͔ͫ͗͢
-
 # constant offset/length
 # normal array_extract
 query T
@@ -142,7 +121,12 @@ NULL
 query T
 SELECT s[-2147483647] FROM strings
 ----
-h
-w
-b
+(empty)
+(empty)
+(empty)
+NULL
+
+query T
+SELECT ([1,2,3])[-2147483647]
+----
 NULL

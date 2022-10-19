@@ -5,46 +5,38 @@
 statement ok
 PRAGMA enable_verification
 
+foreach FUN LEFT LEFT_GRAPHEME
+
 # test LEFT on positive positions
 query TTTTT
-SELECT LEFT('abcd', 0), LEFT('abc', 1), LEFT('abc', 2), LEFT('abc', 3), LEFT('abc', 4)
+SELECT ${FUN}('abcd', 0), ${FUN}('abc', 1), ${FUN}('abc', 2), ${FUN}('abc', 3), ${FUN}('abc', 4)
 ----
 (empty)	a	ab	abc	abc
 
 query TTTTT
-SELECT LEFT('🦆ab', 0), LEFT('🦆ab', 1), LEFT('🦆ab', 2), LEFT('🦆ab', 3), LEFT('🦆ab', 4)
+SELECT ${FUN}('🦆ab', 0), ${FUN}('🦆ab', 1), ${FUN}('🦆ab', 2), ${FUN}('🦆ab', 3), ${FUN}('🦆ab', 4)
 ----
 (empty)	🦆	🦆a	🦆ab	🦆ab
 
-query TTTT
-SELECT LEFT('🦆🤦S̈', 0), LEFT('🦆🤦S̈', 1), LEFT('🦆🤦S̈', 2), LEFT('🦆🤦S̈', 3)
-----
-(empty)	🦆	🦆🤦	🦆🤦S̈
-
 # test LEFT on negative positions
 query TTTTT
-SELECT LEFT('abcd', 0), LEFT('abc', -1), LEFT('abc', -2), LEFT('abc', -3), LEFT('abc', -4)
+SELECT ${FUN}('abcd', 0), ${FUN}('abc', -1), ${FUN}('abc', -2), ${FUN}('abc', -3), ${FUN}('abc', -4)
 ----
 (empty)	ab	a	(empty)	(empty)
 
 query TTTTT
-SELECT LEFT('🦆ab', 0), LEFT('🦆ab', -1), LEFT('🦆ab', -2), LEFT('🦆ab', -3), LEFT('🦆ab', -4)
+SELECT ${FUN}('🦆ab', 0), ${FUN}('🦆ab', -1), ${FUN}('🦆ab', -2), ${FUN}('🦆ab', -3), ${FUN}('🦆ab', -4)
 ----
 (empty)	🦆a	🦆	(empty)	(empty)
 
-query TTTT
-SELECT LEFT('🦆🤦S̈', 0), LEFT('🦆🤦S̈', -1), LEFT('🦆🤦S̈', -2), LEFT('🦆🤦S̈', -3)
-----
-(empty)	🦆🤦	🦆	(empty)
-
 # test LEFT on NULL values
 query TTT
-SELECT LEFT(NULL, 0), LEFT('abc', NULL), LEFT(NULL, NULL)
+SELECT ${FUN}(NULL, 0), ${FUN}('abc', NULL), ${FUN}(NULL, NULL)
 ----
 NULL	NULL	NULL
 
 query TTT
-SELECT LEFT(NULL, 0), LEFT('🦆ab', NULL), LEFT(NULL, NULL)
+SELECT ${FUN}(NULL, 0), ${FUN}('🦆ab', NULL), ${FUN}(NULL, NULL)
 ----
 NULL	NULL	NULL
 
@@ -59,7 +51,7 @@ statement ok
 INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', 1), ('abc', 2), ('abc', 3), ('abc', 4)
 
 query T
-SELECT LEFT(a, b) FROM strings
+SELECT ${FUN}(a, b) FROM strings
 ----
 (empty)
 a
@@ -77,7 +69,7 @@ statement ok
 INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', -1), ('abc', -2), ('abc', -3), ('abc', -4)
 
 query T
-SELECT LEFT(a, b) FROM strings
+SELECT ${FUN}(a, b) FROM strings
 ----
 (empty)
 ab
@@ -95,9 +87,21 @@ statement ok
 INSERT INTO STRINGS VALUES (NULL, 0), ('abc', NULL), (NULL, NULL)
 
 query T
-SELECT LEFT(a, b) FROM strings
+SELECT ${FUN}(a, b) FROM strings
 ----
 NULL
 NULL
 NULL
 
+endloop
+
+# grapheme clusters
+query TTTT
+SELECT LEFT_GRAPHEME('🦆🤦S̈', 0), LEFT_GRAPHEME('🦆🤦S̈', 1), LEFT_GRAPHEME('🦆🤦S̈', 2), LEFT_GRAPHEME('🦆🤦S̈', 3)
+----
+(empty)	🦆	🦆🤦	🦆🤦S̈
+
+query TTTT
+SELECT LEFT_GRAPHEME('🦆🤦S̈', 0), LEFT_GRAPHEME('🦆🤦S̈', -1), LEFT_GRAPHEME('🦆🤦S̈', -2), LEFT_GRAPHEME('🦆🤦S̈', -3)
+----
+(empty)	🦆🤦	🦆	(empty)
