@@ -305,7 +305,8 @@ in_string_constant:
 	suggest_state = SuggestionState::SUGGEST_FILE_NAME;
 	goto standard_suggestion;
 process_word : {
-	while (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos])) {
+	while ((last_pos < sql.size()) &&
+	       (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos]))) {
 		last_pos++;
 	}
 	auto next_word = sql.substr(last_pos, pos - last_pos);
@@ -325,7 +326,8 @@ process_word : {
 	goto regular_scan;
 }
 standard_suggestion:
-	while (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos])) {
+	while ((last_pos < sql.size()) &&
+	       (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos]))) {
 		last_pos++;
 	}
 	auto last_word = sql.substr(last_pos, pos - last_pos);
@@ -349,8 +351,9 @@ standard_suggestion:
 	default:
 		throw InternalException("Unrecognized suggestion state");
 	}
-	if (last_pos >= sql.size()) {
-		throw InternalException("last_pos out of range");
+	if (last_pos > sql.size()) {
+		D_ASSERT(false);
+		throw NotImplementedException("last_pos out of range");
 	}
 	return make_unique<SQLAutoCompleteFunctionData>(move(suggestions), last_pos);
 }
