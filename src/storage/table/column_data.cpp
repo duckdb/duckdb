@@ -111,10 +111,13 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		         state.row_index <= state.current->start + state.current->count);
 		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - state.row_index);
 		idx_t result_offset = initial_remaining - remaining;
-		state.current->Scan(state, scan_count, result, result_offset, scan_count == initial_remaining);
+		if (scan_count > 0) {
+			state.current->Scan(state, scan_count, result, result_offset, scan_count == initial_remaining);
 
-		state.row_index += scan_count;
-		remaining -= scan_count;
+			state.row_index += scan_count;
+			remaining -= scan_count;
+		}
+
 		if (remaining > 0) {
 			if (!state.current->next) {
 				break;
