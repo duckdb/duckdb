@@ -454,7 +454,7 @@ prof_thread_name_alloc(tsd_t *tsd, const char *thread_name) {
 
 	size = strlen(thread_name) + 1;
 	if (size == 1) {
-		return "";
+		return strdup("");
 	}
 
 	ret = (char *)iallocztm(tsd_tsdn(tsd), size, sz_size2index(size), false, NULL,
