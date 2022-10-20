@@ -41,8 +41,8 @@ def parse_args():
 
 def init_db(cli, dbname, benchmark_dir):
     print(f"INITIALIZING {dbname} ...")
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, capture_output=True)
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, capture_output=True)
+    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
     print("INITIALIZATION DONE")
 
 
@@ -58,7 +58,7 @@ def op_inspect(op):
 
 
 def query_plan_cost(cli, dbname, query):
-    subprocess.run(f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"", shell=True, check=True, capture_output=True)
+    subprocess.run(f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"", shell=True, check=True, stdout=subprocess.DEVNULL)
     with open(PROFILE_FILENAME, 'r') as file:
         return op_inspect(json.load(file))
 
