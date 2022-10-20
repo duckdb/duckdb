@@ -84,9 +84,9 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 		type = LogicalType::FLOAT;
 		return true;
 	}
-	default:
+	default: // LCOV_EXCL_START
 		throw NotImplementedException("case not implemented for type PyDecimalExponentType");
-	}
+	} // LCOV_EXCL_STOP
 	}
 	return true;
 }
@@ -122,10 +122,6 @@ void PyDecimal::SetExponent(py::handle &exponent) {
 
 static bool WidthFitsInDecimal(int32_t width) {
 	return width >= 0 && width <= Decimal::MAX_WIDTH_DECIMAL;
-}
-
-static void DoubleConversionFail(const string &decimal) {
-	throw ConversionException("Failed to fall back to a DOUBLE for DECIMAL '%s'", decimal);
 }
 
 template <class OP>

@@ -4,6 +4,7 @@ import datetime
 import numpy as np
 import pytest
 import decimal
+import math
 from decimal import Decimal
 
 def create_generic_dataframe(data):
@@ -414,6 +415,24 @@ class TestResolveObjectColumns(object):
 
         assert(conversion == reference)
 
+    def test_numeric_decimal_coverage(self):
+        duckdb_conn = duckdb.connect()
+
+        x = pd.DataFrame({
+            '0': [Decimal("nan"), Decimal("+nan"), Decimal("-nan"), Decimal("inf"), Decimal("+inf"), Decimal("-inf")]
+        })
+        conversion = duckdb.query_df(x, "x", "select * from x").fetchall()
+        print(conversion[0][0].__class__)
+        for item in conversion:
+            assert(isinstance(item[0], float))
+        assert(math.isnan(conversion[0][0]))
+        assert(math.isnan(conversion[1][0]))
+        assert(math.isnan(conversion[2][0]))
+        assert(math.isinf(conversion[3][0]))
+        assert(math.isinf(conversion[4][0]))
+        assert(math.isinf(conversion[5][0]))
+        assert(str(conversion) == '[(nan,), (nan,), (nan,), (inf,), (inf,), (inf,)]')
+
     # Test that the column 'offset' is actually used when converting,
     # and that the same 1024 (STANDARD_VECTOR_SIZE) values are not being scanned over and over again
     def test_multiple_chunks(self):
@@ -618,7 +637,7 @@ class TestResolveObjectColumns(object):
             Decimal("1234543534535213412342342.2345456"),
             Decimal("123456789123456789123456789123456789123456789123456789123456789123456789"),
             Decimal("1232354.000000000000000000000000000035"),
-			Decimal("123.5e300")
+            Decimal("123.5e300")
         ]
         decimals = pd.DataFrame(
             data={
@@ -635,7 +654,7 @@ class TestResolveObjectColumns(object):
                     (1234543534535213412342342.2345456),
                     (123456789123456789123456789123456789123456789123456789123456789123456789),
                     (1232354.000000000000000000000000000035),
-					(123.5e300)
+                    (123.5e300)
             ) tbl(a);
         """
         duckdb_conn.execute(reference_query)
