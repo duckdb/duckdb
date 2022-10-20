@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_table_func_system
   OBJECT
+  attach_duckdb.cpp
   duckdb_columns.cpp
   duckdb_constraints.cpp
   duckdb_dependencies.cpp

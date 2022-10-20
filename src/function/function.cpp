@@ -99,6 +99,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterReadFunctions();
 	RegisterTableFunctions();
 	RegisterArrowFunctions();
+	RegisterAttachFunctions();
 
 	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();
