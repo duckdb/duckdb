@@ -41,8 +41,9 @@ struct OdbcHandle {
 };
 
 struct OdbcHandleEnv : public OdbcHandle {
-	OdbcHandleEnv() : OdbcHandle(OdbcHandleType::ENV), db(make_unique<DuckDB>(nullptr)) {};
-	unique_ptr<DuckDB> db;
+	OdbcHandleEnv() : OdbcHandle(OdbcHandleType::ENV), db(make_shared<DuckDB>(nullptr)) {};
+
+	shared_ptr<DuckDB> db;
 };
 
 struct OdbcHandleStmt;

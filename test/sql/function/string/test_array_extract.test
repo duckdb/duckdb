@@ -141,7 +141,7 @@ NULL
 query T
 SELECT array_extract(s, -2147483647) FROM strings
 ----
-h
-w
-b
+(empty)
+(empty)
+(empty)
 NULL
