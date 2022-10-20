@@ -24,9 +24,10 @@ TEST_CASE("Test repeated load and checkpoint of storage", "[storage][.]") {
 	vector<string> brand {"AAAAA", "BBBBB", "CCCC", "DDDDDD", "PPPP"};
 	vector<string> color {"violet", "indigo", "blue", "green", "yellow", "orange", "red"};
 	idx_t row_count = 1000;
+	const idx_t checkpoint_loop_count = 100;
 
 	DeleteDatabase(storage_database);
-	for (idx_t counter = 0; counter < 100; counter++) {
+	for (idx_t counter = 0; counter < checkpoint_loop_count; counter++) {
 		DuckDB db(storage_database);
 		Connection con(db);
 

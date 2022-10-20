@@ -53,7 +53,10 @@ private:
 	double base_cardinality;
 
 public:
-	double GetCardinality() const;
+	template <class CARDINALITY_TYPE>
+	CARDINALITY_TYPE GetCardinality() const {
+		return estimated_props->GetCardinality<CARDINALITY_TYPE>();
+	}
 	double GetCost();
 	void SetCost(double cost);
 	double GetBaseTableCardinality();

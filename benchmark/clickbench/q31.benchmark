@@ -5,3 +5,4 @@
 template benchmark/clickbench/clickbench-noresult.benchmark.in
 QUERY_NUMBER=31
 QUERY_NUMBER_PADDED=31
+RESULT_QUERY=SELECT * FROM __answer ORDER BY c DESC, ClientIP
