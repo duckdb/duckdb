@@ -71,6 +71,3 @@ RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row) {
 }
 
 } // namespace duckdb
-
-duckdb_decimal GetInternalAsDecimalCastSwitch(duckdb_result *result, idx_t col, idx_t row, uint8_t width,
-                                              uint8_t scale);

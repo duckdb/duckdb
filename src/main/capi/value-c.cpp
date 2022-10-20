@@ -58,11 +58,6 @@ duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row)
 	return GetInternalCValue<duckdb_decimal>(result, col, row);
 }
 
-duckdb_decimal duckdb_value_decimal_as_properties(duckdb_result *result, idx_t col, idx_t row, uint8_t width,
-                                                  uint8_t scale) {
-	return GetInternalAsDecimalCastSwitch(result, col, row, width, scale);
-}
-
 duckdb_hugeint duckdb_value_hugeint(duckdb_result *result, idx_t col, idx_t row) {
 	duckdb_hugeint result_value;
 	auto internal_value = GetInternalCValue<hugeint_t>(result, col, row);

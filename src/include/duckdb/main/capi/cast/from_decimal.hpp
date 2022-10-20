@@ -42,6 +42,7 @@ bool CastDecimalCInternal(duckdb_result *source, RESULT_TYPE &result, idx_t col,
 //! DECIMAL -> VARCHAR
 template <>
 bool CastDecimalCInternal(duckdb_result *source, char *&result, idx_t col, idx_t row);
+
 //! DECIMAL -> DECIMAL (internal fetch)
 template <>
 bool CastDecimalCInternal(duckdb_result *source, duckdb_decimal &result, idx_t col, idx_t row);
