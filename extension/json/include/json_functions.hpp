@@ -12,36 +12,13 @@
 
 namespace duckdb {
 
+class CastFunctionSet;
+struct CastParameters;
+
 class JSONFunctions {
 public:
-	static vector<CreateScalarFunctionInfo> GetFunctions() {
-		vector<CreateScalarFunctionInfo> functions;
-
-		// Extract functions
-		AddAliases({"json_extract", "json_extract_path"}, GetExtractFunction(), functions);
-		AddAliases({"json_extract_string", "json_extract_path_text", "->>"}, GetExtractStringFunction(), functions);
-
-		// Create functions
-		functions.push_back(GetArrayFunction());
-		functions.push_back(GetObjectFunction());
-		AddAliases({"to_json", "json_quote"}, GetToJSONFunction(), functions);
-		functions.push_back(GetArrayToJSONFunction());
-		functions.push_back(GetRowToJSONFunction());
-		functions.push_back(GetMergePatchFunction());
-
-		// Structure/Transform
-		functions.push_back(GetStructureFunction());
-		AddAliases({"json_transform", "from_json"}, GetTransformFunction(), functions);
-		AddAliases({"json_transform_strict", "from_json_strict"}, GetTransformStrictFunction(), functions);
-
-		// Other
-		functions.push_back(GetArrayLengthFunction());
-		functions.push_back(GetContainsFunction());
-		functions.push_back(GetTypeFunction());
-		functions.push_back(GetValidFunction());
-
-		return functions;
-	}
+	static vector<CreateScalarFunctionInfo> GetFunctions();
+	static void RegisterCastFunctions(CastFunctionSet &casts, GetCastFunctionInput input);
 
 private:
 	static CreateScalarFunctionInfo GetExtractFunction();

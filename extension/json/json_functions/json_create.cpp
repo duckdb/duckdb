@@ -28,10 +28,13 @@ public:
 };
 
 static LogicalType GetJSONType(unordered_map<string, unique_ptr<Vector>> &const_struct_names, const LogicalType &type) {
+	if (JSONCommon::LogicalTypeIsJSON(type)) {
+		return type;
+	}
+
 	switch (type.id()) {
 	// These types can go directly into JSON
 	case LogicalTypeId::SQLNULL:
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::UBIGINT:
@@ -217,12 +220,12 @@ static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 	value_v.ToUnifiedFormat(count, value_data);
 	auto values = (T *)value_data.data;
 
-	const auto value_type = value_v.GetType().id();
+	const auto type_is_json = JSONCommon::LogicalTypeIsJSON(value_v.GetType());
 	for (idx_t i = 0; i < count; i++) {
 		idx_t val_idx = value_data.sel->get_index(i);
 		if (!value_data.validity.RowIsValid(val_idx)) {
 			vals[i] = yyjson_mut_null(doc);
-		} else if (value_type == LogicalTypeId::JSON) {
+		} else if (type_is_json) {
 			vals[i] = CreateJSONValueFromJSON(doc, (string_t &)values[val_idx]);
 		} else {
 			vals[i] = CreateJSONValue<T>(doc, values[val_idx]);
@@ -346,7 +349,6 @@ static void CreateValues(const JSONCreateFunctionData &info, yyjson_mut_doc *doc
 		TemplatedCreateValues<double>(doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 		TemplatedCreateValues<string_t>(doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::STRUCT:
@@ -453,33 +455,33 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetObjectFunction() {
-	auto fun = ScalarFunction("json_object", {}, LogicalType::JSON, ObjectFunction, JSONObjectBind);
+	auto fun = ScalarFunction("json_object", {}, JSONCommon::JSONType(), ObjectFunction, JSONObjectBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayFunction() {
-	auto fun = ScalarFunction("json_array", {}, LogicalType::JSON, ArrayFunction, JSONArrayBind);
+	auto fun = ScalarFunction("json_array", {}, JSONCommon::JSONType(), ArrayFunction, JSONArrayBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetToJSONFunction() {
-	auto fun = ScalarFunction("to_json", {}, LogicalType::JSON, ToJSONFunction, ToJSONBind);
+	auto fun = ScalarFunction("to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ToJSONBind);
 	fun.varargs = LogicalType::ANY;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayToJSONFunction() {
-	auto fun = ScalarFunction("array_to_json", {}, LogicalType::JSON, ToJSONFunction, ArrayToJSONBind);
+	auto fun = ScalarFunction("array_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ArrayToJSONBind);
 	fun.varargs = LogicalType::ANY;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetRowToJSONFunction() {
-	auto fun = ScalarFunction("row_to_json", {}, LogicalType::JSON, ToJSONFunction, RowToJSONBind);
+	auto fun = ScalarFunction("row_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, RowToJSONBind);
 	fun.varargs = LogicalType::ANY;
 	return CreateScalarFunctionInfo(fun);
 }

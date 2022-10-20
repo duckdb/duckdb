@@ -36,8 +36,6 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::TIME;
 	case DUCKDB_TYPE_VARCHAR:
 		return LogicalTypeId::VARCHAR;
-	case DUCKDB_TYPE_JSON:
-		return LogicalTypeId::JSON;
 	case DUCKDB_TYPE_BLOB:
 		return LogicalTypeId::BLOB;
 	case DUCKDB_TYPE_INTERVAL:
@@ -98,8 +96,6 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_TIME;
 	case LogicalTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
-	case LogicalTypeId::JSON:
-		return DUCKDB_TYPE_JSON;
 	case LogicalTypeId::BLOB:
 		return DUCKDB_TYPE_BLOB;
 	case LogicalTypeId::INTERVAL:

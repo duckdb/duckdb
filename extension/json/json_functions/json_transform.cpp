@@ -58,7 +58,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		throw InvalidInputException("JSON structure must be a constant!");
 	} else {
 		auto structure_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-		if (!structure_val.DefaultTryCastAs(LogicalType::JSON)) {
+		if (!structure_val.DefaultTryCastAs(JSONCommon::JSONType())) {
 			throw InvalidInputException("cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
@@ -352,7 +352,6 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
 		return TransformFromString(vals, result, count, result_type, strict);
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, result, count);
@@ -397,13 +396,14 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformFunction() {
-	return CreateScalarFunctionInfo(ScalarFunction("json_transform", {LogicalType::JSON, LogicalType::JSON},
+	return CreateScalarFunctionInfo(ScalarFunction("json_transform", {JSONCommon::JSONType(), JSONCommon::JSONType()},
 	                                               LogicalType::ANY, TransformFunction<false>, JSONTransformBind));
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformStrictFunction() {
-	return CreateScalarFunctionInfo(ScalarFunction("json_transform_strict", {LogicalType::JSON, LogicalType::JSON},
-	                                               LogicalType::ANY, TransformFunction<true>, JSONTransformBind));
+	return CreateScalarFunctionInfo(ScalarFunction("json_transform_strict",
+	                                               {JSONCommon::JSONType(), JSONCommon::JSONType()}, LogicalType::ANY,
+	                                               TransformFunction<true>, JSONTransformBind));
 }
 
 } // namespace duckdb

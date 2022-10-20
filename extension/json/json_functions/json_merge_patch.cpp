@@ -76,9 +76,9 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 
 CreateScalarFunctionInfo JSONFunctions::GetMergePatchFunction() {
 	// Needs at least two json inputs, but supports merging vararg json inputs
-	ScalarFunction fun("json_merge_patch", {LogicalType::JSON, LogicalType::JSON}, LogicalType::JSON,
+	ScalarFunction fun("json_merge_patch", {JSONCommon::JSONType(), JSONCommon::JSONType()}, JSONCommon::JSONType(),
 	                   MergePatchFunction);
-	fun.varargs = LogicalType::JSON;
+	fun.varargs = JSONCommon::JSONType();
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return CreateScalarFunctionInfo(move(fun));
 }

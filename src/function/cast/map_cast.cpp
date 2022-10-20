@@ -107,7 +107,6 @@ BoundCastInfo DefaultCasts::MapCastSwitch(BindCastInput &input, const LogicalTyp
 	switch (target.id()) {
 	case LogicalTypeId::MAP:
 		return BoundCastInfo(MapToMapCast, BindMapToMapCast(input, source, target));
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		// bind a cast in which we convert the key/value to VARCHAR entries
 		auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);

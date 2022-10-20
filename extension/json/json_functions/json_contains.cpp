@@ -93,7 +93,8 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 
 CreateScalarFunctionInfo JSONFunctions::GetContainsFunction() {
 	ScalarFunctionSet set("json_contains");
-	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::JSON}, LogicalType::BOOLEAN, JSONContainsFunction));
+	set.AddFunction(
+	    ScalarFunction({JSONCommon::JSONType(), JSONCommon::JSONType()}, LogicalType::BOOLEAN, JSONContainsFunction));
 	// TODO: implement json_contains that accepts path argument as well
 
 	return CreateScalarFunctionInfo(move(set));

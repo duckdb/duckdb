@@ -21,10 +21,10 @@ static void ManyTypeFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {
 	ScalarFunctionSet set("json_type");
-	set.AddFunction(ScalarFunction({LogicalType::JSON}, LogicalType::VARCHAR, UnaryTypeFunction));
-	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::VARCHAR, BinaryTypeFunction,
-	                               JSONReadFunctionData::Bind));
-	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
+	set.AddFunction(ScalarFunction({JSONCommon::JSONType()}, LogicalType::VARCHAR, UnaryTypeFunction));
+	set.AddFunction(ScalarFunction({JSONCommon::JSONType(), LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                               BinaryTypeFunction, JSONReadFunctionData::Bind));
+	set.AddFunction(ScalarFunction({JSONCommon::JSONType(), LogicalType::LIST(LogicalType::VARCHAR)},
 	                               LogicalType::LIST(LogicalType::VARCHAR), ManyTypeFunction,
 	                               JSONReadManyFunctionData::Bind));
 

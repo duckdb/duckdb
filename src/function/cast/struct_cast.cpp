@@ -138,7 +138,6 @@ BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const Logical
 	switch (target.id()) {
 	case LogicalTypeId::STRUCT:
 		return BoundCastInfo(StructToStructCast, BindStructToStructCast(input, source, target));
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		// bind a cast in which we convert all child entries to VARCHAR entries
 		auto &struct_children = StructType::GetChildTypes(source);

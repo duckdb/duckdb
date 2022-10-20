@@ -210,7 +210,7 @@ static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 CreateScalarFunctionInfo JSONFunctions::GetStructureFunction() {
 	return CreateScalarFunctionInfo(
-	    ScalarFunction("json_structure", {LogicalType::JSON}, LogicalType::JSON, StructureFunction));
+	    ScalarFunction("json_structure", {JSONCommon::JSONType()}, JSONCommon::JSONType(), StructureFunction));
 }
 
 } // namespace duckdb

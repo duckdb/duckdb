@@ -11,7 +11,7 @@ static void ValidFunction(DataChunk &args, ExpressionState &state, Vector &resul
 
 CreateScalarFunctionInfo JSONFunctions::GetValidFunction() {
 	return CreateScalarFunctionInfo(
-	    ScalarFunction("json_valid", {LogicalType::JSON}, LogicalType::BOOLEAN, ValidFunction));
+	    ScalarFunction("json_valid", {JSONCommon::JSONType()}, LogicalType::BOOLEAN, ValidFunction));
 }
 
 } // namespace duckdb

@@ -102,6 +102,19 @@ public:
 };
 
 struct JSONCommon {
+public:
+	static constexpr auto JSON_TYPE_NAME = "JSON";
+
+	static const LogicalType JSONType() {
+		auto json_type = LogicalType(LogicalTypeId::VARCHAR);
+		json_type.SetAlias(JSON_TYPE_NAME);
+		return json_type;
+	}
+
+	static bool LogicalTypeIsJSON(const LogicalType &type) {
+		return type.id() == LogicalTypeId::VARCHAR && type.HasAlias() && type.GetAlias() == JSON_TYPE_NAME;
+	}
+
 private:
 	//! Read/Write flag that make sense for us
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;

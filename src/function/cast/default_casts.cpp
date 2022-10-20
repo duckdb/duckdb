@@ -110,7 +110,6 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return TimestampSecCastSwitch(input, source, target);
 	case LogicalTypeId::INTERVAL:
 		return IntervalCastSwitch(input, source, target);
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return StringCastSwitch(input, source, target);
 	case LogicalTypeId::BLOB:
