@@ -94,9 +94,9 @@ private:
 	void ScheduleEvents();
 	static void ScheduleEventsInternal(ScheduleEventData &event_data);
 
-	static void VerifyScheduledEvents(ScheduleEventData &event_data);
-	static void VerifyScheduledEventsInternal(const idx_t i, const vector<shared_ptr<Event>> &vertices,
-	                                          vector<bool> &visited, vector<bool> &recursion_stack);
+	static void VerifyScheduledEvents(const ScheduleEventData &event_data);
+	static void VerifyScheduledEventsInternal(const idx_t i, const vector<Event *> &vertices, vector<bool> &visited,
+	                                          vector<bool> &recursion_stack);
 
 	static void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data,
 	                             vector<Pipeline *> &scheduled_pipelines);

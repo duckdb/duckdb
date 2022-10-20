@@ -219,10 +219,14 @@ void Executor::ScheduleEvents() {
 	ScheduleEventsInternal(event_data);
 }
 
-void Executor::VerifyScheduledEvents(ScheduleEventData &event_data) {
+void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
 #ifdef DEBUG
-	const auto &vertices = event_data.events;
-	const idx_t count = vertices.size();
+	const idx_t count = event_data.events.size();
+	vector<Event *> vertices;
+	vertices.reserve(count);
+	for (const auto &event : event_data.events) {
+		vertices.push_back(event.get());
+	}
 	vector<bool> visited(count, false);
 	vector<bool> recursion_stack(count, false);
 	for (idx_t i = 0; i < count; i++) {
@@ -231,11 +235,12 @@ void Executor::VerifyScheduledEvents(ScheduleEventData &event_data) {
 #endif
 }
 
-void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<shared_ptr<Event>> &vertices,
-                                             vector<bool> &visited, vector<bool> &recursion_stack) {
+void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<Event *> &vertices, vector<bool> &visited,
+                                             vector<bool> &recursion_stack) {
 	if (visited[vertex]) {
-		return; // early out: we already visited this node
+		return; // early out: we already visited this vertex
 	}
+	D_ASSERT(!recursion_stack[vertex]); // this vertex is in the recursion stack: circular dependency!
 
 	auto dependencies = vertices[vertex]->GetDependenciesVerification();
 	if (dependencies.empty()) {
@@ -248,7 +253,7 @@ void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<sh
 	for (auto &dep : dependencies) {
 		idx_t i;
 		for (i = 0; i < count; i++) {
-			if (vertices[i].get() == dep) {
+			if (vertices[i] == dep) {
 				adjacent.push_back(i);
 				break;
 			}
@@ -256,13 +261,12 @@ void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<sh
 		D_ASSERT(i != count); // dependency must be in there somewhere
 	}
 
-	// mark node as visited and add to recursion stack
+	// mark vertex as visited and add to recursion stack
 	visited[vertex] = true;
 	recursion_stack[vertex] = true;
 
 	// recurse into adjacent vertices
 	for (const auto &i : adjacent) {
-		D_ASSERT(!recursion_stack[i]); // adjacent node is in the recursion stack: circular dependency!
 		VerifyScheduledEventsInternal(i, vertices, visited, recursion_stack);
 	}
 

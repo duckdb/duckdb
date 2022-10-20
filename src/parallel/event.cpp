@@ -49,6 +49,7 @@ void Event::AddDependency(Event &event) {
 }
 
 vector<Event *> Event::GetDependenciesVerification() const {
+	D_ASSERT(parents.size() == parents_raw.size());
 	return parents_raw;
 }
 
