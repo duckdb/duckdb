@@ -74,7 +74,7 @@ public:
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
 	unique_ptr<DuckDBPyRelation> Values(py::object params = py::none());
-        unique_ptr<DuckDBPyRelation> ValuesRows(py::list params = py::none());
+	unique_ptr<DuckDBPyRelation> ValuesRows(py::object params);
 	unique_ptr<DuckDBPyRelation> View(const string &vname);
 
 	unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list());
