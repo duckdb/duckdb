@@ -211,11 +211,63 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 			event->Schedule();
 		}
 	}
+	VerifyScheduledEvents(event_data);
 }
 
 void Executor::ScheduleEvents() {
 	ScheduleEventData event_data(pipelines, child_pipelines, union_pipelines, events, true);
 	ScheduleEventsInternal(event_data);
+}
+
+void Executor::VerifyScheduledEvents(ScheduleEventData &event_data) {
+#ifdef DEBUG
+	const auto &vertices = event_data.events;
+	const idx_t count = vertices.size();
+	vector<bool> visited(count, false);
+	vector<bool> recursion_stack(count, false);
+	for (idx_t i = 0; i < count; i++) {
+		VerifyScheduledEventsInternal(i, vertices, visited, recursion_stack);
+	}
+#endif
+}
+
+void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<shared_ptr<Event>> &vertices,
+                                             vector<bool> &visited, vector<bool> &recursion_stack) {
+	if (visited[vertex]) {
+		return; // early out: we already visited this node
+	}
+
+	auto dependencies = vertices[vertex]->GetDependenciesVerification();
+	if (dependencies.empty()) {
+		return; // early out: no dependencies
+	}
+
+	// create a vector the indices of the adjacent events
+	vector<idx_t> adjacent;
+	const idx_t count = vertices.size();
+	for (auto &dep : dependencies) {
+		idx_t i;
+		for (i = 0; i < count; i++) {
+			if (vertices[i].get() == dep) {
+				adjacent.push_back(i);
+				break;
+			}
+		}
+		D_ASSERT(i != count); // dependency must be in there somewhere
+	}
+
+	// mark node as visited and add to recursion stack
+	visited[vertex] = true;
+	recursion_stack[vertex] = true;
+
+	// recurse into adjacent vertices
+	for (const auto &i : adjacent) {
+		D_ASSERT(!recursion_stack[i]); // adjacent node is in the recursion stack: circular dependency!
+		VerifyScheduledEventsInternal(i, vertices, visited, recursion_stack);
+	}
+
+	// remove vertex from recursion stack
+	recursion_stack[vertex] = false;
 }
 
 void Executor::ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events) {

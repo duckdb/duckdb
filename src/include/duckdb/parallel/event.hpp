@@ -34,16 +34,18 @@ public:
 	void Finish();
 
 	void AddDependency(Event &event);
-	bool HasDependencies() {
+	bool HasDependencies() const {
 		return total_dependencies != 0;
 	}
+	vector<Event *> GetDependenciesVerification() const;
+
 	void CompleteDependency();
 
 	void SetTasks(vector<unique_ptr<Task>> tasks);
 
 	void InsertEvent(shared_ptr<Event> replacement_event);
 
-	bool IsFinished() {
+	bool IsFinished() const {
 		return finished;
 	}
 
@@ -62,6 +64,8 @@ protected:
 
 	//! The events that depend on this event to run
 	vector<weak_ptr<Event>> parents;
+	//! Raw pointers to the parents (used for verification only)
+	vector<Event *> parents_raw;
 
 	//! Whether or not the event is finished executing
 	atomic<bool> finished;

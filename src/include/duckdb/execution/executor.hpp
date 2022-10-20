@@ -9,11 +9,11 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/parallel/pipeline.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -93,6 +93,10 @@ private:
 
 	void ScheduleEvents();
 	static void ScheduleEventsInternal(ScheduleEventData &event_data);
+
+	static void VerifyScheduledEvents(ScheduleEventData &event_data);
+	static void VerifyScheduledEventsInternal(const idx_t i, const vector<shared_ptr<Event>> &vertices,
+	                                          vector<bool> &visited, vector<bool> &recursion_stack);
 
 	static void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data,
 	                             vector<Pipeline *> &scheduled_pipelines);
