@@ -69,9 +69,11 @@ private:
 	//! The final chunk used for moving data into the sink
 	DataChunk final_chunk;
 
-	//! In some edge cases in streaming results, we need to cache
-	unique_ptr<DataChunk> cached_flush_chunk;
-	OperatorFinalizeResultType cached_flush_chunk_result;
+	//! Cached chunk that is the result of a PhysicalOperator::FinalExecute call, necessary when the chunk resulting
+	//! from FinalExecute is pushed into an operator returning OperatorResultType::HAVE_MORE_OUTPUT in a pull.
+	unique_ptr<DataChunk> cached_final_execute_chunk;
+	//! The OperatorFinalizeResultType corresponding to the cached_final_execute_chunk
+	OperatorFinalizeResultType cached_final_execute_result;
 	//! Source has been exhausted
 	bool source_empty = false;
 

@@ -1,7 +1,6 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/limits.hpp"
-#include <iostream>
 
 namespace duckdb {
 
@@ -77,7 +76,7 @@ void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 }
 
 bool PipelineExecutor::IsFinished() {
-	return finished_processing_idx >= 0 && !cached_flush_chunk;
+	return finished_processing_idx >= 0;
 }
 
 OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t initial_idx) {
@@ -137,10 +136,10 @@ void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 			DataChunk *curr_chunk;
 			OperatorFinalizeResultType finalize_result;
 
-			if (cached_flush_chunk) {
+			if (cached_final_execute_chunk) {
 				// Still have a cached chunk from a last pull
-				curr_chunk = cached_flush_chunk.get();
-				finalize_result = cached_flush_chunk_result;
+				curr_chunk = cached_final_execute_chunk.get();
+				finalize_result = cached_final_execute_result;
 			} else {
 				// Flush the current operator
 				tmp_chunk = make_unique<DataChunk>();
@@ -155,11 +154,11 @@ void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 			if (execute_result == OperatorResultType::HAVE_MORE_OUTPUT) {
 				if (tmp_chunk) {
 					// We have a tmp_chunk that we want to continue Executing with
-					cached_flush_chunk = move(tmp_chunk);
+					cached_final_execute_chunk = move(tmp_chunk);
 				}
-				cached_flush_chunk_result = finalize_result;
+				cached_final_execute_result = finalize_result;
 			} else {
-				cached_flush_chunk.reset();
+				cached_final_execute_chunk.reset();
 				if (finalize_result == OperatorFinalizeResultType::FINISHED) {
 					FinishProcessing(op_idx);
 					op_idx++;
@@ -210,7 +209,7 @@ void PipelineExecutor::PushFinalize() {
 	finalized = true;
 	// flush all caching operators
 	// note that even if an operator has finished, we might still need to flush caches AFTER
-	// thphysical_tableinout_function.cppat operator e.g. if we have SOURCE -> LIMIT -> CROSS_PRODUCT -> SINK, if the
+	// that operator e.g. if we have SOURCE -> LIMIT -> CROSS_PRODUCT -> SINK, if the
 	// LIMIT reports no more rows will be passed on we still need to flush caches from the CROSS_PRODUCT
 	D_ASSERT(in_process_operators.empty());
 
