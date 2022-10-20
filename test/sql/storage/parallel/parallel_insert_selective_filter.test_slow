@@ -1,4 +1,4 @@
-# name: test/sql/storage/parallel/parallel_insert_selective_filter.test
+# name: test/sql/storage/parallel/parallel_insert_selective_filter.test_slow
 # description: Test parallel non order-preserving insert with a selective filter
 # group: [parallel]
 

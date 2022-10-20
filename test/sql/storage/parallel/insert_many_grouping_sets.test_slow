@@ -1,4 +1,4 @@
-# name: test/sql/storage/parallel/insert_many_grouping_sets.test
+# name: test/sql/storage/parallel/insert_many_grouping_sets.test_slow
 # description: Test parallel insert from many groups
 # group: [parallel]
 

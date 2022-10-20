@@ -1,4 +1,4 @@
-# name: test/sql/storage/parallel/insert_non_order_preserving.test
+# name: test/sql/storage/parallel/insert_non_order_preserving.test_slow
 # description: Test parallel non order-preserving insert
 # group: [parallel]
 
