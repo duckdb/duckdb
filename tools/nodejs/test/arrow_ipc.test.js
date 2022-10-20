@@ -25,8 +25,9 @@ describe.only('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
         });
     });
 
+    // Should be run with --expose-gc to allow the manual garbage collection trigger
     // TODO: this test should be done with a sanitizer instead of spraying memory
-    it.only('test gc', async () => {
+    it('test gc', async () => {
         // Now we fetch the ipc stream object and construct the RecordBatchReader
         const result = await conn.arrowIPCStream('SELECT * FROM range(1001, 2001) tbl(i)');
 
@@ -42,11 +43,9 @@ describe.only('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
         // Run GC to ensure file is deleted
         if (global.gc) {
             global.gc();
-        } else {
-            assert(false, "This test requires node to be run with --expose-gc");
         }
 
-        // Spray memory overwriting old buffer
+        // Spray memory overwriting hopefully old buffer
         let spray_results = [];
         for (let i = 0; i < 3000; i++) {
             // Now we fetch the ipc stream object and construct the RecordBatchReader

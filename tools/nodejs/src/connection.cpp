@@ -375,8 +375,6 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 		buffers[name].push_back(std::pair<uint64_t, uint64_t>({raw_ptr, length}));
 	}
 
-	// TODO this does not keep a reference, meaning if the object is gc'd in JS we probably segfault
-
 	return Value();
 }
 
