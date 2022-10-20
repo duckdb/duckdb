@@ -207,7 +207,7 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		break;
 
 	case CatalogType::TABLE_MACRO_ENTRY:
-		// create a macro function
+		// create a macro table function
 		function = make_unique_base<StandardEntry, TableMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
 		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
