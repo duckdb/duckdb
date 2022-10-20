@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-constexpr uint8_t BitReader::remainder_masks[];
-constexpr uint8_t BitReader::masks[];
+constexpr uint8_t BitReader::REMAINDER_MASKS[];
+constexpr uint8_t BitReader::MASKS[];
 
 } // namespace duckdb
