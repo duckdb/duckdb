@@ -16,7 +16,7 @@ namespace duckdb_jemalloc {
 		malloc_printf(						\
 		    "<jemalloc>: %s:%d: Failed assertion: \"%s\"\n",	\
 		    __FILE__, __LINE__, #e);				\
-		exit();						\
+		jemalloc_abort();						\
 	}								\
 } while (0)
 #endif
@@ -27,7 +27,7 @@ namespace duckdb_jemalloc {
 		malloc_printf(						\
 		    "<jemalloc>: %s:%d: Unreachable code reached\n",	\
 		    __FILE__, __LINE__);				\
-		exit();						\
+		jemalloc_abort();						\
 	}								\
 	unreachable();							\
 } while (0)
@@ -38,7 +38,7 @@ namespace duckdb_jemalloc {
 	if (config_debug) {						\
 		malloc_printf("<jemalloc>: %s:%d: Not implemented\n",	\
 		    __FILE__, __LINE__);				\
-		exit();						\
+		jemalloc_abort();						\
 	}								\
 } while (0)
 #endif

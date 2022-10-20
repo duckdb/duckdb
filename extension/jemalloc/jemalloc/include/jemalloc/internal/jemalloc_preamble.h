@@ -269,6 +269,13 @@ static const bool have_memcntl =
 #endif
     ;
 
+// calls to abort() must be within DEBUG block to satisfy duckdb R builds
+static void jemalloc_abort() {
+#ifdef DEBUG
+	abort();
+#endif
+}
+
 } // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_PREAMBLE_H */

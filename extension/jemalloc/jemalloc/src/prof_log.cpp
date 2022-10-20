@@ -452,7 +452,7 @@ prof_log_start(tsdn_t *tsdn, const char *filename) {
 			malloc_write("<jemalloc>: Error in atexit() "
 			    "for logging\n");
 			if (opt_abort) {
-				exit();
+				jemalloc_abort();
 			}
 			ret = true;
 			goto label_done;
@@ -662,7 +662,7 @@ prof_log_stop(tsdn_t *tsdn) {
 		malloc_printf("<jemalloc>: creat() for log file \"%s\" "
 			      " failed with %d\n", log_filename, errno);
 		if (opt_abort) {
-			exit();
+			jemalloc_abort();
 		}
 		return true;
 	}

@@ -43,7 +43,7 @@ tsd_cleanup_wrapper(void *arg) {
 			{
 				malloc_write("<jemalloc>: Error setting TSD\n");
 				if (opt_abort) {
-					exit();
+					jemalloc_abort();
 				}
 			}
 			return;
@@ -59,7 +59,7 @@ tsd_wrapper_set(tsd_wrapper_t *wrapper) {
 	}
 	if (pthread_setspecific(tsd_tsd, (void *)wrapper) != 0) {
 		malloc_write("<jemalloc>: Error setting TSD\n");
-		exit();
+		jemalloc_abort();
 	}
 }
 
@@ -85,7 +85,7 @@ tsd_wrapper_get(bool init) {
 		block.data = (void *)wrapper;
 		if (wrapper == NULL) {
 			malloc_write("<jemalloc>: Error allocating TSD\n");
-			exit();
+			jemalloc_abort();
 		} else {
 			wrapper->initialized = false;
       JEMALLOC_DIAGNOSTIC_PUSH
@@ -126,7 +126,7 @@ tsd_boot1(void) {
 	wrapper = (tsd_wrapper_t *)malloc_tsd_malloc(sizeof(tsd_wrapper_t));
 	if (wrapper == NULL) {
 		malloc_write("<jemalloc>: Error allocating TSD\n");
-		exit();
+		jemalloc_abort();
 	}
 	tsd_boot_wrapper.initialized = false;
 	tsd_cleanup(&tsd_boot_wrapper.val);

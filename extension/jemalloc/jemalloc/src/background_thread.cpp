@@ -298,7 +298,7 @@ background_thread_create_signals_masked(pthread_t *thread,
 		    "failed (%d), and signal mask restoration failed "
 		    "(%d)\n", create_err, restore_err);
 		if (opt_abort) {
-			exit();
+			jemalloc_abort();
 		}
 	}
 	return create_err;
@@ -342,7 +342,7 @@ check_background_thread_creation(tsd_t *tsd, unsigned *n_created,
 			malloc_printf("<jemalloc>: background thread "
 			    "creation failed (%d)\n", err);
 			if (opt_abort) {
-				exit();
+				jemalloc_abort();
 			}
 		}
 		/* Return to restart the loop since we unlocked. */
@@ -735,7 +735,7 @@ pthread_create_fptr_init(void) {
 		if (config_lazy_lock) {
 			malloc_write("<jemalloc>: Error in dlsym(RTLD_NEXT, "
 			    "\"pthread_create\")\n");
-			exit();
+			jemalloc_abort();
 		} else {
 			/* Fall back to the default symbol. */
 			pthread_create_fptr = pthread_create;

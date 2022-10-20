@@ -41,7 +41,7 @@ JEMALLOC_ALWAYS_INLINE void
 tsd_wrapper_set(tsd_wrapper_t *wrapper) {
 	if (!TlsSetValue(tsd_tsd, (void *)wrapper)) {
 		malloc_write("<jemalloc>: Error setting TSD\n");
-		exit();
+		jemalloc_abort();
 	}
 }
 
@@ -56,7 +56,7 @@ tsd_wrapper_get(bool init) {
 		    malloc_tsd_malloc(sizeof(tsd_wrapper_t));
 		if (wrapper == NULL) {
 			malloc_write("<jemalloc>: Error allocating TSD\n");
-			exit();
+			jemalloc_abort();
 		} else {
 			wrapper->initialized = false;
 			/* MSVC is finicky about aggregate initialization. */
@@ -87,7 +87,7 @@ tsd_boot1(void) {
 	    malloc_tsd_malloc(sizeof(tsd_wrapper_t));
 	if (wrapper == NULL) {
 		malloc_write("<jemalloc>: Error allocating TSD\n");
-		exit();
+		jemalloc_abort();
 	}
 	tsd_boot_wrapper.initialized = false;
 	tsd_cleanup(&tsd_boot_wrapper.val);

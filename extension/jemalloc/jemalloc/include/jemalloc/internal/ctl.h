@@ -118,7 +118,7 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 		malloc_printf(						\
 		    "<jemalloc>: Failure in xmallctl(\"%s\", ...)\n",	\
 		    name);						\
-		exit();						\
+		jemalloc_abort();						\
 	}								\
 } while (0)
 
@@ -126,7 +126,7 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 	if (je_mallctlnametomib(name, mibp, miblenp) != 0) {		\
 		malloc_printf("<jemalloc>: Failure in "			\
 		    "xmallctlnametomib(\"%s\", ...)\n", name);		\
-		exit();						\
+		jemalloc_abort();						\
 	}								\
 } while (0)
 
@@ -135,7 +135,7 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 	    newlen) != 0) {						\
 		malloc_write(						\
 		    "<jemalloc>: Failure in xmallctlbymib()\n");	\
-		exit();						\
+		jemalloc_abort();						\
 	}								\
 } while (0)
 
@@ -144,7 +144,7 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 	    != 0) {							\
 		malloc_write(						\
 		    "<jemalloc>: Failure in ctl_mibnametomib()\n");	\
-		exit();						\
+		jemalloc_abort();						\
 	}								\
 } while (0)
 
@@ -154,7 +154,7 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 	    oldp, oldlenp, newp, newlen) != 0) {			\
 		malloc_write(						\
 		    "<jemalloc>: Failure in ctl_bymibname()\n");	\
-		exit();						\
+		jemalloc_abort();						\
 	}								\
 } while (0)
 

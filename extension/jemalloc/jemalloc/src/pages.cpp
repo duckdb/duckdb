@@ -73,7 +73,7 @@ static int madvise_MADV_DONTNEED_zeroes_pages()
 		malloc_write("<jemalloc>: Cannot allocate memory for "
 		    "MADV_DONTNEED check\n");
 		if (opt_abort) {
-			exit();
+			jemalloc_abort();
 		}
 	}
 
@@ -92,7 +92,7 @@ static int madvise_MADV_DONTNEED_zeroes_pages()
 		malloc_write("<jemalloc>: Cannot deallocate memory for "
 		    "MADV_DONTNEED check\n");
 		if (opt_abort) {
-			exit();
+			jemalloc_abort();
 		}
 	}
 
@@ -218,7 +218,7 @@ os_pages_unmap(void *addr, size_t size) {
 #endif
 		    "(): %s\n", buf);
 		if (opt_abort) {
-			exit();
+			jemalloc_abort();
 		}
 	}
 }
@@ -704,7 +704,7 @@ init_thp_state(void) {
 	if (!have_madvise_huge && !have_memcntl) {
 		if (metadata_thp_enabled() && opt_abort) {
 			malloc_write("<jemalloc>: no MADV_HUGEPAGE support\n");
-			exit();
+			jemalloc_abort();
 		}
 		goto label_error;
 	}
@@ -762,7 +762,7 @@ pages_boot(void) {
 	if (os_page > PAGE) {
 		malloc_write("<jemalloc>: Unsupported system page size\n");
 		if (opt_abort) {
-			exit();
+			jemalloc_abort();
 		}
 		return true;
 	}

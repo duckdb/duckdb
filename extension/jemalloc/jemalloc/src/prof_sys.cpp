@@ -384,7 +384,7 @@ prof_dump_check_possible_error(prof_dump_arg_t *arg, bool err_cond,
 	malloc_write(buf);
 
 	if (opt_abort) {
-		exit();
+		jemalloc_abort();
 	}
 }
 

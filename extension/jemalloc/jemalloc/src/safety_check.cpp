@@ -33,7 +33,7 @@ void safety_check_fail(const char *format, ...) {
 
 	if (safety_check_abort == NULL) {
 		malloc_write(buf);
-		exit();
+		jemalloc_abort();
 	} else {
 		safety_check_abort(buf);
 	}
