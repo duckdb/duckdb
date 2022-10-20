@@ -8,17 +8,18 @@ using namespace std;
 // Dummy TableInOutFunction that:
 // - sums all INTEGER values in each row
 // - only emits 1 row per call to ThrottlingSum::Function, caching the remainder
-// - during flushing of caching operators still emits only 1 row sum per call, meaning that multiple flushes are required
-//	 to correctly process this operator
+// - during flushing of caching operators still emits only 1 row sum per call, meaning that multiple flushes are
+// required to correctly process this operator
 struct ThrottlingSum {
 	struct CustomFunctionData : public TableFunctionData {
-		CustomFunctionData() {}
+		CustomFunctionData() {
+		}
 		vector<int> row_sums;
 		idx_t current_idx = 0;
 	};
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                                  vector<LogicalType> &return_types, vector<string> &names) {
+	                                     vector<LogicalType> &return_types, vector<string> &names) {
 		auto result = make_unique<ThrottlingSum::CustomFunctionData>();
 		return_types.emplace_back(LogicalType::INTEGER);
 		names.emplace_back("total");
@@ -26,8 +27,8 @@ struct ThrottlingSum {
 	}
 
 	static OperatorResultType Function(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
-	                                                DataChunk &output) {
-		auto& state = (ThrottlingSum::CustomFunctionData&)*data_p.bind_data;
+	                                   DataChunk &output) {
+		auto &state = (ThrottlingSum::CustomFunctionData &)*data_p.bind_data;
 
 		for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 			int sum = 0;
@@ -50,8 +51,8 @@ struct ThrottlingSum {
 	}
 
 	static OperatorFinalizeResultType Finalize(ExecutionContext &context, TableFunctionInput &data_p,
-	                                                                DataChunk &output) {
-		auto& state = (ThrottlingSum::CustomFunctionData&)*data_p.bind_data;
+	                                           DataChunk &output) {
+		auto &state = (ThrottlingSum::CustomFunctionData &)*data_p.bind_data;
 
 		if (state.current_idx < state.row_sums.size()) {
 			output.SetCardinality(1);
@@ -63,7 +64,7 @@ struct ThrottlingSum {
 		}
 	}
 
-	static void Register(Connection& con) {
+	static void Register(Connection &con) {
 		// Create our test TableFunction
 		con.BeginTransaction();
 		auto &client_context = *con.context;
@@ -84,12 +85,14 @@ TEST_CASE("Caching TableInOutFunction", "[filter][.]") {
 	ThrottlingSum::Register(con);
 
 	// Check result
-	auto result2 = con.Query("SELECT * FROM throttling_sum((select i::INTEGER, (i+1)::INTEGER as j from range(0,3) tbl(i)));");
+	auto result2 =
+	    con.Query("SELECT * FROM throttling_sum((select i::INTEGER, (i+1)::INTEGER as j from range(0,3) tbl(i)));");
 	REQUIRE(result2->ColumnCount() == 1);
 	REQUIRE(CHECK_COLUMN(result2, 0, {1, 3, 5}));
 
 	// Check stream result
-	auto result = con.SendQuery("SELECT * FROM throttling_sum((select i::INTEGER, (i+1)::INTEGER as j from range(0,3) tbl(i)));");
+	auto result =
+	    con.SendQuery("SELECT * FROM throttling_sum((select i::INTEGER, (i+1)::INTEGER as j from range(0,3) tbl(i)));");
 	REQUIRE_NO_FAIL(*result);
 
 	auto chunk = result->Fetch();
@@ -111,7 +114,8 @@ TEST_CASE("Caching TableInOutFunction", "[filter][.]") {
 	REQUIRE(!chunk);
 
 	// Large result into aggregation
-	auto result3 = con.Query("SELECT sum(total) FROM throttling_sum((select i::INTEGER, (i+1)::INTEGER as j from range(0,130000) tbl(i)));");
+	auto result3 = con.Query(
+	    "SELECT sum(total) FROM throttling_sum((select i::INTEGER, (i+1)::INTEGER as j from range(0,130000) tbl(i)));");
 	REQUIRE(result3->ColumnCount() == 1);
 	REQUIRE(CHECK_COLUMN(result3, 0, {Value::BIGINT(16900000000)}));
 }
