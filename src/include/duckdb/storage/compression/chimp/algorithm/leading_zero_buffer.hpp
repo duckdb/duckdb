@@ -37,9 +37,6 @@ struct LeadingZeroBufferConstants {
 	static constexpr uint8_t SHIFTS[8] = {0, 3, 6, 9, 12, 15, 18, 21};
 };
 
-constexpr uint32_t LeadingZeroBufferConstants::MASKS[];
-constexpr uint8_t LeadingZeroBufferConstants::SHIFTS[];
-
 template <bool EMPTY>
 class LeadingZeroBuffer {
 
