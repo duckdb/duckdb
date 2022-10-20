@@ -90,10 +90,11 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 	}
 	return true;
 }
-
+// LCOV_EXCL_START
 static void ExponentNotRecognized() {
 	throw NotImplementedException("Failed to convert decimal.Decimal value, exponent type is unknown");
 }
+// LCOV_EXCL_STOP
 
 void PyDecimal::SetExponent(py::handle &exponent) {
 	if (py::isinstance<py::int_>(exponent)) {
@@ -117,7 +118,9 @@ void PyDecimal::SetExponent(py::handle &exponent) {
 			return;
 		}
 	}
+	// LCOV_EXCL_START
 	ExponentNotRecognized();
+	// LCOV_EXCL_STOP
 }
 
 static bool WidthFitsInDecimal(int32_t width) {
@@ -181,9 +184,10 @@ Value PyDecimal::ToDuckValue() {
 	case PyDecimalExponentType::EXPONENT_INFINITY: {
 		return Value::FLOAT(INFINITY);
 	}
+	// LCOV_EXCL_START
 	default: {
 		throw NotImplementedException("case not implemented for type PyDecimalExponentType");
-	}
+	} // LCOV_EXCL_STOP
 	}
 }
 
