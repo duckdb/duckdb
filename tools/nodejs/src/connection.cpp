@@ -15,8 +15,8 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	Napi::Function t =
 	    DefineClass(env, "Connection",
 	                {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec),
-	                 InstanceMethod("register_bulk", &Connection::Register),
-	                 InstanceMethod("unregister", &Connection::Unregister)});
+	                 InstanceMethod("register_udf_bulk", &Connection::RegisterUdf),
+	                 InstanceMethod("unregister_udf", &Connection::UnregisterUdf)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -217,8 +217,8 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 	jsargs->done = true;
 }
 
-struct RegisterTask : public Task {
-	RegisterTask(Connection &connection, std::string name, std::string return_type_name, Napi::Function callback)
+struct RegisterUdfTask : public Task {
+	RegisterUdfTask(Connection &connection, std::string name, std::string return_type_name, Napi::Function callback)
 	    : Task(connection, callback), name(std::move(name)), return_type_name(std::move(return_type_name)) {
 	}
 
@@ -258,7 +258,7 @@ struct RegisterTask : public Task {
 	std::string return_type_name;
 };
 
-Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
+Napi::Value Connection::RegisterUdf(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	if (info.Length() < 3 || !info[0].IsString() || !info[1].IsString() || !info[2].IsFunction()) {
 		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
@@ -287,13 +287,13 @@ Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
 	udfs[name] = udf;
 
 	database_ref->Schedule(info.Env(),
-	                       duckdb::make_unique<RegisterTask>(*this, name, return_type_name, completion_callback));
+	                       duckdb::make_unique<RegisterUdfTask>(*this, name, return_type_name, completion_callback));
 
 	return Value();
 }
 
-struct UnregisterTask : public Task {
-	UnregisterTask(Connection &connection, std::string name, Napi::Function callback)
+struct UnregisterUdfTask : public Task {
+	UnregisterUdfTask(Connection &connection, std::string name, Napi::Function callback)
 	    : Task(connection, callback), name(std::move(name)) {
 	}
 
@@ -318,7 +318,7 @@ struct UnregisterTask : public Task {
 	std::string name;
 };
 
-Napi::Value Connection::Unregister(const Napi::CallbackInfo &info) {
+Napi::Value Connection::UnregisterUdf(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	if (info.Length() < 1 || !info[0].IsString()) {
 		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
@@ -331,7 +331,7 @@ Napi::Value Connection::Unregister(const Napi::CallbackInfo &info) {
 		callback = info[1].As<Napi::Function>();
 	}
 
-	database_ref->Schedule(info.Env(), duckdb::make_unique<UnregisterTask>(*this, name, callback));
+	database_ref->Schedule(info.Env(), duckdb::make_unique<UnregisterUdfTask>(*this, name, callback));
 	return Value();
 }
 
