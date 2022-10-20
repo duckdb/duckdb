@@ -13,73 +13,73 @@ namespace duckdb {
 
 // this is private in query_result for some reason, I'd rather include it from there but for now I'll do this
 namespace __copied_from_query_result_hpp {
-	class QueryResultIterator;
-	class QueryResultRow {
-	public:
-		explicit QueryResultRow(QueryResultIterator &iterator_p, idx_t row_idx) : iterator(iterator_p), row(0) {
-		}
-
-		QueryResultIterator &iterator;
-		idx_t row;
-
-		Value GetValue(idx_t col_idx) const;
-	};
-	//! The row-based query result iterator. Invoking the
-	class QueryResultIterator {
-	public:
-		explicit QueryResultIterator(QueryResult *result_p) : current_row(*this, 0), result(result_p), base_row(0) {
-			if (result) {
-				chunk = shared_ptr<DataChunk>(result->Fetch().release());
-				if (!chunk) {
-					result = nullptr;
-				}
-			}
-		}
-
-		QueryResultRow current_row;
-		shared_ptr<DataChunk> chunk;
-		QueryResult *result;
-		idx_t base_row;
-
-	public:
-		void Next() {
-			if (!chunk) {
-				return;
-			}
-			current_row.row++;
-			if (current_row.row >= chunk->size()) {
-				base_row += chunk->size();
-				chunk = result->Fetch();
-				current_row.row = 0;
-				if (!chunk || chunk->size() == 0) {
-					// exhausted all rows
-					base_row = 0;
-					result = nullptr;
-					chunk.reset();
-				}
-			}
-		}
-
-		QueryResultIterator &operator++() {
-			Next();
-			return *this;
-		}
-		bool operator!=(const QueryResultIterator &other) const {
-			return result != other.result || base_row != other.base_row || current_row.row != other.current_row.row;
-		}
-		const QueryResultRow &operator*() const {
-			return current_row;
-		}
-	};
-
-	Value QueryResultRow::GetValue(idx_t col_idx) const {
-		return iterator.chunk->GetValue(col_idx, row);
+class QueryResultIterator;
+class QueryResultRow {
+public:
+	explicit QueryResultRow(QueryResultIterator &iterator_p, idx_t row_idx) : iterator(iterator_p), row(0) {
 	}
+
+	QueryResultIterator &iterator;
+	idx_t row;
+
+	Value GetValue(idx_t col_idx) const;
+};
+//! The row-based query result iterator. Invoking the
+class QueryResultIterator {
+public:
+	explicit QueryResultIterator(QueryResult *result_p) : current_row(*this, 0), result(result_p), base_row(0) {
+		if (result) {
+			chunk = shared_ptr<DataChunk>(result->Fetch().release());
+			if (!chunk) {
+				result = nullptr;
+			}
+		}
+	}
+
+	QueryResultRow current_row;
+	shared_ptr<DataChunk> chunk;
+	QueryResult *result;
+	idx_t base_row;
+
+public:
+	void Next() {
+		if (!chunk) {
+			return;
+		}
+		current_row.row++;
+		if (current_row.row >= chunk->size()) {
+			base_row += chunk->size();
+			chunk = result->Fetch();
+			current_row.row = 0;
+			if (!chunk || chunk->size() == 0) {
+				// exhausted all rows
+				base_row = 0;
+				result = nullptr;
+				chunk.reset();
+			}
+		}
+	}
+
+	QueryResultIterator &operator++() {
+		Next();
+		return *this;
+	}
+	bool operator!=(const QueryResultIterator &other) const {
+		return result != other.result || base_row != other.base_row || current_row.row != other.current_row.row;
+	}
+	const QueryResultRow &operator*() const {
+		return current_row;
+	}
+};
+
+Value QueryResultRow::GetValue(idx_t col_idx) const {
+	return iterator.chunk->GetValue(col_idx, row);
 }
+} // namespace __copied_from_query_result_hpp
 using QueryResultIterator = __copied_from_query_result_hpp::QueryResultIterator;
 
 struct ExternalQueryFunctionData : public TableFunctionData {
-        ExternalQueryFunctionData() {
+	ExternalQueryFunctionData() {
 	}
 
 	bool finished = false;
@@ -92,7 +92,7 @@ struct ExternalQueryFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> ExternalQueryBind(ClientContext &context, TableFunctionBindInput &input,
-						  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 
 	auto result = make_unique<ExternalQueryFunctionData>();
 	result->file_name = input.inputs[0].GetValue<string>();
@@ -103,7 +103,7 @@ static unique_ptr<FunctionData> ExternalQueryBind(ClientContext &context, TableF
 
 	result->tablerelation = result->connection->Table(result->table)->Execute();
 
-	for(idx_t i = 0; i < result->tablerelation->names.size(); i++) {
+	for (idx_t i = 0; i < result->tablerelation->names.size(); i++) {
 		return_types.push_back(result->tablerelation->types[i]);
 		names.emplace_back(result->tablerelation->names[i]);
 	}
@@ -124,14 +124,14 @@ static void ExternalQueryFunction(ClientContext &context, TableFunctionInput &da
 
 	idx_t count = 0;
 
-	while((data.rowiterator)->result != nullptr && count < STANDARD_VECTOR_SIZE) {
-		for(idx_t col = 0; col < data.tablerelation->types.size(); col++) {
+	while ((data.rowiterator)->result != nullptr && count < STANDARD_VECTOR_SIZE) {
+		for (idx_t col = 0; col < data.tablerelation->types.size(); col++) {
 			output.SetValue(col, count, (*(*(data.rowiterator))).GetValue(col));
 		}
 		count++;
 		data.rowiterator->Next();
 	}
-	if((data.rowiterator)->result == nullptr) {
+	if ((data.rowiterator)->result == nullptr) {
 		data.finished = true;
 	}
 	// todo copy views
@@ -147,7 +147,6 @@ static void ExternalQueryFunction(ClientContext &context, TableFunctionInput &da
 	output.SetCardinality(count);
 }
 
-  
 struct AttachFunctionData : public TableFunctionData {
 	AttachFunctionData() {
 	}
@@ -185,23 +184,23 @@ static void AttachFunction(ClientContext &context, TableFunctionInput &data_p, D
 	}
 
 	DuckDB db {data.file_name};
-        auto econn = Connection(db);
+	auto econn = Connection(db);
 	auto dconn = Connection(context.db->GetDatabase(context));
 
 	{
 
-	        auto q = econn.Query("select table_name from duckdb_tables();");
-		for(auto &row : *q) {
+		auto q = econn.Query("select table_name from duckdb_tables();");
+		for (auto &row : *q) {
 			auto table_name = row.GetValue<string>(0);
 
 			auto table = econn.Table(table_name)->Execute();
 
 			vector<vector<Value>> table_values;
 			unique_ptr<DataChunk> trow = nullptr;
-			while((trow = table->Fetch()) != nullptr) {
-				for(idx_t row_idx = 0; row_idx < trow->size(); row_idx++) {
+			while ((trow = table->Fetch()) != nullptr) {
+				for (idx_t row_idx = 0; row_idx < trow->size(); row_idx++) {
 					vector<Value> row_values;
-					for(idx_t col = 0; col < table->names.size(); col++) {
+					for (idx_t col = 0; col < table->names.size(); col++) {
 						row_values.push_back(trow->GetValue(col, row_idx));
 					}
 					table_values.push_back(row_values);
@@ -231,11 +230,12 @@ static void RegisterAttachFunction(BuiltinFunctions &set) {
 	attach_duckdb.named_parameters["temporary"] = LogicalType::BOOLEAN;
 	set.AddFunction(attach_duckdb);
 
-	TableFunction query_external_duckdb("query_external", {LogicalType::VARCHAR, LogicalType::VARCHAR}, ExternalQueryFunction, ExternalQueryBind);
+	TableFunction query_external_duckdb("query_external", {LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                                    ExternalQueryFunction, ExternalQueryBind);
 	set.AddFunction(query_external_duckdb);
 }
 
 void BuiltinFunctions::RegisterAttachFunctions() {
 	RegisterAttachFunction(*this);
 }
-};
+}; // namespace duckdb
