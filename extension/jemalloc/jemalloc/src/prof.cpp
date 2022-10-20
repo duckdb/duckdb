@@ -652,7 +652,7 @@ prof_boot2(tsd_t *tsd, base_t *base) {
 		    atexit(prof_fdump) != 0) {
 			malloc_write("<jemalloc>: Error in atexit()\n");
 			if (opt_abort) {
-				exit();
+				jemalloc_abort();
 			}
 		}
 

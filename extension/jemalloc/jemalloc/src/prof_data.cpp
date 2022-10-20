@@ -443,7 +443,7 @@ prof_bt_count(void) {
 	return bt_count;
 }
 
-const char *
+char *
 prof_thread_name_alloc(tsd_t *tsd, const char *thread_name) {
 	char *ret;
 	size_t size;
@@ -472,7 +472,7 @@ prof_thread_name_set_impl(tsd_t *tsd, const char *thread_name) {
 
 	prof_tdata_t *tdata;
 	unsigned i;
-	const char *s;
+	char *s;
 
 	tdata = prof_tdata_get(tsd, true);
 	if (tdata == NULL) {
