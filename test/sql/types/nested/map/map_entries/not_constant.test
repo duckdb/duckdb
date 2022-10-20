@@ -44,3 +44,76 @@ SELECT MAP_ENTRIES(MAP_FROM_ENTRIES(list)) FROM t1;
 [{'k': 2, 'v': a}, {'k': 3, 'v': b}]
 [{'k': 6, 'v': h}, {'k': 7, 'v': g}]
 NULL
+
+# Used in lambdas
+statement ok
+create table tbl (
+	maps MAP(integer, text)[]
+);
+
+statement ok
+insert into tbl VALUES (
+	[
+		MAP([5,3,2],['a','c','b']),
+		MAP([1], [NULL]),
+		MAP([7,9,1,3,5,6], ['ab','c','d','ef','ba','he'])
+	]
+);
+
+statement error
+select list_apply(maps, x -> map_entries(x)) from tbl;
+----
+[[5, 3, 2], [1], [7, 9, 1, 3, 5, 6]]
+
+# Used in macros
+statement ok
+CREATE MACRO map_entries_macro(x) AS (map_entries(x))
+
+query I
+select map_entries_macro(map_from_entries(list)) from t1;
+----
+[{'k': 1, 'v': x}, {'k': 2, 'v': y}, {'k': 4, 'v': s}]
+[{'k': 2, 'v': a}, {'k': 3, 'v': b}]
+[{'k': 6, 'v': h}, {'k': 7, 'v': g}]
+NULL
+
+# Select the map, and the map_entries sorted, to show that the sort does not impact the original map
+query II
+select maps, list_apply(maps, x -> list_sort(map_entries(x))) from tbl;
+----
+[{5=a, 3=c, 2=b}, {1=NULL}, {7=ab, 9=c, 1=d, 3=ef, 5=ba, 6=he}]	[[{'k': 2, 'v': b}, {'k': 3, 'v': c}, {'k': 5, 'v': a}], [{'k': 1, 'v': NULL}], [{'k': 1, 'v': d}, {'k': 3, 'v': ef}, {'k': 5, 'v': ba}, {'k': 6, 'v': he}, {'k': 7, 'v': ab}, {'k': 9, 'v': c}]]
+
+query II
+select maps, list_apply(maps, x -> map_from_entries(map_entries(x))) from tbl;
+----
+[{5=a, 3=c, 2=b}, {1=NULL}, {7=ab, 9=c, 1=d, 3=ef, 5=ba, 6=he}]	[{5=a, 3=c, 2=b}, {1=NULL}, {7=ab, 9=c, 1=d, 3=ef, 5=ba, 6=he}]
+
+# Filters
+
+statement ok
+create table filtered (
+	col map(integer, integer),
+	idx integer
+);
+
+statement ok
+insert into filtered VALUES (
+	map([7,4,9,1],[NULL,4,7,5]),
+	0
+), (
+	map([6,3,87,2],[0,NULL,5,NULL]),
+	1
+), (
+	map([7,4,9],[8,3,4]),
+	2
+), (
+	map([9,2,7,5,8,1],[NULL,NULL,4,5,6,7]),
+	3
+);
+
+# Dictionary vector as input
+query I
+select map_entries(col) from filtered where idx % 2 != 0;
+----
+[{'k': 6, 'v': 0}, {'k': 3, 'v': NULL}, {'k': 87, 'v': 5}, {'k': 2, 'v': NULL}]
+[{'k': 9, 'v': NULL}, {'k': 2, 'v': NULL}, {'k': 7, 'v': 4}, {'k': 5, 'v': 5}, {'k': 8, 'v': 6}, {'k': 1, 'v': 7}]
