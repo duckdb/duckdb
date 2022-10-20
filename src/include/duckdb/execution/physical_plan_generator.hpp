@@ -88,6 +88,10 @@ protected:
 	                                                         vector<unique_ptr<Expression>> &groups);
 
 private:
+	bool PreserveInsertionOrder(PhysicalOperator &plan);
+	bool UseBatchIndex(PhysicalOperator &plan);
+
+private:
 	ClientContext &context;
 };
 } // namespace duckdb
