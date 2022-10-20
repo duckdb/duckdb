@@ -11,6 +11,13 @@ def get_relation(conn):
     return conn.from_df(test_df)
 
 class TestRelation(object):
+    def test_values_rows(self, duckdb_cursor):
+        conn = duckdb.connect()
+        rows_rel = conn.value_rows([[1,2],[3,4]])
+        assert len(rows_rel.fetchall()) == 2
+        nonrows_rel = conn.values([[1,2],[3,4]])
+        assert len(nonrows_rel.fetchall()) == 1
+        
     def test_csv_auto(self, duckdb_cursor):
         conn = duckdb.connect()
         df_rel = get_relation(conn)
