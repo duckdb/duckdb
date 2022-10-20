@@ -1516,6 +1516,7 @@ public:
 	}
 
 	bool IsSorted() const {
+		lock_guard<mutex> guard(lock);
 		return stage == WindowSortStage::SORTED;
 	}
 
@@ -1525,7 +1526,8 @@ public:
 
 	GlobalSortState &sort_state;
 
-	mutex lock;
+private:
+	mutable mutex lock;
 	WindowSortStage stage;
 	idx_t total_tasks;
 	idx_t tasks_assigned;
