@@ -3,10 +3,18 @@
 
 namespace duckdb {
 
-double EstimatedProperties::GetCardinality() {
+template <>
+double EstimatedProperties::GetCardinality() const {
 	return cardinality;
 }
-double EstimatedProperties::GetCost() {
+
+template <>
+idx_t EstimatedProperties::GetCardinality() const {
+	auto max_idx_t = NumericLimits<idx_t>::Maximum() - 10000;
+	return MinValue<double>(cardinality, max_idx_t);
+}
+
+double EstimatedProperties::GetCost() const {
 	return cost;
 }
 

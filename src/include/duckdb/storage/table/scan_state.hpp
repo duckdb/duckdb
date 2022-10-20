@@ -13,6 +13,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/storage/table/segment_lock.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -168,7 +169,7 @@ class CreateIndexScanState : public TableScanState {
 public:
 	vector<unique_ptr<StorageLockKey>> locks;
 	unique_lock<mutex> append_lock;
-	unique_lock<mutex> delete_lock;
+	SegmentLock segment_lock;
 };
 
 } // namespace duckdb

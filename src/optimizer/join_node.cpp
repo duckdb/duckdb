@@ -21,10 +21,6 @@ unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
 	return result;
 }
 
-double JoinNode::GetCardinality() const {
-	return estimated_props->GetCardinality();
-}
-
 double JoinNode::GetCost() {
 	return estimated_props->GetCost();
 }
@@ -54,10 +50,10 @@ string JoinNode::ToString() {
 	}
 	string result = "-------------------------------\n";
 	result += set->ToString() + "\n";
-	result += "card = " + to_string(GetCardinality()) + "\n";
+	result += "card = " + to_string(GetCardinality<double>()) + "\n";
 	bool is_cartesian = false;
 	if (left && right) {
-		is_cartesian = (GetCardinality() == left->GetCardinality() * right->GetCardinality());
+		is_cartesian = (GetCardinality<double>() == left->GetCardinality<double>() * right->GetCardinality<double>());
 	}
 	result += "cartesian = " + to_string(is_cartesian) + "\n";
 	result += "cost = " + to_string(estimated_props->GetCost()) + "\n";

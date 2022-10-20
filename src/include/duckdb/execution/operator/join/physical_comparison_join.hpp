@@ -31,10 +31,6 @@ public:
 	//! Construct the remainder of a Full Outer Join based on which tuples in the RHS found no match
 	static void ConstructFullOuterJoinResult(bool *found_match, ColumnDataCollection &input, DataChunk &result,
 	                                         ColumnDataScanState &scan_state);
-
-	bool IsOrderPreserving() const override {
-		return false;
-	}
 };
 
 } // namespace duckdb

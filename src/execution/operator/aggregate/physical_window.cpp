@@ -1495,7 +1495,7 @@ class WindowGlobalMergeState;
 
 class WindowLocalMergeState {
 public:
-	WindowLocalMergeState() : merge_state(nullptr) {
+	WindowLocalMergeState() : merge_state(nullptr), stage(WindowSortStage::INIT) {
 		finished = true;
 	}
 
@@ -1505,6 +1505,7 @@ public:
 	void ExecuteTask();
 
 	WindowGlobalMergeState *merge_state;
+	WindowSortStage stage;
 	atomic<bool> finished;
 };
 
@@ -1533,7 +1534,7 @@ public:
 
 void WindowLocalMergeState::ExecuteTask() {
 	auto &global_sort = merge_state->sort_state;
-	switch (merge_state->stage) {
+	switch (stage) {
 	case WindowSortStage::PREPARE:
 		global_sort.PrepareMergePhase();
 		break;
@@ -1558,6 +1559,7 @@ bool WindowGlobalMergeState::AssignTask(WindowLocalMergeState &local_state) {
 	}
 
 	local_state.merge_state = this;
+	local_state.stage = stage;
 	local_state.finished = false;
 	tasks_assigned++;
 
@@ -1659,7 +1661,10 @@ TaskExecutionResult WindowMergeTask::ExecuteTask(TaskExecutionMode mode) {
 			auto &global_state = hash_groups.states[group];
 			if (global_state->IsSorted()) {
 				// This hash group is done
-				sorted += int(sorted == group);
+				// Update the high water mark of densely completed groups
+				if (sorted == group) {
+					++sorted;
+				}
 				continue;
 			}
 
