@@ -10,6 +10,7 @@
 
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 
 namespace duckdb {
@@ -61,6 +62,57 @@ struct ReadCSVTableFunction {
 	static TableFunction GetFunction(bool list_parameter = false);
 	static TableFunction GetAutoFunction(bool list_parameter = false);
 	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ReadCSVGlobalState : public GlobalTableFunctionState {
+	//! The CSV reader
+	unique_ptr<BufferedCSVReader> csv_reader;
+	//! The index of the next file to read (i.e. current file + 1)
+	idx_t file_index;
+	//! Total File Size
+	idx_t file_size;
+	//! How many bytes were read up to this point
+	atomic<idx_t> bytes_read;
+	//! Mutex to lock when getting next batch of bytes (Parallel Only)
+	mutex main_mutex;
+	//! Starting Byte of Next Thread
+	idx_t next_byte;
+
+	idx_t MaxThreads() const override;
+};
+
+struct ReadCSVLocalState : public LocalTableFunctionState {
+	ReadCSVLocalState(ReadCSVGlobalState &global_state, idx_t bytes_per_thread_p,
+	                  unique_ptr<BufferedCSVReader> csv_reader_p)
+	    : global_state(global_state), bytes_per_thread(bytes_per_thread_p), csv_reader(move(csv_reader_p)) {
+		Next();
+		file_size = csv_reader->GetFileSize();
+	}
+
+	bool Next() {
+		lock_guard<mutex> parallel_lock(global_state.main_mutex);
+		start_byte = global_state.next_byte;
+		end_byte = start_byte + bytes_per_thread;
+		global_state.next_byte += bytes_per_thread;
+		start_reading = false;
+		return Valid();
+	}
+
+	bool Valid() {
+		return start_byte < file_size;
+	}
+
+	ReadCSVGlobalState &global_state;
+	//! Start Byte
+	idx_t start_byte;
+	//! End Byte
+	idx_t end_byte;
+	//! Current Byte
+	idx_t bytes_per_thread;
+	bool start_reading = false;
+	idx_t file_size;
+	//! The CSV reader
+	unique_ptr<BufferedCSVReader> csv_reader;
 };
 
 } // namespace duckdb

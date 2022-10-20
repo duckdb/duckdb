@@ -14,6 +14,7 @@
 #include "utf8proc_wrapper.hpp"
 #include "utf8proc.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -1594,13 +1595,51 @@ final_state:
 	return true;
 }
 
-bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message) {
+bool BufferedCSVReader::SetPosition(ReadCSVLocalState *local_state) {
+	if (local_state) {
+		bool not_read_anything = true;
+		do {
+			// We start off from the assigned position in the local state
+			if (!local_state->start_reading) {
+				position = local_state->start_byte;
+				local_state->start_reading = true;
+			}
+			// We have to move position up to next new line
+			for (; position < buffer_size; position++) {
+				if (StringUtil::CharacterIsNewline(buffer[position]) ||
+				    StringUtil::CharacterIsNullTerminator(buffer[position])) {
+					position++;
+					break;
+				}
+			}
+			not_read_anything = position > local_state->end_byte;
+			if (not_read_anything) {
+				// the thread did not find a new line within it's range
+				if (!local_state->Next()) {
+					return false;
+				}
+			}
+		} while (not_read_anything);
+	}
+	return true;
+}
+
+bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message,
+                                          ReadCSVLocalState *local_state) {
 	// used for parsing algorithm
 	bool finished_chunk = false;
 	idx_t column = 0;
 	idx_t offset = 0;
 	bool has_quotes = false;
 	vector<idx_t> escape_positions;
+	if (local_state) {
+		if (!local_state->Valid()) {
+			return true;
+		}
+	}
+	if (!SetPosition(local_state)) {
+		return true;
+	}
 
 	// read values into the buffer (if any)
 	if (position >= buffer_size) {
@@ -1608,6 +1647,7 @@ bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 			return true;
 		}
 	}
+
 	// start parsing the first value
 	goto value_start;
 value_start:
@@ -1669,6 +1709,18 @@ add_row : {
 		goto carriage_return;
 	} else {
 		// \n newline, move to value start
+		if (local_state) {
+			if (position >= local_state->end_byte) {
+				// This thread is done, get next offsets.
+				if (!local_state->Next()) {
+					return true;
+				}
+				if (!SetPosition(local_state)) {
+					return true;
+				}
+			}
+		}
+
 		if (finished_chunk) {
 			return true;
 		}
@@ -1823,7 +1875,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	return read_count > 0;
 }
 
-void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
+void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk, ReadCSVLocalState *local_state) {
 	// if no auto-detect or auto-detect with jumping samples, we have nothing cached and start from the beginning
 	if (cached_chunks.empty()) {
 		cached_buffers.clear();
@@ -1836,7 +1888,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	}
 
 	string error_message;
-	if (!TryParseCSV(ParserMode::PARSING, insert_chunk, error_message)) {
+	if (!TryParseCSV(ParserMode::PARSING, insert_chunk, error_message, local_state)) {
 		throw InvalidInputException(error_message);
 	}
 }
@@ -1855,11 +1907,12 @@ void BufferedCSVReader::ParseCSV(ParserMode mode) {
 	}
 }
 
-bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_chunk, string &error_message) {
+bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_chunk, string &error_message,
+                                    ReadCSVLocalState *local_state) {
 	mode = parser_mode;
 
 	if (options.quote.size() <= 1 && options.escape.size() <= 1 && options.delimiter.size() == 1) {
-		return TryParseSimpleCSV(insert_chunk, error_message);
+		return TryParseSimpleCSV(insert_chunk, error_message, local_state);
 	} else {
 		return TryParseComplexCSV(insert_chunk, error_message);
 	}

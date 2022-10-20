@@ -27,6 +27,9 @@ public:
 	DUCKDB_API static bool CharacterIsNewline(char c) {
 		return c == '\n' || c == '\r';
 	}
+	DUCKDB_API static bool CharacterIsNullTerminator(char c) {
+		return c == '\0';
+	}
 	DUCKDB_API static bool CharacterIsDigit(char c) {
 		return c >= '0' && c <= '9';
 	}
