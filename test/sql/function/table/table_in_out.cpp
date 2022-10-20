@@ -23,7 +23,7 @@ struct ThrottlingSum {
 		auto result = make_unique<ThrottlingSum::CustomFunctionData>();
 		return_types.emplace_back(LogicalType::INTEGER);
 		names.emplace_back("total");
-		return result;
+		return move(result);
 	}
 
 	static OperatorResultType Function(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
