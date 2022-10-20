@@ -75,8 +75,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("view", &DuckDBPyConnection::View, "Create a relation object for the name'd view", py::arg("view_name"))
 	    .def("values", &DuckDBPyConnection::Values, "Create a relation object from the passed values",
 	         py::arg("values"))
-	    .def("value_rows", &DuckDBPyConnection::ValuesRows, "Create a relation object from the passed values (as a rowset)",
-	         py::arg("values"))
+	    .def("value_rows", &DuckDBPyConnection::ValuesRows,
+	         "Create a relation object from the passed values (as a rowset)", py::arg("rows"))
 	    .def("table_function", &DuckDBPyConnection::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
 	         py::arg("parameters") = py::none())
@@ -301,19 +301,22 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ValuesRows(py::list params) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ValuesRows(py::object params) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 	if (params.is_none()) {
-		params = py::list();
+		throw InvalidInputException("Parameter 'rows' may not be None");
 	}
-	if (!py::hasattr(params, "__len__")) {
-		throw InvalidInputException("Type of object passed to parameter 'values' must be iterable");
+	if (!py::isinstance<py::iterable>(params)) {
+		throw InvalidInputException("Type of object passed to parameter 'rows' must be iterable");
 	}
 	vector<vector<Value>> values;
-	for(py::handle sublist : params) {
-	  values.push_back(DuckDBPyConnection::TransformPythonParamList(sublist.cast<py::list>()));
+	for (py::handle sublist : params) {
+		if (!py::isinstance<py::iterable>(sublist)) {
+			throw InvalidInputException("Object representing row must be iterable");
+		}
+		values.push_back(DuckDBPyConnection::TransformPythonParamList(sublist.cast<py::iterable>()));
 	}
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
 }
