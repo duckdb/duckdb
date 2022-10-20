@@ -43,7 +43,9 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
-
+	bool IsOrderPreserving() const override {
+		return false;
+	}
 	string ParamsToString() const override;
 
 public:

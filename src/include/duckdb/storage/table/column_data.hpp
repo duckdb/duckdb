@@ -136,7 +136,7 @@ public:
 
 protected:
 	//! Append a transient segment
-	void AppendTransientSegment(idx_t start_row);
+	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
 
 	//! Scans a base vector from the column
 	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining);
