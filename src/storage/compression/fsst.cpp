@@ -335,7 +335,8 @@ public:
 		Store<uint32_t>(symbol_table_offset, (data_ptr_t)&header_ptr->fsst_symbol_table_offset);
 		Store<uint32_t>((uint32_t)current_width, (data_ptr_t)&header_ptr->bitpacking_width);
 
-		D_ASSERT(symbol_table_offset + fsst_serialized_symbol_table_size <= current_dictionary.end - current_dictionary.size);
+		D_ASSERT(symbol_table_offset + fsst_serialized_symbol_table_size <=
+		         current_dictionary.end - current_dictionary.size);
 
 		if (total_size >= FSSTStorage::COMPACTION_FLUSH_LIMIT) {
 			// the block is full enough, don't bother moving around the dictionary
