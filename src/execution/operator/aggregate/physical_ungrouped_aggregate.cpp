@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -346,7 +347,7 @@ public:
 		auto &payload_chunk = distinct_aggregate_data.payload_chunk;
 
 		ThreadContext temp_thread_context(context);
-		ExecutionContext temp_exec_context(context, temp_thread_context);
+		ExecutionContext temp_exec_context(context, temp_thread_context, nullptr);
 
 		idx_t payload_idx = 0;
 		idx_t next_payload_idx = 0;
@@ -477,6 +478,10 @@ public:
 	void Schedule() override {
 		auto &distinct_data = *gstate.distinct_data;
 
+		//! Now that all tables are combined, it's time to do the distinct aggregations
+		auto new_event = make_shared<DistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
+		this->InsertEvent(move(new_event));
+
 		vector<unique_ptr<Task>> tasks;
 		for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
 			distinct_data.radix_tables[table_idx]->ScheduleTasks(pipeline->executor, shared_from_this(),
@@ -484,10 +489,6 @@ public:
 		}
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
-
-		//! Now that all tables are combined, it's time to do the distinct aggregations
-		auto new_event = make_shared<DistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
-		this->InsertEvent(move(new_event));
 	}
 };
 

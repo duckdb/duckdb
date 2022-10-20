@@ -1,0 +1,84 @@
+# name: test/sql/storage/optimistic_write/optimistic_write.test_slow
+# description: Test large appends within individual transactions
+# group: [optimistic_write]
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write.db
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000)
+
+query I
+SELECT SUM(a) FROM test
+----
+499999500000
+
+restart
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000)
+
+query I
+SELECT SUM(a) FROM test
+----
+999999000000
+
+# temp table
+require skip_reload
+
+statement ok
+CREATE TEMPORARY TABLE blocks AS SELECT total_blocks FROM pragma_database_size();
+
+# verify in a loop that the size of the system does not increase in case of rollbacks
+loop i 0 10
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000);
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000);
+
+statement ok
+ROLLBACK;
+
+statement ok
+CREATE TEMPORARY TABLE new_blocks AS SELECT total_blocks FROM pragma_database_size();
+
+query I
+SELECT new_blocks.total_blocks - blocks.total_blocks < 20 FROM blocks, new_blocks
+----
+true
+
+statement ok
+DROP TABLE blocks;
+
+statement ok
+CREATE TEMPORARY TABLE blocks AS SELECT * FROM new_blocks;
+
+statement ok
+DROP TABLE new_blocks
+
+statement ok
+CHECKPOINT;
+
+endloop
+
+statement ok
+INSERT INTO test VALUES (42);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+CREATE TEMPORARY TABLE new_blocks AS SELECT total_blocks FROM pragma_database_size();
+
+query I
+SELECT new_blocks.total_blocks - blocks.total_blocks < 20 FROM blocks, new_blocks
+----
+true

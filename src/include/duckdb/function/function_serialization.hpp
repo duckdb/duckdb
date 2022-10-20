@@ -10,6 +10,7 @@
 
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 
 namespace duckdb {
 

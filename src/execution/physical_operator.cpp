@@ -52,8 +52,8 @@ OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChun
 	throw InternalException("Calling Execute on a node that is not an operator!");
 }
 
-void PhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-                                    OperatorState &state) const {
+OperatorFinalizeResultType PhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk,
+                                                          GlobalOperatorState &gstate, OperatorState &state) const {
 	throw InternalException("Calling FinalExecute on a node that is not an operator!");
 }
 // LCOV_EXCL_STOP
@@ -265,7 +265,20 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
 
 #if STANDARD_VECTOR_SIZE >= 128
-	if (caching_supported && state.caching_allowed && chunk.size() < CACHE_THRESHOLD) {
+	if (!context.pipeline || !caching_supported) {
+		return child_result;
+	}
+
+	if (context.pipeline->GetSink() && context.pipeline->GetSink()->RequiresBatchIndex() &&
+	    context.pipeline->GetSource()->SupportsBatchIndex()) {
+		return child_result;
+	}
+
+	if (context.pipeline->IsOrderDependent()) {
+		return child_result;
+	}
+
+	if (chunk.size() < CACHE_THRESHOLD) {
 		// we have filtered out a significant amount of tuples
 		// add this chunk to the cache and continue
 
@@ -292,8 +305,9 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	return child_result;
 }
 
-void CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-                                           OperatorState &state_p) const {
+OperatorFinalizeResultType CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk,
+                                                                 GlobalOperatorState &gstate,
+                                                                 OperatorState &state_p) const {
 	auto &state = (CachingOperatorState &)state_p;
 	if (state.cached_chunk) {
 		chunk.Move(*state.cached_chunk);
@@ -301,6 +315,7 @@ void CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk 
 	} else {
 		chunk.SetCardinality(0);
 	}
+	return OperatorFinalizeResultType::FINISHED;
 }
 
 } // namespace duckdb

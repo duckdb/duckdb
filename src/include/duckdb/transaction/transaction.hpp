@@ -12,7 +12,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/transaction/undo_buffer.hpp"
-#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 
@@ -24,6 +23,7 @@ class ClientContext;
 class CatalogEntry;
 class DataTable;
 class DatabaseInstance;
+class LocalStorage;
 class WriteAheadLog;
 
 class ChunkVectorInfo;
@@ -38,6 +38,7 @@ class Transaction {
 public:
 	Transaction(weak_ptr<ClientContext> context, transaction_t start_time, transaction_t transaction_id,
 	            timestamp_t start_timestamp, idx_t catalog_version);
+	~Transaction();
 
 	weak_ptr<ClientContext> context;
 	//! The start timestamp of this transaction
@@ -55,8 +56,6 @@ public:
 	timestamp_t start_timestamp;
 	//! The catalog version when the transaction was started
 	idx_t catalog_version;
-	//! The set of uncommitted appends for the transaction
-	LocalStorage storage;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
 	//! Whether or not the transaction has been invalidated
@@ -64,6 +63,7 @@ public:
 
 public:
 	static Transaction &GetTransaction(ClientContext &context);
+	LocalStorage &GetLocalStorage();
 
 	void PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data = nullptr, idx_t extra_data_size = 0);
 
@@ -74,20 +74,12 @@ public:
 	bool AutomaticCheckpoint(DatabaseInstance &db);
 
 	//! Rollback
-	void Rollback() noexcept {
-		undo_buffer.Rollback();
-	}
+	void Rollback() noexcept;
 	//! Cleanup the undo buffer
-	void Cleanup() {
-		undo_buffer.Cleanup();
-	}
+	void Cleanup();
 
-	void Invalidate() {
-		is_invalidated = true;
-	}
-	bool IsInvalidated() {
-		return is_invalidated;
-	}
+	void Invalidate();
+	bool IsInvalidated();
 	bool ChangesMade();
 
 	timestamp_t GetCurrentTransactionStartTimestamp() {
@@ -102,6 +94,8 @@ private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
 	UndoBuffer undo_buffer;
+	//! The set of uncommitted appends for the transaction
+	unique_ptr<LocalStorage> storage;
 
 	Transaction(const Transaction &) = delete;
 };

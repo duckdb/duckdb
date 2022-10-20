@@ -8,12 +8,6 @@ public:
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
-	bool allow_caching = true;
-
-public:
-	void AllowCaching(bool val) final {
-		allow_caching = val;
-	}
 };
 
 class TableInOutGlobalState : public GlobalOperatorState {
@@ -55,15 +49,16 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	auto &gstate = (TableInOutGlobalState &)gstate_p;
 	auto &state = (TableInOutLocalState &)state_p;
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
-	return function.in_out_function(context, data, input, chunk, state.allow_caching);
+	return function.in_out_function(context, data, input, chunk);
 }
 
-void PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk,
-                                              GlobalOperatorState &gstate_p, OperatorState &state_p) const {
+OperatorFinalizeResultType PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk,
+                                                                    GlobalOperatorState &gstate_p,
+                                                                    OperatorState &state_p) const {
 	auto &gstate = (TableInOutGlobalState &)gstate_p;
 	auto &state = (TableInOutLocalState &)state_p;
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
-	function.in_out_function_final(context, data, chunk);
+	return function.in_out_function_final(context, data, chunk);
 }
 
 } // namespace duckdb

@@ -1,0 +1,74 @@
+# name: test/sql/catalog/function/test_macro_relpersistence_conflict.test
+# description: Test Macro temporary/if exists/or replace
+# group: [function]
+
+require skip_reload
+
+# load the DB from disk
+load __TEST_DIR__/my_macro_database.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+create macro test(a, b) as a + b
+
+query T
+select test(4, 2)
+----
+6
+
+statement ok
+create or replace macro test(a, b) as a + a
+
+# should be different now
+query T
+select test(4, 2)
+----
+8
+
+# should be ignored
+statement ok
+create macro if not exists test(a, b) as a + b
+
+query T
+select test(4, 2)
+----
+8
+
+statement ok
+drop macro test
+
+# now let's do the same stuff with a temporary macro
+statement ok
+create temporary macro test(a, b) as a + b
+
+query T
+select test(4, 2)
+----
+6
+
+statement ok
+create or replace temporary macro test(a, b) as a + a
+
+query T
+select test(4, 2)
+----
+8
+
+statement ok
+create temporary macro if not exists test(a, b) as a + b
+
+query T
+select test(4, 2)
+----
+8
+
+restart
+
+# macro should be gone
+statement error
+select test(4, 2)

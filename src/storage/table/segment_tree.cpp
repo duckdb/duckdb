@@ -7,6 +7,21 @@ SegmentBase *SegmentTree::GetRootSegment() {
 	return root_node.get();
 }
 
+SegmentBase *SegmentTree::GetSegmentByIndex(int64_t index) {
+	if (index < 0) {
+		index = nodes.size() + index;
+		if (index < 0) {
+			return nullptr;
+		}
+		return nodes[index].node;
+	} else {
+		if (idx_t(index) >= nodes.size()) {
+			return nullptr;
+		}
+		return nodes[index].node;
+	}
+}
+
 SegmentBase *SegmentTree::GetLastSegment() {
 	return nodes.empty() ? nullptr : nodes.back().node;
 }
@@ -37,6 +52,16 @@ idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
 		}
 	}
 	throw InternalException("Could not find node in column segment tree!");
+}
+
+bool SegmentTree::HasSegment(SegmentBase *segment) {
+	lock_guard<mutex> tree_lock(node_lock);
+	for (auto &node : nodes) {
+		if (node.node == segment) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {

@@ -203,12 +203,14 @@ idx_t ValidityFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 struct ValidityScanState : public SegmentScanState {
 	BufferHandle handle;
+	block_id_t block_id;
 };
 
 unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
 	auto result = make_unique<ValidityScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
+	result->block_id = segment.block->BlockId();
 	return move(result);
 }
 
@@ -224,6 +226,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 
 	auto &result_mask = FlatVector::Validity(result);
 	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	D_ASSERT(scan_state.block_id == segment.block->BlockId());
 	auto input_data = (validity_t *)buffer_ptr;
 
 #ifdef DEBUG
@@ -349,6 +352,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 		// it is not required for correctness
 		auto &result_mask = FlatVector::Validity(result);
 		auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
+		D_ASSERT(scan_state.block_id == segment.block->BlockId());
 		auto input_data = (validity_t *)buffer_ptr;
 		auto result_data = (validity_t *)result_mask.GetData();
 		idx_t start_offset = start / ValidityMask::BITS_PER_VALUE;

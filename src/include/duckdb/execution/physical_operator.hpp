@@ -31,10 +31,6 @@ public:
 
 	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
 	}
-
-	virtual void AllowCaching(bool val) {
-		(void)val;
-	}
 };
 
 class GlobalOperatorState {
@@ -143,8 +139,8 @@ public:
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
-	virtual void FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-	                          OperatorState &state) const;
+	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk,
+	                                                GlobalOperatorState &gstate, OperatorState &state) const;
 
 	virtual bool ParallelOperator() const {
 		return false;
@@ -239,12 +235,7 @@ public:
 	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
 	}
 
-	void AllowCaching(bool val) final {
-		caching_allowed = val;
-	}
-
 	unique_ptr<DataChunk> cached_chunk;
-	bool caching_allowed = true;
 };
 
 //! Base class that caches output from child Operator class. Note that Operators inheriting from this class should also
@@ -259,8 +250,8 @@ public:
 public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const final;
-	void FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-	                  OperatorState &state) const final;
+	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+	                                        OperatorState &state) const final;
 
 	bool RequiresFinalExecute() const final {
 		return caching_supported;
