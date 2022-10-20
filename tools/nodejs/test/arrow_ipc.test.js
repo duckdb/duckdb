@@ -7,7 +7,7 @@ const build = 'debug';
 // const build = 'release';
 const extension_path = `../../build/${build}/extension/arrow/arrow.duckdb_extension`;
 
-describe.only('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
+describe('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
     const total = 1000;
 
     let db;
@@ -25,7 +25,6 @@ describe.only('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
         });
     });
 
-    // Should be run with --expose-gc to allow the manual garbage collection trigger
     // TODO: this test should be done with a sanitizer instead of spraying memory
     it('test gc', async () => {
         // Now we fetch the ipc stream object and construct the RecordBatchReader
@@ -43,6 +42,8 @@ describe.only('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
         // Run GC to ensure file is deleted
         if (global.gc) {
             global.gc();
+        } else {
+            throw "should run with --expose-gc";
         }
 
         // Spray memory overwriting hopefully old buffer

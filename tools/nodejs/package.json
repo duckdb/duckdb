@@ -18,7 +18,7 @@
   "scripts": {
     "install": "node-pre-gyp install --fallback-to-build",
     "pretest": "node test/support/createdb.js",
-    "test": "mocha -R spec --timeout 480000",
+    "test": "mocha -R spec --timeout 480000 --expose-gc",
     "pack": "node-pre-gyp package"
   },
   "directories": {
@@ -35,7 +35,7 @@
     "mocha": "^8.3.0",
     "ts-node": "^10.9.1",
     "tsconfig-paths": "^4.0.0",
-    "typescript": "^4.8.4",
+    "typescript": "^4.8.4"
   },
   "repository": {
     "type": "git",

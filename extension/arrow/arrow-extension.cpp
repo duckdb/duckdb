@@ -189,7 +189,7 @@ ToArrowIpcBind(ClientContext &context, TableFunctionBindInput &input,
 }
 
 static OperatorResultType ToArrowIpcFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
-                          DataChunk &output, bool allow_cache) {
+                          DataChunk &output) {
 	std::shared_ptr<arrow::Buffer> arrow_serialized_ipc_buffer;
 	auto &data = (ToArrowIpcFunctionData &)*data_p.bind_data;
 
@@ -221,7 +221,7 @@ static OperatorResultType ToArrowIpcFunction(ExecutionContext &context, TableFun
 		data.current_count += input.size();
 
 		// If chunk size is reached, we can flush to IPC blob
-		if (data.current_count >= data.chunk_size || !allow_cache) {
+		if (data.current_count >= data.chunk_size) {
 			// Construct record batch from DataChunk
 			ArrowArray arr = data.appender->Finalize();
 			auto record_batch = arrow::ImportRecordBatch(&arr, data.schema).ValueOrDie();
@@ -255,7 +255,7 @@ static OperatorResultType ToArrowIpcFunction(ExecutionContext &context, TableFun
 	}
 }
 
-static void ToArrowIpcFunctionFinal(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &output) {
+static OperatorFinalizeResultType ToArrowIpcFunctionFinal(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = (ToArrowIpcFunctionData &)*data_p.bind_data;
 	std::shared_ptr<arrow::Buffer> arrow_serialized_ipc_buffer;
 
@@ -277,6 +277,8 @@ static void ToArrowIpcFunctionFinal(ExecutionContext &context, TableFunctionInpu
 		output.SetCardinality(1);
 		data.appender.reset();
 	}
+
+	return OperatorFinalizeResultType::FINISHED;
 }
 
 static void LoadInternal(DatabaseInstance &instance) {
