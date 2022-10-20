@@ -5,21 +5,37 @@
 statement ok
 PRAGMA enable_verification
 
-# length with grapheme clusters
+# length_grapheme returns the number of grapheme clusters
 query I
-SELECT length('S̈a')
+SELECT length_grapheme('S̈a')
 ----
 2
 
 query I
-SELECT length('🤦🏼‍♂️')
+SELECT length_grapheme('🤦🏼‍♂️')
 ----
 1
 
 query I
-SELECT length('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️')
+SELECT length_grapheme('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️')
 ----
 7
+
+# length returns the number of unicode codepoints
+query I
+SELECT length('S̈a')
+----
+3
+
+query I
+SELECT length('🤦🏼‍♂️')
+----
+5
+
+query I
+SELECT length('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️')
+----
+19
 
 # strlen returns size in bytes
 query I
@@ -60,26 +76,26 @@ daeHrötoM
 
 # substring with grapheme clusters
 query T
-SELECT substring('🤦🏼‍♂️🤦🏼‍♂️🤦🏼‍♂️', 1, 1)
+SELECT substring_grapheme('🤦🏼‍♂️🤦🏼‍♂️🤦🏼‍♂️', 1, 1)
 ----
 🤦🏼‍♂️
 
 query T
-SELECT substring('S̈a︍', 2, 1)
+SELECT substring_grapheme('S̈a︍', 2, 1)
 ----
 a︍
 
 query T
-SELECT substring('test: 🤦🏼‍♂️hello🤦🏼‍♂️ world', 7, 7)
+SELECT substring_grapheme('test: 🤦🏼‍♂️hello🤦🏼‍♂️ world', 7, 7)
 ----
 🤦🏼‍♂️hello🤦🏼‍♂️
 
 query T
-SELECT substring('S̈a', 1, 1)
+SELECT substring_grapheme('S̈a', 1, 1)
 ----
 S̈
 
 query T
-SELECT substring('S̈a︍', -1, 1)
+SELECT substring_grapheme('S̈a︍', -1, 1)
 ----
 a︍
