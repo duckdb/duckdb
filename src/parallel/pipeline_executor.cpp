@@ -163,7 +163,6 @@ void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 					FinishProcessing(op_idx);
 					op_idx++;
 				}
-				// TODO add test case for flush with multiple output chunks
 			}
 
 			// Some non-empty result was pulled from some caching operator, we're done for this pull
