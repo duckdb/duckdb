@@ -16,6 +16,7 @@ void RadixPartitionedHashTable::SetGroupingValues() {
 		for (idx_t i = 0; i < grouping.size(); i++) {
 			if (grouping_set.find(grouping[i]) == grouping_set.end()) {
 				// we don't group on this value!
+				// FIXME: cant we just use bitwise-and to combine these rather than += ?
 				grouping_value += (int64_t)1 << (grouping.size() - (i + 1));
 			}
 		}
@@ -66,7 +67,7 @@ public:
 	bool multi_scan;
 	//! The lock for updating the global aggregate state
 	mutex lock;
-	//! a counter to determine if we should switch over to p
+	//! a counter to determine if we should switch over to partitioning
 	atomic<idx_t> total_groups;
 
 	bool is_finalized = false;

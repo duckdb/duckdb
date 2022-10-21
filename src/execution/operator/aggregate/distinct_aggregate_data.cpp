@@ -7,6 +7,11 @@ namespace duckdb {
 
 DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
                                              vector<idx_t> indices, ClientContext &client)
+    : DistinctAggregateData(allocator, aggregates, indices, {}, client) {
+}
+
+DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
+                                             vector<idx_t> indices, vector<idx_t> groups, ClientContext &client)
     : child_executor(allocator), payload_chunk(), indices(move(indices)) {
 	const idx_t aggregate_count = aggregates.size();
 
@@ -33,7 +38,7 @@ DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<
 		D_ASSERT(table_map.count(i));
 		idx_t table_idx = table_map[i];
 		if (radix_tables[table_idx] != nullptr) {
-			//! Table is already initialized
+			//! This aggregate shares a table with another aggregate, and the table is already initialized
 			continue;
 		}
 		// The grouping set contains the indices of the chunk that correspond to the data vector
@@ -41,6 +46,7 @@ DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<
 		auto &grouping_set = grouping_sets[table_idx];
 		//! Populate the group with the children of the aggregate
 		for (size_t set_idx = 0; set_idx < aggregate.children.size(); set_idx++) {
+			// TODO: add groups to this
 			grouping_set.insert(set_idx);
 		}
 		// Create the hashtable for the aggregate
@@ -49,9 +55,11 @@ DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<
 		radix_tables[table_idx] =
 		    make_unique<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[table_idx]);
 
+		// Get the global sinkstate for the aggregate
 		auto &radix_table = *radix_tables[table_idx];
 		radix_states[table_idx] = radix_table.GetGlobalSinkState(client);
 
+		// Fill the chunk_types (only contains the payload of the distinct aggregates)
 		vector<LogicalType> chunk_types;
 		for (auto &child_p : aggregate.children) {
 			chunk_types.push_back(child_p->return_type);
