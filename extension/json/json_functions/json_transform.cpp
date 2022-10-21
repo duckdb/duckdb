@@ -39,13 +39,8 @@ static LogicalType StructureToType(yyjson_val *val, ClientContext &context) {
 		return StructureToTypeArray(val, context);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		return StructureToTypeObject(val, context);
-	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE: {
-		auto type_str = yyjson_get_str(val);
-		auto type = TransformStringToLogicalType(type_str);
-		return type.id() == LogicalTypeId::USER
-		           ? Catalog::GetCatalog(context).GetType(context, DEFAULT_SCHEMA, type_str)
-		           : type;
-	}
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+		return TransformStringToLogicalType(yyjson_get_str(val), context);
 	default:
 		throw InvalidInputException("invalid JSON structure");
 	}

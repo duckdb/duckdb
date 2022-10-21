@@ -1,23 +1,23 @@
 #include "duckdb/common/types.hpp"
 
-#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/function/cast_rules.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/function/cast_rules.hpp"
-#include "duckdb/common/string_map_set.hpp"
 
 #include <cmath>
 
@@ -485,6 +485,11 @@ LogicalType TransformStringToLogicalType(const string &str) {
 		return LogicalType::SQLNULL;
 	}
 	return Parser::ParseColumnList("dummy " + str)[0].Type();
+}
+
+LogicalType TransformStringToLogicalType(const string &str, ClientContext &context) {
+	auto type = TransformStringToLogicalType(str);
+	return type.id() == LogicalTypeId::USER ? Catalog::GetCatalog(context).GetType(context, DEFAULT_SCHEMA, str) : type;
 }
 
 bool LogicalType::IsIntegral() const {
