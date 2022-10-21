@@ -1,0 +1,41 @@
+# name: test/sql/storage/compression/rle/rle_nulls_edge_case.test
+# description: Test RLE compression with an edge of having exactly UINT16_MAX null values
+# group: [rle]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle_nulls_edge_case.db
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+BEGIN;
+
+statement ok
+PRAGMA force_compression='RLE';
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers SELECT NULL FROM range(65535);
+
+statement ok
+INSERT INTO integers SELECT 1;
+
+statement ok
+INSERT INTO integers SELECT 2;
+
+statement ok
+INSERT INTO integers SELECT 3;
+
+statement ok
+COMMIT;
+
+statement ok
+CHECKPOINT;
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM integers;
+----
+1	3	65538	3

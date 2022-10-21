@@ -1,0 +1,39 @@
+# name: test/sql/tpcds/tpcds_sf1_no_order.test_slow
+# description: Test TPC-DS SF1 with unpreserved insertion order
+# group: [tpcds]
+
+require tpcds
+
+statement ok
+CALL dsdgen(sf=1, suffix='_original')
+
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
+statement ok
+SET preserve_insertion_order=false;
+
+foreach tbl web_site web_sales web_returns web_page warehouse time_dim store_sales store_returns store ship_mode reason promotion item inventory income_band household_demographics date_dim customer_demographics customer_address customer catalog_sales catalog_returns catalog_page call_center
+
+statement ok
+CREATE TABLE ${tbl} AS SELECT * FROM ${tbl}_original
+
+endloop
+
+loop i 1 9
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/0${i}.csv
+
+endloop
+
+loop i 10 100
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
