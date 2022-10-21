@@ -472,10 +472,9 @@ static void PrintRow(std::ostream &ss, const string &annotation, int id, const s
 
 static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id, int depth) {
 	if (info.hasfunction) {
-		D_ASSERT(info.sample_tuples_count != 0);
-		PrintRow(ss, "Function", fun_id++, info.function_name,
-		         int(info.function_time) / double(info.sample_tuples_count), info.sample_tuples_count,
-		         info.tuples_count, "", depth);
+		double time = info.sample_tuples_count == 0 ? 0 : int(info.function_time) / double(info.sample_tuples_count);
+		PrintRow(ss, "Function", fun_id++, info.function_name, time, info.sample_tuples_count, info.tuples_count, "",
+		         depth);
 	}
 	if (info.children.empty()) {
 		return;
@@ -502,10 +501,11 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 			continue;
 		}
 		for (auto &expr_timer : expr_executor->roots) {
-			D_ASSERT(expr_timer->sample_tuples_count != 0);
-			PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name,
-			         int(expr_timer->time) / double(expr_timer->sample_tuples_count), expr_timer->sample_tuples_count,
-			         expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
+			double time = expr_timer->sample_tuples_count == 0
+			                  ? 0
+			                  : double(expr_timer->time) / double(expr_timer->sample_tuples_count);
+			PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name, time,
+			         expr_timer->sample_tuples_count, expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
 			// Extract all functions inside the tree
 			ExtractFunctions(ss, *expr_timer->root, function_counter, depth + 1);
 		}

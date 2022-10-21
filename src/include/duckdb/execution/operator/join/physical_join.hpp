@@ -33,6 +33,10 @@ public:
 	                               PhysicalOperator &op);
 	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
 	vector<const PhysicalOperator *> GetSources() const override;
+
+	bool IsOrderPreserving() const override {
+		return false;
+	}
 };
 
 } // namespace duckdb

@@ -140,24 +140,6 @@ SELECT b FROM test LIMIT 70% OFFSET (((SELECT MIN(test.a) FROM test)-1)/10);
 statement ok
 SELECT * FROM test LIMIT 30% OFFSET RANDOM() / 10.0;
 
-query I
-SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM range(1000000) LIMIT 10%) LIMIT 10%) LIMIT 10%)
-----
-1000
-
-query I
-SELECT * FROM range(10) UNION ALL SELECT * FROM range(10, 20) LIMIT 10%;
-----
-0
-1
-
-#boundary values
-# big value
-query I
-SELECT * FROM range(1000000) LIMIT 0.0001%
-----
-0
-
 statement ok
 SELECT b FROM test LIMIT 0%
 ----
