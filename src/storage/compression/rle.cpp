@@ -41,16 +41,16 @@ public:
 	template <class OP = EmptyRLEWriter>
 	void Update(T *data, ValidityMask &validity, idx_t idx) {
 		if (validity.RowIsValid(idx)) {
-			all_null = false;
-			if (seen_count == 0) {
+			if (all_null) {
 				// no value seen yet
-				// assign the current value, and set the seen_count to 1
+				// assign the current value, and increment the seen_count
 				// note that we increment last_seen_count rather than setting it to 1
 				// this is intentional: this is the first VALID value we see
 				// but it might not be the first value in case of nulls!
 				last_value = data[idx];
-				seen_count = 1;
+				seen_count++;
 				last_seen_count++;
+				all_null = false;
 			} else if (last_value == data[idx]) {
 				// the last value is identical to this value: increment the last_seen_count
 				last_seen_count++;

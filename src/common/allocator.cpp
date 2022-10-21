@@ -57,8 +57,6 @@ struct AllocatorDebugInfo {
 	AllocatorDebugInfo();
 	~AllocatorDebugInfo();
 
-	static string GetStackTrace(int max_depth = 128);
-
 	void AllocateData(data_ptr_t pointer, idx_t size);
 	void FreeData(data_ptr_t pointer, idx_t size);
 	void ReallocateData(data_ptr_t pointer, data_ptr_t new_pointer, idx_t old_size, idx_t new_size);
@@ -161,7 +159,7 @@ AllocatorDebugInfo::~AllocatorDebugInfo() {
 	if (allocation_count != 0) {
 		printf("Outstanding allocations found for Allocator\n");
 		for (auto &entry : pointers) {
-			printf("Allocation of size %ld at address %p\n", entry.second.first, (void *)entry.first);
+			printf("Allocation of size %llu at address %p\n", entry.second.first, (void *)entry.first);
 			printf("Stack trace:\n%s\n", entry.second.second.c_str());
 			printf("\n");
 		}
@@ -173,28 +171,11 @@ AllocatorDebugInfo::~AllocatorDebugInfo() {
 	D_ASSERT(allocation_count == 0);
 }
 
-string AllocatorDebugInfo::GetStackTrace(int max_depth) {
-#ifdef DUCKDB_DEBUG_ALLOCATION
-	string result;
-	auto callstack = unique_ptr<void *[]>(new void *[max_depth]);
-	int frames = backtrace(callstack.get(), max_depth);
-	char **strs = backtrace_symbols(callstack.get(), frames);
-	for (int i = 0; i < frames; i++) {
-		result += strs[i];
-		result += "\n";
-	}
-	free(strs);
-	return result;
-#else
-	throw InternalException("GetStackTrace not supported without DUCKDB_DEBUG_ALLOCATION");
-#endif
-}
-
 void AllocatorDebugInfo::AllocateData(data_ptr_t pointer, idx_t size) {
 	allocation_count += size;
 #ifdef DUCKDB_DEBUG_ALLOCATION
 	lock_guard<mutex> l(pointer_lock);
-	pointers[pointer] = make_pair(size, GetStackTrace());
+	pointers[pointer] = make_pair(size, Exception::GetStackTrace());
 #endif
 }
 

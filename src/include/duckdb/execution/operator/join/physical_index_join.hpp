@@ -62,6 +62,10 @@ public:
 		return true;
 	}
 
+	bool IsOrderPreserving() const override {
+		return false;
+	}
+
 public:
 	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
 	vector<const PhysicalOperator *> GetSources() const override;

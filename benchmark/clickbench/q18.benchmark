@@ -5,3 +5,4 @@
 template benchmark/clickbench/clickbench-noresult.benchmark.in
 QUERY_NUMBER=18
 QUERY_NUMBER_PADDED=18
+RESULT_QUERY=SELECT COUNT(*) AS count FROM (SELECT UserID, SearchPhrase FROM __answer GROUP BY UserID, SearchPhrase) t
