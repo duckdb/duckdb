@@ -36,15 +36,18 @@ DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<
 			//! Table is already initialized
 			continue;
 		}
+		// The grouping set contains the indices of the chunk that correspond to the data vector
+		// that will be used to figure out in which bucket the payload should be put
+		auto &grouping_set = grouping_sets[table_idx];
 		//! Populate the group with the children of the aggregate
 		for (size_t set_idx = 0; set_idx < aggregate.children.size(); set_idx++) {
-			grouping_sets[table_idx].insert(set_idx);
+			grouping_set.insert(set_idx);
 		}
 		// Create the hashtable for the aggregate
 		grouped_aggregate_data[table_idx] = make_unique<GroupedAggregateData>();
 		grouped_aggregate_data[table_idx]->InitializeDistinct(aggregates[i]);
 		radix_tables[table_idx] =
-		    make_unique<RadixPartitionedHashTable>(grouping_sets[table_idx], *grouped_aggregate_data[table_idx]);
+		    make_unique<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[table_idx]);
 
 		auto &radix_table = *radix_tables[table_idx];
 		radix_states[table_idx] = radix_table.GetGlobalSinkState(client);
