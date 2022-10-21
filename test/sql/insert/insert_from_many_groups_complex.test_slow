@@ -1,4 +1,4 @@
-# name: test/sql/insert/insert_from_many_groups_complex.test
+# name: test/sql/insert/insert_from_many_groups_complex.test_slow
 # description: Test parallel insert from many groups with complex types
 # group: [insert]
 
