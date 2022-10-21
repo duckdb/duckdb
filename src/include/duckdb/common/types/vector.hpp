@@ -48,11 +48,11 @@ class Vector {
 
 public:
 	//! Create a vector that references the other vector
-	DUCKDB_API explicit Vector(Vector &other);
+	DUCKDB_API Vector(Vector &other);
 	//! Create a vector that slices another vector
 	DUCKDB_API explicit Vector(Vector &other, const SelectionVector &sel, idx_t count);
-	//! Create a vector that slices another vector starting from a specific offset
-	DUCKDB_API explicit Vector(Vector &other, idx_t offset);
+	//! Create a vector that slices another vector between a pair of offsets
+	DUCKDB_API explicit Vector(Vector &other, idx_t offset, idx_t end);
 	//! Create a vector of size one holding the passed on value
 	DUCKDB_API explicit Vector(const Value &value);
 	//! Create a vector of size tuple_count (non-standard)
@@ -93,7 +93,7 @@ public:
 	DUCKDB_API void ResetFromCache(const VectorCache &cache);
 
 	//! Creates a reference to a slice of the other vector
-	DUCKDB_API void Slice(Vector &other, idx_t offset);
+	DUCKDB_API void Slice(Vector &other, idx_t offset, idx_t end);
 	//! Creates a reference to a slice of the other vector
 	DUCKDB_API void Slice(Vector &other, const SelectionVector &sel, idx_t count);
 	//! Turns the vector into a dictionary vector with the specified dictionary
@@ -200,7 +200,8 @@ protected:
 //! The DictionaryBuffer holds a selection vector
 class VectorChildBuffer : public VectorBuffer {
 public:
-	VectorChildBuffer(Vector vector) : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(move(vector)) {
+	explicit VectorChildBuffer(Vector vector)
+	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(move(vector)) {
 	}
 
 public:

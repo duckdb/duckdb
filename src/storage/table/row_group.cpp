@@ -637,7 +637,7 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
 		if (offset > 0) {
-			Vector sliced_vector(update_chunk.data[i], offset);
+			Vector sliced_vector(update_chunk.data[i], offset, offset + count);
 			sliced_vector.Flatten(count);
 			columns[column]->Update(transaction, column, sliced_vector, ids + offset, count);
 		} else {

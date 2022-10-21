@@ -22,9 +22,11 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 		if (aggregate.window && UseWindowAPI()) {
 			AggregateInit();
 			inputs.Reference(*input_ref);
-		} else if (aggregate.combine && UseCombineAPI()) {
+		} else {
 			inputs.SetCapacity(*input_ref);
-			ConstructTree();
+			if (aggregate.combine && UseCombineAPI()) {
+				ConstructTree();
+			}
 		}
 	}
 }
@@ -76,7 +78,7 @@ void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 	for (idx_t i = 0; i < input_count; ++i) {
 		auto &v = inputs.data[i];
 		auto &vec = chunk.data[i];
-		v.Slice(vec, begin);
+		v.Slice(vec, begin, end);
 		v.Verify(size);
 	}
 
@@ -100,25 +102,24 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 		return;
 	}
 
-	Vector s(statep, 0);
+	const auto count = end - begin;
+	Vector s(statep, 0, count);
 	if (l_idx == 0) {
 		ExtractFrame(begin, end);
 		AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
 		aggregate.update(&inputs.data[0], aggr_input_data, input_ref->ColumnCount(), s, inputs.size());
 	} else {
-		inputs.Reset();
-		inputs.SetCardinality(end - begin);
 		// find out where the states begin
 		data_ptr_t begin_ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
 		// set up a vector of pointers that point towards the set of states
-		Vector v(LogicalType::POINTER);
+		Vector v(LogicalType::POINTER, count);
 		auto pdata = FlatVector::GetData<data_ptr_t>(v);
-		for (idx_t i = 0; i < inputs.size(); i++) {
+		for (idx_t i = 0; i < count; i++) {
 			pdata[i] = begin_ptr + i * state.size();
 		}
-		v.Verify(inputs.size());
+		v.Verify(count);
 		AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
-		aggregate.combine(v, s, aggr_input_data, inputs.size());
+		aggregate.combine(v, s, aggr_input_data, count);
 	}
 }
 
