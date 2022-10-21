@@ -15,26 +15,23 @@
 namespace duckdb {
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
-                                             vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality,
-                                             PhysicalOperatorType type)
-    : PhysicalHashAggregate(context, move(types), move(expressions), {}, estimated_cardinality, type) {
+                                             vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality)
+    : PhysicalHashAggregate(context, move(types), move(expressions), {}, estimated_cardinality) {
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
-                                             vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality,
-                                             PhysicalOperatorType type)
-    : PhysicalHashAggregate(context, move(types), move(expressions), move(groups_p), {}, {}, estimated_cardinality,
-                            type) {
+                                             vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality)
+    : PhysicalHashAggregate(context, move(types), move(expressions), move(groups_p), {}, {}, estimated_cardinality) {
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p,
                                              vector<GroupingSet> grouping_sets_p,
-                                             vector<vector<idx_t>> grouping_functions_p, idx_t estimated_cardinality,
-                                             PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types), estimated_cardinality), grouping_sets(move(grouping_sets_p)) {
+                                             vector<vector<idx_t>> grouping_functions_p, idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::HASH_GROUP_BY, move(types), estimated_cardinality),
+      grouping_sets(move(grouping_sets_p)) {
 	// get a list of all aggregates to be computed
 	const idx_t group_count = groups_p.size();
 	if (grouping_sets.empty()) {
@@ -85,6 +82,7 @@ public:
 	}
 
 	vector<unique_ptr<GlobalSinkState>> radix_states;
+	// TODO: unique_ptr<DistinctAggregateData> here
 };
 
 class HashAggregateLocalState : public LocalSinkState {

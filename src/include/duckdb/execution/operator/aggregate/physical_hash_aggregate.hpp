@@ -19,19 +19,17 @@ namespace duckdb {
 class ClientContext;
 class BufferManager;
 
-//! PhysicalHashAggregate is an group-by and aggregate implementation that uses
-//! a hash table to perform the grouping
+//! PhysicalHashAggregate is a group-by and aggregate implementation that uses a hash table to perform the grouping
+//! This only contains read-only variables, anything that is stateful instead gets stored in the Global/Local states
 class PhysicalHashAggregate : public PhysicalOperator {
 public:
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-	                      idx_t estimated_cardinality, PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
+	                      idx_t estimated_cardinality);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-	                      vector<unique_ptr<Expression>> groups, idx_t estimated_cardinality,
-	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
+	                      vector<unique_ptr<Expression>> groups, idx_t estimated_cardinality);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups, vector<GroupingSet> grouping_sets,
-	                      vector<vector<idx_t>> grouping_functions, idx_t estimated_cardinality,
-	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
+	                      vector<vector<idx_t>> grouping_functions, idx_t estimated_cardinality);
 
 	//! The grouping sets
 	vector<GroupingSet> grouping_sets;
