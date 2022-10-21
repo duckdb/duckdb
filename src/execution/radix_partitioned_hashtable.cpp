@@ -423,7 +423,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 			state.finished = true;
 			return;
 		}
-		D_ASSERT(state.ht_index < gstate.finalized_hts.size());
+		D_ASSERT(ht_index < gstate.finalized_hts.size());
 		D_ASSERT(state.ht_scan_states);
 		auto &ht = gstate.finalized_hts[ht_index];
 		auto &scan_state = state.ht_scan_states[ht_index];
