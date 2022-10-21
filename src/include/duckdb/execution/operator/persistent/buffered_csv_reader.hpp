@@ -16,6 +16,7 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <sstream>
 
@@ -89,8 +90,14 @@ public:
 
 	unique_ptr<char[]> buffer;
 	idx_t buffer_size;
+	//! Current Position this thread is reading
 	idx_t position;
+	//! Start is used to know where we start reading the buffer
 	idx_t start = 0;
+	//! Start Byte of the CSV File that this Reader should read
+	idx_t start_byte = 0;
+	//! End Byte of the CSV File that this Reader should read
+	idx_t end_byte = NumericLimits<idx_t>::Maximum();
 
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
@@ -113,9 +120,12 @@ public:
 
 	std::queue<unique_ptr<DataChunk>> cached_chunks;
 
+	//! If we already started reading after setting start and end bytes
+	bool start_reading = false;
+
 public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
-	void ParseCSV(DataChunk &insert_chunk, ReadCSVLocalState *local_state = nullptr);
+	void ParseCSV(DataChunk &insert_chunk);
 
 	idx_t GetFileSize();
 
@@ -136,8 +146,7 @@ private:
 	//! Try to parse a single datachunk from the file. Returns whether or not the parsing is successful
 	bool TryParseCSV(ParserMode mode);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
-	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message,
-	                 ReadCSVLocalState *local_state = nullptr);
+	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
 	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
 	//! Change the date format for the type to the string
@@ -157,10 +166,10 @@ private:
 	//! Resets the steam
 	void ResetStream();
 	//! Sets Position depending on the byte_start of this thread
-	bool SetPosition(ReadCSVLocalState *local_state);
+	bool SetPosition();
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
-	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, ReadCSVLocalState *local_state);
+	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message);
 	//! Parses more complex CSV files with multi-byte delimiters, escapes or quotes
 	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message);
 

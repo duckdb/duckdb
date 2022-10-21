@@ -224,15 +224,17 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (ReadCSVData &)*data_p.bind_data;
 	auto &csv_global_state = (ReadCSVGlobalState &)*data_p.global_state;
-	auto csv_local_state = (ReadCSVLocalState *)data_p.local_state;
+	auto &csv_local_state = (ReadCSVLocalState &)*data_p.local_state;
 
-	if (!csv_global_state.csv_reader) {
+	if (!csv_local_state.csv_reader) {
 		// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files
 		return;
 	}
 
 	do {
-		csv_local_state->csv_reader->ParseCSV(output, csv_local_state);
+		// Set the correct position of csv reader
+		csv_local_state.SetPosition();
+		csv_local_state.csv_reader->ParseCSV(output);
 		csv_global_state.bytes_read = csv_global_state.csv_reader->bytes_in_chunk;
 		if (output.size() == 0 && csv_global_state.file_index < bind_data.files.size()) {
 			// exhausted this file, but we have more files we can read

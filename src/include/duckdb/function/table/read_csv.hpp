@@ -90,10 +90,12 @@ struct ReadCSVLocalState : public LocalTableFunctionState {
 	}
 
 	bool Next() {
-		lock_guard<mutex> parallel_lock(global_state.main_mutex);
-		start_byte = global_state.next_byte;
+		{
+			lock_guard<mutex> parallel_lock(global_state.main_mutex);
+			start_byte = global_state.next_byte;
+			global_state.next_byte += bytes_per_thread;
+		}
 		end_byte = start_byte + bytes_per_thread;
-		global_state.next_byte += bytes_per_thread;
 		start_reading = false;
 		return Valid();
 	}
@@ -102,14 +104,28 @@ struct ReadCSVLocalState : public LocalTableFunctionState {
 		return start_byte < file_size;
 	}
 
+	void SetPosition(){
+//		if (!start_reading){
+			csv_reader->start_byte = start_byte - buffer_position;
+			csv_reader->start = start_byte - buffer_position;
+			csv_reader->position = start_byte - buffer_position;
+			csv_reader->end_byte = end_byte - buffer_position;
+			buffer_position = start_byte;
+//			start_reading = true;
+//		}
+	}
+
 	ReadCSVGlobalState &global_state;
 	//! Start Byte
 	idx_t start_byte;
 	//! End Byte
 	idx_t end_byte;
-	//! Current Byte
+	//! How many bytes per thread
 	idx_t bytes_per_thread;
-	bool start_reading = false;
+	//! Current (Real) Buffer Position
+	idx_t buffer_position = 0;
+
+	//! The File Size
 	idx_t file_size;
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
