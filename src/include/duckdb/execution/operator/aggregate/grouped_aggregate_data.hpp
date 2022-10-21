@@ -28,8 +28,6 @@ public:
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
-	//! Whether or not any aggregation is DISTINCT
-	bool any_distinct = false;
 	//! The payload types
 	vector<LogicalType> payload_types;
 	//! The aggregate return types
@@ -44,6 +42,7 @@ public:
 
 	void InitializeGroupby(vector<unique_ptr<Expression>> groups, vector<unique_ptr<Expression>> expressions,
 	                       vector<vector<idx_t>> grouping_functions);
+
 	//! Initialize a GroupedAggregateData object for use with distinct aggregates
 	void InitializeDistinct(const unique_ptr<Expression> &aggregate);
 

@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-struct GroupedAggregateData;
+class GroupedAggregateData;
 
 struct DistinctAggregateData {
 public:

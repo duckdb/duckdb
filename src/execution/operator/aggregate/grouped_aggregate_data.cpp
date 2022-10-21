@@ -24,10 +24,6 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 		auto &aggr = (BoundAggregateExpression &)*expr;
 		bindings.push_back(&aggr);
 
-		if (aggr.distinct) {
-			any_distinct = true;
-		}
-
 		aggregate_return_types.push_back(aggr.return_type);
 		for (auto &child : aggr.children) {
 			payload_types.push_back(child->return_type);
@@ -48,7 +44,6 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggregate) {
 	auto &aggr = (BoundAggregateExpression &)*aggregate;
 	D_ASSERT(aggr.distinct);
-	any_distinct = false; //! This is done to stop the radixHT from enforcing ForceSingleHT
 
 	vector<LogicalType> payload_types_filters;
 	aggregate_return_types.push_back(aggr.return_type);
