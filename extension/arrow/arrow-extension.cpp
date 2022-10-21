@@ -155,36 +155,56 @@ private:
 	}
 };
 
-
 //! note: this is the number of vectors per chunk
 static constexpr idx_t DEFAULT_CHUNK_SIZE = 120;
 
 struct ToArrowIpcFunctionData : public TableFunctionData {
 	ToArrowIpcFunctionData() {}
-	idx_t chunk_size;
-	idx_t current_count = 0;
-	bool finished = false;
-	bool sent_schema = false;
 	shared_ptr<arrow::Schema> schema;
-	unique_ptr<ArrowAppender> appender;
-	vector<string> input_table_names;
+	idx_t chunk_size;
 };
 
-// TODO allow omitting argument to use default
+struct ToArrowIpcGlobalState : public GlobalTableFunctionState {
+	ToArrowIpcGlobalState() : sent_schema(false) {}
+	atomic<bool> sent_schema;
+	mutex lock;
+};
+
+struct ToArrowIpcLocalState : public LocalTableFunctionState {
+	unique_ptr<ArrowAppender> appender;
+	idx_t current_count = 0;
+	bool checked_schema = false;
+};
+
+static unique_ptr<LocalTableFunctionState> ToArrowIpcInitLocal (ExecutionContext &context,
+                                                               TableFunctionInitInput &input,
+                                                               GlobalTableFunctionState *global_state) {
+	return make_unique<ToArrowIpcLocalState>();
+}
+
+static unique_ptr<GlobalTableFunctionState> ToArrowIpcInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
+	return make_unique<ToArrowIpcGlobalState>();
+}
+
 static unique_ptr<FunctionData>
 ToArrowIpcBind(ClientContext &context, TableFunctionBindInput &input,
                 vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<ToArrowIpcFunctionData>();
 
-//	if (input.inputs.size() > 1) {
-//		result->chunk_size = input.inputs[1].GetValue<int>() * STANDARD_VECTOR_SIZE;
-//	} else {
-		result->chunk_size = DEFAULT_CHUNK_SIZE * STANDARD_VECTOR_SIZE;
-//	}
+	result->chunk_size = DEFAULT_CHUNK_SIZE * STANDARD_VECTOR_SIZE;
 
-	result->input_table_names = input.input_table_names;
+	// Set return schema
 	return_types.emplace_back(LogicalType::BLOB);
 	names.emplace_back("ipc");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("header");
+
+	// Create the Arrow schema
+	auto tz = context.GetClientProperties().timezone;
+	ArrowSchema schema;
+	ArrowConverter::ToArrowSchema(&schema, input.input_table_types, input.input_table_names, tz);
+	result->schema = arrow::ImportSchema(&schema).ValueOrDie();
+
 	return move(result);
 }
 
@@ -192,38 +212,40 @@ static OperatorResultType ToArrowIpcFunction(ExecutionContext &context, TableFun
                           DataChunk &output) {
 	std::shared_ptr<arrow::Buffer> arrow_serialized_ipc_buffer;
 	auto &data = (ToArrowIpcFunctionData &)*data_p.bind_data;
+	auto &local_state = (ToArrowIpcLocalState &)*data_p.local_state;
+	auto &global_state = (ToArrowIpcGlobalState &)*data_p.global_state;
 
-	if (data.finished) {
-		output.SetCardinality(0);
-		return OperatorResultType::FINISHED;
+	bool sending_schema = false;
+
+	if (!local_state.checked_schema) {
+		if (!global_state.sent_schema) {
+			lock_guard<mutex> init_lock(global_state.lock);
+			if (!global_state.sent_schema) {
+				// This run will send the schema, other threads can just send the buffers
+				global_state.sent_schema = true;
+				sending_schema = true;
+			}
+		}
+		local_state.checked_schema = true;
 	}
 
-	if (!data.sent_schema) {
-		// First time we send the serialized schema only
-		auto tz = context.client.GetClientProperties().timezone;
-		auto types = input.GetTypes();
-
-		ArrowSchema schema;
-		ArrowConverter::ToArrowSchema(&schema, types, data.input_table_names, tz);
-
-		// Serialize the schema
-		data.schema = arrow::ImportSchema(&schema).ValueOrDie();
+	if (sending_schema) {
 		auto result = arrow::ipc::SerializeSchema(*data.schema);
 		arrow_serialized_ipc_buffer = result.ValueOrDie();
-
+		output.data[1].SetValue(0,Value::BOOLEAN(1));
 	} else {
-		if (!data.appender) {
-			data.appender = make_unique<ArrowAppender>(input.GetTypes(), data.chunk_size);
+		if (!local_state.appender) {
+			local_state.appender = make_unique<ArrowAppender>(input.GetTypes(), data.chunk_size);
 		}
 
 		// Append input chunk
-		data.appender->Append(input);
-		data.current_count += input.size();
+		local_state.appender->Append(input);
+		local_state.current_count += input.size();
 
 		// If chunk size is reached, we can flush to IPC blob
-		if (data.current_count >= data.chunk_size) {
+		if (local_state.current_count >= data.chunk_size) {
 			// Construct record batch from DataChunk
-			ArrowArray arr = data.appender->Finalize();
+			ArrowArray arr = local_state.appender->Finalize();
 			auto record_batch = arrow::ImportRecordBatch(&arr, data.schema).ValueOrDie();
 
 			// Serialize recordbatch
@@ -232,8 +254,10 @@ static OperatorResultType ToArrowIpcFunction(ExecutionContext &context, TableFun
 			arrow_serialized_ipc_buffer = result.ValueOrDie();
 
 			// Reset appender
-			data.appender.reset();
-			data.current_count = 0;
+			local_state.appender.reset();
+			local_state.current_count = 0;
+
+			output.data[1].SetValue(0,Value::BOOLEAN(0));
 		} else {
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
@@ -247,8 +271,7 @@ static OperatorResultType ToArrowIpcFunction(ExecutionContext &context, TableFun
 	*data_ptr = string_t((const char*)arrow_serialized_ipc_buffer->data(), arrow_serialized_ipc_buffer->size());
 	output.SetCardinality(1);
 
-	if (!data.sent_schema) {
-		data.sent_schema = true;
+	if (sending_schema) {
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	} else {
 		return OperatorResultType::NEED_MORE_INPUT;
@@ -257,11 +280,12 @@ static OperatorResultType ToArrowIpcFunction(ExecutionContext &context, TableFun
 
 static OperatorFinalizeResultType ToArrowIpcFunctionFinal(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = (ToArrowIpcFunctionData &)*data_p.bind_data;
+	auto &local_state = (ToArrowIpcLocalState &)*data_p.local_state;
 	std::shared_ptr<arrow::Buffer> arrow_serialized_ipc_buffer;
 
 	// TODO clean up
-	if (data.appender) {
-		ArrowArray arr = data.appender->Finalize();
+	if (local_state.appender) {
+		ArrowArray arr = local_state.appender->Finalize();
 		auto record_batch = arrow::ImportRecordBatch(&arr, data.schema).ValueOrDie();
 
 		// Serialize recordbatch
@@ -275,7 +299,8 @@ static OperatorFinalizeResultType ToArrowIpcFunctionFinal(ExecutionContext &cont
 		auto data_ptr = (string_t*)vector.GetData();
 		*data_ptr = string_t((const char*)arrow_serialized_ipc_buffer->data(), arrow_serialized_ipc_buffer->size());
 		output.SetCardinality(1);
-		data.appender.reset();
+		local_state.appender.reset();
+		output.data[1].SetValue(0,Value::BOOLEAN(0));
 	}
 
 	return OperatorFinalizeResultType::FINISHED;
@@ -288,7 +313,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 
 	// test/sql/function/generic/test_table_param.test
 	TableFunction get_arrow_ipc_func("get_arrow_ipc", {LogicalType::TABLE},
-	                                 nullptr, ToArrowIpcBind);
+	                                 nullptr, ToArrowIpcBind, ToArrowIpcInitGlobal, ToArrowIpcInitLocal);
 	get_arrow_ipc_func.in_out_function = ToArrowIpcFunction;
 	get_arrow_ipc_func.in_out_function_final = ToArrowIpcFunctionFinal;
 

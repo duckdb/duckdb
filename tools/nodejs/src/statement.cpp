@@ -546,7 +546,7 @@ struct GetNextArrowIpcTask : public Task {
 		}
 
 		// Arrow IPC streams should be a single column of a single blob
-		D_ASSERT(chunk->size() == 1 && chunk->ColumnCount() == 1);
+		D_ASSERT(chunk->size() == 1 && chunk->ColumnCount() == 2);
 		D_ASSERT(chunk->data[0].GetType() == duckdb::LogicalType::BLOB);
 
 		duckdb::string_t blob = *(duckdb::string_t*)(chunk->data[0].GetData());

@@ -110,7 +110,7 @@ describe('Roundtrip DuckDB -> ArrowJS ipc -> DuckDB', () => {
     });
 })
 
-describe('[Benchmark] single int column load (50M tuples)',() => {
+describe.only('[Benchmark] single int column load (50M tuples)',() => {
     // Config
     const column_size = 50*1000*1000;
 
@@ -141,7 +141,7 @@ describe('[Benchmark] single int column load (50M tuples)',() => {
         });
     });
 
-    it('DuckDB table -> IPC buffer', async () => {
+    it('DuckDB table -> Stream IPC buffer', async () => {
         let got_batches = 0;
         let got_rows = 0;
         const batches = [];
@@ -152,6 +152,16 @@ describe('[Benchmark] single int column load (50M tuples)',() => {
         const table = arrow.tableFromIPC(reader);
 
         assert.equal(table.numRows, column_size);
+    });
+
+    it('DuckDB table -> Materialized IPC buffer',  (done) => {
+        let got_batches = 0;
+        let got_rows = 0;
+        const batches = [];
+
+        conn.all('select * from get_arrow_ipc((SELECT * FROM test))', (err,res) => {
+            done();
+        });
     });
 });
 
