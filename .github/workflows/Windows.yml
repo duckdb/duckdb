@@ -157,7 +157,6 @@ jobs:
  odbc-win-64:
     name: ODBC Windows
     runs-on: windows-latest
-    needs: win-release-64
     steps:
     - uses: actions/checkout@v3
       with:
