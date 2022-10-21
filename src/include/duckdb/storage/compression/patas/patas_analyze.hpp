@@ -131,8 +131,9 @@ idx_t PatasFinalAnalyze(AnalyzeState &state) {
 	// Finish the last "segment"
 	patas_state.StartNewSegment();
 	const auto final_analyze_size = patas_state.TotalUsedBytes();
-	// printf("ANALYZE: ROWGROUP_SIZE: %llu\n", final_analyze_size);
-	return final_analyze_size;
+	// Multiply the final size to factor in the extra cost of decompression time
+	const auto multiplier = 1.2;
+	return final_analyze_size * multiplier;
 }
 
 } // namespace duckdb
