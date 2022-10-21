@@ -92,9 +92,6 @@ bool DataChunk::AllConstant() const {
 }
 
 void DataChunk::Reference(DataChunk &chunk) {
-	if (chunk.ColumnCount() > ColumnCount()) {
-		D_ASSERT(chunk.ColumnCount() <= ColumnCount());
-	}
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
 	SetCardinality(chunk);
 	SetCapacity(chunk);
