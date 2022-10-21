@@ -120,7 +120,7 @@ public:
 	DUCKDB_API CatalogEntry *CreateView(ClientContext &context, CreateViewInfo *info);
 	//! Creates a sequence in the catalog.
 	DUCKDB_API CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
-	//! Creates a Enum in the catalog.
+	//! Creates a type in the catalog.
 	DUCKDB_API CatalogEntry *CreateType(ClientContext &context, CreateTypeInfo *info);
 	//! Creates a collation in the catalog
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
@@ -145,7 +145,7 @@ public:
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateSequence(ClientContext &context, SchemaCatalogEntry *schema,
 	                                        CreateSequenceInfo *info);
-	//! Creates a enum in the catalog.
+	//! Creates a type in the catalog.
 	DUCKDB_API CatalogEntry *CreateType(ClientContext &context, SchemaCatalogEntry *schema, CreateTypeInfo *info);
 	//! Creates a collation in the catalog
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, SchemaCatalogEntry *schema,

@@ -6,16 +6,16 @@
 namespace duckdb {
 
 //! Forward declaration for recursion
-static LogicalType StructureToType(yyjson_val *val);
+static LogicalType StructureToType(yyjson_val *val, ClientContext &context);
 
-static LogicalType StructureToTypeArray(yyjson_val *arr) {
+static LogicalType StructureToTypeArray(yyjson_val *arr, ClientContext &context) {
 	if (yyjson_arr_size(arr) != 1) {
 		throw InvalidInputException("Too many values in array of JSON structure");
 	}
-	return LogicalType::LIST(StructureToType(yyjson_arr_get_first(arr)));
+	return LogicalType::LIST(StructureToType(yyjson_arr_get_first(arr), context));
 }
 
-static LogicalType StructureToTypeObject(yyjson_val *obj) {
+static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context) {
 	unordered_set<string> names;
 	child_list_t<LogicalType> child_types;
 	size_t idx, max;
@@ -27,20 +27,25 @@ static LogicalType StructureToTypeObject(yyjson_val *obj) {
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
 		names.insert(key_str);
-		child_types.emplace_back(key_str, StructureToType(val));
+		child_types.emplace_back(key_str, StructureToType(val, context));
 	}
 	D_ASSERT(yyjson_obj_size(obj) == names.size());
 	return LogicalType::STRUCT(child_types);
 }
 
-static LogicalType StructureToType(yyjson_val *val) {
+static LogicalType StructureToType(yyjson_val *val, ClientContext &context) {
 	switch (yyjson_get_tag(val)) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-		return StructureToTypeArray(val);
+		return StructureToTypeArray(val, context);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-		return StructureToTypeObject(val);
-	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-		return TransformStringToLogicalType(yyjson_get_str(val));
+		return StructureToTypeObject(val, context);
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE: {
+		auto type_str = yyjson_get_str(val);
+		auto type = TransformStringToLogicalType(type_str);
+		return type.id() == LogicalTypeId::USER
+		           ? Catalog::GetCatalog(context).GetType(context, DEFAULT_SCHEMA, type_str)
+		           : type;
+	}
 	default:
 		throw InvalidInputException("invalid JSON structure");
 	}
@@ -66,7 +71,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		if (doc.IsNull()) {
 			throw InvalidInputException("malformed JSON structure");
 		}
-		bound_function.return_type = StructureToType(doc->root);
+		bound_function.return_type = StructureToType(doc->root, context);
 	}
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
@@ -360,7 +365,7 @@ static void Transform(yyjson_val *vals[], Vector &result, const idx_t count, boo
 	case LogicalTypeId::LIST:
 		return TransformArray(vals, result, count, strict);
 	default:
-		throw InternalException("Unexpected type at JSON Transform %s", LogicalTypeIdToString(result_type.id()));
+		throw InternalException("Unexpected type at JSON Transform %s", result_type.ToString());
 	}
 }
 

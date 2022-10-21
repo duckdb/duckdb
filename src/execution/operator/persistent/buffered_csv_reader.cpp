@@ -2029,7 +2029,8 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					}
 				}
 			}
-			insert_chunk.data[insert_cols_idx[col_idx]].Reference(parse_chunk.data[col_idx]);
+			// reinterpret rather than reference so we can deal with user-defined types
+			insert_chunk.data[insert_cols_idx[col_idx]].Reinterpret(parse_chunk.data[col_idx]);
 		} else {
 			string error_message;
 			bool success;

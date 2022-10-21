@@ -105,6 +105,7 @@ void Vector::ReferenceAndSetType(Vector &other) {
 }
 
 void Vector::Reinterpret(Vector &other) {
+	D_ASSERT(other.GetType().id() == GetType().id());
 	vector_type = other.vector_type;
 	AssignSharedPointer(buffer, other.buffer);
 	AssignSharedPointer(auxiliary, other.auxiliary);
