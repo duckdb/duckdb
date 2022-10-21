@@ -1252,11 +1252,18 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 					ignore_nulls.Initialize(total_count);
 				}
 				// Write to the current position
-				// Chunks in a collection are full, so we don't have to worry about raggedness
-				auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(input_idx);
-				auto src = vdata.validity.GetData();
-				for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
-					*dst++ = *src++;
+				if (input_idx % ValidityMask::BITS_PER_VALUE == 0) {
+					// If we are at the edge of an output entry, just copy the entries
+					auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(input_idx);
+					auto src = vdata.validity.GetData();
+					for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
+						*dst++ = *src++;
+					}
+				} else {
+					// If not, we have ragged data and need to copy one bit at a time.
+					for (idx_t i = 0; i < count; ++i) {
+						ignore_nulls.Set(input_idx + i, vdata.validity.RowIsValid(i));
+					}
 				}
 			}
 		}

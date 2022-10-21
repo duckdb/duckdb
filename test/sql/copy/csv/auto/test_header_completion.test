@@ -2,8 +2,6 @@
 # description: Test csv header completion
 # group: [auto]
 
-require vector_size 512
-
 # CSV file with one missing header
 statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/missing_header_col.csv');

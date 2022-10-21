@@ -12,20 +12,18 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
     : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
       statep(Value::POINTER((idx_t)state.data())), frame(0, 0), statev(Value::POINTER((idx_t)state.data())),
       internal_nodes(0), input_ref(input), filter_mask(filter_mask_p), mode(mode_p) {
-#if STANDARD_VECTOR_SIZE < 512
-	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
-#endif
-	statep.Flatten(STANDARD_VECTOR_SIZE);
+	statep.Flatten(input->size());
 	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 
 	if (input_ref && input_ref->ColumnCount() > 0) {
-		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
+		filter_sel.Initialize(input->size());
 		inputs.Initialize(Allocator::DefaultAllocator(), input_ref->GetTypes());
 		// if we have a frame-by-frame method, share the single state
 		if (aggregate.window && UseWindowAPI()) {
 			AggregateInit();
 			inputs.Reference(*input_ref);
 		} else if (aggregate.combine && UseCombineAPI()) {
+			inputs.SetCapacity(*input_ref);
 			ConstructTree();
 		}
 	}
@@ -71,9 +69,6 @@ void WindowSegmentTree::AggegateFinal(Vector &result, idx_t rid) {
 
 void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 	const auto size = end - begin;
-	if (size >= STANDARD_VECTOR_SIZE) {
-		throw InternalException("Cannot compute window aggregation: bounds are too large");
-	}
 
 	auto &chunk = *input_ref;
 	const auto input_count = input_ref->ColumnCount();
@@ -103,10 +98,6 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	D_ASSERT(begin <= end);
 	if (begin == end) {
 		return;
-	}
-
-	if (end - begin >= STANDARD_VECTOR_SIZE) {
-		throw InternalException("Cannot compute window aggregation: bounds are too large");
 	}
 
 	Vector s(statep, 0);

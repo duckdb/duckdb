@@ -52,8 +52,6 @@ select entropy(name) from names;
 ----
 1.459148
 
-require vector_size 512
-
 query I rowsort
 select entropy(k) over (partition by k%2)
     from aggr;
