@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+struct GroupedAggregateData;
+
 struct DistinctAggregateData {
 public:
 	DistinctAggregateData(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates, vector<idx_t> indices,
