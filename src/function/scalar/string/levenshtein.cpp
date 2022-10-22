@@ -16,12 +16,11 @@ static idx_t LevenshteinDistance(const string_t &txt, const string_t &tgt) {
 	auto txt_len = txt.GetSize();
 	auto tgt_len = tgt.GetSize();
 
-	if (txt_len < 1) {
-		throw InvalidInputException("Levenshtein Function: 1st argument too short");
-	}
-
-	if (tgt_len < 1) {
-		throw InvalidInputException("Levenshtein Function: 2nd argument too short");
+	// If one string is empty, the distance equals the length of the other string
+	if (txt_len == 0) {
+		return tgt_len;
+	} else if (tgt_len == 0) {
+		return txt_len;
 	}
 
 	auto txt_str = txt.GetDataUnsafe();
