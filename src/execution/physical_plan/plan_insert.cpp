@@ -50,8 +50,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		use_batch_index = false;
 	}
 	if (op.return_chunk) {
-		// not supported for RETURNING
+		// not supported for RETURNING (yet?)
 		parallel_streaming_insert = false;
+		use_batch_index = false;
 	}
 	unique_ptr<PhysicalOperator> insert;
 	if (use_batch_index && !parallel_streaming_insert) {

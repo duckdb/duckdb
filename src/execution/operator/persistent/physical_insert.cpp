@@ -155,6 +155,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = make_unique<OptimisticDataWriter>(gstate.table->storage.get());
 		}
+		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
 			lstate.writer->CheckFlushToDisk(*lstate.local_collection);

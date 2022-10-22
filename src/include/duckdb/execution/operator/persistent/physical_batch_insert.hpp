@@ -16,10 +16,10 @@ class PhysicalBatchInsert : public PhysicalOperator {
 public:
 	//! INSERT INTO
 	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
-	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality);
+	                    vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality);
 	//! CREATE TABLE AS
 	PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info,
-	               idx_t estimated_cardinality);
+	                    idx_t estimated_cardinality);
 
 	//! The map from insert column index to table column index
 	vector<idx_t> column_index_map;

@@ -263,7 +263,9 @@ static void VerifyGeneratedExpressionSuccess(TableCatalogEntry &table, DataChunk
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (std::exception &ex) {
-		throw ConstraintException("Incorrect %s value for generated column \"%s\"", col.Type().ToString(), col.Name());
+
+		throw ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
+		                          col.Type().ToString(), col.GeneratedExpression().ToString(), ex.what());
 	}
 }
 
@@ -411,19 +413,21 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
-	auto binder = Binder::CreateBinder(context);
-	auto bound_columns = unordered_set<column_t>();
-	CheckBinder generated_check_binder(*binder, context, table.name, table.columns, bound_columns);
-	for (idx_t i = 0; i < table.columns.size(); i++) {
-		auto &col = table.columns[i];
-		if (!col.Generated()) {
-			continue;
+	if (table.HasGeneratedColumns()) {
+		auto binder = Binder::CreateBinder(context);
+		auto bound_columns = unordered_set<column_t>();
+		CheckBinder generated_check_binder(*binder, context, table.name, table.columns, bound_columns);
+		for (idx_t i = 0; i < table.columns.size(); i++) {
+			auto &col = table.columns[i];
+			if (!col.Generated()) {
+				continue;
+			}
+			D_ASSERT(col.Type().id() != LogicalTypeId::ANY);
+			generated_check_binder.target_type = col.Type();
+			auto to_be_bound_expression = col.GeneratedExpression().Copy();
+			auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
+			VerifyGeneratedExpressionSuccess(table, chunk, *bound_expression, i);
 		}
-		D_ASSERT(col.Type().id() != LogicalTypeId::ANY);
-		generated_check_binder.target_type = col.Type();
-		auto to_be_bound_expression = col.GeneratedExpression().Copy();
-		auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
-		VerifyGeneratedExpressionSuccess(table, chunk, *bound_expression, i);
 	}
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
 		auto &base_constraint = table.constraints[i];
