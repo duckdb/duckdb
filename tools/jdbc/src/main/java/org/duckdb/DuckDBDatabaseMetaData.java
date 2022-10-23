@@ -1,5 +1,7 @@
 package org.duckdb;
 
+import javax.sql.rowset.CachedRowSet;
+import javax.sql.rowset.RowSetProvider;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -965,10 +967,53 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		throw new SQLFeatureNotSupportedException("getClientInfoProperties");
 	}
 
+	/**
+	 *
+	 * @param catalog a catalog name; must match the catalog name as it
+	 *        is stored in the database; "" retrieves those without a catalog;
+	 *        <code>null</code> means that the catalog name should not be used to narrow
+	 *        the search
+	 * @param schemaPattern a schema name pattern; must match the schema name
+	 *        as it is stored in the database; "" retrieves those without a schema;
+	 *        <code>null</code> means that the schema name should not be used to narrow
+	 *        the search
+	 * @param functionNamePattern a function name pattern; must match the
+	 *        function name as it is stored in the database
+	 * FUNCTION_CAT String => function catalog (may be null)
+	 * FUNCTION_SCHEM String => function schema (may be null)
+	 * FUNCTION_NAME String => function name. This is the name used to invoke the function
+	 * REMARKS String => explanatory comment on the function
+	 * FUNCTION_TYPE short => kind of function:
+	 *  - functionResultUnknown - Cannot determine if a return value or table will be returned
+	 *  - functionNoTable- Does not return a table
+	 *  - functionReturnsTable - Returns a table
+	 * SPECIFIC_NAME String => the name which uniquely identifies this function within its schema. This is a user specified, or DBMS generated, name that may be different then the FUNCTION_NAME for example with overload functions
+	 */
 	@Override
 	public ResultSet getFunctions(String catalog, String schemaPattern, String functionNamePattern)
 			throws SQLException {
-		return conn.createStatement().executeQuery("SELECT NULL WHERE FALSE");
+		try (PreparedStatement statement = conn.prepareStatement(
+				"SELECT " +
+						"null as FUNCTION_CAT, " +
+						"function_name as FUNCTION_NAME, " +
+						"schema_name as FUNCTION_SCHEM, " +
+						"description as REMARKS," +
+						"CASE function_type " +
+						"WHEN 'table' THEN " + functionReturnsTable + " " +
+						"WHEN 'table_macro' THEN " + functionReturnsTable + " " +
+						"ELSE " + functionNoTable + " " +
+						"END as FUNCTION_TYPE " +
+						"FROM duckdb_functions() " +
+						"WHERE function_name like ? and " +
+						"schema_name like ?"
+		)) {
+			statement.setString(1, functionNamePattern);
+			statement.setString(2, schemaPattern);
+
+			CachedRowSet cachedRowSet = RowSetProvider.newFactory().createCachedRowSet();
+			cachedRowSet.populate(statement.executeQuery());
+			return cachedRowSet;
+		}
 	}
 
 	@Override
