@@ -148,9 +148,7 @@ bool StringListCastLoop(string_t *source_data, ValidityMask &source_mask, Vector
 		}
 
 		list_data[i].offset = total;
-		auto valid =
-		    VectorStringifiedListParser::SplitStringifiedList(source_data[idx], child_data, total, varchar_vector);
-		if (!valid) {
+		if (!VectorStringifiedListParser::SplitStringifiedList(source_data[idx], child_data, total, varchar_vector)) {
 			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
 			              "' can't be cast to the destination type LIST";
 			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, parameters.error_message, all_converted);
@@ -201,6 +199,89 @@ BoundCastInfo StringToListCast(BindCastInput &input, const LogicalType &source, 
 	                     ListBoundCastData::BindListToListCast(input, LogicalType::LIST(LogicalType::VARCHAR), target));
 }
 
+bool StringToStructCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result, ValidityMask &result_mask,
+                            idx_t count, CastParameters &parameters, const SelectionVector *sel) {
+
+	std::vector<Vector> varchar_vectors;
+	for (idx_t i = 0; i < StructType::GetChildCount(result.GetType()); i++) {
+		varchar_vectors.emplace_back(LogicalType::VARCHAR, count); // calls a vector constructor with these arguments
+	}                                                              // one temp varchar vector for each child of result
+
+	bool all_converted = true;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = i;
+		if (sel) {
+			idx = sel->get_index(i);
+		}
+		if (!source_mask.RowIsValid(idx)) {
+			result_mask.SetInvalid(i);
+			continue;
+		}
+
+		if (!VectorStringifiedStructParser::SplitStruct(source_data[idx], varchar_vectors, i, result_mask)) {
+			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
+			              "' can't be cast to the destination type STRUCT";
+			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, parameters.error_message, all_converted);
+		}
+		//        if (parts.size() != varchar_vectors.size()){ // string not splittable into correct number of values
+		//            result_mask.SetInvalid(i);
+		//            continue;
+		//        }
+		//        for (idx_t part_idx = 0; part_idx < parts.size(); part_idx++){
+		//            FlatVector::GetData<string_t>(varchar_vectors[part_idx])[i] = parts[part_idx]; // could be idx??
+		//        }
+	}
+
+	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
+	auto &result_children = StructVector::GetEntries(result);
+
+	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
+		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			(varchar_vectors[child_idx]).SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+		auto &varchar_vector = varchar_vectors[child_idx];
+		auto &result_child_vector = *result_children[child_idx];
+		CastParameters child_parameters(parameters, cast_data.child_cast_info[child_idx].cast_data.get());
+		// get the correct casting function (VARCHAR -> result_child_type) form cast_data
+		// casting functions are provided by BindStructtoStructCast
+		if (!cast_data.child_cast_info[child_idx].function(varchar_vector, result_child_vector, count,
+		                                                   child_parameters)) {
+			return false;
+		}
+	}
+	return all_converted;
+}
+
+bool StringToStructCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
+	D_ASSERT(result.GetType().id() == LogicalTypeId::STRUCT);
+
+	switch (source.GetVectorType()) {
+	case VectorType::CONSTANT_VECTOR: {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		// ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+
+		auto source_data = ConstantVector::GetData<string_t>(source);
+		auto &source_mask = ConstantVector::Validity(source);
+		auto &result_mask = ConstantVector::Validity(result);
+
+		return StringToStructCastLoop(source_data, source_mask, result, result_mask, 1, parameters, nullptr);
+	}
+	default: {
+		UnifiedVectorFormat unified_source;
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+
+		source.ToUnifiedFormat(count, unified_source);
+		auto source_sel = unified_source.sel;
+		auto source_data = (string_t *)unified_source.data;
+		auto &source_mask = unified_source.validity;
+		auto &result_mask = FlatVector::Validity(result);
+
+		return StringToStructCastLoop(source_data, source_mask, result, result_mask, count, parameters, source_sel);
+	}
+	}
+}
+
 BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const LogicalType &source,
                                              const LogicalType &target) {
 	switch (target.id()) {
@@ -232,6 +313,16 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		return &DefaultCasts::ReinterpretCast;
 	case LogicalTypeId::LIST:
 		return StringToListCast(input, source, target);
+
+		// STRING TO STRUCT CASTING! 💃
+	case LogicalTypeId::STRUCT:
+		return BoundCastInfo(
+		    &StringToStructCast,
+		    BindStructToStructCast(input,
+		                           LogicalType::STRUCT(std::vector<pair<std::string, LogicalType>>(
+		                               StructType::GetChildCount(target), std::make_pair("", LogicalType::VARCHAR))),
+		                           target));
+
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
 	}

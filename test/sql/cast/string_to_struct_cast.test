@@ -1,0 +1,278 @@
+# name: test/sql/cast/string_to_struct_cast.test
+# description: cast strings into (nested) structs
+# group: [cast]
+
+# statement ok
+# PRAGMA enable_verification
+
+
+#               Basic tests:
+# ---------------------------------------------------
+
+query I
+SELECT '{key_A: 2, key_B: 46}'::STRUCT(key_A INT, key_B INT);
+----
+{'key_A': 2, 'key_B': 46}
+
+query I
+SELECT '{key_A: 2, key_B: 3, key_C: 8}'::STRUCT(key_A INT, key_B DOUBLE, key_C FLOAT);
+----
+{'key_A': 2, 'key_B': 3.0, 'key_C': 8.0}
+
+query I
+SELECT '{key_A: 2, key_B: hello world}'::STRUCT(key_A INT, key_B VARCHAR);
+----
+{'key_A': 2, 'key_B': hello world}
+
+query I
+select (struct_pack(a=>'42'::double, b => 'DuckDB'::string)::VARCHAR)::STRUCT(key_A INT, key_B VARCHAR);
+----
+{'key_A': 42, 'key_B': DuckDB}
+
+
+
+#               Nested structs
+# ---------------------------------------------------
+query I
+SELECT '{a:{b:1}, b:900}'::STRUCT(key_a STRUCT(b INT), key_b INT);
+----
+{'key_a': {'b': 1}, 'key_b': 900}
+
+query I
+SELECT '{a:{b:DuckDB, c:12}, b:900, c:{a:"DuckParty"}}'::STRUCT(key_a STRUCT(b VARCHAR, c INT), key_b INT, key_c STRUCT(a VARCHAR));
+----
+{'key_a': {'b': DuckDB, 'c': 12}, 'key_b': 900, 'key_c': {'a': DuckParty}}
+
+query I
+SELECT '{a:{b:DuckDB, c:{a:{a:0.9, b:{a:"DuckieDuck"}, c:{a:9000}, d:{a:5881580-07-10}}, b:"🦆"}}, b:900, c:{a:"DuckParty"}}'::STRUCT(key_a STRUCT(b VARCHAR, c STRUCT(a STRUCT(a FLOAT, b STRUCT(a VARCHAR), c STRUCT(a INT), d STRUCT(a DATE)), b VARCHAR)), key_b INT, key_c STRUCT(a VARCHAR));
+----
+{'key_a': {'b': DuckDB, 'c': {'a': {'a': 0.9, 'b': {'a': DuckieDuck}, 'c': {'a': 9000}, 'd': {'a': 5881580-07-10}}, 'b': 🦆}}, 'key_b': 900, 'key_c': {'a': DuckParty}}
+
+
+#               Cast from table
+# ---------------------------------------------------
+statement ok
+CREATE TABLE tbl1(col VARCHAR);
+
+statement ok
+INSERT INTO tbl1 (VALUES ('{a:1, b:3}'));
+
+query I
+SELECT col::STRUCT(key_A INT, key_B INT) FROM tbl1;
+----
+{'key_A': 1, 'key_B': 3}
+
+# ---------------------------------------------------
+statement ok
+CREATE TABLE tbl2(col VARCHAR);
+
+statement ok
+INSERT INTO tbl2 (VALUES ('{a:1, b:"hello, world"}')); 
+# trim off quotes?....
+
+query I
+SELECT col::STRUCT(key_A INT, key_B VARCHAR) FROM tbl2;
+----
+{'key_A': 1, 'key_B': hello, world}
+
+# ---------------------------------------------------
+statement ok
+CREATE TABLE tbl3(col VARCHAR);
+
+statement ok
+INSERT INTO tbl3 (VALUES ('{a:DUCK, b:9.999, c:12}'), ('{a:"DB", b:1.111, c:21}'));
+
+query I
+SELECT col::STRUCT(key_A VARCHAR, key_B FLOAT, key_c INT) FROM tbl3;
+----
+{'key_A': DUCK, 'key_B': 9.999, 'key_c': 12}
+{'key_A': DB, 'key_B': 1.111, 'key_c': 21}
+
+
+# ---------------------------------------------------
+statement ok
+CREATE TABLE tbl4(col VARCHAR);
+
+statement ok
+INSERT INTO tbl4 (VALUES ('{a:{b:1}}'));
+
+query I
+SELECT col::STRUCT(key_a STRUCT(b INT)) FROM tbl4;
+----
+{'key_a': {'b': 1}}
+
+
+#               Struct with lists
+# ---------------------------------------------------
+query I
+SELECT '{key_A: [2, 3, 4], key_B: [Hello, World]}'::STRUCT(key_A INT[], key_B VARCHAR[]);
+----
+{'key_A': [2, 3, 4], 'key_B': [Hello, World]}
+
+query I
+SELECT '{key_A: [[2, 3], [4]], key_B: [Hello, World]}'::STRUCT(key_A INT[][], key_B VARCHAR[]);
+----
+{'key_A': [[2, 3], [4]], 'key_B': [Hello, World]}
+
+
+#               Quote escaping
+# ---------------------------------------------------
+
+
+
+
+
+
+
+#               Test for whitespaces
+# ---------------------------------------------------
+
+#trim whitespace at the end
+query I
+SELECT '{  key_A:     2, key_B: hello world    }'::STRUCT(key_A INT, key_B VARCHAR);
+----
+{'key_A': 2, 'key_B': hello world}
+
+query I
+SELECT '    {a:        {b:         DuckDB,    c:12  }, b:  900, c          :{a
+                    :   "DuckParty  "}       }    '::STRUCT(key_a STRUCT(b VARCHAR, c INT), key_b INT, key_c STRUCT(a VARCHAR));
+----
+{'key_a': {'b': DuckDB, 'c': 12}, 'key_b': 900, 'key_c': {'a': DuckParty  }}
+
+
+
+
+
+#               Empty struct
+# ---------------------------------------------------
+
+# statement ok
+# SELECT CAST('{}' AS STRUCT('a': INT));
+
+
+
+
+
+#               NULL values
+# ---------------------------------------------------
+
+
+
+
+
+
+#               Missing values
+# ---------------------------------------------------
+query I
+SELECT '{key_A: 2, key_C: 8}'::STRUCT(key_A INT, key_B DOUBLE, key_C FLOAT);
+----
+{'key_A': 2, 'key_B': NULL, 'key_C': 8.0}
+
+
+
+
+
+#               Try Cast
+# ---------------------------------------------------
+
+
+
+
+
+
+#               Syntax error checking
+# ---------------------------------------------------
+
+
+
+
+
+
+#               Test WHERE clause
+# ---------------------------------------------------
+
+
+
+
+
+#               All types:
+# ---------------------------------------------------
+
+
+
+
+
+
+#               Larger input test
+# ---------------------------------------------------
+
+
+
+
+
+
+#               CSV reader
+# ---------------------------------------------------
+
+
+
+
+#               JSON testing
+# ---------------------------------------------------
+
+statement ok
+CREATE TABLE json_tbl(col1 VARCHAR);
+
+statement ok
+INSERT INTO json_tbl (VALUES ('{
+    "id": "0001",
+    "type": "donut",
+    "name": "Cake",
+    "ppu": 0.55,
+    "batters":
+        {
+            "batter":
+                [
+                    { "id": "1001", "type": "Regular" },
+                    { "id": "1002", "type": "Chocolate" },
+                    { "id": "1003", "type": "Blueberry" },
+                    { "id": "1004", "type": "Devil''s Food" }
+                ]
+        },
+    "topping":
+        [
+            { "id": "5001", "type": "None" },
+            { "id": "5002", "type": "Glazed" },
+            { "id": "5005", "type": "Sugar" },
+            { "id": "5007", "type": "Powdered Sugar" },
+            { "id": "5006", "type": "Chocolate with Sprinkles" },
+            { "id": "5003", "type": "Chocolate" },
+            { "id": "5004", "type": "Maple" }
+        ]
+}'));
+
+query I
+SELECT col1::STRUCT(id VARCHAR, type VARCHAR, name VARCHAR, ppu FLOAT, 
+    batters STRUCT(batter STRUCT(id VARCHAR, type VARCHAR)[]), topping STRUCT(id VARCHAR, type VARCHAR)[]) FROM json_tbl;
+----
+{'id': 0001, 'type': donut, 'name': Cake, 'ppu': 0.55, 'batters': {'batter': [{'id': 1001, 'type': Regular}, {'id': 1002, 'type': Chocolate}, {'id': 1003, 'type': Blueberry}, {'id': 1004, 'type': Devil's Food}]}, 'topping': [{'id': 5001, 'type': None}, {'id': 5002, 'type': Glazed}, {'id': 5005, 'type': Sugar}, {'id': 5007, 'type': Powdered Sugar}, {'id': 5006, 'type': Chocolate with Sprinkles}, {'id': 5003, 'type': Chocolate}, {'id': 5004, 'type': Maple}]}
+
+# ---------------------------------------------------
+
+statement ok
+CREATE TABLE json_tbl2(col1 JSON);
+
+statement ok
+INSERT INTO json_tbl2 (VALUES   ('{"A": "Ducky", "B": [3, 50, 8, 43], "C":{"A": "TEST", "B": 0.9, "C": [0.0, 9, 30.2]} }' ), 
+                                ('{"A": "TESTY", "B": [4], "C":{"A": "🦆", "B": 6.12, "C": [0.099, 1.6]} }' ),
+                                ('{"A": "Hello World", "B": [0, 0, 2, 500, 0, 8], "C":{"A": "DuckieDuck !", "B": 3000, "C": [0]} }' ),
+                                ('{"A": "", "B": [], "C":{"A": "", "B": 0, "C": []} }' ));
+
+query I
+SELECT col1::VARCHAR::STRUCT(A VARCHAR, B INT[], C STRUCT(A VARCHAR, B FLOAT, C DOUBLE[])) FROM json_tbl2;
+----
+{'A': Ducky, 'B': [3, 50, 8, 43], 'C': {'A': TEST, 'B': 0.9, 'C': [0.0, 9.0, 30.2]}}
+{'A': TESTY, 'B': [4], 'C': {'A': 🦆, 'B': 6.12, 'C': [0.099, 1.6]}}
+{'A': Hello World, 'B': [0, 0, 2, 500, 0, 8], 'C': {'A': DuckieDuck !, 'B': 3000.0, 'C': [0.0]}}
+{'A': , 'B': [], 'C': {'A': , 'B': 0.0, 'C': []}}
+

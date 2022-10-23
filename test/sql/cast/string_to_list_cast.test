@@ -352,6 +352,32 @@ SELECT cast(col1 as int[]) FROM tbl WHERE LEN(cast(col1 as int[])) < 4;
 [5, 6, 7]
 
 
+#               Lists of structs:
+# ---------------------------------------------------
+
+statement ok
+CREATE TABLE struct_tbl1(col VARCHAR);
+
+statement ok
+INSERT INTO struct_tbl1 VALUES('[{a: "hii"}, {a: "hellooo"}]');
+
+query I
+SELECT col::STRUCT(a VARCHAR)[] FROM struct_tbl1;
+----
+[{'a': "hii"}, {'a': "hellooo"}]
+
+# ---------------------------------------------------
+statement ok
+CREATE TABLE struct_tbl2(col VARCHAR);
+
+statement ok
+INSERT INTO struct_tbl2 VALUES('[{a: 7, b:"Duck"}, {a: 7000, b: "🦆🦆🦆🦆🦆🦆"}]');
+
+query I
+SELECT col::STRUCT(a INT, b VARCHAR)[] FROM struct_tbl2;
+----
+[{'a': 7, 'b': "Duck"}, {'a': 7000, 'b': "🦆🦆🦆🦆🦆🦆"}]
+
 #               All types:
 # ---------------------------------------------------
 

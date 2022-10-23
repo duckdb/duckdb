@@ -45,6 +45,28 @@ static bool SkipToCloseQuotes(idx_t &pos, const char *buf, idx_t &len) {
 	return false;
 }
 
+static bool SkipToCloseStructOrList(idx_t &idx, const char *buf, idx_t &len, char close_bracket) {
+	char bracket = buf[idx];
+	idx++;
+
+	while (idx < len) {
+		if (buf[idx] == bracket) {
+			if (!SkipToCloseStructOrList(idx, buf, len, close_bracket)) {
+				return false;
+			}
+			idx++;
+		}
+		if (buf[idx] == '"' || buf[idx] == '\'') {
+			SkipToCloseQuotes(idx, buf, len);
+		}
+		if (buf[idx] == close_bracket) {
+			return true;
+		}
+		idx++;
+	}
+	return false;
+}
+
 static bool SkipToClose(idx_t &idx, const char *buf, idx_t &len, idx_t &lvl) {
 	while (idx < len) {
 		if (buf[idx] == '[') {
@@ -56,6 +78,9 @@ static bool SkipToClose(idx_t &idx, const char *buf, idx_t &len, idx_t &lvl) {
 		}
 		if (buf[idx] == '"' || buf[idx] == '\'') {
 			SkipToCloseQuotes(idx, buf, len);
+		}
+		if (buf[idx] == '{') {
+			SkipToCloseStructOrList(idx, buf, len, '}');
 		}
 		if (buf[idx] == ']') {
 			lvl--;
@@ -92,6 +117,8 @@ static bool SplitStringifiedListInternal(const string_t &input, OP &state) {
 			}
 		} else if (buf[pos] == '"' || buf[pos] == '\'') {
 			SkipToCloseQuotes(pos, buf, len);
+		} else if (buf[pos] == '{') {
+			SkipToCloseStructOrList(pos, buf, len, '}');
 		} else if (buf[pos] == ',' || buf[pos] == ']') {
 			idx_t trailing_whitespace = 0;
 			while (StringUtil::CharacterIsSpace(buf[pos - trailing_whitespace - 1])) {
@@ -135,4 +162,93 @@ idx_t VectorStringifiedListParser::CountParts(const string_t &input) {
 	SplitStringifiedListInternal<CountPartOperation>(input, state);
 	return state.count;
 }
+
+//------------------- struct splitting ----------------------
+
+static bool FindKey(const char *buf, idx_t len, idx_t &pos) {
+	while (pos < len) {
+		if (buf[pos] == ':') {
+			return true;
+		}
+		pos++;
+	}
+	return false;
+}
+
+static bool FindValue(const char *buf, idx_t len, idx_t &pos, Vector &varchar_child, idx_t &row_idx) {
+	auto start_pos = pos;
+	while (pos < len) {
+		if (buf[pos] == '"' || buf[pos] == '\'') {
+			SkipToCloseQuotes(pos, buf, len);
+		} else if (buf[pos] == '{') {
+			SkipToCloseStructOrList(pos, buf, len, '}');
+		} else if (buf[pos] == '[') {
+			SkipToCloseStructOrList(pos, buf, len, ']');
+		} else if (buf[pos] == ',' || buf[pos] == '}') {
+			idx_t trailing_whitespace = 0;
+			while (StringUtil::CharacterIsSpace(buf[pos - trailing_whitespace - 1])) {
+				trailing_whitespace++;
+			}
+			if (buf[start_pos] == '"' && buf[pos - trailing_whitespace - 1] == '"') {
+				start_pos++;
+				trailing_whitespace++;
+			}
+			FlatVector::GetData<string_t>(varchar_child)[row_idx] =
+			    StringVector::AddString(varchar_child, buf + start_pos, pos - start_pos - trailing_whitespace);
+			return true;
+		}
+		pos++;
+	}
+	return false;
+}
+
+bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<Vector> &varchar_vectors, idx_t &row_idx,
+                                                ValidityMask &result_mask) {
+	const char *buf = input.GetDataUnsafe();
+	idx_t len = input.GetSize();
+	idx_t pos = 0;
+	idx_t value_idx = 0;
+
+	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
+		pos++;
+	}
+	if (pos == len || buf[pos] != '{') {
+		return false;
+	}
+
+	pos++;
+	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
+		pos++;
+	}
+
+	while (pos < len) {
+		if (!FindKey(buf, len, pos)) {
+			return false;
+		}
+		pos++;
+		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
+			pos++;
+		}
+		if (!FindValue(buf, len, pos, varchar_vectors[value_idx], row_idx)) {
+			return false;
+		}
+		pos++;
+		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
+			pos++;
+		}
+		value_idx++;
+	}
+	if (value_idx != varchar_vectors.size()) { // string not splittable into correct number of values
+		return false;
+		// result_mask.SetInvalid(row_idx);
+	}
+	while (pos < len) {
+		if (!StringUtil::CharacterIsSpace(buf[pos])) {
+			return false;
+		}
+		pos++;
+	}
+	return true;
+}
+
 } // namespace duckdb

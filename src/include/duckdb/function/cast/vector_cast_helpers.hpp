@@ -202,4 +202,9 @@ struct VectorStringifiedListParser {
 	static bool SplitStringifiedList(const string_t &input, string_t *child_data, idx_t &child_start, Vector &child);
 };
 
+struct VectorStringifiedStructParser {
+	static bool SplitStruct(string_t &input, std::vector<Vector> &varchar_vectors, idx_t &row_idx,
+	                        ValidityMask &result_mask);
+};
+
 } // namespace duckdb
