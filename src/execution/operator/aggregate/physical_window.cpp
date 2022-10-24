@@ -1483,34 +1483,230 @@ unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &co
 	return make_unique<WindowGlobalSinkState>(*this, context);
 }
 
-class WindowMergeTask : public ExecutorTask {
+enum class WindowSortStage : uint8_t { INIT, PREPARE, MERGE, SORTED };
+
+class WindowGlobalMergeState;
+
+class WindowLocalMergeState {
 public:
-	WindowMergeTask(shared_ptr<Event> event_p, ClientContext &context_p, WindowGlobalHashGroup &hash_group_p)
-	    : ExecutorTask(context_p), event(move(event_p)), hash_group(hash_group_p) {
+	WindowLocalMergeState() : merge_state(nullptr), stage(WindowSortStage::INIT) {
+		finished = true;
 	}
 
-	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		// Initialize merge sorted and iterate until done
-		auto &global_sort = *hash_group.global_sort;
+	bool TaskFinished() {
+		return finished;
+	}
+	void ExecuteTask();
+
+	WindowGlobalMergeState *merge_state;
+	WindowSortStage stage;
+	atomic<bool> finished;
+};
+
+class WindowGlobalMergeState {
+public:
+	explicit WindowGlobalMergeState(GlobalSortState &sort_state)
+	    : sort_state(sort_state), stage(WindowSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
+	}
+
+	bool IsSorted() const {
+		lock_guard<mutex> guard(lock);
+		return stage == WindowSortStage::SORTED;
+	}
+
+	bool AssignTask(WindowLocalMergeState &local_state);
+	bool TryPrepareNextStage();
+	void CompleteTask();
+
+	GlobalSortState &sort_state;
+
+private:
+	mutable mutex lock;
+	WindowSortStage stage;
+	idx_t total_tasks;
+	idx_t tasks_assigned;
+	idx_t tasks_completed;
+};
+
+void WindowLocalMergeState::ExecuteTask() {
+	auto &global_sort = merge_state->sort_state;
+	switch (stage) {
+	case WindowSortStage::PREPARE:
+		global_sort.PrepareMergePhase();
+		break;
+	case WindowSortStage::MERGE: {
 		MergeSorter merge_sorter(global_sort, global_sort.buffer_manager);
 		merge_sorter.PerformInMergeRound();
-		event->FinishTask();
-		return TaskExecutionResult::TASK_FINISHED;
+		break;
 	}
+	default:
+		throw InternalException("Unexpected WindowGlobalMergeState in ExecuteTask!");
+	}
+
+	merge_state->CompleteTask();
+	finished = true;
+}
+
+bool WindowGlobalMergeState::AssignTask(WindowLocalMergeState &local_state) {
+	lock_guard<mutex> guard(lock);
+
+	if (tasks_assigned >= total_tasks) {
+		return false;
+	}
+
+	local_state.merge_state = this;
+	local_state.stage = stage;
+	local_state.finished = false;
+	tasks_assigned++;
+
+	return true;
+}
+
+void WindowGlobalMergeState::CompleteTask() {
+	lock_guard<mutex> guard(lock);
+
+	++tasks_completed;
+}
+
+bool WindowGlobalMergeState::TryPrepareNextStage() {
+	lock_guard<mutex> guard(lock);
+
+	if (tasks_completed < total_tasks) {
+		return false;
+	}
+
+	tasks_assigned = tasks_completed = 0;
+
+	switch (stage) {
+	case WindowSortStage::INIT:
+		total_tasks = 1;
+		stage = WindowSortStage::PREPARE;
+		return true;
+
+	case WindowSortStage::PREPARE:
+		total_tasks = sort_state.sorted_blocks.size() / 2;
+		if (!total_tasks) {
+			break;
+		}
+		stage = WindowSortStage::MERGE;
+		sort_state.InitializeMergeRound();
+		return true;
+
+	case WindowSortStage::MERGE:
+		sort_state.CompleteMergeRound(true);
+		total_tasks = sort_state.sorted_blocks.size() / 2;
+		if (!total_tasks) {
+			break;
+		}
+		sort_state.InitializeMergeRound();
+		return true;
+
+	case WindowSortStage::SORTED:
+		break;
+	}
+
+	stage = WindowSortStage::SORTED;
+
+	return false;
+}
+
+class WindowGlobalMergeStates {
+public:
+	using WindowGlobalMergeStatePtr = unique_ptr<WindowGlobalMergeState>;
+
+	WindowGlobalMergeStates(WindowGlobalSinkState &sink, idx_t group) {
+		// Schedule all the sorts for maximum thread utilisation
+		for (; group < sink.hash_groups.size(); group = sink.GetNextSortGroup()) {
+			auto &hash_group = *sink.hash_groups[group];
+
+			// Prepare for merge sort phase
+			auto state = make_unique<WindowGlobalMergeState>(*hash_group.global_sort);
+			states.emplace_back(move(state));
+		}
+	}
+
+	vector<WindowGlobalMergeStatePtr> states;
+};
+
+class WindowMergeTask : public ExecutorTask {
+public:
+	WindowMergeTask(shared_ptr<Event> event_p, ClientContext &context_p, WindowGlobalMergeStates &hash_groups_p)
+	    : ExecutorTask(context_p), event(move(event_p)), hash_groups(hash_groups_p) {
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
 private:
 	shared_ptr<Event> event;
-	WindowGlobalHashGroup &hash_group;
+	WindowLocalMergeState local_state;
+	WindowGlobalMergeStates &hash_groups;
 };
+
+TaskExecutionResult WindowMergeTask::ExecuteTask(TaskExecutionMode mode) {
+	// Loop until all hash groups are done
+	size_t sorted = 0;
+	while (sorted < hash_groups.states.size()) {
+		// First check if there is an unfinished task for this thread
+		if (!local_state.TaskFinished()) {
+			local_state.ExecuteTask();
+			continue;
+		}
+
+		// Thread is done with its assigned task, try to fetch new work
+		for (auto group = sorted; group < hash_groups.states.size(); ++group) {
+			auto &global_state = hash_groups.states[group];
+			if (global_state->IsSorted()) {
+				// This hash group is done
+				// Update the high water mark of densely completed groups
+				if (sorted == group) {
+					++sorted;
+				}
+				continue;
+			}
+
+			// Try to assign work for this hash group to this thread
+			if (global_state->AssignTask(local_state)) {
+				// We assigned a task to this thread!
+				// Break out of this loop to re-enter the top-level loop and execute the task
+				break;
+			}
+
+			// Hash group global state couldn't assign a task to this thread
+			// Try to prepare the next stage
+			if (!global_state->TryPrepareNextStage()) {
+				// This current hash group is not yet done
+				// But we were not able to assign a task for it to this thread
+				// See if the next hash group is better
+				continue;
+			}
+
+			// We were able to prepare the next stage for this hash group!
+			// Try to assign a task once more
+			if (global_state->AssignTask(local_state)) {
+				// We assigned a task to this thread!
+				// Break out of this loop to re-enter the top-level loop and execute the task
+				break;
+			}
+
+			// We were able to prepare the next merge round,
+			// but we were not able to assign a task for it to this thread
+			// The tasks were assigned to other threads while this thread waited for the lock
+			// Go to the next iteration to see if another hash group has a task
+		}
+	}
+
+	event->FinishTask();
+	return TaskExecutionResult::TASK_FINISHED;
+}
 
 class WindowMergeEvent : public BasePipelineEvent {
 public:
-	WindowMergeEvent(WindowGlobalSinkState &gstate_p, Pipeline &pipeline_p, WindowGlobalHashGroup &hash_group_p)
-	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), hash_group(hash_group_p) {
+	WindowMergeEvent(WindowGlobalSinkState &gstate_p, Pipeline &pipeline_p, idx_t group)
+	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), merge_states(gstate_p, group) {
 	}
 
 	WindowGlobalSinkState &gstate;
-	WindowGlobalHashGroup &hash_group;
+	WindowGlobalMergeStates merge_states;
 
 public:
 	void Schedule() override {
@@ -1522,25 +1718,9 @@ public:
 
 		vector<unique_ptr<Task>> merge_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			merge_tasks.push_back(make_unique<WindowMergeTask>(shared_from_this(), context, hash_group));
+			merge_tasks.push_back(make_unique<WindowMergeTask>(shared_from_this(), context, merge_states));
 		}
 		SetTasks(move(merge_tasks));
-	}
-
-	void FinishEvent() override {
-		hash_group.global_sort->CompleteMergeRound(true);
-		CreateMergeTasks(*pipeline, *this, gstate, hash_group);
-	}
-
-	static void CreateMergeTasks(Pipeline &pipeline, Event &event, WindowGlobalSinkState &state,
-	                             WindowGlobalHashGroup &hash_group) {
-
-		// Multiple blocks remaining in the group: Schedule the next round
-		if (hash_group.global_sort->sorted_blocks.size() > 1) {
-			hash_group.global_sort->InitializeMergeRound();
-			auto new_event = make_shared<WindowMergeEvent>(state, pipeline, hash_group);
-			event.InsertEvent(move(new_event));
-		}
 	}
 };
 
@@ -1564,13 +1744,8 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 	}
 
 	// Schedule all the sorts for maximum thread utilisation
-	for (; group < state.hash_groups.size(); group = state.GetNextSortGroup()) {
-		auto &hash_group = *state.hash_groups[group];
-
-		// Prepare for merge sort phase
-		hash_group.PrepareMergePhase();
-		WindowMergeEvent::CreateMergeTasks(pipeline, event, state, hash_group);
-	}
+	auto new_event = make_shared<WindowMergeEvent>(state, pipeline, group);
+	event.InsertEvent(move(new_event));
 
 	return SinkFinalizeType::READY;
 }
