@@ -1,4 +1,4 @@
-# name: test/sql/storage/checkpoint_abort_before_header.test_coverage
+# name: test/sql/storage/checkpoint_abort_before_header.test_slow
 # description: Test correct behavior if we unexpectedly abort after a checkpoint but before the WAL is successfully truncated
 # group: [storage]
 

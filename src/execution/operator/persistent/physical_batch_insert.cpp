@@ -164,12 +164,84 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 	//	}
 }
 
+struct CollectionMerger {
+	vector<unique_ptr<RowGroupCollection>> current_collections;
+
+	void AddCollection(unique_ptr<RowGroupCollection> collection) {
+		current_collections.push_back(move(collection));
+	}
+
+	bool Empty() {
+		return current_collections.empty();
+	}
+
+	void Flush(ClientContext &context, DataTable &storage) {
+		if (Empty()) {
+			return;
+		}
+		unique_ptr<RowGroupCollection> new_collection;
+		if (current_collections.size() == 1) {
+			// we have gathered only one row group collection: merge it directly
+			new_collection = move(current_collections[0]);
+		} else {
+			// we have gathered multiple collections: create one big collection and merge that
+			auto &table_info = storage.info;
+			auto &block_manager = TableIOManager::Get(storage).GetBlockManagerForRowData();
+			auto types = storage.GetTypes();
+			new_collection = make_unique<RowGroupCollection>(table_info, block_manager, types, 0);
+			TableAppendState append_state;
+			new_collection->InitializeEmpty();
+			new_collection->InitializeAppend(append_state);
+
+			DataChunk scan_chunk;
+			scan_chunk.Initialize(context, types);
+
+			vector<column_t> column_ids;
+			for (idx_t i = 0; i < types.size(); i++) {
+				column_ids.push_back(i);
+			}
+			for (auto &collection : current_collections) {
+				TableScanState scan_state;
+				scan_state.Initialize(column_ids);
+				collection->InitializeScan(scan_state.local_state, column_ids, nullptr);
+
+				while (true) {
+					scan_chunk.Reset();
+					scan_state.local_state.ScanCommitted(scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+					if (scan_chunk.size() == 0) {
+						break;
+					}
+					new_collection->Append(scan_chunk, append_state);
+				}
+			}
+
+			new_collection->FinalizeAppend(TransactionData(0, 0), append_state);
+		}
+		storage.LocalMerge(context, *new_collection);
+		current_collections.clear();
+	}
+};
+
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                GlobalSinkState &gstate_p) const {
 	auto &gstate = (BatchInsertGlobalState &)gstate_p;
+
+	CollectionMerger merger;
+
+	auto &storage = *gstate.table->storage;
 	for (auto &collection : gstate.collections) {
-		gstate.table->storage->LocalMerge(context, *collection.second);
+		if (collection.second->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
+			// this collection has very few rows: add it to the merge set
+			merger.AddCollection(move(collection.second));
+		} else {
+			if (!merger.Empty()) {
+				// we have small collections remaining: flush them
+				merger.Flush(context, storage);
+			}
+			storage.LocalMerge(context, *collection.second);
+		}
 	}
+	merger.Flush(context, storage);
 	return SinkFinalizeType::READY;
 }
 
