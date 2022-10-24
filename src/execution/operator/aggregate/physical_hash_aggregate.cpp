@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
 
 namespace duckdb {
 
@@ -50,7 +51,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		aggregate_input_idx += aggr.children.size();
 	}
-	for (auto &aggregate : aggregates) {
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggregate = aggregates[i];
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		if (aggr.filter) {
 			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
@@ -75,19 +77,41 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 class HashAggregateGlobalState : public GlobalSinkState {
 public:
 	HashAggregateGlobalState(const PhysicalHashAggregate &op, ClientContext &context) {
+		auto &allocator = Allocator::Get(context);
+
 		radix_states.reserve(op.radix_tables.size());
 		for (auto &rt : op.radix_tables) {
 			radix_states.push_back(rt.GetGlobalSinkState(context));
 		}
+		vector<idx_t> distinct_indices;
+		for (idx_t i = 0; i < op.grouped_aggregate_data.aggregates.size(); i++) {
+			auto &aggregate = op.grouped_aggregate_data.aggregates[i];
+			auto &aggr = (BoundAggregateExpression &)*aggregate;
+			if (!aggr.distinct) {
+				continue;
+			}
+			distinct_indices.push_back(i);
+		}
+		if (distinct_indices.empty()) {
+			// None of the aggregates are DISTINCT
+			return;
+		}
+		distinct_data = make_unique<DistinctAggregateData>(allocator, op.grouped_aggregate_data.aggregates,
+		                                                   move(distinct_indices), context);
 	}
 
 	vector<unique_ptr<GlobalSinkState>> radix_states;
-	// TODO: unique_ptr<DistinctAggregateData> here
+	unique_ptr<DistinctAggregateData> distinct_data;
 };
 
 class HashAggregateLocalState : public LocalSinkState {
 public:
-	HashAggregateLocalState(const PhysicalHashAggregate &op, ExecutionContext &context) {
+	HashAggregateLocalState(const PhysicalHashAggregate &op, GlobalSinkState &gstate_p, ExecutionContext &context) {
+
+		auto &gstate = (HashAggregateGlobalState &)gstate_p;
+
+		InitializeDistinctAggregates(gstate, context);
+
 		auto &payload_types = op.grouped_aggregate_data.payload_types;
 		if (!payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(payload_types);
@@ -97,11 +121,38 @@ public:
 		for (auto &rt : op.radix_tables) {
 			radix_states.push_back(rt.GetLocalSinkState(context));
 		}
+		// FIXME: missing filter_set??
 	}
 
 	DataChunk aggregate_input_chunk;
 
 	vector<unique_ptr<LocalSinkState>> radix_states;
+	vector<unique_ptr<LocalSinkState>> distinct_states;
+
+public:
+	void InitializeDistinctAggregates(const HashAggregateGlobalState &gstate, ExecutionContext &context) {
+		if (!gstate.distinct_data) {
+			return;
+		}
+		auto &data = *gstate.distinct_data;
+		auto &distinct_indices = data.Indices();
+		D_ASSERT(!distinct_indices.empty());
+		D_ASSERT(!data.radix_tables.empty());
+
+		const idx_t aggregate_count = data.radix_tables.size();
+		distinct_states.resize(aggregate_count);
+
+		for (auto &idx : distinct_indices) {
+			idx_t table_idx = data.table_map[idx];
+			if (data.radix_tables[table_idx] == nullptr) {
+				// This aggregate has identical input as another aggregate, so no table is created for it
+				continue;
+			}
+			// Initialize the states of the radix tables used for the distinct aggregates
+			auto &radix_table = *data.radix_tables[table_idx];
+			distinct_states[table_idx] = radix_table.GetLocalSinkState(context);
+		}
+	}
 };
 
 void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
@@ -116,7 +167,9 @@ unique_ptr<GlobalSinkState> PhysicalHashAggregate::GetGlobalSinkState(ClientCont
 }
 
 unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<HashAggregateLocalState>(*this, context);
+	D_ASSERT(sink_state);
+	auto &gstate = *sink_state;
+	return make_unique<HashAggregateLocalState>(*this, gstate, context);
 }
 
 SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,

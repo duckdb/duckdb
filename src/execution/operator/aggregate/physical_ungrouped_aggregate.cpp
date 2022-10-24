@@ -105,7 +105,7 @@ public:
 	UngroupedAggregateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
 	                             const vector<LogicalType> &child_types, GlobalSinkState &gstate_p,
 	                             ExecutionContext &context)
-	    : state(aggregates), child_executor(allocator), payload_chunk(), filter_set() {
+	    : state(aggregates), child_executor(allocator), aggregate_input_chunk(), filter_set() {
 		auto &gstate = (UngroupedAggregateGlobalState &)gstate_p;
 
 		InitializeDistinctAggregates(gstate, context);
@@ -123,7 +123,7 @@ public:
 			aggregate_objects.emplace_back(&aggr);
 		}
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
-			payload_chunk.Initialize(allocator, payload_types);
+			aggregate_input_chunk.Initialize(allocator, payload_types);
 		}
 		filter_set.Initialize(allocator, aggregate_objects, child_types);
 	}
@@ -133,7 +133,7 @@ public:
 	//! The executor
 	ExpressionExecutor child_executor;
 	//! The payload chunk, containing all the Vectors for the aggregates
-	DataChunk payload_chunk;
+	DataChunk aggregate_input_chunk;
 	//! Aggregate filter data set
 	AggregateFilterDataSet filter_set;
 	//! The local sink states of the distinct aggregates hash tables
@@ -141,7 +141,7 @@ public:
 
 public:
 	void Reset() {
-		payload_chunk.Reset();
+		aggregate_input_chunk.Reset();
 	}
 	void InitializeDistinctAggregates(const UngroupedAggregateGlobalState &gstate, ExecutionContext &context) {
 
@@ -156,8 +156,8 @@ public:
 		}
 		D_ASSERT(!data.radix_tables.empty());
 
-		const idx_t aggregate_cnt = data.radix_tables.size();
-		radix_states.resize(aggregate_cnt);
+		const idx_t aggregate_count = data.radix_tables.size();
+		radix_states.resize(aggregate_count);
 
 		for (auto &idx : distinct_indices) {
 			idx_t table_idx = data.table_map[idx];
@@ -227,7 +227,7 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 		SinkDistinct(context, state, lstate, input);
 	}
 
-	DataChunk &payload_chunk = sink.payload_chunk;
+	DataChunk &payload_chunk = sink.aggregate_input_chunk;
 
 	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
