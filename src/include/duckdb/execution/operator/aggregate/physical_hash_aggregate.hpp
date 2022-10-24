@@ -13,11 +13,47 @@
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 #include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
+#include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
 
 namespace duckdb {
 
 class ClientContext;
 class BufferManager;
+
+struct HashAggregateGroupingData {
+public:
+	HashAggregateGroupingData(GroupingSet grouping_set_p, const GroupedAggregateData &grouped_aggregate_data,
+	                          unique_ptr<DistinctAggregateCollectionInfo> &info);
+
+public:
+	GroupingSet grouping_set;
+	RadixPartitionedHashTable table_data;
+	unique_ptr<DistinctAggregateData> distinct_data;
+
+public:
+	bool HasDistinct() const;
+};
+
+struct HashAggregateGroupingGlobalState {
+public:
+	HashAggregateGroupingGlobalState(const HashAggregateGroupingData &data, ClientContext &context);
+	// Radix state of the GROUPING_SET ht
+	unique_ptr<GlobalSinkState> table_state;
+	// State of the DISTINCT aggregates of this GROUPING_SET
+	unique_ptr<DistinctAggregateState> distinct_state;
+};
+
+struct HashAggregateGroupingLocalState {
+public:
+	HashAggregateGroupingLocalState(const PhysicalHashAggregate &op, const HashAggregateGroupingData &data,
+	                                ExecutionContext &context);
+
+public:
+	// Radix state of the GROUPING_SET ht
+	unique_ptr<LocalSinkState> table_state;
+	// Local states of the DISTINCT aggregates hashtables
+	vector<unique_ptr<LocalSinkState>> distinct_states;
+};
 
 //! PhysicalHashAggregate is a group-by and aggregate implementation that uses a hash table to perform the grouping
 //! This only contains read-only variables, anything that is stateful instead gets stored in the Global/Local states
@@ -32,11 +68,11 @@ public:
 	                      vector<vector<idx_t>> grouping_functions, idx_t estimated_cardinality);
 
 	//! The grouping sets
-	vector<GroupingSet> grouping_sets;
 	GroupedAggregateData grouped_aggregate_data;
 
 	//! The radix partitioned hash tables (one per grouping set)
-	vector<RadixPartitionedHashTable> radix_tables;
+	vector<HashAggregateGroupingData> groupings;
+	unique_ptr<DistinctAggregateCollectionInfo> distinct_collection_info;
 
 	unordered_map<Expression *, size_t> filter_indexes;
 
@@ -87,6 +123,9 @@ private:
 	                                  GlobalSinkState &gstate) const;
 	//! Combine the distinct aggregates
 	void CombineDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
+	//! Sink the distinct aggregates for a single grouping
+	void SinkDistinctGrouping(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	                          DataChunk &input, idx_t grouping_idx) const;
 	//! Sink the distinct aggregates
 	void SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	                  DataChunk &input) const;

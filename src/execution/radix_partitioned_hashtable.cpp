@@ -115,10 +115,13 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 
 	DataChunk &group_chunk = llstate.group_chunk;
 	idx_t chunk_index = 0;
+	// Populate the group_chunk
 	for (auto &group_idx : grouping_set) {
+		// Retrieve the expression containing the index in the input chunk
 		auto &group = op.groups[group_idx];
 		D_ASSERT(group->type == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = (BoundReferenceExpression &)*group;
+		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
 		group_chunk.data[chunk_index++].Reference(groups_input.data[bound_ref_expr.index]);
 	}
 	group_chunk.SetCardinality(groups_input.size());
