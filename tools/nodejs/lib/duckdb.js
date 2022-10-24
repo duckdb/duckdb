@@ -129,7 +129,8 @@ Connection.prototype.all = function (sql) {
  * @return {void}
  */
 Connection.prototype.arrowAll = function (sql) {
-    var statement = new Statement(this, sql);
+    const query = "SELECT * FROM get_arrow_ipc((" + sql + "));";
+    var statement = new Statement(this, query);
     return statement.arrowAll.apply(statement, arguments);
 }
 

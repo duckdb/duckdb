@@ -355,15 +355,18 @@ struct RunPreparedTask : public Task {
 		} break;
 		case RunType::ARROW_ALL: {
 			auto materialized_result = (duckdb::MaterializedQueryResult *)result.get();
-			std::cout << "RowCount " << materialized_result->RowCount() << "\n";
-			Napi::Array result_arr(Napi::Array::New(env, materialized_result->RowCount()));
+			// +1 is for null bytes at end of stream
+			Napi::Array result_arr(Napi::Array::New(env, materialized_result->RowCount()+1));
 
-			auto deleter = [](Napi::Env, void* finalizeData, void* hint){ delete static_cast<std::shared_ptr<duckdb::DataChunk>*>(hint);};
-			std::shared_ptr<duckdb::DataChunk> current_chunk_ptr;
+			auto deleter = [](Napi::Env, void* finalizeData, void* hint){
+				delete static_cast<std::shared_ptr<duckdb::QueryResult>*>(hint);
+			};
+
+			std::shared_ptr<duckdb::QueryResult> result_ptr = move(result);
 
 			duckdb::idx_t out_idx = 1;
 			while (true) {
-				auto chunk = result->Fetch();
+				auto chunk = result_ptr->Fetch();
 
 				if (!chunk || chunk->size() == 0) {
 					break;
@@ -373,27 +376,36 @@ struct RunPreparedTask : public Task {
 				D_ASSERT(chunk->data[0].GetType() == duckdb::LogicalType::BLOB);
 				D_ASSERT(chunk->data[1].GetType() == duckdb::LogicalType::BOOLEAN);
 
-				// Move chunk into shared pointer
-				current_chunk_ptr = std::move(chunk);
+				for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
+					duckdb::string_t blob = ((duckdb::string_t*)(chunk->data[0].GetData()))[row_idx];
+					bool is_header = chunk->data[1].GetData()[row_idx];
 
-				for (duckdb::idx_t row_idx = 0; row_idx < current_chunk_ptr->size(); row_idx++) {
-					duckdb::string_t blob = ((duckdb::string_t*)(current_chunk_ptr->data[0].GetData()))[row_idx];
-					bool is_header = current_chunk_ptr->data[1].GetData()[row_idx];
-
-					// Create shared pointer to give (shared) ownership to ArrayBuffer
-					auto data_chunk_ptr = new std::shared_ptr<duckdb::DataChunk>(current_chunk_ptr);
+					// Create shared pointer to give (shared) ownership to ArrayBuffer, not that for these materialized
+					// query results, the string data is owned by the QueryResult
+					auto result_ref_ptr = new std::shared_ptr<duckdb::QueryResult>(result_ptr);
 
 					auto array_buffer = Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(), deleter,
-					                                           data_chunk_ptr);
+					                                           result_ref_ptr);
+
+					auto typed_array = Napi::Uint8Array::New(env, blob.GetSize(), array_buffer, 0);
+
 					// TODO we should handle this in duckdb probably
 					if (is_header) {
-						result_arr.Set((uint32_t)0, array_buffer);
+						result_arr.Set((uint32_t)0, typed_array);
 					} else {
 						D_ASSERT(out_idx < materialized_result->RowCount());
-						result_arr.Set(out_idx++, array_buffer);
+						result_arr.Set(out_idx++, typed_array);
 					}
 				}
 			}
+
+			// TODO we should handle this in duckdb probably, either way check if arrow really specifies this footer
+			auto null_arr = Napi::Uint8Array::New(env, 4);
+			memset(null_arr.Data(), '\0', 4);
+			result_arr.Set(out_idx++, null_arr);
+
+			// Confirm all rows are set
+			D_ASSERT(out_idx == materialized_result->RowCount()+1);
 
 			cb.MakeCallback(statement.Value(), {env.Null(), result_arr});
 		} break;

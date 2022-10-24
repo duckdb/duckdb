@@ -13,9 +13,11 @@ add_library(arrow_extension STATIC ${ARROW_SOURCES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(arrow ${PARAMETERS} ${ARROW_SOURCES})
 
-find_package(Arrow REQUIRED)
-target_link_libraries(arrow_loadable_extension arrow_shared)
-target_link_libraries(arrow_extension arrow_shared)
+include_directories(/usr/local/include/)
+set_property(TARGET arrow_loadable_extension PROPERTY CXX_STANDARD 17)
+set_property(TARGET arrow_extension PROPERTY CXX_STANDARD 17)
+target_link_libraries(arrow_loadable_extension /usr/local/lib/libarrow.a)
+target_link_libraries(arrow_extension /usr/local/lib/libarrow.a)
 
 install(
   TARGETS arrow_extension

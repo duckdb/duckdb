@@ -154,12 +154,12 @@ describe('[Benchmark] single int column load (50M tuples)',() => {
         assert.equal(table.numRows, column_size);
     });
 
-    it.only('DuckDB table -> Materialized IPC buffer',  (done) => {
+    it('DuckDB table -> Materialized IPC buffer',  (done) => {
         let got_batches = 0;
         let got_rows = 0;
         const batches = [];
 
-        conn.arrowAll('select * from get_arrow_ipc((SELECT * FROM test))', (err,res) => {
+        conn.arrowAll('SELECT * FROM test', (err,res) => {
             done();
         });
     });
@@ -192,7 +192,7 @@ describe('[Benchmark] TPC-H lineitem.parquet', () => {
         });
     });
 
-    it('lineitem.parquet -> DuckDB -> arrow IPC -> query from DuckDB', async () => {
+    it('lineitem.parquet -> DuckDB -> streaming arrow IPC -> query from DuckDB', async () => {
         const startTimeLoad = performance.now()
         const result = await conn.arrowIPCStream('SELECT * FROM "' + parquet_file_path + '"');
         const ipc_buffers = await result.toArray();
@@ -216,6 +216,42 @@ describe('[Benchmark] TPC-H lineitem.parquet', () => {
 
                 assert.deepEqual(result, answer);
                 resolve();
+            })
+        });
+        // console.log("Query time: " + Math.round(performance.now() - startTimeQuery) + "ms");
+    });
+
+    it('lineitem.parquet -> DuckDB -> arrow IPC -> query from DuckDB', async () => {
+        const startTimeLoad = performance.now()
+
+        const ipc_buffers = await new Promise((resolve, reject) => {
+            conn.arrowAll('SELECT * FROM "' + parquet_file_path + '"', function (err, result) {
+                if (err) {
+                    reject(err)
+                }
+                resolve(result)
+            });
+        });
+
+        // We can now create a RecordBatchReader & Table from the materialized stream
+        const reader = await arrow.RecordBatchReader.from(ipc_buffers);
+        const table = arrow.tableFromIPC(reader);
+        // console.log("Load time: " + Math.round(performance.now() - startTimeLoad) + "ms");
+
+        const query = sql.replace("lineitem", "my_arrow_ipc_stream_2");
+        const startTimeQuery = performance.now()
+
+        // Register the ipc buffers as table in duckdb
+        db.register_buffer("my_arrow_ipc_stream_2", ipc_buffers);
+
+        await new Promise((resolve, reject) => {
+            db.all(query, function (err, result) {
+                if (err) {
+                    reject(err)
+                } else {
+                    assert.deepEqual(result, answer);
+                    resolve();
+                }
             })
         });
         // console.log("Query time: " + Math.round(performance.now() - startTimeQuery) + "ms");
