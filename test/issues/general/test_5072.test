@@ -1,0 +1,19 @@
+# name: test/issues/general/test_5072.test
+# description: Issue 5072: CARDINALITY on NULL map results in non-deterministic result
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT CARDINALITY(CAST(NULL AS MAP(VARCHAR, INT)));
+----
+NULL
+
+query I
+WITH src AS ( VALUES (1, NULL) )
+SELECT CARDINALITY(HISTOGRAM(val)) FROM src AS t(k, val);
+----
+NULL
+
+
