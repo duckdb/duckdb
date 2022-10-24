@@ -108,7 +108,7 @@ unique_ptr<LocalSinkState> RadixPartitionedHashTable::GetLocalSinkState(Executio
 }
 
 void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                     DataChunk &input, DataChunk &aggregate_input_chunk) const {
+                                     DataChunk &groups_input, DataChunk &payload_input) const {
 	auto &llstate = (RadixHTLocalState &)lstate;
 	auto &gstate = (RadixHTGlobalState &)state;
 	D_ASSERT(!gstate.is_finalized);
@@ -119,9 +119,9 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		auto &group = op.groups[group_idx];
 		D_ASSERT(group->type == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = (BoundReferenceExpression &)*group;
-		group_chunk.data[chunk_index++].Reference(input.data[bound_ref_expr.index]);
+		group_chunk.data[chunk_index++].Reference(groups_input.data[bound_ref_expr.index]);
 	}
-	group_chunk.SetCardinality(input.size());
+	group_chunk.SetCardinality(groups_input.size());
 	group_chunk.Verify();
 
 	// if we have non-combinable aggregates (e.g. string_agg) or any distinct aggregates we cannot keep parallel hash
@@ -137,7 +137,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		}
 		D_ASSERT(gstate.finalized_hts.size() == 1);
 		D_ASSERT(gstate.finalized_hts[0]);
-		gstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, aggregate_input_chunk);
+		gstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, payload_input);
 		return;
 	}
 
@@ -151,9 +151,8 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		    group_types, op.payload_types, op.bindings);
 	}
 
-	gstate.total_groups +=
-	    llstate.ht->AddChunk(group_chunk, aggregate_input_chunk,
-	                         gstate.total_groups > radix_limit && gstate.partition_info.n_partitions > 1);
+	gstate.total_groups += llstate.ht->AddChunk(
+	    group_chunk, payload_input, gstate.total_groups > radix_limit && gstate.partition_info.n_partitions > 1);
 }
 
 void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkState &state,

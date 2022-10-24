@@ -80,6 +80,16 @@ public:
 	//! Toggle multi-scan capability on a hash table, which prevents the scan of the aggregate from being destructive
 	//! If this is not toggled the GetData method will destroy the hash table as it is scanning it
 	static void SetMultiScan(GlobalSinkState &state);
+
+private:
+	//! Finalize the distinct aggregates
+	SinkFinalizeType FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
+	                                  GlobalSinkState &gstate) const;
+	//! Combine the distinct aggregates
+	void CombineDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
+	//! Sink the distinct aggregates
+	void SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	                  DataChunk &input) const;
 };
 
 } // namespace duckdb

@@ -172,15 +172,55 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionCon
 	return make_unique<HashAggregateLocalState>(*this, gstate, context);
 }
 
+void PhysicalHashAggregate::SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+                                         DataChunk &input) const {
+	auto &sink = (HashAggregateLocalState &)lstate;
+	auto &global_sink = (HashAggregateGlobalState &)state;
+	D_ASSERT(global_sink.distinct_data);
+	auto &distinct_aggregate_data = *global_sink.distinct_data;
+	auto &distinct_indices = distinct_aggregate_data.Indices();
+	for (auto &idx : distinct_indices) {
+		auto &aggregate = (BoundAggregateExpression &)*grouped_aggregate_data.aggregates[idx];
+
+		idx_t table_idx = distinct_aggregate_data.table_map[idx];
+		if (!distinct_aggregate_data.radix_tables[table_idx]) {
+			continue;
+		}
+		D_ASSERT(distinct_aggregate_data.radix_tables[table_idx]);
+		auto &radix_table = *distinct_aggregate_data.radix_tables[table_idx];
+		auto &radix_global_sink = *distinct_aggregate_data.radix_states[table_idx];
+		auto &radix_local_sink = *sink.distinct_states[table_idx];
+
+		// if (aggregate.filter) {
+		//	// Apply the filter before inserting into the hashtable
+		//	auto &filtered_data = sink.filter_set.GetFilterData(idx);
+		//	idx_t count = filtered_data.ApplyFilter(input);
+		//	filtered_data.filtered_payload.SetCardinality(count);
+
+		//	radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload,
+		//	                 filtered_data.filtered_payload);
+		//} else {
+		//	radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input);
+		//}
+		radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input);
+	}
+}
+
 SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                            DataChunk &input) const {
 	auto &llstate = (HashAggregateLocalState &)lstate;
 	auto &gstate = (HashAggregateGlobalState &)state;
 
+	if (gstate.distinct_data) {
+		SinkDistinct(context, state, lstate, input);
+	}
+
 	DataChunk &aggregate_input_chunk = llstate.aggregate_input_chunk;
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
 	idx_t aggregate_input_idx = 0;
+
+	// Populate the aggregate child vectors
 	for (auto &aggregate : aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		for (auto &child_expr : aggr.children) {
@@ -190,6 +230,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
 		}
 	}
+	// Populate the filter vectors
 	for (auto &aggregate : aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		if (aggr.filter) {
@@ -204,10 +245,31 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 	aggregate_input_chunk.Verify();
 
 	for (idx_t i = 0; i < radix_tables.size(); i++) {
+		// TODO: apply filter
 		radix_tables[i].Sink(context, *gstate.radix_states[i], *llstate.radix_states[i], input, aggregate_input_chunk);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
+}
+
+void PhysicalHashAggregate::CombineDistinct(ExecutionContext &context, GlobalSinkState &state,
+                                            LocalSinkState &lstate) const {
+	auto &global_sink = (HashAggregateGlobalState &)state;
+	auto &source = (HashAggregateLocalState &)lstate;
+	auto &distinct_aggregate_data = global_sink.distinct_data;
+
+	if (!distinct_aggregate_data) {
+		return;
+	}
+	auto table_count = distinct_aggregate_data->radix_tables.size();
+	for (idx_t table_idx = 0; table_idx < table_count; table_idx++) {
+		D_ASSERT(distinct_aggregate_data->radix_tables[table_idx]);
+		auto &radix_table = *distinct_aggregate_data->radix_tables[table_idx];
+		auto &radix_global_sink = *distinct_aggregate_data->radix_states[table_idx];
+		auto &radix_local_sink = *source.radix_states[table_idx];
+
+		radix_table.Combine(context, radix_global_sink, radix_local_sink);
+	}
 }
 
 void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
@@ -239,6 +301,42 @@ public:
 		SetTasks(move(tasks));
 	}
 };
+
+SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                         GlobalSinkState &gstate_p) const {
+	// auto &gstate = (HashAggregateGlobalState &)gstate_p;
+	// D_ASSERT(gstate.distinct_data);
+	// auto &distinct_aggregate_data = *gstate.distinct_data;
+	// auto &payload_chunk = distinct_aggregate_data.payload_chunk;
+
+	////! Copy of the payload chunk, used to store the data of the radix table for use with the expression executor
+	////! We can not directly use the payload chunk because the input and the output to the expression executor can not
+	/// be
+	////! the same Vector
+	// DataChunk expression_executor_input;
+	// expression_executor_input.InitializeEmpty(payload_chunk.GetTypes());
+	// expression_executor_input.SetCardinality(0);
+
+	// bool any_partitioned = false;
+	// for (idx_t table_idx = 0; table_idx < distinct_aggregate_data.radix_tables.size(); table_idx++) {
+	//	auto &radix_table_p = distinct_aggregate_data.radix_tables[table_idx];
+	//	auto &radix_state = *distinct_aggregate_data.radix_states[table_idx];
+	//	bool partitioned = radix_table_p->Finalize(context, radix_state);
+	//	if (partitioned) {
+	//		any_partitioned = true;
+	//	}
+	// }
+	// if (any_partitioned) {
+	//	auto new_event = make_shared<DistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
+	//	event.InsertEvent(move(new_event));
+	// } else {
+	//	//! Hashtables aren't partitioned, they dont need to be joined first
+	//	//! So we can compute the aggregate already
+	//	auto new_event = make_shared<DistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
+	//	event.InsertEvent(move(new_event));
+	// }
+	return SinkFinalizeType::READY;
+}
 
 SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                  GlobalSinkState &gstate_p) const {
