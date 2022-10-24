@@ -107,12 +107,15 @@ private:
 
 class CollectionScanState {
 public:
-	CollectionScanState(TableScanState &parent_p) : row_group_state(*this), max_row(0), parent(parent_p) {};
+	CollectionScanState(TableScanState &parent_p)
+	    : row_group_state(*this), max_row(0), batch_index(0), parent(parent_p) {};
 
 	//! The row_group scan state
 	RowGroupScanState row_group_state;
 	//! The total maximum row index
 	idx_t max_row;
+	//! The current batch index
+	idx_t batch_index;
 
 public:
 	const vector<column_t> &GetColumnIds();
@@ -156,6 +159,7 @@ struct ParallelCollectionScanState {
 	RowGroup *current_row_group;
 	idx_t vector_index;
 	idx_t max_row;
+	idx_t batch_index;
 };
 
 struct ParallelTableScanState {

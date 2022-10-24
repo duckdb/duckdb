@@ -36,6 +36,12 @@ public:
 	void AddCollection(idx_t batch_index, unique_ptr<RowGroupCollection> current_collection) {
 		lock_guard<mutex> l(lock);
 		insert_count += current_collection->GetTotalRows();
+		if (collections.find(batch_index) != collections.end()) {
+			throw InternalException("PhysicalBatchInsert::AddCollection error: batch index %d is present in multiple "
+			                        "collections. This occurs when "
+			                        "batch indexes are not uniquely distributed over threads",
+			                        batch_index);
+		}
 		collections[batch_index] = move(current_collection);
 	}
 };
