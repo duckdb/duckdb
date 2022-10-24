@@ -42,6 +42,14 @@ class TestRAPIQuery(object):
         result = rel.execute()
         assert(result.fetchall() == [(5,)])
 
+    def test_query_table_qualified(self):
+        con = duckdb.default_connection
+        con.execute("create schema fff")
+
+        # Create table in fff schema
+        con.execute("create table fff.t2 as select 1 as t")
+        assert(con.table("fff.t2").fetchall() == [(1,)])
+
     def test_query_insert_into_relation(self, tbl_table):
         con = duckdb.default_connection
         rel = con.query("select i from range(1000) tbl(i)")

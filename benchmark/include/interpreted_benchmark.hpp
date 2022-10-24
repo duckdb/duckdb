@@ -12,6 +12,8 @@
 #include <unordered_set>
 
 namespace duckdb {
+struct BenchmarkFileReader;
+class MaterializedQueryResult;
 
 //! Interpreted benchmarks read the benchmark from a file
 class InterpretedBenchmark : public Benchmark {
@@ -51,6 +53,12 @@ public:
 	}
 
 private:
+	string VerifyInternal(BenchmarkState *state_p, MaterializedQueryResult &result);
+
+	void ReadResultFromFile(BenchmarkFileReader &reader, const string &file);
+	void ReadResultFromReader(BenchmarkFileReader &reader, const string &file);
+
+private:
 	bool is_loaded = false;
 	std::unordered_map<string, string> replacement_mapping;
 
@@ -63,6 +71,7 @@ private:
 	std::unordered_set<string> extensions;
 	int64_t result_column_count = 0;
 	vector<vector<string>> result_values;
+	string result_query;
 
 	string display_name;
 	string display_group;

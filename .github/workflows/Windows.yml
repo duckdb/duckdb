@@ -167,11 +167,6 @@ jobs:
       with:
         python-version: '3.7'
 
-    - name: Install Git
-      shell: bash
-      run: |
-        choco install git -y --force
-
     - name: Build
       shell: bash
       run: |
