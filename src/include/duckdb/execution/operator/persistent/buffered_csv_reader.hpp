@@ -17,12 +17,11 @@
 #include "duckdb/common/queue.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/common/limits.hpp"
-
+#include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
 #include <sstream>
 
 namespace duckdb {
 struct CopyInfo;
-struct CSVFileHandle;
 struct FileHandle;
 struct StrpTimeFormat;
 
@@ -67,16 +66,13 @@ class BufferedCSVReader {
 	ParserMode mode;
 
 public:
-	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
+	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, CSVFileHandle *file_handle,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
-	BufferedCSVReader(FileSystem &fs, Allocator &allocator, FileOpener *opener, BufferedCSVReaderOptions options,
-	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BufferedCSVReader();
 
-	FileSystem &fs;
 	Allocator &allocator;
-	FileOpener *opener;
+	CSVFileHandle *file_handle;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
 	vector<string> col_names;
@@ -85,8 +81,6 @@ public:
 	//! union_by_name option on insert_chunk may have more cols
 	vector<idx_t> insert_cols_idx;
 	vector<idx_t> insert_nulls_idx;
-
-	unique_ptr<CSVFileHandle> file_handle;
 
 	unique_ptr<char[]> buffer;
 	idx_t buffer_size;
@@ -127,10 +121,11 @@ public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
 
-	idx_t GetFileSize();
-
 	//! Fill nulls into the cols that mismtach union names
 	void SetNullUnionCols(DataChunk &insert_chunk);
+
+	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
+	void Flush(DataChunk &insert_chunk);
 
 private:
 	//! Initialize Parser
@@ -177,12 +172,9 @@ private:
 	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
 	bool AddRow(DataChunk &insert_chunk, idx_t &column);
-	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
-	void Flush(DataChunk &insert_chunk);
+
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
-
-	unique_ptr<CSVFileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
 
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
 	void DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options,

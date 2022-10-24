@@ -12,8 +12,14 @@
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
 
 namespace duckdb {
+
+class ReadCSV {
+public:
+	static unique_ptr<CSVFileHandle> OpenCSV(const BufferedCSVReaderOptions &options, ClientContext &context);
+};
 
 struct BaseCSVData : public TableFunctionData {
 	//! The file path of the CSV file to read or write
@@ -46,11 +52,14 @@ struct WriteCSVData : public BaseCSVData {
 struct ReadCSVData : public BaseCSVData {
 	//! The expected SQL types to read
 	vector<LogicalType> sql_types;
+	//! The initial file handler (if any): used in combination with the initial reader for automatic detection.
+	unique_ptr<CSVFileHandle> initial_file_handler;
 	//! The initial reader (if any): this is used when automatic detection is used during binding.
 	//! In this case, the CSV reader is already created and might as well be re-used.
 	unique_ptr<BufferedCSVReader> initial_reader;
 	//! The union readers is created(when csv union_by_name option is on) during binding
-	//! Those reader can be re-used during ReadCSVFunction
+	//! Those readers can be re-used during ReadCSVFunction
+	vector<unique_ptr<CSVFileHandle>> union_file_handlers;
 	vector<unique_ptr<BufferedCSVReader>> union_readers;
 };
 
@@ -65,19 +74,20 @@ struct ReadCSVTableFunction {
 };
 
 struct ReadCSVGlobalState : public GlobalTableFunctionState {
-	//! The CSV reader
-	unique_ptr<BufferedCSVReader> csv_reader;
+	//! File Handle for current file
+	unique_ptr<CSVFileHandle> file_handle;
 	//! The index of the next file to read (i.e. current file + 1)
 	idx_t file_index;
-	//! Total File Size
-	idx_t file_size;
 	//! How many bytes were read up to this point
 	atomic<idx_t> bytes_read;
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
 	//! Starting Byte of Next Thread
 	idx_t next_byte;
-
+	//! Size of current file
+	idx_t file_size;
+	//! How many bytes we should execute per local state
+	idx_t bytes_per_local_state;
 	idx_t MaxThreads() const override;
 };
 
@@ -86,7 +96,7 @@ struct ReadCSVLocalState : public LocalTableFunctionState {
 	                  unique_ptr<BufferedCSVReader> csv_reader_p)
 	    : global_state(global_state), bytes_per_thread(bytes_per_thread_p), csv_reader(move(csv_reader_p)) {
 		Next();
-		file_size = csv_reader->GetFileSize();
+		file_size = csv_reader->file_handle->FileSize();
 	}
 
 	bool Next() {
@@ -96,7 +106,7 @@ struct ReadCSVLocalState : public LocalTableFunctionState {
 			global_state.next_byte += bytes_per_thread;
 		}
 		end_byte = start_byte + bytes_per_thread;
-		start_reading = false;
+		csv_reader->start_reading = false;
 		return Valid();
 	}
 
@@ -104,15 +114,15 @@ struct ReadCSVLocalState : public LocalTableFunctionState {
 		return start_byte < file_size;
 	}
 
-	void SetPosition(){
-//		if (!start_reading){
-			csv_reader->start_byte = start_byte - buffer_position;
-			csv_reader->start = start_byte - buffer_position;
-			csv_reader->position = start_byte - buffer_position;
-			csv_reader->end_byte = end_byte - buffer_position;
-			buffer_position = start_byte;
-//			start_reading = true;
-//		}
+	void SetPosition() {
+		//		if (!start_reading){
+		csv_reader->start_byte = start_byte - buffer_position;
+		csv_reader->start = start_byte;
+		csv_reader->position = start_byte - buffer_position;
+		csv_reader->end_byte = end_byte - buffer_position;
+		buffer_position = start_byte;
+		//			start_reading = true;
+		//		}
 	}
 
 	ReadCSVGlobalState &global_state;

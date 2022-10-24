@@ -14,6 +14,14 @@
 
 namespace duckdb {
 
+unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const BufferedCSVReaderOptions &options, ClientContext &context) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto opener = FileSystem::GetFileOpener(context);
+	auto file_handle = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
+	                               options.compression, opener);
+	return make_unique<CSVFileHandle>(move(file_handle));
+}
+
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
 	auto &config = DBConfig::GetConfig(context);
@@ -87,8 +95,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 	if (options.auto_detect) {
 		options.file_path = result->files[0];
-		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
-
+		result->initial_file_handler = ReadCSV::OpenCSV(options, context);
+		auto initial_reader = make_unique<BufferedCSVReader>(context, options, result->initial_file_handler.get());
 		return_types.assign(initial_reader->sql_types.begin(), initial_reader->sql_types.end());
 		if (names.empty()) {
 			names.assign(initial_reader->col_names.begin(), initial_reader->col_names.end());
@@ -110,7 +118,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 		for (idx_t file_idx = 0; file_idx < result->files.size(); ++file_idx) {
 			options.file_path = result->files[file_idx];
-			auto reader = make_unique<BufferedCSVReader>(context, options);
+			auto handler = ReadCSV::OpenCSV(options, context);
+			auto reader = make_unique<BufferedCSVReader>(context, options, handler.get());
 			auto &col_names = reader->col_names;
 			auto &sql_types = reader->sql_types;
 			D_ASSERT(col_names.size() == sql_types.size());
@@ -131,6 +140,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 					union_col_types.emplace_back(sql_types[col]);
 				}
 			}
+			result->union_file_handlers.push_back(move(handler));
 			result->union_readers.push_back(move(reader));
 		}
 
@@ -179,37 +189,41 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	auto result = make_unique<ReadCSVGlobalState>();
-	if (bind_data.initial_reader) {
-		result->csv_reader = move(bind_data.initial_reader);
-	} else if (bind_data.files.empty()) {
+	// FIXME: Should I still care about this case?
+	//	if (bind_data.initial_reader) {
+	//		result->csv_reader = move(bind_data.initial_reader);
+	//	}
+	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
 		return move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
-		result->csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
+		result->file_handle = ReadCSV::OpenCSV(bind_data.options, context);
 	}
-	result->file_size = result->csv_reader->GetFileSize();
+	result->bytes_per_local_state = bind_data.options.bytes_per_thread;
+	result->file_size = result->file_handle->FileSize();
 	result->file_index = 1;
 	return move(result);
 }
 
 idx_t ReadCSVGlobalState::MaxThreads() const {
-	D_ASSERT(csv_reader);
-	return file_size / csv_reader->options.bytes_per_thread + 1;
+	return file_size / bytes_per_local_state + 1;
 }
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                      GlobalTableFunctionState *global_state_p) {
 	auto &global_state = (ReadCSVGlobalState &)*global_state_p;
 	auto &csv_data = (ReadCSVData &)*input.bind_data;
+	CSVFileHandle *file_handle;
 	{
 		lock_guard<mutex> parallel_lock(global_state.main_mutex);
 		if (global_state.next_byte >= global_state.file_size) {
 			// Threads don't have data to read
 			return nullptr;
 		}
+		file_handle = global_state.file_handle.get();
 	}
-	auto csv_reader = make_unique<BufferedCSVReader>(context.client, csv_data.options, csv_data.sql_types);
+	auto csv_reader = make_unique<BufferedCSVReader>(context.client, csv_data.options, file_handle, csv_data.sql_types);
 	auto new_local_state =
 	    make_unique<ReadCSVLocalState>(global_state, csv_data.options.bytes_per_thread, move(csv_reader));
 	return move(new_local_state);
@@ -235,18 +249,28 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		// Set the correct position of csv reader
 		csv_local_state.SetPosition();
 		csv_local_state.csv_reader->ParseCSV(output);
-		csv_global_state.bytes_read = csv_global_state.csv_reader->bytes_in_chunk;
-		if (output.size() == 0 && csv_global_state.file_index < bind_data.files.size()) {
+		//		csv_global_state.bytes_read = csv_global_state.csv_reader->bytes_in_chunk;
+		if (csv_local_state.csv_reader->position + csv_local_state.buffer_position >= csv_local_state.end_byte) {
+
+			//			csv_local_state.Next();
+			if (!csv_local_state.Next()) {
+				csv_local_state.csv_reader->Flush(output);
+			}
+		} else if (output.size() == 0 && csv_global_state.file_index < bind_data.files.size()) {
+			D_ASSERT(0);
 			// exhausted this file, but we have more files we can read
 			// open the next file and increment the counter
 			bind_data.options.file_path = bind_data.files[csv_global_state.file_index];
 			// reuse csv_readers was created during binding
-			if (bind_data.options.union_by_name) {
-				csv_global_state.csv_reader = move(bind_data.union_readers[csv_global_state.file_index]);
-			} else {
-				csv_global_state.csv_reader =
-				    make_unique<BufferedCSVReader>(context, bind_data.options, csv_global_state.csv_reader->sql_types);
-			}
+			//			if (bind_data.options.union_by_name) {
+			//				D_ASSERT(0);
+			////				csv_global_state.csv_reader =
+			///move(bind_data.union_readers[csv_global_state.file_index]);
+			//			} else {
+			//				csv_global_state.csv_reader =
+			//				    make_unique<BufferedCSVReader>(context, bind_data.options,
+			//csv_global_state.csv_reader->sql_types);
+			//			}
 			csv_global_state.file_index++;
 		} else {
 			break;
@@ -254,34 +278,37 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	} while (true);
 
 	if (bind_data.options.union_by_name) {
-		csv_global_state.csv_reader->SetNullUnionCols(output);
+		D_ASSERT(0);
+		//		csv_global_state.csv_reader->SetNullUnionCols(output);
 	}
 	if (bind_data.options.include_file_name) {
-		auto &col = output.data[bind_data.filename_col_idx];
-		col.SetValue(0, Value(csv_global_state.csv_reader->options.file_path));
-		col.SetVectorType(VectorType::CONSTANT_VECTOR);
+		D_ASSERT(0);
+		//		auto &col = output.data[bind_data.filename_col_idx];
+		//		col.SetValue(0, Value(csv_global_state.csv_reader->options.file_path));
+		//		col.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	if (bind_data.options.include_parsed_hive_partitions) {
-		auto partitions = HivePartitioning::Parse(csv_global_state.csv_reader->options.file_path);
-
-		idx_t i = bind_data.hive_partition_col_idx;
-
-		if (partitions.size() != (bind_data.options.names.size() - bind_data.hive_partition_col_idx)) {
-			throw IOException("Hive partition count mismatch, expected " +
-			                  std::to_string(bind_data.options.names.size() - bind_data.hive_partition_col_idx) +
-			                  " hive partitions, got " + std::to_string(partitions.size()) + "\n");
-		}
-
-		for (auto &part : partitions) {
-			if (bind_data.options.names[i] != part.first) {
-				throw IOException("Hive partition names mismatch, expected '" + bind_data.options.names[i] +
-				                  "' but found '" + part.first + "' for file '" +
-				                  csv_global_state.csv_reader->options.file_path + "'");
-			}
-			auto &col = output.data[i++];
-			col.SetValue(0, Value(part.second));
-			col.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
+		D_ASSERT(0);
+		//		auto partitions = HivePartitioning::Parse(csv_global_state.csv_reader->options.file_path);
+		//
+		//		idx_t i = bind_data.hive_partition_col_idx;
+		//
+		//		if (partitions.size() != (bind_data.options.names.size() - bind_data.hive_partition_col_idx)) {
+		//			throw IOException("Hive partition count mismatch, expected " +
+		//			                  std::to_string(bind_data.options.names.size() - bind_data.hive_partition_col_idx)
+		//+ 			                  " hive partitions, got " + std::to_string(partitions.size()) + "\n");
+		//		}
+		//
+		//		for (auto &part : partitions) {
+		//			if (bind_data.options.names[i] != part.first) {
+		//				throw IOException("Hive partition names mismatch, expected '" + bind_data.options.names[i] +
+		//				                  "' but found '" + part.first + "' for file '" +
+		//				                  csv_global_state.csv_reader->options.file_path + "'");
+		//			}
+		//			auto &col = output.data[i++];
+		//			col.SetValue(0, Value(part.second));
+		//			col.SetVectorType(VectorType::CONSTANT_VECTOR);
+		//		}
 	}
 }
 

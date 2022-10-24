@@ -125,129 +125,6 @@ static vector<bool> ParseColumnList(const Value &value, vector<string> &names, c
 	return ParseColumnList(children, names, loption);
 }
 
-struct CSVFileHandle {
-public:
-	explicit CSVFileHandle(unique_ptr<FileHandle> file_handle_p) : file_handle(move(file_handle_p)) {
-		can_seek = file_handle->CanSeek();
-		plain_file_source = file_handle->OnDiskFile() && can_seek;
-		file_size = file_handle->GetFileSize();
-	}
-
-	bool CanSeek() {
-		return can_seek;
-	}
-	void Seek(idx_t position) {
-		if (!can_seek) {
-			throw InternalException("Cannot seek in this file");
-		}
-		file_handle->Seek(position);
-	}
-	idx_t SeekPosition() {
-		if (!can_seek) {
-			throw InternalException("Cannot seek in this file");
-		}
-		return file_handle->SeekPosition();
-	}
-	void Reset() {
-		if (plain_file_source) {
-			file_handle->Reset();
-		} else {
-			if (!reset_enabled) {
-				throw InternalException("Reset called but reset is not enabled for this CSV Handle");
-			}
-			read_position = 0;
-		}
-	}
-	bool PlainFileSource() {
-		return plain_file_source;
-	}
-
-	bool OnDiskFile() {
-		return file_handle->OnDiskFile();
-	}
-
-	idx_t FileSize() {
-		return file_size;
-	}
-
-	idx_t Read(void *buffer, idx_t nr_bytes) {
-		if (!plain_file_source) {
-			// not a plain file source: we need to do some bookkeeping around the reset functionality
-			idx_t result_offset = 0;
-			if (read_position < buffer_size) {
-				// we need to read from our cached buffer
-				auto buffer_read_count = MinValue<idx_t>(nr_bytes, buffer_size - read_position);
-				memcpy(buffer, cached_buffer.get() + read_position, buffer_read_count);
-				result_offset += buffer_read_count;
-				read_position += buffer_read_count;
-				if (result_offset == nr_bytes) {
-					return nr_bytes;
-				}
-			} else if (!reset_enabled && cached_buffer) {
-				// reset is disabled but we still have cached data
-				// we can remove any cached data
-				cached_buffer.reset();
-				buffer_size = 0;
-				buffer_capacity = 0;
-				read_position = 0;
-			}
-			// we have data left to read from the file
-			// read directly into the buffer
-			auto bytes_read = file_handle->Read((char *)buffer + result_offset, nr_bytes - result_offset);
-			read_position += bytes_read;
-			if (reset_enabled) {
-				// if reset caching is enabled, we need to cache the bytes that we have read
-				if (buffer_size + bytes_read >= buffer_capacity) {
-					// no space; first enlarge the buffer
-					buffer_capacity = MaxValue<idx_t>(NextPowerOfTwo(buffer_size + bytes_read), buffer_capacity * 2);
-
-					auto new_buffer = unique_ptr<data_t[]>(new data_t[buffer_capacity]);
-					if (buffer_size > 0) {
-						memcpy(new_buffer.get(), cached_buffer.get(), buffer_size);
-					}
-					cached_buffer = move(new_buffer);
-				}
-				memcpy(cached_buffer.get() + buffer_size, (char *)buffer + result_offset, bytes_read);
-				buffer_size += bytes_read;
-			}
-
-			return result_offset + bytes_read;
-		} else {
-			return file_handle->Read(buffer, nr_bytes);
-		}
-	}
-
-	string ReadLine() {
-		string result;
-		char buffer[1];
-		while (true) {
-			idx_t tuples_read = Read(buffer, 1);
-			if (tuples_read == 0 || buffer[0] == '\n') {
-				return result;
-			}
-			if (buffer[0] != '\r') {
-				result += buffer[0];
-			}
-		}
-	}
-
-	void DisableReset() {
-		this->reset_enabled = false;
-	}
-
-private:
-	unique_ptr<FileHandle> file_handle;
-	bool reset_enabled = true;
-	bool can_seek = false;
-	bool plain_file_source = false;
-	idx_t file_size = 0;
-	// reset support
-	unique_ptr<data_t[]> cached_buffer;
-	idx_t read_position = 0;
-	idx_t buffer_size = 0;
-	idx_t buffer_capacity = 0;
-};
-
 void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	this->delimiter = StringUtil::Replace(input, "\\t", "\t");
 	this->has_delimiter = true;
@@ -501,25 +378,14 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
-BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
-                                     BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
-    : fs(fs_p), allocator(allocator), opener(opener_p), options(move(options_p)), buffer_size(0), position(0),
-      start(0) {
-	file_handle = OpenCSV(options);
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
+                                     CSVFileHandle *file_handle_p, const vector<LogicalType> &requested_types)
+    : allocator(Allocator::Get(context)), file_handle(file_handle_p), options(move(options_p)), buffer_size(0),
+      position(0), start(0) {
 	Initialize(requested_types);
 }
 
-BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
-                                     const vector<LogicalType> &requested_types)
-    : BufferedCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                        move(options_p), requested_types) {
-}
-
 BufferedCSVReader::~BufferedCSVReader() {
-}
-
-idx_t BufferedCSVReader::GetFileSize() {
-	return file_handle ? file_handle->FileSize() : 0;
 }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
@@ -548,12 +414,6 @@ void BufferedCSVReader::PrepareComplexParser() {
 	delimiter_search = TextSearchShiftArray(options.delimiter);
 	escape_search = TextSearchShiftArray(options.escape);
 	quote_search = TextSearchShiftArray(options.quote);
-}
-
-unique_ptr<CSVFileHandle> BufferedCSVReader::OpenCSV(const BufferedCSVReaderOptions &options) {
-	auto file_handle = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
-	                               options.compression, this->opener);
-	return make_unique<CSVFileHandle>(move(file_handle));
 }
 
 // Helper function to generate column names
@@ -1596,8 +1456,8 @@ final_state:
 }
 
 bool BufferedCSVReader::SetPosition() {
-	if (!start_reading){
-		if (start == 0){
+	if (!start_reading) {
+		if (start == 0) {
 			// Thread starting from 0 Reads Up to first line
 			position = start;
 			start_reading = true;
@@ -1622,8 +1482,6 @@ bool BufferedCSVReader::SetPosition() {
 	}
 	return true;
 }
-
-
 
 bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message) {
 	// used for parsing algorithm
@@ -1821,7 +1679,10 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	auto old_buffer = move(buffer);
 
 	// the remaining part of the last buffer
-	idx_t remaining = buffer_size - start;
+	idx_t remaining = 0;
+	if (buffer_size > start) {
+		remaining = buffer_size - start;
+	}
 
 	bool large_buffers = mode == ParserMode::PARSING && !file_handle->OnDiskFile() && file_handle->CanSeek();
 	idx_t buffer_read_size = large_buffers ? INITIAL_BUFFER_SIZE_LARGE : INITIAL_BUFFER_SIZE;

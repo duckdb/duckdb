@@ -15,6 +15,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
@@ -193,7 +194,8 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
 	BufferedCSVReaderOptions options;
 	options.file_path = csv_file;
 	options.auto_detect = true;
-	BufferedCSVReader reader(*context, options);
+	auto file_handle = ReadCSV::OpenCSV(options, *context);
+	BufferedCSVReader reader(*context, options, file_handle.get());
 	vector<ColumnDefinition> column_list;
 	for (idx_t i = 0; i < reader.sql_types.size(); i++) {
 		column_list.emplace_back(reader.col_names[i], reader.sql_types[i]);
