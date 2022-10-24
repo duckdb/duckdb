@@ -47,7 +47,8 @@ BlockHandle::~BlockHandle() {
 	block_manager.UnregisterBlock(block_id, can_destroy);
 }
 
-unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer, block_id_t block_id) {
+unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
+                                block_id_t block_id) {
 	if (reusable_buffer) {
 		// re-usable buffer: re-use it
 		if (reusable_buffer->type == FileBufferType::BLOCK) {
@@ -65,9 +66,7 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 	}
 }
 
-unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(
-	idx_t size, unique_ptr<FileBuffer> &&source)
-{
+unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source) {
 	if (source) {
 		auto tmp = move(source);
 		D_ASSERT(tmp->size == size);
@@ -454,8 +453,7 @@ void BufferManager::SetLimit(idx_t limit) {
 // Temporary File Management
 //===--------------------------------------------------------------------===//
 unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle, idx_t position,
-                                                      idx_t size, block_id_t id,
-                                                      unique_ptr<FileBuffer> reusable_buffer) {
+                                                   idx_t size, block_id_t id, unique_ptr<FileBuffer> reusable_buffer) {
 	auto buffer = buffer_manager.ConstructManagedBuffer(size, move(reusable_buffer));
 	buffer->Read(handle, position);
 	return buffer;
@@ -577,8 +575,9 @@ public:
 
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, idx_t block_index,
 	                                           unique_ptr<FileBuffer> reusable_buffer) {
-		auto buffer = ReadTemporaryBufferInternal(BufferManager::GetBufferManager(db), *handle, GetPositionInFile(block_index), Storage::BLOCK_SIZE, id,
-		                                          move(reusable_buffer));
+		auto buffer =
+		    ReadTemporaryBufferInternal(BufferManager::GetBufferManager(db), *handle, GetPositionInFile(block_index),
+		                                Storage::BLOCK_SIZE, id, move(reusable_buffer));
 		{
 			// remove the block (and potentially truncate the temp file)
 			TemporaryFileLock lock(file_lock);

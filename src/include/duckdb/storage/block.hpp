@@ -26,8 +26,8 @@ public:
 struct BlockPointer {
 	BlockPointer(block_id_t block_id_p, uint32_t offset_p) : block_id(block_id_p), offset(offset_p) {};
 	BlockPointer() {};
-	block_id_t block_id{0};
-	uint32_t offset{0};
+	block_id_t block_id {0};
+	uint32_t offset {0};
 };
 
 } // namespace duckdb

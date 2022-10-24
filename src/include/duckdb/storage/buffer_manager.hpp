@@ -81,8 +81,7 @@ public:
 	//! Construct a managed buffer.
 	//! The block_id is just used for internal tracking. It doesn't map to any actual
 	//! BlockManager.
-	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(
-			idx_t size, unique_ptr<FileBuffer> &&source);
+	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source);
 
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
@@ -113,6 +112,7 @@ private:
 	static void BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
 	static data_ptr_t BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
 	                                         idx_t size);
+
 private:
 	//! The database instance
 	DatabaseInstance &db;
