@@ -122,6 +122,18 @@ Connection.prototype.all = function (sql) {
 }
 
 /**
+ * Run a SQL query and triggers the callback once for all result rows
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Connection.prototype.arrowAll = function (sql) {
+    var statement = new Statement(this, sql);
+    return statement.arrowAll.apply(statement, arguments);
+}
+
+/**
  * Runs a SQL query and triggers the callback for each result row
  * @arg sql
  * @param {...*} params
@@ -632,6 +644,14 @@ Statement.prototype.run;
  * @return {void}
  */
 Statement.prototype.all;
+/**
+ * @method
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Statement.prototype.arrowAll;
 /**
  * @method
  * @arg sql

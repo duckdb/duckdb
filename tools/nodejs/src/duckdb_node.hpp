@@ -151,6 +151,7 @@ public:
 
 public:
 	Napi::Value All(const Napi::CallbackInfo &info);
+	Napi::Value ArrowAll(const Napi::CallbackInfo &info);
 	Napi::Value Each(const Napi::CallbackInfo &info);
 	Napi::Value Run(const Napi::CallbackInfo &info);
 	Napi::Value Finish(const Napi::CallbackInfo &info);

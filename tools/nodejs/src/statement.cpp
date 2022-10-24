@@ -18,8 +18,8 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	Napi::Function t =
 	    DefineClass(env, "Statement",
 	                {InstanceMethod("run", &Statement::Run), InstanceMethod("all", &Statement::All),
-	                 InstanceMethod("each", &Statement::Each), InstanceMethod("finalize", &Statement::Finish),
-	                 InstanceMethod("stream", &Statement::Stream)});
+	                 InstanceMethod("arrowAll", &Statement::ArrowAll), InstanceMethod("each", &Statement::Each),
+	                 InstanceMethod("finalize", &Statement::Finish), InstanceMethod("stream", &Statement::Stream)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -258,7 +258,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 	return scope.Escape(result);
 }
 
-enum RunType { RUN, EACH, ALL };
+enum RunType { RUN, EACH, ALL, ARROW_ALL};
 
 struct StatementParam {
 	std::vector<duckdb::Value> params;
@@ -278,7 +278,7 @@ struct RunPreparedTask : public Task {
 			return;
 		}
 
-		result = statement.statement->Execute(params->params, run_type != RunType::ALL);
+		result = statement.statement->Execute(params->params, run_type != RunType::ALL  && run_type != RunType::ARROW_ALL);
 	}
 
 	void Callback() override {
@@ -348,6 +348,50 @@ struct RunPreparedTask : public Task {
 				}
 				for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
 					result_arr.Set(out_idx++, chunk_converted.Get(row_idx));
+				}
+			}
+
+			cb.MakeCallback(statement.Value(), {env.Null(), result_arr});
+		} break;
+		case RunType::ARROW_ALL: {
+			auto materialized_result = (duckdb::MaterializedQueryResult *)result.get();
+			std::cout << "RowCount " << materialized_result->RowCount() << "\n";
+			Napi::Array result_arr(Napi::Array::New(env, materialized_result->RowCount()));
+
+			auto deleter = [](Napi::Env, void* finalizeData, void* hint){ delete static_cast<std::shared_ptr<duckdb::DataChunk>*>(hint);};
+			std::shared_ptr<duckdb::DataChunk> current_chunk_ptr;
+
+			duckdb::idx_t out_idx = 1;
+			while (true) {
+				auto chunk = result->Fetch();
+
+				if (!chunk || chunk->size() == 0) {
+					break;
+				}
+
+				D_ASSERT(chunk->ColumnCount() == 2);
+				D_ASSERT(chunk->data[0].GetType() == duckdb::LogicalType::BLOB);
+				D_ASSERT(chunk->data[1].GetType() == duckdb::LogicalType::BOOLEAN);
+
+				// Move chunk into shared pointer
+				current_chunk_ptr = std::move(chunk);
+
+				for (duckdb::idx_t row_idx = 0; row_idx < current_chunk_ptr->size(); row_idx++) {
+					duckdb::string_t blob = ((duckdb::string_t*)(current_chunk_ptr->data[0].GetData()))[row_idx];
+					bool is_header = current_chunk_ptr->data[1].GetData()[row_idx];
+
+					// Create shared pointer to give (shared) ownership to ArrayBuffer
+					auto data_chunk_ptr = new std::shared_ptr<duckdb::DataChunk>(current_chunk_ptr);
+
+					auto array_buffer = Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(), deleter,
+					                                           data_chunk_ptr);
+					// TODO we should handle this in duckdb probably
+					if (is_header) {
+						result_arr.Set((uint32_t)0, array_buffer);
+					} else {
+						D_ASSERT(out_idx < materialized_result->RowCount());
+						result_arr.Set(out_idx++, array_buffer);
+					}
 				}
 			}
 
@@ -424,6 +468,12 @@ duckdb::unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInf
 Napi::Value Statement::All(const Napi::CallbackInfo &info) {
 	connection_ref->database_ref->Schedule(info.Env(),
 	                                       duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::ALL));
+	return info.This();
+}
+
+Napi::Value Statement::ArrowAll(const Napi::CallbackInfo &info) {
+	connection_ref->database_ref->Schedule(info.Env(),
+	                                       duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::ARROW_ALL));
 	return info.This();
 }
 

@@ -69,11 +69,11 @@ public:
 	}
 
 private:
-	// need this to parse different args and produce pointer to streamreader myself
 	static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names) {
 		auto stream_decoder = make_unique<BufferingArrowIPCStreamDecoder>();
 
+		// Decode buffer ptr list
 		auto buffer_ptr_list = ListValue::GetChildren(input.inputs[0]);
 		for (auto& buffer_ptr_struct : buffer_ptr_list) {
 			auto unpacked = StructValue::GetChildren(buffer_ptr_struct);
