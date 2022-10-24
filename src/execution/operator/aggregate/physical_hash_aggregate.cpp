@@ -46,6 +46,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...
+	// Because everything that lives in this class should be read only at execution time
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
@@ -56,13 +57,13 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		if (aggr.filter) {
 			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
-			auto it = filter_indexes.find(aggr.filter.get());
-			if (it == filter_indexes.end()) {
+			if (!filter_indexes.count(aggr.filter.get())) {
+				// Replace the bound reference expression's index with the corresponding index into the payload chunk
+				// FIXME: this adds only
 				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
-				bound_ref_expr.index = aggregate_input_idx++;
-			} else {
-				++aggregate_input_idx;
+				bound_ref_expr.index = aggregate_input_idx;
 			}
+			aggregate_input_idx++;
 		}
 	}
 
@@ -246,6 +247,12 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 
 	for (idx_t i = 0; i < radix_tables.size(); i++) {
 		// TODO: apply filter
+		auto &aggregate = grouped_aggregate_data.aggregates[i];
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		// if (aggr.distinct) {
+		//	// Dont sink into distinct aggregates here
+		//	continue;
+		// }
 		radix_tables[i].Sink(context, *gstate.radix_states[i], *llstate.radix_states[i], input, aggregate_input_chunk);
 	}
 

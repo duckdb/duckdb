@@ -194,6 +194,7 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 
 		idx_t table_idx = distinct_aggregate_data.table_map[idx];
 		if (!distinct_aggregate_data.radix_tables[table_idx]) {
+			// This distinct aggregate shares its data with another
 			continue;
 		}
 		D_ASSERT(distinct_aggregate_data.radix_tables[table_idx]);
