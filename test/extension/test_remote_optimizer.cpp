@@ -58,16 +58,18 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			REQUIRE(read(connfd, buffer, bytes) == bytes);
 
 			BufferedDeserializer deserializer((data_ptr_t)buffer, bytes);
-			auto plan = LogicalOperator::Deserialize(deserializer, *con2.context);
+			PlanDeserializationState state(*con2.context);
+			auto plan = LogicalOperator::Deserialize(deserializer, state);
 			plan->ResolveOperatorTypes();
 
 			auto statement = make_unique<LogicalPlanStatement>(move(plan));
 			auto result = con2.Query(move(statement));
-			idx_t num_chunks = result->collection.ChunkCount();
+			auto &collection = result->Collection();
+			idx_t num_chunks = collection.ChunkCount();
 			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
-			for (auto &chunk : result->collection.Chunks()) {
+			for (auto &chunk : collection.Chunks()) {
 				BufferedSerializer serializer;
-				chunk->Serialize(serializer);
+				chunk.Serialize(serializer);
 				auto data = serializer.GetData();
 				ssize_t len = data.size;
 				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));
@@ -82,15 +84,23 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 		config.options.allow_unsigned_extensions = true;
 		DuckDB db1(nullptr, &config);
 		Connection con1(db1);
+		auto load_parquet = con1.Query("LOAD 'parquet'");
+		if (load_parquet->HasError()) {
+			// Do not execute the test.
+			if (kill(pid, SIGKILL) != 0) {
+				FAIL();
+			}
+			return;
+		}
+
 		REQUIRE_NO_FAIL(con1.Query("LOAD '" DUCKDB_BUILD_DIRECTORY
 		                           "/test/extension/loadable_extension_optimizer_demo.duckdb_extension'"));
 		REQUIRE_NO_FAIL(con1.Query("SET waggle_location_host='127.0.0.1'"));
 		REQUIRE_NO_FAIL(con1.Query("SET waggle_location_port=4242"));
 		usleep(100000); // need to wait a bit till socket is up
 
-		auto result1 = con1.Query(
-		    "SELECT first_name FROM PARQUET_SCAN('data/parquet-testing/userdata1.parquet') GROUP BY first_name");
-		result1->Print();
+		REQUIRE_NO_FAIL(con1.Query(
+		    "SELECT first_name FROM PARQUET_SCAN('data/parquet-testing/userdata1.parquet') GROUP BY first_name"));
 
 		if (kill(pid, SIGKILL) != 0) {
 			FAIL();
