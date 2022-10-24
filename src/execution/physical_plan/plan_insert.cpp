@@ -5,10 +5,11 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
 
-bool PhysicalPlanGenerator::PreserveInsertionOrder(PhysicalOperator &plan) {
+bool PhysicalPlanGenerator::PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.preserve_insertion_order) {
 		// preserving insertion order is disabled by config
@@ -21,7 +22,11 @@ bool PhysicalPlanGenerator::PreserveInsertionOrder(PhysicalOperator &plan) {
 	return true;
 }
 
-bool PhysicalPlanGenerator::UseBatchIndex(PhysicalOperator &plan) {
+bool PhysicalPlanGenerator::PreserveInsertionOrder(PhysicalOperator &plan) {
+	return PreserveInsertionOrder(context, plan);
+}
+
+bool PhysicalPlanGenerator::UseBatchIndex(ClientContext &context, PhysicalOperator &plan) {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	if (scheduler.NumberOfThreads() == 1) {
 		// batch index usage only makes sense if we are using multiple threads
@@ -32,6 +37,10 @@ bool PhysicalPlanGenerator::UseBatchIndex(PhysicalOperator &plan) {
 		return false;
 	}
 	return true;
+}
+
+bool PhysicalPlanGenerator::UseBatchIndex(PhysicalOperator &plan) {
+	return UseBatchIndex(context, plan);
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op) {

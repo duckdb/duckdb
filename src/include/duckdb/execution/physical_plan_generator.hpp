@@ -37,6 +37,11 @@ public:
 	//! operator nodes.
 	unique_ptr<PhysicalOperator> CreatePlan(unique_ptr<LogicalOperator> logical);
 
+	//! Whether or not we can (or should) use a batch-index based operator for executing the given sink
+	static bool UseBatchIndex(ClientContext &context, PhysicalOperator &plan);
+	//! Whether or not we should preserve insertion order for executing the given sink
+	static bool PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan);
+
 protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOperator &op);
 
