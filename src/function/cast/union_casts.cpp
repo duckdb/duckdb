@@ -1,28 +1,18 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include <algorithm> // for std::sort
 
 namespace duckdb {
-
-static void CopyValidity(Vector &source, Vector &result, idx_t count) {
-
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-	} else {
-		source.Flatten(count);
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-	}
-}
 
 //--------------------------------------------------------------------------------------------------
 // ??? -> UNION
 //--------------------------------------------------------------------------------------------------
 // if the source can be implicitly cast to a member of the target union, the cast is valid
 
-struct UnionMemberBoundCastData : public BoundCastData {
-	UnionMemberBoundCastData(union_tag_t member_idx, string name, LogicalType type, int64_t cost,
-	                         BoundCastInfo member_cast_info)
+struct ToUnionBoundCastData : public BoundCastData {
+	ToUnionBoundCastData(union_tag_t member_idx, string name, LogicalType type, int64_t cost,
+	                     BoundCastInfo member_cast_info)
 	    : tag(member_idx), name(move(name)), type(move(type)), cost(cost), member_cast_info(move(member_cast_info)) {
 	}
 
@@ -34,10 +24,10 @@ struct UnionMemberBoundCastData : public BoundCastData {
 
 public:
 	unique_ptr<BoundCastData> Copy() const override {
-		return make_unique<UnionMemberBoundCastData>(tag, name, type, cost, member_cast_info.Copy());
+		return make_unique<ToUnionBoundCastData>(tag, name, type, cost, member_cast_info.Copy());
 	}
 
-	static bool SortByCostAscending(const UnionMemberBoundCastData &left, const UnionMemberBoundCastData &right) {
+	static bool SortByCostAscending(const ToUnionBoundCastData &left, const ToUnionBoundCastData &right) {
 		return left.cost < right.cost;
 	}
 };
@@ -45,7 +35,7 @@ public:
 unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	D_ASSERT(target.id() == LogicalTypeId::UNION);
 
-	vector<UnionMemberBoundCastData> candidates;
+	vector<ToUnionBoundCastData> candidates;
 
 	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(target); member_idx++) {
 		auto member_type = UnionType::GetMemberType(target, member_idx);
@@ -75,7 +65,7 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 	}
 
 	// sort the candidate casts by cost
-	sort(candidates.begin(), candidates.end(), UnionMemberBoundCastData::SortByCostAscending);
+	std::sort(candidates.begin(), candidates.end(), ToUnionBoundCastData::SortByCostAscending);
 
 	// select the lowest possible cost cast
 	auto &selected_cast = candidates[0];
@@ -102,12 +92,12 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 	}
 
 	// otherwise, return the selected cast
-	return make_unique<UnionMemberBoundCastData>(move(selected_cast));
+	return make_unique<ToUnionBoundCastData>(move(selected_cast));
 }
 
 static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::UNION);
-	auto &cast_data = (UnionMemberBoundCastData &)*parameters.cast_data;
+	auto &cast_data = (ToUnionBoundCastData &)*parameters.cast_data;
 	auto &selected_member_vector = UnionVector::GetMember(result, cast_data.tag);
 
 	CastParameters child_parameters(parameters, cast_data.member_cast_info.cast_data.get());
@@ -116,9 +106,17 @@ static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParamet
 	}
 
 	// cast succeeded, update union tags
-	UnionVector::SetTags(result, cast_data.tag);
+	UnionVector::SetAllTags(result, cast_data.tag);
 
-	CopyValidity(source, result, count);
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+	} else {
+		source.Flatten(count);
+		FlatVector::Validity(result) = FlatVector::Validity(source);
+	}
+
+	result.Verify(count);
 
 	return true;
 }
@@ -126,91 +124,6 @@ static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParamet
 BoundCastInfo DefaultCasts::ImplicitToUnionCast(BindCastInput &input, const LogicalType &source,
                                                 const LogicalType &target) {
 	return BoundCastInfo(&ToUnionCast, BindToUnionCast(input, source, target));
-}
-
-//--------------------------------------------------------------------------------------------------
-// UNION -> ???
-//--------------------------------------------------------------------------------------------------
-// if the source contains a member that can be implicitly cast the target, the cast is valid
-
-unique_ptr<BoundCastData> BindFromUnionCast(BindCastInput &input, const LogicalType &source,
-                                            const LogicalType &target) {
-	D_ASSERT(source.id() == LogicalTypeId::UNION);
-
-	vector<UnionMemberBoundCastData> candidates;
-
-	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(source); member_idx++) {
-		auto member_type = UnionType::GetMemberType(source, member_idx);
-		auto member_name = UnionType::GetMemberName(source, member_idx);
-		auto member_cast_cost = input.function_set.ImplicitCastCost(member_type, target);
-		if (member_cast_cost != -1) {
-			auto member_cast_info = input.GetCastFunction(member_type, target);
-			candidates.emplace_back(member_idx, member_name, member_type, member_cast_cost, move(member_cast_info));
-		}
-	};
-
-	// no possible casts found!
-	if (candidates.empty()) {
-		auto message = StringUtil::Format(
-		    "Type %s can't be cast as %s. %s can't be implicitly cast from any of the union member types: ",
-		    target.ToString(), source.ToString(), target.ToString());
-
-		auto member_count = UnionType::GetMemberCount(source);
-		for (idx_t member_idx = 0; member_idx < member_count; member_idx++) {
-			auto member_type = UnionType::GetMemberType(source, member_idx);
-			message += member_type.ToString();
-			if (member_idx < member_count - 1) {
-				message += ", ";
-			}
-		}
-		throw CastException(message);
-	}
-
-	// sort the candidate casts by cost
-	sort(candidates.begin(), candidates.end(), UnionMemberBoundCastData::SortByCostAscending);
-
-	// select the lowest possible cost cast
-	auto &selected_cast = candidates[0];
-	auto selected_cost = candidates[0].cost;
-
-	// check if the cast is ambiguous (2 or more casts have the same cost)
-	if (candidates.size() > 1 && candidates[1].cost == selected_cost) {
-
-		// collect all the ambiguous types
-		auto message = StringUtil::Format(
-		    "Type %s can't be cast as %s. The cast is ambiguous, multiple possible members in source: ", source,
-		    target);
-		for (size_t i = 0; i < candidates.size(); i++) {
-			if (candidates[i].cost == selected_cost) {
-				message += StringUtil::Format("'%s (%s)'", candidates[i].name, candidates[i].type.ToString());
-				if (i < candidates.size() - 1) {
-					message += ", ";
-				}
-			}
-		}
-		message += ". Select the desired union member type by using the 'union_extract(<tag>)' function, dot or "
-		           "bracket notation before casting.";
-		throw CastException(message);
-	}
-
-	// otherwise, return the selected cast
-	return make_unique<UnionMemberBoundCastData>(move(selected_cast));
-}
-
-static bool FromUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	D_ASSERT(source.GetType().id() == LogicalTypeId::UNION);
-
-	auto &cast_data = (UnionMemberBoundCastData &)*parameters.cast_data;
-	auto &selected_member_vector = UnionVector::GetMember(source, cast_data.tag);
-
-	CastParameters child_parameters(parameters, cast_data.member_cast_info.cast_data.get());
-	if (!cast_data.member_cast_info.function(selected_member_vector, result, count, child_parameters)) {
-		return false;
-	}
-
-	CopyValidity(source, result, count);
-
-	return true;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -273,9 +186,8 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 				auto &target_member_type = UnionType::GetMemberType(target, target_idx);
 
 				if (input.function_set.ImplicitCastCost(source_member_type, target_member_type) < 0) {
-
 					auto message = StringUtil::Format(
-					    "Type %s can't be cast as %s. The member %s can't be implicitly cast from %s to %s",
+					    "Type %s can't be cast as %s. The member '%s' can't be implicitly cast from %s to %s",
 					    source.ToString(), target.ToString(), source_member_name, source_member_type.ToString(),
 					    target_member_type.ToString());
 					throw CastException(message);
@@ -289,9 +201,9 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 		}
 		if (!found) {
 			// no matching member tag found in the target set
-			auto message = StringUtil::Format(
-			    "Type %s can't be cast as %s. The member %s is not present in target union", source.ToString(),
-			    target.ToString(), source_member_name, source_member_type.ToString());
+			auto message =
+			    StringUtil::Format("Type %s can't be cast as %s. The member '%s' is not present in target union",
+			                       source.ToString(), target.ToString(), source_member_name);
 			throw CastException(message);
 		}
 	}
@@ -303,6 +215,11 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto &cast_data = (UnionToUnionBoundCastData &)*parameters.cast_data;
 
 	auto source_member_count = UnionType::GetMemberCount(source.GetType());
+	auto target_member_count = UnionType::GetMemberCount(result.GetType());
+
+	auto target_member_is_mapped = vector<bool>(target_member_count);
+
+	// Perform the casts from source to target members
 	for (idx_t member_idx = 0; member_idx < source_member_count; member_idx++) {
 		auto target_member_idx = cast_data.tag_map[member_idx];
 
@@ -314,32 +231,59 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 		if (!member_cast.function(source_member_vector, target_member_vector, count, child_parameters)) {
 			return false;
 		}
+
+		target_member_is_mapped[target_member_idx] = true;
 	}
 
-	// cast succeeded, update union tags
-	UnifiedVectorFormat f;
-	source.ToUnifiedFormat(count, f);
-	auto validity = f.validity;
+	// All member casts succeeded!
 
-	auto source_tags = UnionVector::GetTags(source);
-	auto result_tags = UnionVector::GetTags(result);
+	// Set the unmapped target members to constant NULL.
+	// If we cast UNION(A, B) -> UNION(A, B, C) we need to invalidate C so that
+	// the invariants of the result union hold. (only member columns "selected"
+	// by the rowwise corresponding tag in the tag vector should be valid)
+	for (idx_t target_member_idx = 0; target_member_idx < target_member_count; target_member_idx++) {
+		if (!target_member_is_mapped[target_member_idx]) {
+			auto &target_member_vector = UnionVector::GetMember(result, target_member_idx);
+			target_member_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(target_member_vector, true);
+		}
+	}
 
-	// fast path
-	if (validity.AllValid()) {
-		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-			result_tags[row_idx] = cast_data.tag_map[source_tags[row_idx]];
+	// Update the tags in the result vector
+	auto &source_tag_vector = UnionVector::GetTags(source);
+	auto &result_tag_vector = UnionVector::GetTags(result);
+
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// Constant vector case optimization
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		if (ConstantVector::IsNull(source)) {
+			ConstantVector::SetNull(result, true);
+		} else {
+			// map the tag
+			auto source_tag = ConstantVector::GetData<union_tag_t>(source_tag_vector)[0];
+			auto mapped_tag = cast_data.tag_map[source_tag];
+			ConstantVector::GetData<union_tag_t>(result_tag_vector)[0] = mapped_tag;
 		}
 	} else {
-		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		// Otherwise, use the unified vector format to access the source vector.
+		// We assume that a union tag vector validity matches the union vector validity.
+		UnifiedVectorFormat source_tag_format;
+		source_tag_vector.ToUnifiedFormat(count, source_tag_format);
 
-			// map source tag to target tag
-			if (f.validity.RowIsValid(row_idx)) {
-				result_tags[row_idx] = cast_data.tag_map[source_tags[row_idx]];
+		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+			auto source_row_idx = source_tag_format.sel->get_index(row_idx);
+			if (source_tag_format.validity.RowIsValid(source_row_idx)) {
+				// map the tag
+				auto source_tag = ((union_tag_t *)source_tag_format.data)[source_row_idx];
+				auto target_tag = cast_data.tag_map[source_tag];
+				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] = target_tag;
+			} else {
+				FlatVector::SetNull(result, row_idx, true);
 			}
 		}
 	}
 
-	CopyValidity(source, result, count);
+	result.Verify(count);
 
 	return true;
 }
@@ -354,7 +298,8 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 	// now construct the actual varchar vector
 	varchar_union.Flatten(count);
-	auto tags = UnionVector::GetTags(source);
+	auto &tag_vector = UnionVector::GetTags(source);
+	auto tags = FlatVector::GetData<union_tag_t>(tag_vector);
 
 	auto &validity = FlatVector::Validity(varchar_union);
 	auto result_data = FlatVector::GetData<string_t>(result);
@@ -366,9 +311,13 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		}
 
 		auto &member = UnionVector::GetMember(varchar_union, tags[i]);
-		auto member_str = FlatVector::GetData<string_t>(member)[i];
-		auto member_valid = FlatVector::Validity(member).RowIsValid(i);
+		UnifiedVectorFormat member_vdata;
+		member.ToUnifiedFormat(count, member_vdata);
+
+		auto mapped_idx = member_vdata.sel->get_index(i);
+		auto member_valid = member_vdata.validity.RowIsValid(mapped_idx);
 		if (member_valid) {
+			auto member_str = ((string_t *)member_vdata.data)[mapped_idx];
 			result_data[i] = StringVector::AddString(result, member_str);
 		} else {
 			result_data[i] = StringVector::AddString(result, "NULL");
@@ -379,6 +328,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
+	result.Verify(count);
 	return true;
 }
 
@@ -398,7 +348,7 @@ BoundCastInfo DefaultCasts::UnionCastSwitch(BindCastInput &input, const LogicalT
 	case LogicalTypeId::UNION:
 		return BoundCastInfo(UnionToUnionCast, BindUnionToUnionCast(input, source, target));
 	default:
-		return BoundCastInfo(FromUnionCast, BindFromUnionCast(input, source, target));
+		return TryVectorNullCast;
 	}
 }
 

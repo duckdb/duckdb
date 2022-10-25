@@ -2,9 +2,13 @@
 # description: Test union types with ambiguous members
 # group: [union]
 
-# disallow members with same name
+# disallow members with same name (case insensitive)
 statement error
 CREATE TABLE tbl(a UNION(b INT, b INT));
+
+statement error
+CREATE TABLE tbl(a UNION(b INT, B INT));
+
 
 # allow members with same type
 statement ok

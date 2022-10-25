@@ -2,6 +2,7 @@
 # description: Test union to union casts
 # group: [union]
 
+# Test value -> union casts
 statement ok
 create table tbl1(u UNION(i32 INT, str VARCHAR));
 
@@ -15,6 +16,23 @@ SELECT * FROM tbl1;
 two
 three
 
+
+# Test union -> value cast
+
+# cannot cast union to value in the general case 
+statement error
+SELECT u::int FROM tbl1;
+
+# but we can cast to VARCHAR
+query I
+SELECT u::varchar FROM tbl1;
+----
+1
+two
+three
+
+
+# Test union -> union cast
 statement ok
 create table tbl2(u UNION(str VARCHAR, i32 INT, f32 FLOAT));
 
@@ -64,3 +82,45 @@ NULL	NULL	6.0
 1		NULL	NULL
 NULL	two		NULL
 NULL	three	NULL
+
+
+query I
+SELECT * FROM tbl2
+----
+five
+4
+6.0
+
+statement ok
+INSERT INTO tbl2 SELECT * FROM tbl1;
+
+query I
+SELECT * FROM tbl2;
+----
+five
+4
+6.0
+1
+two
+three
+
+query I
+SELECT u.f32 FROM tbl2;
+----
+NULL
+NULL
+6.0
+NULL
+NULL
+NULL
+
+
+query IIII
+SELECT union_tag(u), u.i32, u.str, u.f32 FROM tbl2;
+----
+str		NULL	five	NULL
+i32		4		NULL	NULL
+f32		NULL	NULL	6.0
+i32		1		NULL	NULL
+str		NULL	two		NULL
+str		NULL	three	NULL

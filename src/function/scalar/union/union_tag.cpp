@@ -8,17 +8,29 @@ namespace duckdb {
 
 static unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 1);
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+
+	if (arguments.empty()) {
+		throw BinderException("Missing required arguments for union_tag function.");
+	}
+
+	if (LogicalTypeId::UNKNOWN == arguments[0]->return_type.id()) {
 		throw ParameterNotResolvedException();
 	}
-	D_ASSERT(LogicalTypeId::UNION == arguments[0]->return_type.id());
+
+	if (LogicalTypeId::UNION != arguments[0]->return_type.id()) {
+		throw BinderException("First argument to union_tag function must be a union type.");
+	}
+
+	if (arguments.size() > 1) {
+		throw BinderException("Too many arguments, union_tag takes at most one argument.");
+	}
 
 	auto member_count = UnionType::GetMemberCount(arguments[0]->return_type);
 	if (member_count == 0) {
 		// this should never happen, empty unions are not allowed
 		throw InternalException("Can't get tags from an empty union");
 	}
+
 	bound_function.arguments[0] = arguments[0]->return_type;
 
 	auto varchar_vector = Vector(LogicalType::VARCHAR, member_count);

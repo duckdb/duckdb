@@ -17,6 +17,7 @@
 namespace duckdb {
 
 enum class MapInvalidReason : uint8_t { VALID, NULL_KEY_LIST, NULL_KEY, DUPLICATE_KEY };
+enum class UnionInvalidReason : uint8_t { VALID, TAG_OUT_OF_RANGE, NO_MEMBERS, VALIDITY_OVERLAP };
 
 struct VariableReturnBindData : public FunctionData {
 	LogicalType stype;
@@ -159,5 +160,8 @@ struct StructExtractFun {
 MapInvalidReason CheckMapValidity(Vector &map, idx_t count,
                                   const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
 void MapConversionVerify(Vector &vector, idx_t count);
+
+UnionInvalidReason CheckUnionValidity(Vector &vector, idx_t count,
+                                      const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
 
 } // namespace duckdb

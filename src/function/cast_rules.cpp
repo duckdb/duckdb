@@ -260,6 +260,10 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	}
 
 	if (to.id() == LogicalTypeId::UNION) {
+		// check that the union type is fully resolved.
+		if (to.AuxInfo() == nullptr) {
+			return -1;
+		}
 		// every type can be implicitly be cast to a union if the source type is a member of the union
 		for (idx_t i = 0; i < UnionType::GetMemberCount(to); i++) {
 			auto member = UnionType::GetMemberType(to, i);

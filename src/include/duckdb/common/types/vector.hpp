@@ -132,6 +132,7 @@ public:
 	DUCKDB_API void Verify(idx_t count);
 	//! Asserts that the CheckMapValidity returns MapInvalidReason::VALID
 	DUCKDB_API static void VerifyMap(Vector &map, const SelectionVector &sel, idx_t count);
+	DUCKDB_API static void VerifyUnion(Vector &map, const SelectionVector &sel, idx_t count);
 	DUCKDB_API static void Verify(Vector &vector, const SelectionVector &sel, idx_t count);
 	DUCKDB_API void UTFVerify(idx_t count);
 	DUCKDB_API void UTFVerify(const SelectionVector &sel, idx_t count);
@@ -412,26 +413,39 @@ struct StructVector {
 };
 
 struct UnionVector {
-	//! Get the tags of the union vector
-	//! Note: this does not do anything special for ConstantVector, so you need
-	//! to be careful when offsetting the returned pointer.
-	DUCKDB_API static union_tag_t *GetTags(Vector &v);
-	DUCKDB_API static const union_tag_t *GetTags(const Vector &v);
+	// Unions are stored as structs, but the first child is always the "tag"
+	// vector, specifying the currently selected member for that row.
+	// The remaining children are the members of the union.
+	// INVARIANTS:
+	//	1.	Only one member vector (the one "selected" by the tag) can be
+	//		non-NULL in each row.
+	//
+	//	2.	The validity of the tag vector always matches the validity of the
+	//		union vector itself.
+	//
+	//	3.	For each tag in the tag vector, 0 <= tag < |members|
+
+	//! Get the tag vector of a union vector
+	DUCKDB_API static const Vector &GetTags(const Vector &v);
+	DUCKDB_API static Vector &GetTags(Vector &v);
 
 	//! Get the tag at the specific index of the union vector
-	//! Note: this will handle a ConstantVector correctly.
-	DUCKDB_API static union_tag_t GetTag(const Vector &v, idx_t index);
+	DUCKDB_API static union_tag_t GetTag(const Vector &vector, idx_t index);
 
-	//! Set the tag at the specific index of the union vector
-	DUCKDB_API static void SetTag(Vector &v, idx_t index, union_tag_t tag);
+	//! Get the member vector of a union vector by index
+	DUCKDB_API static const Vector &GetMember(const Vector &vector, idx_t member_index);
+	DUCKDB_API static Vector &GetMember(Vector &vector, idx_t member_index);
 
-	//! Set every entry in the the UnionVector to a specific tag
-	DUCKDB_API static void SetTags(Vector &vector, union_tag_t tag);
+	//! Set every entry in the UnionVector to a specific tag.
+	//! This will set the tag vector to a ConstantVector containing the tag.
+	//! This will set the non-selected member vectors to a ConstantVector containing NULL
+	DUCKDB_API static void SetAllTags(Vector &vector, union_tag_t tag);
 
-	//! Get the union members vector by index
-	DUCKDB_API static const Vector &GetMember(const Vector &vector, idx_t index);
-	DUCKDB_API static Vector &GetMember(Vector &vector, idx_t index);
-	DUCKDB_API static void foo();
+	//! Set every entry in the UnionVector to a specific member.
+	//! This is useful to set the entire vector to a single member, e.g. when "creating"
+	//! a union to return in a function, when you only have one alternative to return.
+	//! This will also handle invalidation of the non-selected members.
+	DUCKDB_API static void SetToMember(Vector &vector, union_tag_t tag, Vector &member_vector);
 };
 
 struct SequenceVector {

@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE tbl(u UNION(num INTEGER, str STRING));
 
 statement ok
-INSERT INTO tbl VALUES (UNION_VALUE(num := 1));
+INSERT INTO tbl VALUES (union_value(num := 1));
 
 # union_value must take exactly one argument
 statement error

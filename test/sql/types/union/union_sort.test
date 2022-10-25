@@ -30,7 +30,11 @@ a	4
 a	3
 a	1
 
+statement ok
+CREATE TABLE tbl5 (a UNION(lft INT, u UNION(lft VARCHAR, rght INT)));
 
+statement ok
+INSERT INTO tbl5 VALUES (union_value(lft := 1))
 
 statement ok
 CREATE TABLE tbl2 (u UNION(lft INT, u UNION(lft VARCHAR, rght INT)));

@@ -69,15 +69,19 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 		result_type = LogicalType::MAP(move(children));
 	} else if (base_type == LogicalTypeId::UNION) {
 		if (!type_name->typmods || type_name->typmods->length == 0) {
-			throw ParserException("Union needs at least one member");
+			throw ParserException("Union type needs at least one member");
 		}
+		if (type_name->typmods->length > (int)UnionType::MAX_UNION_MEMBERS) {
+			throw ParserException("Union types can have at most %d members", UnionType::MAX_UNION_MEMBERS);
+		}
+
 		child_list_t<LogicalType> children;
 		case_insensitive_set_t name_collision_set;
 
 		for (auto node = type_name->typmods->head; node; node = node->next) {
 			auto &type_val = *((duckdb_libpgquery::PGList *)node->data.ptr_value);
 			if (type_val.length != 2) {
-				throw ParserException("Union member needs a tag name and a type name");
+				throw ParserException("Union type member needs a tag name and a type name");
 			}
 
 			auto entry_name_node = (duckdb_libpgquery::PGValue *)(type_val.head->data.ptr_value);
@@ -89,8 +93,9 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			D_ASSERT(!entry_name.empty());
 
 			if (name_collision_set.find(entry_name) != name_collision_set.end()) {
-				throw ParserException("Duplicate union tag name \"%s\"", entry_name);
+				throw ParserException("Duplicate union type tag name \"%s\"", entry_name);
 			}
+
 			name_collision_set.insert(entry_name);
 
 			auto entry_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)entry_type_node);

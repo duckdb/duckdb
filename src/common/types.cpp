@@ -1217,7 +1217,7 @@ const LogicalType &MapType::ValueType(const LogicalType &type) {
 
 LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
 	D_ASSERT(members.size() > 0);
-	D_ASSERT(members.size() < 256);
+	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
 	// union types always have a hidden "tag" field in front
 	members.insert(members.begin(), {"", LogicalType::TINYINT});
 	auto info = make_shared<StructTypeInfo>(move(members));

@@ -554,7 +554,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::MAP(move(key), move(value));
 	}
 	case LogicalTypeId::UNION: {
-		auto tag = UnionVector::GetTag(*vector, index); // ((union_tag_t *)data)[index];
+		auto tag = UnionVector::GetTag(*vector, index);
 		auto value = UnionVector::GetMember(*vector, tag).GetValue(index);
 		auto members = UnionType::CopyMemberTypes(type);
 		return Value::UNION(members, tag, move(value));
@@ -1080,6 +1080,14 @@ void Vector::VerifyMap(Vector &vector_p, const SelectionVector &sel_p, idx_t cou
 #endif // DEBUG
 }
 
+void Vector::VerifyUnion(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
+#ifdef DEBUG
+	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::UNION);
+	auto valid_check = CheckUnionValidity(vector_p, count, sel_p);
+	D_ASSERT(valid_check == UnionInvalidReason::VALID);
+#endif // DEBUG
+}
+
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
@@ -1173,6 +1181,10 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		}
 		if (vector->GetType().id() == LogicalTypeId::MAP) {
 			VerifyMap(*vector, *sel, count);
+		}
+
+		if (vector->GetType().id() == LogicalTypeId::UNION) {
+			VerifyUnion(*vector, *sel, count);
 		}
 	}
 
@@ -1734,36 +1746,75 @@ void ListVector::PushBack(Vector &target, const Value &insert) {
 }
 
 // Union vector
-const Vector &UnionVector::GetMember(const Vector &vector, idx_t index) {
-	D_ASSERT(index < UnionType::GetMemberCount(vector.GetType()));
+const Vector &UnionVector::GetMember(const Vector &vector, idx_t member_index) {
+	D_ASSERT(member_index < UnionType::GetMemberCount(vector.GetType()));
 	auto &entries = StructVector::GetEntries(vector);
-	return *entries[index + 1]; // skip the "tag" entry
+	return *entries[member_index + 1]; // skip the "tag" entry
 }
 
-Vector &UnionVector::GetMember(Vector &vector, idx_t index) {
-	D_ASSERT(index < UnionType::GetMemberCount(vector.GetType()));
+Vector &UnionVector::GetMember(Vector &vector, idx_t member_index) {
+	D_ASSERT(member_index < UnionType::GetMemberCount(vector.GetType()));
 	auto &entries = StructVector::GetEntries(vector);
-	return *entries[index + 1]; // skip the "tag" entry
+	return *entries[member_index + 1]; // skip the "tag" entry
 }
 
-union_tag_t *UnionVector::GetTags(Vector &v) {
+const Vector &UnionVector::GetTags(const Vector &vector) {
 	// the tag vector is always the first struct child.
-	auto &tag_vector = *StructVector::GetEntries(v)[0];
-	if (tag_vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(tag_vector);
-		return FlatVector::GetData<union_tag_t>(child);
-	}
-	return FlatVector::GetData<union_tag_t>(tag_vector);
+	return *StructVector::GetEntries(vector)[0];
 }
 
-const union_tag_t *UnionVector::GetTags(const Vector &vector) {
+Vector &UnionVector::GetTags(Vector &vector) {
 	// the tag vector is always the first struct child.
-	auto &tag_vector = *StructVector::GetEntries(vector)[0];
-	if (tag_vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(tag_vector);
-		return FlatVector::GetData<union_tag_t>(child);
+	return *StructVector::GetEntries(vector)[0];
+}
+
+void UnionVector::SetAllTags(Vector &vector, union_tag_t tag) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
+	D_ASSERT(tag < UnionType::GetMemberCount(vector.GetType()));
+
+	// the tag vector is always the first struct child.
+	auto &entries = StructVector::GetEntries(vector);
+	auto &tag_vector = *entries[0];
+
+	// set the tag to constant
+	tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::GetData<union_tag_t>(tag_vector)[0] = tag;
+
+	// set the non-selected members to constant null vectors
+	for (idx_t i = 0; i < entries.size() - 1; i++) {
+		if (i != tag) {
+			auto &member = *entries[1 + i];
+			member.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(member, true);
+		}
 	}
-	return FlatVector::GetData<union_tag_t>(tag_vector);
+}
+
+void UnionVector::SetToMember(Vector &vector, union_tag_t tag, Vector &member_vector) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
+	D_ASSERT(tag < UnionType::GetMemberCount(vector.GetType()));
+
+	// Set the union member to the specified vector
+	UnionVector::GetMember(vector, tag).Reference(member_vector);
+
+	// Since the tag is constant, we can set the tag vector type to constant
+	auto &tag_vector = UnionVector::GetTags(vector);
+	tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::GetData<union_tag_t>(UnionVector::GetTags(vector))[0] = tag;
+
+	// Set the non-selected members to constant null vectors
+	for (idx_t i = 0; i < UnionType::GetMemberCount(vector.GetType()); i++) {
+		if (i != tag) {
+			auto &member = UnionVector::GetMember(vector, i);
+			member.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(member, true);
+		}
+	}
+
+	// if the member vector is constant, we can set the union to constant too
+	if (member_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 union_tag_t UnionVector::GetTag(const Vector &vector, idx_t index) {
@@ -1777,31 +1828,6 @@ union_tag_t UnionVector::GetTag(const Vector &vector, idx_t index) {
 		return ConstantVector::GetData<union_tag_t>(tag_vector)[0];
 	}
 	return FlatVector::GetData<union_tag_t>(tag_vector)[index];
-}
-
-void UnionVector::SetTag(Vector &vector, idx_t index, union_tag_t tag) {
-	D_ASSERT(tag < UnionType::GetMemberCount(vector.GetType()));
-	// the tag vector is always the first struct child.
-	auto &tag_vector = *StructVector::GetEntries(vector)[0];
-	if (tag_vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(tag_vector);
-		FlatVector::GetData<union_tag_t>(child)[index] = tag;
-		return;
-	}
-	if (tag_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		ConstantVector::GetData<union_tag_t>(tag_vector)[0] = tag;
-		return;
-	}
-	FlatVector::GetData<union_tag_t>(tag_vector)[index] = tag;
-}
-
-void UnionVector::SetTags(Vector &vector, union_tag_t tag) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
-	D_ASSERT(tag < UnionType::GetMemberCount(vector.GetType()));
-	// the tag vector is always the first struct child.
-	auto &tag_vector = *StructVector::GetEntries(vector)[0];
-	tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::GetData<union_tag_t>(tag_vector)[0] = tag;
 }
 
 } // namespace duckdb
