@@ -28,7 +28,6 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, uni
                          bool can_destroy_p, idx_t block_size)
     : block_manager(block_manager), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p),
       unswizzled(nullptr) {
-	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	buffer = move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
 	memory_usage = block_size + Storage::BLOCK_HEADER_SIZE;

@@ -43,7 +43,7 @@ FileBuffer::~FileBuffer() {
 
 void FileBuffer::SetMallocedSize(uint64_t &bufsiz) {
 	// make room for the block header (if this is not the db file header)
-	if (type == FileBufferType::MANAGED_BUFFER && bufsiz != Storage::FILE_HEADER_SIZE) {
+	if (type == FileBufferType::MANAGED_BUFFER) {
 		bufsiz += Storage::BLOCK_HEADER_SIZE;
 	}
 	malloced_size = bufsiz;
