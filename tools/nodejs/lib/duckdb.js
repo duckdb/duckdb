@@ -128,10 +128,10 @@ Connection.prototype.all = function (sql) {
  * @param callback
  * @return {void}
  */
-Connection.prototype.arrowAll = function (sql) {
+Connection.prototype.arrowIPCAll = function (sql) {
     const query = "SELECT * FROM get_arrow_ipc((" + sql + "));";
     var statement = new Statement(this, query);
-    return statement.arrowAll.apply(statement, arguments);
+    return statement.arrowIPCAll.apply(statement, arguments);
 }
 
 /**
@@ -531,6 +531,18 @@ Database.prototype.all = function () {
 }
 
 /**
+ * Convenience method for Connection#apply using a built-in default connection
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Database.prototype.arrowIPCAll = function () {
+    default_connection(this).arrowIPCAll.apply(this.default_connection, arguments);
+    return this;
+}
+
+/**
  * Convenience method for Connection#arrowIPCStream using a built-in default connection
  * @arg sql
  * @param {...*} params
@@ -577,19 +589,6 @@ Database.prototype.register_udf = function () {
     default_connection(this).register_udf.apply(this.default_connection, arguments);
     return this;
 }
-
-/**
- * Unregister a User Defined Function
- *
- * Convenience method for Connection#unregister_udf
- * @arg name
- * @return {this}
- */
-Database.prototype.unregister_buffer = function () {
-    default_connection(this).unregister_udf.apply(this.default_connection, arguments);
-    return this;
-}
-
 
 /**
  * Register a Buffer
@@ -652,7 +651,7 @@ Statement.prototype.all;
  * @param callback
  * @return {void}
  */
-Statement.prototype.arrowAll;
+Statement.prototype.arrowIPCAll;
 /**
  * @method
  * @arg sql

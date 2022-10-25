@@ -18,7 +18,7 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	Napi::Function t =
 	    DefineClass(env, "Statement",
 	                {InstanceMethod("run", &Statement::Run), InstanceMethod("all", &Statement::All),
-	                 InstanceMethod("arrowAll", &Statement::ArrowAll), InstanceMethod("each", &Statement::Each),
+	                 InstanceMethod("arrowIPCAll", &Statement::ArrowIPCAll), InstanceMethod("each", &Statement::Each),
 	                 InstanceMethod("finalize", &Statement::Finish), InstanceMethod("stream", &Statement::Stream)});
 
 	constructor = Napi::Persistent(t);
@@ -483,7 +483,7 @@ Napi::Value Statement::All(const Napi::CallbackInfo &info) {
 	return info.This();
 }
 
-Napi::Value Statement::ArrowAll(const Napi::CallbackInfo &info) {
+Napi::Value Statement::ArrowIPCAll(const Napi::CallbackInfo &info) {
 	connection_ref->database_ref->Schedule(info.Env(),
 	                                       duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::ARROW_ALL));
 	return info.This();
