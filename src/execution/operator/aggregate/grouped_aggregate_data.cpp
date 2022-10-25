@@ -22,11 +22,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
 		auto &aggr = (BoundAggregateExpression &)*expr;
-		if (!aggr.IsDistinct()) {
-			// Since distinct aggregates are already added here, then they will immediately be targeted in Sink
-			// So we have to make sure to disable aggregating DISTINCT aggregates in the first step
-			bindings.push_back(&aggr);
-		}
+		bindings.push_back(&aggr);
 
 		aggregate_return_types.push_back(aggr.return_type);
 		for (auto &child : aggr.children) {

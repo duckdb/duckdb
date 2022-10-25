@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
@@ -149,6 +150,8 @@ public:
 	}
 
 	vector<HashAggregateGroupingGlobalState> grouping_states;
+	//! Whether or not the aggregate is finished
+	bool finished = false;
 };
 
 class HashAggregateLocalState : public LocalSinkState {
@@ -311,9 +314,11 @@ void PhysicalHashAggregate::CombineDistinct(ExecutionContext &context, GlobalSin
 		auto &distinct_data = groupings[i].distinct_data;
 		auto &distinct_state = grouping_gstate.distinct_state;
 
-		auto table_count = distinct_data->radix_tables.size();
+		const auto table_count = distinct_data->radix_tables.size();
 		for (idx_t table_idx = 0; table_idx < table_count; table_idx++) {
-			D_ASSERT(distinct_data->radix_tables[table_idx]);
+			if (!distinct_data->radix_tables[table_idx]) {
+				continue;
+			}
 			auto &radix_table = *distinct_data->radix_tables[table_idx];
 			auto &radix_global_sink = *distinct_state->radix_states[table_idx];
 			auto &radix_local_sink = *grouping_lstate.distinct_states[table_idx];
@@ -338,6 +343,8 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 		table.Combine(context, *grouping_gstate.table_state, *grouping_lstate.table_state);
 	}
 }
+
+//! REGULAR FINALIZE EVENT
 
 class HashAggregateFinalizeEvent : public BasePipelineEvent {
 public:
@@ -364,45 +371,243 @@ public:
 	}
 };
 
+//! DISTINCT FINALIZE TASK
+
+class HashDistinctAggregateFinalizeTask : public ExecutorTask {
+public:
+	HashDistinctAggregateFinalizeTask(Pipeline &pipeline, shared_ptr<Event> event_p, HashAggregateGlobalState &state_p,
+	                                  ClientContext &context, const PhysicalHashAggregate &op)
+	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(move(event_p)), gstate(state_p), context(context),
+	      op(op) {
+	}
+
+	void AggregateDistinctGrouping(DistinctAggregateCollectionInfo &info, DistinctAggregateData &data,
+	                               DistinctAggregateState &state) {
+		auto &aggregates = info.aggregates;
+		auto &payload_chunk = state.payload_chunk;
+
+		ThreadContext temp_thread_context(context);
+		ExecutionContext temp_exec_context(context, temp_thread_context);
+
+		idx_t payload_idx = 0;
+		idx_t next_payload_idx = 0;
+
+		//! Copy of the payload chunk, used to store the data of the radix table for use with the expression executor
+		//! We can not directly use the payload chunk because the input and the output to the expression executor can
+		//! not be the same Vector
+		DataChunk expression_executor_input;
+		expression_executor_input.InitializeEmpty(payload_chunk.GetTypes());
+		expression_executor_input.SetCardinality(0);
+
+		for (idx_t i = 0; i < aggregates.size(); i++) {
+			auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+
+			// Forward the payload idx
+			payload_idx = next_payload_idx;
+			next_payload_idx = payload_idx + aggregate.children.size();
+
+			// If aggregate is not distinct, skip it
+			if (!data.IsDistinct(i)) {
+				continue;
+			}
+			D_ASSERT(data.info.table_map.count(i));
+			auto table_idx = data.info.table_map.at(i);
+			auto &radix_table_p = data.radix_tables[table_idx];
+			auto &output_chunk = *state.distinct_output_chunks[table_idx];
+
+			//! Create global and local state for the hashtable
+			auto global_source_state = radix_table_p->GetGlobalSourceState(context);
+			auto local_source_state = radix_table_p->GetLocalSourceState(temp_exec_context);
+
+			//! Retrieve the stored data from the hashtable
+			while (true) {
+				payload_chunk.Reset();
+				output_chunk.Reset();
+				radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx],
+				                       *global_source_state, *local_source_state);
+				if (output_chunk.size() == 0) {
+					break;
+				}
+
+				for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
+					expression_executor_input.data[payload_idx + child_idx].Reference(output_chunk.data[child_idx]);
+				}
+				expression_executor_input.SetCardinality(output_chunk);
+				// We dont need to resolve the filter, we already did this in Sink
+				state.child_executor.SetChunk(expression_executor_input);
+
+				payload_chunk.SetCardinality(output_chunk);
+
+#ifdef DEBUG
+				gstate.state.counts[i] += payload_chunk.size();
+#endif
+
+				// resolve the child expressions of the aggregate (if any)
+				idx_t payload_cnt = 0;
+				for (auto &child : aggregate.children) {
+					//! Before executing, remap the indices to point to the payload_chunk
+					//! Originally these indices correspond to the 'input' chunk
+					//! So we need to filter out the data that was used for filters (if any)
+					auto &child_ref = (BoundReferenceExpression &)*child;
+					child_ref.index = payload_idx + payload_cnt;
+
+					//! The child_executor contains a pointer to the expression we altered above
+					state.child_executor.ExecuteExpression(payload_idx + payload_cnt,
+					                                       payload_chunk.data[payload_idx + payload_cnt]);
+					payload_cnt++;
+				}
+
+				auto start_of_input = payload_cnt ? &payload_chunk.data[payload_idx] : nullptr;
+				//! Update the aggregate state
+				AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
+				aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
+				                                 gstate.state.aggregates[i].get(), payload_chunk.size());
+			}
+		}
+		D_ASSERT(!gstate.finished);
+		gstate.finished = true;
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		D_ASSERT(op.distinct_collection_info);
+		auto &info = *op.distinct_collection_info;
+		for (idx_t i = 0; i < op.groupings.size(); i++) {
+			auto &grouping = op.groupings[i];
+			auto &distinct_data = *grouping.distinct_data;
+			auto &distinct_state = *gstate.grouping_states[i].distinct_state;
+			AggregateDistinctGrouping(info, distinct_data, distinct_state);
+		}
+		op.Finalize(pipeline, *event, context, gstate, false);
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	Pipeline &pipeline;
+	shared_ptr<Event> event;
+	HashAggregateGlobalState &gstate;
+	ClientContext &context;
+	const PhysicalHashAggregate &op;
+};
+
+//! DISTINCT FINALIZE EVENT
+
+// TODO: Create tasks and run these in parallel instead of doing this all in Schedule, single threaded
+class HashDistinctAggregateFinalizeEvent : public BasePipelineEvent {
+public:
+	HashDistinctAggregateFinalizeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p,
+	                                   Pipeline &pipeline_p, ClientContext &context)
+	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), context(context) {
+	}
+	const PhysicalHashAggregate &op;
+	HashAggregateGlobalState &gstate;
+	ClientContext &context;
+
+public:
+	void Schedule() override {
+		vector<unique_ptr<Task>> tasks;
+		tasks.push_back(
+		    make_unique<HashDistinctAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate, context, op));
+		D_ASSERT(!tasks.empty());
+		SetTasks(move(tasks));
+	}
+};
+
+//! DISTINCT COMBINE EVENT
+
+class HashDistinctCombineFinalizeEvent : public BasePipelineEvent {
+public:
+	HashDistinctCombineFinalizeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p,
+	                                 Pipeline &pipeline_p, ClientContext &client)
+	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), client(client) {
+	}
+
+	const PhysicalHashAggregate &op;
+	HashAggregateGlobalState &gstate;
+	ClientContext &client;
+
+public:
+	void Schedule() override {
+		vector<unique_ptr<Task>> tasks;
+		for (idx_t i = 0; i < op.groupings.size(); i++) {
+			auto &grouping = op.groupings[i];
+			auto &distinct_data = *grouping.distinct_data;
+			auto &distinct_state = *gstate.grouping_states[i].distinct_state;
+			for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
+				if (!distinct_data.radix_tables[table_idx]) {
+					continue;
+				}
+				distinct_data.radix_tables[table_idx]->ScheduleTasks(pipeline->executor, shared_from_this(),
+				                                                     *distinct_state.radix_states[table_idx], tasks);
+			}
+		}
+
+		//! Now that all tables are combined, it's time to do the distinct aggregations
+		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
+		this->InsertEvent(move(new_event));
+
+		D_ASSERT(!tasks.empty());
+		SetTasks(move(tasks));
+	}
+};
+
+//! FINALIZE
+
 SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
                                                          GlobalSinkState &gstate_p) const {
-	// auto &gstate = (HashAggregateGlobalState &)gstate_p;
-	// D_ASSERT(gstate.distinct_data);
-	// auto &distinct_aggregate_data = *gstate.distinct_data;
-	// auto &payload_chunk = distinct_aggregate_data.payload_chunk;
+	auto &gstate = (HashAggregateGlobalState &)gstate_p;
+	D_ASSERT(distinct_collection_info);
+	auto &distinct_info = *distinct_collection_info;
 
-	////! Copy of the payload chunk, used to store the data of the radix table for use with the expression executor
-	////! We can not directly use the payload chunk because the input and the output to the expression executor can not
-	/// be
-	////! the same Vector
-	// DataChunk expression_executor_input;
-	// expression_executor_input.InitializeEmpty(payload_chunk.GetTypes());
-	// expression_executor_input.SetCardinality(0);
+	//! Copy of the payload chunk, used to store the data of the radix table for use with the expression executor
+	//! We can not directly use the payload chunk because the input and the output to the expression executor can not
+	//! be the same Vector
+	bool any_partitioned = false;
+	for (idx_t i = 0; i < groupings.size(); i++) {
+		auto &grouping = groupings[i];
+		auto &distinct_data = *grouping.distinct_data;
+		auto &distinct_state = *gstate.grouping_states[i].distinct_state;
+		auto &payload_chunk = distinct_state.payload_chunk;
+		DataChunk expression_executor_input;
+		expression_executor_input.InitializeEmpty(payload_chunk.GetTypes());
+		expression_executor_input.SetCardinality(0);
 
-	// bool any_partitioned = false;
-	// for (idx_t table_idx = 0; table_idx < distinct_aggregate_data.radix_tables.size(); table_idx++) {
-	//	auto &radix_table_p = distinct_aggregate_data.radix_tables[table_idx];
-	//	auto &radix_state = *distinct_aggregate_data.radix_states[table_idx];
-	//	bool partitioned = radix_table_p->Finalize(context, radix_state);
-	//	if (partitioned) {
-	//		any_partitioned = true;
-	//	}
-	// }
-	// if (any_partitioned) {
-	//	auto new_event = make_shared<DistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
-	//	event.InsertEvent(move(new_event));
-	// } else {
-	//	//! Hashtables aren't partitioned, they dont need to be joined first
-	//	//! So we can compute the aggregate already
-	//	auto new_event = make_shared<DistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
-	//	event.InsertEvent(move(new_event));
-	// }
+		for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
+			if (!distinct_data.radix_tables[i]) {
+				continue;
+			}
+			auto &radix_table = distinct_data.radix_tables[table_idx];
+			auto &radix_state = *distinct_state.radix_states[table_idx];
+			bool partitioned = radix_table->Finalize(context, radix_state);
+			if (partitioned) {
+				any_partitioned = true;
+			}
+		}
+	}
+	if (any_partitioned) {
+		// If any of the groupings are partitioned then we first need to combine those, then aggregate
+		auto new_event = make_shared<HashDistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
+		event.InsertEvent(move(new_event));
+	} else {
+		//! Hashtables aren't partitioned, they dont need to be joined first
+		//! So we can compute the aggregate already
+		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
+		event.InsertEvent(move(new_event));
+	}
 	return SinkFinalizeType::READY;
 }
 
 SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                 GlobalSinkState &gstate_p) const {
+                                                 GlobalSinkState &gstate_p, bool check_distinct) const {
 	auto &gstate = (HashAggregateGlobalState &)gstate_p;
+
+	if (check_distinct && distinct_collection_info) {
+		// There are distinct aggregates
+		// If these are partitioned those need to be combined first
+		// Then we Finalize again, skipping this step
+		return FinalizeDistinct(pipeline, event, context, gstate_p);
+	}
+
 	bool any_partitioned = false;
 	for (idx_t i = 0; i < groupings.size(); i++) {
 		auto &grouping = groupings[i];
@@ -418,6 +623,11 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 		event.InsertEvent(move(new_event));
 	}
 	return SinkFinalizeType::READY;
+}
+
+SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                 GlobalSinkState &gstate_p) const {
+	return Finalize(pipeline, event, context, gstate_p, true);
 }
 
 //===--------------------------------------------------------------------===//

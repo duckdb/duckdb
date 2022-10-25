@@ -128,7 +128,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 	group_chunk.SetCardinality(groups_input.size());
 	group_chunk.Verify();
 
-	// if we have non-combinable aggregates (e.g. string_agg) or any distinct aggregates we cannot keep parallel hash
+	// if we have non-combinable aggregates (e.g. string_agg) we cannot keep parallel hash
 	// tables
 	if (ForceSingleHT(state)) {
 		lock_guard<mutex> glock(gstate.lock);

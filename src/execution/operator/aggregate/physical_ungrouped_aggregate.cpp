@@ -332,10 +332,11 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	client_profiler.Flush(context.thread.profiler);
 }
 
-class DistinctAggregateFinalizeTask : public ExecutorTask {
+class UngroupedDistinctAggregateFinalizeTask : public ExecutorTask {
 public:
-	DistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, UngroupedAggregateGlobalState &state_p,
-	                              ClientContext &context, const PhysicalUngroupedAggregate &op)
+	UngroupedDistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p,
+	                                       UngroupedAggregateGlobalState &state_p, ClientContext &context,
+	                                       const PhysicalUngroupedAggregate &op)
 	    : ExecutorTask(executor), event(move(event_p)), gstate(state_p), context(context), op(op) {
 	}
 
@@ -424,6 +425,7 @@ public:
 				                                 gstate.state.aggregates[i].get(), payload_chunk.size());
 			}
 		}
+		// TODO: cant the global HT become partitioned because of this?
 		D_ASSERT(!gstate.finished);
 		gstate.finished = true;
 	}
@@ -442,10 +444,11 @@ private:
 };
 
 // TODO: Create tasks and run these in parallel instead of doing this all in Schedule, single threaded
-class DistinctAggregateFinalizeEvent : public BasePipelineEvent {
+class UngroupedDistinctAggregateFinalizeEvent : public BasePipelineEvent {
 public:
-	DistinctAggregateFinalizeEvent(const PhysicalUngroupedAggregate &op_p, UngroupedAggregateGlobalState &gstate_p,
-	                               Pipeline &pipeline_p, ClientContext &context)
+	UngroupedDistinctAggregateFinalizeEvent(const PhysicalUngroupedAggregate &op_p,
+	                                        UngroupedAggregateGlobalState &gstate_p, Pipeline &pipeline_p,
+	                                        ClientContext &context)
 	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), context(context) {
 	}
 	const PhysicalUngroupedAggregate &op;
@@ -455,17 +458,18 @@ public:
 public:
 	void Schedule() override {
 		vector<unique_ptr<Task>> tasks;
-		tasks.push_back(
-		    make_unique<DistinctAggregateFinalizeTask>(pipeline->executor, shared_from_this(), gstate, context, op));
+		tasks.push_back(make_unique<UngroupedDistinctAggregateFinalizeTask>(pipeline->executor, shared_from_this(),
+		                                                                    gstate, context, op));
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
 	}
 };
 
-class DistinctCombineFinalizeEvent : public BasePipelineEvent {
+class UngroupedDistinctCombineFinalizeEvent : public BasePipelineEvent {
 public:
-	DistinctCombineFinalizeEvent(const PhysicalUngroupedAggregate &op_p, UngroupedAggregateGlobalState &gstate_p,
-	                             Pipeline &pipeline_p, ClientContext &client)
+	UngroupedDistinctCombineFinalizeEvent(const PhysicalUngroupedAggregate &op_p,
+	                                      UngroupedAggregateGlobalState &gstate_p, Pipeline &pipeline_p,
+	                                      ClientContext &client)
 	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), client(client) {
 	}
 
@@ -479,7 +483,7 @@ public:
 		auto &distinct_data = *op.distinct_data;
 
 		//! Now that all tables are combined, it's time to do the distinct aggregations
-		auto new_event = make_shared<DistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
+		auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
 		this->InsertEvent(move(new_event));
 
 		vector<unique_ptr<Task>> tasks;
@@ -516,12 +520,12 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 		}
 	}
 	if (any_partitioned) {
-		auto new_event = make_shared<DistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
+		auto new_event = make_shared<UngroupedDistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
 		event.InsertEvent(move(new_event));
 	} else {
 		//! Hashtables aren't partitioned, they dont need to be joined first
 		//! So we can compute the aggregate already
-		auto new_event = make_shared<DistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
+		auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
 		event.InsertEvent(move(new_event));
 	}
 	return SinkFinalizeType::READY;
