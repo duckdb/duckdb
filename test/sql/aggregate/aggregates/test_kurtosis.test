@@ -71,8 +71,6 @@ NULL
 -3.977599
 
 # Window Function
-require vector_size 512
-
 query I rowsort
 select kurtosis(v2) over (partition by v)
     from aggr;

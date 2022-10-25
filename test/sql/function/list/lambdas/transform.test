@@ -269,8 +269,6 @@ SELECT list_transform([1, 2, 3], x -> x + #1) FROM range(10)
 
 # test for issue 4855
 
-require vector_size 512
-
 statement ok
 create table test(a int, b int);
 

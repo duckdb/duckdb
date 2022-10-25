@@ -39,7 +39,7 @@ using block_id_t = int64_t;
 //! file.
 struct MainHeader {
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
-	static constexpr idx_t MAGIC_BYTE_OFFSET = sizeof(uint64_t);
+	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
 	// the magic bytes in front of the file
 	// should be "DUCK"

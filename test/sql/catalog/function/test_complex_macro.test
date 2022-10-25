@@ -277,8 +277,6 @@ doc1	 QUÁCK+QUÁCK+QUÁCK
 doc2	 BÁRK+BÁRK+BÁRK+BÁRK
 
 # macro with window function
-require vector_size 512
-
 statement ok
 CREATE MACRO mywindow(k,v) AS SUM(v) OVER (PARTITION BY k)
 

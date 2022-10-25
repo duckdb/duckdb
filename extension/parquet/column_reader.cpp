@@ -665,7 +665,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		// we have read more values from the child reader than we can fit into the result for this read
 		// we have to pass everything from child_idx to child_actual_num_values into the next call
 		if (child_idx < child_actual_num_values && result_offset == num_values) {
-			read_vector.Slice(read_vector, child_idx);
+			read_vector.Slice(read_vector, child_idx, child_actual_num_values);
 			overflow_child_count = child_actual_num_values - child_idx;
 			read_vector.Verify(overflow_child_count);
 

@@ -36,8 +36,8 @@ void ColumnDataAllocator::AllocateBlock() {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = Storage::BLOCK_ALLOC_SIZE;
-	data.handle = alloc.buffer_manager->RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+	data.capacity = Storage::BLOCK_SIZE;
+	data.handle = alloc.buffer_manager->RegisterMemory(Storage::BLOCK_SIZE, false);
 	blocks.push_back(move(data));
 }
 
