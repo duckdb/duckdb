@@ -41,7 +41,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 	// transient: allocate a buffer for the uncompressed segment
 	auto allocation_size = Storage::BLOCK_SIZE;
-	if (start == idx_t(MAX_ROW_ID)) {
+	if (start == LocalStorage::TRANSACTION_ROW_BEGIN) {
 		allocation_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
 	}
 	auto block = BufferManager::GetBufferManager(db).RegisterMemory(allocation_size, false);
