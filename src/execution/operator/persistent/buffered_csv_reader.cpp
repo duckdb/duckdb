@@ -217,15 +217,31 @@ public:
 	}
 
 	string ReadLine() {
+		bool carriage_return = false;
 		string result;
 		char buffer[1];
 		while (true) {
-			idx_t tuples_read = Read(buffer, 1);
-			if (tuples_read == 0 || buffer[0] == '\n') {
+			idx_t bytes_read = Read(buffer, 1);
+			if (bytes_read == 0) {
+				return result;
+			}
+			if (carriage_return) {
+				if (buffer[0] != '\n') {
+					if (!file_handle->CanSeek()) {
+						throw BinderException(
+						    "Carriage return newlines not supported when reading CSV files in which we cannot seek");
+					}
+					file_handle->Seek(file_handle->SeekPosition() - 1);
+					return result;
+				}
+			}
+			if (buffer[0] == '\n') {
 				return result;
 			}
 			if (buffer[0] != '\r') {
 				result += buffer[0];
+			} else {
+				carriage_return = true;
 			}
 		}
 	}
