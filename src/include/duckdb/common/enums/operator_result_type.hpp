@@ -23,6 +23,11 @@ namespace duckdb {
 //! The operator will not be called again, and neither will any other operators in this pipeline.
 enum class OperatorResultType : uint8_t { NEED_MORE_INPUT, HAVE_MORE_OUTPUT, FINISHED };
 
+//! OperatorFinalizeResultType is used to indicate whether operators have finished flushing their cached results.
+//! FINISHED means the operator has flushed all cached data.
+//! HAVE_MORE_OUTPUT means the operator contains more results.
+enum class OperatorFinalizeResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED };
+
 //! The SinkResultType is used to indicate the result of data flowing into a sink
 //! There are two possible results:
 //! NEED_MORE_INPUT means the sink needs more input
