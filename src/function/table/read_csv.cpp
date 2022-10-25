@@ -222,10 +222,13 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 			return nullptr;
 		}
 		file_handle = global_state.file_handle.get();
+		global_state.children++;
 	}
+	unique_ptr<CSVFileHandle> file_handle_true = ReadCSV::OpenCSV(csv_data.options, context.client);
 	auto csv_reader = make_unique<BufferedCSVReader>(context.client, csv_data.options, file_handle, csv_data.sql_types);
 	auto new_local_state =
 	    make_unique<ReadCSVLocalState>(global_state, csv_data.options.bytes_per_thread, move(csv_reader));
+	new_local_state->file_handle = move(file_handle_true);
 	return move(new_local_state);
 }
 
@@ -246,17 +249,13 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 
 	do {
-		// Set the correct position of csv reader
-		csv_local_state.SetPosition();
-		csv_local_state.csv_reader->ParseCSV(output);
-		//		csv_global_state.bytes_read = csv_global_state.csv_reader->bytes_in_chunk;
-		if (csv_local_state.csv_reader->position + csv_local_state.buffer_position >= csv_local_state.end_byte) {
-
-			//			csv_local_state.Next();
-			if (!csv_local_state.Next()) {
-				csv_local_state.csv_reader->Flush(output);
+		while (output.size() == 0 && csv_local_state.Valid()) {
+			csv_local_state.csv_reader->ParseCSV(output);
+			if (csv_local_state.csv_reader->finished) {
+				csv_local_state.Next();
 			}
-		} else if (output.size() == 0 && csv_global_state.file_index < bind_data.files.size()) {
+		}
+		if (output.size() == 0 && csv_global_state.file_index < bind_data.files.size()) {
 			D_ASSERT(0);
 			// exhausted this file, but we have more files we can read
 			// open the next file and increment the counter
@@ -265,17 +264,27 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			//			if (bind_data.options.union_by_name) {
 			//				D_ASSERT(0);
 			////				csv_global_state.csv_reader =
-			///move(bind_data.union_readers[csv_global_state.file_index]);
+			/// move(bind_data.union_readers[csv_global_state.file_index]);
 			//			} else {
 			//				csv_global_state.csv_reader =
 			//				    make_unique<BufferedCSVReader>(context, bind_data.options,
-			//csv_global_state.csv_reader->sql_types);
+			// csv_global_state.csv_reader->sql_types);
 			//			}
 			csv_global_state.file_index++;
 		} else {
 			break;
 		}
 	} while (true);
+	{
+		lock_guard<mutex> parallel_lock(csv_global_state.main_mutex);
+		if (csv_global_state.children_done == csv_global_state.children) {
+			if (output.size() == 0) {
+				csv_local_state.csv_reader->ResetBuffer();
+				csv_local_state.csv_reader->ParseCSV(output, &csv_global_state.remainder_lines);
+				csv_global_state.children_done++;
+			}
+		}
+	}
 
 	if (bind_data.options.union_by_name) {
 		D_ASSERT(0);

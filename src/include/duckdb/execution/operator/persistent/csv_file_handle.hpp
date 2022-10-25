@@ -121,6 +121,8 @@ public:
 	void DisableReset() {
 		this->reset_enabled = false;
 	}
+	mutex main_mutex;
+	idx_t count = 0;
 
 private:
 	unique_ptr<FileHandle> file_handle;

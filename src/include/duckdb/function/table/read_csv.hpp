@@ -88,6 +88,14 @@ struct ReadCSVGlobalState : public GlobalTableFunctionState {
 	idx_t file_size;
 	//! How many bytes we should execute per local state
 	idx_t bytes_per_local_state;
+	//! If we finished reading the whole file
+	bool finished_file = false;
+	//! The remainder of Lines
+	RemainderLines remainder_lines;
+
+	idx_t children = 0;
+	idx_t children_done = 0;
+
 	idx_t MaxThreads() const override;
 };
 
@@ -95,50 +103,57 @@ struct ReadCSVLocalState : public LocalTableFunctionState {
 	ReadCSVLocalState(ReadCSVGlobalState &global_state, idx_t bytes_per_thread_p,
 	                  unique_ptr<BufferedCSVReader> csv_reader_p)
 	    : global_state(global_state), bytes_per_thread(bytes_per_thread_p), csv_reader(move(csv_reader_p)) {
-		Next();
 		file_size = csv_reader->file_handle->FileSize();
+		csv_reader->bytes_per_thread = bytes_per_thread;
+		Next();
 	}
 
-	bool Next() {
+	void Next() {
+		if (start_byte > file_size) {
+			return;
+		}
 		{
 			lock_guard<mutex> parallel_lock(global_state.main_mutex);
+			// Update the Global State with Remainder Lines
+			if (csv_reader->reminder_start) {
+				auto start = csv_reader->reminder_start->start;
+				global_state.remainder_lines.start_remainder[start] = move(csv_reader->reminder_start);
+			}
+			if (csv_reader->reminder_end) {
+				auto start = csv_reader->reminder_end->start;
+				global_state.remainder_lines.end_remainder[start] = move(csv_reader->reminder_end);
+			}
+			// Update Global State Next Position
 			start_byte = global_state.next_byte;
 			global_state.next_byte += bytes_per_thread;
+			if (start_byte > file_size) {
+				global_state.finished_file = true;
+				global_state.children_done++;
+			}
 		}
-		end_byte = start_byte + bytes_per_thread;
+		// We have to set the positions of the csv_reader
+		csv_reader->ResetBuffer();
+		csv_reader->start_buffer = start_byte;
+		csv_reader->position_buffer = start_byte;
+		csv_reader->start_position_csv = start_byte;
 		csv_reader->start_reading = false;
-		return Valid();
+		csv_reader->finished = false;
 	}
 
 	bool Valid() {
 		return start_byte < file_size;
 	}
 
-	void SetPosition() {
-		//		if (!start_reading){
-		csv_reader->start_byte = start_byte - buffer_position;
-		csv_reader->start = start_byte;
-		csv_reader->position = start_byte - buffer_position;
-		csv_reader->end_byte = end_byte - buffer_position;
-		buffer_position = start_byte;
-		//			start_reading = true;
-		//		}
-	}
-
 	ReadCSVGlobalState &global_state;
-	//! Start Byte
-	idx_t start_byte;
-	//! End Byte
-	idx_t end_byte;
+	//! Start Byte (Relative to CSV File)
+	idx_t start_byte = 0;
 	//! How many bytes per thread
-	idx_t bytes_per_thread;
-	//! Current (Real) Buffer Position
-	idx_t buffer_position = 0;
-
+	idx_t bytes_per_thread = 0;
 	//! The File Size
-	idx_t file_size;
+	idx_t file_size = 0;
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
+	unique_ptr<CSVFileHandle> file_handle;
 };
 
 } // namespace duckdb
