@@ -291,49 +291,49 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 			payload_idx += aggr.child_count;
 			continue;
 		}
-		if (aggr.IsDistinct()) {
-			// construct chunk for secondary hash table probing
-			vector<LogicalType> probe_types(groups.GetTypes());
-			for (idx_t i = 0; i < aggr.child_count; i++) {
-				probe_types.push_back(payload_types[payload_idx + i]);
-			}
-			DataChunk probe_chunk;
-			probe_chunk.Initialize(Allocator::DefaultAllocator(), probe_types);
-			for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
-				probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
-			}
-			for (idx_t i = 0; i < aggr.child_count; i++) {
-				probe_chunk.data[groups.ColumnCount() + i].Reference(payload.data[payload_idx + i]);
-			}
-			probe_chunk.SetCardinality(groups);
-			probe_chunk.Verify();
+		// if (aggr.IsDistinct()) {
+		//	// construct chunk for secondary hash table probing
+		//	vector<LogicalType> probe_types(groups.GetTypes());
+		//	for (idx_t i = 0; i < aggr.child_count; i++) {
+		//		probe_types.push_back(payload_types[payload_idx + i]);
+		//	}
+		//	DataChunk probe_chunk;
+		//	probe_chunk.Initialize(Allocator::DefaultAllocator(), probe_types);
+		//	for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
+		//		probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
+		//	}
+		//	for (idx_t i = 0; i < aggr.child_count; i++) {
+		//		probe_chunk.data[groups.ColumnCount() + i].Reference(payload.data[payload_idx + i]);
+		//	}
+		//	probe_chunk.SetCardinality(groups);
+		//	probe_chunk.Verify();
 
-			Vector dummy_addresses(LogicalType::POINTER);
-			// this is the actual meat, find out which groups plus payload
-			// value have not been seen yet
-			idx_t new_group_count =
-			    distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, new_groups);
-			if (new_group_count > 0) {
-				// now fix up the payload and addresses accordingly by creating
-				// a selection vector
-				DataChunk distinct_payload;
-				distinct_payload.Initialize(Allocator::DefaultAllocator(), payload.GetTypes());
-				distinct_payload.Slice(payload, new_groups, new_group_count);
-				distinct_payload.Verify();
+		//	Vector dummy_addresses(LogicalType::POINTER);
+		//	// this is the actual meat, find out which groups plus payload
+		//	// value have not been seen yet
+		//	idx_t new_group_count =
+		//	    distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, new_groups);
+		//	if (new_group_count > 0) {
+		//		// now fix up the payload and addresses accordingly by creating
+		//		// a selection vector
+		//		DataChunk distinct_payload;
+		//		distinct_payload.Initialize(Allocator::DefaultAllocator(), payload.GetTypes());
+		//		distinct_payload.Slice(payload, new_groups, new_group_count);
+		//		distinct_payload.Verify();
 
-				Vector distinct_addresses(addresses, new_groups, new_group_count);
-				distinct_addresses.Verify(new_group_count);
+		//		Vector distinct_addresses(addresses, new_groups, new_group_count);
+		//		distinct_addresses.Verify(new_group_count);
 
-				if (aggr.filter) {
-					distinct_addresses.Flatten(new_group_count);
-					RowOperations::UpdateFilteredStates(filter_set.GetFilterData(aggr_idx), aggr, distinct_addresses,
-					                                    distinct_payload, payload_idx);
-				} else {
-					RowOperations::UpdateStates(aggr, distinct_addresses, distinct_payload, payload_idx,
-					                            new_group_count);
-				}
-			}
-		} else if (aggr.filter) {
+		//		if (aggr.filter) {
+		//			distinct_addresses.Flatten(new_group_count);
+		//			RowOperations::UpdateFilteredStates(filter_set.GetFilterData(aggr_idx), aggr, distinct_addresses,
+		//			                                    distinct_payload, payload_idx);
+		//		} else {
+		//			RowOperations::UpdateStates(aggr, distinct_addresses, distinct_payload, payload_idx,
+		//			                            new_group_count);
+		//		}
+		//	}
+		if (aggr.filter) {
 			RowOperations::UpdateFilteredStates(filter_set.GetFilterData(aggr_idx), aggr, addresses, payload,
 			                                    payload_idx);
 		} else {

@@ -2,6 +2,8 @@
 # description: DISTINCT aggregations, without GROUP BY
 # group: [ungrouped]
 
+# FIXME: this is string aggr, which goes through the HashAggregateOperator, so this is in fact 'grouped'
+
 statement ok
 create or replace table tbl as select * FROM ( VALUES
 	([repeat('a', 1000000)]),

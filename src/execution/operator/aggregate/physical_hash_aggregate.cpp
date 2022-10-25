@@ -438,9 +438,9 @@ public:
 
 				payload_chunk.SetCardinality(output_chunk);
 
-#ifdef DEBUG
-				gstate.state.counts[i] += payload_chunk.size();
-#endif
+				//#ifdef DEBUG
+				//				gstate.state.counts[i] += payload_chunk.size();
+				//#endif
 
 				// resolve the child expressions of the aggregate (if any)
 				idx_t payload_cnt = 0;
@@ -460,8 +460,8 @@ public:
 				auto start_of_input = payload_cnt ? &payload_chunk.data[payload_idx] : nullptr;
 				//! Update the aggregate state
 				AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
-				aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
-				                                 gstate.state.aggregates[i].get(), payload_chunk.size());
+				// aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
+				//                                  gstate.state.aggregates[i].get(), payload_chunk.size());
 			}
 		}
 		D_ASSERT(!gstate.finished);
@@ -627,7 +627,8 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 
 SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                  GlobalSinkState &gstate_p) const {
-	return Finalize(pipeline, event, context, gstate_p, true);
+	return Finalize(pipeline, event, context, gstate_p, false); // DELETE ME
+	// return Finalize(pipeline, event, context, gstate_p, true); //
 }
 
 //===--------------------------------------------------------------------===//
