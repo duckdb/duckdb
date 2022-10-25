@@ -190,10 +190,7 @@ bool Date::ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &res
 	return false;
 }
 
-static bool TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const char *special, bool strict) {
-	if (strict) {
-		return false;
-	}
+static bool TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const char *special) {
 	auto p = pos;
 	for (; p < len && *special; ++p) {
 		const auto s = *special++;
@@ -234,9 +231,9 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	}
 	if (!StringUtil::CharacterIsDigit(buf[pos])) {
 		// Check for special values
-		if (TryConvertDateSpecial(buf, len, pos, PINF, strict)) {
+		if (TryConvertDateSpecial(buf, len, pos, PINF)) {
 			result = yearneg ? date_t::ninfinity() : date_t::infinity();
-		} else if (TryConvertDateSpecial(buf, len, pos, EPOCH, strict)) {
+		} else if (TryConvertDateSpecial(buf, len, pos, EPOCH)) {
 			result = date_t::epoch();
 		} else {
 			return false;

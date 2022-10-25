@@ -1382,7 +1382,7 @@ bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, string 
 
 template <>
 bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
-	return Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result);
 }
 
 template <>
