@@ -440,6 +440,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 		chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(chunk.data[null_group], true);
 	}
+	D_ASSERT(grouping_set.size() + null_groups.size() == op.GroupCount());
 	for (idx_t col_idx = 0; col_idx < op.aggregates.size(); col_idx++) {
 		chunk.data[op.GroupCount() + col_idx].Reference(lstate.scan_chunk.data[group_types.size() + col_idx]);
 	}

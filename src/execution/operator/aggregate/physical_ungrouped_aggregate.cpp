@@ -201,6 +201,8 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 		auto &radix_global_sink = *distinct_state.radix_states[table_idx];
 		auto &radix_local_sink = *sink.radix_states[table_idx];
 
+		// FIXME: why is this being done here? The 'Sink' method already applies a filter if needed
+		// Ah that one only applies the filter to the payload, not the groups..
 		if (aggregate.filter) {
 			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.filter_set.GetFilterData(idx);
@@ -390,6 +392,7 @@ public:
 					break;
 				}
 
+				// Retrieve the 'groups' part of the scan chunk
 				for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
 					expression_executor_input.data[payload_idx + child_idx].Reference(output_chunk.data[child_idx]);
 				}
@@ -406,9 +409,9 @@ public:
 				// resolve the child expressions of the aggregate (if any)
 				idx_t payload_cnt = 0;
 				for (auto &child : aggregate.children) {
-					//! Before executing, remap the indices to point to the payload_chunk
-					//! Originally these indices correspond to the 'input' chunk
-					//! So we need to filter out the data that was used for filters (if any)
+					// Before executing, remap the indices to point to the payload_chunk
+					// Originally these indices correspond to the 'input' chunk,
+					// but 'groups' are placed at the very front of the chunk received from GetData
 					auto &child_ref = (BoundReferenceExpression &)*child;
 					child_ref.index = payload_idx + payload_cnt;
 

@@ -168,10 +168,19 @@ public:
 			grouping_states.emplace_back(op, grouping, context);
 		}
 		// FIXME: missing filter_set??
+		// The filter set is only needed here for the distinct aggregates
+		// the filtering of data for the regular aggregates is done within the hashtable
+		vector<AggregateObject> aggregate_objects;
+		for (auto &aggregate : op.grouped_aggregate_data.aggregates) {
+			auto &aggr = (BoundAggregateExpression &)*aggregate;
+			aggregate_objects.emplace_back(&aggr);
+		}
+		filter_set.Initialize(Allocator::Get(context.client), aggregate_objects, payload_types);
 	}
 
 	DataChunk aggregate_input_chunk;
 	vector<HashAggregateGroupingLocalState> grouping_states;
+	AggregateFilterDataSet filter_set;
 };
 
 void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
@@ -225,17 +234,17 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 		auto &radix_global_sink = *distinct_state->radix_states[table_idx];
 		auto &radix_local_sink = *grouping_lstate.distinct_states[table_idx];
 
-		// if (aggregate.filter) {
-		//	// Apply the filter before inserting into the hashtable
-		//	auto &filtered_data = sink.filter_set.GetFilterData(idx);
-		//	idx_t count = filtered_data.ApplyFilter(input);
-		//	filtered_data.filtered_payload.SetCardinality(count);
+		if (aggregate.filter) {
+			// Apply the filter before inserting into the hashtable
+			auto &filtered_data = sink.filter_set.GetFilterData(idx);
+			idx_t count = filtered_data.ApplyFilter(input);
+			filtered_data.filtered_payload.SetCardinality(count);
 
-		//	radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload,
-		//	                 filtered_data.filtered_payload);
-		//} else {
-		//	radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input);
-		//}
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload,
+			                 filtered_data.filtered_payload, AggregateType::DISTINCT);
+		} else {
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input, AggregateType::DISTINCT);
+		}
 		radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input, AggregateType::DISTINCT);
 	}
 }
