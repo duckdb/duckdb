@@ -45,8 +45,8 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 		}
 		D_ASSERT(data.info.table_map.count(i));
 		idx_t table_idx = data.info.table_map.at(i);
-		if (data.radix_tables[table_idx] != nullptr) {
-			//! This aggregate shares a table with another aggregate, and the table is already initialized
+		if (data.radix_tables[table_idx] == nullptr) {
+			//! This table is unused because the aggregate shares its data with another
 			continue;
 		}
 
