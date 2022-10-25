@@ -102,7 +102,6 @@ class LocalStorage {
 public:
 	// Threshold to merge row groups instead of appending
 	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE / 2;
-	static constexpr const idx_t TRANSACTION_ROW_BEGIN = 4611686018427388000ULL; // 2^62
 
 public:
 	struct CommitState {

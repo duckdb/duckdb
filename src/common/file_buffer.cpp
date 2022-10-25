@@ -10,11 +10,21 @@
 
 namespace duckdb {
 
-FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsiz)
-    : allocator(allocator), type(type), malloced_buffer(nullptr) {
-	SetMallocedSize(bufsiz);
-	malloced_buffer = allocator.AllocateData(malloced_size);
-	Construct(bufsiz);
+FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size)
+    : allocator(allocator), type(type) {
+	Init();
+	if (user_size) {
+		Resize(user_size);
+	}
+}
+
+void FileBuffer::Init() {
+	buffer = nullptr;
+	size = 0;
+	internal_buffer = nullptr;
+	internal_size = 0;
+	malloced_buffer = nullptr;
+	malloced_size = 0;
 }
 
 FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(source.allocator), type(type_p) {
@@ -26,12 +36,7 @@ FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(so
 	malloced_buffer = source.malloced_buffer;
 	malloced_size = source.malloced_size;
 
-	source.buffer = nullptr;
-	source.size = 0;
-	source.internal_buffer = nullptr;
-	source.internal_size = 0;
-	source.malloced_buffer = nullptr;
-	source.malloced_size = 0;
+	source.Init();
 }
 
 FileBuffer::~FileBuffer() {
@@ -41,30 +46,42 @@ FileBuffer::~FileBuffer() {
 	allocator.FreeData(malloced_buffer, malloced_size);
 }
 
-void FileBuffer::SetMallocedSize(uint64_t &bufsiz) {
-	// make room for the block header (if this is not the db file header)
-	if (type == FileBufferType::MANAGED_BUFFER && bufsiz != Storage::FILE_HEADER_SIZE) {
-		bufsiz += Storage::BLOCK_HEADER_SIZE;
+void FileBuffer::ReallocBuffer(size_t new_size) {
+	if (malloced_buffer) {
+		malloced_buffer = allocator.ReallocateData(malloced_buffer, malloced_size, new_size);
+	} else {
+		malloced_buffer = allocator.AllocateData(new_size);
 	}
-	malloced_size = bufsiz;
-}
-
-void FileBuffer::Construct(uint64_t bufsiz) {
 	if (!malloced_buffer) {
 		throw std::bad_alloc();
 	}
+	malloced_size = new_size;
 	internal_buffer = malloced_buffer;
 	internal_size = malloced_size;
-	buffer = internal_buffer + Storage::BLOCK_HEADER_SIZE;
-	size = internal_size - Storage::BLOCK_HEADER_SIZE;
+	// Caller must update these.
+	buffer = nullptr;
+	size = 0;
 }
 
-void FileBuffer::Resize(uint64_t bufsiz) {
-	D_ASSERT(type == FileBufferType::MANAGED_BUFFER);
-	auto old_size = malloced_size;
-	SetMallocedSize(bufsiz);
-	malloced_buffer = allocator.ReallocateData(malloced_buffer, old_size, malloced_size);
-	Construct(bufsiz);
+void FileBuffer::Resize(uint64_t new_size) {
+	{
+		// TODO: All the logic here is specific to SingleFileBlockManager.
+		// and should be moved there, via a specific implementation of FileBuffer.
+		//
+		// make room for the block header (if this is not the db file header)
+		if (type == FileBufferType::MANAGED_BUFFER && new_size != Storage::FILE_HEADER_SIZE) {
+			new_size += Storage::BLOCK_HEADER_SIZE;
+			// If we don't write/read an entire block, our checksum won't match.
+			new_size = AlignValue<uint32_t, Storage::BLOCK_ALLOC_SIZE>(new_size);
+		}
+		new_size = AlignValue<uint32_t, Storage::SECTOR_SIZE>(new_size);
+		ReallocBuffer(new_size);
+	}
+
+	if (new_size > 0) {
+		buffer = internal_buffer + Storage::BLOCK_HEADER_SIZE;
+		size = internal_size - Storage::BLOCK_HEADER_SIZE;
+	}
 }
 
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {
