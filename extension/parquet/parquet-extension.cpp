@@ -131,6 +131,7 @@ public:
 		table_function.table_scan_progress = ParquetProgress;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
@@ -145,6 +146,7 @@ public:
 		table_function.bind = ParquetScanBindList;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		set.AddFunction(table_function);
 		return set;
@@ -163,6 +165,8 @@ public:
 				continue;
 			} else if (loption == "filename") {
 				parquet_options.filename = true;
+			} else if (loption == "file_row_number") {
+				parquet_options.file_row_number = true;
 			} else if (loption == "hive_partitioning") {
 				parquet_options.hive_partitioning = true;
 			} else {
@@ -297,6 +301,8 @@ public:
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			} else if (loption == "filename") {
 				parquet_options.filename = BooleanValue::Get(kv.second);
+			} else if (loption == "file_row_number") {
+				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			} else if (loption == "hive_partitioning") {
 				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
 			}
@@ -328,6 +334,8 @@ public:
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			} else if (loption == "filename") {
 				parquet_options.filename = BooleanValue::Get(kv.second);
+			} else if (loption == "file_row_number") {
+				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			} else if (loption == "hive_partitioning") {
 				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
 			}

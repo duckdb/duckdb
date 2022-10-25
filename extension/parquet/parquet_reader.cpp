@@ -5,6 +5,7 @@
 
 #include "boolean_column_reader.hpp"
 #include "generated_column_reader.hpp"
+#include "row_number_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "callback_column_reader.hpp"
 #include "list_column_reader.hpp"
@@ -368,6 +369,11 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 		    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
 	}
 
+	if (parquet_options.file_row_number) {
+		root_struct_reader.child_readers.push_back(
+		    make_unique<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
+	}
+
 	if (parquet_options.hive_partitioning) {
 		auto res = HivePartitioning::Parse(file_name);
 
@@ -413,6 +419,16 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 		}
 		return_types.emplace_back(LogicalType::VARCHAR);
 		names.emplace_back("filename");
+	}
+
+	// Add generated constant column for row number
+	if (parquet_options.file_row_number) {
+		if (std::find(names.begin(), names.end(), "file_row_number") != names.end()) {
+			throw BinderException(
+			    "Using file_row_number option on file with column named file_row_number is not supported");
+		}
+		return_types.emplace_back(LogicalType::BIGINT);
+		names.emplace_back("file_row_number");
 	}
 
 	// Add generated constant column for filename
@@ -646,7 +662,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t o
 		}
 	}
 
-	state.root_reader->InitializeRead(group.columns, *state.thrift_file_proto);
+	state.root_reader->InitializeRead(state.group_idx_list[state.current_group], group.columns,
+	                                  *state.thrift_file_proto);
 }
 
 idx_t ParquetReader::NumRows() {

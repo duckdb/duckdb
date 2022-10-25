@@ -6,6 +6,7 @@
 #include "boolean_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "generated_column_reader.hpp"
+#include "row_number_column_reader.hpp"
 #include "callback_column_reader.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "list_column_reader.hpp"
@@ -141,7 +142,8 @@ void ColumnReader::DictReference(Vector &result) {
 void ColumnReader::PlainReference(shared_ptr<ByteBuffer>, Vector &result) { // NOLINT
 }
 
-void ColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+void ColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
+                                  TProtocol &protocol_p) {
 	D_ASSERT(file_idx < columns.size());
 	chunk = &columns[file_idx];
 	protocol = &protocol_p;
@@ -734,6 +736,33 @@ idx_t GeneratedConstantColumnReader::Read(uint64_t num_values, parquet_filter_t 
 }
 
 //===--------------------------------------------------------------------===//
+// Row NumberColumn Reader
+//===--------------------------------------------------------------------===//
+RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
+                                             idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p)
+    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
+}
+
+void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
+                                           TProtocol &protocol_p) {
+	row_group_offset = 0;
+	auto &row_groups = reader.GetFileMetadata()->row_groups;
+	for (idx_t i = 0; i < row_group_idx_p; i++) {
+		row_group_offset += row_groups[i].num_rows;
+	}
+};
+
+idx_t RowNumberColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out,
+                                  uint8_t *repeat_out, Vector &result) {
+
+	auto data_ptr = FlatVector::GetData<int64_t>(result);
+	for (idx_t i = 0; i < num_values; i++) {
+		data_ptr[i] = row_group_offset++;
+	}
+	return num_values;
+}
+
+//===--------------------------------------------------------------------===//
 // Cast Column Reader
 //===--------------------------------------------------------------------===//
 CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, LogicalType target_type_p)
@@ -749,8 +778,9 @@ unique_ptr<BaseStatistics> CastColumnReader::Stats(const std::vector<ColumnChunk
 	return nullptr;
 }
 
-void CastColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
-	child_reader->InitializeRead(columns, protocol_p);
+void CastColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
+                                      TProtocol &protocol_p) {
+	child_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
 }
 
 idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
@@ -797,9 +827,10 @@ ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
 	return child_readers[child_idx].get();
 }
 
-void StructColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
+                                        TProtocol &protocol_p) {
 	for (auto &child : child_readers) {
-		child->InitializeRead(columns, protocol_p);
+		child->InitializeRead(row_group_idx_p, columns, protocol_p);
 	}
 }
 

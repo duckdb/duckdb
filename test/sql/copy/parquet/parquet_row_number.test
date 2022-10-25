@@ -1,0 +1,16 @@
+# name: test/sql/copy/parquet/parquet_row_number.test
+# description: Test the filename option of the parquet reader
+# group: [parquet]
+
+require parquet
+
+query III
+select min(file_row_number), max(file_row_number), avg(file_row_number) from parquet_scan('data/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1, filename=1);
+----
+0	9999	4999.5
+
+
+query III
+select sum(row_number_lag), min(row_number_lag), max(row_number_lag)  from (select file_row_number - LAG(file_row_number) OVER (ORDER BY file_row_number) as row_number_lag from parquet_scan('data/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1, filename=1));
+----
+9999	1	1

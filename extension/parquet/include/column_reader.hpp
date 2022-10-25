@@ -51,7 +51,7 @@ public:
 	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const LogicalType &type_p,
 	                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define,
 	                                             idx_t max_repeat);
-	virtual void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p);
+	virtual void InitializeRead(idx_t row_group_index, const std::vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	                   Vector &result_out);
 
