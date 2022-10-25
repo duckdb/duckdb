@@ -24,11 +24,11 @@ static inline bool CharacterIsTimeZone(char c) {
 	return StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '/';
 }
 
-bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, string_t &tz) {
+bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, string_t &tz, bool strict) {
 	idx_t pos;
 	date_t date;
 	dtime_t time;
-	if (!Date::TryConvertDate(str, len, pos, date)) {
+	if (!Date::TryConvertDate(str, len, pos, date, strict)) {
 		return false;
 	}
 	if (pos == len) {
@@ -88,9 +88,9 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 	return true;
 }
 
-bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result) {
+bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result, bool strict) {
 	string_t tz(nullptr, 0);
-	return TryConvertTimestampTZ(str, len, result, tz) && !tz.GetSize();
+	return TryConvertTimestampTZ(str, len, result, tz, strict) && !tz.GetSize();
 }
 
 string Timestamp::ConversionError(const string &str) {
