@@ -22,11 +22,10 @@ class BufferManager;
 
 struct HashAggregateGroupingData {
 public:
-	HashAggregateGroupingData(GroupingSet grouping_set_p, const GroupedAggregateData &grouped_aggregate_data,
+	HashAggregateGroupingData(GroupingSet &grouping_set_p, const GroupedAggregateData &grouped_aggregate_data,
 	                          unique_ptr<DistinctAggregateCollectionInfo> &info);
 
 public:
-	GroupingSet grouping_set;
 	RadixPartitionedHashTable table_data;
 	unique_ptr<DistinctAggregateData> distinct_data;
 
@@ -70,6 +69,7 @@ public:
 	//! The grouping sets
 	GroupedAggregateData grouped_aggregate_data;
 
+	vector<GroupingSet> grouping_sets;
 	//! The radix partitioned hash tables (one per grouping set)
 	vector<HashAggregateGroupingData> groupings;
 	unique_ptr<DistinctAggregateCollectionInfo> distinct_collection_info;

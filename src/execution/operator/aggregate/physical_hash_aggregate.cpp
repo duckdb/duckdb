@@ -15,10 +15,10 @@
 
 namespace duckdb {
 
-HashAggregateGroupingData::HashAggregateGroupingData(GroupingSet grouping_set_p,
+HashAggregateGroupingData::HashAggregateGroupingData(GroupingSet &grouping_set_p,
                                                      const GroupedAggregateData &grouped_aggregate_data,
                                                      unique_ptr<DistinctAggregateCollectionInfo> &info)
-    : grouping_set(move(grouping_set_p)), table_data(grouping_set, grouped_aggregate_data) {
+    : table_data(grouping_set_p, grouped_aggregate_data) {
 	if (info) {
 		distinct_data = make_unique<DistinctAggregateData>(*info);
 	}
@@ -26,7 +26,6 @@ HashAggregateGroupingData::HashAggregateGroupingData(GroupingSet grouping_set_p,
 
 bool HashAggregateGroupingData::HasDistinct() const {
 	return distinct_data != nullptr;
-	;
 }
 
 HashAggregateGroupingGlobalState::HashAggregateGroupingGlobalState(const HashAggregateGroupingData &data,
@@ -83,9 +82,11 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
-                                             vector<unique_ptr<Expression>> groups_p, vector<GroupingSet> grouping_sets,
+                                             vector<unique_ptr<Expression>> groups_p,
+                                             vector<GroupingSet> grouping_sets_p,
                                              vector<vector<idx_t>> grouping_functions_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::HASH_GROUP_BY, move(types), estimated_cardinality) {
+    : PhysicalOperator(PhysicalOperatorType::HASH_GROUP_BY, move(types), estimated_cardinality),
+      grouping_sets(move(grouping_sets_p)) {
 	// get a list of all aggregates to be computed
 	const idx_t group_count = groups_p.size();
 	if (grouping_sets.empty()) {
@@ -130,8 +131,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	}
 
 	for (idx_t i = 0; i < grouping_sets.size(); i++) {
-		auto &grouping_set = grouping_sets[i];
-		groupings.emplace_back(move(grouping_set), grouped_aggregate_data, distinct_collection_info);
+		groupings.emplace_back(grouping_sets[i], grouped_aggregate_data, distinct_collection_info);
 	}
 }
 
