@@ -1,29 +1,25 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/physical_insert.hpp
+// duckdb/execution/operator/persistent/physical_batch_insert.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/execution/operator/persistent/physical_insert.hpp"
 
 namespace duckdb {
 
-//! Physically insert a set of data into a table
-class PhysicalInsert : public PhysicalOperator {
+class PhysicalBatchInsert : public PhysicalOperator {
 public:
 	//! INSERT INTO
-	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
-	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, bool return_chunk,
-	               bool parallel);
+	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
+	                    vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality);
 	//! CREATE TABLE AS
-	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info,
-	               idx_t estimated_cardinality, bool parallel);
+	PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info,
+	                    idx_t estimated_cardinality);
 
 	//! The map from insert column index to table column index
 	vector<idx_t> column_index_map;
@@ -33,15 +29,10 @@ public:
 	vector<LogicalType> insert_types;
 	//! The default expressions of the columns for which no value is provided
 	vector<unique_ptr<Expression>> bound_defaults;
-	//! If the returning statement is present, return the whole chunk
-	bool return_chunk;
 	//! Table schema, in case of CREATE TABLE AS
 	SchemaCatalogEntry *schema;
 	//! Create table info, in case of CREATE TABLE AS
 	unique_ptr<BoundCreateTableInfo> info;
-	//! Whether or not the INSERT can be executed in parallel
-	//! This insert is not order preserving if executed in parallel
-	bool parallel;
 
 public:
 	// Source interface
@@ -59,19 +50,17 @@ public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
 
+	bool RequiresBatchIndex() const override {
+		return true;
+	}
+
 	bool IsSink() const override {
 		return true;
 	}
 
 	bool ParallelSink() const override {
-		return parallel;
+		return true;
 	}
-
-public:
-	static void GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types,
-	                          vector<unique_ptr<Expression>> &bound_defaults);
-	static void ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk, const vector<idx_t> &column_index_map,
-	                            ExpressionExecutor &defaults_executor, DataChunk &result);
 };
 
 } // namespace duckdb

@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/chimp/chimp_compression_ratio.test_coverage
+# name: test/sql/storage/compression/chimp/chimp_compression_ratio.test_slow
 # description: Assert chimp compression ratio is within reasonable margins
 # group: [chimp]
 
