@@ -2,8 +2,6 @@
 # description: Issue 4625: Address boundary error when using PARTITION BY
 # group: [general]
 
-require vector_size 512
-
 statement ok
 CREATE TABLE "crash"
 ("amount" "FLOAT",

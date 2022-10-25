@@ -2,8 +2,6 @@
 # description: Test NTile function
 # group: [window]
 
-require vector_size 512
-
 statement ok
 CREATE TABLE Scoreboard(TeamName VARCHAR, Player VARCHAR, Score INTEGER);
 

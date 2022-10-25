@@ -20,7 +20,7 @@ insert_final_newline = true
 indent_style = tab
 tab_width = 4
 indent_size = tab
-trim_trailing_whitespace = true
+trim_trailing_whitespace = false
 charset = utf-8
 x-soft-wrap-text = false
 

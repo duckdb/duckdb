@@ -837,21 +837,23 @@ static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 }
 
 template <typename T>
-static T GetCell(ChunkCollection &collection, idx_t column, idx_t index) {
-	D_ASSERT(collection.ColumnCount() > column);
-	auto &chunk = collection.GetChunkForRow(index);
+static T GetCell(DataChunk &chunk, idx_t column, idx_t index) {
+	D_ASSERT(chunk.ColumnCount() > column);
 	auto &source = chunk.data[column];
-	const auto source_offset = index % STANDARD_VECTOR_SIZE;
 	const auto data = FlatVector::GetData<T>(source);
-	return data[source_offset];
+	return data[index];
 }
 
-static bool CellIsNull(ChunkCollection &collection, idx_t column, idx_t index) {
-	D_ASSERT(collection.ColumnCount() > column);
-	auto &chunk = collection.GetChunkForRow(index);
+static bool CellIsNull(DataChunk &chunk, idx_t column, idx_t index) {
+	D_ASSERT(chunk.ColumnCount() > column);
 	auto &source = chunk.data[column];
-	const auto source_offset = index % STANDARD_VECTOR_SIZE;
-	return FlatVector::IsNull(source, source_offset);
+	return FlatVector::IsNull(source, index);
+}
+
+static void CopyCell(DataChunk &chunk, idx_t column, idx_t index, Vector &target, idx_t target_offset) {
+	D_ASSERT(chunk.ColumnCount() > column);
+	auto &source = chunk.data[column];
+	VectorOperations::Copy(source, target, index + 1, index, target_offset);
 }
 
 template <typename T>
@@ -1150,7 +1152,7 @@ struct WindowExecutor {
 	uint64_t rank = 1;
 
 	// Expression collections
-	ChunkCollection payload_collection;
+	DataChunk payload_collection;
 	ExpressionExecutor payload_executor;
 	DataChunk payload_chunk;
 
@@ -1179,10 +1181,9 @@ struct WindowExecutor {
 };
 
 WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, Allocator &allocator, const idx_t count)
-    : wexpr(wexpr), bounds(wexpr, count), payload_collection(allocator), payload_executor(allocator),
-      filter_executor(allocator), leadlag_offset(wexpr->offset_expr.get(), allocator),
-      leadlag_default(wexpr->default_expr.get(), allocator), boundary_start(wexpr->start_expr.get(), allocator),
-      boundary_end(wexpr->end_expr.get(), allocator),
+    : wexpr(wexpr), bounds(wexpr, count), payload_collection(), payload_executor(allocator), filter_executor(allocator),
+      leadlag_offset(wexpr->offset_expr.get(), allocator), leadlag_default(wexpr->default_expr.get(), allocator),
+      boundary_start(wexpr->start_expr.get(), allocator), boundary_end(wexpr->end_expr.get(), allocator),
       range((bounds.has_preceding_range || bounds.has_following_range) ? wexpr->orders[0].expression.get() : nullptr,
             allocator, count)
 
@@ -1206,6 +1207,11 @@ WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, Allocator &allocato
 		exprs.push_back(child.get());
 	}
 	PrepareInputExpressions(exprs.data(), exprs.size(), payload_executor, payload_chunk);
+
+	auto types = payload_chunk.GetTypes();
+	if (!types.empty()) {
+		payload_collection.Initialize(allocator, types);
+	}
 }
 
 void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) {
@@ -1234,7 +1240,7 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 		payload_chunk.Reset();
 		payload_executor.Execute(input_chunk, payload_chunk);
 		payload_chunk.Verify();
-		payload_collection.Append(payload_chunk);
+		payload_collection.Append(payload_chunk, true);
 
 		// process payload chunks while they are still piping hot
 		if (check_nulls) {
@@ -1246,11 +1252,18 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 					ignore_nulls.Initialize(total_count);
 				}
 				// Write to the current position
-				// Chunks in a collection are full, so we don't have to worry about raggedness
-				auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(input_idx);
-				auto src = vdata.validity.GetData();
-				for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
-					*dst++ = *src++;
+				if (input_idx % ValidityMask::BITS_PER_VALUE == 0) {
+					// If we are at the edge of an output entry, just copy the entries
+					auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(input_idx);
+					auto src = vdata.validity.GetData();
+					for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
+						*dst++ = *src++;
+					}
+				} else {
+					// If not, we have ragged data and need to copy one bit at a time.
+					for (idx_t i = 0; i < count; ++i) {
+						ignore_nulls.Set(input_idx + i, vdata.validity.RowIsValid(i));
+					}
 				}
 			}
 		}
@@ -1406,7 +1419,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			// else offset is zero, so don't move.
 
 			if (!delta) {
-				payload_collection.CopyCell(0, val_idx, result, output_offset);
+				CopyCell(payload_collection, 0, val_idx, result, output_offset);
 			} else if (wexpr->default_expr) {
 				leadlag_default.CopyCell(result, output_offset);
 			} else {
@@ -1417,13 +1430,13 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 		case ExpressionType::WINDOW_FIRST_VALUE: {
 			idx_t n = 1;
 			const auto first_idx = FindNextStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
-			payload_collection.CopyCell(0, first_idx, result, output_offset);
+			CopyCell(payload_collection, 0, first_idx, result, output_offset);
 			break;
 		}
 		case ExpressionType::WINDOW_LAST_VALUE: {
 			idx_t n = 1;
-			payload_collection.CopyCell(0, FindPrevStart(ignore_nulls, bounds.window_start, bounds.window_end, n),
-			                            result, output_offset);
+			CopyCell(payload_collection, 0, FindPrevStart(ignore_nulls, bounds.window_start, bounds.window_end, n),
+			         result, output_offset);
 			break;
 		}
 		case ExpressionType::WINDOW_NTH_VALUE: {
@@ -1440,7 +1453,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 					auto n = idx_t(n_param);
 					const auto nth_index = FindNextStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
 					if (!n) {
-						payload_collection.CopyCell(0, nth_index, result, output_offset);
+						CopyCell(payload_collection, 0, nth_index, result, output_offset);
 					} else {
 						FlatVector::SetNull(result, output_offset, true);
 					}
