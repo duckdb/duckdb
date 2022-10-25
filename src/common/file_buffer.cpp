@@ -69,9 +69,6 @@ void FileBuffer::Resize(uint64_t new_size) {
 		// and should be moved there, via a specific implementation of FileBuffer.
 		//
 		// make room for the block header (if this is not the db file header)
-		//
-		// qq: Why is the second condition (new_size != Storage::FILE_HEADER_SIZE) necessary?
-		// If we're only allocating 8 bytes, does it matter really if we actually allocate 16?
 		if (type == FileBufferType::MANAGED_BUFFER && new_size != Storage::FILE_HEADER_SIZE) {
 			new_size += Storage::BLOCK_HEADER_SIZE;
 			// If we don't write/read an entire block, our checksum won't match.

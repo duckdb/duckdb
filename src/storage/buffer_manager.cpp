@@ -242,8 +242,6 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 
 	// Temp buffers can be larger than the storage block size. But persistent buffers
 	// cannot.
-	//
-	// TODO: It would be nice if getting into this case wasn't even possible.
 	D_ASSERT(old_block->buffer->AllocSize() <= Storage::BLOCK_ALLOC_SIZE);
 
 	// register a block with the new block id
