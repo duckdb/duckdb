@@ -69,12 +69,11 @@ void FileBuffer::Resize(uint64_t new_size) {
 		// and should be moved there, via a specific implementation of FileBuffer.
 		//
 		// make room for the block header (if this is not the db file header)
-		if (type == FileBufferType::MANAGED_BUFFER && new_size != Storage::FILE_HEADER_SIZE) {
+		if (type == FileBufferType::MANAGED_BUFFER) {
 			new_size += Storage::BLOCK_HEADER_SIZE;
-			// If we don't write/read an entire block, our checksum won't match.
-			new_size = AlignValue<uint32_t, Storage::BLOCK_ALLOC_SIZE>(new_size);
+		} else {
+			new_size = AlignValue<uint32_t, Storage::SECTOR_SIZE>(new_size);
 		}
-		new_size = AlignValue<uint32_t, Storage::SECTOR_SIZE>(new_size);
 		ReallocBuffer(new_size);
 	}
 

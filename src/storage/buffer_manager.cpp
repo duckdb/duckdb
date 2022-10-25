@@ -787,7 +787,6 @@ void BufferManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer
 		return;
 	}
 
-	D_ASSERT(buffer.size > Storage::BLOCK_SIZE);
 	// get the path to write to
 	auto path = GetTemporaryPath(block_id);
 	// create the file and write the size followed by the buffer contents
