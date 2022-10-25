@@ -35,7 +35,7 @@ class BufferManager {
 
 public:
 	BufferManager(DatabaseInstance &db, string temp_directory, idx_t maximum_memory);
-	~BufferManager();
+	virtual ~BufferManager();
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
 	//! not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so
