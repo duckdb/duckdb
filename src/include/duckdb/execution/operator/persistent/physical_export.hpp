@@ -51,7 +51,7 @@ public:
 	}
 
 public:
-	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline, vector<Pipeline *> &final_pipelines) override;
 	vector<const PhysicalOperator *> GetSources() const override;
 };
 

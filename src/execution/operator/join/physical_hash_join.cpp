@@ -267,15 +267,13 @@ public:
 public:
 	void Schedule() override {
 		auto &context = pipeline->GetClientContext();
-		auto parallel_construct_count =
-		    context.config.verify_parallelism ? STANDARD_VECTOR_SIZE : PARALLEL_CONSTRUCT_COUNT;
 
 		vector<unique_ptr<Task>> finalize_tasks;
 		auto &ht = *sink.hash_table;
 		const auto &block_collection = ht.GetBlockCollection();
 		const auto &blocks = block_collection.blocks;
 		const auto num_blocks = blocks.size();
-		if (block_collection.count < parallel_construct_count) {
+		if (block_collection.count < PARALLEL_CONSTRUCT_THRESHOLD && !context.config.verify_parallelism) {
 			// Single-threaded finalize
 			finalize_tasks.push_back(
 			    make_unique<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0, num_blocks, false));
@@ -303,8 +301,7 @@ public:
 		sink.hash_table->finalized = true;
 	}
 
-	// 1 << 18 TODO: tweak experimentally
-	static constexpr const idx_t PARALLEL_CONSTRUCT_COUNT = 262144;
+	static constexpr const idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {

@@ -1,14 +1,13 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-
 #include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
-#include "duckdb/parallel/pipeline.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -119,27 +118,16 @@ void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, 
 }
 
 void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) const {
-	if (pipelines.empty()) {
+	if (!recursive_meta_pipeline) {
 		throw InternalException("Missing pipelines for recursive CTE");
 	}
+	D_ASSERT(recursive_meta_pipeline->HasRecursiveCTE());
 
-	for (auto &pipeline : pipelines) {
-		auto sink = pipeline->GetSink();
-		if (sink != this) {
-			// reset the sink state for any intermediate sinks
-			sink->sink_state = sink->GetGlobalSinkState(context.client);
-		}
-		for (auto &op : pipeline->GetOperators()) {
-			if (op) {
-				op->op_state = op->GetGlobalOperatorState(context.client);
-			}
-		}
-		pipeline->Reset();
-	}
-	auto &executor = pipelines[0]->executor;
-
+	auto &executor = recursive_meta_pipeline->GetExecutor();
+	vector<shared_ptr<MetaPipeline>> meta_pipelines;
+	recursive_meta_pipeline->GetMetaPipelines(meta_pipelines, true);
 	vector<shared_ptr<Event>> events;
-	executor.ReschedulePipelines(pipelines, events);
+	executor.ReschedulePipelines(meta_pipelines, events);
 
 	while (true) {
 		executor.WorkOnTasks();
@@ -163,32 +151,31 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalRecursiveCTE::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
+                                          vector<Pipeline *> &final_pipelines) {
 	op_state.reset();
 	sink_state.reset();
-	pipelines.clear();
+	recursive_meta_pipeline.reset();
 
-	// recursive CTE
+	auto &state = meta_pipeline.GetState();
 	state.SetPipelineSource(current, this);
-	// the LHS of the recursive CTE is our initial state
-	// we build this pipeline as normal
-	auto pipeline_child = children[0].get();
-	// for the RHS, we gather all pipelines that depend on the recursive cte
-	// these pipelines need to be rerun
-	if (state.recursive_cte) {
+
+	if (meta_pipeline.HasRecursiveCTE()) {
 		throw InternalException("Recursive CTE detected WITHIN a recursive CTE node");
 	}
-	state.recursive_cte = this;
 
-	auto recursive_pipeline = make_shared<Pipeline>(executor);
-	state.SetPipelineSink(*recursive_pipeline, this);
-	children[1]->BuildPipelines(executor, *recursive_pipeline, state);
+	// the LHS of the recursive CTE is our initial state, we build this pipeline as normal
+	auto initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
+	initial_state_pipeline->Build(children[0].get());
+	auto &initial_state_root_pipeline = *initial_state_pipeline->GetRootPipeline();
 
-	pipelines.push_back(move(recursive_pipeline));
+	// the RHS is the recursive pipeline, which depends on the initial pipeline
+	auto recursive_pipeline = initial_state_pipeline->CreateChildMetaPipeline(initial_state_root_pipeline, this);
+	recursive_pipeline->SetRecursiveCTE(this);
+	recursive_pipeline->Build(children[1].get());
 
-	state.recursive_cte = nullptr;
-
-	BuildChildPipeline(executor, current, state, pipeline_child);
+	// set the recursive meta pipeline in this operator
+	recursive_meta_pipeline = recursive_pipeline->shared_from_this();
 }
 
 vector<const PhysicalOperator *> PhysicalRecursiveCTE::GetSources() const {

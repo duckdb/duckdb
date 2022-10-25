@@ -1009,32 +1009,24 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalIEJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
+                                    vector<Pipeline *> &final_pipelines) {
 	D_ASSERT(children.size() == 2);
-	if (state.recursive_cte) {
+	auto &state = meta_pipeline.GetState();
+	if (meta_pipeline.HasRecursiveCTE()) {
 		throw NotImplementedException("IEJoins are not supported in recursive CTEs yet");
 	}
 
-	// Build the LHS
-	auto lhs_pipeline = make_shared<Pipeline>(executor);
-	state.SetPipelineSink(*lhs_pipeline, this);
-	D_ASSERT(children[0].get());
-	children[0]->BuildPipelines(executor, *lhs_pipeline, state);
+	// current depends on lhs
+	auto lhs_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
+	lhs_meta_pipeline->Build(children[0].get());
+	auto &lhs_root_pipeline = *lhs_meta_pipeline->GetRootPipeline();
 
-	// Build the RHS
-	auto rhs_pipeline = make_shared<Pipeline>(executor);
-	state.SetPipelineSink(*rhs_pipeline, this);
-	D_ASSERT(children[1].get());
-	children[1]->BuildPipelines(executor, *rhs_pipeline, state);
+	// lhs depends on rhs
+	auto rhs_pipeline = lhs_meta_pipeline->CreateChildMetaPipeline(lhs_root_pipeline, this);
+	rhs_pipeline->Build(children[1].get());
 
-	// RHS => LHS => current
-	current.AddDependency(rhs_pipeline);
-	rhs_pipeline->AddDependency(lhs_pipeline);
-
-	state.AddPipeline(executor, move(lhs_pipeline));
-	state.AddPipeline(executor, move(rhs_pipeline));
-
-	// Now build both and scan
+	// this operator becomes a source for the current pipeline after RHS => LHS have been built
 	state.SetPipelineSource(current, this);
 }
 

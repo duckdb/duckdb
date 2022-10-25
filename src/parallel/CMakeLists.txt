@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_parallel
   OBJECT
   base_pipeline_event.cpp
+  meta_pipeline.cpp
   executor_task.cpp
   executor.cpp
   event.cpp

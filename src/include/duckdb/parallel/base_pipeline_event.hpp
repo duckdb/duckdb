@@ -19,6 +19,10 @@ public:
 	BasePipelineEvent(shared_ptr<Pipeline> pipeline);
 	BasePipelineEvent(Pipeline &pipeline);
 
+	void PrintPipeline() override {
+		pipeline->Print();
+	}
+
 	//! The pipeline that this event belongs to
 	shared_ptr<Pipeline> pipeline;
 };

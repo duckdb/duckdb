@@ -10,9 +10,10 @@ vector<PhysicalOperator *> PhysicalExecute::GetChildren() const {
 	return {plan};
 }
 
-void PhysicalExecute::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+void PhysicalExecute::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
+                                     vector<Pipeline *> &final_pipelines) {
 	// EXECUTE statement: build pipeline on child
-	plan->BuildPipelines(executor, current, state);
+	meta_pipeline.Build(plan);
 }
 
 } // namespace duckdb

@@ -9,12 +9,12 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
-#include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/optimizer/join_node.hpp"
 
 namespace duckdb {
 class Event;
@@ -22,6 +22,7 @@ class Executor;
 class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
+class MetaPipeline;
 
 // LCOV_EXCL_START
 class OperatorState {
@@ -218,10 +219,7 @@ public:
 	bool AllSourcesSupportBatchIndex() const;
 	bool AllOperatorsPreserveOrder() const;
 
-	void AddPipeline(Executor &executor, shared_ptr<Pipeline> current, PipelineBuildState &state);
-	virtual void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state);
-	void BuildChildPipeline(Executor &executor, Pipeline &current, PipelineBuildState &state,
-	                        PhysicalOperator *pipeline_child);
+	virtual void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline, vector<Pipeline *> &final_pipelines);
 };
 
 } // namespace duckdb

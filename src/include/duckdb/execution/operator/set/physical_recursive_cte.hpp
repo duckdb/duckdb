@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
 class Pipeline;
@@ -23,7 +23,7 @@ public:
 
 	bool union_all;
 	std::shared_ptr<ColumnDataCollection> working_table;
-	vector<shared_ptr<Pipeline>> pipelines;
+	shared_ptr<MetaPipeline> recursive_meta_pipeline;
 
 public:
 	// Source interface
@@ -42,7 +42,7 @@ public:
 	}
 
 public:
-	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline, vector<Pipeline *> &final_pipelines) override;
 
 	vector<const PhysicalOperator *> GetSources() const override;
 

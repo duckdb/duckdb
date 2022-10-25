@@ -1,19 +1,18 @@
 #include "duckdb/parallel/pipeline.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/execution/executor.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/main/database.hpp"
-
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
-#include "duckdb/parallel/pipeline_executor.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parallel/pipeline_event.hpp"
-
-#include "duckdb/common/algorithm.hpp"
-#include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/parallel/pipeline_executor.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -205,6 +204,12 @@ void Pipeline::Print() const {
 	Printer::Print(ToString());
 }
 
+void Pipeline::PrintDependencies() const {
+	for (auto &dep : dependencies) {
+		shared_ptr<Pipeline>(dep)->Print();
+	}
+}
+
 vector<PhysicalOperator *> Pipeline::GetOperators() const {
 	vector<PhysicalOperator *> result;
 	D_ASSERT(source);
@@ -223,20 +228,14 @@ void PipelineBuildState::SetPipelineSource(Pipeline &pipeline, PhysicalOperator 
 	pipeline.source = op;
 }
 
-void PipelineBuildState::SetPipelineSink(Pipeline &pipeline, PhysicalOperator *op) {
+void PipelineBuildState::SetPipelineSink(Pipeline &pipeline, PhysicalOperator *op, idx_t sink_pipeline_count) {
 	pipeline.sink = op;
 	// set the base batch index of this pipeline based on how many other pipelines have this node as their sink
-	pipeline.base_batch_index = BATCH_INCREMENT * sink_pipeline_count[op];
-	// increment the number of nodes that have this pipeline as their sink
-	sink_pipeline_count[op]++;
+	pipeline.base_batch_index = BATCH_INCREMENT * sink_pipeline_count;
 }
 
 void PipelineBuildState::AddPipelineOperator(Pipeline &pipeline, PhysicalOperator *op) {
 	pipeline.operators.push_back(op);
-}
-
-void PipelineBuildState::AddPipeline(Executor &executor, shared_ptr<Pipeline> pipeline) {
-	executor.pipelines.push_back(move(pipeline));
 }
 
 PhysicalOperator *PipelineBuildState::GetPipelineSource(Pipeline &pipeline) {
@@ -251,16 +250,10 @@ void PipelineBuildState::SetPipelineOperators(Pipeline &pipeline, vector<Physica
 	pipeline.operators = move(operators);
 }
 
-void PipelineBuildState::AddChildPipeline(Executor &executor, Pipeline &pipeline) {
-	executor.AddChildPipeline(&pipeline);
+shared_ptr<Pipeline> PipelineBuildState::CreateChildPipeline(Executor &executor, Pipeline &pipeline) {
+	return executor.CreateChildPipeline(&pipeline);
 }
 
-unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &PipelineBuildState::GetUnionPipelines(Executor &executor) {
-	return executor.union_pipelines;
-}
-unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &PipelineBuildState::GetChildPipelines(Executor &executor) {
-	return executor.child_pipelines;
-}
 vector<PhysicalOperator *> PipelineBuildState::GetPipelineOperators(Pipeline &pipeline) {
 	return pipeline.operators;
 }

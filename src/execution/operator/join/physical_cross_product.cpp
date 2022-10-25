@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
+
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/join/physical_join.hpp"
@@ -135,8 +136,9 @@ OperatorResultType PhysicalCrossProduct::Execute(ExecutionContext &context, Data
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalCrossProduct::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
-	PhysicalJoin::BuildJoinPipelines(executor, current, state, *this);
+void PhysicalCrossProduct::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
+                                          vector<Pipeline *> &final_pipelines) {
+	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, final_pipelines, *this);
 }
 
 vector<const PhysicalOperator *> PhysicalCrossProduct::GetSources() const {

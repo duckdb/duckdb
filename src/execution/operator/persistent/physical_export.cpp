@@ -191,14 +191,16 @@ SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalExport::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+void PhysicalExport::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
+                                    vector<Pipeline *> &final_pipelines) {
 	// EXPORT has an optional child
 	// we only need to schedule child pipelines if there is a child
+	auto &state = meta_pipeline.GetState();
 	state.SetPipelineSource(current, this);
 	if (children.empty()) {
 		return;
 	}
-	PhysicalOperator::BuildPipelines(executor, current, state);
+	PhysicalOperator::BuildPipelines(current, meta_pipeline, final_pipelines);
 }
 
 vector<const PhysicalOperator *> PhysicalExport::GetSources() const {

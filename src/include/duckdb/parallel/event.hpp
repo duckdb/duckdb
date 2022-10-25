@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -47,6 +47,9 @@ public:
 
 	bool IsFinished() const {
 		return finished;
+	}
+
+	virtual void PrintPipeline() {
 	}
 
 protected:
