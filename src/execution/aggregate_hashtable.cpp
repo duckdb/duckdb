@@ -253,14 +253,15 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	Verify();
 }
 
-idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
+idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter) {
 	Vector hashes(LogicalType::HASH);
 	groups.Hash(hashes);
 
-	return AddChunk(groups, hashes, payload);
+	return AddChunk(groups, hashes, payload, filter);
 }
 
-idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
+idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload,
+                                          AggregateType filter) {
 	D_ASSERT(!is_finalized);
 
 	if (groups.size() == 0) {
@@ -286,6 +287,10 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
+		if (aggr.aggr_type != filter) {
+			payload_idx += aggr.child_count;
+			continue;
+		}
 		if (aggr.IsDistinct()) {
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(groups.GetTypes());

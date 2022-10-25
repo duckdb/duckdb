@@ -208,9 +208,9 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 			filtered_data.filtered_payload.SetCardinality(count);
 
 			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload,
-			                 filtered_data.filtered_payload);
+			                 filtered_data.filtered_payload, AggregateType::DISTINCT);
 		} else {
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input);
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input, AggregateType::DISTINCT);
 		}
 	}
 }

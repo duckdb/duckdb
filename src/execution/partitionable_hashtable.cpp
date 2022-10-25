@@ -65,7 +65,7 @@ PartitionableHashTable::PartitionableHashTable(Allocator &allocator, BufferManag
 }
 
 idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes,
-                                           DataChunk &payload) {
+                                           DataChunk &payload, AggregateType filter) {
 	if (list.empty() || list.back()->Size() + groups.size() > list.back()->MaxCapacity()) {
 		if (!list.empty()) {
 			// early release first part of ht and prevent adding of more data
@@ -74,10 +74,10 @@ idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &group
 		list.push_back(make_unique<GroupedAggregateHashTable>(allocator, buffer_manager, group_types, payload_types,
 		                                                      bindings, HtEntryType::HT_WIDTH_32));
 	}
-	return list.back()->AddChunk(groups, group_hashes, payload);
+	return list.back()->AddChunk(groups, group_hashes, payload, filter);
 }
 
-idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition) {
+idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition, AggregateType filter) {
 	groups.Hash(hashes);
 
 	// we partition when we are asked to or when the unpartitioned ht runs out of space
@@ -86,7 +86,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	}
 
 	if (!IsPartitioned()) {
-		return ListAddChunk(unpartitioned_hts, groups, hashes, payload);
+		return ListAddChunk(unpartitioned_hts, groups, hashes, payload, filter);
 	}
 
 	// makes no sense to do this with 1 partition
@@ -123,7 +123,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 		}
 		hashes_subset.Slice(hashes, sel_vectors[r], sel_vector_sizes[r]);
 
-		group_count += ListAddChunk(radix_partitioned_hts[r], group_subset, hashes_subset, payload_subset);
+		group_count += ListAddChunk(radix_partitioned_hts[r], group_subset, hashes_subset, payload_subset, filter);
 	}
 	return group_count;
 }

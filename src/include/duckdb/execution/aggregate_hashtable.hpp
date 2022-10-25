@@ -80,8 +80,8 @@ public:
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
-	idx_t AddChunk(DataChunk &groups, DataChunk &payload);
-	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter);
+	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload, AggregateType filter);
 
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.

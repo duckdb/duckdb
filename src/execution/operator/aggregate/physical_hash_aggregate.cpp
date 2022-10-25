@@ -233,7 +233,7 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 		//} else {
 		//	radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input);
 		//}
-		radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input);
+		radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input, AggregateType::DISTINCT);
 	}
 }
 
@@ -289,7 +289,8 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 
 		auto &grouping = groupings[i];
 		auto &table = grouping.table_data;
-		table.Sink(context, *grouping_gstate.table_state, *grouping_lstate.table_state, input, aggregate_input_chunk);
+		table.Sink(context, *grouping_gstate.table_state, *grouping_lstate.table_state, input, aggregate_input_chunk,
+		           AggregateType::NON_DISTINCT);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;

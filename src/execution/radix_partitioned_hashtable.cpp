@@ -109,7 +109,7 @@ unique_ptr<LocalSinkState> RadixPartitionedHashTable::GetLocalSinkState(Executio
 }
 
 void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                     DataChunk &groups_input, DataChunk &payload_input) const {
+                                     DataChunk &groups_input, DataChunk &payload_input, AggregateType filter) const {
 	auto &llstate = (RadixHTLocalState &)lstate;
 	auto &gstate = (RadixHTGlobalState &)state;
 	D_ASSERT(!gstate.is_finalized);
@@ -141,7 +141,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		}
 		D_ASSERT(gstate.finalized_hts.size() == 1);
 		D_ASSERT(gstate.finalized_hts[0]);
-		gstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, payload_input);
+		gstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, payload_input, filter);
 		return;
 	}
 
@@ -155,8 +155,9 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		    group_types, op.payload_types, op.bindings);
 	}
 
-	gstate.total_groups += llstate.ht->AddChunk(
-	    group_chunk, payload_input, gstate.total_groups > radix_limit && gstate.partition_info.n_partitions > 1);
+	gstate.total_groups +=
+	    llstate.ht->AddChunk(group_chunk, payload_input,
+	                         gstate.total_groups > radix_limit && gstate.partition_info.n_partitions > 1, filter);
 }
 
 void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkState &state,
