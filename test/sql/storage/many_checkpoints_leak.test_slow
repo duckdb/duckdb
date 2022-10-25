@@ -19,7 +19,7 @@ statement ok
 SELECT total_blocks FROM pragma_database_size()
 
 query I
-SELECT total_blocks<10 FROM pragma_database_size()
+SELECT total_blocks * block_size < 10 * 262144 FROM pragma_database_size()
 ----
 true
 

@@ -78,6 +78,11 @@ public:
 		return db;
 	}
 
+	//! Construct a managed buffer.
+	//! The block_id is just used for internal tracking. It doesn't map to any actual
+	//! BlockManager.
+	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source);
+
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
