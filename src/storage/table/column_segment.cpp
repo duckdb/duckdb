@@ -36,17 +36,13 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
-                                                                idx_t start) {
+                                                                idx_t start, idx_t segment_size) {
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 	// transient: allocate a buffer for the uncompressed segment
-	auto allocation_size = Storage::BLOCK_SIZE;
-	if (start == LocalStorage::TRANSACTION_ROW_BEGIN) {
-		allocation_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
-	}
-	auto block = BufferManager::GetBufferManager(db).RegisterMemory(allocation_size, false);
+	auto block = BufferManager::GetBufferManager(db).RegisterMemory(segment_size, false);
 	return make_unique<ColumnSegment>(db, block, type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
-	                                  INVALID_BLOCK, 0, allocation_size);
+	                                  INVALID_BLOCK, 0, segment_size);
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx_t start) {
@@ -120,6 +116,19 @@ void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 //===--------------------------------------------------------------------===//
 idx_t ColumnSegment::SegmentSize() const {
 	return segment_size;
+}
+
+void ColumnSegment::Resize(idx_t new_size) {
+	D_ASSERT(new_size > this->segment_size);
+	D_ASSERT(offset == 0);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto new_block = buffer_manager.RegisterMemory(Storage::BLOCK_SIZE, false);
+	auto old_handle = buffer_manager.Pin(block);
+	auto new_handle = buffer_manager.Pin(new_block);
+	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
+	this->block_id = new_block->BlockId();
+	this->block = move(new_block);
+	this->segment_size = new_size;
 }
 
 void ColumnSegment::InitializeAppend(ColumnAppendState &state) {

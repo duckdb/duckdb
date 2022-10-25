@@ -337,7 +337,11 @@ unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
-	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row);
+	idx_t segment_size = Storage::BLOCK_SIZE;
+	if (start_row == idx_t(MAX_ROW_ID)) {
+		segment_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
+	}
+	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
 	data.AppendSegment(l, move(new_segment));
 }
 

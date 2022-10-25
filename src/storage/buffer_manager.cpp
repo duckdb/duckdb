@@ -105,7 +105,6 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 	}
 	D_ASSERT(!unswizzled);
 	D_ASSERT(CanUnload());
-	D_ASSERT(memory_usage >= Storage::BLOCK_ALLOC_SIZE);
 
 	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
 		// temporary block that cannot be destroyed: write to temporary file

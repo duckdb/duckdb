@@ -58,7 +58,8 @@ public:
 	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
 	                                                         idx_t start, idx_t count, CompressionType compression_type,
 	                                                         unique_ptr<BaseStatistics> statistics);
-	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start);
+	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start,
+	                                                        idx_t segment_size = Storage::BLOCK_SIZE);
 	static unique_ptr<ColumnSegment> CreateSegment(ColumnSegment &other, idx_t start);
 
 public:
@@ -76,6 +77,8 @@ public:
 
 	// The maximum size of the buffer (in bytes)
 	idx_t SegmentSize() const;
+	//! Resize the block
+	void Resize(idx_t segment_size);
 
 	//! Initialize an append of this segment. Appends are only supported on transient segments.
 	void InitializeAppend(ColumnAppendState &state);
