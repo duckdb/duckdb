@@ -22,7 +22,11 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
 		auto &aggr = (BoundAggregateExpression &)*expr;
-		bindings.push_back(&aggr);
+		if (!aggr.IsDistinct()) {
+			// Since distinct aggregates are already added here, then they will immediately be targeted in Sink
+			// So we have to make sure to disable aggregating DISTINCT aggregates in the first step
+			bindings.push_back(&aggr);
+		}
 
 		aggregate_return_types.push_back(aggr.return_type);
 		for (auto &child : aggr.children) {
@@ -41,11 +45,14 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 	}
 }
 
-void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggregate) {
+void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggregate,
+                                              vector<unique_ptr<Expression>> &groups_p) {
 	auto &aggr = (BoundAggregateExpression &)*aggregate;
-	D_ASSERT(aggr.distinct);
+	D_ASSERT(aggr.IsDistinct());
 
-	vector<LogicalType> payload_types_filters;
+	// Add the (empty in ungrouped case) groups of the aggregates
+	InitializeDistinctGroups(groups_p);
+
 	aggregate_return_types.push_back(aggr.return_type);
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		auto &child = aggr.children[i];
@@ -54,6 +61,13 @@ void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggr
 	}
 	if (!aggr.function.combine) {
 		throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
+	}
+}
+
+void GroupedAggregateData::InitializeDistinctGroups(vector<unique_ptr<Expression>> &groups_p) {
+	for (auto &expr : groups_p) {
+		group_types.push_back(expr->return_type);
+		groups.push_back(expr->Copy());
 	}
 }
 

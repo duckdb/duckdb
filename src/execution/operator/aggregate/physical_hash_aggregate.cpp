@@ -110,7 +110,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i];
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
-		if (aggr.distinct) {
+		if (aggr.IsDistinct()) {
 			distinct_indices.push_back(i);
 		}
 		if (aggr.filter) {

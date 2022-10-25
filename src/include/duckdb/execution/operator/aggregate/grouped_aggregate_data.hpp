@@ -44,9 +44,10 @@ public:
 	                       vector<vector<idx_t>> grouping_functions);
 
 	//! Initialize a GroupedAggregateData object for use with distinct aggregates
-	void InitializeDistinct(const unique_ptr<Expression> &aggregate);
+	void InitializeDistinct(const unique_ptr<Expression> &aggregate, vector<unique_ptr<Expression>> &groups_p);
 
 private:
+	void InitializeDistinctGroups(vector<unique_ptr<Expression>> &groups);
 	void InitializeGroupbyGroups(vector<unique_ptr<Expression>> groups);
 	void SetGroupingFunctions(vector<vector<idx_t>> &functions);
 };

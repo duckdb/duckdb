@@ -78,7 +78,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(Allocator &allocator, Buffe
 	idx_t payload_idx = 0;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
-		if (aggr.distinct) {
+		if (aggr.IsDistinct()) {
 			// layout types minus hash column plus aggr return type
 			vector<LogicalType> distinct_group_types(layout.GetTypes());
 			(void)distinct_group_types.pop_back();
@@ -286,7 +286,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
-		if (aggr.distinct) {
+		if (aggr.IsDistinct()) {
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(groups.GetTypes());
 			for (idx_t i = 0; i < aggr.child_count; i++) {

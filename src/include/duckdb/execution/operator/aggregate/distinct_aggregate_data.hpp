@@ -41,11 +41,11 @@ private:
 	idx_t CreateTableIndexMap();
 };
 
-// TODO: create a 'common' struct that contains data that is unaffected by adding groups, so we can avoid unnecessarily
-// copying most of these variables n times
 struct DistinctAggregateData {
 public:
 	DistinctAggregateData(const DistinctAggregateCollectionInfo &info);
+	DistinctAggregateData(const DistinctAggregateCollectionInfo &info, GroupingSet groups,
+	                      vector<unique_ptr<Expression>> group_expressions);
 	//! The data used by the hashtables
 	vector<unique_ptr<GroupedAggregateData>> grouped_aggregate_data;
 	//! The hashtables

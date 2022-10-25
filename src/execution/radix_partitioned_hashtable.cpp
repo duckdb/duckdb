@@ -13,6 +13,7 @@ void RadixPartitionedHashTable::SetGroupingValues() {
 	auto &grouping_functions = op.GetGroupingFunctions();
 	for (auto &grouping : grouping_functions) {
 		int64_t grouping_value = 0;
+		D_ASSERT(grouping.size() < sizeof(int64_t) * 8);
 		for (idx_t i = 0; i < grouping.size(); i++) {
 			if (grouping_set.find(grouping[i]) == grouping_set.end()) {
 				// we don't group on this value!
@@ -393,6 +394,8 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 				aggr.function.destructor(state_vector, 1);
 			}
 		}
+		// Place the grouping values (all the groups of the grouping_set condensed into a single value)
+		// Behind the null groups + aggregates
 		for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
 			chunk.data[null_groups.size() + op.aggregates.size() + i].Reference(grouping_values[i]);
 		}

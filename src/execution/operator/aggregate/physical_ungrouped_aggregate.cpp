@@ -27,7 +27,7 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i];
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
-		if (aggr.distinct) {
+		if (aggr.IsDistinct()) {
 			distinct_indices.push_back(i);
 		}
 	}
@@ -218,7 +218,6 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
                                                 LocalSinkState &lstate, DataChunk &input) const {
 	auto &sink = (UngroupedAggregateLocalState &)lstate;
-	auto &gstate = (UngroupedAggregateGlobalState &)state;
 
 	// perform the aggregation inside the local state
 	sink.Reset();
@@ -238,7 +237,7 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 		payload_idx = next_payload_idx;
 		next_payload_idx = payload_idx + aggregate.children.size();
 
-		if (aggregate.distinct) {
+		if (aggregate.IsDistinct()) {
 			continue;
 		}
 
@@ -314,7 +313,7 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
-		if (aggregate.distinct) {
+		if (aggregate.IsDistinct()) {
 			continue;
 		}
 

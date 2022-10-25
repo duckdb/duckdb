@@ -40,7 +40,7 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 		for (auto &child : aggregate.children) {
 			child_executor.AddExpression(*child);
 		}
-		if (!aggregate.distinct) {
+		if (!aggregate.IsDistinct()) {
 			continue;
 		}
 		D_ASSERT(data.info.table_map.count(i));
@@ -71,8 +71,13 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 }
 
 //! Persistent + shared (read-only) data for the distinct aggregates
+DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info)
+    : DistinctAggregateData(info, {}, {}) {
+}
 
-DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info) : info(info) {
+DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info, GroupingSet groups,
+                                             vector<unique_ptr<Expression>> group_expressions)
+    : info(info) {
 	grouped_aggregate_data.resize(info.table_count);
 	radix_tables.resize(info.table_count);
 	grouping_sets.resize(info.table_count);
@@ -90,13 +95,15 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 		// that will be used to figure out in which bucket the payload should be put
 		auto &grouping_set = grouping_sets[table_idx];
 		//! Populate the group with the children of the aggregate
-		for (size_t set_idx = 0; set_idx < aggregate.children.size(); set_idx++) {
-			// TODO: add groups to this
+		for (auto &group : groups) {
+			grouping_set.insert(group);
+		}
+		for (idx_t set_idx = groups.size(); set_idx < aggregate.children.size(); set_idx++) {
 			grouping_set.insert(set_idx);
 		}
 		// Create the hashtable for the aggregate
 		grouped_aggregate_data[table_idx] = make_unique<GroupedAggregateData>();
-		grouped_aggregate_data[table_idx]->InitializeDistinct(info.aggregates[i]);
+		grouped_aggregate_data[table_idx]->InitializeDistinct(info.aggregates[i], group_expressions);
 		radix_tables[table_idx] =
 		    make_unique<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[table_idx]);
 
