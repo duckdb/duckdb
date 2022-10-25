@@ -750,7 +750,7 @@ void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vec
 	for (idx_t i = 0; i < row_group_idx_p; i++) {
 		row_group_offset += row_groups[i].num_rows;
 	}
-};
+}
 
 idx_t RowNumberColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out,
                                   uint8_t *repeat_out, Vector &result) {
