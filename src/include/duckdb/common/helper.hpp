@@ -82,6 +82,7 @@ T AbsValue(T a) {
 	return a < 0 ? -a : a;
 }
 
+//Align value (ceiling)
 template<class T, T val=8>
 static inline T AlignValue(T n) {
 	return ((n + (val - 1)) / val) * val;

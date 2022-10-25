@@ -2,8 +2,6 @@
 # description: TPC-DS Q49 bug fix for multi-sort window functions
 # group: [window]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 

@@ -179,6 +179,33 @@ True
 True
 True
 
+# test structs (issue #5005)
+
+query I
+SELECT list_transform([{'a': 1}], x -> x.a);
+----
+[1]
+
+query I
+SELECT list_transform([{'a': [1, 2, 3]}], x -> x.a[2]);
+----
+[2]
+
+query I
+SELECT list_transform([{'b' : {'a': 1}}], x -> x.b.a);
+----
+[1]
+
+query I
+SELECT list_transform([{'b' : {'a': 42, 'b': 43}}], x -> x.b.b);
+----
+[43]
+
+query I
+SELECT list_transform([{'b' : {'a': [{'c': 77}], 'b': 43}}], x -> x.b.a[1].c);
+----
+[77]
+
 # test correlated subqueries
 
 statement ok
@@ -241,8 +268,6 @@ SELECT list_transform([1, 2, 3], x -> x + #1) FROM range(10)
 [10, 11, 12]
 
 # test for issue 4855
-
-require vector_size 512
 
 statement ok
 create table test(a int, b int);

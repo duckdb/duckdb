@@ -2,8 +2,6 @@
 # description: Parallel window lag
 # group: [window]
 
-require vector_size 512
-
 statement ok
 CREATE  TABLE "data" ("Store" INTEGER, "Dept" INTEGER, "Date" DATE, "Weekly_Sales" DOUBLE, "IsHoliday" BOOLEAN);
 

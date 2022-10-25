@@ -61,6 +61,11 @@ public:
 	static TransactionManager &Get(ClientContext &context);
 	static TransactionManager &Get(DatabaseInstance &db);
 
+	void SetBaseCommitId(transaction_t base) {
+		D_ASSERT(base >= TRANSACTION_ID_START);
+		current_transaction_id = base;
+	}
+
 private:
 	bool CanCheckpoint(Transaction *current = nullptr);
 	//! Remove the given transaction from the list of active transactions

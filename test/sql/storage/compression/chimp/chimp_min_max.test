@@ -1,0 +1,31 @@
+# name: test/sql/storage/compression/chimp/chimp_min_max.test
+# group: [chimp]
+
+# load the DB from disk
+load __TEST_DIR__/chimp_min_max.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma force_compression='chimp';
+
+foreach type DOUBLE FLOAT
+
+statement ok
+CREATE TABLE all_types AS SELECT ${type} FROM test_all_types();
+
+loop i 0 15
+
+statement ok
+checkpoint
+
+statement ok
+INSERT INTO all_types SELECT ${type} FROM all_types;
+
+endloop
+
+statement ok
+DROP TABLE all_types;
+
+endloop

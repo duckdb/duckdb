@@ -2,10 +2,6 @@
 # description: Run Sakila test queries
 # group: [sakila]
 
-require vector_size 512
-
-
-
 statement ok
 PRAGMA enable_verification
 

@@ -27,12 +27,12 @@ UnionInvalidReason CheckUnionValidity(Vector &vector, idx_t count, const Selecti
 			continue;
 		}
 
-		auto tag_mapped_row_idx = sel.get_index(row_idx);
+		auto tag_mapped_row_idx = tags_vdata.sel->get_index(row_idx);
 		if (!tags_vdata.validity.RowIsValid(tag_mapped_row_idx)) {
 			continue;
 		}
 
-		auto tag = tags_vdata.data[tag_mapped_row_idx];
+		auto tag = ((union_tag_t *)tags_vdata.data)[tag_mapped_row_idx];
 		if (tag >= member_count) {
 			return UnionInvalidReason::TAG_OUT_OF_RANGE;
 		}
