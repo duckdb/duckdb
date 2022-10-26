@@ -554,8 +554,9 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ParquetReader &reader, 
 	auto root_reader = reader.CreateReader(file_meta_data);
 	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
 
-	for (auto &row_group : file_meta_data->row_groups) {
-		auto chunk_stats = column_reader->Stats(row_group.columns);
+	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data->row_groups.size(); row_group_idx++) {
+		auto &row_group = file_meta_data->row_groups[row_group_idx];
+		auto chunk_stats = column_reader->Stats(row_group_idx, row_group.columns);
 		if (!chunk_stats) {
 			return nullptr;
 		}
@@ -644,7 +645,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t o
 
 	// TODO move this to columnreader too
 	if (state.filters) {
-		auto stats = column_reader->Stats(group.columns);
+		auto stats = column_reader->Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
 		auto filter_entry = state.filters->filters.find(out_col_idx);
 		if (stats && filter_entry != state.filters->filters.end()) {

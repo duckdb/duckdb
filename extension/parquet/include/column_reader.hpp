@@ -71,7 +71,7 @@ public:
 	// register the range this reader will touch for prefetching
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 
-	virtual unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns);
+	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns);
 
 protected:
 	// readers that use the default Read() need to implement those

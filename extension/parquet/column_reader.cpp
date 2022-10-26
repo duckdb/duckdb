@@ -115,7 +115,7 @@ idx_t ColumnReader::GroupRowsAvailable() {
 	return group_rows_available;
 }
 
-unique_ptr<BaseStatistics> ColumnReader::Stats(const std::vector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) {
 	if (Type().id() == LogicalTypeId::LIST || Type().id() == LogicalTypeId::STRUCT ||
 	    Type().id() == LogicalTypeId::MAP) {
 		return nullptr;
@@ -743,10 +743,19 @@ RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, LogicalType 
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
 }
 
-unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(const std::vector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
+                                                        const std::vector<ColumnChunk> &columns) {
 	auto stats = make_unique<NumericStatistics>(type, StatisticsType::LOCAL_STATS);
-	stats->min = Value::BIGINT(0);
-	stats->max = Value::BIGINT(reader.GetFileMetadata()->num_rows);
+	auto &row_groups = reader.GetFileMetadata()->row_groups;
+	D_ASSERT(row_group_idx_p < row_groups.size());
+	idx_t row_group_offset_min = 0;
+	for (idx_t i = 0; i < row_group_idx_p; i++) {
+		row_group_offset_min += row_groups[i].num_rows;
+	}
+
+	stats->min = Value::BIGINT(row_group_offset_min);
+	stats->max = Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows);
+
 	D_ASSERT(!stats->CanHaveNull() && stats->CanHaveNoNull());
 	return stats;
 };
@@ -781,7 +790,7 @@ CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, Logi
 	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }
 
-unique_ptr<BaseStatistics> CastColumnReader::Stats(const std::vector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> CastColumnReader::Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) {
 	// casting stats is not supported (yet)
 	return nullptr;
 }
