@@ -17,4 +17,3 @@ FROM t1 AS v1, t1 AS v2, t1 AS v3, t1 AS v4, t1 AS v5, t1 AS v6, t1 AS v7, t1 AS
 WHERE
 f1.x = v1.a AND f1.y = v3 AND f1.z = v4 AND f1.w = v5 AND
 f2.x = v2.a AND f2.y = v6 AND f2.z = v7 AND f2.w = v8;
-

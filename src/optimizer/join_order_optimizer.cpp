@@ -7,7 +7,6 @@
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
-#include <iostream>
 
 namespace std {
 
@@ -302,10 +301,6 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
-	if (entry != plans.end() && entry->second == nullptr) {
-		entry = plans.end();
-	}
-
 	if (entry == plans.end() || new_plan->GetCost() < entry->second->GetCost()) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
@@ -337,7 +332,6 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 		plans[new_set] = move(new_plan);
 		return result;
 	}
-
 	return entry->second.get();
 }
 
@@ -571,7 +565,6 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 		if (right_plan == plans.end()) {
 			continue;
 		}
-
 		auto updated_plan = EmitPair(new_set, neighbor_relation, connections);
 		// <= because the child node has already been replaced. You need to
 		// replace the parent node as well in this case
@@ -604,6 +597,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 				if (!connection.empty()) {
 					// we can check the cost of this connection
 					auto node = EmitPair(left, right, connection);
+
 					// update the DP tree in case a plan created by the DP algorithm uses the node
 					// that was potentially just updated by EmitPair. You will get a use-after-free
 					// error if future plans rely on the old node that was just replaced.
@@ -883,7 +877,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	return plan;
 }
 
-
 // the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
@@ -991,6 +984,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
+	// now the optimal join path should have been found
 	// get it from the node
 	unordered_set<idx_t> bindings;
 	for (idx_t i = 0; i < relations.size(); i++) {
