@@ -60,9 +60,9 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 	}
 
 	if (IsSink()) {
-        auto &g_sink_state = (CreateTypeGlobalState &)*sink_state;
-
 		D_ASSERT(info->type == LogicalType::INVALID);
+
+		auto &g_sink_state = (CreateTypeGlobalState &)*sink_state;
 		auto &collection = g_sink_state.collection;
 		ColumnDataScanState scan_state;
 		collection.InitializeScan(scan_state);
@@ -80,16 +80,12 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 			idx_t src_row_count = scan_chunk.size();
 			auto &src_vec = scan_chunk.data[0];
 			D_ASSERT(src_vec.GetVectorType() == VectorType::FLAT_VECTOR);
+			D_ASSERT(src_vec.GetType() == LogicalType::VARCHAR);
 			auto src_ptr = FlatVector::GetData<string_t>(src_vec);
 			auto &src_validity = FlatVector::Validity(src_vec);
 
-			for (idx_t i = 0; i < src_row_count; i++) {
-				result_ptr[i] = StringVector::AddStringOrBlob(result, src_ptr[i].GetDataUnsafe(), src_ptr[i].GetSize());
-			}
-
-			result_ptr += src_row_count * sizeof(string_t);
-
 			if (!src_validity.AllValid()) {
+				// lazy initialize
 				if (res_validity.AllValid()) {
 					res_validity.Initialize(total_row_count);
 				}
@@ -107,6 +103,17 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 					}
 				}
 			}
+
+			for (idx_t i = 0; i < src_row_count; i++) {
+				idx_t target_index = offset + i;
+				if (res_validity.RowIsValid(target_index)) {
+					result_ptr[target_index] =
+					    StringVector::AddStringOrBlob(result, src_ptr[i].GetDataUnsafe(), src_ptr[i].GetSize());
+				}
+			}
+
+			// result_ptr += src_row_count;
+
 			offset += src_row_count;
 		}
 
