@@ -111,13 +111,21 @@ public class DuckDBResultSet implements ResultSet {
 
 	}
 
-	public void arrowExportSchema(long schema_pointer) {
+	public void arrowExportSchema(long schema_pointer) throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("Result set is closed");
+		}
 		DuckDBNative.duckdb_jdbc_arrow_schema(result_ref, schema_pointer);
 	}
 
-	public void arrowFetch(long array_pointer) {
-		// TODO we need to ensure the offsets etc are fine
-		DuckDBNative.duckdb_jdbc_arrow_fetch(result_ref, array_pointer);
+	public boolean arrowFetch(long array_pointer) throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("Result set is closed");
+		}
+		if (chunk_idx != 0) {
+			throw new SQLException("Result set is not new");
+		}
+		return DuckDBNative.duckdb_jdbc_arrow_fetch(result_ref, array_pointer);
 	}
 
 	public Object getObject(int columnIndex) throws SQLException {

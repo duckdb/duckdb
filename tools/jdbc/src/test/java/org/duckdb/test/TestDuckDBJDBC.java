@@ -32,6 +32,7 @@ import javax.sql.rowset.RowSetProvider;
 import javax.sql.rowset.CachedRowSet;
 
 import org.duckdb.DuckDBAppender;
+import org.duckdb.DuckDBArrowResult;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDatabase;
 import org.duckdb.DuckDBDriver;

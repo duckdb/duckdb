@@ -97,7 +97,7 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_arrow_schema(ByteBuffer appender_ref, long arrow_schema);
 
-	protected static native void duckdb_jdbc_arrow_fetch(ByteBuffer appender_ref, long arrow_array);
+	protected static native boolean duckdb_jdbc_arrow_fetch(ByteBuffer appender_ref, long arrow_array);
 
 	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name) throws SQLException;
 
