@@ -56,16 +56,16 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 	case duckdb_libpgquery::PG_NEWTYPE_ENUM: {
 		info->internal = false;
 		idx_t size = 0;
-        if (stmt->query) {
-            D_ASSERT(stmt->vals == nullptr);
-            auto query = TransformSelect(stmt->query, false);
-            info->query = std::move(query);
-            info->type = LogicalType::INVALID;
-        } else {
-            D_ASSERT(stmt->query == nullptr);
-            auto ordered_array = ReadPgListToVector(stmt->vals, size);
-		    info->type = LogicalType::ENUM(info->name, ordered_array, size);
-        }
+		if (stmt->query) {
+			D_ASSERT(stmt->vals == nullptr);
+			auto query = TransformSelect(stmt->query, false);
+			info->query = std::move(query);
+			info->type = LogicalType::INVALID;
+		} else {
+			D_ASSERT(stmt->query == nullptr);
+			auto ordered_array = ReadPgListToVector(stmt->vals, size);
+			info->type = LogicalType::ENUM(info->name, ordered_array, size);
+		}
 	} break;
 
 	case duckdb_libpgquery::PG_NEWTYPE_ALIAS: {
