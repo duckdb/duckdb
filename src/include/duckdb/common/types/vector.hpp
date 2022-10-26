@@ -437,16 +437,15 @@ struct UnionVector {
 	DUCKDB_API static const Vector &GetMember(const Vector &vector, idx_t member_index);
 	DUCKDB_API static Vector &GetMember(Vector &vector, idx_t member_index);
 
-	//! Set every entry in the UnionVector to a specific tag.
-	//! This will set the tag vector to a ConstantVector containing the tag.
-	//! This will set the non-selected member vectors to a ConstantVector containing NULL
-	DUCKDB_API static void SetAllTags(Vector &vector, union_tag_t tag);
-
 	//! Set every entry in the UnionVector to a specific member.
 	//! This is useful to set the entire vector to a single member, e.g. when "creating"
 	//! a union to return in a function, when you only have one alternative to return.
-	//! This will also handle invalidation of the non-selected members.
-	DUCKDB_API static void SetToMember(Vector &vector, union_tag_t tag, Vector &member_vector);
+	//! if 'keep_tags_for_null' is false, the tags will be set to NULL where the member is NULL.
+	//! (the validity of the tag vector will match the selected member vector)
+	//! otherwise, they are all set to the 'tag'.
+	//! This will also handle invalidation of the non-selected members
+	DUCKDB_API static void SetToMember(Vector &vector, union_tag_t tag, Vector &member_vector, idx_t count,
+	                                   bool keep_tags_for_null);
 };
 
 struct SequenceVector {

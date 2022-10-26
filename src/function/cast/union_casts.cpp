@@ -105,16 +105,8 @@ static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParamet
 		return false;
 	}
 
-	// cast succeeded, update union tags
-	UnionVector::SetAllTags(result, cast_data.tag);
-
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-	} else {
-		source.Flatten(count);
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-	}
+	// cast succeeded, create union vector
+	UnionVector::SetToMember(result, cast_data.tag, selected_member_vector, count, true);
 
 	result.Verify(count);
 

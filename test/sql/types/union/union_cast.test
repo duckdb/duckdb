@@ -79,8 +79,8 @@ SELECT u.i32, u.str, u.f32 FROM tbl2 UNION SELECT u.i32, u.str, NULL FROM tbl1;
 NULL	five	NULL
 4		NULL	NULL
 NULL	NULL	6.0
-1		NULL	NULL
 NULL	two		NULL
+1		NULL	NULL
 NULL	three	NULL
 
 

@@ -1768,52 +1768,54 @@ Vector &UnionVector::GetTags(Vector &vector) {
 	return *StructVector::GetEntries(vector)[0];
 }
 
-void UnionVector::SetAllTags(Vector &vector, union_tag_t tag) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
-	D_ASSERT(tag < UnionType::GetMemberCount(vector.GetType()));
-
-	// the tag vector is always the first struct child.
-	auto &entries = StructVector::GetEntries(vector);
-	auto &tag_vector = *entries[0];
-
-	// set the tag to constant
-	tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::GetData<union_tag_t>(tag_vector)[0] = tag;
-
-	// set the non-selected members to constant null vectors
-	for (idx_t i = 0; i < entries.size() - 1; i++) {
-		if (i != tag) {
-			auto &member = *entries[1 + i];
-			member.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(member, true);
-		}
-	}
-}
-
-void UnionVector::SetToMember(Vector &vector, union_tag_t tag, Vector &member_vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
-	D_ASSERT(tag < UnionType::GetMemberCount(vector.GetType()));
+void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &member_vector, idx_t count,
+                              bool keep_tags_for_null) {
+	D_ASSERT(union_vector.GetType().id() == LogicalTypeId::UNION);
+	D_ASSERT(tag < UnionType::GetMemberCount(union_vector.GetType()));
 
 	// Set the union member to the specified vector
-	UnionVector::GetMember(vector, tag).Reference(member_vector);
+	UnionVector::GetMember(union_vector, tag).Reference(member_vector);
+	auto &tag_vector = UnionVector::GetTags(union_vector);
 
-	// Since the tag is constant, we can set the tag vector type to constant
-	auto &tag_vector = UnionVector::GetTags(vector);
-	tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::GetData<union_tag_t>(UnionVector::GetTags(vector))[0] = tag;
+	if (member_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// if the member vector is constant, we can set the union to constant as well
+		union_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::GetData<union_tag_t>(tag_vector)[0] = tag;
+		ConstantVector::SetNull(union_vector, ConstantVector::IsNull(member_vector));
 
-	// Set the non-selected members to constant null vectors
-	for (idx_t i = 0; i < UnionType::GetMemberCount(vector.GetType()); i++) {
-		if (i != tag) {
-			auto &member = UnionVector::GetMember(vector, i);
-			member.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(member, true);
+	} else {
+		// otherwise flatten and set to flatvector
+		member_vector.Flatten(count);
+		union_vector.SetVectorType(VectorType::FLAT_VECTOR);
+
+		if (member_vector.validity.AllValid()) {
+			// if the member vector is all valid, we can set the tag to constant
+			tag_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			auto tag_data = ConstantVector::GetData<union_tag_t>(tag_vector);
+			*tag_data = tag;
+		} else {
+			tag_vector.SetVectorType(VectorType::FLAT_VECTOR);
+			if (keep_tags_for_null) {
+				FlatVector::Validity(tag_vector).SetAllValid(count);
+				FlatVector::Validity(union_vector).SetAllValid(count);
+			} else {
+				// ensure the tags have the same validity as the member
+				FlatVector::Validity(union_vector) = FlatVector::Validity(member_vector);
+				FlatVector::Validity(tag_vector) = FlatVector::Validity(member_vector);
+			}
+
+			auto tag_data = FlatVector::GetData<union_tag_t>(tag_vector);
+			memset(tag_data, tag, count);
 		}
 	}
 
-	// if the member vector is constant, we can set the union to constant too
-	if (member_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	// Set the non-selected members to constant null vectors
+	for (idx_t i = 0; i < UnionType::GetMemberCount(union_vector.GetType()); i++) {
+		if (i != tag) {
+			auto &member = UnionVector::GetMember(union_vector, i);
+			member.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(member, true);
+		}
 	}
 }
 

@@ -22,7 +22,6 @@ INSERT INTO tbl VALUES (union_value(key := 1))
 statement ok
 INSERT INTO tbl VALUES (union_value(num := 1)), (1), (union_value(str := 'hello')), (2), ('world');
 
-
 statement ok
 INSERT INTO tbl SELECT 
     union_value(num := 1)::UNION(num INTEGER, str STRING) 
@@ -41,3 +40,36 @@ NULL
 NULL
 1
 NULL
+
+# Test that null inserts dont erase the key
+statement ok
+CREATE TABLE tbl3 (u UNION(num INTEGER, str STRING));
+
+statement ok
+INSERT INTO tbl3 VALUES 
+    (union_value(num := 1)),
+    (union_value(num := NULL)),
+    (union_value(str := '3')),
+    (union_value(str := NULL)),
+
+query I
+SELECT u from tbl3 where u = NULL
+----
+
+query I
+SELECT union_value(str := NULL) IS NULL;
+----
+false
+
+query I
+SELECT union_tag(union_value(str := NULL))
+----
+str
+
+query II
+SELECT union_tag(u), u FROM tbl3;
+----
+num	1
+num	NULL
+str	3
+str	NULL

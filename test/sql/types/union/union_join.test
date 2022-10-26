@@ -20,8 +20,8 @@ SELECT id, union_tag(a), a.b, a.c FROM tbl1 UNION SELECT id, union_tag(d), d.e, 
 ----
 1		b		1		NULL
 3		c		NULL	foo
-2		b		2		NULL
 4		c		NULL	bar
+2		b		2		NULL
 1		f		NULL	foo
 2		f		NULL	bar
 3		e		1		NULL
@@ -33,8 +33,8 @@ SELECT id, union_tag(a) as tag, a.b as v1, a.c as v2 FROM tbl1 UNION SELECT id, 
 ----
 1	b	1		NULL
 3	c	NULL	foo
-2	b	2		NULL
 4	c	NULL	bar
+2	b	2		NULL
 1	f	NULL	foo
 2	f	NULL	bar
 3	e	1		NULL

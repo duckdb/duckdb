@@ -111,6 +111,7 @@ void UnionValueFun::RegisterFunction(BuiltinFunctions &set) {
 	auto fun =
 	    ScalarFunction("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = VariableReturnBindData::Serialize;
 	fun.deserialize = VariableReturnBindData::Deserialize;
 
