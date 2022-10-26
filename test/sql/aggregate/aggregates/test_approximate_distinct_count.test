@@ -63,8 +63,6 @@ SELECT approx_count_distinct(a) from t group by a %2;
 993
 986
 
-require vector_size 512
-
 query I
 SELECT count(*) from t where a < 10;
 ----

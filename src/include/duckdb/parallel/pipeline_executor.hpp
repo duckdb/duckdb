@@ -69,10 +69,9 @@ private:
 	//! The final chunk used for moving data into the sink
 	DataChunk final_chunk;
 
-	//! Cached chunk that is the result of a PhysicalOperator::FinalExecute call, necessary when the chunk resulting
-	//! from FinalExecute is pushed into an operator returning OperatorResultType::HAVE_MORE_OUTPUT in a pull.
-	unique_ptr<DataChunk> cached_final_execute_chunk;
-	//! The OperatorFinalizeResultType corresponding to the cached_final_execute_chunk
+	//! Indicates that the first non-finished operator in the pipeline with RequireFinalExecute has some pending result
+	bool pending_final_execute = false;
+	//! The OperatorFinalizeResultType corresponding to the currently pending final_execute result
 	OperatorFinalizeResultType cached_final_execute_result;
 	//! Source has been exhausted
 	bool source_empty = false;
@@ -86,8 +85,6 @@ private:
 	int32_t finished_processing_idx = -1;
 	//! Whether or not this pipeline requires keeping track of the batch index of the source
 	bool requires_batch_index = false;
-	//! Whether this pipeline supports caching of intermediate results
-	bool can_cache_in_pipeline;
 
 private:
 	void StartOperator(PhysicalOperator *op);
@@ -108,10 +105,6 @@ private:
 	//! FlushCachedOperators methods push/pull any remaining cached results through the pipeline
 	void FlushCachingOperatorsPull(DataChunk &result);
 	void FlushCachingOperatorsPush();
-
-	//! Helper function that fetches the intermediate chunk for op_idx if possible, for the last op in the pipeline,
-	//! it uses tmp_chunk to initialize a new chunk for this.
-	DataChunk *GetIntermediateChunk(unique_ptr<DataChunk> &tmp_chunk, idx_t op_idx);
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);

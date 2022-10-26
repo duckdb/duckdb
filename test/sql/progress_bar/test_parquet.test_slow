@@ -4,8 +4,6 @@
 
 require parquet
 
-require vector_size 512
-
 require tpch
 
 statement ok

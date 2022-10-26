@@ -86,7 +86,8 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 	} // LCOV_EXCL_STOP
 	while (true) {
 		OperatorResultType result;
-		if (!pipeline.operators.empty()) {
+		// Note: if input is the final_chunk, we don't do any executing, the chunk just needs to be sinked
+		if (&input != &final_chunk) {
 			final_chunk.Reset();
 			result = Execute(input, final_chunk, initial_idx);
 			if (result == OperatorResultType::FINISHED) {
@@ -95,7 +96,7 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 		} else {
 			result = OperatorResultType::NEED_MORE_INPUT;
 		}
-		auto &sink_chunk = pipeline.operators.empty() ? input : final_chunk;
+		auto &sink_chunk = final_chunk;
 		if (sink_chunk.size() > 0) {
 			StartOperator(pipeline.sink);
 			D_ASSERT(pipeline.sink);
@@ -113,64 +114,45 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 	}
 }
 
-DataChunk *PipelineExecutor::GetIntermediateChunk(unique_ptr<DataChunk> &tmp_chunk, idx_t op_idx) {
-	auto chunk_idx = op_idx + 1;
-	bool last_op = chunk_idx >= intermediate_chunks.size();
-
-	if (last_op) {
-		tmp_chunk = make_unique<DataChunk>();
-		tmp_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[op_idx]->GetTypes());
-		return tmp_chunk.get();
-	} else {
-		return intermediate_chunks[chunk_idx].get();
-	}
-}
-
 // Pull a single DataChunk from the pipeline by flushing any operators holding cached output
 void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
 	idx_t op_idx = start_idx;
 	while (op_idx < pipeline.operators.size()) {
-		if (pipeline.operators[op_idx]->RequiresFinalExecute()) {
-			unique_ptr<DataChunk> tmp_chunk;
-			DataChunk *curr_chunk;
-			OperatorFinalizeResultType finalize_result;
-
-			if (cached_final_execute_chunk) {
-				// Still have a cached chunk from a last pull
-				curr_chunk = cached_final_execute_chunk.get();
-				finalize_result = cached_final_execute_result;
-			} else {
-				// Flush the current operator
-				tmp_chunk = make_unique<DataChunk>();
-				tmp_chunk->Initialize(Allocator::Get(context.client), pipeline.operators[op_idx]->GetTypes());
-				curr_chunk = tmp_chunk.get();
-				finalize_result = pipeline.operators[op_idx]->FinalExecute(
-				    context, *curr_chunk, *pipeline.operators[op_idx]->op_state, *intermediate_states[op_idx]);
-			}
-
-			auto execute_result = Execute(*curr_chunk, result, op_idx + 1);
-
-			if (execute_result == OperatorResultType::HAVE_MORE_OUTPUT) {
-				if (tmp_chunk) {
-					// We have a tmp_chunk that we want to continue Executing with
-					cached_final_execute_chunk = move(tmp_chunk);
-				}
-				cached_final_execute_result = finalize_result;
-			} else {
-				cached_final_execute_chunk.reset();
-				if (finalize_result == OperatorFinalizeResultType::FINISHED) {
-					FinishProcessing(op_idx);
-					op_idx++;
-				}
-			}
-
-			// Some non-empty result was pulled from some caching operator, we're done for this pull
-			if (result.size() > 0) {
-				break;
-			}
-		} else {
+		if (!pipeline.operators[op_idx]->RequiresFinalExecute()) {
 			op_idx++;
+			continue;
+		}
+
+		OperatorFinalizeResultType finalize_result;
+		DataChunk &curr_chunk =
+		    op_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[op_idx + 1];
+
+		if (pending_final_execute) {
+			// Still have a cached chunk from a last pull, reuse chunk
+			finalize_result = cached_final_execute_result;
+		} else {
+			// Flush the current operator
+			finalize_result = pipeline.operators[op_idx]->FinalExecute(
+			    context, curr_chunk, *pipeline.operators[op_idx]->op_state, *intermediate_states[op_idx]);
+		}
+
+		auto execute_result = Execute(curr_chunk, result, op_idx + 1);
+
+		if (execute_result == OperatorResultType::HAVE_MORE_OUTPUT) {
+			pending_final_execute = true;
+			cached_final_execute_result = finalize_result;
+		} else {
+			pending_final_execute = false;
+			if (finalize_result == OperatorFinalizeResultType::FINISHED) {
+				FinishProcessing(op_idx);
+				op_idx++;
+			}
+		}
+
+		// Some non-empty result was pulled from some caching operator, we're done for this pull
+		if (result.size() > 0) {
+			break;
 		}
 	}
 }
@@ -187,8 +169,8 @@ void PipelineExecutor::FlushCachingOperatorsPush() {
 		OperatorResultType push_result;
 
 		do {
-			unique_ptr<DataChunk> tmp_chunk;
-			auto &curr_chunk = *GetIntermediateChunk(tmp_chunk, op_idx);
+			auto &curr_chunk =
+			    op_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[op_idx + 1];
 			finalize_result = pipeline.operators[op_idx]->FinalExecute(
 			    context, curr_chunk, *pipeline.operators[op_idx]->op_state, *intermediate_states[op_idx]);
 			push_result = ExecutePushInternal(curr_chunk, op_idx + 1);

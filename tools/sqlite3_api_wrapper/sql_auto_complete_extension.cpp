@@ -181,6 +181,7 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	auto &fs = FileSystem::GetFileSystem(context);
 	string search_dir;
 	D_ASSERT(last_pos >= prefix.size());
+	auto is_path_absolute = FileSystem::IsPathAbsolute(prefix);
 	for (idx_t i = prefix.size(); i > 0; i--, last_pos--) {
 		if (prefix[i - 1] == '/' || prefix[i - 1] == '\\') {
 			search_dir = prefix.substr(0, i - 1);
@@ -189,7 +190,7 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 		}
 	}
 	if (search_dir.empty()) {
-		search_dir = ".";
+		search_dir = is_path_absolute ? "/" : ".";
 	} else {
 		search_dir = fs.ExpandPath(search_dir, FileOpener::Get(context));
 	}
@@ -326,9 +327,11 @@ process_word : {
 	goto regular_scan;
 }
 standard_suggestion:
-	while ((last_pos < sql.size()) &&
-	       (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos]))) {
-		last_pos++;
+	if (suggest_state != SuggestionState::SUGGEST_FILE_NAME) {
+		while ((last_pos < sql.size()) &&
+		       (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos]))) {
+			last_pos++;
+		}
 	}
 	auto last_word = sql.substr(last_pos, pos - last_pos);
 	last_pos -= pos_offset;

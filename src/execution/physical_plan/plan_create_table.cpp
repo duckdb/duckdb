@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
 
 namespace duckdb {
 
@@ -35,15 +36,20 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 	if ((!existing_entry || replace) && !op.children.empty()) {
 		auto plan = CreatePlan(*op.children[0]);
 
-		auto &config = DBConfig::GetConfig(context);
-		bool plan_preserves_order = plan->AllOperatorsPreserveOrder();
-		bool parallel_streaming_insert = !config.options.preserve_insertion_order || !plan_preserves_order;
+		bool parallel_streaming_insert = !PreserveInsertionOrder(*plan);
+		bool use_batch_index = UseBatchIndex(*plan);
+		unique_ptr<PhysicalOperator> create;
+		if (!parallel_streaming_insert && use_batch_index) {
+			create = make_unique<PhysicalBatchInsert>(op, op.schema, move(op.info), op.estimated_cardinality);
+
+		} else {
+			create = make_unique<PhysicalInsert>(op, op.schema, move(op.info), op.estimated_cardinality,
+			                                     parallel_streaming_insert);
+		}
 
 		D_ASSERT(op.children.size() == 1);
-		auto create = make_unique<PhysicalInsert>(op, op.schema, move(op.info), op.estimated_cardinality,
-		                                          parallel_streaming_insert);
 		create->children.push_back(move(plan));
-		return move(create);
+		return create;
 	} else {
 		return make_unique<PhysicalCreateTable>(op, op.schema, move(op.info), op.estimated_cardinality);
 	}

@@ -332,6 +332,7 @@ void JoinHashTable::InitializePointerTable() {
 		// allocate the HT if not yet done
 		hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
 	}
+	D_ASSERT(hash_map.GetFileBuffer().size >= capacity * sizeof(data_ptr_t));
 
 	// initialize HT with all-zero entries
 	memset(hash_map.Ptr(), 0, capacity * sizeof(data_ptr_t));

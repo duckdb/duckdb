@@ -493,7 +493,8 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 			if (!FlatVector::Validity(src_vec).RowIsValid(row_idx)) {
 				SET_ELEMENT(dest, dest_offset + row_idx, R_NilValue);
 			} else {
-				child_vector.Slice(ListVector::GetEntry(src_vec), src_data[row_idx].offset);
+				const auto end = src_data[row_idx].offset + src_data[row_idx].length;
+				child_vector.Slice(ListVector::GetEntry(src_vec), src_data[row_idx].offset, end);
 
 				RProtector ele_prot;
 				// transform the list child vector to a single R SEXP

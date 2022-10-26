@@ -51,8 +51,8 @@ Vector::Vector(Vector &other, const SelectionVector &sel, idx_t count) : type(ot
 	Slice(other, sel, count);
 }
 
-Vector::Vector(Vector &other, idx_t offset) : type(other.type) {
-	Slice(other, offset);
+Vector::Vector(Vector &other, idx_t offset, idx_t end) : type(other.type) {
+	Slice(other, offset, end);
 }
 
 Vector::Vector(const Value &value) : type(value.type()) {
@@ -116,7 +116,7 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 	cache.ResetFromCache(*this);
 }
 
-void Vector::Slice(Vector &other, idx_t offset) {
+void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
 	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		Reference(other);
 		return;
@@ -130,10 +130,10 @@ void Vector::Slice(Vector &other, idx_t offset) {
 		auto &other_entries = StructVector::GetEntries(other);
 		D_ASSERT(entries.size() == other_entries.size());
 		for (idx_t i = 0; i < entries.size(); i++) {
-			entries[i]->Slice(*other_entries[i], offset);
+			entries[i]->Slice(*other_entries[i], offset, end);
 		}
 		if (offset > 0) {
-			new_vector.validity.Slice(other.validity, offset);
+			new_vector.validity.Slice(other.validity, offset, end);
 		} else {
 			new_vector.validity = other.validity;
 		}
@@ -142,7 +142,7 @@ void Vector::Slice(Vector &other, idx_t offset) {
 		Reference(other);
 		if (offset > 0) {
 			data = data + GetTypeIdSize(internal_type) * offset;
-			validity.Slice(other.validity, offset);
+			validity.Slice(other.validity, offset, end);
 		}
 	}
 }
