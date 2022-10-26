@@ -990,7 +990,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		bindings.insert(i);
 	}
-
 	auto total_relation = set_manager.GetJoinRelation(bindings);
 	auto final_plan = plans.find(total_relation);
 	if (final_plan == plans.end()) {
