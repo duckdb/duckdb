@@ -743,6 +743,14 @@ RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, LogicalType 
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
 }
 
+unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(const std::vector<ColumnChunk> &columns) {
+	auto stats = make_unique<NumericStatistics>(type, StatisticsType::LOCAL_STATS);
+	stats->min = Value::BIGINT(0);
+	stats->max = Value::BIGINT(reader.GetFileMetadata()->num_rows);
+	D_ASSERT(!stats->CanHaveNull() && stats->CanHaveNoNull());
+	return stats;
+};
+
 void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
                                            TProtocol &protocol_p) {
 	row_group_offset = 0;
@@ -824,6 +832,7 @@ StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p
 }
 
 ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
+	D_ASSERT(child_idx < child_readers.size());
 	return child_readers[child_idx].get();
 }
 
