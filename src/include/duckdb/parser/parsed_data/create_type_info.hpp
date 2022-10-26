@@ -27,7 +27,7 @@ struct CreateTypeInfo : public CreateInfo {
 	//! Logical Type
 	LogicalType type;
 
-    std::unique_ptr<SQLStatement> query;
+	std::unique_ptr<SQLStatement> query;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
@@ -35,7 +35,9 @@ public:
 		CopyProperties(*result);
 		result->name = name;
 		result->type = type;
-        result->query = query->Copy();
+		if (query) {
+			result->query = query->Copy();
+		}
 		return move(result);
 	}
 
