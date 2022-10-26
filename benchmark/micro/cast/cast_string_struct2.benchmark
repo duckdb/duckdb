@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_string_struct_2.benchmark
+# description: Cast string values to struct
+# group: [cast]
+
+name Cast VARCHAR -> STRUCT
+group cast
+
+load
+CREATE TABLE structs AS SELECT {'key': i} v FROM range(0, 100000000) tbl(i);
+
+run
+SELECT MIN(v) FROM structs;
+
+result I
+{'key': 0}
