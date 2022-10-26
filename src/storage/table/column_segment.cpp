@@ -39,8 +39,14 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
                                                                 idx_t start, idx_t segment_size) {
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	shared_ptr<BlockHandle> block;
 	// transient: allocate a buffer for the uncompressed segment
-	auto block = BufferManager::GetBufferManager(db).RegisterMemory(segment_size, false);
+	if (segment_size < Storage::BLOCK_SIZE) {
+		block = buffer_manager.RegisterSmallMemory(segment_size);
+	} else {
+		block = buffer_manager.RegisterMemory(segment_size, false);
+	}
 	return make_unique<ColumnSegment>(db, block, type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
 	                                  INVALID_BLOCK, 0, segment_size);
 }

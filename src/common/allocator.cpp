@@ -39,6 +39,7 @@ void AllocatedData::Reset() {
 	}
 	D_ASSERT(allocator);
 	allocator->FreeData(pointer, allocated_size);
+	allocated_size = 0;
 	pointer = nullptr;
 }
 
