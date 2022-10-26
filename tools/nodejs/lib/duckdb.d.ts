@@ -26,7 +26,7 @@ export class Connection {
   prepare(sql: string, ...args: [...any, Callback<Statement>] | []): Statement;
   run(sql: string, ...args: [...any, Callback<void>] | []): Statement;
 
-  register(
+  register_udf(
     name: string,
     return_type: string,
     fun: (...args: any[]) => any
@@ -37,7 +37,7 @@ export class Connection {
     return_type: string,
     fun: (...args: any[]) => any
   ): void;
-  unregister(name: string, callback: Callback<any>): void;
+  unregister_udf(name: string, callback: Callback<any>): void;
 
   stream(sql: any, ...args: any[]): QueryResult;
 }
@@ -60,12 +60,12 @@ export class Database {
   prepare(sql: string, ...args: [...any, Callback<Statement>] | []): Statement;
   run(sql: string, ...args: [...any, Callback<void>] | []): Statement;
 
-  register(
+  register_udf(
     name: string,
     return_type: string,
     fun: (...args: any[]) => any
   ): void;
-  unregister(name: string, callback: Callback<any>): void;
+  unregister_udf(name: string, callback: Callback<any>): void;
 }
 
 export class Statement {

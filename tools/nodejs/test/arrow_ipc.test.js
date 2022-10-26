@@ -48,9 +48,10 @@ describe(`Arrow IPC Demo`, () => {
     });
 
     it(`Basic examples`, async () => {
-        const query = "SELECT * FROM range(0,3) tbl(i)";
+        const range_size = 130000;
+        const query = `SELECT * FROM range(0,${range_size}) tbl(i)`;
         const arrow_table_expected = new arrow.Table({
-            i: new arrow.Vector([arrow.makeData({ type: new arrow.Int32, data: [0, 1, 2] })]),
+            i: new arrow.Vector([arrow.makeData({ type: new arrow.Int32, data: Array.from(new Array(range_size), (x, i) => i) })]),
         });
 
         // Can use Arrow to read from stream directly
@@ -85,12 +86,12 @@ describe(`Arrow IPC Demo`, () => {
         // Scanning materialized IPC buffers from DuckDB
         db.register_buffer("ipc_table", result_materialized, true);
         await new Promise((resolve, reject) => {
-            db.all(`SELECT * FROM ipc_table`, function (err, result) {
+            db.arrowIPCAll(`SELECT * FROM ipc_table`, function (err, result) {
                 if (err) {
                     reject(err);
                 }
 
-                assert.deepEqual(result, [{i: 0}, { i: 1}, {i: 2}]);
+                assert.deepEqual(result, result_materialized);
                 resolve()
             });
         });
@@ -329,7 +330,7 @@ for (const [name, fun] of Object.entries(to_ipc_functions)) {
         const queries = [
             "select count(*) from table_name LIMIT 10",
             "select sum(l_orderkey) as sum_orderkey FROM table_name",
-            "select * from table_name LIMIT 10",
+            "select * from table_name",
             "select l_orderkey from table_name WHERE l_orderkey=2 LIMIT 2",
             "select l_extendedprice from table_name",
             "select l_extendedprice from table_name WHERE l_extendedprice > 53468 and l_extendedprice < 53469  LIMIT 2",

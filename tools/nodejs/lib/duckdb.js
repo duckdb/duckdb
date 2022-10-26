@@ -593,7 +593,7 @@ Database.prototype.register_udf = function () {
 /**
  * Register a Buffer
  *
- * Convenience method for Connection#unregister_udf
+ * Convenience method for Connection#unregister_buffer
  * @arg name
  * @return {this}
  */
@@ -605,12 +605,24 @@ Database.prototype.register_buffer = function () {
 /**
  * Unregister a Buffer
  *
- * Convenience method for Connection#unregister_udf
+ * Convenience method for Connection#unregister_buffer
  * @arg name
  * @return {this}
  */
 Database.prototype.unregister_buffer = function () {
     default_connection(this).unregister_buffer.apply(this.default_connection, arguments);
+    return this;
+}
+
+/**
+ * Unregister a UDF
+ *
+ * Convenience method for Connection#unregister_udf
+ * @arg name
+ * @return {this}
+ */
+Database.prototype.unregister_udf = function () {
+    default_connection(this).unregister_udf.apply(this.default_connection, arguments);
     return this;
 }
 

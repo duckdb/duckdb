@@ -108,6 +108,10 @@ Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connec
 	database_ref = Napi::ObjectWrap<Database>::Unwrap(info[0].As<Napi::Object>());
 	database_ref->Ref();
 
+	if (!database_ref->database) {
+		Napi::Error::New(env, "Connection created on database that was not yet initialized").ThrowAsJavaScriptException();
+		return;
+	}
 	// Register replacement scan
 	database_ref->database->instance->config.replacement_scans.emplace_back(ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(this));
 
