@@ -946,6 +946,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1schema(
 	}
 	if (arrow_schema_address == 0) {
 		env->ThrowNew(J_SQLException, "Invalid schema pointer address");
+		return;
 	}
 
 	auto timezone_config = duckdb::QueryResult::GetConfigTimezone(*res_ref->res);
@@ -959,9 +960,11 @@ JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1fet
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		env->ThrowNew(J_SQLException, "Invalid result set");
+		return false;
 	}
 	if (arrow_array_address == 0) {
 		env->ThrowNew(J_SQLException, "Invalid array pointer address");
+		return false;
 	}
 	auto arrow_array = (ArrowArray *)arrow_array_address;
 	auto chunk = res_ref->res->Fetch();

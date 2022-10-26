@@ -44,7 +44,8 @@ public class DuckDBResultSet implements ResultSet {
 	private boolean finished = false;
 	private boolean was_null;
 
-	public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref) throws SQLException {
+	public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref)
+			throws SQLException {
 		this.stmt = stmt;
 		this.result_ref = result_ref;
 		this.meta = meta;
@@ -111,14 +112,20 @@ public class DuckDBResultSet implements ResultSet {
 
 	}
 
-	public void arrowExportSchema(long schema_pointer) throws SQLException {
+	// Export the result set schema to the Arrow C data interface schema pointed to
+	// in the argument, see
+	// https://arrow.apache.org/docs/format/CDataInterface.html#the-arrowschema-structure
+	protected void arrowExportSchema(long schema_pointer) throws SQLException {
 		if (isClosed()) {
 			throw new SQLException("Result set is closed");
 		}
 		DuckDBNative.duckdb_jdbc_arrow_schema(result_ref, schema_pointer);
 	}
 
-	public boolean arrowFetch(long array_pointer) throws SQLException {
+	// Fetch a batch of results into the Arrow C data interface array pointed to in
+	// the argument, see
+	// https://arrow.apache.org/docs/format/CDataInterface.html#the-arrowarray-structure
+	protected boolean arrowFetch(long array_pointer) throws SQLException {
 		if (isClosed()) {
 			throw new SQLException("Result set is closed");
 		}
