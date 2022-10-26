@@ -1,8 +1,8 @@
-# name: test/temp.test
-# group: [test]
+
+
+
 
 query I
-SELECT '    {a:        {b:         DuckDB,    c:12  }, b:  900, c          :{a
-                    :   "DuckParty  "}       }    '::STRUCT(key_a STRUCT(b VARCHAR, c INT), key_b INT, key_c STRUCT(a VARCHAR));
+SELECT '{"key_A": 2, "key_B": hello world}'::STRUCT(key_A INT, key_B VARCHAR);
 ----
-{'key_a': {'b': DuckDB, 'c': 12}, 'key_b': 900, 'key_c': {'a': "DuckParty  "}}
+{'key_A': 2, 'key_B': hello world}

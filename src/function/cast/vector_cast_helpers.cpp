@@ -193,8 +193,7 @@ static bool FindValue(const char *buf, idx_t len, idx_t &pos, Vector &varchar_ch
 				start_pos++;
 				trailing_whitespace++;
 			}
-			FlatVector::GetData<string_t>(varchar_child)[row_idx] =
-			    StringVector::AddString(varchar_child, buf + start_pos, pos - start_pos - trailing_whitespace);
+			FlatVector::GetData<string_t>(varchar_child)[row_idx] = StringVector::AddString(varchar_child, buf + start_pos, pos - start_pos - trailing_whitespace);
 			return true;
 		}
 		pos++;
@@ -203,11 +202,11 @@ static bool FindValue(const char *buf, idx_t len, idx_t &pos, Vector &varchar_ch
 }
 
 bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<Vector> &varchar_vectors, idx_t &row_idx,
-                                                ValidityMask &result_mask) {
+                                                std::vector<string_t> &child_names) {
 	const char *buf = input.GetDataUnsafe();
 	idx_t len = input.GetSize();
 	idx_t pos = 0;
-	idx_t value_idx = 0;
+	idx_t child_idx = 0;
 
 	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 		pos++;
@@ -222,25 +221,65 @@ bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<Vec
 	}
 
 	while (pos < len) {
+        auto key_start = pos;
 		if (!FindKey(buf, len, pos)) {
 			return false;
 		}
+        auto key_end = pos;
+
+
+        idx_t trailing_whitespace = 0;
+        while (StringUtil::CharacterIsSpace(buf[key_end - trailing_whitespace - 1])) {
+            trailing_whitespace++;
+        }
+        if ((buf[key_start] == '"' && buf[pos - trailing_whitespace - 1] == '"') || (buf[key_start] == '\'' && buf[pos - trailing_whitespace - 1] == '\'')) {
+            key_start++;
+            trailing_whitespace++;
+        }
+        key_end = key_end - trailing_whitespace;
+        auto key_len = key_end - key_start;
+
+        while(child_idx < child_names.size()){
+            const char *child_buf = child_names[child_idx].GetDataUnsafe();
+            if (child_names[child_idx].GetSize() != key_len){
+                child_idx++;
+                continue; // key does not match
+            }
+            idx_t i = 0;
+            for (; i < key_len; i++){
+                if (child_buf[i] != buf[key_start + i]){
+                    break;
+                }
+            }
+            if (key_start + i == key_end){ // key matches
+                break;
+            }
+            if (varchar_vectors[child_idx].GetVectorType() == VectorType::CONSTANT_VECTOR){
+                ConstantVector::SetNull(varchar_vectors[child_idx], true);
+            } else {
+                FlatVector::SetNull(varchar_vectors[child_idx], row_idx, true);
+            }
+            child_idx++;
+        }
+
 		pos++;
 		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 			pos++;
 		}
-		if (!FindValue(buf, len, pos, varchar_vectors[value_idx], row_idx)) {
+        if (child_idx == child_names.size()){
+            return false;
+        }
+		if (!FindValue(buf, len, pos, varchar_vectors[child_idx], row_idx)) {
 			return false;
 		}
 		pos++;
 		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 			pos++;
 		}
-		value_idx++;
+        child_idx++;
 	}
-	if (value_idx != varchar_vectors.size()) { // string not splittable into correct number of values
+	if (child_idx != varchar_vectors.size()) { // string not splittable into correct number of values
 		return false;
-		// result_mask.SetInvalid(row_idx);
 	}
 	while (pos < len) {
 		if (!StringUtil::CharacterIsSpace(buf[pos])) {

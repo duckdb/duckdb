@@ -9,7 +9,7 @@
 #               Basic tests:
 # ---------------------------------------------------
 
-query I
+query I 
 SELECT '{key_A: 2, key_B: 46}'::STRUCT(key_A INT, key_B INT);
 ----
 {'key_A': 2, 'key_B': 46}
@@ -20,12 +20,12 @@ SELECT '{key_A: 2, key_B: 3, key_C: 8}'::STRUCT(key_A INT, key_B DOUBLE, key_C F
 {'key_A': 2, 'key_B': 3.0, 'key_C': 8.0}
 
 query I
-SELECT '{key_A: 2, key_B: hello world}'::STRUCT(key_A INT, key_B VARCHAR);
+SELECT '{"key_A": 2, "key_B": hello world}'::STRUCT(key_A INT, key_B VARCHAR);
 ----
 {'key_A': 2, 'key_B': hello world}
 
 query I
-select (struct_pack(a=>'42'::double, b => 'DuckDB'::string)::VARCHAR)::STRUCT(key_A INT, key_B VARCHAR);
+select (struct_pack(key_A=>'42'::double, key_B=>'DuckDB'::string)::VARCHAR)::STRUCT(key_A INT, key_B VARCHAR);
 ----
 {'key_A': 42, 'key_B': DuckDB}
 
@@ -34,20 +34,24 @@ select (struct_pack(a=>'42'::double, b => 'DuckDB'::string)::VARCHAR)::STRUCT(ke
 #               Nested structs
 # ---------------------------------------------------
 query I
-SELECT '{a:{b:1}, b:900}'::STRUCT(key_a STRUCT(b INT), key_b INT);
+SELECT '{a:{c:1}, b:900}'::STRUCT(a STRUCT(c INT), b INT);
 ----
-{'key_a': {'b': 1}, 'key_b': 900}
+{'a': {'c': 1}, 'b': 900}
 
 query I
-SELECT '{a:{b:DuckDB, c:12}, b:900, c:{a:"DuckParty"}}'::STRUCT(key_a STRUCT(b VARCHAR, c INT), key_b INT, key_c STRUCT(a VARCHAR));
+SELECT '{a:{b:DuckDB, c:12}, b:900, c:{a:"DuckParty"}}'::STRUCT(a STRUCT(b VARCHAR, c INT), b INT, c STRUCT(a VARCHAR));
 ----
-{'key_a': {'b': DuckDB, 'c': 12}, 'key_b': 900, 'key_c': {'a': DuckParty}}
+{'a': {'b': DuckDB, 'c': 12}, 'b': 900, 'c': {'a': DuckParty}}
 
 query I
-SELECT '{a:{b:DuckDB, c:{a:{a:0.9, b:{a:"DuckieDuck"}, c:{a:9000}, d:{a:5881580-07-10}}, b:"🦆"}}, b:900, c:{a:"DuckParty"}}'::STRUCT(key_a STRUCT(b VARCHAR, c STRUCT(a STRUCT(a FLOAT, b STRUCT(a VARCHAR), c STRUCT(a INT), d STRUCT(a DATE)), b VARCHAR)), key_b INT, key_c STRUCT(a VARCHAR));
+SELECT '{a:{b:DuckDB, c:{a:{a:0.9, b:{a:"DuckieDuck"}, c:{a:9000}, d:{a:5881580-07-10}}, b:"🦆"}}, b:900, c:{a:"DuckParty"}}'::STRUCT(a STRUCT(b VARCHAR, c STRUCT(a STRUCT(a FLOAT, b STRUCT(a VARCHAR), c STRUCT(a INT), d STRUCT(a DATE)), b VARCHAR)), b INT, c STRUCT(a VARCHAR));
 ----
-{'key_a': {'b': DuckDB, 'c': {'a': {'a': 0.9, 'b': {'a': DuckieDuck}, 'c': {'a': 9000}, 'd': {'a': 5881580-07-10}}, 'b': 🦆}}, 'key_b': 900, 'key_c': {'a': DuckParty}}
+{'a': {'b': DuckDB, 'c': {'a': {'a': 0.9, 'b': {'a': DuckieDuck}, 'c': {'a': 9000}, 'd': {'a': 5881580-07-10}}, 'b': 🦆}}, 'b': 900, 'c': {'a': DuckParty}}
 
+query I
+SELECT CAST('{a:{b:{c:{d:{e:{f:"Hello World"}}}}}}' AS STRUCT(a STRUCT(b STRUCT(c STRUCT(d STRUCT(e STRUCT(f VARCHAR)))))));
+----
+{'a': {'b': {'c': {'d': {'e': {'f': Hello World}}}}}}
 
 #               Cast from table
 # ---------------------------------------------------
@@ -58,9 +62,9 @@ statement ok
 INSERT INTO tbl1 (VALUES ('{a:1, b:3}'));
 
 query I
-SELECT col::STRUCT(key_A INT, key_B INT) FROM tbl1;
+SELECT col::STRUCT(a INT, b INT) FROM tbl1;
 ----
-{'key_A': 1, 'key_B': 3}
+{'a': 1, 'b': 3}
 
 # ---------------------------------------------------
 statement ok
@@ -71,9 +75,9 @@ INSERT INTO tbl2 (VALUES ('{a:1, b:"hello, world"}'));
 # trim off quotes?....
 
 query I
-SELECT col::STRUCT(key_A INT, key_B VARCHAR) FROM tbl2;
+SELECT col::STRUCT(a INT, b VARCHAR) FROM tbl2;
 ----
-{'key_A': 1, 'key_B': hello, world}
+{'a': 1, 'b': hello, world}
 
 # ---------------------------------------------------
 statement ok
@@ -83,10 +87,10 @@ statement ok
 INSERT INTO tbl3 (VALUES ('{a:DUCK, b:9.999, c:12}'), ('{a:"DB", b:1.111, c:21}'));
 
 query I
-SELECT col::STRUCT(key_A VARCHAR, key_B FLOAT, key_c INT) FROM tbl3;
+SELECT col::STRUCT(a VARCHAR, b FLOAT, c INT) FROM tbl3;
 ----
-{'key_A': DUCK, 'key_B': 9.999, 'key_c': 12}
-{'key_A': DB, 'key_B': 1.111, 'key_c': 21}
+{'a': DUCK, 'b': 9.999, 'c': 12}
+{'a': DB, 'b': 1.111, 'c': 21}
 
 
 # ---------------------------------------------------
@@ -97,9 +101,9 @@ statement ok
 INSERT INTO tbl4 (VALUES ('{a:{b:1}}'));
 
 query I
-SELECT col::STRUCT(key_a STRUCT(b INT)) FROM tbl4;
+SELECT col::STRUCT(a STRUCT(b INT)) FROM tbl4;
 ----
-{'key_a': {'b': 1}}
+{'a': {'b': 1}}
 
 
 #               Struct with lists
@@ -127,7 +131,6 @@ SELECT '{key_A: [[2, 3], [4]], key_B: [Hello, World]}'::STRUCT(key_A INT[][], ke
 #               Test for whitespaces
 # ---------------------------------------------------
 
-#trim whitespace at the end
 query I
 SELECT '{  key_A:     2, key_B: hello world    }'::STRUCT(key_A INT, key_B VARCHAR);
 ----
@@ -135,9 +138,9 @@ SELECT '{  key_A:     2, key_B: hello world    }'::STRUCT(key_A INT, key_B VARCH
 
 query I
 SELECT '    {a:        {b:         DuckDB,    c:12  }, b:  900, c          :{a
-                    :   "DuckParty  "}       }    '::STRUCT(key_a STRUCT(b VARCHAR, c INT), key_b INT, key_c STRUCT(a VARCHAR));
+                    :   "DuckParty  "}       }    '::STRUCT(a STRUCT(b VARCHAR, c INT), b INT, c STRUCT(a VARCHAR));
 ----
-{'key_a': {'b': DuckDB, 'c': 12}, 'key_b': 900, 'key_c': {'a': DuckParty  }}
+{'a': {'b': DuckDB, 'c': 12}, 'b': 900, 'c': {'a': DuckParty  }}
 
 
 
@@ -168,6 +171,16 @@ SELECT '{key_A: 2, key_C: 8}'::STRUCT(key_A INT, key_B DOUBLE, key_C FLOAT);
 ----
 {'key_A': 2, 'key_B': NULL, 'key_C': 8.0}
 
+query I
+SELECT '{key_C: Quack}'::STRUCT(key_A INT, key_B VARCHAR, key_C VARCHAR);
+----
+{'key_A': NULL, 'key_B': NULL, 'key_C': Quack}
+
+# query I
+# SELECT '{}'::STRUCT(key_A INT, key_B VARCHAR);
+# ----
+# {'key_A': NULL, 'key_B': NULL}
+
 
 
 
@@ -182,7 +195,35 @@ SELECT '{key_A: 2, key_C: 8}'::STRUCT(key_A INT, key_B DOUBLE, key_C FLOAT);
 
 #               Syntax error checking
 # ---------------------------------------------------
+statement error
+SELECT CAST('[{a:3}]' AS STRUCT(a INT));
 
+statement error
+SELECT CAST('Hello World' AS STRUCT(a VARCHAR));
+
+statement error
+SELECT CAST('{a: 3}}' AS STRUCT(a INT));
+
+statement error
+SELECT CAST('{{a: 3}' AS STRUCT(a INT));
+
+statement error
+SELECT CAST('{a:3}, {b:1}' AS STRUCT(a INT, b INT));
+
+statement error
+SELECT CAST('{a:{a:3}, b:{{b:1}}}' AS STRUCT(a STRUCT(a INT), b STRUCT(b INT)));
+
+statement error
+SELECT CAST('{a: 3 1}' AS STRUCT(a INT));
+
+statement error
+SELECT CAST('{a:3,, b:1}' AS STRUCT(a INT, b INT));
+
+statement error
+SELECT CAST('}{a:5}' AS STRUCT(a INT));
+
+statement error
+SELECT CAST('{a:{b:{d: 800}, {c: "Duck"}}}' AS STRUCT(a STRUCT(b STRUCT(d INT), c STRUCT(c VARCHAR))));
 
 
 
@@ -190,9 +231,16 @@ SELECT '{key_A: 2, key_C: 8}'::STRUCT(key_A INT, key_B DOUBLE, key_C FLOAT);
 
 #               Test WHERE clause
 # ---------------------------------------------------
+statement ok
+CREATE TABLE tbl(col VARCHAR);
 
+statement ok
+INSERT INTO tbl (VALUES ('{a:DUCK, b:12}'), ('{a:"DB", b:21}'), ('{a:"Quack", b:2}'));
 
-
+query I
+SELECT cast(col as STRUCT(a VARCHAR, b INT)).a FROM tbl WHERE cast(col as STRUCT(a VARCHAR, b INT)).b=12;
+----
+DUCK
 
 
 #               All types:
@@ -213,8 +261,19 @@ SELECT '{key_A: 2, key_C: 8}'::STRUCT(key_A INT, key_B DOUBLE, key_C FLOAT);
 
 #               CSV reader
 # ---------------------------------------------------
+statement ok
+CREATE TABLE assorted_structs(col1 STRUCT(a INT, b VARCHAR));
 
+statement ok
+COPY (SELECT '{a: 8, b: "hello, DuckDB"}') TO '__TEST_DIR__/assorted_structs.csv';
 
+statement ok
+COPY assorted_structs FROM '__TEST_DIR__/assorted_structs.csv';
+
+query I
+SELECT * FROM assorted_structs;
+----
+{'a': 8, 'b': hello, DuckDB}
 
 
 #               JSON testing
