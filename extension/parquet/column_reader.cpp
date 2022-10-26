@@ -757,8 +757,8 @@ unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
 	stats->max = Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows);
 
 	D_ASSERT(!stats->CanHaveNull() && stats->CanHaveNoNull());
-	return stats;
-};
+	return move(stats);
+}
 
 void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
                                            TProtocol &protocol_p) {
