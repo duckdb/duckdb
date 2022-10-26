@@ -108,6 +108,8 @@ unique_ptr<LocalSinkState> RadixPartitionedHashTable::GetLocalSinkState(Executio
 	return make_unique<RadixHTLocalState>(*this);
 }
 
+// TODO: write a method that lets us insert into a Combined ht (inserting only into the global state)
+
 void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                      DataChunk &groups_input, DataChunk &payload_input, AggregateType filter) const {
 	auto &llstate = (RadixHTLocalState &)lstate;

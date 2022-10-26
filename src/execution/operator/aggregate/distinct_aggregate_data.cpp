@@ -20,6 +20,10 @@ DistinctAggregateCollectionInfo::DistinctAggregateCollectionInfo(const vector<un
 		for (auto &child : aggregate.children) {
 			payload_types.push_back(child->return_type);
 		}
+		if (!aggregate.IsDistinct()) {
+			continue;
+		}
+		total_child_count += aggregate.children.size();
 	}
 }
 
@@ -56,8 +60,9 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 
 		// Fill the chunk_types (only contains the payload of the distinct aggregates)
 		vector<LogicalType> chunk_types;
-		for (auto &child_p : aggregate.children) {
-			chunk_types.push_back(child_p->return_type);
+		// TODO: add the group types to the chunk_types
+		for (auto &group_type : data.grouped_aggregate_data[table_idx]->group_types) {
+			chunk_types.push_back(group_type);
 		}
 
 		// This is used in Finalize to get the data from the radix table

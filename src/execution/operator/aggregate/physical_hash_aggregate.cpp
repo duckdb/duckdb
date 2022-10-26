@@ -390,9 +390,12 @@ public:
 	      op(op) {
 	}
 
-	void AggregateDistinctGrouping(DistinctAggregateCollectionInfo &info, DistinctAggregateData &data,
-	                               DistinctAggregateState &state) {
+	void AggregateDistinctGrouping(DistinctAggregateCollectionInfo &info,
+	                               const HashAggregateGroupingData &grouping_data,
+	                               HashAggregateGroupingGlobalState &grouping_state) {
 		auto &aggregates = info.aggregates;
+		auto &data = *grouping_data.distinct_data;
+		auto &state = *grouping_state.distinct_state;
 		auto &payload_chunk = state.payload_chunk;
 
 		ThreadContext temp_thread_context(context);
@@ -401,12 +404,10 @@ public:
 		idx_t payload_idx = 0;
 		idx_t next_payload_idx = 0;
 
-		//! Copy of the payload chunk, used to store the data of the radix table for use with the expression executor
-		//! We can not directly use the payload chunk because the input and the output to the expression executor can
-		//! not be the same Vector
-		DataChunk expression_executor_input;
-		expression_executor_input.InitializeEmpty(payload_chunk.GetTypes());
-		expression_executor_input.SetCardinality(0);
+		DataChunk group_chunk;
+		group_chunk.Initialize(context, grouping_data.table_data.group_types);
+		auto distinct_aggr_children = info.total_child_count;
+		auto &groups = op.grouped_aggregate_data.groups;
 
 		for (idx_t i = 0; i < aggregates.size(); i++) {
 			auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
@@ -428,49 +429,45 @@ public:
 			auto global_source_state = radix_table_p->GetGlobalSourceState(context);
 			auto local_source_state = radix_table_p->GetLocalSourceState(temp_exec_context);
 
+			auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
+			DataChunk aggregate_input_chunk;
+			if (!grouped_aggregate_data.payload_types.empty()) {
+				aggregate_input_chunk.Initialize(context, grouped_aggregate_data.payload_types);
+			}
+
 			//! Retrieve the stored data from the hashtable
+			idx_t groups_size = grouped_aggregate_data.GroupCount();
+			idx_t group_by_size = groups_size - distinct_aggr_children;
+
+			// FIXME: this is deallocated at the end of this, but in Finalize this is read from, so that might be
+			// causing the `Invalid bool load` ?
+			auto temp_local_state = grouping_data.table_data.GetLocalSinkState(temp_exec_context);
+
 			while (true) {
-				payload_chunk.Reset();
 				output_chunk.Reset();
 				radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx],
 				                       *global_source_state, *local_source_state);
 				if (output_chunk.size() == 0) {
 					break;
 				}
-
-				for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
-					expression_executor_input.data[payload_idx + child_idx].Reference(output_chunk.data[child_idx]);
-				}
-				expression_executor_input.SetCardinality(output_chunk);
-				// We dont need to resolve the filter, we already did this in Sink
-				state.child_executor.SetChunk(expression_executor_input);
-
-				payload_chunk.SetCardinality(output_chunk);
-
-				//#ifdef DEBUG
-				//				gstate.state.counts[i] += payload_chunk.size();
-				//#endif
-
-				// resolve the child expressions of the aggregate (if any)
-				idx_t payload_cnt = 0;
-				for (auto &child : aggregate.children) {
-					//! Before executing, remap the indices to point to the payload_chunk
-					//! Originally these indices correspond to the 'input' chunk
-					//! So we need to filter out the data that was used for filters (if any)
-					auto &child_ref = (BoundReferenceExpression &)*child;
-					child_ref.index = payload_idx + payload_cnt;
-
-					//! The child_executor contains a pointer to the expression we altered above
-					state.child_executor.ExecuteExpression(payload_idx + payload_cnt,
-					                                       payload_chunk.data[payload_idx + payload_cnt]);
-					payload_cnt++;
+				// Populate the group chunk
+				// FIXME: is this guaranteed to line up?
+				for (idx_t idx = 0; idx < group_chunk.ColumnCount(); idx++) {
+					group_chunk.data[idx].Reference(output_chunk.data[idx]);
 				}
 
-				auto start_of_input = payload_cnt ? &payload_chunk.data[payload_idx] : nullptr;
-				//! Update the aggregate state
-				AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
-				// aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
-				//                                  gstate.state.aggregates[i].get(), payload_chunk.size());
+				// Skip the group_by vectors (located at the start of the 'groups' vector)
+				// Map from the output_chunk to the aggregate_input_chunk, using the child expressions
+				for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.aggregates.size(); child_idx++) {
+					auto &child = grouped_aggregate_data.aggregates[child_idx];
+					auto &bound_ref_expr = (BoundReferenceExpression &)*child;
+					aggregate_input_chunk.data[bound_ref_expr.index].Reference(
+					    output_chunk.data[group_by_size + child_idx]);
+				}
+
+				// Sink it into the main ht
+				grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
+				                              group_chunk, aggregate_input_chunk, AggregateType::DISTINCT);
 			}
 		}
 		D_ASSERT(!gstate.finished);
@@ -482,12 +479,11 @@ public:
 		auto &info = *op.distinct_collection_info;
 		for (idx_t i = 0; i < op.groupings.size(); i++) {
 			auto &grouping = op.groupings[i];
-			auto &distinct_data = *grouping.distinct_data;
-			auto &distinct_state = *gstate.grouping_states[i].distinct_state;
-			AggregateDistinctGrouping(info, distinct_data, distinct_state);
+			auto &grouping_state = gstate.grouping_states[i];
+			AggregateDistinctGrouping(info, grouping, grouping_state);
 		}
-		op.Finalize(pipeline, *event, context, gstate, false);
 		event->FinishTask();
+		op.Finalize(pipeline, *event, context, gstate, false);
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
@@ -636,8 +632,8 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 
 SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                  GlobalSinkState &gstate_p) const {
-	return Finalize(pipeline, event, context, gstate_p, false); // DELETE ME
-	// return Finalize(pipeline, event, context, gstate_p, true); //
+	// return Finalize(pipeline, event, context, gstate_p, false); // DELETE ME
+	return Finalize(pipeline, event, context, gstate_p, true);
 }
 
 //===--------------------------------------------------------------------===//

@@ -289,6 +289,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		auto &aggr = aggregates[aggr_idx];
 		if (aggr.aggr_type != filter) {
 			payload_idx += aggr.child_count;
+			VectorOperations::AddInPlace(addresses, aggr.payload_size, payload.size());
 			continue;
 		}
 		// if (aggr.IsDistinct()) {

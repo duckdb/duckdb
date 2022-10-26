@@ -29,8 +29,9 @@ public:
 	//! This indirection is used to allow two aggregates to share the same input data
 	unordered_map<idx_t, idx_t> table_map;
 	const vector<unique_ptr<Expression>> &aggregates;
-	//! Mapping from aggregate index to table
 	vector<LogicalType> payload_types;
+	// Total amount of children of the distinct aggregates
+	idx_t total_child_count;
 
 public:
 	const vector<idx_t> &Indices() const;
