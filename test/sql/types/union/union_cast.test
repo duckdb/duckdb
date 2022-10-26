@@ -74,14 +74,14 @@ five
 6.0
 
 query III
-SELECT u.i32, u.str, u.f32 FROM tbl2 UNION SELECT u.i32, u.str, NULL FROM tbl1;
+SELECT u.i32, u.str, u.f32 FROM tbl2 UNION SELECT u.i32, u.str, NULL FROM tbl1 ORDER BY ALL;
 ----
-NULL	five	NULL
-4		NULL	NULL
 NULL	NULL	6.0
+NULL	five	NULL
+NULL	three	NULL
 NULL	two		NULL
 1		NULL	NULL
-NULL	three	NULL
+4		NULL	NULL
 
 
 query I
