@@ -49,20 +49,23 @@ describe(`Arrow IPC Demo`, () => {
 
     it(`Basic examples`, async () => {
         const query = "SELECT * FROM range(0,3) tbl(i)";
-        const result_stream = await db.arrowIPCStream(query);
+        const arrow_table_expected = new arrow.Table({
+            i: new arrow.Vector([arrow.makeData({ type: new arrow.Int32, data: [0, 1, 2] })]),
+        });
 
         // Can use Arrow to read from stream directly
+        const result_stream = await db.arrowIPCStream(query);
         const reader = await arrow.RecordBatchReader.from(result_stream);
         const table = await arrow.tableFromIPC(reader);
         const array_from_arrow = table.toArray();
-        assert.deepEqual(array_from_arrow.toString(), '{"i": 0},{"i": 1},{"i": 2}');
+        assert.deepEqual(array_from_arrow, arrow_table_expected.toArray());
 
         // Can also fully materialize stream first, then pass to Arrow
-        const result_stream_materialized = result_stream.toArray()
-        const reader2 = await arrow.RecordBatchReader.from(result_stream_materialized);
+        const result_stream2 = await db.arrowIPCStream(query);
+        const reader2 = await arrow.RecordBatchReader.from(result_stream2.toArray());
         const table2 = await arrow.tableFromIPC(reader2);
-        const array_from_arrow2 = table.toArray();
-        assert.deepEqual(array_from_arrow2.toString(), '{"i": 0},{"i": 1},{"i": 2}');
+        const array_from_arrow2 = table2.toArray();
+        assert.deepEqual(array_from_arrow2, arrow_table_expected.toArray());
 
         // Can also fully materialize in DuckDB first (allowing parallel execution)
         const result_materialized = await new Promise((resolve, reject) => {
@@ -76,8 +79,8 @@ describe(`Arrow IPC Demo`, () => {
         });
         const reader3 = await arrow.RecordBatchReader.from(result_materialized);
         const table3 = await arrow.tableFromIPC(reader3);
-        const array_from_arrow3 = table.toArray();
-        assert.deepEqual(array_from_arrow3.toString(), '{"i": 0},{"i": 1},{"i": 2}');
+        const array_from_arrow3 = table3.toArray();
+        assert.deepEqual(array_from_arrow3, arrow_table_expected.toArray());
 
         // Scanning materialized IPC buffers from DuckDB
         db.register_buffer("ipc_table", result_materialized, true);
@@ -136,7 +139,6 @@ for (const [name, fun] of Object.entries(to_ipc_functions)) {
             }
 
             // Now we can query the ipc buffer using DuckDB by providing an object with an alias and the materialized ipc buffers
-
             await new Promise((resolve, reject) => {
                 db.all(`SELECT avg(i) as average, count(1) as total
                         FROM ipc_table_${name};`, function (err, result) {
@@ -152,11 +154,6 @@ for (const [name, fun] of Object.entries(to_ipc_functions)) {
         it(`Round-trip int column`, async () => {
             // Now we fetch the ipc stream object and construct the RecordBatchReader
             const ipc_buffers = await fun(db, 'SELECT * FROM range(1001, 2001) tbl(i)');
-
-            //! NOTE: We can now create an Arrow RecordBatchReader and Table from the materialized stream
-            // const reader = await arrow.RecordBatchReader.from(ipc_buffers);
-            // const table = arrow.tableFromIPC(reader);
-            // console.log(table.toArray());
 
             // Now to scan the buffer, we first need to register it
             db.register_buffer("ipc_table", ipc_buffers, true);
@@ -223,33 +220,21 @@ describe('[Benchmark] Arrow IPC Single Int Column (50M tuples)',() => {
     });
 
     it('DuckDB table -> DuckDB table', (done) => {
-        const batches = [];
-        let got_rows = 0;
-
-        conn.run('CREATE TABLE copy_table AS SELECT * FROM test', (err, result) => {
+        conn.run('CREATE TABLE copy_table AS SELECT * FROM test', (err) => {
             if (err) throw err;
             done();
         });
     });
 
     it('DuckDB table -> Stream IPC buffer', async () => {
-        let got_batches = 0;
-        let got_rows = 0;
-        const batches = [];
-
         const result = await conn.arrowIPCStream('SELECT * FROM test');
         const ipc_buffers = await result.toArray();
         const reader = await arrow.RecordBatchReader.from(ipc_buffers);
         const table = arrow.tableFromIPC(reader);
-
         assert.equal(table.numRows, column_size);
     });
 
     it('DuckDB table -> Materialized IPC buffer',  (done) => {
-        let got_batches = 0;
-        let got_rows = 0;
-        const batches = [];
-
         conn.arrowIPCAll('SELECT * FROM test', (err,res) => {
             done();
         });
@@ -312,10 +297,6 @@ describe('[Benchmark] Arrow IPC TPC-H lineitem.parquet', () => {
     });
 
     it('Parquet -> DuckDB', async () => {
-        const batches = [];
-        let got_rows = 0;
-
-        const startTimeLoad = performance.now()
         await new Promise((resolve, reject) => {
             conn.run('CREATE TABLE load_parquet_directly AS SELECT * FROM "' + parquet_file_path + '";', (err) => {
                 if (err) {
@@ -324,10 +305,8 @@ describe('[Benchmark] Arrow IPC TPC-H lineitem.parquet', () => {
                 resolve()
             });
         });
-        // console.log("Load time: " + Math.round(performance.now() - startTimeLoad) + "ms");
 
         const query = sql.replace("lineitem", "load_parquet_directly");
-        const startTimeQuery = performance.now()
 
         const result = await new Promise((resolve, reject) => {
             db.all(query, function (err, result) {
@@ -337,7 +316,6 @@ describe('[Benchmark] Arrow IPC TPC-H lineitem.parquet', () => {
                 resolve(result)
             });
         });
-        // console.log("Query time: " + Math.round(performance.now() - startTimeQuery) + "ms");
 
         assert.deepEqual(result, answer);
     });
@@ -376,7 +354,6 @@ for (const [name, fun] of Object.entries(to_ipc_functions)) {
 
         for (const query of queries) {
             it(` ${query}`, async () => {
-                const batches = [];
                 // First do query directly on parquet file
                 const expected_value = await new Promise((resolve, reject) => {
                     db.all(query.replace("table_name", `'${parquet_file_path}'`), function (err, result) {
@@ -388,7 +365,7 @@ for (const [name, fun] of Object.entries(to_ipc_functions)) {
                     });
                 });
 
-                // Secondly copy parquet file completely into Arrow IPC format
+                // Copy parquet file completely into Arrow IPC format
                 const ipc_buffers = await fun(db, 'SELECT * FROM "' + parquet_file_path + '"');
 
                 // Register the ipc buffers as table in duckdb, using force to override the previously registered buffers
