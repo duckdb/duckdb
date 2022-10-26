@@ -2,8 +2,9 @@ package org.duckdb;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Iterator;
 
-public class DuckDBArrowResult {
+public class DuckDBArrowResult implements Iterable<Object> {
 
 	private Class<?> vector_root_class;
 	private Class<?> schema_class;
@@ -51,7 +52,7 @@ public class DuckDBArrowResult {
 				schema, allocator);
 	}
 
-	public Object fetchVectorSchemaRoot() throws Exception {
+	private Object fetchVectorSchemaRoot() throws Exception {
 		Object c_array = c_array_class.getMethod("allocateNew", buffer_allocator_class).invoke(null, allocator);
 		Long c_array_address = (Long) c_array_class.getMethod("memoryAddress").invoke(c_array);
 
@@ -63,5 +64,28 @@ public class DuckDBArrowResult {
 				dictionary_class).invoke(null, allocator, c_array, vector_schema_root, null);
 
 		return vector_schema_root;
+	}
+
+	@Override
+	public Iterator<Object> iterator() {
+		return new Iterator<Object>() {
+			Object fetch_result;
+
+			@Override
+			public boolean hasNext() {
+				fetch_result = null;
+				try {
+					fetch_result = fetchVectorSchemaRoot();
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+				return fetch_result != null;
+			}
+
+			@Override
+			public Object next() {
+				return fetch_result;
+			}
+		};
 	}
 }
