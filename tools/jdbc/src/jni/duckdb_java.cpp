@@ -6,6 +6,7 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -940,23 +941,28 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1schema(
                                                                                 jlong arrow_schema_address) {
 
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
-	if (!res_ref || !res_ref->res || !res_ref->res->success) {
+	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		env->ThrowNew(J_SQLException, "Invalid result set");
+	}
+	if (arrow_schema_address == 0) {
+		env->ThrowNew(J_SQLException, "Invalid schema pointer address");
 	}
 
 	auto timezone_config = duckdb::QueryResult::GetConfigTimezone(*res_ref->res);
 	auto arrow_schema = (ArrowSchema *)arrow_schema_address;
-	duckdb::QueryResult::ToArrowSchema(arrow_schema, res_ref->res->types, res_ref->res->names, timezone_config);
+	ArrowConverter::ToArrowSchema(arrow_schema, res_ref->res->types, res_ref->res->names, timezone_config);
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1fetch(JNIEnv *env, jclass, jobject res_ref_buf,
                                                                                jlong arrow_array_address) {
-
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
-	if (!res_ref || !res_ref->res || !res_ref->res->success) {
+	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		env->ThrowNew(J_SQLException, "Invalid result set");
+	}
+	if (arrow_array_address == 0) {
+		env->ThrowNew(J_SQLException, "Invalid array pointer address");
 	}
 	auto arrow_array = (ArrowArray *)arrow_array_address;
 	auto chunk = res_ref->res->Fetch();
-	chunk->ToArrowArray(arrow_array);
+	ArrowConverter::ToArrowArray(*chunk, arrow_array);
 }

@@ -91,24 +91,15 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
 
-<<<<<<< HEAD
-	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref);
+	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref) throws SQLException;
+	
+	protected static native int duckdb_jdbc_fetch_size();
 
 	protected static native void duckdb_jdbc_arrow_schema(ByteBuffer appender_ref, long arrow_schema);
 
 	protected static native void duckdb_jdbc_arrow_fetch(ByteBuffer appender_ref, long arrow_array);
 
-	protected static native int duckdb_jdbc_fetch_size();
-
-	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name,
-			byte[] table_name);
-=======
-	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref) throws SQLException;
-	
-	protected static native int duckdb_jdbc_fetch_size();
-
 	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name) throws SQLException;
->>>>>>> 575117f6be395ad7caef8614ffa4b44d7e149331
 
 	protected static native void duckdb_jdbc_appender_begin_row(ByteBuffer appender_ref) throws SQLException;
 
