@@ -1223,6 +1223,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	return RefineTypeDetection(type_candidates, requested_types, best_sql_types_candidates, best_format_candidates);
 }
 
+// 32Mb Chunk
+//  1 Thread per Mb?
+
 bool BufferedCSVReader::TryParseComplexCSV(DataChunk &insert_chunk, string &error_message,
                                            RemainderLines *remainder_lines) {
 	// used for parsing algorithm
@@ -1736,53 +1739,6 @@ final_state:
 	finished = true;
 	//	end_of_file_reached = true;
 	return true;
-}
-
-bool BufferedCSVReader::ReadBuffer(idx_t &start) {
-	auto old_buffer = move(buffer);
-
-	// the remaining part of the last buffer
-	idx_t remaining = 0;
-	if (buffer_size > start) {
-		remaining = buffer_size - start;
-	}
-
-	bool large_buffers = mode == ParserMode::PARSING && !file_handle->OnDiskFile() && file_handle->CanSeek();
-	//	idx_t buffer_read_size = large_buffers ? INITIAL_BUFFER_SIZE_LARGE : INITIAL_BUFFER_SIZE;
-	idx_t buffer_read_size = bytes_per_thread;
-	while (remaining > buffer_read_size) {
-		buffer_read_size *= 2;
-	}
-
-	// Check line length
-	if (remaining > options.maximum_line_size) {
-		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", options.maximum_line_size);
-	}
-
-	buffer = unique_ptr<char[]>(new char[buffer_read_size + remaining + 1]);
-	buffer_size = remaining + buffer_read_size;
-	if (remaining > 0) {
-		// remaining from last buffer: copy it here
-		memcpy(buffer.get(), old_buffer.get() + start, remaining);
-	}
-	idx_t read_count = file_handle->Read(buffer.get() + remaining, buffer_read_size);
-
-	bytes_in_chunk += read_count;
-	buffer_size = remaining + read_count;
-	//	buffer[buffer_size] = '\0';
-	if (old_buffer) {
-		cached_buffers.push_back(move(old_buffer));
-	}
-	start = 0;
-	position_buffer = remaining;
-	if (!bom_checked) {
-		bom_checked = true;
-		if (read_count >= 3 && buffer[0] == '\xEF' && buffer[1] == '\xBB' && buffer[2] == '\xBF') {
-			position_buffer += 3;
-		}
-	}
-
-	return read_count > 0;
 }
 
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk, RemainderLines *remainder_lines) {

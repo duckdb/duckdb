@@ -90,8 +90,6 @@ struct ReadCSVGlobalState : public GlobalTableFunctionState {
 	idx_t bytes_per_local_state;
 	//! If we finished reading the whole file
 	bool finished_file = false;
-	//! The remainder of Lines
-	RemainderLines remainder_lines;
 
 	idx_t children = 0;
 	idx_t children_done = 0;

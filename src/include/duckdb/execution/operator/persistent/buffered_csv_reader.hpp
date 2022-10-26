@@ -18,6 +18,8 @@
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
+#include "duckdb/execution/operator/persistent/csv_buffer.hpp"
+
 #include <sstream>
 
 namespace duckdb {
@@ -74,10 +76,6 @@ struct RemainderLines {
 };
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BufferedCSVReader {
-	//! Initial buffer read size; can be extended for long lines
-	//	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
-	//! Larger buffer size for non disk files
-	//	static constexpr idx_t INITIAL_BUFFER_SIZE_LARGE = 10000000; // 10MB
 	ParserMode mode;
 
 public:
@@ -97,8 +95,6 @@ public:
 	vector<idx_t> insert_cols_idx;
 	vector<idx_t> insert_nulls_idx;
 
-	unique_ptr<char[]> buffer;
-	idx_t buffer_size;
 	//! Current Position (Relative to the Buffer)
 	idx_t position_buffer = 0;
 	//! Start (Relative to the Buffer)
