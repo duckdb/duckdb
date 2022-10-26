@@ -27,7 +27,7 @@ public:
 	             LocalSourceState &lstate) const override;
 
 public:
-    // Sink interface
+	// Sink interface
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
@@ -37,6 +37,7 @@ public:
 	bool IsSink() const override {
 		return info->query != nullptr;
 	}
+
 	bool ParallelSink() const override {
 		return true;
 	}
