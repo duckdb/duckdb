@@ -91,7 +91,7 @@ public:
 private:
 	void InitializeInternal(PhysicalOperator *physical_plan);
 
-	void ScheduleEvents();
+	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
 	static void ScheduleEventsInternal(ScheduleEventData &event_data);
 
 	static void VerifyScheduledEvents(const ScheduleEventData &event_data);
@@ -102,7 +102,7 @@ private:
 
 	bool NextExecutor();
 
-	shared_ptr<Pipeline> CreateChildPipeline(Pipeline *current);
+	shared_ptr<Pipeline> CreateChildPipeline(Pipeline *current, PhysicalOperator *op);
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
@@ -115,8 +115,8 @@ private:
 	mutex error_lock;
 	//! All pipelines of the query plan
 	vector<shared_ptr<Pipeline>> pipelines;
-	//! The meta pipelines of the query
-	vector<shared_ptr<MetaPipeline>> root_pipelines;
+	//! The root pipelines of the query
+	vector<shared_ptr<Pipeline>> root_pipelines;
 	//! The pipeline executor for the root pipeline
 	unique_ptr<PipelineExecutor> root_executor;
 	//! The current root pipeline index

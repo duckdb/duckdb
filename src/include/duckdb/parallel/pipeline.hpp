@@ -33,7 +33,7 @@ public:
 	void SetPipelineSink(Pipeline &pipeline, PhysicalOperator *op, idx_t sink_pipeline_count);
 	void SetPipelineOperators(Pipeline &pipeline, vector<PhysicalOperator *> operators);
 	void AddPipelineOperator(Pipeline &pipeline, PhysicalOperator *op);
-	shared_ptr<Pipeline> CreateChildPipeline(Executor &executor, Pipeline &pipeline);
+	shared_ptr<Pipeline> CreateChildPipeline(Executor &executor, Pipeline &pipeline, PhysicalOperator *op);
 
 	PhysicalOperator *GetPipelineSource(Pipeline &pipeline);
 	PhysicalOperator *GetPipelineSink(Pipeline &pipeline);

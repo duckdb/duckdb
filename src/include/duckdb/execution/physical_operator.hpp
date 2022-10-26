@@ -219,7 +219,7 @@ public:
 	bool AllSourcesSupportBatchIndex() const;
 	bool AllOperatorsPreserveOrder() const;
 
-	virtual void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline, vector<Pipeline *> &final_pipelines);
+	virtual void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline);
 };
 
 } // namespace duckdb

@@ -11,6 +11,7 @@ add_library_unity(
   pipeline_event.cpp
   pipeline_executor.cpp
   pipeline_finish_event.cpp
+  pipeline_initialize_event.cpp
   task_scheduler.cpp
   thread_context.cpp)
 set(ALL_OBJECT_FILES

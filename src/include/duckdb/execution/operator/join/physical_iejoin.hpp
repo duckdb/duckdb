@@ -62,7 +62,7 @@ public:
 	}
 
 public:
-	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline, vector<Pipeline *> &final_pipelines) override;
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 
 private:
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)

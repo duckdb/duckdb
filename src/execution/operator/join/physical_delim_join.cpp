@@ -119,8 +119,7 @@ string PhysicalDelimJoin::ParamsToString() const {
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
-                                       vector<Pipeline *> &final_pipelines) {
+void PhysicalDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 	sink_state.reset();
 
@@ -134,9 +133,9 @@ void PhysicalDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 		// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
 		auto &state = meta_pipeline.GetState();
 		for (auto &delim_scan : delim_scans) {
-			state.delim_join_dependencies[delim_scan] = child_meta_pipeline->GetRootPipeline().get();
+			state.delim_join_dependencies[delim_scan] = child_meta_pipeline->GetBasePipeline().get();
 		}
-		join->BuildPipelines(current, meta_pipeline, final_pipelines);
+		join->BuildPipelines(current, meta_pipeline);
 	}
 }
 

@@ -22,6 +22,41 @@ PhysicalOperator *MetaPipeline::GetSink() const {
 	return sink;
 }
 
+shared_ptr<Pipeline> &MetaPipeline::GetBasePipeline() {
+	return pipelines[0];
+}
+
+void MetaPipeline::GetPipelines(vector<shared_ptr<Pipeline>> &result, bool recursive, bool skip) {
+	if (!skip) {
+		result.insert(result.end(), pipelines.begin(), pipelines.end());
+	}
+	if (recursive) {
+		for (auto &child : children) {
+			child->GetPipelines(result, true, false);
+		}
+	}
+}
+
+void MetaPipeline::GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip) {
+	if (!skip) {
+		result.push_back(shared_from_this());
+	}
+	if (recursive) {
+		for (auto &child : children) {
+			child->GetMetaPipelines(result, true, false);
+		}
+	}
+}
+
+const vector<Pipeline *> *MetaPipeline::GetDependencies(Pipeline *dependant) const {
+	auto it = dependencies.find(dependant);
+	if (it == dependencies.end()) {
+		return nullptr;
+	} else {
+		return &it->second;
+	}
+}
+
 bool MetaPipeline::HasRecursiveCTE() const {
 	return recursive_cte != nullptr;
 }
@@ -35,53 +70,11 @@ void MetaPipeline::SetRecursiveCTE(PhysicalOperator *recursive_cte_p) {
 	recursive_cte = (PhysicalRecursiveCTE *)recursive_cte_p;
 }
 
-shared_ptr<Pipeline> &MetaPipeline::GetRootPipeline() {
-	return pipelines[0];
-}
-
-void MetaPipeline::GetPipelines(vector<shared_ptr<Pipeline>> &result, bool recursive) {
-	if (!sink) {
-		return;
-	}
-	result.insert(result.end(), pipelines.begin(), pipelines.end());
-	if (recursive) {
-		for (auto &child : children) {
-			child->GetPipelines(result, true);
-		}
-	}
-}
-
-void MetaPipeline::GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive) {
-	result.push_back(shared_from_this());
-	if (recursive) {
-		for (auto &child : children) {
-			child->GetMetaPipelines(result, true);
-		}
-	}
-}
-
-vector<shared_ptr<MetaPipeline>> &MetaPipeline::GetChildren() {
-	return children;
-}
-
-const vector<Pipeline *> *MetaPipeline::GetDependencies(Pipeline *pipeline) const {
-	auto it = inter_pipeline_dependencies.find(pipeline);
-	if (it == inter_pipeline_dependencies.end()) {
-		return nullptr;
-	} else {
-		return &it->second;
-	}
-}
-
-vector<Pipeline *> &MetaPipeline::GetFinalPipelines() {
-	return final_pipelines;
-}
-
 void MetaPipeline::Build(PhysicalOperator *op) {
 	D_ASSERT(pipelines.size() == 1);
 	D_ASSERT(children.empty());
 	D_ASSERT(final_pipelines.empty());
-	op->BuildPipelines(*pipelines.back(), *this, final_pipelines);
+	op->BuildPipelines(*pipelines.back(), *this);
 }
 
 void MetaPipeline::Ready() {
@@ -110,10 +103,11 @@ void MetaPipeline::Reset(ClientContext &context, bool reset_sink) {
 }
 
 MetaPipeline *MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op) {
+	D_ASSERT(pipelines.back().get() == &current); // rule 1
 	children.push_back(make_unique<MetaPipeline>(executor, state, op));
 	auto child_meta_pipeline = children.back().get();
 	// child MetaPipeline must finish completely before this MetaPipeline can start
-	current.AddDependency(child_meta_pipeline->GetRootPipeline());
+	current.AddDependency(child_meta_pipeline->GetBasePipeline());
 	return child_meta_pipeline;
 }
 
@@ -126,19 +120,43 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current) {
 	if (HasRecursiveCTE()) {
 		throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");
 	}
+
+	// create the union pipeline
 	auto union_pipeline = CreatePipeline();
 	state.SetPipelineOperators(*union_pipeline, state.GetPipelineOperators(current));
 	state.SetPipelineSink(*union_pipeline, sink, pipelines.size() - 1);
+
+	// 'union_pipeline' inherits ALL dependencies of 'current' (intra- and inter-MetaPipeline)
+	union_pipeline->dependencies = current.dependencies;
+	auto current_inter_deps = GetDependencies(&current);
+	if (current_inter_deps) {
+		dependencies[union_pipeline] = *current_inter_deps;
+	}
+
 	return union_pipeline;
 }
 
-Pipeline *MetaPipeline::CreateChildPipeline(Pipeline &current) {
-	pipelines.emplace_back(state.CreateChildPipeline(executor, current));
-	return pipelines.back().get();
-}
+void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op) {
+	D_ASSERT(pipelines.back().get() != &current); // rule 2
+	if (HasRecursiveCTE()) {
+		throw NotImplementedException("Child pipelines are not supported in recursive CTEs yet");
+	}
 
-void MetaPipeline::AddInterPipelineDependency(Pipeline *dependant, Pipeline *dependee) {
-	inter_pipeline_dependencies[dependant].push_back(dependee);
+	// child pipeline has an inter-MetaPipeline depency on all pipelines that were scheduled between 'current' and now
+	// (including 'current') - gather them
+	auto it = pipelines.begin();
+	while (it->get() != &current) {
+		it++;
+	}
+	vector<Pipeline *> scheduled_between;
+	while (it != pipelines.end()) {
+		scheduled_between.push_back(it->get());
+	}
+	D_ASSERT(!scheduled_between.empty());
+
+	// finally, create the child pipeline and set the dependencies
+	pipelines.emplace_back(state.CreateChildPipeline(executor, current, op));
+	dependencies[pipelines.back().get()] = move(scheduled_between);
 }
 
 } // namespace duckdb

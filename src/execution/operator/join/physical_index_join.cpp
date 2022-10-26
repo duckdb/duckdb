@@ -211,13 +211,12 @@ OperatorResultType PhysicalIndexJoin::Execute(ExecutionContext &context, DataChu
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalIndexJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
-                                       vector<Pipeline *> &final_pipelines) {
+void PhysicalIndexJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	// index join: we only continue into the LHS
 	// the right side is probed by the index join
 	// so we don't need to do anything in the pipeline with this child
 	meta_pipeline.GetState().AddPipelineOperator(current, this);
-	children[0]->BuildPipelines(current, meta_pipeline, final_pipelines);
+	children[0]->BuildPipelines(current, meta_pipeline);
 }
 
 vector<const PhysicalOperator *> PhysicalIndexJoin::GetSources() const {

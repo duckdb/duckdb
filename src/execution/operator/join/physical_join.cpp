@@ -25,8 +25,7 @@ bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
-                                      vector<Pipeline *> &final_pipelines, PhysicalOperator &op) {
+void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline, PhysicalOperator &op) {
 	op.op_state.reset();
 	op.sink_state.reset();
 
@@ -34,8 +33,14 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	auto &state = meta_pipeline.GetState();
 	state.AddPipelineOperator(current, &op);
 
+	// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
+	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, &op);
+	child_meta_pipeline->Build(op.children[1].get());
+
+	// continue building the current pipeline on the LHS (probe side)
+	op.children[0]->BuildPipelines(current, meta_pipeline);
+
 	// Join can become a source operator if it's RIGHT/OUTER, or if the hash join goes out-of-core
-	// this pipeline has to happen AFTER all the probing has happened
 	bool add_child_pipeline = false;
 	if (op.type != PhysicalOperatorType::CROSS_PRODUCT) {
 		auto &join_op = (PhysicalJoin &)op;
@@ -56,30 +61,12 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	}
 
 	if (add_child_pipeline) {
-		// create child pipeline
-		auto child_pipeline = meta_pipeline.CreateChildPipeline(current);
-		// create a new vector to set up dependencies
-		vector<Pipeline *> child_pipeline_dependencies;
-		// continue building the LHS pipeline (probe child)
-		op.children[0]->BuildPipelines(current, meta_pipeline, child_pipeline_dependencies);
-		// child pipeline depends on the downstream child pipelines to have finished (if any)
-		for (auto dependee : child_pipeline_dependencies) {
-			meta_pipeline.AddInterPipelineDependency(child_pipeline, dependee);
-		}
-		// the child pipeline needs to finish before the MetaPipeline is finished
-		final_pipelines.push_back(child_pipeline);
-	} else {
-		// continue building the LHS pipeline (probe child)
-		op.children[0]->BuildPipelines(current, meta_pipeline, final_pipelines);
+		meta_pipeline.CreateChildPipeline(current, &op);
 	}
-
-	// on the RHS (build side), we construct a new child pipeline with this pipeline as its source
-	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, &op);
-	child_meta_pipeline->Build(op.children[1].get());
 }
 
-void PhysicalJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline, vector<Pipeline *> &final_pipelines) {
-	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, final_pipelines, *this);
+void PhysicalJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
+	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, *this);
 }
 
 vector<const PhysicalOperator *> PhysicalJoin::GetSources() const {

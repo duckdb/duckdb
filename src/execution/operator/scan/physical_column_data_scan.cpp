@@ -36,8 +36,7 @@ void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
-                                            vector<Pipeline *> &final_pipelines) {
+void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	// check if there is any additional action we need to do depending on the type
 	auto &state = meta_pipeline.GetState();
 	switch (type) {

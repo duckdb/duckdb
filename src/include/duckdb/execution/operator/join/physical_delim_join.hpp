@@ -47,7 +47,7 @@ public:
 	string ParamsToString() const override;
 
 public:
-	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline, vector<Pipeline *> &final_pipelines) override;
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 };
 
 } // namespace duckdb

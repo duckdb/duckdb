@@ -118,7 +118,6 @@ bool Pipeline::IsOrderDependent() const {
 void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
 	D_ASSERT(sink);
-	Reset();
 	if (!ScheduleParallel(event)) {
 		// could not parallelize this pipeline: push a sequential task instead
 		ScheduleSequentialTask(event);
@@ -147,7 +146,7 @@ bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 }
 
 void Pipeline::Reset() {
-	if (sink && !sink->sink_state) {
+	if (!sink->sink_state) {
 		sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
 	}
 
@@ -250,8 +249,9 @@ void PipelineBuildState::SetPipelineOperators(Pipeline &pipeline, vector<Physica
 	pipeline.operators = move(operators);
 }
 
-shared_ptr<Pipeline> PipelineBuildState::CreateChildPipeline(Executor &executor, Pipeline &pipeline) {
-	return executor.CreateChildPipeline(&pipeline);
+shared_ptr<Pipeline> PipelineBuildState::CreateChildPipeline(Executor &executor, Pipeline &pipeline,
+                                                             PhysicalOperator *op) {
+	return executor.CreateChildPipeline(&pipeline, op);
 }
 
 vector<PhysicalOperator *> PipelineBuildState::GetPipelineOperators(Pipeline &pipeline) {

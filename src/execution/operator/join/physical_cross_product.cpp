@@ -136,9 +136,8 @@ OperatorResultType PhysicalCrossProduct::Execute(ExecutionContext &context, Data
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalCrossProduct::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
-                                          vector<Pipeline *> &final_pipelines) {
-	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, final_pipelines, *this);
+void PhysicalCrossProduct::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
+	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, *this);
 }
 
 vector<const PhysicalOperator *> PhysicalCrossProduct::GetSources() const {

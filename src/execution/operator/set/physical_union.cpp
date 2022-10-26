@@ -15,17 +15,15 @@ PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
-                                   vector<Pipeline *> &final_pipelines) {
+void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 	sink_state.reset();
 
-	// create a union pipeline that is identical
+	// create a union pipeline that is identical, inheriting any dependencies encountered so far
 	auto union_pipeline = meta_pipeline.CreateUnionPipeline(current);
-	// continue building the current pipeline
-	children[0]->BuildPipelines(current, meta_pipeline, final_pipelines);
-	// continue building the union pipeline
-	children[1]->BuildPipelines(*union_pipeline, meta_pipeline, final_pipelines);
+	// the remainder of the top and bottom pipelines of the union are independent of each other
+	children[0]->BuildPipelines(current, meta_pipeline);
+	children[1]->BuildPipelines(*union_pipeline, meta_pipeline);
 }
 
 vector<const PhysicalOperator *> PhysicalUnion::GetSources() const {

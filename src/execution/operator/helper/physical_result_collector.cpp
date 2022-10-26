@@ -37,8 +37,7 @@ vector<PhysicalOperator *> PhysicalResultCollector::GetChildren() const {
 	return {plan};
 }
 
-void PhysicalResultCollector::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
-                                             vector<Pipeline *> &final_pipelines) {
+void PhysicalResultCollector::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	// operator is a sink, build a pipeline
 	sink_state.reset();
 

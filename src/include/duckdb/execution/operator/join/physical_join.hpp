@@ -29,9 +29,8 @@ public:
 	                                    bool has_null);
 
 public:
-	static void BuildJoinPipelines(Pipeline &current, MetaPipeline &confluent_pipelines,
-	                               vector<Pipeline *> &final_pipelines, PhysicalOperator &op);
-	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline, vector<Pipeline *> &final_pipelines) override;
+	static void BuildJoinPipelines(Pipeline &current, MetaPipeline &confluent_pipelines, PhysicalOperator &op);
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	vector<const PhysicalOperator *> GetSources() const override;
 };
 

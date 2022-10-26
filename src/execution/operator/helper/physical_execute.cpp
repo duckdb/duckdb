@@ -10,8 +10,7 @@ vector<PhysicalOperator *> PhysicalExecute::GetChildren() const {
 	return {plan};
 }
 
-void PhysicalExecute::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
-                                     vector<Pipeline *> &final_pipelines) {
+void PhysicalExecute::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	// EXECUTE statement: build pipeline on child
 	meta_pipeline.Build(plan);
 }

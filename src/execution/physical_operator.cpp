@@ -119,8 +119,7 @@ idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline,
-                                      vector<Pipeline *> &final_pipelines) {
+void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 
 	auto &state = meta_pipeline.GetState();
@@ -145,7 +144,7 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 				throw InternalException("Operator not supported in BuildPipelines");
 			}
 			state.AddPipelineOperator(current, this);
-			children[0]->BuildPipelines(current, meta_pipeline, final_pipelines);
+			children[0]->BuildPipelines(current, meta_pipeline);
 		}
 	}
 }
