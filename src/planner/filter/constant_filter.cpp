@@ -1,4 +1,6 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
+
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 
@@ -25,7 +27,7 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	case PhysicalType::DOUBLE:
 		return ((NumericStatistics &)stats).CheckZonemap(comparison_type, constant);
 	case PhysicalType::VARCHAR:
-		return ((StringStatistics &)stats).CheckZonemap(comparison_type, constant.ToString());
+		return ((StringStatistics &)stats).CheckZonemap(comparison_type, StringValue::Get(constant));
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -41,6 +43,17 @@ bool ConstantFilter::Equals(const TableFilter &other_p) const {
 	}
 	auto &other = (ConstantFilter &)other_p;
 	return other.comparison_type == comparison_type && other.constant == constant;
+}
+
+void ConstantFilter::Serialize(FieldWriter &writer) const {
+	writer.WriteField(comparison_type);
+	writer.WriteSerializable(constant);
+}
+
+unique_ptr<TableFilter> ConstantFilter::Deserialize(FieldReader &source) {
+	auto comparision_type = source.ReadRequired<ExpressionType>();
+	auto constant = source.ReadRequiredSerializable<Value, Value>();
+	return make_unique<ConstantFilter>(comparision_type, constant);
 }
 
 } // namespace duckdb

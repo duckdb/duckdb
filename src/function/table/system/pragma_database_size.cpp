@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-struct PragmaDatabaseSizeData : public FunctionOperatorData {
+struct PragmaDatabaseSizeData : public GlobalTableFunctionState {
 	PragmaDatabaseSizeData() : finished(false) {
 	}
 
@@ -44,45 +44,28 @@ static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, T
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> PragmaDatabaseSizeInit(ClientContext &context, const FunctionData *bind_data,
-                                                        const vector<column_t> &column_ids,
-                                                        TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaDatabaseSizeInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<PragmaDatabaseSizeData>();
 }
 
-void PragmaDatabaseSizeFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (PragmaDatabaseSizeData &)*operator_state;
+void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (PragmaDatabaseSizeData &)*data_p.global_state;
 	if (data.finished) {
 		return;
 	}
 	auto &storage = StorageManager::GetStorageManager(context);
-	auto &block_manager = BlockManager::GetBlockManager(context);
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 
+	auto ds = storage.GetDatabaseSize();
+
 	output.SetCardinality(1);
-	if (!storage.InMemory()) {
-		auto total_blocks = block_manager.TotalBlocks();
-		auto block_size = Storage::BLOCK_ALLOC_SIZE;
-		auto free_blocks = block_manager.FreeBlocks();
-		auto used_blocks = total_blocks - free_blocks;
-		auto bytes = (total_blocks * block_size);
-		auto wal = storage.GetWriteAheadLog();
-		auto wal_size = wal ? wal->GetWALSize() : 0;
-		output.data[0].SetValue(0, Value(StringUtil::BytesToHumanReadableString(bytes)));
-		output.data[1].SetValue(0, Value::BIGINT(block_size));
-		output.data[2].SetValue(0, Value::BIGINT(total_blocks));
-		output.data[3].SetValue(0, Value::BIGINT(used_blocks));
-		output.data[4].SetValue(0, Value::BIGINT(free_blocks));
-		output.data[5].SetValue(0, Value(StringUtil::BytesToHumanReadableString(wal_size)));
-	} else {
-		output.data[0].SetValue(0, Value());
-		output.data[1].SetValue(0, Value());
-		output.data[2].SetValue(0, Value());
-		output.data[3].SetValue(0, Value());
-		output.data[4].SetValue(0, Value());
-		output.data[5].SetValue(0, Value());
-	}
+	output.data[0].SetValue(0, Value(StringUtil::BytesToHumanReadableString(ds.bytes)));
+	output.data[1].SetValue(0, Value::BIGINT(ds.block_size));
+	output.data[2].SetValue(0, Value::BIGINT(ds.total_blocks));
+	output.data[3].SetValue(0, Value::BIGINT(ds.used_blocks));
+	output.data[4].SetValue(0, Value::BIGINT(ds.free_blocks));
+	output.data[5].SetValue(0, Value(StringUtil::BytesToHumanReadableString(ds.wal_size)));
+
 	output.data[6].SetValue(0, Value(StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedMemory())));
 	auto max_memory = buffer_manager.GetMaxMemory();
 	output.data[7].SetValue(0, max_memory == (idx_t)-1 ? Value("Unlimited")

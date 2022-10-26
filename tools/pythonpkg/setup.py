@@ -56,12 +56,11 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 
 lib_name = 'duckdb'
-extension_name = '_duckdb_extension'
 
-extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'excel', 'substrait']
+extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'excel']
 
 if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json', 'excel', 'substrait']
+    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json', 'excel']
 
 unity_build = 0
 if 'DUCKDB_BUILD_UNITY' in os.environ:
@@ -127,7 +126,7 @@ for i in range(len(sys.argv)):
     else:
         new_sys_args.append(sys.argv[i])
 sys.argv = new_sys_args
-toolchain_args.append('-DDUCKDB_PYTHON_EXTENSION_NAME='+ extension_name)
+toolchain_args.append('-DDUCKDB_PYTHON_LIB_NAME='+lib_name)
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
@@ -155,7 +154,6 @@ class get_numpy_include(object):
         import numpy
         return numpy.get_include()
 
-
 extra_files = []
 header_files = []
 
@@ -164,6 +162,7 @@ main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
 include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
+
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
     source_files = main_source_files
@@ -174,15 +173,15 @@ if len(existing_duckdb_dir) == 0:
         # copy all source files to the current directory
         sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
-        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, extension_name), extensions, False, unity_build, extension_name)
+        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, lib_name), extensions, False, unity_build)
 
         duckdb_sources = [os.path.sep.join(package_build.get_relative_path(script_path, x).split('/')) for x in source_list]
         duckdb_sources.sort()
 
-        original_sources = [os.path.join(extension_name, x) for x in original_sources]
+        original_sources = [os.path.join(lib_name, x) for x in original_sources]
 
-        duckdb_includes = [os.path.join(extension_name, x) for x in include_list]
-        duckdb_includes += [extension_name]
+        duckdb_includes = [os.path.join(lib_name, x) for x in include_list]
+        duckdb_includes += [lib_name]
 
         # gather the include files
         import amalgamation
@@ -210,7 +209,7 @@ if len(existing_duckdb_dir) == 0:
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
 
-    libduckdb = Extension(extension_name,
+    libduckdb = Extension(lib_name,
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
@@ -221,13 +220,14 @@ else:
     sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
     import package_build
 
+    include_directories += [os.path.join('..', '..', include) for include in package_build.third_party_includes()]
     toolchain_args += ['-I' + x for x in package_build.includes(extensions)]
 
     result_libraries = package_build.get_libraries(existing_duckdb_dir, libraries, extensions)
     library_dirs = [x[0] for x in result_libraries if x[0] is not None]
     libnames = [x[1] for x in result_libraries if x[1] is not None]
 
-    libduckdb = Extension(extension_name,
+    libduckdb = Extension(lib_name,
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
@@ -275,7 +275,7 @@ setup(
     description = 'DuckDB embedded database',
     keywords = 'DuckDB Database SQL OLAP',
     url="https://www.duckdb.org",
-    long_description = 'See here for an introduction: https://duckdb.org/docs/api/python',
+    long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
     install_requires=[ # these version is still available for Python 2, newer ones aren't
          'numpy>=1.14'
@@ -283,13 +283,12 @@ setup(
     data_files = data_files,
     packages=[
         'duckdb_query_graph',
-        'duckdb-stubs',
-        'duckdb'
+        'duckdb-stubs'
     ],
     include_package_data=True,
-    setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.6.0'],
+    setup_requires=setup_requires + ["setuptools_scm", 'numpy>=1.14', 'pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,
-    tests_require=['pytest'],
+    tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',
         'Intended Audience :: Developers',
@@ -299,4 +298,10 @@ setup(
     maintainer = "Hannes Muehleisen",
     maintainer_email = "hannes@cwi.nl",
     cmdclass={"build_ext": build_ext},
+    project_urls={
+        "Documentation": "https://duckdb.org/docs/api/python/overview",
+        "Source": "https://github.com/duckdb/duckdb/blob/master/tools/pythonpkg",
+        "Issues": "https://github.com/duckdb/duckdb/issues",
+        "Changelog": "https://github.com/duckdb/duckdb/releases",
+    },
 )

@@ -2,7 +2,7 @@
 # description: Grouping OVER clauses to reduce unnecessary sorting
 # group: [window]
 
-require vector_size 512
+require skip_reload
 
 #statement ok
 #PRAGMA enable_verification
@@ -31,6 +31,9 @@ create table image  (
 
 statement ok
 insert into image (id, width, height) values (1, 500, 297);
+
+statement ok
+SELECT SETSEED(0.8675309);
 
 statement ok
 create table pixel (

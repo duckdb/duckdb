@@ -1,0 +1,58 @@
+# name: test/sql/generated_columns/virtual/foreign_key_extensive.test
+# description: Re-testing 'test_foreignkey.test' with generated columns mixed in
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE album (
+	gen_artistid AS (artistid),
+	gen_albumname AS (albumname),
+	artistid INTEGER,
+	albumname TEXT,
+	albumcover TEXT,
+	UNIQUE (artistid, albumname)
+);
+
+statement ok
+INSERT INTO album VALUES (1, 'A', 'A_cover'), (2, 'B', 'B_cover'), (3, 'C', 'C_cover'), (4, 'D', 'D_cover');
+
+# The count of columns are primary keys must be equal with the count of columns are foreign keys
+statement error
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid));
+
+statement error
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songalbum) REFERENCES album(artistid, albumname));
+
+statement error
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES albumlist(artistid, albumname));
+
+statement error
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, album_name));
+
+statement error
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, song_album) REFERENCES album(artistid, albumname));
+
+statement ok
+CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
+
+# Any row that is inserted into the table with the foreign key must exist in the table with the primary key (constraint)
+statement error
+INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'E', 'B_song'), (13, 3, 'C', 'C_song');
+
+statement error
+INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 5, 'D', 'B_song'), (13, 3, 'C', 'C_song');
+
+statement ok
+INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'B', 'B_song'), (13, 3, 'C', 'C_song');
+
+statement ok
+DELETE FROM album WHERE albumname='D';
+
+query ITITT
+SELECT * FROM album;
+----
+1	A	1	A	A_cover	
+2	B	2	B	B_cover	
+3	C	3	C	C_cover

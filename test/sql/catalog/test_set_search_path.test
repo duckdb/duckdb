@@ -2,6 +2,8 @@
 # description: SET schema and SET search_path
 # group: [catalog]
 
+require skip_reload
+
 # create a couple of schemas with a table each
 statement ok
 CREATE TABLE main_table(i INTEGER);
@@ -102,9 +104,14 @@ SELECT current_schema();
 test
 
 query I
-SELECT current_schemas(false);
+SELECT current_schemas(true);
 ----
 [temp, test, main, pg_catalog]
+
+query I
+SELECT current_schemas(false);
+----
+[test]
 
 # Case insensitivity
 

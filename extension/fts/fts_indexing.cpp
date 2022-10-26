@@ -299,13 +299,13 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 			// star found - get all columns
 			doc_values.clear();
 			for (auto &cd : table->columns) {
-				if (cd.type == LogicalType::VARCHAR) {
-					doc_values.push_back(cd.name);
+				if (cd.Type() == LogicalType::VARCHAR) {
+					doc_values.push_back(cd.Name());
 				}
 			}
 			break;
 		}
-		if (table->name_map.find(col_name) == table->name_map.end()) {
+		if (!table->ColumnExists(col_name)) {
 			// we check this here because else we we end up with an error halfway the indexing script
 			throw CatalogException("Table '%s.%s' does not have a column named '%s'!", qname.schema, qname.name,
 			                       col_name);

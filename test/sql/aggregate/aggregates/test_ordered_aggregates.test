@@ -72,7 +72,7 @@ select percentile_cont(0.25) within group(order by i desc) from generate_series(
 query I
 select percentile_cont([0.25, 0.5, 0.75]) within group(order by i desc) from generate_series(0,100) tbl(i);
 ----
-[75.000000, 50.000000, 25.000000]
+[75.0, 50.0, 25.0]
 
 #
 # Error checking
@@ -115,3 +115,7 @@ select percentile_disc('duck') within group(order by i) from generate_series(0,1
 # No function matches the given name and argument types 'quantile_cont(BIGINT, VARCHAR)'
 statement error
 select percentile_cont('duck') within group(order by i) from generate_series(0,100) tbl(i);
+
+# aggregate function calls cannot be nested
+statement error
+SELECT percentile_disc(sum(1)) WITHIN GROUP (ORDER BY 1 DESC);

@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _THRIFT_TOSTRING_H_
-#define _THRIFT_TOSTRING_H_ 1
+#ifndef _DUCKDB_THRIFT_TOSTRING_H_
+#define _DUCKDB_THRIFT_TOSTRING_H_ 1
 
 #include <cmath>
 #include <limits>
@@ -111,4 +111,4 @@ std::string to_string(const std::set<T>& s) {
 }
 } // duckdb_apache::thrift
 
-#endif // _THRIFT_TOSTRING_H_
+#endif // _DUCKDB_THRIFT_TOSTRING_H_

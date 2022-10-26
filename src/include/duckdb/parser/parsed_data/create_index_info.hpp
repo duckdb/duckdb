@@ -13,6 +13,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
 
@@ -24,26 +25,28 @@ struct CreateIndexInfo : public CreateInfo {
 	IndexType index_type;
 	//! Name of the Index
 	string index_name;
-	//! If it is an unique index
-	bool unique = false;
+	//! Index Constraint Type
+	IndexConstraintType constraint_type;
 	//! The table to create the index on
 	unique_ptr<BaseTableRef> table;
 	//! Set of expressions to index by
 	vector<unique_ptr<ParsedExpression>> expressions;
+	vector<unique_ptr<ParsedExpression>> parsed_expressions;
+
+	//! Types used for the CREATE INDEX scan
+	vector<LogicalType> scan_types;
+	//! The names of the columns, used for the CREATE INDEX scan
+	vector<string> names;
+	//! Column IDs needed for index creation
+	vector<column_t> column_ids;
+
+protected:
+	void SerializeInternal(Serializer &serializer) const override;
 
 public:
-	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateIndexInfo>();
-		CopyProperties(*result);
-		result->index_type = index_type;
-		result->index_name = index_name;
-		result->unique = unique;
-		result->table = unique_ptr_cast<TableRef, BaseTableRef>(table->Copy());
-		for (auto &expr : expressions) {
-			result->expressions.push_back(expr->Copy());
-		}
-		return move(result);
-	}
+	unique_ptr<CreateInfo> Copy() const override;
+
+	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

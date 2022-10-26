@@ -180,15 +180,11 @@ WHERE rt <> dt
 ----
 
 # empty specifier and string
-query I
+statement error
 SELECT strptime('', '')
-----
-1900-01-01 00:00:00
 
-query I
+statement error
 SELECT strptime(NULL, '')
-----
-NULL
 
 query I
 SELECT strptime('', NULL)

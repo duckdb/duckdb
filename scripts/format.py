@@ -8,6 +8,7 @@ import sys
 import inspect
 import subprocess
 import difflib
+import re
 from python_helpers import open_utf8
 
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
@@ -19,7 +20,7 @@ ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpc
                  'termcolor.hpp', 'test_insert_invalid.test', 'httplib.hpp', 'os_win.c', 'glob.c', 'printf.c',
                  'helper.hpp', 'single_thread_ptr.hpp','types.hpp', 'default_views.cpp', 'default_functions.cpp',
                  'release.h', 'genrand.cpp', 'address.cpp', 'visualizer_constants.hpp', 'icu-collate.cpp', 'icu-collate.hpp',
-                 'yyjson.cpp', 'yyjson.hpp',
+                 'yyjson.cpp', 'yyjson.hpp', 'duckdb_pdqsort.hpp',
                  'nf_calendar.cpp', 'nf_calendar.h', 'nf_localedata.cpp', 'nf_localedata.h', 'nf_zformat.cpp', 'nf_zformat.h', 'expr.cc']
 ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen', os.path.join('tools', 'pythonpkg', 'duckdb'), os.path.join('tools', 'pythonpkg', 'build'), os.path.join('tools', 'rpkg', 'src', 'duckdb'), os.path.join('tools', 'rpkg', 'inst', 'include', 'cpp11'), os.path.join('extension', 'tpcds', 'dsdgen')]
 format_all = False
@@ -221,7 +222,9 @@ def get_formatted_text(f, full_path, directory, ext):
         print(' '.join(proc_command))
         print(stderr)
         exit(1)
-    return new_text.replace('\r', '')
+    new_text = new_text.replace('\r', '')
+    new_text = re.sub(r'\n*$', '', new_text)
+    return new_text + '\n'
 
 def format_file(f, full_path, directory, ext):
     global difference_files

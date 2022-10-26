@@ -20,25 +20,26 @@ struct RegrSXYOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, bind_data, y_data, x_data, bmask, amask,
-		                                                         yidx, xidx);
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, x_data, y_data, amask,
-		                                                          bmask, xidx, yidx);
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data,
+	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, aggr_input_data, y_data, x_data, bmask,
+		                                                         amask, yidx, xidx);
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, aggr_input_data, x_data, y_data,
+		                                                          amask, bmask, xidx, yidx);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
-		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop, bind_data);
-		RegrCountFunction::Combine<size_t, OP>(source.count, &target->count, bind_data);
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
+		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop, aggr_input_data);
+		RegrCountFunction::Combine<size_t, OP>(source.count, &target->count, aggr_input_data);
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *fd, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		CovarPopOperation::Finalize<T, CovarState>(result, fd, &state->cov_pop, target, mask, idx);
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
+	                     ValidityMask &mask, idx_t idx) {
+		CovarPopOperation::Finalize<T, CovarState>(result, aggr_input_data, &state->cov_pop, target, mask, idx);
 		auto cov_pop = target[idx];
-		RegrCountFunction::Finalize<T, size_t>(result, fd, &state->count, target, mask, idx);
+		RegrCountFunction::Finalize<T, size_t>(result, aggr_input_data, &state->count, target, mask, idx);
 		target[idx] *= cov_pop;
 	}
 

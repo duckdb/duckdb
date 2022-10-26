@@ -1,11 +1,12 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+
 #include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
 string SetOperationNode::ToString() const {
 	string result;
-	result = CTEToString();
+	result = cte_map.ToString();
 	result += "(" + left->ToString() + ") ";
 	bool is_distinct = false;
 	for (idx_t modifier_idx = 0; modifier_idx < modifiers.size(); modifier_idx++) {
@@ -18,6 +19,9 @@ string SetOperationNode::ToString() const {
 	switch (setop_type) {
 	case SetOperationType::UNION:
 		result += is_distinct ? "UNION" : "UNION ALL";
+		break;
+	case SetOperationType::UNION_BY_NAME:
+		result += is_distinct ? "UNION BY NAME" : "UNION ALL BY NAME";
 		break;
 	case SetOperationType::EXCEPT:
 		D_ASSERT(is_distinct);

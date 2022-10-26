@@ -105,9 +105,9 @@ TEST_CASE("Concurrent update", "[interquery][.]") {
 
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 		result = con.Query("SELECT money FROM accounts WHERE id=" + to_string(from));
-		Value money_from = result->collection.GetValue(0, 0);
+		Value money_from = result->GetValue(0, 0);
 		result = con.Query("SELECT money FROM accounts WHERE id=" + to_string(to));
-		Value money_to = result->collection.GetValue(0, 0);
+		Value money_to = result->GetValue(0, 0);
 
 		REQUIRE_NO_FAIL(
 		    con.Query("UPDATE accounts SET money = money - " + to_string(amount) + " WHERE id = " + to_string(from)));
@@ -115,9 +115,9 @@ TEST_CASE("Concurrent update", "[interquery][.]") {
 		    con.Query("UPDATE accounts SET money = money + " + to_string(amount) + " WHERE id = " + to_string(to)));
 
 		result = con.Query("SELECT money FROM accounts WHERE id=" + to_string(from));
-		Value new_money_from = result->collection.GetValue(0, 0);
+		Value new_money_from = result->GetValue(0, 0);
 		result = con.Query("SELECT money FROM accounts WHERE id=" + to_string(to));
-		Value new_money_to = result->collection.GetValue(0, 0);
+		Value new_money_to = result->GetValue(0, 0);
 
 		Value expected_money_from, expected_money_to;
 
@@ -142,29 +142,29 @@ static void write_random_numbers_to_account(DuckDB *db, bool *correct, size_t nr
 	for (size_t i = 0; i < CONCURRENT_UPDATE_TRANSACTION_UPDATE_COUNT; i++) {
 		// just make some changes to the total
 		// the total amount of money after the commit is the same
-		if (!con.Query("BEGIN TRANSACTION")->success) {
+		if (con.Query("BEGIN TRANSACTION")->HasError()) {
 			correct[nr] = false;
 		}
-		if (!con.Query("UPDATE accounts SET money = money + " + to_string(i * 2) + " WHERE id = " + to_string(nr))
-		         ->success) {
+		if (con.Query("UPDATE accounts SET money = money + " + to_string(i * 2) + " WHERE id = " + to_string(nr))
+		        ->HasError()) {
 			correct[nr] = false;
 		}
-		if (!con.Query("UPDATE accounts SET money = money - " + to_string(i) + " WHERE id = " + to_string(nr))
-		         ->success) {
+		if (con.Query("UPDATE accounts SET money = money - " + to_string(i) + " WHERE id = " + to_string(nr))
+		        ->HasError()) {
 			correct[nr] = false;
 		}
-		if (!con.Query("UPDATE accounts SET money = money - " + to_string(i * 2) + " WHERE id = " + to_string(nr))
-		         ->success) {
+		if (con.Query("UPDATE accounts SET money = money - " + to_string(i * 2) + " WHERE id = " + to_string(nr))
+		        ->HasError()) {
 			correct[nr] = false;
 		}
-		if (!con.Query("UPDATE accounts SET money = money + " + to_string(i) + " WHERE id = " + to_string(nr))
-		         ->success) {
+		if (con.Query("UPDATE accounts SET money = money + " + to_string(i) + " WHERE id = " + to_string(nr))
+		        ->HasError()) {
 			correct[nr] = false;
 		}
 		// we test both commit and rollback
 		// the result of both should be the same since the updates have a
 		// net-zero effect
-		if (!con.Query(nr % 2 == 0 ? "COMMIT" : "ROLLBACK")->success) {
+		if (con.Query(nr % 2 == 0 ? "COMMIT" : "ROLLBACK")->HasError()) {
 			correct[nr] = false;
 		}
 	}

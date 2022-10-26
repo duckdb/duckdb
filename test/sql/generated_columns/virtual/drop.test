@@ -1,0 +1,24 @@
+# name: test/sql/generated_columns/virtual/drop.test
+# description: Remove generated column
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold)
+);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+# Delete the generated column
+statement ok
+ALTER TABLE unit DROP COLUMN total_profit;
+
+# We can now no longer select it
+statement error
+SELECT total_profit FROM unit;

@@ -21,7 +21,8 @@ namespace duckdb {
 //! NumericHelper is a static class that holds helper functions for integers/doubles
 class NumericHelper {
 public:
-	static const int64_t POWERS_OF_TEN[20];
+	static constexpr uint8_t CACHED_POWERS_OF_TEN = 20;
+	static const int64_t POWERS_OF_TEN[CACHED_POWERS_OF_TEN];
 	static const double DOUBLE_POWERS_OF_TEN[40];
 
 public:
@@ -92,7 +93,7 @@ std::string NumericHelper::ToString(hugeint_t value);
 
 struct DecimalToString {
 	template <class SIGNED, class UNSIGNED>
-	static int DecimalLength(SIGNED value, uint8_t scale) {
+	static int DecimalLength(SIGNED value, uint8_t width, uint8_t scale) {
 		if (scale == 0) {
 			// scale is 0: regular number
 			return NumericHelper::SignedLength<SIGNED, UNSIGNED>(value);
@@ -104,11 +105,13 @@ struct DecimalToString {
 		// in that case we print "0.XXX", which is the scale, plus "0." (2 chars)
 		// integer length + 1 happens when the number is outside of that range
 		// in that case we print the integer number, but with one extra character ('.')
-		return MaxValue(scale + 2 + (value < 0 ? 1 : 0), NumericHelper::SignedLength<SIGNED, UNSIGNED>(value) + 1);
+		auto extra_characters = width > scale ? 2 : 1;
+		return MaxValue(scale + extra_characters + (value < 0 ? 1 : 0),
+		                NumericHelper::SignedLength<SIGNED, UNSIGNED>(value) + 1);
 	}
 
 	template <class SIGNED, class UNSIGNED>
-	static void FormatDecimal(SIGNED value, uint8_t scale, char *dst, idx_t len) {
+	static void FormatDecimal(SIGNED value, uint8_t width, uint8_t scale, char *dst, idx_t len) {
 		char *end = dst + len;
 		if (value < 0) {
 			value = -value;
@@ -131,14 +134,18 @@ struct DecimalToString {
 		}
 		*--dst = '.';
 		// now write the part before the decimal
-		dst = NumericHelper::FormatUnsigned<UNSIGNED>(major, dst);
+		D_ASSERT(width > scale || major == 0);
+		if (width > scale) {
+			// there are numbers after the comma
+			dst = NumericHelper::FormatUnsigned<UNSIGNED>(major, dst);
+		}
 	}
 
 	template <class SIGNED, class UNSIGNED>
-	static string_t Format(SIGNED value, uint8_t scale, Vector &vector) {
-		int len = DecimalLength<SIGNED, UNSIGNED>(value, scale);
+	static string_t Format(SIGNED value, uint8_t width, uint8_t scale, Vector &vector) {
+		int len = DecimalLength<SIGNED, UNSIGNED>(value, width, scale);
 		string_t result = StringVector::EmptyString(vector, len);
-		FormatDecimal<SIGNED, UNSIGNED>(value, scale, result.GetDataWriteable(), len);
+		FormatDecimal<SIGNED, UNSIGNED>(value, width, scale, result.GetDataWriteable(), len);
 		result.Finalize();
 		return result;
 	}
@@ -261,7 +268,7 @@ struct HugeintToStringCast {
 		return result;
 	}
 
-	static int DecimalLength(hugeint_t value, uint8_t scale) {
+	static int DecimalLength(hugeint_t value, uint8_t width, uint8_t scale) {
 		int negative;
 		if (value.upper < 0) {
 			Hugeint::NegateInPlace(value);
@@ -280,10 +287,11 @@ struct HugeintToStringCast {
 		// in that case we print "0.XXX", which is the scale, plus "0." (2 chars)
 		// integer length + 1 happens when the number is outside of that range
 		// in that case we print the integer number, but with one extra character ('.')
-		return MaxValue(scale + 2, UnsignedLength(value) + 1) + negative;
+		auto extra_numbers = width > scale ? 2 : 1;
+		return MaxValue(scale + extra_numbers, UnsignedLength(value) + 1) + negative;
 	}
 
-	static void FormatDecimal(hugeint_t value, uint8_t scale, char *dst, int len) {
+	static void FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, char *dst, int len) {
 		auto endptr = dst + len;
 
 		int negative = value.upper < 0;
@@ -312,16 +320,19 @@ struct HugeintToStringCast {
 		}
 		*--dst = '.';
 		// now write the part before the decimal
-		dst = FormatUnsigned(major, dst);
+		D_ASSERT(width > scale || major == 0);
+		if (width > scale) {
+			dst = FormatUnsigned(major, dst);
+		}
 	}
 
-	static string_t FormatDecimal(hugeint_t value, uint8_t scale, Vector &vector) {
-		int length = DecimalLength(value, scale);
+	static string_t FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, Vector &vector) {
+		int length = DecimalLength(value, width, scale);
 		string_t result = StringVector::EmptyString(vector, length);
 
 		auto dst = result.GetDataWriteable();
 
-		FormatDecimal(value, scale, dst, length);
+		FormatDecimal(value, width, scale, dst, length);
 
 		result.Finalize();
 		return result;
@@ -511,14 +522,16 @@ struct IntervalToStringCast {
 			if (micros < 0) {
 				// negative time: append negative sign
 				buffer[length++] = '-';
+			} else {
 				micros = -micros;
 			}
-			int64_t hour = micros / Interval::MICROS_PER_HOUR;
-			micros -= hour * Interval::MICROS_PER_HOUR;
-			int64_t min = micros / Interval::MICROS_PER_MINUTE;
-			micros -= min * Interval::MICROS_PER_MINUTE;
-			int64_t sec = micros / Interval::MICROS_PER_SEC;
-			micros -= sec * Interval::MICROS_PER_SEC;
+			int64_t hour = -(micros / Interval::MICROS_PER_HOUR);
+			micros += hour * Interval::MICROS_PER_HOUR;
+			int64_t min = -(micros / Interval::MICROS_PER_MINUTE);
+			micros += min * Interval::MICROS_PER_MINUTE;
+			int64_t sec = -(micros / Interval::MICROS_PER_SEC);
+			micros += sec * Interval::MICROS_PER_SEC;
+			micros = -micros;
 
 			if (hour < 10) {
 				buffer[length++] = '0';

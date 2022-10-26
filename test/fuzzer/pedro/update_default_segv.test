@@ -1,0 +1,19 @@
+# name: test/fuzzer/pedro/update_default_segv.test
+# description: Issue #4678: Update default SEGV
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 VARCHAR, c2 AS(1), c3 INT, UNIQUE(c0));
+
+statement ok
+UPDATE t0 SET c0 = DEFAULT;
+
+statement ok
+CREATE TABLE t1(c4 UUID, c0 REAL AS(0));
+
+# cannot set default for generated column
+statement error
+ALTER TABLE t1 ALTER c0 SET DEFAULT 0;

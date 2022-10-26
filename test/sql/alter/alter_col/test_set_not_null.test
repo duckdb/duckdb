@@ -1,0 +1,148 @@
+# name: test/sql/alter/alter_col/test_set_not_null.test
+# description: Test ALTER TABLE ALTER COLUMN column_name SET NOT NULL
+# group: [alter_col]
+
+# Happy path
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO t VALUES (1, 1), (2, 2)
+
+statement ok
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement error 
+INSERT INTO t VALUES (3, NULL)
+# SET again
+statement ok
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement error 
+INSERT INTO t VALUES (3, NULL)
+
+query II
+SELECT * FROM t
+----
+1	1
+2	2
+
+# Large table
+statement ok
+INSERT INTO t SELECT 5,5 from range(65534)
+
+statement ok
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement error 
+INSERT INTO t VALUES (6, NULL)
+
+query I
+SELECT COUNT(*) FROM t WHERE j IS NULL
+----
+0
+
+# SET NOT NULL failed if contains null value
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO t VALUES (1, 1), (2, 2), (3, null)
+
+statement ok
+INSERT INTO t SELECT 4,4 FROM RANGE(65536)
+
+statement error
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+INSERT INTO t VALUES (5, null)
+
+query II
+SELECT * FROM t WHERE j IS NULL
+----
+3	NULL
+5	NULL
+
+# Insert null before&after drop constraint
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO t SELECT 1,1 FROM RANGE(65536)
+
+# Set not null
+statement ok
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+# Failed to insert before drop constraint
+statement error
+INSERT INTO t VALUES (2, null)
+
+# Drop not null
+statement ok
+ALTER TABLE t ALTER COLUMN j DROP NOT NULL
+
+# Insert after drop constraint
+statement ok
+INSERT INTO t VALUES (3, null)
+
+# Only 1 null
+query II
+SELECT * FROM t WHERE j IS NULL
+----
+3	NULL
+
+# Basic test with generated column
+statement ok
+CREATE TABLE t0(c0 AS (1), c1 INT);
+
+statement ok
+ALTER TABLE t0 ALTER c1 SET NOT NULL;
+
+# Insert null before&after drop constraint with generated column
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i AS (1), j INTEGER)
+
+statement ok
+INSERT INTO t SELECT 1 FROM RANGE(65536)
+
+# Set not null
+statement error
+ALTER TABLE t ALTER COLUMN i SET NOT NULL
+
+# Set not null
+statement ok
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+# Failed to insert before drop constraint
+statement error
+INSERT INTO t VALUES (null)
+
+# Drop not null
+statement ok
+ALTER TABLE t ALTER COLUMN j DROP NOT NULL
+
+# Insert after drop constraint
+statement ok
+INSERT INTO t VALUES (null)
+
+# Only 1 null
+query II
+SELECT * FROM t WHERE j IS NULL
+----
+1	NULL
+

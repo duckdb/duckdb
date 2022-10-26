@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-struct DuckDBSchemasData : public FunctionOperatorData {
+struct DuckDBSchemasData : public GlobalTableFunctionState {
 	DuckDBSchemasData() : offset(0) {
 	}
 
@@ -33,8 +33,7 @@ static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, TableF
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBSchemasInit(ClientContext &context, const FunctionData *bind_data,
-                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBSchemasInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBSchemasData>();
 
 	// scan all the schemas and collect them
@@ -46,9 +45,8 @@ unique_ptr<FunctionOperatorData> DuckDBSchemasInit(ClientContext &context, const
 	return move(result);
 }
 
-void DuckDBSchemasFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk &output) {
-	auto &data = (DuckDBSchemasData &)*operator_state;
+void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBSchemasData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

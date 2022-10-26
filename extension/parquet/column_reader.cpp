@@ -5,6 +5,7 @@
 
 #include "boolean_column_reader.hpp"
 #include "cast_column_reader.hpp"
+#include "generated_column_reader.hpp"
 #include "callback_column_reader.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "list_column_reader.hpp"
@@ -44,7 +45,6 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
       type(move(type_p)), page_rows_available(0) {
 
 	// dummies for Skip()
-	none_filter.none();
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	dummy_repeat.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 }
@@ -74,6 +74,40 @@ idx_t ColumnReader::MaxDefine() const {
 
 idx_t ColumnReader::MaxRepeat() const {
 	return max_repeat;
+}
+
+void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
+	if (chunk) {
+		uint64_t size = chunk->meta_data.total_compressed_size;
+		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
+	}
+}
+
+uint64_t ColumnReader::TotalCompressedSize() {
+	if (!chunk) {
+		return 0;
+	}
+
+	return chunk->meta_data.total_compressed_size;
+}
+
+// Note: It's not trivial to determine where all Column data is stored. Chunk->file_offset
+// apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
+// minimum of all page offsets.
+idx_t ColumnReader::FileOffset() const {
+	if (!chunk) {
+		throw std::runtime_error("FileOffset called on ColumnReader with no chunk");
+	}
+	auto min_offset = NumericLimits<idx_t>::Maximum();
+	if (chunk->meta_data.__isset.dictionary_page_offset) {
+		min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.dictionary_page_offset);
+	}
+	if (chunk->meta_data.__isset.index_page_offset) {
+		min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.index_page_offset);
+	}
+	min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.data_page_offset);
+
+	return min_offset;
 }
 
 idx_t ColumnReader::GroupRowsAvailable() {
@@ -141,11 +175,11 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DATA_PAGE:
-		PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
+		PreparePage(page_hdr);
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DICTIONARY_PAGE:
-		PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
+		PreparePage(page_hdr);
 		Dictionary(move(block), page_hdr.dictionary_page_header.num_values);
 		break;
 	default:
@@ -154,95 +188,92 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 }
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
-	// FIXME this is copied from the other prepare, merge the decomp part
-
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
 	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
+
+	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
+		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+			throw std::runtime_error("Page size mismatch");
+		}
+		trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
+		return;
+	}
+
 	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
 	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
 	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
-	auto possibly_compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 	trans.read((uint8_t *)block->ptr, uncompressed_bytes);
 
-	switch (chunk->meta_data.codec) {
-	case CompressionCodec::UNCOMPRESSED:
-		trans.read(((uint8_t *)block->ptr) + uncompressed_bytes, possibly_compressed_bytes);
-		break;
+	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
+	ResizeableBuffer compressed_buffer(reader.allocator, compressed_bytes);
+	trans.read((uint8_t *)compressed_buffer.ptr, compressed_bytes);
 
-	case CompressionCodec::SNAPPY: {
-		// TODO move allocation outta here
-		ResizeableBuffer compressed_bytes_buffer(reader.allocator, possibly_compressed_bytes);
-		trans.read((uint8_t *)compressed_bytes_buffer.ptr, possibly_compressed_bytes);
-
-		auto res = duckdb_snappy::RawUncompress((const char *)compressed_bytes_buffer.ptr, possibly_compressed_bytes,
-		                                        ((char *)block->ptr) + uncompressed_bytes);
-		if (!res) {
-			throw std::runtime_error("Decompression failure");
-		}
-		break;
-	}
-
-	default: {
-		std::stringstream codec_name;
-		codec_name << chunk->meta_data.codec;
-		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, gzip or snappy");
-		break;
-	}
-	}
+	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr, compressed_bytes,
+	                   (char *)block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
 }
 
-void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size) {
+void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
-	block = make_shared<ResizeableBuffer>(reader.allocator, compressed_page_size + 1);
-	trans.read((uint8_t *)block->ptr, compressed_page_size);
+	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
 
-	// TODO this allocation should probably be avoided
-	shared_ptr<ResizeableBuffer> unpacked_block;
-	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
-		unpacked_block = make_shared<ResizeableBuffer>(reader.allocator, uncompressed_page_size + 1);
+	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
+		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+			throw std::runtime_error("Page size mismatch");
+		}
+		trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
+		return;
 	}
 
-	switch (chunk->meta_data.codec) {
+	ResizeableBuffer compressed_buffer(reader.allocator, page_hdr.compressed_page_size + 1);
+	trans.read((uint8_t *)compressed_buffer.ptr, page_hdr.compressed_page_size);
+
+	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr, page_hdr.compressed_page_size,
+	                   (char *)block->ptr, page_hdr.uncompressed_page_size);
+}
+
+void ColumnReader::DecompressInternal(CompressionCodec::type codec, const char *src, idx_t src_size, char *dst,
+                                      idx_t dst_size) {
+	switch (codec) {
 	case CompressionCodec::UNCOMPRESSED:
-		break;
+		throw InternalException("Parquet data unexpectedly uncompressed");
 	case CompressionCodec::GZIP: {
 		MiniZStream s;
-
-		s.Decompress((const char *)block->ptr, compressed_page_size, (char *)unpacked_block->ptr,
-		             uncompressed_page_size);
-		block = move(unpacked_block);
-
+		s.Decompress(src, src_size, dst, dst_size);
 		break;
 	}
 	case CompressionCodec::SNAPPY: {
-		auto res =
-		    duckdb_snappy::RawUncompress((const char *)block->ptr, compressed_page_size, (char *)unpacked_block->ptr);
-		if (!res) {
-			throw std::runtime_error("Decompression failure");
+		{
+			size_t uncompressed_size = 0;
+			auto res = duckdb_snappy::GetUncompressedLength(src, src_size, &uncompressed_size);
+			if (!res) {
+				throw std::runtime_error("Snappy decompression failure");
+			}
+			if (uncompressed_size != (size_t)dst_size) {
+				throw std::runtime_error("Snappy decompression failure: Uncompressed data size mismatch");
+			}
 		}
-		block = move(unpacked_block);
+		auto res = duckdb_snappy::RawUncompress(src, src_size, dst);
+		if (!res) {
+			throw std::runtime_error("Snappy decompression failure");
+		}
 		break;
 	}
 	case CompressionCodec::ZSTD: {
-		auto res = duckdb_zstd::ZSTD_decompress((char *)unpacked_block->ptr, uncompressed_page_size,
-		                                        (const char *)block->ptr, compressed_page_size);
-		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)uncompressed_page_size) {
+		auto res = duckdb_zstd::ZSTD_decompress(dst, dst_size, src, src_size);
+		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)dst_size) {
 			throw std::runtime_error("ZSTD Decompression failure");
 		}
-		block = move(unpacked_block);
 		break;
 	}
-
 	default: {
 		std::stringstream codec_name;
-		codec_name << chunk->meta_data.codec;
+		codec_name << codec;
 		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, gzip or snappy");
+		                         "\". Supported options are uncompressed, gzip, snappy or zstd");
 		break;
 	}
 	}
@@ -347,6 +378,11 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 	trans.SetLocation(chunk_read_offset);
 
+	// Perform any skips that were not applied yet.
+	if (pending_skips > 0) {
+		ApplyPendingSkips(pending_skips);
+	}
+
 	idx_t result_offset = 0;
 	auto to_read = num_values;
 
@@ -422,14 +458,28 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 }
 
 void ColumnReader::Skip(idx_t num_values) {
+	pending_skips += num_values;
+}
+
+void ColumnReader::ApplyPendingSkips(idx_t num_values) {
+	pending_skips -= num_values;
+
 	dummy_define.zero();
 	dummy_repeat.zero();
 
 	// TODO this can be optimized, for example we dont actually have to bitunpack offsets
 	Vector dummy_result(type, nullptr);
-	auto values_read =
-	    Read(num_values, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
-	if (values_read != num_values) {
+
+	idx_t remaining = num_values;
+	idx_t read = 0;
+
+	while (remaining) {
+		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
+		read += Read(to_read, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
+		remaining -= to_read;
+	}
+
+	if (read != num_values) {
 		throw std::runtime_error("Row count mismatch when skipping rows");
 	}
 }
@@ -472,7 +522,14 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 	dict = move(data);
 	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
 	for (idx_t dict_idx = 0; dict_idx < num_entries; dict_idx++) {
-		uint32_t str_len = dict->read<uint32_t>();
+		uint32_t str_len;
+		if (fixed_width_string_length == 0) {
+			// variable length string: read from dictionary
+			str_len = dict->read<uint32_t>();
+		} else {
+			// fixed length string
+			str_len = fixed_width_string_length;
+		}
 		dict->available(str_len);
 
 		auto actual_str_len = VerifyString(dict->ptr, str_len);
@@ -527,6 +584,10 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
 	auto &result_mask = FlatVector::Validity(result_out);
+
+	if (pending_skips > 0) {
+		ApplyPendingSkips(pending_skips);
+	}
 
 	D_ASSERT(ListVector::GetListSize(result_out) == 0);
 	// if an individual list is longer than STANDARD_VECTOR_SIZE we actually have to loop the child read to fill it
@@ -604,7 +665,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		// we have read more values from the child reader than we can fit into the result for this read
 		// we have to pass everything from child_idx to child_actual_num_values into the next call
 		if (child_idx < child_actual_num_values && result_offset == num_values) {
-			read_vector.Slice(read_vector, child_idx);
+			read_vector.Slice(read_vector, child_idx, child_actual_num_values);
 			overflow_child_count = child_actual_num_values - child_idx;
 			read_vector.Verify(overflow_child_count);
 
@@ -623,7 +684,7 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
                                    idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
                                    unique_ptr<ColumnReader> child_column_reader_p)
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_column_reader(move(child_column_reader_p)), read_cache(ListType::GetChildType(Type())),
+      child_column_reader(move(child_column_reader_p)), read_cache(reader.allocator, ListType::GetChildType(Type())),
       read_vector(read_cache), overflow_child_count(0) {
 
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -634,15 +695,44 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_filter.set();
 }
 
-// ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-//                             Vector &result_out)
-void ListColumnReader::Skip(idx_t num_values) {
-	parquet_filter_t filter;
+void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
+	pending_skips -= num_values;
+
 	auto define_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 	auto repeat_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
-	Vector result_out(Type());
-	Read(num_values, filter, define_out.get(), repeat_out.get(), result_out);
+
+	idx_t remaining = num_values;
+	idx_t read = 0;
+
+	while (remaining) {
+		Vector result_out(Type());
+		parquet_filter_t filter;
+		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
+		read += Read(to_read, filter, define_out.get(), repeat_out.get(), result_out);
+		remaining -= to_read;
+	}
+
+	if (read != num_values) {
+		throw InternalException("Not all skips done!");
+	}
 }
+
+//===--------------------------------------------------------------------===//
+// Generated Constant Column Reader
+//===--------------------------------------------------------------------===//
+GeneratedConstantColumnReader::GeneratedConstantColumnReader(ParquetReader &reader, LogicalType type_p,
+                                                             const SchemaElement &schema_p, idx_t schema_idx_p,
+                                                             idx_t max_define_p, idx_t max_repeat_p, Value constant_p)
+    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
+      constant(move(constant_p)) {
+}
+idx_t GeneratedConstantColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out,
+                                          uint8_t *repeat_out, Vector &result) {
+	result.SetValue(0, constant);
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	return num_values;
+}
+
 //===--------------------------------------------------------------------===//
 // Cast Column Reader
 //===--------------------------------------------------------------------===//
@@ -651,7 +741,7 @@ CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, Logi
                    child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
       child_reader(move(child_reader_p)) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
-	intermediate_chunk.Initialize(intermediate_types);
+	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }
 
 unique_ptr<BaseStatistics> CastColumnReader::Stats(const std::vector<ColumnChunk> &columns) {
@@ -672,7 +762,7 @@ idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 	if (!filter.all()) {
 		// work-around for filters: set all values that are filtered to NULL to prevent the cast from failing on
 		// uninitialized data
-		intermediate_vector.Normalify(amount);
+		intermediate_vector.Flatten(amount);
 		auto &validity = FlatVector::Validity(intermediate_vector);
 		for (idx_t i = 0; i < amount; i++) {
 			if (!filter[i]) {
@@ -680,7 +770,7 @@ idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 			}
 		}
 	}
-	VectorOperations::Cast(intermediate_vector, result, amount);
+	VectorOperations::DefaultCast(intermediate_vector, result, amount);
 	return amount;
 }
 
@@ -718,6 +808,10 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, ui
 	auto &struct_entries = StructVector::GetEntries(result);
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 
+	if (pending_skips > 0) {
+		ApplyPendingSkips(pending_skips);
+	}
+
 	idx_t read_count = num_values;
 	for (idx_t i = 0; i < struct_entries.size(); i++) {
 		auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
@@ -744,9 +838,40 @@ void StructColumnReader::Skip(idx_t num_values) {
 	}
 }
 
+void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
+	for (auto &child : child_readers) {
+		child->RegisterPrefetch(transport, allow_merge);
+	}
+}
+
+uint64_t StructColumnReader::TotalCompressedSize() {
+	uint64_t size = 0;
+	for (auto &child : child_readers) {
+		size += child->TotalCompressedSize();
+	}
+	return size;
+}
+
+static bool TypeHasExactRowCount(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		return false;
+	case LogicalTypeId::STRUCT:
+		for (auto &kv : StructType::GetChildTypes(type)) {
+			if (TypeHasExactRowCount(kv.second)) {
+				return true;
+			}
+		}
+		return false;
+	default:
+		return true;
+	}
+}
+
 idx_t StructColumnReader::GroupRowsAvailable() {
 	for (idx_t i = 0; i < child_readers.size(); i++) {
-		if (child_readers[i]->Type().id() != LogicalTypeId::LIST) {
+		if (TypeHasExactRowCount(child_readers[i]->Type())) {
 			return child_readers[i]->GroupRowsAvailable();
 		}
 	}
@@ -1012,15 +1137,29 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 			return make_unique<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(
 			    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 		case Type::INT64:
-			switch (schema_p.converted_type) {
-			case ConvertedType::TIMESTAMP_MICROS:
-				return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			case ConvertedType::TIMESTAMP_MILLIS:
-				return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			default:
-				break;
+			if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIMESTAMP) {
+				if (schema_p.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.MICROS) {
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.NANOS) {
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				}
+
+			} else if (schema_p.__isset.converted_type) {
+				switch (schema_p.converted_type) {
+				case ConvertedType::TIMESTAMP_MICROS:
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				case ConvertedType::TIMESTAMP_MILLIS:
+					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				default:
+					break;
+				}
 			}
 		default:
 			break;

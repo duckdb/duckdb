@@ -48,11 +48,22 @@ static void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vect
 
 // current_schemas
 static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	if (!input.AllConstant()) {
+		throw NotImplementedException("current_schemas requires a constant input");
+	}
+	if (ConstantVector::IsNull(input.data[0])) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
+	auto implicit_schemas = *ConstantVector::GetData<bool>(input.data[0]);
 	vector<Value> schema_list;
-	vector<string> search_path = ClientData::Get(SystemBindData::GetFrom(state).context).catalog_search_path->Get();
+	auto &catalog_search_path = ClientData::Get(SystemBindData::GetFrom(state).context).catalog_search_path;
+	vector<string> search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
 	std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
 	               [](const string &s) -> Value { return Value(s); });
-	auto val = Value::LIST(schema_list);
+
+	auto val = Value::LIST(LogicalType::VARCHAR, schema_list);
 	result.Reference(val);
 }
 
@@ -72,14 +83,14 @@ static void VersionFunction(DataChunk &input, ExpressionState &state, Vector &re
 void SystemFun::RegisterFunction(BuiltinFunctions &set) {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
+	ScalarFunction current_query("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, BindSystemFunction);
+	current_query.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction(current_query);
 	set.AddFunction(
-	    ScalarFunction("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, true, BindSystemFunction));
-	set.AddFunction(
-	    ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction, false, BindSystemFunction));
+	    ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction, BindSystemFunction));
 	set.AddFunction(ScalarFunction("current_schemas", {LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction,
-	                               false, BindSystemFunction));
-	set.AddFunction(
-	    ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent, false, BindSystemFunction));
+	                               BindSystemFunction));
+	set.AddFunction(ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent, BindSystemFunction));
 	set.AddFunction(ScalarFunction("version", {}, LogicalType::VARCHAR, VersionFunction));
 	set.AddFunction(ExportAggregateFunction::GetCombine());
 	set.AddFunction(ExportAggregateFunction::GetFinalize());

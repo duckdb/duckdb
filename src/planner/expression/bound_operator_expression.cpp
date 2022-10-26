@@ -2,6 +2,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression_util.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,21 @@ unique_ptr<Expression> BoundOperatorExpression::Copy() {
 		copy->children.push_back(child->Copy());
 	}
 	return move(copy);
+}
+
+void BoundOperatorExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializable(return_type);
+	writer.WriteSerializableList(children);
+}
+
+unique_ptr<Expression> BoundOperatorExpression::Deserialize(ExpressionDeserializationState &state,
+                                                            FieldReader &reader) {
+	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
+
+	auto result = make_unique<BoundOperatorExpression>(state.type, return_type);
+	result->children = move(children);
+	return move(result);
 }
 
 } // namespace duckdb

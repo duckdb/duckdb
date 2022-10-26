@@ -37,6 +37,15 @@ struct RStatement {
 	vector<Value> parameters;
 };
 
+struct RelationWrapper {
+	RelationWrapper(std::shared_ptr<Relation> rel_p) : rel(move(rel_p)) {
+	}
+	shared_ptr<Relation> rel;
+};
+
+typedef cpp11::external_pointer<ParsedExpression> expr_extptr_t;
+typedef cpp11::external_pointer<RelationWrapper> rel_extptr_t;
+
 typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
 struct RQueryResult {
@@ -90,10 +99,12 @@ struct RStrings {
 	SEXP UTC_str; // Rf_mkString
 	SEXP Date_str;
 	SEXP factor_str;
+	SEXP dataframe_str;
 	SEXP difftime_str;
 	SEXP secs_str;
 	SEXP arrow_str; // StringsToSexp
 	SEXP POSIXct_POSIXt_str;
+	SEXP integer64_str;
 	SEXP enc2utf8_sym; // Rf_install
 	SEXP tzone_sym;
 	SEXP units_sym;
@@ -113,6 +124,8 @@ private:
 	RStrings();
 };
 
+SEXP duckdb_execute_R_impl(MaterializedQueryResult *result, bool);
+
 } // namespace duckdb
 
 // moved out of duckdb namespace for the time being (r-lib/cpp11#262)
@@ -129,11 +142,11 @@ cpp11::list rapi_prepare(duckdb::conn_eptr_t, std::string);
 
 cpp11::list rapi_bind(duckdb::stmt_eptr_t, SEXP paramsexp, bool);
 
-SEXP rapi_execute(duckdb::stmt_eptr_t, bool);
+SEXP rapi_execute(duckdb::stmt_eptr_t, bool, bool);
 
 void rapi_release(duckdb::stmt_eptr_t);
 
-void rapi_register_df(duckdb::conn_eptr_t, std::string, cpp11::data_frame);
+void rapi_register_df(duckdb::conn_eptr_t, std::string, cpp11::data_frame, bool);
 
 void rapi_unregister_df(duckdb::conn_eptr_t, std::string);
 

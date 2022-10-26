@@ -22,9 +22,6 @@ restart
 statement ok
 PRAGMA default_null_order='NULLS LAST'
 
-# too slow queries:
-# 64, 85
-
 loop i 1 9
 
 query I
@@ -34,49 +31,7 @@ PRAGMA tpcds(${i})
 
 endloop
 
-loop i 10 64
-
-query I
-PRAGMA tpcds(${i})
-----
-<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
-
-endloop
-
-loop i 65 71
-
-query I
-PRAGMA tpcds(${i})
-----
-<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
-
-endloop
-
-loop i 72 85
-
-query I
-PRAGMA tpcds(${i})
-----
-<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
-
-endloop
-
-loop i 86 99
-
-query I
-PRAGMA tpcds(${i})
-----
-<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
-
-endloop
-
-# unstable multithreaded rounding
-# 71
-
-foreach i 71
-
-statement ok
-pragma threads=1
+loop i 10 100
 
 query I
 PRAGMA tpcds(${i})

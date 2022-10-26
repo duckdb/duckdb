@@ -1,11 +1,10 @@
-library("testthat")
-library("DBI")
-
 skip_on_cran()
 skip_on_os("windows")
 skip_if_not_installed("arrow", "5.0.0")
 # Skip if parquet is not a capability as an indicator that Arrow is fully installed.
 skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
+
+library("arrow")
 
 test_that("duckdb_register_arrow() works", {
   con <- dbConnect(duckdb::duckdb())
@@ -453,7 +452,7 @@ test_that("duckdb can read arrow timestamps", {
   con <- DBI::dbConnect(duckdb::duckdb(), timezone_out = "UTC")
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
-  timestamp <- as.POSIXct("2022-01-30 11:59:29")
+  timestamp <- as.POSIXct("2022-01-30 11:59:29", tz = "UTC")
 
   for (unit in c("s", "ms", "us", "ns")) {
     tbl <- arrow::arrow_table(t = arrow::Array$create(timestamp, type = arrow::timestamp(unit)))

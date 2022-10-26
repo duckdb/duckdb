@@ -3,6 +3,7 @@
 #include "t_digest.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -19,7 +20,7 @@ struct ApproximateQuantileBindData : public FunctionData {
 	explicit ApproximateQuantileBindData(float quantile_p) : quantiles(1, quantile_p) {
 	}
 
-	explicit ApproximateQuantileBindData(const vector<float> &quantiles_p) : quantiles(quantiles_p) {
+	explicit ApproximateQuantileBindData(vector<float> quantiles_p) : quantiles(move(quantiles_p)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -28,7 +29,23 @@ struct ApproximateQuantileBindData : public FunctionData {
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (ApproximateQuantileBindData &)other_p;
-		return quantiles == other.quantiles;
+		//		return quantiles == other.quantiles;
+		if (quantiles != other.quantiles) {
+			return false;
+		}
+		return true;
+	}
+
+	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
+		D_ASSERT(bind_data_p);
+		auto bind_data = (ApproximateQuantileBindData *)bind_data_p;
+		writer.WriteList<float>(bind_data->quantiles);
+	}
+
+	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	                                            AggregateFunction &bound_function) {
+		auto quantiles = reader.ReadRequiredList<float>();
+		return make_unique<ApproximateQuantileBindData>(move(quantiles));
 	}
 
 	vector<float> quantiles;
@@ -44,15 +61,15 @@ struct ApproxQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		if (!state->h) {
 			state->h = new duckdb_tdigest::TDigest(100);
 		}
@@ -62,7 +79,7 @@ struct ApproxQuantileOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (source.pos == 0) {
 			return;
 		}
@@ -89,7 +106,7 @@ struct ApproxQuantileOperation {
 struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, TARGET_TYPE *target,
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, TARGET_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
 
 		if (state->pos == 0) {
@@ -97,9 +114,9 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 			return;
 		}
 		D_ASSERT(state->h);
-		D_ASSERT(bind_data_p);
+		D_ASSERT(aggr_input_data.bind_data);
 		state->h->compress();
-		auto bind_data = (ApproximateQuantileBindData *)bind_data_p;
+		auto bind_data = (ApproximateQuantileBindData *)aggr_input_data.bind_data;
 		D_ASSERT(bind_data->quantiles.size() == 1);
 		target[idx] = Cast::template Operation<SAVE_TYPE, TARGET_TYPE>(state->h->quantile(bind_data->quantiles[0]));
 	}
@@ -111,30 +128,33 @@ AggregateFunction GetApproximateQuantileAggregateFunction(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int16_t, int16_t,
 		                                                   ApproxQuantileScalarOperation>(LogicalType::SMALLINT,
 		                                                                                  LogicalType::SMALLINT);
-
 	case PhysicalType::INT32:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int32_t, int32_t,
 		                                                   ApproxQuantileScalarOperation>(LogicalType::INTEGER,
 		                                                                                  LogicalType::INTEGER);
-
 	case PhysicalType::INT64:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int64_t, int64_t,
 		                                                   ApproxQuantileScalarOperation>(LogicalType::BIGINT,
 		                                                                                  LogicalType::BIGINT);
+	case PhysicalType::INT128:
+		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, hugeint_t, hugeint_t,
+		                                                   ApproxQuantileScalarOperation>(LogicalType::HUGEINT,
+		                                                                                  LogicalType::HUGEINT);
 	case PhysicalType::DOUBLE:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, double, double,
 		                                                   ApproxQuantileScalarOperation>(LogicalType::DOUBLE,
 		                                                                                  LogicalType::DOUBLE);
-
 	default:
 		throw InternalException("Unimplemented quantile aggregate");
 	}
 }
 
 static float CheckApproxQuantile(const Value &quantile_val) {
+	if (quantile_val.IsNull()) {
+		throw BinderException("APPROXIMATE QUANTILE parameter cannot be NULL");
+	}
 	auto quantile = quantile_val.GetValue<float>();
-
-	if (quantile_val.IsNull() || quantile < 0 || quantile > 1) {
+	if (quantile < 0 || quantile > 1) {
 		throw BinderException("APPROXIMATE QUANTILE can only take parameters in range [0, 1]");
 	}
 
@@ -143,7 +163,10 @@ static float CheckApproxQuantile(const Value &quantile_val) {
 
 unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFunction &function,
                                             vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[1]->IsScalar()) {
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("APPROXIMATE QUANTILE can only take constant quantile parameters");
 	}
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
@@ -158,7 +181,7 @@ unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFun
 	}
 
 	// remove the quantile argument so we can use the unary aggregate
-	arguments.pop_back();
+	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_unique<ApproximateQuantileBindData>(quantiles);
 }
 
@@ -167,12 +190,16 @@ unique_ptr<FunctionData> BindApproxQuantileDecimal(ClientContext &context, Aggre
 	auto bind_data = BindApproxQuantile(context, function, arguments);
 	function = GetApproximateQuantileAggregateFunction(arguments[0]->return_type.InternalType());
 	function.name = "approx_quantile";
+	function.serialize = ApproximateQuantileBindData::Serialize;
+	function.deserialize = ApproximateQuantileBindData::Deserialize;
 	return bind_data;
 }
 
 AggregateFunction GetApproximateQuantileAggregate(PhysicalType type) {
 	auto fun = GetApproximateQuantileAggregateFunction(type);
 	fun.bind = BindApproxQuantile;
+	fun.serialize = ApproximateQuantileBindData::Serialize;
+	fun.deserialize = ApproximateQuantileBindData::Deserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.emplace_back(LogicalType::FLOAT);
 	return fun;
@@ -182,15 +209,15 @@ template <class CHILD_TYPE>
 struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 
 	template <class RESULT_TYPE, class STATE>
-	static void Finalize(Vector &result_list, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
+	static void Finalize(Vector &result_list, AggregateInputData &aggr_input_data, STATE *state, RESULT_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
 		if (state->pos == 0) {
 			mask.SetInvalid(idx);
 			return;
 		}
 
-		D_ASSERT(bind_data_p);
-		auto bind_data = (ApproximateQuantileBindData *)bind_data_p;
+		D_ASSERT(aggr_input_data.bind_data);
+		auto bind_data = (ApproximateQuantileBindData *)aggr_input_data.bind_data;
 
 		auto &result = ListVector::GetEntry(result_list);
 		auto ridx = ListVector::GetListSize(result_list);
@@ -212,12 +239,12 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 	}
 
 	template <class STATE_TYPE, class RESULT_TYPE>
-	static void FinalizeList(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count, // NOLINT
+	static void FinalizeList(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count, // NOLINT
 	                         idx_t offset) {
 		D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-		D_ASSERT(bind_data_p);
-		auto bind_data = (ApproximateQuantileBindData *)bind_data_p;
+		D_ASSERT(aggr_input_data.bind_data);
+		auto bind_data = (ApproximateQuantileBindData *)aggr_input_data.bind_data;
 
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -226,7 +253,7 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
 			auto &mask = ConstantVector::Validity(result);
-			Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[0], rdata, mask, 0);
+			Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[0], rdata, mask, 0);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -236,7 +263,7 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 			auto &mask = FlatVector::Validity(result);
 			for (idx_t i = 0; i < count; i++) {
-				Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[i], rdata, mask, i + offset);
+				Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[i], rdata, mask, i + offset);
 			}
 		}
 
@@ -259,6 +286,8 @@ AggregateFunction GetTypedApproxQuantileListAggregateFunction(const LogicalType 
 	using STATE = ApproxQuantileState;
 	using OP = ApproxQuantileListOperation<INPUT_TYPE>;
 	auto fun = ApproxQuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
+	fun.serialize = ApproximateQuantileBindData::Serialize;
+	fun.deserialize = ApproximateQuantileBindData::Deserialize;
 	return fun;
 }
 
@@ -274,7 +303,6 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 		return GetTypedApproxQuantileListAggregateFunction<int64_t, int64_t>(type);
 	case LogicalTypeId::HUGEINT:
 		return GetTypedApproxQuantileListAggregateFunction<hugeint_t, hugeint_t>(type);
-
 	case LogicalTypeId::FLOAT:
 		return GetTypedApproxQuantileListAggregateFunction<float, float>(type);
 	case LogicalTypeId::DOUBLE:
@@ -292,8 +320,6 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 		default:
 			throw NotImplementedException("Unimplemented approximate quantile list aggregate");
 		}
-		break;
-
 	default:
 		// TODO: Add quantitative temporal types
 		throw NotImplementedException("Unimplemented approximate quantile list aggregate");
@@ -305,12 +331,16 @@ unique_ptr<FunctionData> BindApproxQuantileDecimalList(ClientContext &context, A
 	auto bind_data = BindApproxQuantile(context, function, arguments);
 	function = GetApproxQuantileListAggregateFunction(arguments[0]->return_type);
 	function.name = "approx_quantile";
+	function.serialize = ApproximateQuantileBindData::Serialize;
+	function.deserialize = ApproximateQuantileBindData::Deserialize;
 	return bind_data;
 }
 
 AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	auto fun = GetApproxQuantileListAggregateFunction(type);
 	fun.bind = BindApproxQuantile;
+	fun.serialize = ApproximateQuantileBindData::Serialize;
+	fun.deserialize = ApproximateQuantileBindData::Deserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
 	fun.arguments.push_back(list_of_float);
@@ -326,6 +356,7 @@ void ApproximateQuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT16));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT32));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT64));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT128));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::DOUBLE));
 
 	// List variants

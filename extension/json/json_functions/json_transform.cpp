@@ -49,13 +49,16 @@ static LogicalType StructureToType(yyjson_val *val) {
 static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (arguments[1]->return_type == LogicalTypeId::SQLNULL) {
 		bound_function.return_type = LogicalTypeId::SQLNULL;
 	} else if (!arguments[1]->IsFoldable()) {
 		throw InvalidInputException("JSON structure must be a constant!");
 	} else {
 		auto structure_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-		if (!structure_val.TryCastAs(LogicalType::JSON)) {
+		if (!structure_val.DefaultTryCastAs(LogicalType::JSON)) {
 			throw InvalidInputException("cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
@@ -218,7 +221,7 @@ static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 	}
 
 	string error_message;
-	if (!VectorOperations::TryCast(string_vector, result, count, &error_message, strict) && strict) {
+	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &error_message, strict) && strict) {
 		throw InvalidInputException(error_message);
 	}
 }
@@ -366,8 +369,8 @@ template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto count = args.size();
 	auto &input = args.data[0];
-	VectorData input_data;
-	input.Orrify(count, input_data);
+	UnifiedVectorFormat input_data;
+	input.ToUnifiedFormat(count, input_data);
 	auto inputs = (string_t *)input_data.data;
 	// Read documents
 	vector<DocPointer<yyjson_doc>> docs;
@@ -387,18 +390,20 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 	// Transform
 	Transform(vals, result, count, strict);
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformFunction() {
 	return CreateScalarFunctionInfo(ScalarFunction("json_transform", {LogicalType::JSON, LogicalType::JSON},
-	                                               LogicalType::ANY, TransformFunction<false>, false, JSONTransformBind,
-	                                               nullptr, nullptr));
+	                                               LogicalType::ANY, TransformFunction<false>, JSONTransformBind));
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformStrictFunction() {
 	return CreateScalarFunctionInfo(ScalarFunction("json_transform_strict", {LogicalType::JSON, LogicalType::JSON},
-	                                               LogicalType::ANY, TransformFunction<true>, false, JSONTransformBind,
-	                                               nullptr, nullptr));
+	                                               LogicalType::ANY, TransformFunction<true>, JSONTransformBind));
 }
 
 } // namespace duckdb

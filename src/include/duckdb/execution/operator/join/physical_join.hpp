@@ -14,7 +14,7 @@
 namespace duckdb {
 
 //! PhysicalJoin represents the base class of the join operators
-class PhysicalJoin : public PhysicalOperator {
+class PhysicalJoin : public CachingPhysicalOperator {
 public:
 	PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type, idx_t estimated_cardinality);
 
@@ -27,13 +27,16 @@ public:
 	static void ConstructAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
 	static void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
 	                                    bool has_null);
-	static void ConstructLeftJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
 
 public:
 	static void BuildJoinPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state,
 	                               PhysicalOperator &op);
 	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
 	vector<const PhysicalOperator *> GetSources() const override;
+
+	bool IsOrderPreserving() const override {
+		return false;
+	}
 };
 
 } // namespace duckdb

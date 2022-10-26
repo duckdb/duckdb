@@ -1,0 +1,21 @@
+# name: test/sql/generated_columns/virtual/preserve_order.test
+# description: Test that order is preserved even when mixing generated and standard columns
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (
+    foo INTEGER,
+    bar INTEGER GENERATED ALWAYS AS (foo+1) VIRTUAL,
+    foobar INTEGER
+);
+
+statement ok
+INSERT INTO test (foo, foobar) VALUES (1, 10);
+
+query III
+SELECT * FROM test;
+----
+1	2	10

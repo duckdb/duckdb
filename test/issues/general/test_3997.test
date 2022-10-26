@@ -1,0 +1,60 @@
+# name: test/issues/general/test_3997.test
+# description: Issue 3997: CTEs on Insert/update/delete statements
+# group: [general]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+create table x (x int);
+
+statement ok
+with y(y) as (select 1) insert into x (select y from y);
+
+query I
+select x from x;
+----
+1
+
+statement ok
+with y(y) as (select 1) update x set x = 2 from y where x = y;
+
+query I
+select x from x;
+----
+2
+
+statement ok
+with y(y) as (select 2) delete from x using y where x = y;
+
+query I
+select x from x;
+----
+
+statement ok
+with y(y) as (select 1), z(z) as (select 2) insert into x (select (select y + z + 7) from y, z);
+
+statement ok
+with recursive t as (select 1 as x union all select x+1 from t where x < 3) insert into x (select * from t);
+
+query I
+select x from x;
+----
+10
+1
+2
+3
+
+statement ok
+with y(y) as (with z(z) as (select 20) select * from z) delete from x using y where x < y;
+
+query I
+select x from x;
+----
+
+statement error
+with y(y) as (select 2) delete from x using (select y) z(z) where x = z;
+
+# at the moment keep this as an error
+statement error
+insert into x default values;

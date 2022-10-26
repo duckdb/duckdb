@@ -1,0 +1,42 @@
+# name: test/sql/generated_columns/virtual/from_generated_column.test
+# description: Expected behavior when trying to create a generated column from a generated column
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+# ALTER TABLE - ADD COLUMN generated column not supported yet
+statement error
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+statement error
+SELECT total_profit FROM unit
+
+statement error
+ALTER TABLE unit ADD COLUMN also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL;
+
+statement error
+SELECT also_total_profit FROM unit
+
+# Create a table with a generated column, and another generated column created from this other one
+statement ok
+CREATE TABLE unit2(
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL,
+	also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL
+);
+
+statement ok
+INSERT INTO unit2 VALUES (100, 0)
+
+query IIII
+SELECT * FROM unit2
+----
+100	0	0	0

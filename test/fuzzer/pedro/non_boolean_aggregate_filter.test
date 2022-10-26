@@ -1,0 +1,16 @@
+# name: test/fuzzer/pedro/non_boolean_aggregate_filter.test
+# description: Issue #4570: Non-boolean aggregate filter
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT mode(1) FILTER (0);
+----
+NULL
+
+query II
+SELECT SUM(i), SUM(i) FILTER (i%2) FROM range(10) tbl(i);
+----
+45	25

@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-//! The SelectStatement of the view
+
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/function/function.hpp"
@@ -28,6 +28,8 @@ public:
 
 public:
 	unique_ptr<MacroFunction> Copy() override;
+
+	string ToSQL(const string &schema, const string &name) override;
 };
 
 } // namespace duckdb

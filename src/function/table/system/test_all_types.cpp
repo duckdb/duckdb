@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-struct TestAllTypesData : public FunctionOperatorData {
+struct TestAllTypesData : public GlobalTableFunctionState {
 	TestAllTypesData() : offset(0) {
 	}
 
@@ -15,22 +15,7 @@ struct TestAllTypesData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-struct TestType {
-	TestType(LogicalType type_p, string name_p)
-	    : type(move(type_p)), name(move(name_p)), min_value(Value::MinimumValue(type)),
-	      max_value(Value::MaximumValue(type)) {
-	}
-	TestType(LogicalType type_p, string name_p, Value min, Value max)
-	    : type(move(type_p)), name(move(name_p)), min_value(move(min)), max_value(move(max)) {
-	}
-
-	LogicalType type;
-	string name;
-	Value min_value;
-	Value max_value;
-};
-
-static vector<TestType> GetTestTypes() {
+vector<TestType> TestAllTypesFun::GetTestTypes() {
 	vector<TestType> result;
 	// scalar types/numerics
 	result.emplace_back(LogicalType::BOOLEAN, "bool");
@@ -75,7 +60,7 @@ static vector<TestType> GetTestTypes() {
 	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::JSON, "json", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
-	                    Value("\\x00\\x00\\x00a"));
+	                    Value::BLOB("\\x00\\x00\\x00a"));
 
 	// enums
 	Vector small_enum(LogicalType::VARCHAR, 2);
@@ -201,7 +186,7 @@ static vector<TestType> GetTestTypes() {
 
 static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
-	auto test_types = GetTestTypes();
+	auto test_types = TestAllTypesFun::GetTestTypes();
 	for (auto &test_type : test_types) {
 		return_types.push_back(move(test_type.type));
 		names.push_back(move(test_type.name));
@@ -209,10 +194,9 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const FunctionData *bind_data,
-                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<TestAllTypesData>();
-	auto test_types = GetTestTypes();
+	auto test_types = TestAllTypesFun::GetTestTypes();
 	// 3 rows: min, max and NULL
 	result->entries.resize(3);
 	// initialize the values
@@ -224,9 +208,8 @@ unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const 
 	return move(result);
 }
 
-void TestAllTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk &output) {
-	auto &data = (TestAllTypesData &)*operator_state;
+void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (TestAllTypesData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

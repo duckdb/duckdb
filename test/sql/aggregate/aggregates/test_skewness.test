@@ -66,8 +66,6 @@ NULL
 -0.330141
 
 # Window Function
-require vector_size 512
-
 query I
 select skewness(v2) over (partition by v)
     from aggr order by v;

@@ -2,12 +2,20 @@
 
 namespace duckdb {
 
-class TableInOutFunctionState : public OperatorState {
+class TableInOutLocalState : public OperatorState {
 public:
-	TableInOutFunctionState() {
+	TableInOutLocalState() {
 	}
 
-	unique_ptr<FunctionOperatorData> operator_data;
+	unique_ptr<LocalTableFunctionState> local_state;
+};
+
+class TableInOutGlobalState : public GlobalOperatorState {
+public:
+	TableInOutGlobalState() {
+	}
+
+	unique_ptr<GlobalTableFunctionState> global_state;
 };
 
 PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
@@ -17,18 +25,40 @@ PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types
       function(move(function_p)), bind_data(move(bind_data_p)), column_ids(move(column_ids_p)) {
 }
 
-unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ClientContext &context) const {
-	auto result = make_unique<TableInOutFunctionState>();
-	if (function.init) {
-		result->operator_data = function.init(context, bind_data.get(), column_ids, nullptr);
+unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ExecutionContext &context) const {
+	auto &gstate = (TableInOutGlobalState &)*op_state;
+	auto result = make_unique<TableInOutLocalState>();
+	if (function.init_local) {
+		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
+		result->local_state = function.init_local(context, input, gstate.global_state.get());
+	}
+	return move(result);
+}
+
+unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorState(ClientContext &context) const {
+	auto result = make_unique<TableInOutGlobalState>();
+	if (function.init_global) {
+		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
+		result->global_state = function.init_global(context, input);
 	}
 	return move(result);
 }
 
 OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                       GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (TableInOutFunctionState &)state_p;
-	return function.in_out_function(context.client, bind_data.get(), state.operator_data.get(), input, chunk);
+                                                       GlobalOperatorState &gstate_p, OperatorState &state_p) const {
+	auto &gstate = (TableInOutGlobalState &)gstate_p;
+	auto &state = (TableInOutLocalState &)state_p;
+	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	return function.in_out_function(context, data, input, chunk);
+}
+
+OperatorFinalizeResultType PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk,
+                                                                    GlobalOperatorState &gstate_p,
+                                                                    OperatorState &state_p) const {
+	auto &gstate = (TableInOutGlobalState &)gstate_p;
+	auto &state = (TableInOutLocalState &)state_p;
+	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	return function.in_out_function_final(context, data, chunk);
 }
 
 } // namespace duckdb

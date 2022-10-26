@@ -1,0 +1,45 @@
+# name: test/sql/generated_columns/virtual/select.test
+# description: Remove generated column
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement error
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+# CREATE
+
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold),
+);
+
+statement ok
+INSERT INTO tbl VALUES (5,4);
+
+#Select basic
+query I
+SELECT total_profit FROM tbl
+----
+20
+
+#Select *
+query III
+SELECT * FROM tbl
+----
+5	4	20
+
+#Select tbl.*
+query III
+SELECT tbl.* FROM tbl
+----
+5	4	20

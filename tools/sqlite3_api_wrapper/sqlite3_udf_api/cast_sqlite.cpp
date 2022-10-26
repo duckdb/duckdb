@@ -35,11 +35,11 @@ void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chu
 			type = LogicalType::VARCHAR;
 		}
 	}
-	new_chunk.Initialize(new_types);
+	new_chunk.Initialize(Allocator::DefaultAllocator(), new_types);
 
 	for (idx_t i = 0; i < data_chunk.ColumnCount(); ++i) {
 		if (CastSQLite::RequiresCastToVarchar(data_chunk.data[i].GetType())) {
-			VectorOperations::Cast(data_chunk.data[i], new_chunk.data[i], data_chunk.size(), true);
+			VectorOperations::DefaultCast(data_chunk.data[i], new_chunk.data[i], data_chunk.size(), true);
 		} else {
 			new_chunk.data[i].Reference(data_chunk.data[i]);
 		}
@@ -48,7 +48,7 @@ void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chu
 
 VectorType CastSQLite::ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &result,
                                             vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlite_values,
-                                            unique_ptr<VectorData[]> vec_data) {
+                                            unique_ptr<UnifiedVectorFormat[]> vec_data) {
 	VectorType result_vec_type = VectorType::CONSTANT_VECTOR;
 
 	// Casting input data to sqlite_value
@@ -66,7 +66,7 @@ VectorType CastSQLite::ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &resul
 }
 
 //*** Cast to vectors ***********************************/
-unique_ptr<vector<sqlite3_value>> CastSQLite::ToVector(LogicalType type, VectorData &vec_data, idx_t size,
+unique_ptr<vector<sqlite3_value>> CastSQLite::ToVector(LogicalType type, UnifiedVectorFormat &vec_data, idx_t size,
                                                        Vector &result) {
 	LogicalTypeId type_id = type.id();
 	switch (type_id) {

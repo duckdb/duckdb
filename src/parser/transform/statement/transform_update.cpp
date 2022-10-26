@@ -8,6 +8,9 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGNo
 	D_ASSERT(stmt);
 
 	auto result = make_unique<UpdateStatement>();
+	if (stmt->withClause) {
+		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
+	}
 
 	result->table = TransformRangeVar(stmt->relation);
 	if (stmt->fromClause) {

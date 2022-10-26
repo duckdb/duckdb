@@ -10,13 +10,42 @@ PreparedStatementData::PreparedStatementData(StatementType type) : statement_typ
 PreparedStatementData::~PreparedStatementData() {
 }
 
+void PreparedStatementData::CheckParameterCount(idx_t parameter_count) {
+	const auto required = properties.parameter_count;
+	if (parameter_count != required) {
+		throw BinderException("Parameter/argument count mismatch for prepared statement. Expected %llu, got %llu",
+		                      required, parameter_count);
+	}
+}
+
+bool PreparedStatementData::RequireRebind(ClientContext &context, const vector<Value> &values) {
+	CheckParameterCount(values.size());
+	if (!unbound_statement) {
+		// no unbound statement!? cannot rebind?
+		return false;
+	}
+	if (!properties.bound_all_parameters) {
+		// parameters not yet bound: query always requires a rebind
+		return true;
+	}
+	auto &catalog = Catalog::GetCatalog(context);
+	if (catalog.GetCatalogVersion() != catalog_version) {
+		//! context is out of bounds
+		return true;
+	}
+	for (auto &it : value_map) {
+		const idx_t i = it.first - 1;
+		if (values[i].type() != it.second->return_type) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void PreparedStatementData::Bind(vector<Value> values) {
 	// set parameters
-	const auto required = unbound_statement ? unbound_statement->n_param : 0;
-	if (values.size() != required) {
-		throw BinderException("Parameter/argument count mismatch for prepared statement. Expected %llu, got %llu",
-		                      required, values.size());
-	}
+	D_ASSERT(!unbound_statement || unbound_statement->n_param == properties.parameter_count);
+	CheckParameterCount(values.size());
 
 	// bind the required values
 	for (auto &it : value_map) {
@@ -24,25 +53,35 @@ void PreparedStatementData::Bind(vector<Value> values) {
 		if (i >= values.size()) {
 			throw BinderException("Could not find parameter with index %llu", i + 1);
 		}
-		D_ASSERT(!it.second.empty());
-		if (!values[i].TryCastAs(it.second[0]->type())) {
+		D_ASSERT(it.second);
+		if (!values[i].DefaultTryCastAs(it.second->return_type)) {
 			throw BinderException(
 			    "Type mismatch for binding parameter with index %llu, expected type %s but got type %s", i + 1,
-			    it.second[0]->type().ToString().c_str(), values[i].type().ToString().c_str());
+			    it.second->return_type.ToString().c_str(), values[i].type().ToString().c_str());
 		}
-		for (auto &target : it.second) {
-			*target = values[i];
-		}
+		it.second->value = values[i];
 	}
 }
 
-LogicalType PreparedStatementData::GetType(idx_t param_idx) {
+bool PreparedStatementData::TryGetType(idx_t param_idx, LogicalType &result) {
 	auto it = value_map.find(param_idx);
 	if (it == value_map.end()) {
+		return false;
+	}
+	if (it->second->return_type.id() != LogicalTypeId::INVALID) {
+		result = it->second->return_type;
+	} else {
+		result = it->second->value.type();
+	}
+	return true;
+}
+
+LogicalType PreparedStatementData::GetType(idx_t param_idx) {
+	LogicalType result;
+	if (!TryGetType(param_idx, result)) {
 		throw BinderException("Could not find parameter with index %llu", param_idx);
 	}
-	D_ASSERT(!it->second.empty());
-	return it->second[0]->type();
+	return result;
 }
 
 } // namespace duckdb

@@ -20,12 +20,16 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.sql.SQLWarning;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import javax.sql.rowset.RowSetProvider;
+import javax.sql.rowset.CachedRowSet;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
@@ -34,12 +38,17 @@ import org.duckdb.DuckDBDriver;
 import org.duckdb.DuckDBTimestamp;
 import org.duckdb.DuckDBColumnType;
 import org.duckdb.DuckDBResultSetMetaData;
+import org.duckdb.JsonNode;
 
 public class TestDuckDBJDBC {
 
 	private static void assertTrue(boolean val) throws Exception {
+		assertTrue(val, null);
+	}
+
+	private static void assertTrue(boolean val, String message) throws Exception {
 		if (!val) {
-			throw new Exception();
+			throw new Exception(message);
 		}
 	}
 
@@ -51,7 +60,7 @@ public class TestDuckDBJDBC {
 		if (a == null && b == null) {
 			return;
 		}
-		assertTrue(a.equals(b));
+		assertTrue(a.equals(b), String.format("%s should equal %s", a, b));
 	}
 
 	private static void assertNull(Object a) throws Exception {
@@ -63,7 +72,22 @@ public class TestDuckDBJDBC {
 	}
 
 	private static void fail() throws Exception {
-		assertTrue(false);
+		fail(null);
+	}
+
+	private static void fail(String s) throws Exception {
+		throw new Exception(s);
+	}
+
+	private static <T extends Throwable> String assertThrows(Thrower thrower, Class<T> exception) throws Exception {
+		try {
+			thrower.run();
+			fail("Expected to throw " + exception.getName());
+			return null;
+		} catch (Throwable e) {
+			assertEquals(e.getClass(), exception);
+			return e.getMessage();
+		}
 	}
 
 	static {
@@ -149,11 +173,27 @@ public class TestDuckDBJDBC {
 	public static void test_prepare_exception() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
-	
+
 		stmt = conn.createStatement();
-		
+
 		try {
 			stmt.execute("this is no SQL;");
+			fail();
+		} catch (SQLException e) {
+		}
+	}
+
+	public static void test_execute_exception() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE t (id INT, b UUID)");
+		stmt.execute("INSERT INTO t VALUES (1, uuid())");
+
+		try {
+			ResultSet rs = stmt.executeQuery("SELECT * FROM t");
+			rs.next();
 			fail();
 		} catch (SQLException e) {
 		}
@@ -165,7 +205,7 @@ public class TestDuckDBJDBC {
 		ResultSet rs;
 
 		conn.setAutoCommit(false);
-	
+
 		stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE t (id INT);");
 		conn.commit();
@@ -188,22 +228,23 @@ public class TestDuckDBJDBC {
 		rs = stmt.executeQuery("SELECT COUNT(*) FROM T");
 		rs.next();
 		assertEquals(rs.getInt(1), 3);
-		
+
 		stmt.execute("INSERT INTO t (id) VALUES (6);");
 		stmt.execute("INSERT INTO t (id) VALUES (7);");
-		
+
 		conn.setAutoCommit(true);
 
 		// Turning auto-commit on triggers a commit
 		rs = stmt.executeQuery("SELECT COUNT(*) FROM T");
 		rs.next();
 		assertEquals(rs.getInt(1), 5);
-		
+
 		// This means a rollback must not be possible now
 		try {
 			conn.rollback();
 			fail();
-		} catch (SQLException e) {}
+		} catch (SQLException e) {
+		}
 
 		stmt.execute("INSERT INTO t (id) VALUES (8);");
 		rs = stmt.executeQuery("SELECT COUNT(*) FROM T");
@@ -220,7 +261,7 @@ public class TestDuckDBJDBC {
 		Statement stmt = conn.createStatement();
 
 		ResultSet rs;
-	
+
 		// Test 8 bit enum + different access ways
 		stmt.execute("CREATE TYPE enum_test AS ENUM ('Enum1', 'enum2', '1üöñ');");
 		stmt.execute("CREATE TABLE t (id INT, e1 enum_test);");
@@ -262,40 +303,40 @@ public class TestDuckDBJDBC {
 		rs.close();
 
 		// Test 16 bit enum
-		stmt.execute("CREATE TYPE enum_long AS ENUM ('enum0' ,'enum1' ,'enum2' ,'enum3' ,'enum4' ,'enum5' ,'enum6'" 
-		+ ",'enum7' ,'enum8' ,'enum9' ,'enum10' ,'enum11' ,'enum12' ,'enum13' ,'enum14' ,'enum15' ,'enum16' ,'enum17'" 
-		+ ",'enum18' ,'enum19' ,'enum20' ,'enum21' ,'enum22' ,'enum23' ,'enum24' ,'enum25' ,'enum26' ,'enum27' ,'enum28'" 
-		+ ",'enum29' ,'enum30' ,'enum31' ,'enum32' ,'enum33' ,'enum34' ,'enum35' ,'enum36' ,'enum37' ,'enum38' ,'enum39'" 
-		+ ",'enum40' ,'enum41' ,'enum42' ,'enum43' ,'enum44' ,'enum45' ,'enum46' ,'enum47' ,'enum48' ,'enum49' ,'enum50'" 
-		+ ",'enum51' ,'enum52' ,'enum53' ,'enum54' ,'enum55' ,'enum56' ,'enum57' ,'enum58' ,'enum59' ,'enum60' ,'enum61'" 
-		+ ",'enum62' ,'enum63' ,'enum64' ,'enum65' ,'enum66' ,'enum67' ,'enum68' ,'enum69' ,'enum70' ,'enum71' ,'enum72'" 
-		+ ",'enum73' ,'enum74' ,'enum75' ,'enum76' ,'enum77' ,'enum78' ,'enum79' ,'enum80' ,'enum81' ,'enum82' ,'enum83'" 
-		+ ",'enum84' ,'enum85' ,'enum86' ,'enum87' ,'enum88' ,'enum89' ,'enum90' ,'enum91' ,'enum92' ,'enum93' ,'enum94'" 
-		+ ",'enum95' ,'enum96' ,'enum97' ,'enum98' ,'enum99' ,'enum100' ,'enum101' ,'enum102' ,'enum103' ,'enum104' "
-		+ ",'enum105' ,'enum106' ,'enum107' ,'enum108' ,'enum109' ,'enum110' ,'enum111' ,'enum112' ,'enum113' ,'enum114'" 
-		+ ",'enum115' ,'enum116' ,'enum117' ,'enum118' ,'enum119' ,'enum120' ,'enum121' ,'enum122' ,'enum123' ,'enum124'" 
-		+ ",'enum125' ,'enum126' ,'enum127' ,'enum128' ,'enum129' ,'enum130' ,'enum131' ,'enum132' ,'enum133' ,'enum134'" 
-		+ ",'enum135' ,'enum136' ,'enum137' ,'enum138' ,'enum139' ,'enum140' ,'enum141' ,'enum142' ,'enum143' ,'enum144'" 
-		+ ",'enum145' ,'enum146' ,'enum147' ,'enum148' ,'enum149' ,'enum150' ,'enum151' ,'enum152' ,'enum153' ,'enum154'" 
-		+ ",'enum155' ,'enum156' ,'enum157' ,'enum158' ,'enum159' ,'enum160' ,'enum161' ,'enum162' ,'enum163' ,'enum164'" 
-		+ ",'enum165' ,'enum166' ,'enum167' ,'enum168' ,'enum169' ,'enum170' ,'enum171' ,'enum172' ,'enum173' ,'enum174'" 
-		+ ",'enum175' ,'enum176' ,'enum177' ,'enum178' ,'enum179' ,'enum180' ,'enum181' ,'enum182' ,'enum183' ,'enum184'" 
-		+ ",'enum185' ,'enum186' ,'enum187' ,'enum188' ,'enum189' ,'enum190' ,'enum191' ,'enum192' ,'enum193' ,'enum194'" 
-		+ ",'enum195' ,'enum196' ,'enum197' ,'enum198' ,'enum199' ,'enum200' ,'enum201' ,'enum202' ,'enum203' ,'enum204'" 
-		+ ",'enum205' ,'enum206' ,'enum207' ,'enum208' ,'enum209' ,'enum210' ,'enum211' ,'enum212' ,'enum213' ,'enum214'" 
-		+ ",'enum215' ,'enum216' ,'enum217' ,'enum218' ,'enum219' ,'enum220' ,'enum221' ,'enum222' ,'enum223' ,'enum224'" 
-		+ ",'enum225' ,'enum226' ,'enum227' ,'enum228' ,'enum229' ,'enum230' ,'enum231' ,'enum232' ,'enum233' ,'enum234'" 
-		+ ",'enum235' ,'enum236' ,'enum237' ,'enum238' ,'enum239' ,'enum240' ,'enum241' ,'enum242' ,'enum243' ,'enum244'" 
-		+ ",'enum245' ,'enum246' ,'enum247' ,'enum248' ,'enum249' ,'enum250' ,'enum251' ,'enum252' ,'enum253' ,'enum254'" 
-		+ ",'enum255' ,'enum256' ,'enum257' ,'enum258' ,'enum259' ,'enum260' ,'enum261' ,'enum262' ,'enum263' ,'enum264'" 
-		+ ",'enum265' ,'enum266' ,'enum267' ,'enum268' ,'enum269' ,'enum270' ,'enum271' ,'enum272' ,'enum273' ,'enum274'" 
-		+ ",'enum275' ,'enum276' ,'enum277' ,'enum278' ,'enum279' ,'enum280' ,'enum281' ,'enum282' ,'enum283' ,'enum284'" 
-		+ ",'enum285' ,'enum286' ,'enum287' ,'enum288' ,'enum289' ,'enum290' ,'enum291' ,'enum292' ,'enum293' ,'enum294'" 
-		+ ",'enum295' ,'enum296' ,'enum297' ,'enum298' ,'enum299');");
-		
+		stmt.execute("CREATE TYPE enum_long AS ENUM ('enum0' ,'enum1' ,'enum2' ,'enum3' ,'enum4' ,'enum5' ,'enum6'"
+				+ ",'enum7' ,'enum8' ,'enum9' ,'enum10' ,'enum11' ,'enum12' ,'enum13' ,'enum14' ,'enum15' ,'enum16' ,'enum17'"
+				+ ",'enum18' ,'enum19' ,'enum20' ,'enum21' ,'enum22' ,'enum23' ,'enum24' ,'enum25' ,'enum26' ,'enum27' ,'enum28'"
+				+ ",'enum29' ,'enum30' ,'enum31' ,'enum32' ,'enum33' ,'enum34' ,'enum35' ,'enum36' ,'enum37' ,'enum38' ,'enum39'"
+				+ ",'enum40' ,'enum41' ,'enum42' ,'enum43' ,'enum44' ,'enum45' ,'enum46' ,'enum47' ,'enum48' ,'enum49' ,'enum50'"
+				+ ",'enum51' ,'enum52' ,'enum53' ,'enum54' ,'enum55' ,'enum56' ,'enum57' ,'enum58' ,'enum59' ,'enum60' ,'enum61'"
+				+ ",'enum62' ,'enum63' ,'enum64' ,'enum65' ,'enum66' ,'enum67' ,'enum68' ,'enum69' ,'enum70' ,'enum71' ,'enum72'"
+				+ ",'enum73' ,'enum74' ,'enum75' ,'enum76' ,'enum77' ,'enum78' ,'enum79' ,'enum80' ,'enum81' ,'enum82' ,'enum83'"
+				+ ",'enum84' ,'enum85' ,'enum86' ,'enum87' ,'enum88' ,'enum89' ,'enum90' ,'enum91' ,'enum92' ,'enum93' ,'enum94'"
+				+ ",'enum95' ,'enum96' ,'enum97' ,'enum98' ,'enum99' ,'enum100' ,'enum101' ,'enum102' ,'enum103' ,'enum104' "
+				+ ",'enum105' ,'enum106' ,'enum107' ,'enum108' ,'enum109' ,'enum110' ,'enum111' ,'enum112' ,'enum113' ,'enum114'"
+				+ ",'enum115' ,'enum116' ,'enum117' ,'enum118' ,'enum119' ,'enum120' ,'enum121' ,'enum122' ,'enum123' ,'enum124'"
+				+ ",'enum125' ,'enum126' ,'enum127' ,'enum128' ,'enum129' ,'enum130' ,'enum131' ,'enum132' ,'enum133' ,'enum134'"
+				+ ",'enum135' ,'enum136' ,'enum137' ,'enum138' ,'enum139' ,'enum140' ,'enum141' ,'enum142' ,'enum143' ,'enum144'"
+				+ ",'enum145' ,'enum146' ,'enum147' ,'enum148' ,'enum149' ,'enum150' ,'enum151' ,'enum152' ,'enum153' ,'enum154'"
+				+ ",'enum155' ,'enum156' ,'enum157' ,'enum158' ,'enum159' ,'enum160' ,'enum161' ,'enum162' ,'enum163' ,'enum164'"
+				+ ",'enum165' ,'enum166' ,'enum167' ,'enum168' ,'enum169' ,'enum170' ,'enum171' ,'enum172' ,'enum173' ,'enum174'"
+				+ ",'enum175' ,'enum176' ,'enum177' ,'enum178' ,'enum179' ,'enum180' ,'enum181' ,'enum182' ,'enum183' ,'enum184'"
+				+ ",'enum185' ,'enum186' ,'enum187' ,'enum188' ,'enum189' ,'enum190' ,'enum191' ,'enum192' ,'enum193' ,'enum194'"
+				+ ",'enum195' ,'enum196' ,'enum197' ,'enum198' ,'enum199' ,'enum200' ,'enum201' ,'enum202' ,'enum203' ,'enum204'"
+				+ ",'enum205' ,'enum206' ,'enum207' ,'enum208' ,'enum209' ,'enum210' ,'enum211' ,'enum212' ,'enum213' ,'enum214'"
+				+ ",'enum215' ,'enum216' ,'enum217' ,'enum218' ,'enum219' ,'enum220' ,'enum221' ,'enum222' ,'enum223' ,'enum224'"
+				+ ",'enum225' ,'enum226' ,'enum227' ,'enum228' ,'enum229' ,'enum230' ,'enum231' ,'enum232' ,'enum233' ,'enum234'"
+				+ ",'enum235' ,'enum236' ,'enum237' ,'enum238' ,'enum239' ,'enum240' ,'enum241' ,'enum242' ,'enum243' ,'enum244'"
+				+ ",'enum245' ,'enum246' ,'enum247' ,'enum248' ,'enum249' ,'enum250' ,'enum251' ,'enum252' ,'enum253' ,'enum254'"
+				+ ",'enum255' ,'enum256' ,'enum257' ,'enum258' ,'enum259' ,'enum260' ,'enum261' ,'enum262' ,'enum263' ,'enum264'"
+				+ ",'enum265' ,'enum266' ,'enum267' ,'enum268' ,'enum269' ,'enum270' ,'enum271' ,'enum272' ,'enum273' ,'enum274'"
+				+ ",'enum275' ,'enum276' ,'enum277' ,'enum278' ,'enum279' ,'enum280' ,'enum281' ,'enum282' ,'enum283' ,'enum284'"
+				+ ",'enum285' ,'enum286' ,'enum287' ,'enum288' ,'enum289' ,'enum290' ,'enum291' ,'enum292' ,'enum293' ,'enum294'"
+				+ ",'enum295' ,'enum296' ,'enum297' ,'enum298' ,'enum299');");
+
 		stmt.execute("CREATE TABLE t2 (id INT, e1 enum_long);");
 		stmt.execute("INSERT INTO t2 (id, e1) VALUES (1, 'enum290');");
-	
+
 		ps = conn.prepareStatement("SELECT e1 FROM t2 WHERE id = ?");
 		ps.setObject(1, 1);
 		rs = ps.executeQuery();
@@ -307,18 +348,66 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_timestamp_ms() throws Exception {
+		String expectedString = "2022-08-17 12:11:10.999";
+		String sql = "SELECT '2022-08-17T12:11:10.999'::TIMESTAMP_MS as ts_ms";
+		assert_timestamp_match(sql, expectedString, "TIMESTAMP_MS");
+	}
+
+	public static void test_timestamp_ns() throws Exception {
+		String expectedString = "2022-08-17 12:11:10.999999";
+		String sql = "SELECT '2022-08-17T12:11:10.999999999'::TIMESTAMP_NS as ts_ns";
+		assert_timestamp_match(sql, expectedString, "TIMESTAMP_NS");
+	}
+
+	public static void test_timestamp_s() throws Exception {
+		String expectedString = "2022-08-17 12:11:10";
+		String sql = "SELECT '2022-08-17T12:11:10'::TIMESTAMP_S as ts_s";
+		assert_timestamp_match(sql, expectedString, "TIMESTAMP_S");
+	}
+
+	private static void assert_timestamp_match(String fetchSql, String expectedString, String expectedTypeName)
+			throws Exception {
+		String originalTzProperty = System.getProperty("user.timezone");
+		TimeZone originalTz = TimeZone.getDefault();
+		try {
+			TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+			System.setProperty("user.timezone", "UTC");
+			Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			Statement stmt = conn.createStatement();
+
+			ResultSet rs = stmt.executeQuery(fetchSql);
+			assertTrue(rs.next());
+			Timestamp actual = rs.getTimestamp(1);
+
+			Timestamp expected = Timestamp.valueOf(expectedString);
+
+			assertEquals(expected.getTime(), actual.getTime());
+			assertEquals(expected.getNanos(), actual.getNanos());
+
+			assertEquals(Types.TIMESTAMP, rs.getMetaData().getColumnType(1));
+			assertEquals(expectedTypeName, rs.getMetaData().getColumnTypeName(1));
+
+			rs.close();
+			stmt.close();
+			conn.close();
+		} finally {
+			TimeZone.setDefault(originalTz);
+			System.setProperty("user.timezone", originalTzProperty);
+		}
+	}
+
 	public static void test_timestamp_tz() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
 		ResultSet rs;
-		
+
 		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ)");
 		stmt.execute("INSERT INTO t (id, t1) VALUES (1, '2022-01-01T12:11:10+02')");
 		stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:10')");
 
-		PreparedStatement ps = conn.prepareStatement(
-				"INSERT INTO T (id, t1) VALUES (?, ?)");
+		PreparedStatement ps = conn.prepareStatement("INSERT INTO T (id, t1) VALUES (?, ?)");
 
 		OffsetDateTime odt1 = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12345, ZoneOffset.ofHours(7));
 		OffsetDateTime odt1Rounded = OffsetDateTime.of(2020, 10, 7, 13, 15, 7, 12000, ZoneOffset.ofHours(7));
@@ -350,11 +439,34 @@ public class TestDuckDBJDBC {
 		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt5));
 		rs.next();
 		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt2Rounded));
-		assertTrue(((OffsetDateTime)rs.getObject(2)).isEqual(odt2Rounded));
+		assertTrue(((OffsetDateTime) rs.getObject(2)).isEqual(odt2Rounded));
 
 		// Metadata tests
-		assertEquals(Types.TIME_WITH_TIMEZONE, ((DuckDBResultSetMetaData)meta).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
+		assertEquals(Types.TIMESTAMP_WITH_TIMEZONE,
+				((DuckDBResultSetMetaData) meta).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
 		assertTrue(OffsetDateTime.class.toString().equals(meta.getColumnClassName(2)));
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_throw_wrong_datatype() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		ResultSet rs;
+
+		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ, t2 TIMESTAMP)");
+		stmt.execute("INSERT INTO t (id, t1, t2) VALUES (1, '2022-01-01T12:11:10+02', '2022-01-01T12:11:10')");
+
+		rs = stmt.executeQuery("SELECT * FROM t");
+		rs.next();
+
+		try {
+			rs.getTimestamp(2);
+			fail();
+		} catch (IllegalArgumentException e) {
+		}
 
 		rs.close();
 		stmt.close();
@@ -549,7 +661,7 @@ public class TestDuckDBJDBC {
 		duckdb_timestamp_test();
 
 		// Store default time zone
-		TimeZone defaultTZ = TimeZone.getDefault(); 
+		TimeZone defaultTZ = TimeZone.getDefault();
 
 		// Test with different time zones
 		TimeZone.setDefault(TimeZone.getTimeZone("America/Lima"));
@@ -580,7 +692,7 @@ public class TestDuckDBJDBC {
 		Timestamp cts2 = new DuckDBTimestamp(ts2).toSqlTimestamp();
 		Timestamp cts3 = new DuckDBTimestamp(ts3).toSqlTimestamp();
 		Timestamp cts4 = new DuckDBTimestamp(ts4).toSqlTimestamp();
-		
+
 		assertTrue(ts0.getTime() == cts0.getTime());
 		assertTrue(ts0.compareTo(cts0) == 0);
 		assertTrue(ts1.getTime() == cts1.getTime());
@@ -599,19 +711,17 @@ public class TestDuckDBJDBC {
 		DuckDBTimestamp dts5 = new DuckDBTimestamp(ts2);
 		assertTrue(dts5.toSqlTimestamp().compareTo(ts2) == 0);
 
-		// Insert and read a timestamp 
+		// Insert and read a timestamp
 		stmt.execute("INSERT INTO a (ts) VALUES ('2005-11-02 07:59:58')");
-		ResultSet rs = stmt.executeQuery(
-				"SELECT * FROM a");
+		ResultSet rs = stmt.executeQuery("SELECT * FROM a");
 		assertTrue(rs.next());
 		assertEquals(rs.getObject("ts"), Timestamp.valueOf("2005-11-02 07:59:58"));
 		assertEquals(rs.getTimestamp("ts"), Timestamp.valueOf("2005-11-02 07:59:58"));
-	
+
 		rs.close();
 		stmt.close();
 
-		PreparedStatement ps = conn.prepareStatement(
-				"SELECT COUNT(ts) FROM a WHERE ts = ?");
+		PreparedStatement ps = conn.prepareStatement("SELECT COUNT(ts) FROM a WHERE ts = ?");
 		ps.setTimestamp(1, Timestamp.valueOf("2005-11-02 07:59:58"));
 		ResultSet rs2 = ps.executeQuery();
 		assertTrue(rs2.next());
@@ -619,8 +729,7 @@ public class TestDuckDBJDBC {
 		rs2.close();
 		ps.close();
 
-		ps = conn.prepareStatement(
-				"SELECT COUNT(ts) FROM a WHERE ts = ?");
+		ps = conn.prepareStatement("SELECT COUNT(ts) FROM a WHERE ts = ?");
 		ps.setObject(1, Timestamp.valueOf("2005-11-02 07:59:58"));
 		ResultSet rs3 = ps.executeQuery();
 		assertTrue(rs3.next());
@@ -628,8 +737,7 @@ public class TestDuckDBJDBC {
 		rs3.close();
 		ps.close();
 
-		ps = conn.prepareStatement(
-				"SELECT COUNT(ts) FROM a WHERE ts = ?");
+		ps = conn.prepareStatement("SELECT COUNT(ts) FROM a WHERE ts = ?");
 		ps.setObject(1, Timestamp.valueOf("2005-11-02 07:59:58"), Types.TIMESTAMP);
 		ResultSet rs4 = ps.executeQuery();
 		assertTrue(rs4.next());
@@ -639,8 +747,7 @@ public class TestDuckDBJDBC {
 
 		Statement stmt2 = conn.createStatement();
 		stmt2.execute("INSERT INTO a (ts) VALUES ('1905-11-02 07:59:58.12345')");
-		ps = conn.prepareStatement(
-				"SELECT COUNT(ts) FROM a WHERE ts = ?");
+		ps = conn.prepareStatement("SELECT COUNT(ts) FROM a WHERE ts = ?");
 		ps.setTimestamp(1, Timestamp.valueOf("1905-11-02 07:59:58.12345"));
 		ResultSet rs5 = ps.executeQuery();
 		assertTrue(rs5.next());
@@ -648,8 +755,7 @@ public class TestDuckDBJDBC {
 		rs5.close();
 		ps.close();
 
-		ps = conn.prepareStatement(
-				"SELECT ts FROM a WHERE ts = ?");
+		ps = conn.prepareStatement("SELECT ts FROM a WHERE ts = ?");
 		ps.setTimestamp(1, Timestamp.valueOf("1905-11-02 07:59:58.12345"));
 		ResultSet rs6 = ps.executeQuery();
 		assertTrue(rs6.next());
@@ -665,13 +771,13 @@ public class TestDuckDBJDBC {
 		Statement stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE x (ts TIMESTAMP)");
 
-		LocalDateTime ldt = LocalDateTime.of(2021,1,18,21,20,7);
+		LocalDateTime ldt = LocalDateTime.of(2021, 1, 18, 21, 20, 7);
 
 		PreparedStatement ps1 = conn.prepareStatement("INSERT INTO x VALUES (?)");
 		ps1.setObject(1, ldt);
 		ps1.execute();
 		ps1.close();
-		
+
 		PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM x");
 		ResultSet rs2 = ps2.executeQuery();
 
@@ -684,17 +790,17 @@ public class TestDuckDBJDBC {
 		stmt.close();
 		conn.close();
 	}
-	
+
 	public static void test_duckdb_getObject_with_class() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE b (vchar VARCHAR, bo BOOLEAN, sint SMALLINT, nint INTEGER, bigi BIGINT,"
-			+ " flt FLOAT, dbl DOUBLE, dte DATE, tme TIME, ts TIMESTAMP, dec16 DECIMAL(3,1),"
-			+ " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10), tint TINYINT, utint UTINYINT,"
-			+ " usint USMALLINT, uint UINTEGER, ubig UBIGINT, hin HUGEINT, blo BLOB)");
+				+ " flt FLOAT, dbl DOUBLE, dte DATE, tme TIME, ts TIMESTAMP, dec16 DECIMAL(3,1),"
+				+ " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10), tint TINYINT, utint UTINYINT,"
+				+ " usint USMALLINT, uint UINTEGER, ubig UBIGINT, hin HUGEINT, blo BLOB)");
 		stmt.execute("INSERT INTO b VALUES ('varchary', true, 6, 42, 666, 42.666, 666.42,"
-			+ " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444, "
-			+ " -4, 200, 50001, 4000111222, 18446744073709551615, 18446744073709551616, 'yeah'::BLOB)");
+				+ " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444, "
+				+ " -4, 200, 50001, 4000111222, 18446744073709551615, 18446744073709551616, 'yeah'::BLOB)");
 
 		PreparedStatement ps = conn.prepareStatement("SELECT * FROM b");
 		ResultSet rs = ps.executeQuery();
@@ -711,54 +817,54 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getTime(9), rs.getObject(9, Time.class));
 		assertEquals(rs.getTimestamp(10), rs.getObject(10, Timestamp.class));
 		assertEquals(rs.getObject(10, LocalDateTime.class), LocalDateTime.parse("1970-01-03T03:42:23"));
-		assertEquals(rs.getObject(10, LocalDateTime.class), LocalDateTime.of(1970,1,3,3,42,23));
-		assertEquals(rs.getBigDecimal(11), rs.getObject(11, BigDecimal.class)); 
-		assertEquals(rs.getBigDecimal(12), rs.getObject(12, BigDecimal.class)); 
-		assertEquals(rs.getBigDecimal(13), rs.getObject(13, BigDecimal.class)); 
-		assertEquals(rs.getBigDecimal(14), rs.getObject(14, BigDecimal.class)); 
+		assertEquals(rs.getObject(10, LocalDateTime.class), LocalDateTime.of(1970, 1, 3, 3, 42, 23));
+		assertEquals(rs.getBigDecimal(11), rs.getObject(11, BigDecimal.class));
+		assertEquals(rs.getBigDecimal(12), rs.getObject(12, BigDecimal.class));
+		assertEquals(rs.getBigDecimal(13), rs.getObject(13, BigDecimal.class));
+		assertEquals(rs.getBigDecimal(14), rs.getObject(14, BigDecimal.class));
 
 		// Missing implementations, should never reach assertTrue(false)
 		try {
 			rs.getObject(11, Integer.class);
 			assertTrue(false);
+		} catch (SQLException e) {
 		}
-		catch (SQLException e) {}
 
 		try {
 			rs.getObject(12, Integer.class);
 			assertTrue(false);
+		} catch (SQLException e) {
 		}
-		catch (SQLException e) {}
-			
+
 		try {
 			rs.getObject(13, Integer.class);
 			assertTrue(false);
+		} catch (SQLException e) {
 		}
-		catch (SQLException e) {}
-			
+
 		try {
 			rs.getObject(14, Long.class);
 			assertTrue(false);
+		} catch (SQLException e) {
 		}
-		catch (SQLException e) {}
-			
+
 		try {
 			rs.getObject(15, BigInteger.class);
 			assertTrue(false);
+		} catch (SQLException e) {
 		}
-		catch (SQLException e) {}
 
 		try {
 			rs.getObject(16, BigInteger.class);
 			assertTrue(false);
+		} catch (SQLException e) {
 		}
-		catch (SQLException e) {}
 
 		try {
 			rs.getObject(16, Blob.class);
 			assertTrue(false);
+		} catch (SQLException e) {
 		}
-		catch (SQLException e) {}
 
 		rs.close();
 		ps.close();
@@ -766,19 +872,47 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_multiple_statements_execution() throws Exception {
+		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		ResultSet rs = stmt.executeQuery("CREATE TABLE integers(i integer);\n"
+				+ "insert into integers select * from range(10);" + "select * from integers;");
+		int i = 0;
+		while (rs.next()) {
+			assertEquals(rs.getInt("i"), i);
+			i++;
+		}
+		assertEquals(i, 10);
+	}
+
+	public static void test_multiple_statements_exception() throws Exception {
+		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		boolean succ = false;
+		try {
+			stmt.executeQuery("CREATE TABLE integers(i integer, i boolean);\n" + "CREATE TABLE integers2(i integer);\n"
+					+ "insert into integers2 select * from range(10);\n" + "select * from integers2;");
+			succ = true;
+		} catch (Exception ex) {
+			assertFalse(succ);
+		}
+	}
+
 	public static void test_bigdecimal() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
-		stmt.execute("CREATE TABLE q (id DECIMAL(3,0), dec16 DECIMAL(4,1), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
+		stmt.execute(
+				"CREATE TABLE q (id DECIMAL(3,0), dec16 DECIMAL(4,1), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
 
-		PreparedStatement ps1 = conn.prepareStatement("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (?, ?, ?, ?, ?)");
+		PreparedStatement ps1 = conn
+				.prepareStatement("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (?, ?, ?, ?, ?)");
 		ps1.setObject(1, new BigDecimal("1"));
 		ps1.setObject(2, new BigDecimal("999.9"));
 		ps1.setObject(3, new BigDecimal("99999.9999"));
 		ps1.setObject(4, new BigDecimal("99999999999.9999999"));
 		ps1.setObject(5, new BigDecimal("9999999999999999999999999999.9999999999"));
 		ps1.execute();
-		
+
 		ps1.clearParameters();
 		ps1.setBigDecimal(1, new BigDecimal("2"));
 		ps1.setBigDecimal(2, new BigDecimal("-999.9"));
@@ -796,8 +930,6 @@ public class TestDuckDBJDBC {
 		ps1.execute();
 		ps1.close();
 
-
-
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (4, -0, -0, -0, -0)");
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (5, 0, 0, 0, 18446744073709551615)");
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (6, 0, 0, 0, 18446744073709551616)");
@@ -807,19 +939,18 @@ public class TestDuckDBJDBC {
 
 		PreparedStatement ps = conn.prepareStatement("SELECT * FROM q ORDER BY id");
 		ResultSet rs = ps.executeQuery();
-		while (rs.next())
-		{
-			assertEquals(rs.getBigDecimal(1), rs.getObject(1, BigDecimal.class)); 
-			assertEquals(rs.getBigDecimal(2), rs.getObject(2, BigDecimal.class)); 
-			assertEquals(rs.getBigDecimal(3), rs.getObject(3, BigDecimal.class)); 
-			assertEquals(rs.getBigDecimal(4), rs.getObject(4, BigDecimal.class)); 
-			assertEquals(rs.getBigDecimal(5), rs.getObject(5, BigDecimal.class)); 
+		while (rs.next()) {
+			assertEquals(rs.getBigDecimal(1), rs.getObject(1, BigDecimal.class));
+			assertEquals(rs.getBigDecimal(2), rs.getObject(2, BigDecimal.class));
+			assertEquals(rs.getBigDecimal(3), rs.getObject(3, BigDecimal.class));
+			assertEquals(rs.getBigDecimal(4), rs.getObject(4, BigDecimal.class));
+			assertEquals(rs.getBigDecimal(5), rs.getObject(5, BigDecimal.class));
 		}
 
 		rs.close();
 
 		ResultSet rs2 = ps.executeQuery();
-		DuckDBResultSetMetaData meta = (DuckDBResultSetMetaData)rs2.getMetaData();
+		DuckDBResultSetMetaData meta = (DuckDBResultSetMetaData) rs2.getMetaData();
 		rs2.next();
 		assertEquals(rs2.getBigDecimal(1), new BigDecimal("1"));
 		assertEquals(rs2.getBigDecimal(2), new BigDecimal("999.9"));
@@ -865,6 +996,17 @@ public class TestDuckDBJDBC {
 		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(3)));
 		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(4)));
 
+		assertEquals(3, meta.getPrecision(1));
+		assertEquals(0, meta.getScale(1));
+		assertEquals(4, meta.getPrecision(2));
+		assertEquals(1, meta.getScale(2));
+		assertEquals(9, meta.getPrecision(3));
+		assertEquals(4, meta.getScale(3));
+		assertEquals(18, meta.getPrecision(4));
+		assertEquals(7, meta.getScale(4));
+		assertEquals(38, meta.getPrecision(5));
+		assertEquals(10, meta.getScale(5));
+
 		conn.close();
 	}
 
@@ -876,16 +1018,15 @@ public class TestDuckDBJDBC {
 
 		Timestamp ts = Timestamp.valueOf("1970-01-01 01:01:01");
 
-		for (long i = 134234533L; i < 13423453300L; i=i+73512) {
+		for (long i = 134234533L; i < 13423453300L; i = i + 73512) {
 			ts.setTime(i);
-			stmt.execute("INSERT INTO a (ts) VALUES ('" + ts +"')");
+			stmt.execute("INSERT INTO a (ts) VALUES ('" + ts + "')");
 		}
 
 		stmt.close();
 
-		for (long i = 134234533L; i < 13423453300L; i=i+73512) {
-			PreparedStatement ps = conn.prepareStatement(
-					"SELECT COUNT(ts) FROM a WHERE ts = ?");
+		for (long i = 134234533L; i < 13423453300L; i = i + 73512) {
+			PreparedStatement ps = conn.prepareStatement("SELECT COUNT(ts) FROM a WHERE ts = ?");
 			ps.setTimestamp(1, ts);
 			ResultSet rs = ps.executeQuery();
 			assertTrue(rs.next());
@@ -900,26 +1041,27 @@ public class TestDuckDBJDBC {
 	public static void test_lots_of_decimals() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
-		stmt.execute("CREATE TABLE q (id DECIMAL(4,0), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
+		stmt.execute(
+				"CREATE TABLE q (id DECIMAL(4,0), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
 		stmt.close();
 
 		PreparedStatement ps1 = conn.prepareStatement("INSERT INTO q (id, dec32, dec64, dec128) VALUES (?, ?, ?, ?)");
 		ps1.setObject(1, new BigDecimal("1"));
-		
+
 		BigDecimal dec32_org = new BigDecimal("99999.9999");
 		BigDecimal dec64_org = new BigDecimal("99999999999.9999999");
 		BigDecimal dec128_org = new BigDecimal("9999999999999999999999999999.9999999999");
 
-		ps1.setObject(2, dec32_org); 
+		ps1.setObject(2, dec32_org);
 		ps1.setObject(3, dec64_org);
-		ps1.setObject(4, dec128_org); 
+		ps1.setObject(4, dec128_org);
 		ps1.execute();
 
 		PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM q WHERE id = ?");
 		BigDecimal multiplicant = new BigDecimal("0.987");
 
 		for (int i = 2; i < 10000; i++) {
-			ps2.setObject(1, new BigDecimal(i-1));
+			ps2.setObject(1, new BigDecimal(i - 1));
 			ResultSet rs = ps2.executeQuery();
 			assertTrue(rs.next());
 
@@ -929,7 +1071,7 @@ public class TestDuckDBJDBC {
 			assertEquals(dec32_org, dec32);
 			assertEquals(dec64_org, dec64);
 			assertEquals(dec128_org, dec128);
-			
+
 			dec32 = rs.getBigDecimal(2);
 			dec64 = rs.getBigDecimal(3);
 			dec128 = rs.getBigDecimal(4);
@@ -954,7 +1096,6 @@ public class TestDuckDBJDBC {
 		ps2.close();
 		conn.close();
 	}
-
 
 	public static void test_big_data() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
@@ -1127,7 +1268,7 @@ public class TestDuckDBJDBC {
 		ps.setLong(5, (long) 85);
 		ps.setFloat(6, (float) 8.6);
 		ps.setDouble(7, (double) 8.7);
-		ps.setString(8, "eight eight");
+		ps.setString(8, "eight eight\n\t");
 
 		rs = ps.executeQuery();
 		assertTrue(rs.next());
@@ -1138,7 +1279,7 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getLong(5), (long) 85);
 		assertEquals(rs.getFloat(6), 8.6, 0.001);
 		assertEquals(rs.getDouble(7), 8.7, 0.001);
-		assertEquals(rs.getString(8), "eight eight");
+		assertEquals(rs.getString(8), "eight eight\n\t");
 		rs.close();
 
 		ps.setObject(1, false);
@@ -1148,7 +1289,7 @@ public class TestDuckDBJDBC {
 		ps.setObject(5, (long) 85);
 		ps.setObject(6, (float) 8.6);
 		ps.setObject(7, (double) 8.7);
-		ps.setObject(8, "eight eight");
+		ps.setObject(8, "𫝼🔥😜䭔🟢");
 
 		rs = ps.executeQuery();
 		assertTrue(rs.next());
@@ -1159,7 +1300,7 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getLong(5), (long) 85);
 		assertEquals(rs.getFloat(6), 8.6, 0.001);
 		assertEquals(rs.getDouble(7), 8.7, 0.001);
-		assertEquals(rs.getString(8), "eight eight");
+		assertEquals(rs.getString(8), "𫝼🔥😜䭔🟢");
 
 		ps.setNull(1, 0);
 		ps.setNull(2, 0);
@@ -1734,6 +1875,30 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_appender_string_with_emoji() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE data (str_value VARCHAR(10))");
+		String expectedValue = "䭔\uD86D\uDF7C🔥\uD83D\uDE1C";
+		try (DuckDBAppender appender = conn.createAppender("main", "data")) {
+			appender.beginRow();
+			appender.append(expectedValue);
+			appender.endRow();
+		}
+
+		ResultSet rs = stmt.executeQuery("SELECT str_value FROM data");
+		assertFalse(rs.isClosed());
+		assertTrue(rs.next());
+
+		String appendedValue = rs.getString(1);
+		assertEquals(appendedValue, expectedValue);
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void test_appender_table_does_not_exist() throws Exception {
 		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
@@ -2076,14 +2241,196 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_get_schema() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+
+		assertEquals(conn.getSchema(), "main");
+
+		try (Statement stmt = conn.createStatement()) {
+			stmt.execute("CREATE SCHEMA alternate_schema;");
+			stmt.execute("SET search_path = \"alternate_schema\";");
+		}
+
+		assertEquals(conn.getSchema(), "alternate_schema");
+
+		conn.close();
+
+		try {
+			conn.getSchema();
+			fail();
+		} catch (SQLException e) {
+			assertEquals(e.getMessage(), "Invalid connection");
+		}
+	}
+
+	/**
+	 * @see {https://github.com/duckdb/duckdb/issues/3906}
+	 */
+	public static void test_cached_row_set() throws Exception {
+		CachedRowSet rowSet = RowSetProvider.newFactory().createCachedRowSet();
+		rowSet.setUrl("jdbc:duckdb:");
+		rowSet.setCommand("select 1");
+		rowSet.execute();
+
+		rowSet.next();
+		assertEquals(rowSet.getInt(1), 1);
+	}
+
+	public static void test_json() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+
+		try (Statement stmt = conn.createStatement()) {
+			ResultSet rs = stmt.executeQuery("select [1, 5]::JSON");
+			rs.next();
+			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
+			JsonNode jsonNode = (JsonNode) rs.getObject(1);
+			assertTrue(jsonNode.isArray());
+			assertEquals(jsonNode.toString(), "[1, 5]");
+		}
+
+		try (Statement stmt = conn.createStatement()) {
+			ResultSet rs = stmt.executeQuery("select {'key': 'value'}::JSON");
+			rs.next();
+			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
+			JsonNode jsonNode = (JsonNode) rs.getObject(1);
+			assertTrue(jsonNode.isObject());
+			assertEquals(jsonNode.toString(), "{'key': value}"); // this isn't valid json output, must load json extension for that
+		}
+
+		try (Statement stmt = conn.createStatement()) {
+			ResultSet rs = stmt.executeQuery("select 'hello'::JSON");
+			rs.next();
+			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
+			JsonNode jsonNode = (JsonNode) rs.getObject(1);
+			assertTrue(jsonNode.isString());
+			assertEquals(jsonNode.toString(), "hello");
+		}
+	}
+
+	public static void test_bug4218_prepare_types() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		String query = "SELECT ($1 || $2)";
+		conn.prepareStatement(query);
+		assertTrue(true);
+	}
+
+	public static void test_bug532_timestamp() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs;
+
+		stmt.execute("CREATE TABLE t0(c0 DATETIME);");
+		stmt.execute("INSERT INTO t0 VALUES(DATE '1-1-1');");
+		rs = stmt.executeQuery("SELECT t0.c0 FROM t0; ");
+
+		rs.next();
+		rs.getObject(1);
+	}
+
+	public static void test_bug966_typeof() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		ResultSet rs = stmt.executeQuery("select typeof(1);");
+
+		rs.next();
+		assertEquals(rs.getString(1), "INTEGER");
+	}
+	
+	public static void test_config() throws Exception {
+		String memory_limit = "memory_limit";
+		String threads = "threads";
+
+		Properties info = new Properties();
+		info.put(memory_limit, "500MB");
+		info.put(threads, "5");
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:", info);
+
+		assertEquals("500.0MB", getSetting(conn, memory_limit));
+		assertEquals("5", getSetting(conn, threads));
+	}
+
+	public static void test_invalid_config() throws Exception {
+		Properties info = new Properties();
+		info.put("invalid config name", "true");
+
+		String message = assertThrows(
+				() -> DriverManager.getConnection("jdbc:duckdb:", info),
+				SQLException.class
+		);
+
+		assertEquals(message, "Catalog Error: unrecognized configuration parameter \"invalid config name\"\n\nDid you mean: \"enable_profiling\"");
+	}
+
+	private static String getSetting(Connection conn, String settingName) throws Exception {
+		try (PreparedStatement stmt = conn.prepareStatement("select value from duckdb_settings() where name = ?")) {
+			stmt.setString(1, settingName);
+			ResultSet rs = stmt.executeQuery();
+			rs.next();
+
+			return rs.getString(1);
+		}
+	}
+
+	public static void test_describe() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+
+		try (Statement stmt = conn.createStatement()) {
+			stmt.execute("CREATE TABLE TEST (COL INT DEFAULT 42)");
+
+			ResultSet rs = stmt.executeQuery("DESCRIBE SELECT * FROM TEST");
+			rs.next();
+			assertEquals(rs.getString("column_name"), "COL");
+			assertEquals(rs.getString("column_type"), "INTEGER");
+			assertEquals(rs.getString("null"), "YES");
+			assertNull(rs.getString("key"));
+			assertNull(rs.getString("default"));
+			assertNull(rs.getString("extra"));
+		}
+	}
+
+	public static void test_dont_leak_database() throws Exception {
+		DuckDBDatabase database;
+
+		try (DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:")) {
+			conn.duplicate().close();
+
+			database = conn.getDatabase();
+		}
+
+		assertTrue(database.isShutdown());
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
+
+		Arrays.sort(methods, new Comparator<Method>() {
+			@Override
+			public int compare(Method o1, Method o2) {
+				return o1.getName().compareTo(o2.getName());
+			}
+		});
+
+		boolean anyFailed = false;
 		for (Method m : methods) {
 			if (m.getName().startsWith("test_")) {
-				m.invoke(null);
+				System.out.print(m.getName() + " ");
+
+				LocalDateTime start = LocalDateTime.now();
+				try {
+					m.invoke(null);
+					System.out.println(
+							"success in " + Duration.between(start, LocalDateTime.now()).getSeconds() + " seconds");
+				} catch (Throwable t) {
+					System.out.println("failed with " + t);
+					t.printStackTrace(System.out);
+					anyFailed = true;
+				}
 			}
 		}
 		System.out.println("OK");
+
+		System.exit(anyFailed ? 1 : 0);
 	}
 }

@@ -77,8 +77,8 @@ int main(int argc, const char **argv) {
 			PrintUsage();
 		}
 		auto idx = entry->second;
-		auto filter =
-		    make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(splits[1]).CastAs(return_types[idx]));
+		auto filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL,
+		                                          Value(splits[1]).DefaultCastAs(return_types[idx]));
 		filters.filters[idx] = move(filter);
 	}
 
@@ -87,7 +87,7 @@ int main(int argc, const char **argv) {
 	reader.InitializeScan(state, column_ids, groups, &filters);
 	DataChunk output;
 
-	output.Initialize(return_types);
+	output.Initialize(allocator, return_types);
 	do {
 		output.Reset();
 		reader.Scan(state, output);

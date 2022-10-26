@@ -8,15 +8,16 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
 #include <thread>
 
 namespace duckdb {
 
-PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(const PhysicalRangeJoin &op, const idx_t child)
-    : op(op), has_null(0), count(0) {
+PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(Allocator &allocator, const PhysicalRangeJoin &op,
+                                                      const idx_t child)
+    : op(op), executor(allocator), has_null(0), count(0) {
 	// Initialize order clause expression executor and key DataChunk
 	vector<LogicalType> types;
 	for (const auto &cond : op.conditions) {
@@ -25,7 +26,7 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(const PhysicalRangeJoin &o
 
 		types.push_back(expr->return_type);
 	}
-	keys.Initialize(types);
+	keys.Initialize(allocator, types);
 }
 
 void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState &global_sort_state) {
@@ -57,14 +58,10 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, 
       memory_per_thread(0) {
 	D_ASSERT(orders.size() == 1);
 
-	// Set external (can be force with the PRAGMA)
+	// Set external (can be forced with the PRAGMA)
 	auto &config = ClientConfig::GetConfig(context);
 	global_sort_state.external = config.force_external;
-	// Memory usage per thread should scale with max mem / num threads
-	// We take 1/4th of this, to be conservative
-	idx_t max_memory = global_sort_state.buffer_manager.GetMaxMemory();
-	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	memory_per_thread = (max_memory / num_threads) / 4;
+	memory_per_thread = PhysicalRangeJoin::GetMaxThreadMemory(context);
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Combine(LocalSortedTable &ltable) {
@@ -107,21 +104,20 @@ private:
 	GlobalSortedTable &table;
 };
 
-class RangeJoinMergeEvent : public Event {
+class RangeJoinMergeEvent : public BasePipelineEvent {
 public:
 	using GlobalSortedTable = PhysicalRangeJoin::GlobalSortedTable;
 
 public:
 	RangeJoinMergeEvent(GlobalSortedTable &table_p, Pipeline &pipeline_p)
-	    : Event(pipeline_p.executor), table(table_p), pipeline(pipeline_p) {
+	    : BasePipelineEvent(pipeline_p), table(table_p) {
 	}
 
 	GlobalSortedTable &table;
-	Pipeline &pipeline;
 
 public:
 	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
+		auto &context = pipeline->GetClientContext();
 
 		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 		auto &ts = TaskScheduler::GetScheduler(context);
@@ -140,7 +136,7 @@ public:
 		global_sort_state.CompleteMergeRound(true);
 		if (global_sort_state.sorted_blocks.size() > 1) {
 			// Multiple blocks remaining: Schedule the next round
-			table.ScheduleMergeTasks(pipeline, *this);
+			table.ScheduleMergeTasks(*pipeline, *this);
 		}
 	}
 };
@@ -217,8 +213,8 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 		}
 		return 0;
 	} else if (keys.ColumnCount() > 1) {
-		//	Normalify the primary, as it will need to merge arbitrary validity masks
-		primary.Normalify(count);
+		//	Flatten the primary, as it will need to merge arbitrary validity masks
+		primary.Flatten(count);
 		auto &pvalidity = FlatVector::Validity(primary);
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
@@ -226,10 +222,10 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
-			//	Orrify the rest, as the sort code will do this anyway.
+			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
 			auto &v = keys.data[c];
-			VectorData vdata;
-			v.Orrify(count, vdata);
+			UnifiedVectorFormat vdata;
+			v.ToUnifiedFormat(count, vdata);
 			auto &vvalidity = vdata.validity;
 			if (vvalidity.AllValid()) {
 				continue;
@@ -269,9 +265,9 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 	}
 }
 
-void PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
-                                           const SelectionVector &result, const idx_t result_count,
-                                           const idx_t left_cols) {
+BufferHandle PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
+                                                   const SelectionVector &result, const idx_t result_count,
+                                                   const idx_t left_cols) {
 	// There should only be one sorted block if they have been sorted
 	D_ASSERT(state.sorted_blocks.size() == 1);
 	SBScanState read_state(state.buffer_manager, state);
@@ -281,6 +277,7 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &
 	read_state.SetIndices(block_idx, 0);
 	read_state.PinData(sorted_data);
 	const auto data_ptr = read_state.DataPtr(sorted_data);
+	data_ptr_t heap_ptr = nullptr;
 
 	// Set up a batch of pointers to scan data from
 	Vector addresses(LogicalType::POINTER, result_count);
@@ -306,18 +303,18 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &
 
 	// Unswizzle the offsets back to pointers (if needed)
 	if (!sorted_data.layout.AllConstant() && state.external) {
-		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(),
-		                                 addr_count);
+		heap_ptr = read_state.payload_heap_handle.Ptr();
 	}
 
 	// Deserialize the payload data
 	auto sel = FlatVector::IncrementalSelectionVector();
-	for (idx_t col_idx = 0; col_idx < sorted_data.layout.ColumnCount(); col_idx++) {
-		const auto col_offset = sorted_data.layout.GetOffsets()[col_idx];
-		auto &col = payload.data[left_cols + col_idx];
-		RowOperations::Gather(addresses, *sel, col, *sel, addr_count, col_offset, col_idx);
+	for (idx_t col_no = 0; col_no < sorted_data.layout.ColumnCount(); col_no++) {
+		auto &col = payload.data[left_cols + col_no];
+		RowOperations::Gather(addresses, *sel, col, *sel, addr_count, sorted_data.layout, col_no, 0, heap_ptr);
 		col.Slice(gsel, result_count);
 	}
+
+	return move(read_state.payload_heap_handle);
 }
 
 idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,

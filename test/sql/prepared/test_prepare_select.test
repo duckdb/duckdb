@@ -2,6 +2,9 @@
 # description: PREPARE for SELECT clause
 # group: [prepared]
 
+require skip_reload
+
+
 statement ok
 CREATE TABLE a (i TINYINT)
 
@@ -11,7 +14,7 @@ INSERT INTO a VALUES (42)
 statement ok
 PREPARE s3 AS SELECT * FROM a WHERE i=$1
 
-statement error
+statement ok
 EXECUTE s3(10000)
 
 statement ok

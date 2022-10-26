@@ -13,6 +13,21 @@
 
 namespace duckdb {
 
+enum class SequenceInfo : uint8_t {
+	// Sequence start
+	SEQ_START,
+	// Sequence increment
+	SEQ_INC,
+	// Sequence minimum value
+	SEQ_MIN,
+	// Sequence maximum value
+	SEQ_MAX,
+	// Sequence cycle option
+	SEQ_CYCLE,
+	// Sequence owner table
+	SEQ_OWN
+};
+
 struct CreateSequenceInfo : public CreateInfo {
 	CreateSequenceInfo()
 	    : CreateInfo(CatalogType::SEQUENCE_ENTRY, INVALID_SCHEMA), name(string()), usage_count(0), increment(1),
@@ -47,6 +62,11 @@ public:
 		result->start_value = start_value;
 		result->cycle = cycle;
 		return move(result);
+	}
+
+protected:
+	void SerializeInternal(Serializer &) const override {
+		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(type));
 	}
 };
 

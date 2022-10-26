@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -22,10 +24,14 @@ public:
 	idx_t table_index;
 	bool return_chunk;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
 protected:
 	vector<ColumnBinding> GetColumnBindings() override {
 		if (return_chunk) {
-			return GenerateColumnBindings(table_index, table->columns.size());
+			return GenerateColumnBindings(table_index, table->GetTypes().size());
 		}
 		return {ColumnBinding(0, 0)};
 	}

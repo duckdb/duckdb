@@ -45,7 +45,7 @@ static bool ParseBoolean(const Value &value, const string &loption) {
 	    value.type().id() == LogicalTypeId::DECIMAL) {
 		throw BinderException("\"%s\" expects a boolean value (e.g. TRUE or 1)", loption);
 	}
-	return BooleanValue::Get(value.CastAs(LogicalType::BOOLEAN));
+	return BooleanValue::Get(value.DefaultCastAs(LogicalType::BOOLEAN));
 }
 
 static string ParseString(const Value &value, const string &loption) {
@@ -161,6 +161,10 @@ public:
 		return plain_file_source;
 	}
 
+	bool OnDiskFile() {
+		return file_handle->OnDiskFile();
+	}
+
 	idx_t FileSize() {
 		return file_size;
 	}
@@ -213,15 +217,31 @@ public:
 	}
 
 	string ReadLine() {
+		bool carriage_return = false;
 		string result;
 		char buffer[1];
 		while (true) {
-			idx_t tuples_read = Read(buffer, 1);
-			if (tuples_read == 0 || buffer[0] == '\n') {
+			idx_t bytes_read = Read(buffer, 1);
+			if (bytes_read == 0) {
+				return result;
+			}
+			if (carriage_return) {
+				if (buffer[0] != '\n') {
+					if (!file_handle->CanSeek()) {
+						throw BinderException(
+						    "Carriage return newlines not supported when reading CSV files in which we cannot seek");
+					}
+					file_handle->Seek(file_handle->SeekPosition() - 1);
+					return result;
+				}
+			}
+			if (buffer[0] == '\n') {
 				return result;
 			}
 			if (buffer[0] != '\r') {
 				result += buffer[0];
+			} else {
+				carriage_return = true;
 			}
 		}
 	}
@@ -249,6 +269,22 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	if (input.empty()) {
 		this->delimiter = string("\0", 1);
 	}
+}
+
+void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
+	string error;
+	if (read_format) {
+		auto &date_format = this->date_format[type];
+		error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+		date_format.format_specifier = format;
+	} else {
+		auto &date_format = this->write_date_format[type];
+		error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+	}
+	if (!error.empty()) {
+		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+	}
+	has_format[type] = true;
 }
 
 void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value &value,
@@ -295,27 +331,17 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		force_not_null = ParseColumnList(value, expected_names, loption);
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
-		auto &date_format = this->date_format[LogicalTypeId::DATE];
-		string error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
-		date_format.format_specifier = format;
-		if (!error.empty()) {
-			throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
-		}
-		has_format[LogicalTypeId::DATE] = true;
+		SetDateFormat(LogicalTypeId::DATE, format, true);
 	} else if (loption == "timestamp_format" || loption == "timestampformat") {
 		string format = ParseString(value, loption);
-		auto &timestamp_format = date_format[LogicalTypeId::TIMESTAMP];
-		string error = StrTimeFormat::ParseFormatSpecifier(format, timestamp_format);
-		timestamp_format.format_specifier = format;
-		if (!error.empty()) {
-			throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
-		}
-		has_format[LogicalTypeId::TIMESTAMP] = true;
+		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);
 	} else if (loption == "escape") {
 		escape = ParseString(value, loption);
 		has_escape = true;
 	} else if (loption == "ignore_errors") {
 		ignore_errors = ParseBoolean(value, loption);
+	} else if (loption == "union_by_name") {
+		union_by_name = ParseBoolean(value, loption);
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}
@@ -328,6 +354,15 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 
 	if (loption == "force_quote") {
 		force_quote = ParseColumnList(value, names, loption);
+	} else if (loption == "date_format" || loption == "dateformat") {
+		string format = ParseString(value, loption);
+		SetDateFormat(LogicalTypeId::DATE, format, false);
+	} else if (loption == "timestamp_format" || loption == "timestampformat") {
+		string format = ParseString(value, loption);
+		if (StringUtil::Lower(format) == "iso") {
+			format = "%Y-%m-%dT%H:%M:%S.%fZ";
+		}
+		SetDateFormat(LogicalTypeId::TIMESTAMP, format, false);
 	} else {
 		throw BinderException("Unrecognized option CSV writer \"%s\"", loption);
 	}
@@ -434,14 +469,20 @@ static bool StartsWithNumericDate(string &separator, const string &value) {
 
 string GenerateDateFormat(const string &separator, const char *format_template) {
 	string format_specifier = format_template;
-
-	//	replace all dashes with the separator
-	for (auto pos = std::find(format_specifier.begin(), format_specifier.end(), '-'); pos != format_specifier.end();
-	     pos = std::find(pos + separator.size(), format_specifier.end(), '-')) {
-		format_specifier.replace(pos, pos + 1, separator);
+	auto amount_of_dashes = std::count(format_specifier.begin(), format_specifier.end(), '-');
+	if (!amount_of_dashes) {
+		return format_specifier;
 	}
-
-	return format_specifier;
+	string result;
+	result.reserve(format_specifier.size() - amount_of_dashes + (amount_of_dashes * separator.size()));
+	for (auto &character : format_specifier) {
+		if (character == '-') {
+			result += separator;
+		} else {
+			result += character;
+		}
+	}
+	return result;
 }
 
 TextSearchShiftArray::TextSearchShiftArray() {
@@ -475,17 +516,18 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
-BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, FileOpener *opener_p, BufferedCSVReaderOptions options_p,
-                                     const vector<LogicalType> &requested_types)
-    : fs(fs_p), opener(opener_p), options(move(options_p)), buffer_size(0), position(0), start(0) {
+BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
+                                     BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
+    : fs(fs_p), allocator(allocator), opener(opener_p), options(move(options_p)), buffer_size(0), position(0),
+      start(0) {
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
 }
 
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : BufferedCSVReader(FileSystem::GetFileSystem(context), FileSystem::GetFileOpener(context), move(options_p),
-                        requested_types) {
+    : BufferedCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
+                        move(options_p), requested_types) {
 }
 
 BufferedCSVReader::~BufferedCSVReader() {
@@ -511,6 +553,7 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		SkipRowsAndReadHeader(options.skip_rows, options.header);
 	}
 	InitParseChunk(sql_types.size());
+	InitInsertChunkIdx(sql_types.size());
 	// we only need reset support during the automatic CSV type detection
 	// since reset support might require caching (in the case of streams), we disable it for the remainder
 	file_handle->DisableReset();
@@ -652,7 +695,13 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 
 		// initialize the parse_chunk with a set of VARCHAR types
 		vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
-		parse_chunk.Initialize(varchar_types);
+		parse_chunk.Initialize(allocator, varchar_types);
+	}
+}
+
+void BufferedCSVReader::InitInsertChunkIdx(idx_t num_cols) {
+	for (idx_t col = 0; col < num_cols; ++col) {
+		insert_cols_idx.push_back(col);
 	}
 }
 
@@ -774,7 +823,7 @@ bool BufferedCSVReader::TryCastValue(const Value &value, const LogicalType &sql_
 	} else {
 		Value new_value;
 		string error_message;
-		return value.TryCastAs(sql_type, new_value, &error_message, true);
+		return value.DefaultTryCastAs(sql_type, new_value, &error_message, true);
 	}
 }
 
@@ -832,7 +881,7 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const
 	} else {
 		// target type is not varchar: perform a cast
 		string error_message;
-		return VectorOperations::TryCast(parse_chunk_col, dummy_result, size, &error_message, true);
+		return VectorOperations::DefaultTryCast(parse_chunk_col, dummy_result, size, &error_message, true);
 	}
 }
 
@@ -979,7 +1028,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 		// jump to beginning and skip potential header
 		JumpToBeginning(options.skip_rows, true);
 		DataChunk header_row;
-		header_row.Initialize(sql_types);
+		header_row.Initialize(allocator, sql_types);
 		parse_chunk.Copy(header_row);
 
 		if (header_row.size() == 0) {
@@ -1099,7 +1148,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 			best_format_candidates = format_candidates;
 			best_header_row.Destroy();
 			auto header_row_types = header_row.GetTypes();
-			best_header_row.Initialize(header_row_types);
+			best_header_row.Initialize(allocator, header_row_types);
 			header_row.Copy(best_header_row);
 		}
 	}
@@ -1334,6 +1383,7 @@ bool BufferedCSVReader::TryParseComplexCSV(DataChunk &insert_chunk, string &erro
 	bool finished_chunk = false;
 	idx_t column = 0;
 	vector<idx_t> escape_positions;
+	bool has_quotes = false;
 	uint8_t delimiter_pos = 0, escape_pos = 0, quote_pos = 0;
 	idx_t offset = 0;
 
@@ -1396,9 +1446,10 @@ normal:
 	} while (ReadBuffer(start));
 	goto final_state;
 add_value:
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
+	has_quotes = false;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after delimiter, go to final state
@@ -1408,10 +1459,11 @@ add_value:
 add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
 	offset = 0;
+	has_quotes = false;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after newline, go to final state
@@ -1433,6 +1485,7 @@ in_quotes:
 	// this state parses the remainder of a quoted value
 	quote_pos = 0;
 	escape_pos = 0;
+	has_quotes = true;
 	position++;
 	do {
 		for (; position < buffer_size; position++) {
@@ -1544,7 +1597,7 @@ final_state:
 	}
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+		AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 	// final stage, only reached after parsing the file is finished
@@ -1562,6 +1615,7 @@ bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	bool finished_chunk = false;
 	idx_t column = 0;
 	idx_t offset = 0;
+	bool has_quotes = false;
 	vector<idx_t> escape_positions;
 
 	// read values into the buffer (if any)
@@ -1603,9 +1657,10 @@ normal:
 	// file ends during normal scan: go to end state
 	goto final_state;
 add_value:
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
+	has_quotes = false;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after delimiter, go to final state
@@ -1615,10 +1670,11 @@ add_value:
 add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
 	offset = 0;
+	has_quotes = false;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after delimiter, go to final state
@@ -1638,6 +1694,7 @@ add_row : {
 in_quotes:
 	/* state: in_quotes */
 	// this state parses the remainder of a quoted value
+	has_quotes = true;
 	position++;
 	do {
 		for (; position < buffer_size; position++) {
@@ -1724,7 +1781,7 @@ final_state:
 
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+		AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 
@@ -1743,13 +1800,20 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 
 	// the remaining part of the last buffer
 	idx_t remaining = buffer_size - start;
-	idx_t buffer_read_size = INITIAL_BUFFER_SIZE;
+
+	bool large_buffers = mode == ParserMode::PARSING && !file_handle->OnDiskFile() && file_handle->CanSeek();
+	idx_t buffer_read_size = large_buffers ? INITIAL_BUFFER_SIZE_LARGE : INITIAL_BUFFER_SIZE;
+
 	while (remaining > buffer_read_size) {
 		buffer_read_size *= 2;
 	}
-	if (remaining + buffer_read_size > options.maximum_line_size) {
-		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", options.maximum_line_size);
+
+	// Check line length
+	if (remaining > options.maximum_line_size) {
+		throw InvalidInputException("Maximum line size of %llu bytes exceeded on line %s!", options.maximum_line_size,
+		                            GetLineNumberStr(linenr, linenr_estimated));
 	}
+
 	buffer = unique_ptr<char[]>(new char[buffer_read_size + remaining + 1]);
 	buffer_size = remaining + buffer_read_size;
 	if (remaining > 0) {
@@ -1818,7 +1882,8 @@ bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_ch
 	}
 }
 
-void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions) {
+void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions,
+                                 bool has_quotes) {
 	if (length == 0 && column == 0) {
 		row_empty = true;
 	} else {
@@ -1849,8 +1914,9 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 
 	str_val[length] = '\0';
 
-	// test against null string
-	if (!options.force_not_null[column] && strcmp(options.null_str.c_str(), str_val) == 0) {
+	// test against null string, but only if the value was not quoted
+	if ((!has_quotes || sql_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
+	    strcmp(options.null_str.c_str(), str_val) == 0) {
 		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
 	} else {
 		auto &v = parse_chunk.data[column];
@@ -1888,6 +1954,9 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	if (row_empty) {
 		row_empty = false;
 		if (sql_types.size() != 1) {
+			if (mode == ParserMode::PARSING) {
+				FlatVector::SetNull(parse_chunk.data[0], parse_chunk.size(), false);
+			}
 			column = 0;
 			return false;
 		}
@@ -1939,6 +2008,13 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	return false;
 }
 
+void BufferedCSVReader::SetNullUnionCols(DataChunk &insert_chunk) {
+	for (idx_t col = 0; col < insert_nulls_idx.size(); ++col) {
+		insert_chunk.data[insert_nulls_idx[col]].SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(insert_chunk.data[insert_nulls_idx[col]], true);
+	}
+}
+
 void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	if (parse_chunk.size() == 0) {
 		return;
@@ -1969,23 +2045,26 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					}
 				}
 			}
-			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
+			insert_chunk.data[insert_cols_idx[col_idx]].Reference(parse_chunk.data[col_idx]);
 		} else {
 			string error_message;
 			bool success;
 			if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx],
-				                            parse_chunk.size(), error_message);
+				success =
+				    TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_cols_idx[col_idx]],
+				                      parse_chunk.size(), error_message);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
 			           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx],
-				                                 parse_chunk.size(), error_message);
+				success = TryCastTimestampVector(options, parse_chunk.data[col_idx],
+				                                 insert_chunk.data[insert_cols_idx[col_idx]], parse_chunk.size(),
+				                                 error_message);
 			} else {
 				// target type is not varchar: perform a cast
-				success = VectorOperations::TryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
-				                                    parse_chunk.size(), &error_message);
+				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx],
+				                                           insert_chunk.data[insert_cols_idx[col_idx]],
+				                                           parse_chunk.size(), &error_message);
 			}
 			if (success) {
 				continue;

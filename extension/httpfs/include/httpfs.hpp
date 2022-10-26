@@ -3,6 +3,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb_httplib_openssl {
 struct Response;
@@ -11,7 +12,7 @@ class Client;
 
 namespace duckdb {
 
-using HeaderMap = unordered_map<string, string>;
+using HeaderMap = case_insensitive_map_t<string>;
 
 // avoid including httplib in header
 struct ResponseWrapper {
@@ -32,7 +33,7 @@ struct HTTPParams {
 
 class HTTPFileHandle : public FileHandle {
 public:
-	HTTPFileHandle(FileSystem &fs, std::string path, uint8_t flags, const HTTPParams &params);
+	HTTPFileHandle(FileSystem &fs, string path, uint8_t flags, const HTTPParams &params);
 	~HTTPFileHandle() override;
 	// This two-phase construction allows subclasses more flexible setup.
 	virtual unique_ptr<ResponseWrapper> Initialize();
@@ -55,7 +56,7 @@ public:
 	idx_t buffer_end;
 
 	// Read buffer
-	std::unique_ptr<data_t[]> read_buffer;
+	unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
 public:
@@ -71,9 +72,9 @@ public:
 	static unique_ptr<duckdb_httplib_openssl::Client> GetClient(const HTTPParams &http_params,
 	                                                            const char *proto_host_port);
 	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
-	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
-	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
-	                                     FileOpener *opener = nullptr) final;
+	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
+	                                FileCompressionType compression = DEFAULT_COMPRESSION,
+	                                FileOpener *opener = nullptr) final;
 
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
 		return {path}; // FIXME
@@ -108,15 +109,16 @@ public:
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}
-	std::string GetName() const override {
+	string GetName() const override {
 		return "HTTPFileSystem";
 	}
 
 	static void Verify();
 
 protected:
-	virtual std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
-	                                                     FileCompressionType compression, FileOpener *opener);
+	virtual unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,
+	                                                FileLockType lock, FileCompressionType compression,
+	                                                FileOpener *opener);
 };
 
 } // namespace duckdb

@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-//! The SelectStatement of the view
+
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -21,11 +21,9 @@ enum class MacroType : uint8_t { VOID_MACRO = 0, TABLE_MACRO = 1, SCALAR_MACRO =
 
 class MacroFunction {
 public:
-	// explicit MacroFunction(unique_ptr<ParsedExpression> expression);
 	MacroFunction(MacroType type);
 
-	// MacroFunction(void);
-	// The type
+	//! The type
 	MacroType type;
 	//! The positional parameters
 	vector<unique_ptr<ParsedExpression>> parameters;
@@ -44,6 +42,8 @@ public:
 	                                FunctionExpression &function_expr,
 	                                vector<unique_ptr<ParsedExpression>> &positionals,
 	                                unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
+
+	virtual string ToSQL(const string &schema, const string &name);
 };
 
 } // namespace duckdb

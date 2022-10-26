@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -10,7 +11,7 @@ namespace duckdb {
 static LogicalType ResolveNotType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	// NOT expression, cast child to BOOLEAN
 	D_ASSERT(children.size() == 1);
-	children[0]->expr = BoundCastExpression::AddCastToType(move(children[0]->expr), LogicalType::BOOLEAN);
+	children[0]->expr = BoundCastExpression::AddDefaultCastToType(move(children[0]->expr), LogicalType::BOOLEAN);
 	return LogicalType(LogicalTypeId::BOOLEAN);
 }
 
@@ -26,7 +27,7 @@ static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression 
 
 	// cast all children to the same type
 	for (idx_t i = 0; i < children.size(); i++) {
-		children[i]->expr = BoundCastExpression::AddCastToType(move(children[i]->expr), max_type);
+		children[i]->expr = BoundCastExpression::AddDefaultCastToType(move(children[i]->expr), max_type);
 	}
 	// (NOT) IN always returns a boolean
 	return LogicalType::BOOLEAN;
@@ -37,6 +38,9 @@ static LogicalType ResolveOperatorType(OperatorExpression &op, vector<BoundExpre
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		// IS (NOT) NULL always returns a boolean, and does not cast its children
+		if (!children[0]->expr->return_type.IsValid()) {
+			throw ParameterNotResolvedException();
+		}
 		return LogicalType::BOOLEAN;
 	case ExpressionType::COMPARE_IN:
 	case ExpressionType::COMPARE_NOT_IN:

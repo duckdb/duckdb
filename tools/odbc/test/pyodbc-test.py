@@ -1,7 +1,7 @@
 import pyodbc
 import glob
 
-cnxn = pyodbc.connect('DSN={DuckDB}')
+cnxn = pyodbc.connect('DSN=DuckDB')
 cursor = cnxn.cursor()
 
 cursor.execute("CREATE TABLE fuu (i INTEGER, j STRING)")

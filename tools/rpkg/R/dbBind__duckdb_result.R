@@ -15,7 +15,7 @@ dbBind__duckdb_result <- function(res, params, ...) {
 
   params <- encode_values(params)
 
-  out <- rapi_bind(res@stmt_lst$ref, params, res@arrow)
+  out <- rapi_bind(res@stmt_lst$ref, params, res@arrow, res@connection@driver@bigint == "integer64")
   if (length(out) == 1) {
     out <- out[[1]]
   } else if (length(out) == 0) {
@@ -30,3 +30,12 @@ dbBind__duckdb_result <- function(res, params, ...) {
 #' @rdname duckdb_result-class
 #' @export
 setMethod("dbBind", "duckdb_result", dbBind__duckdb_result)
+
+list_to_df <- function(x) {
+  if (is.data.frame(x)) {
+    return(x)
+  }
+  attr(x, "row.names") <- c(NA_integer_, -NROW(x[[1]]))
+  class(x) <- "data.frame"
+  x
+}

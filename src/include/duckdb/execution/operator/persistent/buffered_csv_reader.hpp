@@ -14,9 +14,9 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/queue.hpp"
 
 #include <sstream>
-#include <queue>
 
 namespace duckdb {
 struct CopyInfo;
@@ -85,6 +85,8 @@ struct BufferedCSVReaderOptions {
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! The column names of the columns to read/write
+	vector<string> names;
 
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
@@ -93,6 +95,7 @@ struct BufferedCSVReaderOptions {
 	//! How many leading rows to skip
 	idx_t skip_rows = 0;
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
+	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
 	idx_t maximum_line_size = 2097152;
 	//! Whether or not header names shall be normalized
 	bool normalize_names = false;
@@ -110,20 +113,28 @@ struct BufferedCSVReaderOptions {
 	string file_path;
 	//! Whether or not to include a file name column
 	bool include_file_name = false;
+	//! Whether or not to include a parsed hive partition columns
+	bool include_parsed_hive_partitions = false;
+	//! Whether or not to union files with different (but compatible) columns
+	bool union_by_name = false;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
 
-	//! The column names of the columns to write
-	vector<string> names;
 	//! True, if column with that index must be quoted
 	vector<bool> force_quote;
 
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	//! The date format to use for writing (if any is specified)
+	std::map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}},
+	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+
+	void Serialize(FieldWriter &writer) const;
+	void Deserialize(FieldReader &reader);
 
 	void SetDelimiter(const string &delimiter);
 	//! Set an option that is supported by both reading and writing functions, called by
@@ -136,6 +147,7 @@ struct BufferedCSVReaderOptions {
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 
 	void SetWriteOption(const string &loption, const Value &value);
+	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 
 	std::string ToString() const;
 };
@@ -146,21 +158,30 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DA
 class BufferedCSVReader {
 	//! Initial buffer read size; can be extended for long lines
 	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
+	//! Larger buffer size for non disk files
+	static constexpr idx_t INITIAL_BUFFER_SIZE_LARGE = 10000000; // 10MB
 	ParserMode mode;
 
 public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
-	BufferedCSVReader(FileSystem &fs, FileOpener *opener, BufferedCSVReaderOptions options,
+	BufferedCSVReader(FileSystem &fs, Allocator &allocator, FileOpener *opener, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BufferedCSVReader();
 
 	FileSystem &fs;
+	Allocator &allocator;
 	FileOpener *opener;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
 	vector<string> col_names;
+
+	//! remap parse_chunk col to insert_chunk col, because when
+	//! union_by_name option on insert_chunk may have more cols
+	vector<idx_t> insert_cols_idx;
+	vector<idx_t> insert_nulls_idx;
+
 	unique_ptr<CSVFileHandle> file_handle;
 
 	unique_ptr<char[]> buffer;
@@ -195,11 +216,16 @@ public:
 
 	idx_t GetFileSize();
 
+	//! Fill nulls into the cols that mismtach union names
+	void SetNullUnionCols(DataChunk &insert_chunk);
+
 private:
 	//! Initialize Parser
 	void Initialize(const vector<LogicalType> &requested_types);
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
+	//! Initializes the insert_chunk idx for mapping parse_chunk cols to insert_chunk cols
+	void InitInsertChunkIdx(idx_t num_cols);
 	//! Initializes the TextSearchShiftArrays for complex parser
 	void PrepareComplexParser();
 	//! Try to parse a single datachunk from the file. Throws an exception if anything goes wrong.
@@ -233,7 +259,7 @@ private:
 	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message);
 
 	//! Adds a value to the current row
-	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions);
+	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
 	bool AddRow(DataChunk &insert_chunk, idx_t &column);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk

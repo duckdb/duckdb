@@ -9,6 +9,9 @@ unique_ptr<TableRef> Transformer::TransformRangeSubselect(duckdb_libpgquery::PGR
 	if (!subquery) {
 		return nullptr;
 	}
+	if (root->lateral) {
+		throw NotImplementedException("LATERAL not implemented");
+	}
 	auto result = make_unique<SubqueryRef>(move(subquery));
 	result->alias = TransformAlias(root->alias, result->column_name_alias);
 	if (root->sample) {

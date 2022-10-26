@@ -1,12 +1,13 @@
-#include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
+
+#include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 
 #include <cstring>
 
 namespace duckdb {
 
-Node16::Node16(ART &art, size_t compression_length) : Node(art, NodeType::N16, compression_length) {
+Node16::Node16() : Node(NodeType::N16) {
 	memset(key, 16, sizeof(key));
 }
 
@@ -31,7 +32,11 @@ idx_t Node16::GetChildGreaterEqual(uint8_t k, bool &equal) {
 			return pos;
 		}
 	}
-	return Node::GetChildGreaterEqual(k, equal);
+	return DConstants::INVALID_INDEX;
+}
+
+idx_t Node16::GetMin() {
+	return 0;
 }
 
 idx_t Node16::GetNextPos(idx_t pos) {
@@ -42,68 +47,99 @@ idx_t Node16::GetNextPos(idx_t pos) {
 	return pos < count ? pos : DConstants::INVALID_INDEX;
 }
 
-unique_ptr<Node> *Node16::GetChild(idx_t pos) {
+Node *Node16::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(pos < count);
-	return &child[pos];
+	return children[pos].Unswizzle(art);
 }
 
-idx_t Node16::GetMin() {
-	return 0;
+void Node16::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[pos] = node;
 }
 
-void Node16::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
-	Node16 *n = static_cast<Node16 *>(node.get());
+void Node16::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
+	Node16 *n = (Node16 *)node;
 
+	// Insert new child node into node
 	if (n->count < 16) {
 		// Insert element
 		idx_t pos = 0;
 		while (pos < node->count && n->key[pos] < key_byte) {
 			pos++;
 		}
-		if (n->child[pos] != nullptr) {
+		if (n->children[pos]) {
 			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];
-				n->child[i] = move(n->child[i - 1]);
+				n->children[i] = n->children[i - 1];
 			}
 		}
 		n->key[pos] = key_byte;
-		n->child[pos] = move(child);
+		n->children[pos] = new_child;
 		n->count++;
 	} else {
 		// Grow to Node48
-		auto new_node = make_unique<Node48>(art, n->prefix_length);
+		auto new_node = new Node48();
 		for (idx_t i = 0; i < node->count; i++) {
 			new_node->child_index[n->key[i]] = i;
-			new_node->child[i] = move(n->child[i]);
+			new_node->children[i] = n->children[i];
+			n->children[i] = nullptr;
 		}
-		CopyPrefix(art, n, new_node.get());
+		new_node->prefix = move(n->prefix);
 		new_node->count = node->count;
-		node = move(new_node);
+		delete node;
+		node = new_node;
 
-		Node48::Insert(art, node, key_byte, child);
+		Node48::InsertChild(node, key_byte, new_child);
 	}
 }
 
-void Node16::Erase(ART &art, unique_ptr<Node> &node, int pos) {
-	Node16 *n = static_cast<Node16 *>(node.get());
+void Node16::EraseChild(Node *&node, int pos, ART &art) {
+	auto n = (Node16 *)node;
 	// erase the child and decrease the count
-	n->child[pos].reset();
+	n->children[pos].Reset();
 	n->count--;
 	// potentially move any children backwards
 	for (; pos < n->count; pos++) {
 		n->key[pos] = n->key[pos + 1];
-		n->child[pos] = move(n->child[pos + 1]);
+		n->children[pos] = n->children[pos + 1];
 	}
+	// set any remaining nodes as nullptr
+	for (; pos < 16; pos++) {
+		if (!n->children[pos]) {
+			break;
+		}
+		n->children[pos] = nullptr;
+	}
+
 	if (node->count <= 3) {
 		// Shrink node
-		auto new_node = make_unique<Node4>(art, n->prefix_length);
+		auto new_node = new Node4();
 		for (unsigned i = 0; i < n->count; i++) {
 			new_node->key[new_node->count] = n->key[i];
-			new_node->child[new_node->count++] = move(n->child[i]);
+			new_node->children[new_node->count++] = n->children[i];
+			n->children[i] = nullptr;
 		}
-		CopyPrefix(art, n, new_node.get());
-		node = move(new_node);
+		new_node->prefix = move(n->prefix);
+		delete node;
+		node = new_node;
 	}
+}
+
+bool Node16::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
+
+	Node16 *r_n = (Node16 *)info.r_node;
+
+	for (idx_t i = 0; i < info.r_node->count; i++) {
+
+		auto l_child_pos = info.l_node->GetChildPos(r_n->key[i]);
+		if (!Node::MergeAtByte(info, depth, l_child_pos, i, r_n->key[i], l_parent, l_pos)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+idx_t Node16::GetSize() {
+	return 16;
 }
 
 } // namespace duckdb

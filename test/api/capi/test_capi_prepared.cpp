@@ -221,9 +221,13 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	status = duckdb_prepare(tester.connection, "SELECT SUM(i)*$1-$2 FROM a", &stmt);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != nullptr);
+	// clear bindings
+	duckdb_bind_int32(stmt, 1, 2);
+	REQUIRE(duckdb_clear_bindings(stmt) == DuckDBSuccess);
+
+	// bind again will succeed
 	duckdb_bind_int32(stmt, 1, 2);
 	duckdb_bind_int32(stmt, 2, 1000);
-
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int32(&res, 0, 0) == 1000000);
@@ -249,4 +253,13 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	memcpy(malloced_data, "hello\0", 6);
 	REQUIRE(string((char *)malloced_data) == "hello");
 	duckdb_free(malloced_data);
+
+	status = duckdb_prepare(tester.connection, "SELECT sum(i) FROM a WHERE i > ?", &stmt);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(stmt != nullptr);
+	REQUIRE(duckdb_nparams(stmt) == 1);
+	REQUIRE(duckdb_param_type(nullptr, 0) == DUCKDB_TYPE_INVALID);
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_INTEGER);
+
+	duckdb_destroy_prepare(&stmt);
 }

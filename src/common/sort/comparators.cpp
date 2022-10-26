@@ -5,7 +5,8 @@
 
 namespace duckdb {
 
-bool Comparators::TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout) {
+bool Comparators::TieIsBreakable(const idx_t &tie_col, const data_ptr_t &row_ptr, const SortLayout &sort_layout) {
+	const auto &col_idx = sort_layout.sorting_to_blob_col.at(tie_col);
 	// Check if the blob is NULL
 	ValidityBytes row_mask(row_ptr);
 	idx_t entry_idx;
@@ -15,13 +16,16 @@ bool Comparators::TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr,
 		// Can't break a NULL tie
 		return false;
 	}
-	if (row_layout.GetTypes()[col_idx].InternalType() == PhysicalType::VARCHAR) {
-		const auto &tie_col_offset = row_layout.GetOffsets()[col_idx];
-		string_t tie_string = Load<string_t>(row_ptr + tie_col_offset);
-		if (tie_string.GetSize() < string_t::INLINE_LENGTH) {
-			// No need to break the tie - we already compared the full string
-			return false;
-		}
+	auto &row_layout = sort_layout.blob_layout;
+	if (row_layout.GetTypes()[col_idx].InternalType() != PhysicalType::VARCHAR) {
+		// Nested type, must be broken
+		return true;
+	}
+	const auto &tie_col_offset = row_layout.GetOffsets()[col_idx];
+	auto tie_string = Load<string_t>(row_ptr + tie_col_offset);
+	if (tie_string.GetSize() < sort_layout.prefix_lengths[tie_col]) {
+		// No need to break the tie - we already compared the full string
+		return false;
 	}
 	return true;
 }
@@ -63,14 +67,14 @@ int Comparators::CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, cons
 
 int Comparators::BreakBlobTie(const idx_t &tie_col, const SBScanState &left, const SBScanState &right,
                               const SortLayout &sort_layout, const bool &external) {
-	const idx_t &col_idx = sort_layout.sorting_to_blob_col.at(tie_col);
 	data_ptr_t l_data_ptr = left.DataPtr(*left.sb->blob_sorting_data);
 	data_ptr_t r_data_ptr = right.DataPtr(*right.sb->blob_sorting_data);
-	if (!TieIsBreakable(col_idx, l_data_ptr, sort_layout.blob_layout)) {
+	if (!TieIsBreakable(tie_col, l_data_ptr, sort_layout)) {
 		// Quick check to see if ties can be broken
 		return 0;
 	}
 	// Align the pointers
+	const idx_t &col_idx = sort_layout.sorting_to_blob_col.at(tie_col);
 	const auto &tie_col_offset = sort_layout.blob_layout.GetOffsets()[col_idx];
 	l_data_ptr += tie_col_offset;
 	r_data_ptr += tie_col_offset;
@@ -345,14 +349,14 @@ int Comparators::TemplatedCompareListLoop(data_ptr_t &left_ptr, data_ptr_t &righ
 
 void Comparators::UnswizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data_ptr += sizeof(uint32_t) + string_t::PREFIX_LENGTH;
+		data_ptr += string_t::HEADER_SIZE;
 	}
 	Store<data_ptr_t>(heap_ptr + Load<idx_t>(data_ptr), data_ptr);
 }
 
 void Comparators::SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data_ptr += sizeof(uint32_t) + string_t::PREFIX_LENGTH;
+		data_ptr += string_t::HEADER_SIZE;
 	}
 	Store<idx_t>(Load<data_ptr_t>(data_ptr) - heap_ptr, data_ptr);
 }

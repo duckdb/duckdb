@@ -5,6 +5,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ struct StringAggFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->dataptr) {
 			mask.SetInvalid(idx);
 		} else {
@@ -93,26 +94,26 @@ struct StringAggFunction {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *str_data, ValidityMask &str_mask,
-	                      idx_t str_idx) {
-		PerformOperation(state, str_data[str_idx], bind_data);
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *str_data,
+	                      ValidityMask &str_mask, idx_t str_idx) {
+		PerformOperation(state, str_data[str_idx], aggr_input_data.bind_data);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
 		if (!source.dataptr) {
 			// source is not set: skip combining
 			return;
 		}
-		PerformOperation(target, string_t(source.dataptr, source.size), bind_data);
+		PerformOperation(target, string_t(source.dataptr, source.size), aggr_input_data.bind_data);
 	}
 };
 
@@ -123,6 +124,9 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 		return make_unique<StringAggBindData>(",");
 	}
 	D_ASSERT(arguments.size() == 2);
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("Separator argument to StringAgg must be a constant");
 	}
@@ -130,29 +134,38 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 	if (separator_val.IsNull()) {
 		arguments[0] = make_unique<BoundConstantExpression>(Value(LogicalType::VARCHAR));
 	}
-	function.arguments.erase(function.arguments.begin() + 1);
+	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_unique<StringAggBindData>(separator_val.ToString());
+}
+
+static void StringAggSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+                               const AggregateFunction &function) {
+	D_ASSERT(bind_data_p);
+	auto bind_data = (StringAggBindData *)bind_data_p;
+	writer.WriteString(bind_data->sep);
+}
+
+unique_ptr<FunctionData> StringAggDeserialize(ClientContext &context, FieldReader &reader,
+                                              AggregateFunction &bound_function) {
+	auto sep = reader.ReadRequired<string>();
+	return make_unique<StringAggBindData>(move(sep));
 }
 
 void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet string_agg("string_agg");
-	string_agg.AddFunction(
-	    AggregateFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                      AggregateFunction::StateSize<StringAggState>,
-	                      AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
-	                      AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggFunction>,
-	                      AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
-	                      AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
-	                      AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggFunction>, StringAggBind,
-	                      AggregateFunction::StateDestroy<StringAggState, StringAggFunction>));
-	string_agg.AddFunction(
-	    AggregateFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
-	                      AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
-	                      AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggFunction>,
-	                      AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
-	                      AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
-	                      AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggFunction>, StringAggBind,
-	                      AggregateFunction::StateDestroy<StringAggState, StringAggFunction>));
+	AggregateFunction string_agg_param(
+	    {LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
+	    AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
+	    AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggFunction>,
+	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
+	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
+	    AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggFunction>, StringAggBind,
+	    AggregateFunction::StateDestroy<StringAggState, StringAggFunction>);
+	string_agg_param.serialize = StringAggSerialize;
+	string_agg_param.deserialize = StringAggDeserialize;
+	string_agg.AddFunction(string_agg_param);
+	string_agg_param.arguments.emplace_back(LogicalType::VARCHAR);
+	string_agg.AddFunction(string_agg_param);
 	set.AddFunction(string_agg);
 	string_agg.name = "group_concat";
 	set.AddFunction(string_agg);

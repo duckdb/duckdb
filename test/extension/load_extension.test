@@ -4,6 +4,8 @@
 
 require notmingw
 
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 
@@ -22,4 +24,23 @@ LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extensio
 query I
 SELECT hello('World');
 ----
-Hello, World
+10
+
+query I
+QUACK QUACK QUACK
+----
+QUACK
+QUACK
+QUACK
+
+query I
+quACk QUaCk
+----
+QUACK
+QUACK
+
+statement error
+QUAC
+
+statement error
+QUACK NOT QUACK

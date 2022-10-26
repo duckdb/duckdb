@@ -3,12 +3,14 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "postgres_parser.hpp"
 #include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 
 #include "parser/parser.hpp"
 
@@ -25,6 +27,22 @@ void Parser::ParseQuery(const string &query) {
 		parser.Parse(query);
 
 		if (!parser.success) {
+			if (options.extensions) {
+				for (auto &ext : *options.extensions) {
+					D_ASSERT(ext.parse_function);
+					auto result = ext.parse_function(ext.parser_info.get(), query);
+					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+						auto statement = make_unique<ExtensionStatement>(ext, move(result.parse_data));
+						statement->stmt_length = query.size();
+						statement->stmt_location = 0;
+						statements.push_back(move(statement));
+						return;
+					}
+					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+						throw ParserException(result.error);
+					}
+				}
+			}
 			throw ParserException(QueryErrorContext::Format(query, parser.error_message, parser.error_location - 1));
 		}
 
@@ -146,12 +164,12 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOpti
 	}
 	auto &select = (SelectStatement &)*parser.statements[0];
 	if (select.node->type != QueryNodeType::SELECT_NODE) {
-		throw InternalException("Expected a single SELECT node");
+		throw ParserException("Expected a single SELECT node");
 	}
 	auto &select_node = (SelectNode &)*select.node;
 	if (select_node.modifiers.empty() || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER ||
 	    select_node.modifiers.size() != 1) {
-		throw InternalException("Expected a single ORDER clause");
+		throw ParserException("Expected a single ORDER clause");
 	}
 	auto &order = (OrderModifier &)*select_node.modifiers[0];
 	return move(order.orders);
@@ -189,7 +207,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 	}
 	auto &select_node = (SelectNode &)*select.node;
 	if (!select_node.from_table || select_node.from_table->type != TableReferenceType::EXPRESSION_LIST) {
-		throw InternalException("Expected a single VALUES statement");
+		throw ParserException("Expected a single VALUES statement");
 	}
 	auto &values_list = (ExpressionListRef &)*select_node.from_table;
 	return move(values_list.values);

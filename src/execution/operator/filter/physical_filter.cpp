@@ -6,7 +6,7 @@ namespace duckdb {
 
 PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::FILTER, move(types), estimated_cardinality) {
+    : CachingPhysicalOperator(PhysicalOperatorType::FILTER, move(types), estimated_cardinality) {
 	D_ASSERT(select_list.size() > 0);
 	if (select_list.size() > 1) {
 		// create a big AND out of the expressions
@@ -20,9 +20,10 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 	}
 }
 
-class FilterState : public OperatorState {
+class FilterState : public CachingOperatorState {
 public:
-	explicit FilterState(Expression &expr) : executor(expr), sel(STANDARD_VECTOR_SIZE) {
+	explicit FilterState(ExecutionContext &context, Expression &expr)
+	    : executor(Allocator::Get(context.client), expr), sel(STANDARD_VECTOR_SIZE) {
 	}
 
 	ExpressionExecutor executor;
@@ -34,12 +35,12 @@ public:
 	}
 };
 
-unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ClientContext &context) const {
-	return make_unique<FilterState>(*expression);
+unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &context) const {
+	return make_unique<FilterState>(context, *expression);
 }
 
-OperatorResultType PhysicalFilter::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                           GlobalOperatorState &gstate, OperatorState &state_p) const {
+OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                   GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (FilterState &)state_p;
 	idx_t result_count = state.executor.SelectExpression(input, state.sel);
 	if (result_count == input.size()) {

@@ -1,0 +1,14 @@
+# name: test/fuzzer/pedro/comparison_to_string.test
+# description: Issue #4827: Parsed statement differs from original result
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query I nosort
+SELECT 1 WHERE (1 IS DISTINCT FROM 1) > ANY(SELECT 2);
+----
+
+query I nosort
+SELECT 1 WHERE (1 IS DISTINCT FROM 1) IS NULL;
+----

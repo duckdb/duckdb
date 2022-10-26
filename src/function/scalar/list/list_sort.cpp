@@ -90,21 +90,23 @@ void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_list
 	payload_chunk.data[0].Reference(payload_vector);
 	payload_chunk.SetCardinality(offset_lists_indices);
 
+	key_chunk.Verify();
+	payload_chunk.Verify();
+
 	// sink
 	local_sort_state.SinkChunk(key_chunk, payload_chunk);
 	data_to_sort = true;
 }
 
 static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	D_ASSERT(args.ColumnCount() >= 1 && args.ColumnCount() <= 3);
 	auto count = args.size();
-	Vector &lists = args.data[0];
+	Vector &input_lists = args.data[0];
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_validity = FlatVector::Validity(result);
 
-	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
+	if (input_lists.GetType().id() == LogicalTypeId::SQLNULL) {
 		result_validity.SetInvalid(0);
 		return;
 	}
@@ -119,15 +121,18 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	LocalSortState local_sort_state;
 	local_sort_state.Initialize(global_sort_state, buffer_manager);
 
+	// this ensures that we do not change the order of the entries in the input chunk
+	VectorOperations::Copy(input_lists, result, count, 0, 0);
+
 	// get the child vector
-	auto lists_size = ListVector::GetListSize(lists);
-	auto &child_vector = ListVector::GetEntry(lists);
-	VectorData child_data;
-	child_vector.Orrify(lists_size, child_data);
+	auto lists_size = ListVector::GetListSize(result);
+	auto &child_vector = ListVector::GetEntry(result);
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(lists_size, child_data);
 
 	// get the lists data
-	VectorData lists_data;
-	lists.Orrify(count, lists_data);
+	UnifiedVectorFormat lists_data;
+	result.ToUnifiedFormat(count, lists_data);
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// create the lists_indices vector, this contains an element for each list's entry,
@@ -151,7 +156,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	bool data_to_sort = false;
 
 	for (idx_t i = 0; i < count; i++) {
-
 		auto lists_index = lists_data.sel->get_index(i);
 		const auto &list_entry = list_entries[lists_index];
 
@@ -167,7 +171,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-
 			// lists_indices vector is full, sink
 			if (offset_lists_indices == STANDARD_VECTOR_SIZE) {
 				SinkDataChunk(&child_vector, sel, offset_lists_indices, info.types, info.payload_types, payload_vector,
@@ -175,10 +178,10 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 				offset_lists_indices = 0;
 			}
 
-			auto source_idx = child_data.sel->get_index(list_entry.offset + child_idx);
+			auto source_idx = list_entry.offset + child_idx;
 			sel.set_index(offset_lists_indices, source_idx);
 			lists_indices_data[offset_lists_indices] = (uint32_t)i;
-			payload_vector_data[offset_lists_indices] = incr_payload_count;
+			payload_vector_data[offset_lists_indices] = source_idx;
 			offset_lists_indices++;
 			incr_payload_count++;
 		}
@@ -190,7 +193,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 
 	if (data_to_sort) {
-
 		// add local state to global state, which sorts the data
 		global_sort_state.AddLocalState(local_sort_state);
 		global_sort_state.PrepareMergePhase();
@@ -203,7 +205,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 		for (;;) {
 			DataChunk result_chunk;
-			result_chunk.Initialize(info.payload_types);
+			result_chunk.Initialize(Allocator::DefaultAllocator(), info.payload_types);
 			result_chunk.SetCardinality(0);
 			scanner.Scan(result_chunk);
 			if (result_chunk.size() == 0) {
@@ -217,28 +219,24 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 			for (idx_t i = 0; i < row_count; i++) {
 				sel_sorted.set_index(sel_sorted_idx, result_data[i]);
+				D_ASSERT(result_data[i] < lists_size);
 				sel_sorted_idx++;
 			}
 		}
 
 		D_ASSERT(sel_sorted_idx == incr_payload_count);
 		child_vector.Slice(sel_sorted, sel_sorted_idx);
-		child_vector.Normalify(sel_sorted_idx);
+		child_vector.Flatten(sel_sorted_idx);
 	}
 
-	result.Reference(lists);
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments, OrderType &order,
                                              OrderByNullType &null_order) {
-
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_unique<VariableReturnBindData>(bound_function.return_type);
-	}
-
 	bound_function.arguments[0] = arguments[0]->return_type;
 	bound_function.return_type = arguments[0]->return_type;
 	auto child_type = ListType::GetChildType(arguments[0]->return_type);
@@ -272,8 +270,8 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 
 	// set default values
 	auto &config = DBConfig::GetConfig(context);
-	auto order = config.default_order_type;
-	auto null_order = config.default_null_order;
+	auto order = config.options.default_order_type;
+	auto null_order = config.options.default_null_order;
 
 	// get the sorting order
 	if (arguments.size() >= 2) {
@@ -310,8 +308,9 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 
 	// set (reverse) default values
 	auto &config = DBConfig::GetConfig(context);
-	auto order = (config.default_order_type == OrderType::ASCENDING) ? OrderType::DESCENDING : OrderType::ASCENDING;
-	auto null_order = config.default_null_order;
+	auto order =
+	    (config.options.default_order_type == OrderType::ASCENDING) ? OrderType::DESCENDING : OrderType::ASCENDING;
+	auto null_order = config.options.default_null_order;
 
 	// get the null sorting order
 	if (arguments.size() == 2) {
@@ -327,15 +326,15 @@ void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// one parameter: list
 	ScalarFunction sort({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
-	                    false, false, ListNormalSortBind);
+	                    ListNormalSortBind);
 
 	// two parameters: list, order
 	ScalarFunction sort_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
-	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListNormalSortBind);
+	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
 	// three parameters: list, order, null order
 	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListNormalSortBind);
+	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
 	ScalarFunctionSet list_sort("list_sort");
 	list_sort.AddFunction(sort);
@@ -353,12 +352,11 @@ void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// one parameter: list
 	ScalarFunction sort_reverse({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
-	                            ListSortFunction, false, false, ListReverseSortBind);
+	                            ListSortFunction, ListReverseSortBind);
 
 	// two parameters: list, null order
 	ScalarFunction sort_reverse_null_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
-	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false,
-	                                       ListReverseSortBind);
+	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListReverseSortBind);
 
 	ScalarFunctionSet list_reverse_sort("list_reverse_sort");
 	list_reverse_sort.AddFunction(sort_reverse);

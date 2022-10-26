@@ -27,29 +27,26 @@
 #include "dbgen/dss.h"
 #include "dbgen/rnd.h"
 
-static seed_t *Seed = DBGenGlobals::Seed;
-static tdef *tdefs = DBGenGlobals::tdefs;
-
 const char *tpch_env_config PROTO((const char *tag, const char *dflt));
 void NthElement(DSS_HUGE, DSS_HUGE *);
 
-void dss_random(DSS_HUGE *tgt, DSS_HUGE lower, DSS_HUGE upper, long stream) {
-	*tgt = UnifInt(lower, upper, stream);
-	Seed[stream].usage += 1;
+void dss_random(DSS_HUGE *tgt, DSS_HUGE lower, DSS_HUGE upper, seed_t *seed) {
+	*tgt = UnifInt(lower, upper, seed);
+	seed->usage += 1;
 
 	return;
 }
 
-void row_start(int t) {
+void row_start(int t, DBGenContext *ctx) {
 	(void)t;
 	int i;
 	for (i = 0; i <= MAX_STREAM; i++)
-		Seed[i].usage = 0;
+		ctx->Seed[i].usage = 0;
 
 	return;
 }
 
-void row_stop_h(int t) {
+void row_stop_h(int t, DBGenContext *ctx) {
 	int i;
 
 	/* need to allow for handling the master and detail together */
@@ -59,29 +56,29 @@ void row_stop_h(int t) {
 		t = PART;
 
 	for (i = 0; i <= MAX_STREAM; i++)
-		if ((Seed[i].table == t) || (Seed[i].table == tdefs[t].child)) {
-			if (set_seeds && (Seed[i].usage > Seed[i].boundary)) {
-				fprintf(stderr, "\nSEED CHANGE: seed[%d].usage = " HUGE_FORMAT "\n", i, Seed[i].usage);
-				Seed[i].boundary = Seed[i].usage;
+		if ((ctx->Seed[i].table == t) || (ctx->Seed[i].table == ctx->tdefs[t].child)) {
+			if (set_seeds && (ctx->Seed[i].usage > ctx->Seed[i].boundary)) {
+				fprintf(stderr, "\nSEED CHANGE: seed[%d].usage = " HUGE_FORMAT "\n", i, ctx->Seed[i].usage);
+				ctx->Seed[i].boundary = ctx->Seed[i].usage;
 			} else {
-				NthElement((Seed[i].boundary - Seed[i].usage), &Seed[i].value);
+				NthElement((ctx->Seed[i].boundary - ctx->Seed[i].usage), &ctx->Seed[i].value);
 #ifdef RNG_TEST
-				Seed[i].nCalls += Seed[i].boundary - Seed[i].usage;
+				ctx->Seed[i].nCalls += ctx->Seed[i].boundary - ctx->Seed[i].usage;
 #endif
 			}
 		}
 	return;
 }
 
-void dump_seeds(int tbl) {
+void dump_seeds(int tbl, seed_t *seeds) {
 	int i;
 
 	for (i = 0; i <= MAX_STREAM; i++)
-		if (Seed[i].table == tbl)
+		if (seeds[i].table == tbl)
 #ifdef RNG_TEST
-			printf("%d(" HUGE_FORMAT "):\t" HUGE_FORMAT "\n", i, Seed[i].nCalls, Seed[i].value);
+			printf("%d(" HUGE_FORMAT "):\t" HUGE_FORMAT "\n", i, seeds[i].nCalls, seeds[i].value);
 #else
-			printf("%d:\t" HUGE_FORMAT "\n", i, Seed[i].value);
+			printf("%d:\t" HUGE_FORMAT "\n", i, seeds[i].value);
 #endif
 	return;
 }
@@ -116,15 +113,14 @@ NextRand(DSS_HUGE nSeed)
 *******************************************************************/
 
 /*
- * long UnifInt( long nLow, long nHigh, long nStream )
+ * long UnifInt( long nLow, long nHigh, seed_t *seed )
  */
 DSS_HUGE
-UnifInt(DSS_HUGE nLow, DSS_HUGE nHigh, long nStream)
+UnifInt(DSS_HUGE nLow, DSS_HUGE nHigh, seed_t *seed)
 
 /*
  * Returns an integer uniformly distributed between nLow and nHigh,
- * including * the endpoints.  nStream is the random number stream.
- * Stream 0 is used if nStream is not in the range 0..MAX_STREAM.
+ * including * the endpoints. Seed points to the random number stream.
  */
 
 {
@@ -132,20 +128,16 @@ UnifInt(DSS_HUGE nLow, DSS_HUGE nHigh, long nStream)
 	DSS_HUGE nTemp;
 	int32_t nLow32 = (int32_t)nLow, nHigh32 = (int32_t)nHigh;
 
-	if (nStream < 0 || nStream > MAX_STREAM) {
-		nStream = 0;
-	}
-
 	if ((nHigh == MAX_LONG) && (nLow == 0)) {
 		dRange = (double)((DSS_HUGE)(nHigh32 - nLow32) + 1);
 	} else {
 		dRange = (double)(nHigh - nLow + 1);
 	}
 
-	Seed[nStream].value = NextRand(Seed[nStream].value);
+	seed->value = NextRand(seed->value);
 #ifdef RNG_TEST
-	Seed[nStream].nCalls += 1;
+	seed->nCalls += 1;
 #endif
-	nTemp = (DSS_HUGE)(((double)Seed[nStream].value / DBGenGlobals::dM) * (dRange));
+	nTemp = (DSS_HUGE)(((double)seed->value / DBGenContext::dM) * (dRange));
 	return (nLow + nTemp);
 }

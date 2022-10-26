@@ -14,14 +14,14 @@ namespace duckdb {
 
 class WriteOverflowStringsToDisk : public OverflowStringWriter {
 public:
-	explicit WriteOverflowStringsToDisk(DatabaseInstance &db);
+	explicit WriteOverflowStringsToDisk(BlockManager &block_manager);
 	~WriteOverflowStringsToDisk() override;
 
-	//! The checkpoint manager
-	DatabaseInstance &db;
+	//! The block manager
+	BlockManager &block_manager;
 
 	//! Temporary buffer
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 	//! The block on-disk to which we are writing
 	block_id_t block_id;
 	//! The offset within the current block

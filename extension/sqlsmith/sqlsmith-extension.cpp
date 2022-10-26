@@ -54,9 +54,8 @@ static unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFuncti
 	return move(result);
 }
 
-static void SQLSmithFunction(ClientContext &context, const FunctionData *bind_data,
-                             FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (SQLSmithFunctionData &)*bind_data;
+static void SQLSmithFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (SQLSmithFunctionData &)*data_p.bind_data;
 	if (data.finished) {
 		return;
 	}
@@ -101,9 +100,8 @@ static unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunct
 	return result;
 }
 
-static void ReduceSQLFunction(ClientContext &context, const FunctionData *bind_data,
-                              FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (ReduceSQLFunctionData &)*bind_data;
+static void ReduceSQLFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (ReduceSQLFunctionData &)*data_p.bind_data;
 	if (data.offset >= data.statements.size()) {
 		// finished returning values
 		return;

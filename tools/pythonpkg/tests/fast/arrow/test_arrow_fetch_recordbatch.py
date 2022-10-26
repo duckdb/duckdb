@@ -22,8 +22,7 @@ class TestArrowFetchRecordBatch(object):
         assert(len(chunk) == 1024)
         chunk = record_batch_reader.read_next_batch()
         assert(len(chunk) == 952)
-        # StopIteration Exception
-        with pytest.raises(Exception):
+        with pytest.raises(StopIteration):
             chunk = record_batch_reader.read_next_batch()
 
     def test_record_batch_read_all(self, duckdb_cursor):
@@ -59,8 +58,7 @@ class TestArrowFetchRecordBatch(object):
         assert(len(chunk) == 2048)
         chunk = record_batch_reader.read_next_batch()
         assert(len(chunk) == 904)
-        # StopIteration Exception
-        with pytest.raises(Exception):
+        with pytest.raises(StopIteration):
             chunk = record_batch_reader.read_next_batch()
 
         query = duckdb_cursor.execute("SELECT a FROM t")
@@ -80,9 +78,9 @@ class TestArrowFetchRecordBatch(object):
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select range a from range(5000);")
         query = duckdb_cursor.execute("SELECT a FROM t")
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError, match='Approximate Batch Size of Record Batch MUST be higher than 0'):
             record_batch_reader = query.fetch_record_batch(0)
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError, match='incompatible function arguments'):
             record_batch_reader = query.fetch_record_batch(-1)
 
     def test_record_batch_reader_from_relation(self, duckdb_cursor):
@@ -106,3 +104,12 @@ class TestArrowFetchRecordBatch(object):
         chunk = record_batch_reader.read_all()
         assert(len(chunk) == 2048)
 
+    def test_record_batch_query_error(self):
+        if not can_run:
+            return
+        duckdb_cursor = duckdb.connect()
+        duckdb_cursor.execute("CREATE table t as select 'foo' as a;")
+        query = duckdb_cursor.execute("SELECT cast(a as double) FROM t")
+        record_batch_reader = query.fetch_record_batch(1024)
+        with pytest.raises(OSError, match='Conversion Error'):
+            record_batch_reader.read_next_batch()

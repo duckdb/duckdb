@@ -1,0 +1,50 @@
+# name: test/sql/types/decimal/test_decimal_from_string.test
+# group: [decimal]
+
+#statement ok
+#pragma enable_verification
+
+query I
+select '+1e-1'::DECIMAL(38,3)
+----
+0.100
+
+query I
+select '+1234.56789e-1'::DECIMAL(38,0)
+----
+123
+
+query I
+select '+1234.56789e-1'::DECIMAL(38,5)
+----
+123.45679
+
+query I
+select +1234.56789e-1::DECIMAL(38,5)
+----
+123.45679
+
+foreach exp_sign + -
+
+foreach base_sign + -
+
+foreach scale 0 1 2 3 4 5 6
+
+foreach exponent 1 2 3 4 5 6 7 8 9 10
+
+foreach num 1 1.23456789 1234 1234.56789 0.12345678 0.00001234
+
+query I
+select '${base_sign}${num}e${exp_sign}${exponent}'::DECIMAL(38,${scale}) == ${base_sign}${num}e${exp_sign}${exponent}::DECIMAL(38,${scale});
+----
+True
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+endloop

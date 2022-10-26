@@ -209,7 +209,7 @@ SELECT list_reverse_sort([1, 3, NULL, 2], 'NULLS FIRST')
 query I
 SELECT list_sort([True, False, NULL, True, True, NULL])
 ----
-[NULL, NULL, False, True, True, True]
+[NULL, NULL, false, true, true, true]
 
 query I
 SELECT list_sort([NULL::BOOLEAN])
@@ -393,3 +393,15 @@ where g = lg
   and li > i
 ----
 0
+
+# bug fixes test for #4591
+
+query II
+select k, array_sort(k,'DESC') from (values ([1,2,3,4])) as t(k);
+----
+[1, 2, 3, 4]	[4, 3, 2, 1]
+
+query IIII
+select k, v, map(k,v), map(k,v)[(array_sort(k,'DESC'))[1]] from (values ([1,2,3,4],[2,3,4,5])) as t(k,v);
+----
+[1, 2, 3, 4]	[2, 3, 4, 5]	{1=2, 2=3, 3=4, 4=5}	[5]

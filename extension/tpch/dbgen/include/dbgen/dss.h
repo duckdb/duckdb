@@ -97,8 +97,8 @@
 #define SPARSE_KEEP 3
 #define MK_SPARSE(key, seq) (((((key >> 3) << 2) | (seq & 0x0003)) << 3) | (key & 0x0007))
 
-#define RANDOM(tgt, lower, upper, stream) dss_random(&tgt, lower, upper, stream)
-#define RANDOM64(tgt, lower, upper, stream) dss_random64(&tgt, lower, upper, stream)
+#define RANDOM(tgt, lower, upper, seed) dss_random(&tgt, lower, upper, seed)
+#define RANDOM64(tgt, lower, upper, seed) dss_random64(&tgt, lower, upper, seed)
 
 typedef struct {
 	long weight;
@@ -140,38 +140,43 @@ typedef struct SEED_T {
 
 #define PROTO(s) s
 
+struct DBGenContext;
+
 /* bm_utils.c */
 const char *tpch_env_config PROTO((const char *var, const char *dflt));
 long yes_no PROTO((char *prompt));
-void tpch_a_rnd PROTO((int min, int max, int column, char *dest));
+void tpch_a_rnd PROTO((int min, int max, seed_t *seed, char *dest));
 int tx_rnd PROTO((long min, long max, long column, char *tgt));
 long julian PROTO((long date));
 long unjulian PROTO((long date));
 long dssncasecmp PROTO((const char *s1, const char *s2, int n));
 long dsscasecmp PROTO((const char *s1, const char *s2));
-int pick_str PROTO((distribution * s, int c, char *target));
-void agg_str PROTO((distribution * set, long count, long col, char *dest));
+int pick_str PROTO((distribution * s, seed_t *seed, char *target));
+void agg_str PROTO((distribution * set, long count, seed_t *seed, char *dest));
 void read_dist PROTO((const char *path, const char *name, distribution *target));
 void embed_str PROTO((distribution * d, int min, int max, int stream, char *dest));
 #ifndef STDLIB_HAS_GETOPT
 int getopt PROTO((int arg_cnt, char **arg_vect, char *oprions));
 #endif /* STDLIB_HAS_GETOPT */
-DSS_HUGE set_state PROTO((int t, long scale, long procs, long step, DSS_HUGE *e));
+DSS_HUGE set_state PROTO((int t, long scale, long procs, long step, DSS_HUGE *e, DBGenContext *ctx));
 
 /* rnd.c */
 DSS_HUGE NextRand PROTO((DSS_HUGE nSeed));
-DSS_HUGE UnifInt PROTO((DSS_HUGE nLow, DSS_HUGE nHigh, long nStream));
-void dss_random(DSS_HUGE *tgt, DSS_HUGE min, DSS_HUGE max, long seed);
-void row_start(int t);
-void row_stop_h(int t);
-void dump_seeds_ds(int t);
+DSS_HUGE UnifInt PROTO((DSS_HUGE nLow, DSS_HUGE nHigh, seed_t *seed));
+void dss_random(DSS_HUGE *tgt, DSS_HUGE min, DSS_HUGE max, seed_t *seed);
+void row_start(int t, DBGenContext *ctx);
+void row_stop_h(int t, DBGenContext *ctx);
+void dump_seeds_ds(int t, seed_t *seeds);
 
 /* text.c */
 #define MAX_GRAMMAR_LEN 12 /* max length of grammar component */
 #define MAX_SENT_LEN 256   /* max length of populated sentence */
 #define RNG_PER_SENT 27    /* max number of RNG calls per sentence */
 
-void dbg_text PROTO((char *t, int min, int max, int s));
+void init_text_pool PROTO((long bSize, DBGenContext *ctx));
+void free_text_pool PROTO(());
+
+void dbg_text PROTO((char *t, int min, int max, seed_t *seed));
 
 #ifdef DECLARER
 #define EXTERN
@@ -205,7 +210,6 @@ EXTERN distribution np;
 EXTERN distribution vp;
 EXTERN distribution grammar;
 
-EXTERN long scale;
 EXTERN int refresh;
 EXTERN int resume;
 EXTERN long verbose;
@@ -276,7 +280,7 @@ EXTERN int delete_segment;
  */
 #define PS_SIZE 145
 #define PS_SKEY_MIN 0
-#define PS_SKEY_MAX ((tdefs[SUPP].base - 1) * scale)
+#define PS_SKEY_MAX ((ctx->tdefs[SUPP].base - 1) * ctx->scale_factor)
 #define PS_SCST_MIN 100
 #define PS_SCST_MAX 100000
 #define PS_QTY_MIN 1
@@ -295,7 +299,7 @@ EXTERN int delete_segment;
  */
 #define O_SIZE 109
 #define O_CKEY_MIN 1
-#define O_CKEY_MAX (tdefs[CUST].base * scale)
+#define O_CKEY_MAX (ctx->tdefs[CUST].base * ctx->scale_factor)
 #define O_ODATE_MIN STARTDATE
 #define O_ODATE_MAX (STARTDATE + TOTDATE - (L_SDTE_MAX + L_RDTE_MAX) - 1)
 #define O_CLRK_TAG "Clerk#"
@@ -315,7 +319,7 @@ EXTERN int delete_segment;
 #define L_DCNT_MIN 0
 #define L_DCNT_MAX 10
 #define L_PKEY_MIN 1
-#define L_PKEY_MAX (tdefs[PART].base * scale)
+#define L_PKEY_MAX (ctx->tdefs[PART].base * ctx->scale_factor)
 #define L_SDTE_MIN 1
 #define L_SDTE_MAX 121
 #define L_CDTE_MIN 30
@@ -421,13 +425,13 @@ int dbg_print(int dt, FILE *tgt, void *data, int len, int eol);
 	{                                                                                                                  \
 		char *xx = d;                                                                                                  \
 		while (*xx)                                                                                                    \
-			tdefs[t].vtotal += *xx++;                                                                                  \
+			ctx->tdefs[t].vtotal += *xx++;                                                                                  \
 	}
-#define VRF_INT(t, d) tdefs[t].vtotal += d
-#define VRF_HUGE(t, d) tdefs[t].vtotal = *((long *)&d) + *((long *)(&d + 1))
+#define VRF_INT(t, d) ctx->tdefs[t].vtotal += d
+#define VRF_HUGE(t, d) ctx->tdefs[t].vtotal = *((long *)&d) + *((long *)(&d + 1))
 /* assume float is a 64 bit quantity */
-#define VRF_MONEY(t, d) tdefs[t].vtotal = *((long *)&d) + *((long *)(&d + 1))
-#define VRF_CHR(t, d) tdefs[t].vtotal += d
+#define VRF_MONEY(t, d) ctx->tdefs[t].vtotal = *((long *)&d) + *((long *)(&d + 1))
+#define VRF_CHR(t, d) ctx->tdefs[t].vtotal += d
 #define VRF_STRT(t)
 #define VRF_END(t)
 
@@ -478,10 +482,74 @@ int dbg_print(int dt, FILE *tgt, void *data, int len, int eol);
 #define BBB_CMNT_SD 46
 #define BBB_OFFSET_SD 47
 
-struct DBGenGlobals {
-	static seed_t Seed[MAX_STREAM + 1];
-	static double dM;
-	static tdef tdefs[10];
+struct DBGenContext {
+  seed_t Seed[MAX_STREAM + 1] = {
+      {PART, 1, 0, 1}, /* P_MFG_SD     0 */
+      {PART, 46831694, 0, 1}, /* P_BRND_SD    1 */
+      {PART, 1841581359, 0, 1}, /* P_TYPE_SD    2 */
+      {PART, 1193163244, 0, 1}, /* P_SIZE_SD    3 */
+      {PART, 727633698, 0, 1}, /* P_CNTR_SD    4 */
+      {NONE, 933588178, 0, 1}, /* text pregeneration  5 */
+      {PART, 804159733, 0, 2}, /* P_CMNT_SD    6 */
+      {PSUPP, 1671059989, 0, SUPP_PER_PART}, /* PS_QTY_SD    7 */
+      {PSUPP, 1051288424, 0, SUPP_PER_PART}, /* PS_SCST_SD   8 */
+      {PSUPP, 1961692154, 0, SUPP_PER_PART * 2}, /* PS_CMNT_SD   9 */
+      {ORDER, 1227283347, 0, 1}, /* O_SUPP_SD    10 */
+      {ORDER, 1171034773, 0, 1}, /* O_CLRK_SD    11 */
+      {ORDER, 276090261, 0, 2}, /* O_CMNT_SD    12 */
+      {ORDER, 1066728069, 0, 1}, /* O_ODATE_SD   13 */
+      {LINE, 209208115, 0, O_LCNT_MAX}, /* L_QTY_SD     14 */
+      {LINE, 554590007, 0, O_LCNT_MAX}, /* L_DCNT_SD    15 */
+      {LINE, 721958466, 0, O_LCNT_MAX}, /* L_TAX_SD     16 */
+      {LINE, 1371272478, 0, O_LCNT_MAX}, /* L_SHIP_SD    17 */
+      {LINE, 675466456, 0, O_LCNT_MAX}, /* L_SMODE_SD   18 */
+      {LINE, 1808217256, 0, O_LCNT_MAX}, /* L_PKEY_SD    19 */
+      {LINE, 2095021727, 0, O_LCNT_MAX}, /* L_SKEY_SD    20 */
+      {LINE, 1769349045, 0, O_LCNT_MAX}, /* L_SDTE_SD    21 */
+      {LINE, 904914315, 0, O_LCNT_MAX}, /* L_CDTE_SD    22 */
+      {LINE, 373135028, 0, O_LCNT_MAX}, /* L_RDTE_SD    23 */
+      {LINE, 717419739, 0, O_LCNT_MAX}, /* L_RFLG_SD    24 */
+      {LINE, 1095462486, 0, O_LCNT_MAX * 2}, /* L_CMNT_SD    25 */
+      {CUST, 881155353, 0, 9}, /* C_ADDR_SD    26 */
+      {CUST, 1489529863, 0, 1}, /* C_NTRG_SD    27 */
+      {CUST, 1521138112, 0, 3}, /* C_PHNE_SD    28 */
+      {CUST, 298370230, 0, 1}, /* C_ABAL_SD    29 */
+      {CUST, 1140279430, 0, 1}, /* C_MSEG_SD    30 */
+      {CUST, 1335826707, 0, 2}, /* C_CMNT_SD    31 */
+      {SUPP, 706178559, 0, 9}, /* S_ADDR_SD    32 */
+      {SUPP, 110356601, 0, 1}, /* S_NTRG_SD    33 */
+      {SUPP, 884434366, 0, 3}, /* S_PHNE_SD    34 */
+      {SUPP, 962338209, 0, 1}, /* S_ABAL_SD    35 */
+      {SUPP, 1341315363, 0, 2}, /* S_CMNT_SD    36 */
+      {PART, 709314158, 0, 92}, /* P_NAME_SD    37 */
+      {ORDER, 591449447, 0, 1}, /* O_PRIO_SD    38 */
+      {LINE, 431918286, 0, 1}, /* HVAR_SD      39 */
+      {ORDER, 851767375, 0, 1}, /* O_CKEY_SD    40 */
+      {NATION, 606179079, 0, 2}, /* N_CMNT_SD    41 */
+      {REGION, 1500869201, 0, 2}, /* R_CMNT_SD    42 */
+      {ORDER, 1434868289, 0, 1}, /* O_LCNT_SD    43 */
+      {SUPP, 263032577, 0, 1}, /* BBB offset   44 */
+      {SUPP, 753643799, 0, 1}, /* BBB type     45 */
+      {SUPP, 202794285, 0, 1}, /* BBB comment  46 */
+      {SUPP, 715851524, 0, 1} /* BBB junk     47 */
+  };
+
+  static constexpr double dM = 2147483647.0;
+
+  tdef tdefs[10] = {
+      {"part.tbl", "part table", 200000, NULL, NULL, PSUPP, 0},
+      {"partsupp.tbl", "partsupplier table", 200000, NULL, NULL, NONE, 0},
+      {"supplier.tbl", "suppliers table", 10000, NULL, NULL, NONE, 0},
+      {"customer.tbl", "customers table", 150000, NULL, NULL, NONE, 0},
+      {"orders.tbl", "order table", 150000, NULL, NULL, LINE, 0},
+      {"lineitem.tbl", "lineitem table", 150000, NULL, NULL, NONE, 0},
+      {"orders.tbl", "orders/lineitem tables", 150000, NULL, NULL, LINE, 0},
+      {"part.tbl", "part/partsupplier tables", 200000, NULL, NULL, PSUPP, 0},
+      {"nation.tbl", "nation table", NATIONS_MAX, NULL, NULL, NONE, 0},
+      {"region.tbl", "region table", NATIONS_MAX, NULL, NULL, NONE, 0},
+  };
+
+  long scale_factor = 1;
 };
 
 #endif /* DSS_H */

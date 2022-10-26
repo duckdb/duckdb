@@ -2,6 +2,9 @@
 # description: ART Simple Big Range
 # group: [art]
 
+statement ok
+PRAGMA enable_verification
+
 # now perform a an index creation and scan with deletions with a second transaction
 statement ok
 BEGIN TRANSACTION

@@ -1,6 +1,5 @@
 #include "duckdb_python/pandas_scan.hpp"
 #include "duckdb_python/array_wrapper.hpp"
-#include "duckdb/parallel/parallel_state.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb_python/vector_conversion.hpp"
@@ -10,7 +9,7 @@
 
 namespace duckdb {
 
-struct PandasScanFunctionData : public TableFunctionData {
+struct PandasScanFunctionData : public PyTableFunctionData {
 	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasColumnBindData> pandas_bind_data,
 	                       vector<LogicalType> sql_types)
 	    : df(df), row_count(row_count), lines_read(0), pandas_bind_data(move(pandas_bind_data)),
@@ -28,8 +27,8 @@ struct PandasScanFunctionData : public TableFunctionData {
 	}
 };
 
-struct PandasScanState : public FunctionOperatorData {
-	PandasScanState(idx_t start, idx_t end) : start(start), end(end), batch_index(0) {
+struct PandasScanLocalState : public LocalTableFunctionState {
+	PandasScanLocalState(idx_t start, idx_t end) : start(start), end(end), batch_index(0) {
 	}
 
 	idx_t start;
@@ -38,28 +37,33 @@ struct PandasScanState : public FunctionOperatorData {
 	vector<column_t> column_ids;
 };
 
-struct ParallelPandasScanState : public ParallelState {
-	ParallelPandasScanState() : position(0), batch_index(0) {
+struct PandasScanGlobalState : public GlobalTableFunctionState {
+	explicit PandasScanGlobalState(idx_t max_threads) : position(0), batch_index(0), max_threads(max_threads) {
 	}
 
 	std::mutex lock;
 	idx_t position;
 	idx_t batch_index;
+	idx_t max_threads;
+
+	idx_t MaxThreads() const override {
+		return max_threads;
+	}
 };
 
 PandasScanFunction::PandasScanFunction()
-    : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInit, nullptr,
-                    nullptr, nullptr, PandasScanCardinality, nullptr, nullptr, PandasScanMaxThreads,
-                    PandasScanInitParallelState, PandasScanFuncParallel, PandasScanParallelInit,
-                    PandasScanParallelStateNext, true, false, PandasProgress) {
+    : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInitGlobal,
+                    PandasScanInitLocal) {
 	get_batch_index = PandasScanGetBatchIndex;
-	supports_batch_index = true;
+	cardinality = PandasScanCardinality;
+	table_scan_progress = PandasProgress;
+	projection_pushdown = true;
 }
 
 idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                                  FunctionOperatorData *operator_state,
-                                                  ParallelState *parallel_state_p) {
-	auto &data = (PandasScanState &)*operator_state;
+                                                  LocalTableFunctionState *local_state,
+                                                  GlobalTableFunctionState *global_state) {
+	auto &data = (PandasScanLocalState &)*local_state;
 	return data.batch_index;
 }
 
@@ -69,7 +73,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	py::handle df((PyObject *)(input.inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
-	VectorConversion::BindPandas(df, pandas_bind_data, return_types, names);
+	VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
 
 	auto df_columns = py::list(df.attr("columns"));
 	auto get_fun = df.attr("__getitem__");
@@ -78,13 +82,17 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	return make_unique<PandasScanFunctionData>(df, row_count, move(pandas_bind_data), return_types);
 }
 
-unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanInit(ClientContext &context,
-                                                                    const FunctionData *bind_data_p,
-                                                                    const vector<column_t> &column_ids,
-                                                                    TableFilterCollection *filters) {
-	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
-	auto result = make_unique<PandasScanState>(0, bind_data.row_count);
-	result->column_ids = column_ids;
+unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,
+                                                                              TableFunctionInitInput &input) {
+	return make_unique<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
+}
+
+unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ExecutionContext &context,
+                                                                            TableFunctionInitInput &input,
+                                                                            GlobalTableFunctionState *gstate) {
+	auto result = make_unique<PandasScanLocalState>(0, 0);
+	result->column_ids = input.column_ids;
+	PandasScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	return move(result);
 }
 
@@ -96,32 +104,12 @@ idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const Fun
 	return bind_data.row_count / PANDAS_PARTITION_COUNT + 1;
 }
 
-unique_ptr<ParallelState> PandasScanFunction::PandasScanInitParallelState(ClientContext &context,
-                                                                          const FunctionData *bind_data_p,
-                                                                          const vector<column_t> &column_ids,
-                                                                          TableFilterCollection *filters) {
-	return make_unique<ParallelPandasScanState>();
-}
-
-unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanParallelInit(ClientContext &context,
-                                                                            const FunctionData *bind_data_p,
-                                                                            ParallelState *state,
-                                                                            const vector<column_t> &column_ids,
-                                                                            TableFilterCollection *filters) {
-	auto result = make_unique<PandasScanState>(0, 0);
-	result->column_ids = column_ids;
-	if (!PandasScanParallelStateNext(context, bind_data_p, result.get(), state)) {
-		return nullptr;
-	}
-	return move(result);
-}
-
 bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
-                                                     FunctionOperatorData *operator_state,
-                                                     ParallelState *parallel_state_p) {
+                                                     LocalTableFunctionState *lstate,
+                                                     GlobalTableFunctionState *gstate) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
-	auto &parallel_state = (ParallelPandasScanState &)*parallel_state_p;
-	auto &state = (PandasScanState &)*operator_state;
+	auto &parallel_state = (PandasScanGlobalState &)*gstate;
+	auto &state = (PandasScanLocalState &)*lstate;
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
 	if (parallel_state.position >= bind_data.row_count) {
@@ -137,7 +125,8 @@ bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, con
 	return true;
 }
 
-double PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p) {
+double PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p,
+                                          const GlobalTableFunctionState *gstate) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	if (bind_data.row_count == 0) {
 		return 100;
@@ -146,32 +135,23 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 	return percentage;
 }
 
-void PandasScanFunction::PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-                                                FunctionOperatorData *operator_state, DataChunk &output,
-                                                ParallelState *parallel_state_p) {
-	//! FIXME: Have specialized parallel function from pandas scan here
-	PandasScanFunc(context, bind_data, operator_state, output);
-}
-
 //! The main pandas scan function: note that this can be called in parallel without the GIL
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
-void PandasScanFunction::PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-                                        FunctionOperatorData *operator_state, DataChunk &output) {
-	if (!operator_state) {
-		return;
-	}
-	auto &data = (PandasScanFunctionData &)*bind_data;
-	auto &state = (PandasScanState &)*operator_state;
+void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (PandasScanFunctionData &)*data_p.bind_data;
+	auto &state = (PandasScanLocalState &)*data_p.local_state;
 
 	if (state.start >= state.end) {
-		return;
+		if (!PandasScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {
+			return;
+		}
 	}
 	idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, state.end - state.start);
 	output.SetCardinality(this_count);
 	for (idx_t idx = 0; idx < state.column_ids.size(); idx++) {
 		auto col_idx = state.column_ids[idx];
 		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
-			output.data[idx].Sequence(state.start, this_count);
+			output.data[idx].Sequence(state.start, 1, this_count);
 		} else {
 			VectorConversion::NumpyToDuckDB(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col,
 			                                this_count, state.start, output.data[idx]);

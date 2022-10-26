@@ -23,6 +23,7 @@
 #include "parquet/exception.h"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
 #include "test_helpers.hpp"
 
 std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
@@ -59,7 +60,6 @@ std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::GetSchema));
-	params.push_back(duckdb::Value::UBIGINT(1000000));
 	if (query.empty()) {
 		return conn.TableFunction("arrow_scan", params)->Execute();
 	}
@@ -85,7 +85,7 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 	ArrowSchema abi_arrow_schema;
 	std::vector<std::shared_ptr<arrow::RecordBatch>> batches_result;
 	auto timezone_config = duckdb::QueryResult::GetConfigTimezone(*result);
-	duckdb::QueryResult::ToArrowSchema(&abi_arrow_schema, result->types, result->names, timezone_config);
+	duckdb::ArrowConverter::ToArrowSchema(&abi_arrow_schema, result->types, result->names, timezone_config);
 	auto result_schema = arrow::ImportSchema(&abi_arrow_schema);
 
 	while (true) {
@@ -93,8 +93,9 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 		if (!data_chunk || data_chunk->size() == 0) {
 			break;
 		}
+		data_chunk->Verify();
 		ArrowArray arrow_array;
-		data_chunk->ToArrowArray(&arrow_array);
+		duckdb::ArrowConverter::ToArrowArray(*data_chunk, &arrow_array);
 		auto batch = arrow::ImportRecordBatch(&arrow_array, result_schema.ValueUnsafe());
 		batches_result.push_back(batch.MoveValueUnsafe());
 	}
@@ -109,7 +110,7 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 			break;
 		}
 		ArrowArray arrow_array;
-		data_chunk->ToArrowArray(&arrow_array);
+		duckdb::ArrowConverter::ToArrowArray(*data_chunk, &arrow_array);
 		auto batch = arrow::ImportRecordBatch(&arrow_array, result_schema.ValueUnsafe());
 		batches_result.push_back(batch.MoveValueUnsafe());
 	}
@@ -126,7 +127,7 @@ TEST_CASE("Test Parquet File NaN", "[arrow]") {
 	auto table = ReadParquetFile(parquet_path);
 
 	auto result = ArrowToDuck(conn, *table);
-	REQUIRE(result->success);
+	REQUIRE(!result->HasError());
 	REQUIRE(CHECK_COLUMN(result, 0, {-1, std::numeric_limits<double>::infinity(), 2.5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"foo", "bar", "baz"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {true, false, true}));
@@ -143,7 +144,7 @@ TEST_CASE("Test Parquet File Fixed Size Binary", "[arrow]") {
 	auto table = ReadParquetFile(parquet_path);
 
 	auto result = ArrowToDuck(conn, *table);
-	REQUIRE(result->success);
+	REQUIRE(!result->HasError());
 	REQUIRE(
 	    CHECK_COLUMN(result, 0, {"\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\x09\\x0A\\x0B\\x0C\\x0D\\x0E\\x0F"}));
 }
@@ -164,28 +165,70 @@ TEST_CASE("Test Parquet Long Files", "[arrow]") {
 }
 
 TEST_CASE("Test Parquet Files", "[arrow]") {
+	std::vector<std::string> data;
+	// data.emplace_back("data/parquet-testing/7-set.snappy.arrow2.parquet");
+	data.emplace_back("data/parquet-testing/adam_genotypes.parquet");
+	data.emplace_back("data/parquet-testing/apkwan.parquet");
+	data.emplace_back("data/parquet-testing/aws1.snappy.parquet");
+	// not supported by arrow
+	// data.emplace_back("data/parquet-testing/aws2.parquet");
+	data.emplace_back("data/parquet-testing/binary_string.parquet");
+	data.emplace_back("data/parquet-testing/blob.parquet");
+	data.emplace_back("data/parquet-testing/boolean_stats.parquet");
+	// arrow can't read this
+	// data.emplace_back("data/parquet-testing/broken-arrow.parquet");
+	data.emplace_back("data/parquet-testing/bug1554.parquet");
+	data.emplace_back("data/parquet-testing/bug1588.parquet");
+	data.emplace_back("data/parquet-testing/bug1589.parquet");
+	data.emplace_back("data/parquet-testing/bug1618_struct_strings.parquet");
+	data.emplace_back("data/parquet-testing/bug2267.parquet");
+	data.emplace_back("data/parquet-testing/bug2557.parquet");
+	// slow
+	// data.emplace_back("data/parquet-testing/bug687_nulls.parquet");
+	// data.emplace_back("data/parquet-testing/complex.parquet");
+	data.emplace_back("data/parquet-testing/data-types.parquet");
+	data.emplace_back("data/parquet-testing/date.parquet");
+	data.emplace_back("data/parquet-testing/date_stats.parquet");
+	data.emplace_back("data/parquet-testing/decimal_stats.parquet");
+	data.emplace_back("data/parquet-testing/decimals.parquet");
+	data.emplace_back("data/parquet-testing/enum.parquet");
+	data.emplace_back("data/parquet-testing/filter_bug1391.parquet");
+	//	data.emplace_back("data/parquet-testing/fixed.parquet");
+	// slow
+	// data.emplace_back("data/parquet-testing/leftdate3_192_loop_1.parquet");
+	data.emplace_back("data/parquet-testing/lineitem-top10000.gzip.parquet");
+	data.emplace_back("data/parquet-testing/manyrowgroups.parquet");
+	data.emplace_back("data/parquet-testing/manyrowgroups2.parquet");
+	data.emplace_back("data/parquet-testing/map.parquet");
+	// Can't roundtrip NaNs
+	// data.emplace_back("data/parquet-testing/nan-float.parquet");
+	// null byte in file
+	// data.emplace_back("data/parquet-testing/nullbyte.parquet");
+	// data.emplace_back("data/parquet-testing/nullbyte_multiple.parquet");
+	// borked
+	// data.emplace_back("data/parquet-testing/p2.parquet");
+	// data.emplace_back("data/parquet-testing/p2strings.parquet");
+	data.emplace_back("data/parquet-testing/pandas-date.parquet");
+	data.emplace_back("data/parquet-testing/signed_stats.parquet");
+	data.emplace_back("data/parquet-testing/silly-names.parquet");
+	// borked
+	// data.emplace_back("data/parquet-testing/simple.parquet");
+	// data.emplace_back("data/parquet-testing/sorted.zstd_18_131072_small.parquet");
+	data.emplace_back("data/parquet-testing/struct.parquet");
+	data.emplace_back("data/parquet-testing/struct_skip_test.parquet");
+	data.emplace_back("data/parquet-testing/timestamp-ms.parquet");
+	data.emplace_back("data/parquet-testing/timestamp.parquet");
+	data.emplace_back("data/parquet-testing/unsigned.parquet");
+	data.emplace_back("data/parquet-testing/unsigned_stats.parquet");
+	data.emplace_back("data/parquet-testing/userdata1.parquet");
+	data.emplace_back("data/parquet-testing/varchar_stats.parquet");
+	data.emplace_back("data/parquet-testing/zstd.parquet");
 
-	std::vector<std::string> skip {"aws2.parquet"};    //! Not supported by arrow
-	skip.emplace_back("broken-arrow.parquet");         //! Arrow can't read this
-	skip.emplace_back("nan-float.parquet");            //! Can't roundtrip NaNs
-	skip.emplace_back("fixed.parquet");                //! Can't roundtrip Fixed-size Binaries
-	skip.emplace_back("leftdate3_192_loop_1.parquet"); //! This is just crazy slow
-	skip.emplace_back("bug687_nulls.parquet");         //! This is just crazy slow
-	skip.emplace_back("nullbyte.parquet");             //! Null byte in file
-	skip.emplace_back("nullbyte_multiple.parquet");    //! Null byte in file
-	// arrow does not like (some of) these files
-	skip.emplace_back("7-set.snappy.arrow2.parquet");
-	skip.emplace_back("complex.parquet");
-	skip.emplace_back("p2.parquet");
-	skip.emplace_back("p2strings.parquet");
-	skip.emplace_back("simple.parquet");
+	std::vector<std::string> skip;
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
-	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
-
-	auto parquet_files = fs.Glob("data/parquet-testing/*.parquet");
-	for (auto &parquet_path : parquet_files) {
+	for (auto &parquet_path : data) {
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
 }

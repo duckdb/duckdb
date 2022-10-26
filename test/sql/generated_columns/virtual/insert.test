@@ -1,0 +1,75 @@
+# name: test/sql/generated_columns/virtual/insert.test
+# description: Test that all types of inserting work
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (
+    foo INTEGER,
+    bar INTEGER GENERATED ALWAYS AS (foo+1) VIRTUAL,
+    foobar INTEGER DEFAULT 5
+);
+
+#Inserting into a generated column by name
+statement error
+INSERT INTO test (bar) VALUES (5)
+
+#Using column names
+statement ok
+INSERT INTO test (foo, foobar) VALUES (1, 10);
+
+#Relying on DEFAULT constraint
+statement ok
+INSERT INTO test (foo) VALUES (12)
+
+query III
+SELECT * FROM test
+----
+1	2	10
+12	13	5
+
+#Using VALUES with not enough values - cant rely on DEFAULT here
+statement error
+INSERT INTO test VALUES (22)
+
+#Using VALUES correctly
+statement ok
+INSERT INTO test VALUES (22, 10);
+
+#Using VALUES incorrectly, too many values
+statement error
+INSERT INTO test VALUES (22, 10, 10)
+
+statement ok
+CREATE TABLE tbl (
+    x INTEGER,
+    y BOOLEAN AS (x),
+);
+
+statement ok
+INSERT INTO tbl VALUES (5);
+
+query II
+SELECT * FROM tbl;
+----
+5	True
+
+statement ok
+INSERT INTO tbl VALUES (0);
+
+query II
+SELECT * FROM tbl;
+----
+5	True
+0	False
+
+statement ok
+CREATE TABLE tbl2 (
+	x TEXT,
+	y BOOLEAN AS (x),
+);
+
+statement error
+INSERT INTO tbl2 VALUES ('test');

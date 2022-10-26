@@ -13,8 +13,13 @@
 
 namespace duckdb {
 
+SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
+                           case_insensitive_map_t<idx_t> alias_map)
+    : ExpressionBinder(binder, context), inside_window(false), node(node), info(info), alias_map(move(alias_map)) {
+}
+
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
-    : ExpressionBinder(binder, context), inside_window(false), node(node), info(info) {
+    : SelectBinder(binder, context, node, info, case_insensitive_map_t<idx_t>()) {
 }
 
 BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
@@ -25,6 +30,8 @@ BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 		return BindGroup(expr, depth, group_index);
 	}
 	switch (expr.expression_class) {
+	case ExpressionClass::COLUMN_REF:
+		return BindColumnRef(expr_ptr, depth);
 	case ExpressionClass::DEFAULT:
 		return BindResult("SELECT clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
@@ -59,6 +66,37 @@ idx_t SelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	}
 #endif
 	return DConstants::INVALID_INDEX;
+}
+
+BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth) {
+	// first try to bind the column reference regularly
+	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
+	if (!result.HasError()) {
+		return result;
+	}
+	// binding failed
+	// check in the alias map
+	auto &colref = (ColumnRefExpression &)**expr_ptr;
+	if (!colref.IsQualified()) {
+		auto alias_entry = alias_map.find(colref.column_names[0]);
+		if (alias_entry != alias_map.end()) {
+			// found entry!
+			auto index = alias_entry->second;
+			if (index >= node.select_list.size()) {
+				throw BinderException("Column \"%s\" referenced that exists in the SELECT clause - but this column "
+				                      "cannot be referenced before it is defined",
+				                      colref.column_names[0]);
+			}
+			if (node.select_list[index]->HasSideEffects()) {
+				throw BinderException("Alias \"%s\" referenced in a SELECT clause - but the expression has side "
+				                      "effects. This is not yet supported.",
+				                      colref.column_names[0]);
+			}
+			return BindResult(node.select_list[index]->Copy());
+		}
+	}
+	// entry was not found in the alias map: return the original error
+	return result;
 }
 
 BindResult SelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t depth) {

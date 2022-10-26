@@ -1,5 +1,8 @@
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression_binder/update_binder.hpp"
@@ -8,12 +11,10 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
-#include "duckdb/planner/constraints/bound_check_constraint.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/tableref/bound_crossproductref.hpp"
+#include "duckdb/storage/data_table.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -43,9 +44,9 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
 			auto &column = table.columns[check_column_id];
 			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    column.type, ColumnBinding(proj.table_index, proj.expressions.size())));
+			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    column.type, ColumnBinding(get.table_index, get.column_ids.size())));
+			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
 			get.column_ids.push_back(check_column_id);
 			update.columns.push_back(check_column_id);
 		}
@@ -101,7 +102,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 
 	// we also convert any updates on LIST columns into delete + insert
 	for (auto &col : update.columns) {
-		if (!TypeSupportsRegularUpdate(table.columns[col].type)) {
+		if (!TypeSupportsRegularUpdate(table.columns[col].Type())) {
 			update.update_is_del_and_insert = true;
 			break;
 		}
@@ -130,6 +131,9 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	}
 	auto &table_binding = (BoundBaseTableRef &)*bound_table;
 	auto table = table_binding.table;
+
+	// Add CTEs as bindable
+	AddCTEMap(stmt.cte_map);
 
 	if (stmt.from_table) {
 		BoundCrossProductRef bound_crossproduct;
@@ -178,16 +182,19 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 			throw BinderException("Referenced update column %s not found in table!", colname);
 		}
 		auto &column = table->GetColumn(colname);
-		if (std::find(update->columns.begin(), update->columns.end(), column.oid) != update->columns.end()) {
+		if (column.Generated()) {
+			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
+		}
+		if (std::find(update->columns.begin(), update->columns.end(), column.StorageOid()) != update->columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
-		update->columns.push_back(column.oid);
+		update->columns.push_back(column.StorageOid());
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
-			update->expressions.push_back(make_unique<BoundDefaultExpression>(column.type));
+			update->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));
 		} else {
 			UpdateBinder binder(*this, context);
-			binder.target_type = column.type;
+			binder.target_type = column.Type();
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(&bound_expr, &root);
 

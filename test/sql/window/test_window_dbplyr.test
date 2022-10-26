@@ -2,8 +2,6 @@
 # description: Ensure dbplyr crash with ORDER BY under window stays fixed
 # group: [window]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 

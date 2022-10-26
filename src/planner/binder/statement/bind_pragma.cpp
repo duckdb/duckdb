@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/logical_pragma.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -11,11 +12,12 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	// bind the pragma function
 	auto entry = catalog.GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->name, false);
 	string error;
-	idx_t bound_idx = Function::BindFunction(entry->name, entry->functions, *stmt.info, error);
+	FunctionBinder function_binder(context);
+	idx_t bound_idx = function_binder.BindFunction(entry->name, entry->functions, *stmt.info, error);
 	if (bound_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(stmt.stmt_location, error));
 	}
-	auto &bound_function = entry->functions[bound_idx];
+	auto bound_function = entry->functions.GetFunctionByOffset(bound_idx);
 	if (!bound_function.function) {
 		throw BinderException("PRAGMA function does not have a function specified");
 	}

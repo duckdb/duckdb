@@ -1,4 +1,5 @@
 import pytest
+import duckdb
 
 class Test3324(object):
 
@@ -21,7 +22,7 @@ class Test3324(object):
                 where 
                     column1 = $1""").fetch_df()
 
-        with pytest.raises(Exception, match="Unexpected prepared parameter"):
+        with pytest.raises(duckdb.BinderException, match="Unexpected prepared parameter"):
             duckdb_cursor.execute("""execute v1(?)""",'test1').fetch_df()
-        with pytest.raises(Exception, match="Unexpected prepared parameter"):
+        with pytest.raises(duckdb.BinderException, match="Unexpected prepared parameter"):
             duckdb_cursor.execute("""execute v1(?)""",('test1',)).fetch_df()

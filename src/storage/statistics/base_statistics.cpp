@@ -68,6 +68,14 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 	}
 }
 
+idx_t BaseStatistics::GetDistinctCount() {
+	if (distinct_stats) {
+		auto &d_stats = (DistinctStatistics &)*distinct_stats;
+		return d_stats.GetCount();
+	}
+	return 0;
+}
+
 unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type, StatisticsType stats_type) {
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
@@ -196,8 +204,7 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 }
 
 void BaseStatistics::Verify(Vector &vector, idx_t count) const {
-	SelectionVector owned_sel;
-	auto sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+	auto sel = FlatVector::IncrementalSelectionVector();
 	Verify(vector, *sel, count);
 }
 

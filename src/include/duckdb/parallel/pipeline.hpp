@@ -11,7 +11,6 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/atomic.hpp"
 
@@ -44,7 +43,6 @@ public:
 
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &GetUnionPipelines(Executor &executor);
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &GetChildPipelines(Executor &executor);
-	unordered_map<Pipeline *, vector<Pipeline *>> &GetChildDependencies(Executor &executor);
 
 	PhysicalOperator *GetPipelineSource(Pipeline &pipeline);
 	PhysicalOperator *GetPipelineSink(Pipeline &pipeline);
@@ -90,12 +88,18 @@ public:
 		return sink;
 	}
 
+	PhysicalOperator *GetSource() {
+		return source;
+	}
+
 	//! Returns whether any of the operators in the pipeline care about preserving insertion order
 	bool IsOrderDependent() const;
 
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;
+	//! Whether or not the pipeline has been initialized
+	atomic<bool> initialized;
 	//! The source of this pipeline
 	PhysicalOperator *source;
 	//! The chain of intermediate operators

@@ -8,7 +8,6 @@
 %type <defelt> generic_option_elem
 %type <ival> key_update
 %type <ival> key_actions
-%type <list> create_generic_options
 %type <oncommit> OnCommitOption
 %type <list> reloptions
 %type <boolean> opt_no_inherit
@@ -23,7 +22,6 @@
 %type <str> generic_option_name
 %type <ival> ConstraintAttributeElem
 %type <node> columnDef
-%type <list> generic_option_list
 %type <list> def_list
 %type <str> index_name
 %type <node> TableElement
@@ -37,7 +35,8 @@
 %type <defelt> reloption_elem
 %type <list> columnList columnList_opt_comma
 %type <typnam> func_type
-%type <node> ConstraintElem
+%type <constr> GeneratedColumnType opt_GeneratedColumnType
+%type <node> ConstraintElem GeneratedConstraintElem
 %type <list> TableElementList
 %type <ival> key_match
 %type <node> TableLikeClause

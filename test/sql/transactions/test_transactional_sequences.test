@@ -2,6 +2,9 @@
 # description: Test that sequences are transactional
 # group: [transactions]
 
+require skip_reload
+
+
 # start a transaction for both nodes
 statement ok con1
 BEGIN TRANSACTION

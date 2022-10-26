@@ -160,33 +160,39 @@ public:
 		}
 		return result;
 	}
-	//! Wrapper around yyjson_mut_write so we don't have to free the malloc'ed char[]
-	static unique_ptr<char, void (*)(void *)> MutWrite(yyjson_mut_doc *doc, idx_t &len) {
+	//! Some wrappers around writes so we don't have to free the malloc'ed char[]
+	static inline unique_ptr<char, void (*)(void *)> WriteVal(yyjson_val *val, idx_t &len) {
+		return unique_ptr<char, decltype(free) *>(
+		    reinterpret_cast<char *>(yyjson_val_write(val, WRITE_FLAG, (size_t *)&len)), free);
+	}
+	static inline unique_ptr<char, void (*)(void *)> WriteVal(yyjson_mut_val *val, idx_t &len) {
+		return unique_ptr<char, decltype(free) *>(
+		    reinterpret_cast<char *>(yyjson_mut_val_write(val, WRITE_FLAG, (size_t *)&len)), free);
+	}
+	static unique_ptr<char, void (*)(void *)> WriteMutDoc(yyjson_mut_doc *doc, idx_t &len) {
 		return unique_ptr<char, decltype(free) *>(
 		    reinterpret_cast<char *>(yyjson_mut_write(doc, WRITE_FLAG, (size_t *)&len)), free);
 	}
-	//! Write JSON value to string_t
-	static inline string_t WriteVal(yyjson_mut_doc *doc, Vector &vector) {
-		idx_t len;
-		auto data = MutWrite(doc, len);
-		auto result = StringVector::AddString(vector, data.get(), len);
-		return result;
-	}
+	//! Vector writes
 	static inline string_t WriteVal(yyjson_val *val, Vector &vector) {
-		// Create mutable copy of the read val
-		auto mut_doc = CreateDocument();
-		auto *mut_val = yyjson_val_mut_copy(*mut_doc, val);
-		yyjson_mut_doc_set_root(*mut_doc, mut_val);
-		auto result = WriteVal(*mut_doc, vector);
-		return result;
+		idx_t len;
+		auto data = WriteVal(val, len);
+		return StringVector::AddString(vector, data.get(), len);
+	}
+	static inline string_t WriteVal(yyjson_mut_val *val, Vector &vector) {
+		idx_t len;
+		auto data = WriteVal(val, len);
+		return StringVector::AddString(vector, data.get(), len);
+	}
+	static inline string_t WriteDoc(yyjson_mut_doc *doc, Vector &vector) {
+		idx_t len;
+		auto data = WriteMutDoc(doc, len);
+		return StringVector::AddString(vector, data.get(), len);
 	}
 	//! Throw an error with the printed yyjson_val
 	static void ThrowValFormatError(string error_string, yyjson_val *val) {
-		auto mut_doc = JSONCommon::CreateDocument();
-		auto *mut_val = yyjson_val_mut_copy(*mut_doc, val);
-		yyjson_mut_doc_set_root(*mut_doc, mut_val);
 		idx_t len;
-		auto data = JSONCommon::MutWrite(*mut_doc, len);
+		auto data = WriteVal(val, len);
 		error_string = StringUtil::Format(error_string, string(data.get(), len));
 		throw InvalidInputException(error_string);
 	}
@@ -285,6 +291,9 @@ public:
 				    }
 			    });
 		}
+		if (args.AllConstant()) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 	}
 
 	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
@@ -299,9 +308,9 @@ public:
 		const idx_t num_paths = info.ptrs.size();
 		const idx_t list_size = count * num_paths;
 
-		VectorData input_data;
+		UnifiedVectorFormat input_data;
 		auto &input_vector = args.data[0];
-		input_vector.Orrify(count, input_data);
+		input_vector.ToUnifiedFormat(count, input_data);
 		auto inputs = (string_t *)input_data.data;
 
 		ListVector::Reserve(result, list_size);
@@ -336,6 +345,10 @@ public:
 			offset += num_paths;
 		}
 		ListVector::SetListSize(result, offset);
+
+		if (args.AllConstant()) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 	}
 
 private:

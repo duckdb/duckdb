@@ -10,6 +10,10 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -32,9 +36,13 @@ class FileMetaData;
 namespace duckdb {
 class Allocator;
 class ClientContext;
-class ChunkCollection;
 class BaseStatistics;
 class TableFilterSet;
+
+struct ParquetReaderPrefetchConfig {
+	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
+	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
+};
 
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
@@ -51,6 +59,9 @@ struct ParquetReaderScanState {
 
 	ResizeableBuffer define_buf;
 	ResizeableBuffer repeat_buf;
+
+	bool prefetch_mode = false;
+	bool current_group_prefetched = false;
 };
 
 struct ParquetOptions {
@@ -59,6 +70,12 @@ struct ParquetOptions {
 	explicit ParquetOptions(ClientContext &context);
 
 	bool binary_as_string = false;
+	bool filename = false;
+	bool hive_partitioning = false;
+
+public:
+	void Serialize(FieldWriter &writer) const;
+	void Deserialize(FieldReader &reader);
 };
 
 class ParquetReader {
@@ -115,6 +132,10 @@ private:
 	                                               idx_t depth, idx_t max_define, idx_t max_repeat,
 	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
+	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
+	idx_t GetGroupOffset(ParquetReaderScanState &state);
+	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size
+	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
 

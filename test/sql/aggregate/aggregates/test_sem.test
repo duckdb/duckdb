@@ -37,8 +37,6 @@ select  sem(v),sem(v2) from aggr
 3.577709	5.663398
 
 # Window Function
-require vector_size 512
-
 query I rowsort
 select  sem(v) over (partition by k)
     from aggr;

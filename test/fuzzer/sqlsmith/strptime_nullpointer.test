@@ -1,0 +1,15 @@
+# name: test/fuzzer/sqlsmith/strptime_nullpointer.test
+# description: Fuzzer #45: nullpointer in strptime call
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 BOOLEAN DEFAULT(true), c1 VARCHAR);
+
+statement ok
+INSERT INTO t0(c0, c1) VALUES (534898561, 1156365055), (524523641, '0.46680525959210206');
+
+statement error
+SELECT NULL FROM t0 ORDER BY strptime(NOT(t0.c0 BETWEEN t0.rowid AND t0.rowid), 1407974306)

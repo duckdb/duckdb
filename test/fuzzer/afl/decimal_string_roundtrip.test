@@ -1,0 +1,46 @@
+# name: test/fuzzer/afl/decimal_string_roundtrip.test
+# description: Decimal to string statement verification assertion error
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT .0
+----
+.0
+
+query I
+SELECT .123456
+----
+.123456
+
+query I
+SELECT .1234567890123
+----
+.1234567890123
+
+query I
+SELECT .123456789012345678901234567890
+----
+.123456789012345678901234567890
+
+query I
+SELECT .0::VARCHAR
+----
+.0
+
+query I
+SELECT .123456::VARCHAR
+----
+.123456
+
+query I
+SELECT .1234567890123::VARCHAR
+----
+.1234567890123
+
+query I
+SELECT .123456789012345678901234567890::VARCHAR
+----
+.123456789012345678901234567890

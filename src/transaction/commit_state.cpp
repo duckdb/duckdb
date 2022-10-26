@@ -17,8 +17,8 @@
 
 namespace duckdb {
 
-CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
-    : log(log), commit_id(commit_id), current_table_info(nullptr) {
+CommitState::CommitState(ClientContext &context, transaction_t commit_id, WriteAheadLog *log)
+    : log(log), commit_id(commit_id), current_table_info(nullptr), context(context) {
 }
 
 void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
@@ -146,7 +146,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 	if (!delete_chunk) {
 		delete_chunk = make_unique<DataChunk>();
 		vector<LogicalType> delete_types = {LogicalType::ROW_TYPE};
-		delete_chunk->Initialize(delete_types);
+		delete_chunk->Initialize(Allocator::DefaultAllocator(), delete_types);
 	}
 	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
 	for (idx_t i = 0; i < info->count; i++) {
@@ -174,7 +174,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	update_types.emplace_back(LogicalType::ROW_TYPE);
 
 	update_chunk = make_unique<DataChunk>();
-	update_chunk->Initialize(update_types);
+	update_chunk->Initialize(Allocator::DefaultAllocator(), update_types);
 
 	// fetch the updated values from the base segment
 	info->segment->FetchCommitted(info->vector_index, update_chunk->data[0]);

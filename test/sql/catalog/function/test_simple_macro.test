@@ -94,13 +94,13 @@ DROP FUNCTION two;
 
 # b cannot be found
 statement error
-CREATE MACRO add(a) AS a + b
+CREATE MACRO add_macro(a) AS a + b
 
 statement ok
-CREATE MACRO add(a, b) AS a + b
+CREATE MACRO add_macro(a, b) AS a + b
 
 query T
-SELECT add(a,a) FROM integers
+SELECT add_macro(a,a) FROM integers
 ----
 2
 
@@ -111,7 +111,7 @@ statement ok
 INSERT INTO floats VALUES (0.5)
 
 query T
-SELECT add(a,2) + add(3,b) FROM integers, floats
+SELECT add_macro(a,2) + add_macro(3,b) FROM integers, floats
 ----
 6.5
 
@@ -177,10 +177,10 @@ statement ok
 CREATE SCHEMA macros
 
 statement ok
-CREATE MACRO macros.add(a, b) AS a + b
+CREATE MACRO macros.add_macro(a, b) AS a + b
 
 query T
-SELECT macros.add(40,2)
+SELECT macros.add_macro(40,2)
 ----
 42
 
@@ -276,7 +276,7 @@ statement error
 SELECT two_default_params(b := 5, b := 3)
 
 statement error
-CREATE MACRO macros.add(a, b) AS a + b
+CREATE MACRO macros.add_macro(a, b) AS a + b
 
 statement error
 CREATE MACRO my_macro(a.b) AS 42;

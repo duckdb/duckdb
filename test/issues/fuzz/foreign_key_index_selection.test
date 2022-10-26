@@ -10,7 +10,7 @@ CREATE TABLE s1(t0 INTEGER, a TEXT, b TEXT);
 
 # key does not exist
 statement error
-CREATE TABLE c2(c0 INTEGER, c1 INTEgiGER UNIQUE, FOREIGN KEY (c0) REFERENCES s1(tz));
+CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s1(tz));
 
 # key does not have an index on it
 statement error

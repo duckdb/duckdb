@@ -82,6 +82,9 @@ class TestCategory(object):
     def test_category_string_null(self, duckdb_cursor):
         check_category_equal(['foo','bla',None,'zoo', 'foo', 'foo',None, 'bla'])
 
+    def test_category_string_null_bug_4747(self, duckdb_cursor):
+        check_category_equal([str(i) for i in range(160)] + [None])
+
     def test_categorical_fetchall(self, duckdb_cursor):
         df_in = pd.DataFrame({
         'x': pd.Categorical(['foo','bla',None,'zoo', 'foo', 'foo',None, 'bla'], ordered=True),

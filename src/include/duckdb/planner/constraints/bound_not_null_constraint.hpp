@@ -18,7 +18,7 @@ public:
 	}
 
 	//! Column index this constraint pertains to
-	column_t index;
+	storage_t index;
 };
 
 } // namespace duckdb

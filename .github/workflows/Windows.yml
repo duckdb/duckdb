@@ -17,10 +17,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
@@ -42,20 +38,24 @@ jobs:
         python-version: '3.7'
 
     - name: Build
+      shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
     - name: Test
+      shell: bash
       run: test/Release/unittest.exe
 
     - name: Tools Test
+      shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
         java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Deploy
+      shell: bash
       run: |
         python scripts/amalgamation.py
         choco install zip -y --force
@@ -75,6 +75,7 @@ jobs:
 
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
+      shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
 
  win-release-32:
@@ -92,18 +93,22 @@ jobs:
         python-version: '3.7'
 
     - name: Build
+      shell: bash
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
         cmake --build . --config Release
 
     - name: Test
+      shell: bash
       run: test/Release/unittest.exe
 
     - name: Tools Test
+      shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
 
     - name: Deploy
+      shell: bash
       run: |
         python scripts/amalgamation.py
         choco install zip -y --force
@@ -124,9 +129,6 @@ jobs:
      name: MingW (64 Bit)
      runs-on: windows-latest
      needs: win-release-64
-     defaults:
-       run:
-         shell: msys2 {0}
      steps:
        - uses: actions/checkout@v3
        - uses: msys2/setup-msys2@v2
@@ -137,14 +139,17 @@ jobs:
        # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
        - name: Put MSYS2_MinGW64 on PATH
          # there is not yet an environment variable for this path from msys2/setup-msys2
+         shell: msys2 {0}
          run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
 
        - name: Build
+         shell: msys2 {0}
          run: |
            cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_PARQUET_EXTENSION=1
            cmake --build . --config Release
 
        - name: Test
+         shell: msys2 {0}
          run: |
            cp src/libduckdb.dll .
            test/unittest.exe
@@ -162,16 +167,14 @@ jobs:
       with:
         python-version: '3.7'
 
-    - name: Install Git
-      run: |
-        choco install git -y --force
-
     - name: Build
+      shell: bash
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
     - name: Install ODBC Driver
+      shell: bash
       run:  |
         tools/odbc/bin/Release/odbc_install.exe //CI //Install
         Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources"
@@ -179,6 +182,7 @@ jobs:
         Reg Query "HKLM\SOFTWARE\ODBC\ODBCINST.INI\DuckDB Driver"
 
     - name: Enable ODBC Trace HKCU
+      shell: bash
       run: |
         REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //f
         REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v Trace //t REG_SZ //d 1
@@ -188,11 +192,13 @@ jobs:
         Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
 
     - name: Install psqlodbc
+      shell: bash
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout 89726c417d1ea8b4080e486fe240725a79eca0d6 && make release)
+        (cd psqlodbc && git checkout 70fa016bde0b326d98803742aa570a1e5b3f6e89 && make release)
 
     - name: Test psqlodbc
+      shell: bash
       run: |
         cd psqlodbc
         export PSQLODBC_TEST_DSN=DuckDB
@@ -200,26 +206,13 @@ jobs:
 
     - name: Print ODBC trace on failure
       if: ${{ failure() }}
+      shell: bash
       run: cat ODBC_TRACE.log
 
  win-extensions-64:
    name: Windows Extensions (64-bit)
    runs-on: windows-latest
    needs: win-release-64
-   env:
-     BUILD_VISUALIZER: 1
-     BUILD_ICU: 1
-     BUILD_TPCH: 1
-     BUILD_TPCDS: 1
-     BUILD_FTS: 1
-     BUILD_HTTPFS: 1
-     BUILD_JSON: 1
-     BUILD_EXCEL: 1
-     STATIC_OPENSSL: 1
-     BUILD_SUBSTRAIT_EXTENSION: 1
-     AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-     AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-     AWS_DEFAULT_REGION: us-east-1
    steps:
      - uses: actions/checkout@v3
        with:
@@ -230,24 +223,16 @@ jobs:
          python-version: '3.7'
 
      - name: Install OpenSSL
+       shell: bash
        run: |
          choco install openssl -y --force
 
-     - name: Build
-       run: |
-         make
-         rm build/release/src/Release/duckdb*
-
-     - name: Uninstall OpenSSL
-       run: |
-         choco uninstall openssl -y --force
-
-     - name: Deploy
-       run: |
-         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-           pip install awscli
-           ./scripts/extension-upload.sh windows_amd64
-           ./scripts/extension-upload-test.sh
-         else
-           ./scripts/extension-upload-test.sh local
-         fi
+     - uses: ./.github/actions/build_extensions
+       with:
+         deploy_as: windows_amd64
+         post_install: choco uninstall openssl -y --force
+         treat_warn_as_error: 0
+         s3_id: ${{ secrets.S3_ID }}
+         s3_key: ${{ secrets.S3_KEY }}
+         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+         python_name: python

@@ -23,12 +23,22 @@ public:
 	}
 };
 
-struct UnnestOperatorData : public FunctionOperatorData {
-	UnnestOperatorData() {
+struct UnnestGlobalState : public GlobalTableFunctionState {
+	UnnestGlobalState() {
+	}
+
+	vector<unique_ptr<Expression>> select_list;
+
+	idx_t MaxThreads() const override {
+		return GlobalTableFunctionState::MAX_THREADS;
+	}
+};
+
+struct UnnestLocalState : public LocalTableFunctionState {
+	UnnestLocalState() {
 	}
 
 	unique_ptr<OperatorState> operator_state;
-	vector<unique_ptr<Expression>> select_list;
 };
 
 static unique_ptr<FunctionData> UnnestBind(ClientContext &context, TableFunctionBindInput &input,
@@ -41,11 +51,18 @@ static unique_ptr<FunctionData> UnnestBind(ClientContext &context, TableFunction
 	return make_unique<UnnestBindData>(input.input_table_types[0]);
 }
 
-static unique_ptr<FunctionOperatorData> UnnestInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
-	auto &bind_data = (UnnestBindData &)*bind_data_p;
-	auto result = make_unique<UnnestOperatorData>();
-	result->operator_state = PhysicalUnnest::GetState(context);
+static unique_ptr<LocalTableFunctionState> UnnestLocalInit(ExecutionContext &context, TableFunctionInitInput &input,
+                                                           GlobalTableFunctionState *global_state) {
+	auto &gstate = (UnnestGlobalState &)*global_state;
+
+	auto result = make_unique<UnnestLocalState>();
+	result->operator_state = PhysicalUnnest::GetState(context, gstate.select_list);
+	return move(result);
+}
+
+static unique_ptr<GlobalTableFunctionState> UnnestInit(ClientContext &context, TableFunctionInitInput &input) {
+	auto &bind_data = (UnnestBindData &)*input.bind_data;
+	auto result = make_unique<UnnestGlobalState>();
 	auto ref = make_unique<BoundReferenceExpression>(bind_data.input_type, 0);
 	auto bound_unnest = make_unique<BoundUnnestExpression>(ListType::GetChildType(bind_data.input_type));
 	bound_unnest->child = move(ref);
@@ -53,14 +70,15 @@ static unique_ptr<FunctionOperatorData> UnnestInit(ClientContext &context, const
 	return move(result);
 }
 
-static OperatorResultType UnnestFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                         FunctionOperatorData *state_p, DataChunk &input, DataChunk &output) {
-	auto &state = (UnnestOperatorData &)*state_p;
-	return PhysicalUnnest::ExecuteInternal(context, input, output, *state.operator_state, state.select_list, false);
+static OperatorResultType UnnestFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
+                                         DataChunk &output) {
+	auto &state = (UnnestGlobalState &)*data_p.global_state;
+	auto &lstate = (UnnestLocalState &)*data_p.local_state;
+	return PhysicalUnnest::ExecuteInternal(context, input, output, *lstate.operator_state, state.select_list, false);
 }
 
 void UnnestTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction unnest_function("unnest", {LogicalTypeId::TABLE}, nullptr, UnnestBind, UnnestInit);
+	TableFunction unnest_function("unnest", {LogicalTypeId::TABLE}, nullptr, UnnestBind, UnnestInit, UnnestLocalInit);
 	unnest_function.in_out_function = UnnestFunction;
 	set.AddFunction(unnest_function);
 }

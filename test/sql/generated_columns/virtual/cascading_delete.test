@@ -1,0 +1,65 @@
+# name: test/sql/generated_columns/virtual/cascading_delete.test
+# description: Test the chain reaction effect of deleting a column that is a dependency of a generated column
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit as (price * amount_sold),
+	profit_total AS (total_profit),
+	dependent AS (profit_total),
+	also_dependent AS (profit_total * dependent),
+	dont_delete_me AS (amount_sold),
+);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+query IIIIIII
+SELECT * FROM unit;
+----
+5	4	20	20	20	400	4
+
+# Is a dependency of 1 or more columns - CASCADE required
+statement error
+ALTER TABLE unit DROP COLUMN price;
+
+statement ok
+ALTER TABLE unit DROP COLUMN price CASCADE;
+
+query II
+SELECT * FROM unit;
+----
+4	4
+
+statement ok
+INSERT INTO unit VALUES (5)
+
+query II
+SELECT * FROM unit;
+----
+4	4
+5	5
+
+statement ok
+ALTER TABLE unit DROP COLUMN dont_delete_me;
+
+query I
+SELECT * FROM unit;
+----
+4
+5
+
+# Cant delete last column
+statement error
+ALTER TABLE unit DROP COLUMN amount_sold CASCADE;
+
+query I
+SELECT * FROM unit;
+----
+4
+5

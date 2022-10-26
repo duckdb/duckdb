@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _THRIFT_PROTOCOL_TPROTOCOL_H_
-#define _THRIFT_PROTOCOL_TPROTOCOL_H_ 1
+#ifndef _DUCKDB_THRIFT_PROTOCOL_TPROTOCOL_H_
+#define _DUCKDB_THRIFT_PROTOCOL_TPROTOCOL_H_ 1
 
 #ifdef _WIN32
 // Need to come before any Windows.h includes
@@ -45,37 +45,39 @@
 // but that doesn't work.
 // For a pretty in-depth explanation of the problem, see
 // http://cellperformance.beyond3d.com/articles/2006/06/understanding-strict-aliasing.html
+namespace duckdb_apache { namespace thrift {
 template <typename To, typename From>
 static inline To bitwise_cast(From from) {
-  static_assert(sizeof(From) == sizeof(To), "sizeof(From) == sizeof(To)");
+	static_assert(sizeof(From) == sizeof(To), "sizeof(From) == sizeof(To)");
 
-  // BAD!!!  These are all broken with -O2.
-  //return *reinterpret_cast<To*>(&from);  // BAD!!!
-  //return *static_cast<To*>(static_cast<void*>(&from));  // BAD!!!
-  //return *(To*)(void*)&from;  // BAD!!!
+	// BAD!!!  These are all broken with -O2.
+	// return *reinterpret_cast<To*>(&from);  // BAD!!!
+	// return *static_cast<To*>(static_cast<void*>(&from));  // BAD!!!
+	// return *(To*)(void*)&from;  // BAD!!!
 
-  // Super clean and paritally blessed by section 3.9 of the standard.
-  //unsigned char c[sizeof(from)];
-  //memcpy(c, &from, sizeof(from));
-  //To to;
-  //memcpy(&to, c, sizeof(c));
-  //return to;
+	// Super clean and paritally blessed by section 3.9 of the standard.
+	// unsigned char c[sizeof(from)];
+	// memcpy(c, &from, sizeof(from));
+	// To to;
+	// memcpy(&to, c, sizeof(c));
+	// return to;
 
-  // Slightly more questionable.
-  // Same code emitted by GCC.
-  //To to;
-  //memcpy(&to, &from, sizeof(from));
-  //return to;
+	// Slightly more questionable.
+	// Same code emitted by GCC.
+	// To to;
+	// memcpy(&to, &from, sizeof(from));
+	// return to;
 
-  // Technically undefined, but almost universally supported,
-  // and the most efficient implementation.
-  union {
-    From f;
-    To t;
-  } u;
-  u.f = from;
-  return u.t;
+	// Technically undefined, but almost universally supported,
+	// and the most efficient implementation.
+	union {
+		From f;
+		To t;
+	} u;
+	u.f = from;
+	return u.t;
 }
+}} // namespace duckdb_apache::thrift
 
 
 #ifdef HAVE_SYS_PARAM_H
@@ -761,4 +763,4 @@ uint32_t skip(Protocol_& prot, TType type) {
 
 }}} // duckdb_apache::thrift::protocol
 
-#endif // #define _THRIFT_PROTOCOL_TPROTOCOL_H_ 1
+#endif // #define _DUCKDB_THRIFT_PROTOCOL_TPROTOCOL_H_ 1

@@ -1,0 +1,23 @@
+# name: test/issues/general/test_4625.test
+# description: Issue 4625: Address boundary error when using PARTITION BY
+# group: [general]
+
+statement ok
+CREATE TABLE "crash"
+("amount" "FLOAT",
+ "account" "TEXT");
+
+statement ok
+INSERT INTO "crash"
+VALUES
+ (1000, '123456789012'),
+ (1000, '1234567890123');
+
+query T
+SELECT SUM("amount") OVER (PARTITION BY "account"
+                           ORDER BY "account" ASC
+                           ROWS CURRENT ROW)
+FROM "crash";
+----
+1000.0
+1000.0

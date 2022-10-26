@@ -35,9 +35,9 @@ unique_ptr<FunctionData> StatsBind(ClientContext &context, ScalarFunction &bound
 	return make_unique<StatsBindData>();
 }
 
-static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                      FunctionData *bind_data,
-                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &bind_data = input.bind_data;
 	if (child_stats[0]) {
 		auto &info = (StatsBindData &)*bind_data;
 		info.stats = child_stats[0]->ToString();
@@ -46,8 +46,11 @@ static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, Bo
 }
 
 void StatsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("stats", {LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, true, StatsBind,
-	                               nullptr, StatsPropagateStats));
+	ScalarFunction stats("stats", {LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, StatsBind, nullptr,
+	                     StatsPropagateStats);
+	stats.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	stats.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction(stats);
 }
 
 } // namespace duckdb

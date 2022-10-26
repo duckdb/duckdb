@@ -1,10 +1,18 @@
+if(${EXIT_TIME_DESTRUCTORS_WARNING})
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
+endif()
+
 add_library_unity(
   duckdb_common_types
   OBJECT
-  batched_chunk_collection.cpp
+  batched_data_collection.cpp
   blob.cpp
   cast_helpers.cpp
   chunk_collection.cpp
+  column_data_allocator.cpp
+  column_data_collection.cpp
+  column_data_collection_segment.cpp
   data_chunk.cpp
   date.cpp
   decimal.cpp
@@ -14,6 +22,7 @@ add_library_unity(
   hyperloglog.cpp
   interval.cpp
   row_data_collection.cpp
+  row_data_collection_scanner.cpp
   row_layout.cpp
   selection_vector.cpp
   string_heap.cpp

@@ -7,8 +7,9 @@
 //===----------------------------------------------------------------------===//
 //! The SelectStatement of the view
 #include "duckdb/function/table_macro_function.hpp"
-#include "duckdb/parser/query_node.hpp"
+
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -24,6 +25,10 @@ unique_ptr<MacroFunction> TableMacroFunction::Copy() {
 	result->query_node = query_node->Copy();
 	this->CopyProperties(*result);
 	return move(result);
+}
+
+string TableMacroFunction::ToSQL(const string &schema, const string &name) {
+	return MacroFunction::ToSQL(schema, name) + StringUtil::Format("TABLE (%s);", query_node->ToString());
 }
 
 } // namespace duckdb

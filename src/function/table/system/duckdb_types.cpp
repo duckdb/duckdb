@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-struct DuckDBTypesData : public FunctionOperatorData {
+struct DuckDBTypesData : public GlobalTableFunctionState {
 	DuckDBTypesData() : offset(0) {
 	}
 
@@ -48,8 +48,7 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBTypesInit(ClientContext &context, const FunctionData *bind_data,
-                                                 const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBTypesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBTypesData>();
 	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
 	for (auto &schema : schemas) {
@@ -64,9 +63,8 @@ unique_ptr<FunctionOperatorData> DuckDBTypesInit(ClientContext &context, const F
 	return move(result);
 }
 
-void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                         DataChunk &output) {
-	auto &data = (DuckDBTypesData &)*operator_state;
+void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBTypesData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

@@ -294,11 +294,11 @@ static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_DATE:
 		return "current_date";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME:
-		return "current_time";
+		return "get_current_time";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME_N:
 		return "current_time_n";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP:
-		return "current_timestamp";
+		return "get_current_timestamp";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP_N:
 		return "current_timestamp_n";
 	case duckdb_libpgquery::PG_SVFOP_LOCALTIME:

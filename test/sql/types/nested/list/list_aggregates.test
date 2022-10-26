@@ -2,8 +2,6 @@
 # description: Test lists with aggregations
 # group: [list]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 
@@ -79,6 +77,7 @@ query I
 select string_agg(list_value(i), ',') from range(10) tbl(i);
 ----
 [0],[1],[2],[3],[4],[5],[6],[7],[8],[9]
+
 
 # window aggregate
 query III

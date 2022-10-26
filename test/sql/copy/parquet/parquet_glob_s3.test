@@ -19,6 +19,8 @@ statement ok
 COPY (select * from 'data/parquet-testing/glob/t1.parquet') to 's3://test-bucket/parquet_glob_s3/glob/t1.parquet';
 COPY (select * from 'data/parquet-testing/glob/t2.parquet') to 's3://test-bucket/parquet_glob_s3/glob/t2.parquet';
 COPY (select * from 'data/parquet-testing/glob2/t1.parquet') to 's3://test-bucket/parquet_glob_s3/glob2/t1.parquet';
+COPY (select * from 'data/parquet-testing/glob/t1.parquet') to 's3://test-bucket/parquet_glob_s3/with+plus/t1.parquet';
+COPY (select * from 'data/parquet-testing/glob/t1.parquet') to 's3://test-bucket/parquet_glob_s3/with space/t1.parquet';
 
 # parquet glob with COPY FROM
 statement ok
@@ -74,6 +76,11 @@ select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/g*/*.parquet
 
 query I
 select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/g*/t1.parquet')
+----
+2
+
+query I
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/with*/*.parquet')
 ----
 2
 

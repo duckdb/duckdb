@@ -1,7 +1,8 @@
 # helper to clean up non-utf and posixlt vectors
 encode_values <- function(value) {
-  value <- as.data.frame(value)
-  names(value) <- enc2utf8(names(value))
+  if (!is.null(names(value))) {
+    names(value) <- enc2utf8(names(value))
+  }
 
   is_character <- vapply(value, is.character, logical(1))
   value[is_character] <- lapply(value[is_character], enc2utf8)
@@ -26,6 +27,7 @@ encode_values <- function(value) {
 #' @param conn A DuckDB connection, created by `dbConnect()`.
 #' @param name The name for the virtual table that is registered or unregistered
 #' @param df A `data.frame` with the data for the virtual table
+#' @param overwrite Should an existing registration be overwritten?
 #' @return These functions are called for their side effect.
 #' @export
 #' @examples
@@ -40,17 +42,16 @@ encode_values <- function(value) {
 #' try(dbReadTable(con, "data"))
 #'
 #' dbDisconnect(con)
-duckdb_register <- function(conn, name, df) {
+duckdb_register <- function(conn, name, df, overwrite=FALSE) {
   stopifnot(dbIsValid(conn))
   df <- encode_values(as.data.frame(df))
-  rapi_register_df(conn@conn_ref, enc2utf8(as.character(name)), df)
+  rapi_register_df(conn@conn_ref, enc2utf8(as.character(name)), df, conn@driver@bigint == "integer64", overwrite)
   invisible(TRUE)
 }
 
 #' @rdname duckdb_register
 #' @export
 duckdb_unregister <- function(conn, name) {
-  stopifnot(dbIsValid(conn))
   rapi_unregister_df(conn@conn_ref, enc2utf8(as.character(name)))
   invisible(TRUE)
 }

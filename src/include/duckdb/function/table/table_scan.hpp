@@ -15,7 +15,8 @@ namespace duckdb {
 class TableCatalogEntry;
 
 struct TableScanBindData : public TableFunctionData {
-	explicit TableScanBindData(TableCatalogEntry *table) : table(table), is_index_scan(false), chunk_count(0) {
+	explicit TableScanBindData(TableCatalogEntry *table)
+	    : table(table), is_index_scan(false), is_create_index(false), chunk_count(0) {
 	}
 
 	//! The table to scan
@@ -23,6 +24,8 @@ struct TableScanBindData : public TableFunctionData {
 
 	//! Whether or not the table scan is an index scan
 	bool is_index_scan;
+	//! Whether or not the table scan is for index creation
+	bool is_create_index;
 	//! The row ids to fetch (in case of an index scan)
 	vector<row_t> result_ids;
 
@@ -38,7 +41,9 @@ public:
 
 //! The table scan function represents a sequential scan over one of DuckDB's base tables.
 struct TableScanFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
 	static TableFunction GetFunction();
+	static TableFunction GetIndexScanFunction();
 	static TableCatalogEntry *GetTableEntry(const TableFunction &function, const FunctionData *bind_data);
 };
 

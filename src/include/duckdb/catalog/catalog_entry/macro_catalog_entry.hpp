@@ -25,6 +25,10 @@ public:
 public:
 	//! Serialize the meta information
 	virtual void Serialize(Serializer &serializer) = 0;
+
+	string ToSQL() override {
+		return function->ToSQL(schema->name, name);
+	}
 };
 
 } // namespace duckdb

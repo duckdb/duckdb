@@ -32,8 +32,18 @@ public:
 	vector<string> names;
 	//! Bound column IDs
 	vector<column_t> column_ids;
+	//! Columns that are used outside of the scan
+	vector<idx_t> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
+	//! The set of input parameters for the table function
+	vector<Value> parameters;
+	//! The set of named input parameters for the table function
+	named_parameter_map_t named_parameters;
+	//! The set of named input table types for the table-in table-out function
+	vector<LogicalType> input_table_types;
+	//! The set of named input table names for the table-in table-out function
+	vector<string> input_table_names;
 
 	string GetName() const override;
 	string ParamsToString() const override;
@@ -42,8 +52,10 @@ public:
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
-
 	idx_t EstimateCardinality(ClientContext &context) override;
+
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	void ResolveTypes() override;

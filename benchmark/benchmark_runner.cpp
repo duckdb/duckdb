@@ -61,9 +61,9 @@ void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
 	auto &fs = db.GetFileSystem();
 	Connection con(db);
 	auto result = con.Query(
-	    StringUtil::Format("EXPORT DATABASE '%s' (FORMAT CSV)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
-	if (!result->success) {
-		throw Exception("Failed to save database: " + result->error);
+	    StringUtil::Format("EXPORT DATABASE '%s' (FORMAT PARQUET)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
+	if (result->HasError()) {
+		result->ThrowError("Failed to save database: ");
 	}
 }
 
@@ -79,8 +79,8 @@ bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, string name) {
 	}
 	Connection con(db);
 	auto result = con.Query(StringUtil::Format("IMPORT DATABASE '%s'", base_dir));
-	if (!result->success) {
-		throw Exception("Failed to load database: " + result->error);
+	if (result->HasError()) {
+		result->ThrowError("Failed to load database: ");
 	}
 	return true;
 }
@@ -130,9 +130,7 @@ void BenchmarkRunner::LogOutput(string message) {
 void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler profiler;
 	auto display_name = benchmark->DisplayName();
-	// LogLine(string(display_name.size() + 6, '-'));
-	// LogLine("|| " + display_name + " ||");
-	// LogLine(string(display_name.size() + 6, '-'));
+
 	auto state = benchmark->Initialize(configuration);
 	auto nruns = benchmark->NRuns();
 	for (size_t i = 0; i < nruns + 1; i++) {
@@ -150,8 +148,6 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		profiler.Start();
 		benchmark->Run(state.get());
 		profiler.End();
-
-		benchmark->Cleanup(state.get());
 
 		is_active = false;
 		interrupt_thread.join();
@@ -174,13 +170,14 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 				}
 			}
 		}
+		benchmark->Cleanup(state.get());
 	}
 	benchmark->Finalize();
 }
 
 void BenchmarkRunner::RunBenchmarks() {
 	LogLine("Starting benchmark run.");
-	LogLine("name\trun\tnruns\ttiming");
+	LogLine("name\trun\ttiming");
 	for (auto &benchmark : benchmarks) {
 		RunBenchmark(benchmark);
 	}
@@ -240,7 +237,7 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 		} else if (StringUtil::StartsWith(arg, "--threads=")) {
 			// write info of benchmark
 			auto splits = StringUtil::Split(arg, '=');
-			instance.threads = Value(splits[1]).CastAs(LogicalType::UINTEGER).GetValue<uint32_t>();
+			instance.threads = Value(splits[1]).DefaultCastAs(LogicalType::UINTEGER).GetValue<uint32_t>();
 		} else if (arg == "--query") {
 			// write group of benchmark
 			instance.configuration.meta = BenchmarkMetaType::QUERY;

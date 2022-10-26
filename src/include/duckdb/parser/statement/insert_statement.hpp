@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 class ExpressionListRef;
@@ -30,6 +31,9 @@ public:
 
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
+
+	//! CTEs
+	CommonTableExpressionMap cte_map;
 
 protected:
 	InsertStatement(const InsertStatement &other);

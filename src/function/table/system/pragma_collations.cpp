@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-struct PragmaCollateData : public FunctionOperatorData {
+struct PragmaCollateData : public GlobalTableFunctionState {
 	PragmaCollateData() : offset(0) {
 	}
 
@@ -23,8 +23,7 @@ static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, TableF
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> PragmaCollateInit(ClientContext &context, const FunctionData *bind_data,
-                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaCollateInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<PragmaCollateData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
@@ -36,9 +35,8 @@ unique_ptr<FunctionOperatorData> PragmaCollateInit(ClientContext &context, const
 	return move(result);
 }
 
-static void PragmaCollateFunction(ClientContext &context, const FunctionData *bind_data,
-                                  FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (PragmaCollateData &)*operator_state;
+static void PragmaCollateFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (PragmaCollateData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

@@ -10,7 +10,7 @@ PRAGMA enable_verification
 query R
 select abs(-17.4)
 ----
-17.400000
+17.4
 
 query R
 select cbrt(27.0)
@@ -20,12 +20,12 @@ select cbrt(27.0)
 query R
 select ceil(-42.8)
 ----
--42.000000
+-42
 
 query R
 select ceiling(-95.3)
 ----
--95.000000
+-95
 
 query R
 select exp(1.0)
@@ -35,7 +35,7 @@ select exp(1.0)
 query R
 select floor(-42.8)
 ----
--43.000000
+-43
 
 query R
 select ln(2.0)

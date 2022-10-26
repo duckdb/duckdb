@@ -27,14 +27,13 @@ select json_group_object(n, v) from t1 group by n % 2
 {"11":1,"13":3,"15":5,"17":7,"19":9}
 
 statement ok
-insert into t1 values (NULL, NULL), (20, NULL), (21, NULL), (NULL, 10), (NULL, 11)
+insert into t1 values (0, NULL), (20, NULL), (21, NULL), (1, 10), (2, 11)
 
 query T
 select json_group_object(n, v) from t1 group by n % 2
 ----
-{"10":0,"12":2,"14":4,"16":6,"18":8,"20":null}
-{"11":1,"13":3,"15":5,"17":7,"19":9,"21":null}
-{}
+{"10":0,"12":2,"14":4,"16":6,"18":8,"0":null,"20":null,"2":11}
+{"11":1,"13":3,"15":5,"17":7,"19":9,"21":null,"1":10}
 
 statement ok
 create table t2 (j json)

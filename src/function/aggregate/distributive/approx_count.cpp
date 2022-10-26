@@ -9,17 +9,31 @@
 namespace duckdb {
 
 struct ApproxDistinctCountState {
+	ApproxDistinctCountState() : log(nullptr) {
+	}
+	~ApproxDistinctCountState() {
+		if (log) {
+			delete log;
+		}
+	}
+	void Resize(idx_t count) {
+		indices.resize(count);
+		counts.resize(count);
+	}
+
 	HyperLogLog *log;
+	vector<uint64_t> indices;
+	vector<uint8_t> counts;
 };
 
 struct ApproxCountDistinctFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->log = nullptr;
+		new (state) STATE;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.log) {
 			return;
 		}
@@ -34,7 +48,7 @@ struct ApproxCountDistinctFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->log) {
 			target[idx] = state->log->Count();
 		} else {
@@ -47,13 +61,11 @@ struct ApproxCountDistinctFunction {
 	}
 	template <class STATE>
 	static void Destroy(STATE *state) {
-		if (state->log) {
-			delete state->log;
-		}
+		state->~STATE();
 	}
 };
 
-static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], FunctionData *bind_data, idx_t input_count,
+static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count,
                                                     data_ptr_t state, idx_t count) {
 	D_ASSERT(input_count == 1);
 
@@ -62,43 +74,48 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], FunctionDat
 		agg_state->log = new HyperLogLog();
 	}
 
-	VectorData vdata;
-	inputs[0].Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	inputs[0].ToUnifiedFormat(count, vdata);
 
-	uint64_t indices[STANDARD_VECTOR_SIZE];
-	uint8_t counts[STANDARD_VECTOR_SIZE];
+	agg_state->Resize(count);
+	auto indices = agg_state->indices.data();
+	auto counts = agg_state->counts.data();
 
 	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
 	agg_state->log->AddToLog(vdata, count, indices, counts);
 }
 
-static void ApproxCountDistinctUpdateFunction(Vector inputs[], FunctionData *bind_data, idx_t input_count,
+static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count,
                                               Vector &state_vector, idx_t count) {
 	D_ASSERT(input_count == 1);
 
-	VectorData sdata;
-	state_vector.Orrify(count, sdata);
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(count, sdata);
 	auto states = (ApproxDistinctCountState **)sdata.data;
 
+	uint64_t *indices;
+	uint8_t *counts;
 	for (idx_t i = 0; i < count; i++) {
 		auto agg_state = states[sdata.sel->get_index(i)];
 		if (!agg_state->log) {
 			agg_state->log = new HyperLogLog();
 		}
+		if (i == 0) {
+			agg_state->Resize(count);
+			indices = agg_state->indices.data();
+			counts = agg_state->counts.data();
+		}
 	}
 
-	VectorData vdata;
-	inputs[0].Orrify(count, vdata);
-
-	uint64_t indices[STANDARD_VECTOR_SIZE];
-	uint8_t counts[STANDARD_VECTOR_SIZE];
+	UnifiedVectorFormat vdata;
+	inputs[0].ToUnifiedFormat(count, vdata);
 
 	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
 	HyperLogLog::AddToLogs(vdata, count, indices, counts, (HyperLogLog ***)states, sdata.sel);
 }
 
 AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) {
-	return AggregateFunction(
+	auto fun = AggregateFunction(
 	    {input_type}, LogicalTypeId::BIGINT, AggregateFunction::StateSize<ApproxDistinctCountState>,
 	    AggregateFunction::StateInitialize<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctUpdateFunction,
@@ -106,6 +123,8 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctSimpleUpdateFunction, nullptr,
 	    AggregateFunction::StateDestroy<ApproxDistinctCountState, ApproxCountDistinctFunction>);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return fun;
 }
 
 void ApproxCountDistinctFun::RegisterFunction(BuiltinFunctions &set) {

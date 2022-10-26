@@ -39,6 +39,9 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
                                              Value &delimiter_value) {
 	auto new_binder = Binder::CreateBinder(context, this, true);
 	if (delimiter->HasSubquery()) {
+		if (!order_binder.HasExtraList()) {
+			throw BinderException("Subquery in LIMIT/OFFSET not supported in set operation");
+		}
 		return order_binder.CreateExtraReference(move(delimiter));
 	}
 	ExpressionBinder expr_binder(*new_binder, context);
@@ -46,9 +49,11 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 	auto expr = expr_binder.Bind(delimiter);
 	if (expr->IsFoldable()) {
 		//! this is a constant
-		delimiter_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(type);
+		delimiter_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(context, type);
 		return nullptr;
 	}
+	// move any correlated columns to this binder
+	MoveCorrelatedExpressions(*new_binder);
 	return expr;
 }
 
@@ -58,7 +63,7 @@ unique_ptr<BoundResultModifier> Binder::BindLimit(OrderBinder &order_binder, Lim
 		Value val;
 		result->limit = BindDelimiter(context, order_binder, move(limit_mod.limit), LogicalType::BIGINT, val);
 		if (!result->limit) {
-			result->limit_val = val.GetValue<int64_t>();
+			result->limit_val = val.IsNull() ? NumericLimits<int64_t>::Maximum() : val.GetValue<int64_t>();
 			if (result->limit_val < 0) {
 				throw BinderException("LIMIT cannot be negative");
 			}
@@ -68,7 +73,7 @@ unique_ptr<BoundResultModifier> Binder::BindLimit(OrderBinder &order_binder, Lim
 		Value val;
 		result->offset = BindDelimiter(context, order_binder, move(limit_mod.offset), LogicalType::BIGINT, val);
 		if (!result->offset) {
-			result->offset_val = val.GetValue<int64_t>();
+			result->offset_val = val.IsNull() ? 0 : val.GetValue<int64_t>();
 			if (result->offset_val < 0) {
 				throw BinderException("OFFSET cannot be negative");
 			}
@@ -83,7 +88,7 @@ unique_ptr<BoundResultModifier> Binder::BindLimitPercent(OrderBinder &order_bind
 		Value val;
 		result->limit = BindDelimiter(context, order_binder, move(limit_mod.limit), LogicalType::DOUBLE, val);
 		if (!result->limit) {
-			result->limit_percent = val.GetValue<double>();
+			result->limit_percent = val.IsNull() ? 100 : val.GetValue<double>();
 			if (result->limit_percent < 0.0) {
 				throw Exception("Limit percentage can't be negative value");
 			}
@@ -93,7 +98,7 @@ unique_ptr<BoundResultModifier> Binder::BindLimitPercent(OrderBinder &order_bind
 		Value val;
 		result->offset = BindDelimiter(context, order_binder, move(limit_mod.offset), LogicalType::BIGINT, val);
 		if (!result->offset) {
-			result->offset_val = val.GetValue<int64_t>();
+			result->offset_val = val.IsNull() ? 0 : val.GetValue<int64_t>();
 		}
 	}
 	return move(result);
@@ -145,9 +150,11 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				if (!order_expression) {
 					continue;
 				}
-				auto type = order_node.type == OrderType::ORDER_DEFAULT ? config.default_order_type : order_node.type;
-				auto null_order = order_node.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order
-				                                                                          : order_node.null_order;
+				auto type =
+				    order_node.type == OrderType::ORDER_DEFAULT ? config.options.default_order_type : order_node.type;
+				auto null_order = order_node.null_order == OrderByNullType::ORDER_DEFAULT
+				                      ? config.options.default_null_order
+				                      : order_node.null_order;
 				bound_order->orders.emplace_back(type, null_order, move(order_expression));
 			}
 			if (!bound_order->orders.empty()) {
@@ -207,7 +214,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			}
 			for (auto &target_distinct : distinct.target_distincts) {
 				auto &bound_colref = (BoundColumnRefExpression &)*target_distinct;
-				auto sql_type = sql_types[bound_colref.binding.column_index];
+				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					target_distinct = ExpressionBinder::PushCollation(context, move(target_distinct),
 					                                                  StringType::GetCollation(sql_type), true);
@@ -237,7 +244,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 					throw BinderException("Ambiguous name in ORDER BY!");
 				}
 				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
-				auto sql_type = sql_types[bound_colref.binding.column_index];
+				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					order_node.expression = ExpressionBinder::PushCollation(context, move(order_node.expression),
@@ -367,14 +374,18 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	}
 
 	// after that, we bind to the SELECT list
-	SelectBinder select_binder(*this, context, *result, info);
+	SelectBinder select_binder(*this, context, *result, info, alias_map);
 	vector<LogicalType> internal_sql_types;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
+		bool is_window = statement.select_list[i]->IsWindow();
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
+			}
+			if (is_window) {
+				throw BinderException("Cannot group on a window clause");
 			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group

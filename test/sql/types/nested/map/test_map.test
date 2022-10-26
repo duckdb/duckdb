@@ -5,11 +5,33 @@
 statement ok
 PRAGMA enable_verification
 
+# All keys are NULL
+statement error
+select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
+
+query I
+SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a
+----
+{{'i': 1, 'j': 2}={'i': 1, 'j': 2}, {'i': 3, 'j': 4}={'i': 3, 'j': 4}}
+
+# Some keys are NULL
+statement error
+select MAP(LIST_VALUE(1,NULL,3), LIST_VALUE(6,5,4))
+
+query I
+select MAP(LIST_VALUE(1,2,3), LIST_VALUE(6,NULL,4))
+----
+{1=6, 2=NULL, 3=4}
+
 query I
 select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7))
 ----
 {1=10, 2=9, 3=8, 4=7}
 
+
+# Keys have to be unique
+statement error
+select MAP(LIST_VALUE(1,2,3,4,1),LIST_VALUE(10,9,8,7,6))
 
 # Empty maps
 query I
@@ -22,9 +44,52 @@ select MAP()
 ----
 {}
 
+statement error
+select MAP(NULL)
+
+# Test making MAPs from columns
+statement ok
+CREATE TABLE tbl (
+	a INTEGER[],
+	b TEXT[],
+);
+
+statement ok
+INSERT INTO tbl VALUES (ARRAY[5,7], ARRAY['test','string']), (ARRAY[6,3], ARRAY['foo','bar'])
+
+query I
+SELECT MAP(a, b) FROM tbl;
+----
+{5=test, 7=string}
+{6=foo, 3=bar}
+
+# Check unique exception with columns
+statement ok
+INSERT INTO tbl VALUES (ARRAY[5,7], ARRAY['also_test', 'also_string'])
+
+# Unique between rows, should work
+query I
+SELECT MAP(a, b) FROM tbl;
+----
+{5=test, 7=string}
+{6=foo, 3=bar}
+{5=also_test, 7=also_string}
+
+statement ok
+INSERT INTO tbl VALUES (ARRAY[7,5,7], ARRAY['a', 'b', 'c'])
+
+# Keys are not unique for one of the rows
+statement error
+SELECT MAP(a, b) FROM tbl;
+
 # Lists with different size are FORBIDDEN
 statement error
 select MAP(LIST_VALUE(10),LIST_VALUE())
+
+query I
+select MAP(LIST_VALUE([1],[2],[3],[4]),LIST_VALUE(10,9,8,7))
+----
+{[1]=10, [2]=9, [3]=8, [4]=7}
 
 # Maps that are not initialized empty or with lists are  FORBIDDEN
 # Map where the 2 entries are not lists

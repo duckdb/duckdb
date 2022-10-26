@@ -1,0 +1,24 @@
+# name: test/sql/types/alias/test_alias_map.test
+# description: Test alias with map
+# group: [alias]
+
+require skip_reload
+
+statement ok
+CREATE TYPE MAPPOINT AS MAP(INTEGER,INTEGER);
+
+statement ok
+CREATE TABLE a(b MAPPOINT);
+
+query I
+SELECT * FROM a;
+----
+
+statement ok
+INSERT INTO a VALUES (MAP([1], [2])), (MAP([1, 2, 3], [4, 5, 6]));
+
+query I
+SELECT * FROM a;
+----
+{1=2}
+{1=4, 2=5, 3=6}

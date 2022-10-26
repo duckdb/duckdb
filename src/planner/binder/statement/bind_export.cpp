@@ -88,7 +88,7 @@ void ReorderTableEntries(vector<TableCatalogEntry *> &tables) {
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("COPY TO is disabled through configuration");
 	}
 	BoundStatement result;
@@ -155,6 +155,13 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->is_from = false;
 		info->schema = table->schema->name;
 		info->table = table->name;
+
+		// We can not export generated columns
+		for (auto &col : table->columns) {
+			if (!col.Generated()) {
+				info->select_list.push_back(col.GetName());
+			}
+		}
 
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;

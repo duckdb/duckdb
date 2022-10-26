@@ -22,6 +22,19 @@
 #endif
 #endif
 
+// duplicate of duckdb/main/winapi.hpp
+#ifndef DUCKDB_EXTENSION_API
+#ifdef _WIN32
+#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+#define DUCKDB_EXTENSION_API __declspec(dllexport)
+#else
+#define DUCKDB_EXTENSION_API
+#endif
+#else
+#define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
+#endif
+#endif
+
 // duplicate of duckdb/common/constants.hpp
 #ifndef DUCKDB_API_0_3_1
 #define DUCKDB_API_0_3_1 1
@@ -216,6 +229,7 @@ typedef struct {
 typedef void *duckdb_database;
 typedef void *duckdb_connection;
 typedef void *duckdb_prepared_statement;
+typedef void *duckdb_pending_result;
 typedef void *duckdb_appender;
 typedef void *duckdb_arrow;
 typedef void *duckdb_config;
@@ -227,6 +241,11 @@ typedef void *duckdb_vector;
 typedef void *duckdb_value;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
+typedef enum {
+	DUCKDB_PENDING_RESULT_READY = 0,
+	DUCKDB_PENDING_RESULT_NOT_READY = 1,
+	DUCKDB_PENDING_ERROR = 2
+} duckdb_pending_state;
 
 //===--------------------------------------------------------------------===//
 // Open/Connect
@@ -281,6 +300,13 @@ Closes the specified connection and de-allocates all memory allocated for that c
 * connection: The connection to close.
 */
 DUCKDB_API void duckdb_disconnect(duckdb_connection *connection);
+
+/*!
+Returns the version of the linked DuckDB, with a version postfix for dev versions
+
+Usually used for developing C extensions that must return this for a compatibility check.
+*/
+DUCKDB_API const char *duckdb_library_version();
 
 //===--------------------------------------------------------------------===//
 // Configuration
@@ -475,7 +501,7 @@ Returns the error message contained within the result. The error is only set if 
 
 The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_result` is called.
 
-* result: The result object to fetch the nullmask from.
+* result: The result object to fetch the error from.
 * returns: The error of the result.
 */
 DUCKDB_API const char *duckdb_result_error(duckdb_result *result);
@@ -803,6 +829,11 @@ Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the stat
 DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
 /*!
+Clear the params bind to the prepared statement.
+*/
+DUCKDB_API duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement);
+
+/*!
 Binds a bool value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, idx_t param_idx, bool val);
@@ -932,6 +963,67 @@ Executes the prepared statement with the given bound parameters, and returns an 
 */
 DUCKDB_API duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement,
                                                       duckdb_arrow *out_result);
+
+//===--------------------------------------------------------------------===//
+// Pending Result Interface
+//===--------------------------------------------------------------------===//
+/*!
+Executes the prepared statement with the given bound parameters, and returns a pending result.
+The pending result represents an intermediate structure for a query that is not yet fully executed.
+The pending result can be used to incrementally execute a query, returning control to the client between tasks.
+
+Note that after calling `duckdb_pending_prepared`, the pending result should always be destroyed using
+`duckdb_destroy_pending`, even if this function returns DuckDBError.
+
+* prepared_statement: The prepared statement to execute.
+* out_result: The pending query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statement,
+                                                duckdb_pending_result *out_result);
+
+/*!
+Closes the pending result and de-allocates all memory allocated for the result.
+
+* pending_result: The pending result to destroy.
+*/
+DUCKDB_API void duckdb_destroy_pending(duckdb_pending_result *pending_result);
+
+/*!
+Returns the error message contained within the pending result.
+
+The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_pending` is called.
+
+* result: The pending result to fetch the error from.
+* returns: The error of the pending result.
+*/
+DUCKDB_API const char *duckdb_pending_error(duckdb_pending_result pending_result);
+
+/*!
+Executes a single task within the query, returning whether or not the query is ready.
+
+If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
+If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_task function should be called again.
+If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
+
+The error message can be obtained by calling duckdb_pending_error on the pending_result.
+
+* pending_result: The pending result to execute a task within..
+* returns: The state of the pending result after the execution.
+*/
+DUCKDB_API duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_result);
+
+/*!
+Fully execute a pending query result, returning the final query result.
+
+If duckdb_pending_execute_task has been called until DUCKDB_PENDING_RESULT_READY was returned, this will return fast.
+Otherwise, all remaining tasks must be executed first.
+
+* pending_result: The pending result to execute.
+* out_result: The result object.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb_result *out_result);
 
 //===--------------------------------------------------------------------===//
 // Value Interface
@@ -1436,6 +1528,15 @@ Sets the init function of the table function
 DUCKDB_API void duckdb_table_function_set_init(duckdb_table_function table_function, duckdb_table_function_init_t init);
 
 /*!
+Sets the thread-local init function of the table function
+
+* table_function: The table function
+* init: The init function
+*/
+DUCKDB_API void duckdb_table_function_set_local_init(duckdb_table_function table_function,
+                                                     duckdb_table_function_init_t init);
+
+/*!
 Sets the main function of the table function
 
 * table_function: The table function
@@ -1518,6 +1619,14 @@ Sets the user-provided bind data in the bind object. This object can be retrieve
 DUCKDB_API void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_delete_callback_t destroy);
 
 /*!
+Sets the cardinality estimate for the table function, used for optimization.
+
+* info: The bind data object.
+* is_exact: Whether or not the cardinality estimate is exact, or an approximation
+*/
+DUCKDB_API void duckdb_bind_set_cardinality(duckdb_bind_info info, idx_t cardinality, bool is_exact);
+
+/*!
 Report that an error has occurred while calling bind.
 
 * info: The info object
@@ -1579,6 +1688,14 @@ This function must be used if projection pushdown is enabled to figure out which
 DUCKDB_API idx_t duckdb_init_get_column_index(duckdb_init_info info, idx_t column_index);
 
 /*!
+Sets how many threads can process this table function in parallel (default: 1)
+
+* info: The info object
+* max_threads: The maximum amount of threads that can process this table function
+*/
+DUCKDB_API void duckdb_init_set_max_threads(duckdb_init_info info, idx_t max_threads);
+
+/*!
 Report that an error has occurred while calling init.
 
 * info: The info object
@@ -1609,12 +1726,20 @@ For tracking state, use the init data instead.
 DUCKDB_API void *duckdb_function_get_bind_data(duckdb_function_info info);
 
 /*!
-Gets the init data set by `duckdb_bind_set_init_data` during the bind.
+Gets the init data set by `duckdb_init_set_init_data` during the init.
 
 * info: The info object
 * returns: The init data object
 */
 DUCKDB_API void *duckdb_function_get_init_data(duckdb_function_info info);
+
+/*!
+Gets the thread-local init data set by `duckdb_init_set_init_data` during the local_init.
+
+* info: The info object
+* returns: The init data object
+*/
+DUCKDB_API void *duckdb_function_get_local_init_data(duckdb_function_info info);
 
 /*!
 Report that an error has occurred while executing the function.
@@ -1658,6 +1783,14 @@ Adds a parameter to the replacement scan function.
 * parameter: The parameter to add.
 */
 DUCKDB_API void duckdb_replacement_scan_add_parameter(duckdb_replacement_scan_info info, duckdb_value parameter);
+
+/*!
+Report that an error has occurred while executing the replacement scan.
+
+* info: The info object
+* error: The error message
+*/
+DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info info, const char *error);
 
 //===--------------------------------------------------------------------===//
 // Appender
@@ -1924,6 +2057,8 @@ DUCKDB_API void duckdb_destroy_arrow(duckdb_arrow *result);
 //===--------------------------------------------------------------------===//
 // Threading Information
 //===--------------------------------------------------------------------===//
+typedef void *duckdb_task_state;
+
 /*!
 Execute DuckDB tasks on this thread.
 
@@ -1933,6 +2068,66 @@ Will return after `max_tasks` have been executed, or if there are no more tasks 
 * max_tasks: The maximum amount of tasks to execute
 */
 DUCKDB_API void duckdb_execute_tasks(duckdb_database database, idx_t max_tasks);
+
+/*!
+Creates a task state that can be used with duckdb_execute_tasks_state to execute tasks until
+ duckdb_finish_execution is called on the state.
+
+duckdb_destroy_state should be called on the result in order to free memory.
+
+* database: The database object to create the task state for
+* returns: The task state that can be used with duckdb_execute_tasks_state.
+*/
+DUCKDB_API duckdb_task_state duckdb_create_task_state(duckdb_database database);
+
+/*!
+Execute DuckDB tasks on this thread.
+
+The thread will keep on executing tasks forever, until duckdb_finish_execution is called on the state.
+Multiple threads can share the same duckdb_task_state.
+
+* state: The task state of the executor
+*/
+DUCKDB_API void duckdb_execute_tasks_state(duckdb_task_state state);
+
+/*!
+Execute DuckDB tasks on this thread.
+
+The thread will keep on executing tasks until either duckdb_finish_execution is called on the state,
+max_tasks tasks have been executed or there are no more tasks to be executed.
+
+Multiple threads can share the same duckdb_task_state.
+
+* state: The task state of the executor
+* max_tasks: The maximum amount of tasks to execute
+* returns: The amount of tasks that have actually been executed
+*/
+DUCKDB_API idx_t duckdb_execute_n_tasks_state(duckdb_task_state state, idx_t max_tasks);
+
+/*!
+Finish execution on a specific task.
+
+* state: The task state to finish execution
+*/
+DUCKDB_API void duckdb_finish_execution(duckdb_task_state state);
+
+/*!
+Check if the provided duckdb_task_state has finished execution
+
+* state: The task state to inspect
+* returns: Whether or not duckdb_finish_execution has been called on the task state
+*/
+DUCKDB_API bool duckdb_task_state_is_finished(duckdb_task_state state);
+
+/*!
+Destroys the task state returned from duckdb_create_task_state.
+
+Note that this should not be called while there is an active duckdb_execute_tasks_state running
+on the task state.
+
+* state: The task state to clean up
+*/
+DUCKDB_API void duckdb_destroy_task_state(duckdb_task_state state);
 
 #ifdef __cplusplus
 }

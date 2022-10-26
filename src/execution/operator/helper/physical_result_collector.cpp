@@ -1,9 +1,11 @@
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
-#include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
+
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
-#include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
 
@@ -15,12 +17,12 @@ PhysicalResultCollector::PhysicalResultCollector(PreparedStatementData &data)
 
 unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(ClientContext &context,
                                                                                 PreparedStatementData &data) {
-	auto &config = DBConfig::GetConfig(context);
-	bool use_materialized_collector = !config.preserve_insertion_order || !data.plan->AllSourcesSupportBatchIndex();
-	if (use_materialized_collector) {
-		// parallel materialized collector only if we don't care about maintaining insertion order
-		return make_unique_base<PhysicalResultCollector, PhysicalMaterializedCollector>(
-		    data, !config.preserve_insertion_order);
+	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, *data.plan)) {
+		// the plan is not order preserving, so we just use the parallel materialized collector
+		return make_unique_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, true);
+	} else if (!PhysicalPlanGenerator::UseBatchIndex(context, *data.plan)) {
+		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
+		return make_unique_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, false);
 	} else {
 		// we care about maintaining insertion order and the sources all support batch indexes
 		// use a batch collector

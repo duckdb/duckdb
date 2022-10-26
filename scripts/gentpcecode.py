@@ -129,7 +129,9 @@ static void append_bool(tpce_append_information &info, bool value) {
 }
 
 static void append_timestamp(tpce_append_information &info, CDateTime time) {
-	info.appender.Append<int64_t>(0); // Timestamp::FromString(time.ToStr(1));
+	int32_t year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, msec = 0;
+	time.GetYMDHMS(&year, &month, &day, &hour, &minute, &second, &msec);
+	info.appender.Append<Value>(Value::TIMESTAMP(year, month, day, hour, minute, second, msec * 1000));
 }
 
 void append_char(tpce_append_information &info, char value) {

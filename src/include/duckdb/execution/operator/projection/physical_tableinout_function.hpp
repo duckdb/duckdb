@@ -22,12 +22,19 @@ public:
 	                           idx_t estimated_cardinality);
 
 public:
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
+	unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
+	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+	                                        OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
 		return true;
+	}
+
+	bool RequiresFinalExecute() const override {
+		return function.in_out_function_final;
 	}
 
 private:

@@ -313,8 +313,8 @@ struct ICUDatePart : public ICUDateFunc {
 				}
 			}
 		} else {
-			VectorData rdata;
-			input.Orrify(count, rdata);
+			UnifiedVectorFormat rdata;
+			input.ToUnifiedFormat(count, rdata);
 
 			const auto &arg_valid = rdata.validity;
 			auto tdata = (const INPUT_TYPE *)rdata.data;
@@ -376,6 +376,9 @@ struct ICUDatePart : public ICUDateFunc {
 		using adapters_t = data_t::adapters_t;
 
 		// collect names and deconflict, construct return type
+		if (arguments[0]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[0]->IsFoldable()) {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);
 		}
@@ -407,16 +410,25 @@ struct ICUDatePart : public ICUDateFunc {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);
 		}
 
-		arguments.erase(arguments.begin());
-		bound_function.arguments.erase(bound_function.arguments.begin());
+		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.return_type = LogicalType::STRUCT(move(struct_children));
 		return make_unique<data_t>(context, adapters);
+	}
+
+	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p,
+	                              const ScalarFunction &function) {
+		throw NotImplementedException("FIXME: serialize icu-datepart");
+	}
+
+	static unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
+	                                                    ScalarFunction &bound_function) {
+		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static ScalarFunction GetUnaryPartCodeFunction(const LogicalType &temporal_type) {
 		return ScalarFunction({temporal_type}, LogicalType::BIGINT, UnaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>,
-		                      false, false, BindDatePart);
+		                      BindDatePart);
 	}
 
 	static void AddUnaryPartCodeFunctions(const string &name, ClientContext &context) {
@@ -430,15 +442,17 @@ struct ICUDatePart : public ICUDateFunc {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static ScalarFunction GetBinaryPartCodeFunction(const LogicalType &temporal_type) {
 		return ScalarFunction({LogicalType::VARCHAR, temporal_type}, LogicalType::BIGINT,
-		                      BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>, false, false, BindDatePart);
+		                      BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>, BindDatePart);
 	}
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetStructFunction(const LogicalType &temporal_type) {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
-		return ScalarFunction({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, false, false,
-		                      BindStruct);
+		ScalarFunction result({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, BindStruct);
+		result.serialize = SerializeFunction;
+		result.deserialize = DeserializeFunction;
+		return result;
 	}
 
 	static void AddDatePartFunctions(const string &name, ClientContext &context) {
@@ -458,8 +472,8 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetLastDayFunction(const LogicalType &temporal_type) {
-		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>, false,
-		                      false, BindLastDate);
+		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>,
+		                      BindLastDate);
 	}
 	static void AddLastDayFunctions(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);

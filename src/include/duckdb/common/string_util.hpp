@@ -39,6 +39,24 @@ public:
 	DUCKDB_API static char CharacterIsAlpha(char c) {
 		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 	}
+	static bool CharacterIsOperator(char c) {
+		if (c == '_') {
+			return false;
+		}
+		if (c >= '!' && c <= '/') {
+			return true;
+		}
+		if (c >= ':' && c <= '@') {
+			return true;
+		}
+		if (c >= '[' && c <= '`') {
+			return true;
+		}
+		if (c >= '{' && c <= '~') {
+			return true;
+		}
+		return false;
+	}
 
 	//! Returns true if the needle string exists in the haystack
 	DUCKDB_API static bool Contains(const string &haystack, const string &needle);
@@ -60,6 +78,15 @@ public:
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);
+
+	template <class T>
+	static string ToString(const vector<T> &input, const string &separator) {
+		vector<string> input_list;
+		for (auto &i : input) {
+			input_list.push_back(i.ToString());
+		}
+		return StringUtil::Join(input_list, separator);
+	}
 
 	//! Join multiple items of container with given size, transformed to string
 	//! using function, into one string using the given separator

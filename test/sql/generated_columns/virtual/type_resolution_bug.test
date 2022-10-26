@@ -1,0 +1,26 @@
+# name: test/sql/generated_columns/virtual/type_resolution_bug.test
+# description: Test the chain reaction effect of deleting a column that is a dependency of a generated column
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+# which itself is also a dependency of a generated column
+
+statement ok
+CREATE TABLE unit (
+	bar TEXT,
+	foobar as (concat(foo, bar)),
+	profit_total AS (foobar),
+	dependent AS (profit_total),
+	also_dependent AS (concat(profit_total,dependent)),
+	foo TEXT,
+);
+
+statement ok
+INSERT INTO unit VALUES ('string','test')
+
+query IIIIII
+SELECT * FROM unit;
+----
+string	teststring	teststring	teststring	teststringteststring	test

@@ -324,27 +324,26 @@ struct UDFAverageFunction {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		state->sum += input[idx];
 		state->count++;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
+	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		state->count += count;
 		state->sum += input[0] * count;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		target->count += source.count;
 		target->sum += source.sum;
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, ValidityMask &mask,
-	                     idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!Value::DoubleIsFinite(double(state->sum))) {
 			throw OutOfRangeException("AVG is out of range!");
 		} else if (state->count == 0) {
@@ -379,7 +378,7 @@ struct UDFCovarOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
+	static void Operation(STATE *state, AggregateInputData &, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
 	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		// update running mean and d^2
 		const uint64_t n = ++(state->count);
@@ -400,7 +399,7 @@ struct UDFCovarOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (target->count == 0) {
 			*target = source;
 		} else if (source.count > 0) {
@@ -426,8 +425,7 @@ struct UDFCovarOperation {
 
 struct UDFCovarPopOperation : public UDFCovarOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, ValidityMask &mask,
-	                     idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
@@ -457,19 +455,20 @@ struct UDFSum {
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, idx_t idx) {
 		state->isset = true;
 		state->value += input[idx];
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, idx_t count) {
 		state->isset = true;
 		state->value += (INPUT_TYPE)input[0] * (INPUT_TYPE)count;
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE>
-	static void Update(Vector inputs[], FunctionData *bind_data, idx_t input_count, Vector &states, idx_t count) {
+	static void Update(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
+	                   idx_t count) {
 		D_ASSERT(input_count == 1);
 
 		if (inputs[0].GetVectorType() == VectorType::CONSTANT_VECTOR &&
@@ -481,7 +480,7 @@ struct UDFSum {
 			// regular constant: get first state
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>(*sdata, bind_data, idata, count);
+			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>(*sdata, aggr_input_data, idata, count);
 		} else if (inputs[0].GetVectorType() == VectorType::FLAT_VECTOR &&
 		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
@@ -491,13 +490,13 @@ struct UDFSum {
 				// potential NULL values and NULL values are ignored
 				for (idx_t i = 0; i < count; i++) {
 					if (mask.RowIsValid(i)) {
-						UDFSum::Operation<INPUT_TYPE, STATE_TYPE>(sdata[i], bind_data, idata, i);
+						UDFSum::Operation<INPUT_TYPE, STATE_TYPE>(sdata[i], aggr_input_data, idata, i);
 					}
 				}
 			} else {
 				// quick path: no NULL values or NULL values are not ignored
 				for (idx_t i = 0; i < count; i++) {
-					UDFSum::Operation<INPUT_TYPE, STATE_TYPE>(sdata[i], bind_data, idata, i);
+					UDFSum::Operation<INPUT_TYPE, STATE_TYPE>(sdata[i], aggr_input_data, idata, i);
 				}
 			}
 		} else {
@@ -506,7 +505,7 @@ struct UDFSum {
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE>
-	static void SimpleUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+	static void SimpleUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                         idx_t count) {
 		D_ASSERT(input_count == 1);
 		switch (inputs[0].GetVectorType()) {
@@ -515,7 +514,7 @@ struct UDFSum {
 				return;
 			}
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(inputs[0]);
-			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, bind_data, idata, count);
+			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, aggr_input_data, idata, count);
 			break;
 		}
 		case VectorType::FLAT_VECTOR: {
@@ -525,13 +524,13 @@ struct UDFSum {
 				// potential NULL values and NULL values are ignored
 				for (idx_t i = 0; i < count; i++) {
 					if (mask.RowIsValid(i)) {
-						UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, bind_data, idata, i);
+						UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, aggr_input_data, idata, i);
 					}
 				}
 			} else {
 				// quick path: no NULL values or NULL values are not ignored
 				for (idx_t i = 0; i < count; i++) {
-					UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, bind_data, idata, i);
+					UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, aggr_input_data, idata, i);
 				}
 			}
 			break;
@@ -543,7 +542,7 @@ struct UDFSum {
 	}
 
 	template <class STATE_TYPE>
-	static void Combine(Vector &source, Vector &target, FunctionData *bind_data, idx_t count) {
+	static void Combine(Vector &source, Vector &target, AggregateInputData &, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
 		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
@@ -564,7 +563,7 @@ struct UDFSum {
 	}
 
 	template <class STATE_TYPE, class RESULT_TYPE>
-	static void Finalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count, idx_t offset) {
+	static void Finalize(Vector &states, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 

@@ -19,6 +19,9 @@ struct BaseCSVData : public TableFunctionData {
 	vector<string> files;
 	//! The CSV reader options
 	BufferedCSVReaderOptions options;
+	//! Offsets for generated columns
+	idx_t filename_col_idx;
+	idx_t hive_partition_col_idx;
 
 	void Finalize();
 };
@@ -45,10 +48,9 @@ struct ReadCSVData : public BaseCSVData {
 	//! The initial reader (if any): this is used when automatic detection is used during binding.
 	//! In this case, the CSV reader is already created and might as well be re-used.
 	unique_ptr<BufferedCSVReader> initial_reader;
-	//! Total File Size
-	atomic<idx_t> file_size;
-	//! How many bytes were read up to this point
-	atomic<idx_t> bytes_read;
+	//! The union readers is created(when csv union_by_name option is on) during binding
+	//! Those reader can be re-used during ReadCSVFunction
+	vector<unique_ptr<BufferedCSVReader>> union_readers;
 };
 
 struct CSVCopyFunction {
@@ -56,7 +58,8 @@ struct CSVCopyFunction {
 };
 
 struct ReadCSVTableFunction {
-	static TableFunction GetFunction();
+	static TableFunction GetFunction(bool list_parameter = false);
+	static TableFunction GetAutoFunction(bool list_parameter = false);
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

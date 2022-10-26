@@ -2,8 +2,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
-#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -33,41 +33,32 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &vec = args.data[0];
 
 	vec.Verify(args.size());
-	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(vec);
-		auto &dict_sel = DictionaryVector::SelVector(vec);
-		auto &children = StructVector::GetEntries(child);
-		D_ASSERT(info.index < children.size());
-		auto &struct_child = children[info.index];
-		result.Slice(*struct_child, dict_sel, args.size());
-	} else {
-		auto &children = StructVector::GetEntries(vec);
-		D_ASSERT(info.index < children.size());
-		auto &struct_child = children[info.index];
-		result.Reference(*struct_child);
-	}
+	auto &children = StructVector::GetEntries(vec);
+	D_ASSERT(info.index < children.size());
+	auto &struct_child = children[info.index];
+	result.Reference(*struct_child);
 	result.Verify(args.size());
 }
 
 static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL ||
-	    arguments[1]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalType::SQLNULL;
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		return make_unique<StructExtractBindData>("", 0, LogicalType::SQLNULL);
+	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
 	}
 	D_ASSERT(LogicalTypeId::STRUCT == arguments[0]->return_type.id());
 	auto &struct_children = StructType::GetChildTypes(arguments[0]->return_type);
 	if (struct_children.empty()) {
 		throw InternalException("Can't extract something from an empty struct");
 	}
+	bound_function.arguments[0] = arguments[0]->return_type;
 
 	auto &key_child = arguments[1];
+	if (key_child->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 
-	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
-	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
+	if (key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw BinderException("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
@@ -104,13 +95,12 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	}
 
 	bound_function.return_type = return_type;
-	bound_function.arguments[0] = arguments[0]->return_type;
 	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 
-static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                              FunctionData *bind_data,
-                                                              vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &bind_data = input.bind_data;
 	if (!child_stats[0]) {
 		return nullptr;
 	}
@@ -124,7 +114,7 @@ static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &con
 
 ScalarFunction StructExtractFun::GetFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                      StructExtractFunction, false, StructExtractBind, nullptr, PropagateStructExtractStats);
+	                      StructExtractFunction, StructExtractBind, nullptr, PropagateStructExtractStats);
 }
 
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {

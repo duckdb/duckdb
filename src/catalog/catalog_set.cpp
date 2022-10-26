@@ -191,11 +191,13 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 				throw CatalogException(rename_err_msg, original_name, value->name);
 			}
 		}
+	}
+
+	if (value->name != original_name) {
+		// Do PutMapping and DeleteMapping after dependency check
 		PutMapping(context, value->name, entry_index);
 		DeleteMapping(context, original_name);
 	}
-	//! Check the dependency manager to verify that there are no conflicting dependencies with this alter
-	catalog.dependency_manager->AlterObject(context, entry, value.get());
 
 	value->timestamp = transaction.transaction_id;
 	value->child = move(entries[entry_index]);
@@ -207,9 +209,17 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	alter_info->Serialize(serializer);
 	BinaryData serialized_alter = serializer.GetData();
 
+	auto new_entry = value.get();
+
 	// push the old entry in the undo buffer for this transaction
 	transaction.PushCatalogEntry(value->child.get(), serialized_alter.data.get(), serialized_alter.size);
 	entries[entry_index] = move(value);
+
+	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
+	// Note that we do this AFTER the new entry has been entirely set up in the catalog set
+	// that is because in case the alter fails because of a dependency conflict, we need to be able to cleanly roll back
+	// to the old entry.
+	catalog.dependency_manager->AlterObject(context, entry, new_entry);
 
 	return true;
 }
@@ -468,15 +478,15 @@ void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
 	mapping[entry->name]->timestamp = timestamp;
 }
 
-void CatalogSet::AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove) {
-	CatalogEntry *enum_type_catalog = (CatalogEntry *)EnumType::GetCatalog(column.type);
-	if (enum_type_catalog) {
+void CatalogSet::AdjustUserDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove) {
+	CatalogEntry *user_type_catalog = (CatalogEntry *)LogicalType::GetCatalog(column.Type());
+	if (user_type_catalog) {
 		if (remove) {
-			catalog.dependency_manager->dependents_map[enum_type_catalog].erase(entry->parent);
-			catalog.dependency_manager->dependencies_map[entry->parent].erase(enum_type_catalog);
+			catalog.dependency_manager->dependents_map[user_type_catalog].erase(entry->parent);
+			catalog.dependency_manager->dependencies_map[entry->parent].erase(user_type_catalog);
 		} else {
-			catalog.dependency_manager->dependents_map[enum_type_catalog].insert(entry);
-			catalog.dependency_manager->dependencies_map[entry].insert(enum_type_catalog);
+			catalog.dependency_manager->dependents_map[user_type_catalog].insert(entry);
+			catalog.dependency_manager->dependencies_map[entry].insert(user_type_catalog);
 		}
 	}
 }
@@ -484,15 +494,27 @@ void CatalogSet::AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &col
 void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table, ColumnDefinition &column,
                                   bool remove) {
 	bool found = false;
-	if (column.type.id() == LogicalTypeId::ENUM) {
+	if (column.Type().id() == LogicalTypeId::ENUM) {
 		for (auto &old_column : table->columns) {
-			if (old_column.name == column.name && old_column.type.id() != LogicalTypeId::ENUM) {
-				AdjustEnumDependency(entry, column, remove);
+			if (old_column.Name() == column.Name() && old_column.Type().id() != LogicalTypeId::ENUM) {
+				AdjustUserDependency(entry, column, remove);
 				found = true;
 			}
 		}
 		if (!found) {
-			AdjustEnumDependency(entry, column, remove);
+			AdjustUserDependency(entry, column, remove);
+		}
+	} else if (!(column.Type().GetAlias().empty())) {
+		auto alias = column.Type().GetAlias();
+		for (auto &old_column : table->columns) {
+			auto old_alias = old_column.Type().GetAlias();
+			if (old_column.Name() == column.Name() && old_alias != alias) {
+				AdjustUserDependency(entry, column, remove);
+				found = true;
+			}
+		}
+		if (!found) {
+			AdjustUserDependency(entry, column, remove);
 		}
 	}
 }

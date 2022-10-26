@@ -2,6 +2,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
@@ -10,6 +11,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -57,7 +60,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		if (ordered_set_agg) {
 			auto &config = DBConfig::GetConfig(context);
 			const auto &order = aggr.order_bys->orders[0];
-			const auto sense = (order.type == OrderType::ORDER_DEFAULT) ? config.default_order_type : order.type;
+			const auto sense =
+			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
 			invert_fractions = (sense == OrderType::DESCENDING);
 		}
 	}
@@ -65,7 +69,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	for (auto &child : aggr.children) {
 		aggregate_binder.BindChild(child, 0, error);
 		// We have to invert the fractions for PERCENTILE_XXXX DESC
-		if (invert_fractions) {
+		if (error.empty() && invert_fractions) {
 			InvertPercentileFractions(child);
 		}
 	}
@@ -115,6 +119,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			// we didn't bind columns, try again in children
 			return BindResult(error);
 		}
+	} else if (depth > 0 && !aggregate_binder.HasBoundColumns()) {
+		return BindResult("Aggregate with only constant parameters has to be bound in the root subquery");
 	}
 	if (!filter_error.empty()) {
 		return BindResult(filter_error);
@@ -122,8 +128,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	if (aggr.filter) {
 		auto &child = (BoundExpression &)*aggr.filter;
-		bound_filter = move(child.expr);
+		bound_filter = BoundCastExpression::AddCastToType(context, move(child.expr), LogicalType::BOOLEAN);
 	}
+
 	// all children bound successfully
 	// extract the children and types
 	vector<LogicalType> types;
@@ -148,13 +155,13 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 
 	// bind the aggregate
-	bool cast_parameters;
-	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error, cast_parameters);
+	FunctionBinder function_binder(context);
+	idx_t best_function = function_binder.BindFunction(func->name, func->functions, types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw BinderException(binder.FormatError(aggr, error));
 	}
 	// found a matching function!
-	auto &bound_function = func->functions[best_function];
+	auto bound_function = func->functions.GetFunctionByOffset(best_function);
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	auto order_bys = make_unique<BoundOrderModifier>();
@@ -162,15 +169,17 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = (BoundExpression &)*order.expression;
-			const auto sense = (order.type == OrderType::ORDER_DEFAULT) ? config.default_order_type : order.type;
-			const auto null_order =
-			    (order.null_order == OrderByNullType::ORDER_DEFAULT) ? config.default_null_order : order.null_order;
+			const auto sense =
+			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
+			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
+			                            ? config.options.default_null_order
+			                            : order.null_order;
 			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, move(order_expr.expr)));
 		}
 	}
 
-	auto aggregate = AggregateFunction::BindAggregateFunction(
-	    context, bound_function, move(children), move(bound_filter), aggr.distinct, move(order_bys), cast_parameters);
+	auto aggregate = function_binder.BindAggregateFunction(bound_function, move(children), move(bound_filter),
+	                                                       aggr.distinct, move(order_bys));
 	if (aggr.export_state) {
 		aggregate = ExportAggregateFunction::Bind(move(aggregate));
 	}

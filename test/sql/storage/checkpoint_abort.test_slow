@@ -2,6 +2,9 @@
 # description: Test correct behavior if we unexpectedly abort during a checkpoint
 # group: [storage]
 
+require skip_reload
+
+
 load __TEST_DIR__/checkpoint_abort.db
 
 statement ok
@@ -42,11 +45,6 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 
 statement error
 CHECKPOINT;
-
-query III
-SELECT MIN(i), MAX(i), COUNT(*) FROM integers
-----
-1	200000	200000
 
 restart
 

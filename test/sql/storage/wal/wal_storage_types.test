@@ -2,6 +2,9 @@
 # description: Test storage of columns with various types
 # group: [wal]
 
+require skip_reload
+
+
 # load the DB from disk
 load __TEST_DIR__/storage_types.db
 

@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-//! LogicalChunkGet represents a scan operation from a ChunkCollection
+//! LogicalCTERef represents a reference to a recursive CTE
 class LogicalCTERef : public LogicalOperator {
 public:
 	LogicalCTERef(idx_t table_index, idx_t cte_index, vector<LogicalType> types, vector<string> colnames)
@@ -35,6 +35,8 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, chunk_types.size());
 	}
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	void ResolveTypes() override {

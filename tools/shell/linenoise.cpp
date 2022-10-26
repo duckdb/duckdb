@@ -670,6 +670,18 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 	std::string sql(buf, len);
 	auto tokens = duckdb::Parser::Tokenize(sql);
 	std::stringstream ss;
+	if (!tokens.empty() && tokens[0].start > 0) {
+		duckdb::SimplifiedToken new_token;
+		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		new_token.start = 0;
+		tokens.insert(tokens.begin(), new_token);
+	}
+	if (tokens.empty() && sql.size() > 0) {
+		duckdb::SimplifiedToken new_token;
+		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		new_token.start = 0;
+		tokens.push_back(new_token);
+	}
 	for (size_t i = 0; i < tokens.size(); i++) {
 		size_t next = i + 1 < tokens.size() ? tokens[i + 1].start : len;
 		if (next < start_pos) {
@@ -1081,6 +1093,19 @@ void linenoiseEditDeletePrevWord(struct linenoiseState *l) {
 	refreshLine(l);
 }
 
+// returns true if there is more data available to read in a particular stream
+static int hasMoreData(int fd) {
+	fd_set rfds;
+	FD_ZERO(&rfds);
+	FD_SET(fd, &rfds);
+
+	// no timeout: return immediately
+	struct timeval tv;
+	tv.tv_sec = 0;
+	tv.tv_usec = 0;
+	return select(1, &rfds, NULL, NULL, &tv);
+}
+
 /* This function is the core of the line editing capability of linenoise.
  * It expects 'fd' to be already in "raw mode" so that every key pressed
  * will be returned ASAP to read().
@@ -1129,6 +1154,10 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		 * there was an error reading from fd. Otherwise it will return the
 		 * character that should be handled next. */
 		if (c == 9 && completionCallback != NULL) {
+			if (hasMoreData(l.ifd)) {
+				// if there is more data, this tab character was added as part of copy-pasting data
+				continue;
+			}
 			c = completeLine(&l);
 			/* Return on errors */
 			if (c < 0)

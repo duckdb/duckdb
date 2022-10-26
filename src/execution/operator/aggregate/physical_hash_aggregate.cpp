@@ -9,7 +9,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
@@ -34,47 +34,19 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              vector<GroupingSet> grouping_sets_p,
                                              vector<vector<idx_t>> grouping_functions_p, idx_t estimated_cardinality,
                                              PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types), estimated_cardinality), groups(move(groups_p)),
-      grouping_sets(move(grouping_sets_p)), grouping_functions(move(grouping_functions_p)), any_distinct(false) {
+    : PhysicalOperator(type, move(types), estimated_cardinality), grouping_sets(move(grouping_sets_p)) {
 	// get a list of all aggregates to be computed
-	for (auto &expr : groups) {
-		group_types.push_back(expr->return_type);
-	}
+	const idx_t group_count = groups_p.size();
 	if (grouping_sets.empty()) {
 		GroupingSet set;
-		for (idx_t i = 0; i < group_types.size(); i++) {
+		for (idx_t i = 0; i < group_count; i++) {
 			set.insert(i);
 		}
 		grouping_sets.push_back(move(set));
 	}
-	vector<LogicalType> payload_types_filters;
-	for (auto &expr : expressions) {
-		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
-		D_ASSERT(expr->IsAggregate());
-		auto &aggr = (BoundAggregateExpression &)*expr;
-		bindings.push_back(&aggr);
+	grouped_aggregate_data.InitializeGroupby(move(groups_p), move(expressions), move(grouping_functions_p));
 
-		if (aggr.distinct) {
-			any_distinct = true;
-		}
-
-		aggregate_return_types.push_back(aggr.return_type);
-		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
-		}
-		if (aggr.filter) {
-			payload_types_filters.push_back(aggr.filter->return_type);
-		}
-		if (!aggr.function.combine) {
-			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
-		}
-		aggregates.push_back(move(expr));
-	}
-
-	for (const auto &pay_filters : payload_types_filters) {
-		payload_types.push_back(pay_filters);
-	}
-
+	auto &aggregates = grouped_aggregate_data.aggregates;
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
@@ -96,7 +68,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	}
 
 	for (auto &grouping_set : grouping_sets) {
-		radix_tables.emplace_back(grouping_set, *this);
+		radix_tables.emplace_back(grouping_set, grouped_aggregate_data);
 	}
 }
 
@@ -118,8 +90,9 @@ public:
 class HashAggregateLocalState : public LocalSinkState {
 public:
 	HashAggregateLocalState(const PhysicalHashAggregate &op, ExecutionContext &context) {
-		if (!op.payload_types.empty()) {
-			aggregate_input_chunk.InitializeEmpty(op.payload_types);
+		auto &payload_types = op.grouped_aggregate_data.payload_types;
+		if (!payload_types.empty()) {
+			aggregate_input_chunk.InitializeEmpty(payload_types);
 		}
 
 		radix_states.reserve(op.radix_tables.size());
@@ -155,6 +128,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 
 	DataChunk &aggregate_input_chunk = llstate.aggregate_input_chunk;
 
+	auto &aggregates = grouped_aggregate_data.aggregates;
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
@@ -194,16 +168,15 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 	}
 }
 
-class HashAggregateFinalizeEvent : public Event {
+class HashAggregateFinalizeEvent : public BasePipelineEvent {
 public:
 	HashAggregateFinalizeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p,
 	                           Pipeline *pipeline_p)
-	    : Event(pipeline_p->executor), op(op_p), gstate(gstate_p), pipeline(pipeline_p) {
+	    : BasePipelineEvent(*pipeline_p), op(op_p), gstate(gstate_p) {
 	}
 
 	const PhysicalHashAggregate &op;
 	HashAggregateGlobalState &gstate;
-	Pipeline *pipeline;
 
 public:
 	void Schedule() override {
@@ -236,40 +209,87 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class PhysicalHashAggregateState : public GlobalSourceState {
+class PhysicalHashAggregateGlobalSourceState : public GlobalSourceState {
 public:
-	explicit PhysicalHashAggregateState(const PhysicalHashAggregate &op) : scan_index(0) {
+	PhysicalHashAggregateGlobalSourceState(ClientContext &context, const PhysicalHashAggregate &op)
+	    : op(op), state_index(0) {
 		for (auto &rt : op.radix_tables) {
-			radix_states.push_back(rt.GetGlobalSourceState());
+			radix_states.push_back(rt.GetGlobalSourceState(context));
 		}
 	}
 
-	idx_t scan_index;
+	const PhysicalHashAggregate &op;
+	mutex lock;
+	atomic<idx_t> state_index;
 
 	vector<unique_ptr<GlobalSourceState>> radix_states;
+
+public:
+	idx_t MaxThreads() override {
+		// If there are no tables, we only need one thread.
+		if (op.radix_tables.empty()) {
+			return 1;
+		}
+
+		auto &ht_state = (HashAggregateGlobalState &)*op.sink_state;
+		idx_t count = 0;
+		for (size_t sidx = 0; sidx < op.radix_tables.size(); ++sidx) {
+			count += op.radix_tables[sidx].Size(*ht_state.radix_states[sidx]);
+		}
+		return MaxValue<idx_t>(1, count / RowGroup::ROW_GROUP_SIZE);
+	}
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PhysicalHashAggregateState>(*this);
+	return make_unique<PhysicalHashAggregateGlobalSourceState>(context, *this);
+}
+
+class PhysicalHashAggregateLocalSourceState : public LocalSourceState {
+public:
+	explicit PhysicalHashAggregateLocalSourceState(ExecutionContext &context, const PhysicalHashAggregate &op) {
+		for (auto &rt : op.radix_tables) {
+			radix_states.push_back(rt.GetLocalSourceState(context));
+		}
+	}
+
+	vector<unique_ptr<LocalSourceState>> radix_states;
+};
+
+unique_ptr<LocalSourceState> PhysicalHashAggregate::GetLocalSourceState(ExecutionContext &context,
+                                                                        GlobalSourceState &gstate) const {
+	return make_unique<PhysicalHashAggregateLocalSourceState>(context, *this);
 }
 
 void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                    LocalSourceState &lstate) const {
-	auto &gstate = (HashAggregateGlobalState &)*sink_state;
-	auto &state = (PhysicalHashAggregateState &)gstate_p;
-	while (state.scan_index < state.radix_states.size()) {
-		radix_tables[state.scan_index].GetData(context, chunk, *gstate.radix_states[state.scan_index],
-		                                       *state.radix_states[state.scan_index]);
+                                    LocalSourceState &lstate_p) const {
+	auto &ht_state = (HashAggregateGlobalState &)*sink_state;
+	auto &gstate = (PhysicalHashAggregateGlobalSourceState &)gstate_p;
+	auto &lstate = (PhysicalHashAggregateLocalSourceState &)lstate_p;
+	while (true) {
+		idx_t radix_idx = gstate.state_index;
+		if (radix_idx >= radix_tables.size()) {
+			break;
+		}
+		radix_tables[radix_idx].GetData(context, chunk, *ht_state.radix_states[radix_idx],
+		                                *gstate.radix_states[radix_idx], *lstate.radix_states[radix_idx]);
 		if (chunk.size() != 0) {
 			return;
 		}
-
-		state.scan_index++;
+		// move to the next table
+		lock_guard<mutex> l(gstate.lock);
+		radix_idx++;
+		if (radix_idx > gstate.state_index) {
+			// we have not yet worked on the table
+			// move the global index forwards
+			gstate.state_index = radix_idx;
+		}
 	}
 }
 
 string PhysicalHashAggregate::ParamsToString() const {
 	string result;
+	auto &groups = grouped_aggregate_data.groups;
+	auto &aggregates = grouped_aggregate_data.aggregates;
 	for (idx_t i = 0; i < groups.size(); i++) {
 		if (i > 0) {
 			result += "\n";

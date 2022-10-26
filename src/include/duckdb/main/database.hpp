@@ -39,10 +39,17 @@ public:
 	DUCKDB_API TaskScheduler &GetScheduler();
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
+	DUCKDB_API void Invalidate();
+	DUCKDB_API bool IsInvalidated();
+	DUCKDB_API void SetExtensionLoaded(const std::string &extension_name);
 
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
+
+	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
+
+	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
 private:
 	void Initialize(const char *path, DBConfig *config);
@@ -57,6 +64,8 @@ private:
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
+	//! Set to true if a fatal exception has occurred
+	atomic<bool> is_invalidated;
 };
 
 //! The database object. This object holds the catalog and all the
@@ -80,7 +89,7 @@ public:
 			return;
 		}
 		extension.Load(*this);
-		SetExtensionLoaded(extension.Name());
+		instance->SetExtensionLoaded(extension.Name());
 	}
 
 	DUCKDB_API FileSystem &GetFileSystem();
@@ -90,7 +99,6 @@ public:
 	DUCKDB_API static const char *LibraryVersion();
 	DUCKDB_API static string Platform();
 	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
-	DUCKDB_API void SetExtensionLoaded(const std::string &name);
 };
 
 } // namespace duckdb

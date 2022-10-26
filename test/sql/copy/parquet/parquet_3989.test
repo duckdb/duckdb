@@ -1,0 +1,16 @@
+# name: test/sql/copy/parquet/parquet_3989.test
+# description: Issue #3989: Skipping more than 1024 values on list column fails
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE lists as SELECT i as id, [i] as list from range(0,10000) tbl(i);
+
+statement ok
+COPY lists to '__TEST_DIR__/list_bug_test.parquet';
+
+query I
+SELECT list from '__TEST_DIR__/list_bug_test.parquet' where id = 5000;
+----
+[5000]

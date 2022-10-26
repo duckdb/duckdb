@@ -1,27 +1,29 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/planner/binder.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/common/algorithm.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/tableref/bound_table_function.hpp"
-#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/algorithm.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/planner/tableref/bound_table_function.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
 static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function) {
-	return table_function.functions.size() == 1 && table_function.functions[0].arguments.size() == 1 &&
-	       table_function.functions[0].arguments[0].id() == LogicalTypeId::TABLE;
+	auto fun = table_function.functions.GetFunctionByOffset(0);
+	return table_function.functions.Size() == 1 && fun.arguments.size() == 1 &&
+	       fun.arguments[0].id() == LogicalTypeId::TABLE;
 }
 
 bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
@@ -87,6 +89,9 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
+		if (expr->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!expr->IsFoldable()) {
 			error = "Table function requires a constant parameter";
 			return false;
@@ -107,9 +112,65 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 	return true;
 }
 
+unique_ptr<LogicalOperator>
+Binder::BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,
+                                  named_parameter_map_t named_parameters, vector<LogicalType> input_table_types,
+                                  vector<string> input_table_names, const vector<string> &column_name_alias,
+                                  unique_ptr<ExternalDependency> external_dependency) {
+	auto bind_index = GenerateTableIndex();
+	// perform the binding
+	unique_ptr<FunctionData> bind_data;
+	vector<LogicalType> return_types;
+	vector<string> return_names;
+	if (table_function.bind) {
+		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
+		                                  table_function.function_info.get());
+		bind_data = table_function.bind(context, bind_input, return_types, return_names);
+		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
+			auto arrow_bind = (PyTableFunctionData *)bind_data.get();
+			arrow_bind->external_dependency = move(external_dependency);
+		}
+	}
+	if (return_types.size() != return_names.size()) {
+		throw InternalException(
+		    "Failed to bind \"%s\": Table function return_types and return_names must be of the same size",
+		    table_function.name);
+	}
+	if (return_types.empty()) {
+		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
+		                        table_function.name);
+	}
+	// overwrite the names with any supplied aliases
+	for (idx_t i = 0; i < column_name_alias.size() && i < return_names.size(); i++) {
+		return_names[i] = column_name_alias[i];
+	}
+	for (idx_t i = 0; i < return_names.size(); i++) {
+		if (return_names[i].empty()) {
+			return_names[i] = "C" + to_string(i);
+		}
+	}
+	auto get = make_unique<LogicalGet>(bind_index, table_function, move(bind_data), return_types, return_names);
+	get->parameters = parameters;
+	get->named_parameters = named_parameters;
+	get->input_table_types = input_table_types;
+	get->input_table_names = input_table_names;
+	// now add the table function to the bind context so its columns can be bound
+	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
+	                              get->GetTable());
+	return move(get);
+}
+
+unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, vector<Value> parameters) {
+	named_parameter_map_t named_parameters;
+	vector<LogicalType> input_table_types;
+	vector<string> input_table_names;
+	vector<string> column_name_aliases;
+	return BindTableFunctionInternal(function, function.name, move(parameters), move(named_parameters),
+	                                 move(input_table_types), move(input_table_names), column_name_aliases, nullptr);
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	QueryErrorContext error_context(root_statement, ref.query_location);
-	auto bind_index = GenerateTableIndex();
 
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto fexpr = (FunctionExpression *)ref.function.get();
@@ -158,11 +219,12 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	}
 
 	// select the function based on the input parameters
-	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);
+	FunctionBinder function_binder(context);
+	idx_t best_function_idx = function_binder.BindFunction(function->name, function->functions, arguments, error);
 	if (best_function_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(ref, error));
 	}
-	auto &table_function = function->functions[best_function_idx];
+	auto table_function = function->functions.GetFunctionByOffset(best_function_idx);
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
@@ -172,7 +234,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		if (table_function.arguments[i] != LogicalType::ANY && table_function.arguments[i] != LogicalType::TABLE &&
 		    table_function.arguments[i] != LogicalType::POINTER &&
 		    table_function.arguments[i].id() != LogicalTypeId::LIST) {
-			parameters[i] = parameters[i].CastAs(table_function.arguments[i]);
+			parameters[i] = parameters[i].CastAs(context, table_function.arguments[i]);
 		}
 	}
 
@@ -183,38 +245,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		input_table_types = subquery->subquery->types;
 		input_table_names = subquery->subquery->names;
 	}
-
-	// perform the binding
-	unique_ptr<FunctionData> bind_data;
-	vector<LogicalType> return_types;
-	vector<string> return_names;
-	if (table_function.bind) {
-		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
-		                                  table_function.function_info.get());
-		bind_data = table_function.bind(context, bind_input, return_types, return_names);
-	}
-	if (return_types.size() != return_names.size()) {
-		throw InternalException(
-		    "Failed to bind \"%s\": Table function return_types and return_names must be of the same size",
-		    table_function.name);
-	}
-	if (return_types.empty()) {
-		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
-		                        table_function.name);
-	}
-	// overwrite the names with any supplied aliases
-	for (idx_t i = 0; i < ref.column_name_alias.size() && i < return_names.size(); i++) {
-		return_names[i] = ref.column_name_alias[i];
-	}
-	for (idx_t i = 0; i < return_names.size(); i++) {
-		if (return_names[i].empty()) {
-			return_names[i] = "C" + to_string(i);
-		}
-	}
-	auto get = make_unique<LogicalGet>(bind_index, table_function, move(bind_data), return_types, return_names);
-	// now add the table function to the bind context so its columns can be bound
-	bind_context.AddTableFunction(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, return_names,
-	                              return_types, *get);
+	auto get = BindTableFunctionInternal(table_function, ref.alias.empty() ? fexpr->function_name : ref.alias,
+	                                     move(parameters), move(named_parameters), move(input_table_types),
+	                                     move(input_table_names), ref.column_name_alias, move(ref.external_dependency));
 	if (subquery) {
 		get->children.push_back(Binder::CreatePlan(*subquery));
 	}

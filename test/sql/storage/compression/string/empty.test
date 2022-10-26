@@ -1,0 +1,76 @@
+# name: test/sql/storage/compression/string/empty.test
+# description: Test empty strings with string compression
+# group: [string]
+
+require vector_size 512
+# load the DB from disk
+load __TEST_DIR__/test_dictionary.db
+
+foreach compression fsst dictionary
+
+foreach enable_fsst_vector true false
+
+statement ok
+SET enable_fsst_vectors='${enable_fsst_vector}'
+
+statement ok
+PRAGMA force_compression='${compression}'
+
+statement ok
+CREATE TABLE test_empty (a VARCHAR);
+
+statement ok
+INSERT INTO test_empty VALUES('');
+INSERT INTO test_empty VALUES('A');
+INSERT INTO test_empty VALUES(NULL);
+INSERT INTO test_empty VALUES('B');
+INSERT INTO test_empty VALUES('');
+INSERT INTO test_empty VALUES('A');
+
+statement ok
+CHECKPOINT
+
+query I
+select * from test_empty;
+----
+(empty)
+A
+NULL
+B
+(empty)
+A
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_empty') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+statement ok
+CREATE TABLE test_empty_large AS SELECT '' as a from range(0,10000);
+
+statement ok
+INSERT INTO test_empty_large VALUES('A');
+INSERT INTO test_empty_large VALUES('');
+
+statement ok
+CHECKPOINT
+
+query III
+select count(*), min(a[1]), max(a[1]) from test_empty_large limit 5;
+----
+10002	(empty)	A
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_empty_large') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+statement ok
+DROP TABLE test_empty
+
+statement ok
+DROP TABLE test_empty_large
+
+endloop
+
+endloop

@@ -23,7 +23,7 @@ namespace duckdb {
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("COPY TO is disabled by configuration");
 	}
 	BoundStatement result;
@@ -43,7 +43,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	for (auto &option : stmt.info->options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
-			use_tmp_file = option.second[0].CastAs(LogicalType::BOOLEAN).GetValue<bool>();
+			use_tmp_file = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			stmt.info->options.erase(option.first);
 			break;
 		}
@@ -65,7 +65,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("COPY FROM is disabled by configuration");
 	}
 	BoundStatement result;
@@ -99,13 +99,13 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		expected_names.resize(bound_insert.expected_types.size());
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
-				expected_names[bound_insert.column_index_map[i]] = table->columns[i].name;
+				expected_names[bound_insert.column_index_map[i]] = table->columns[i].Name();
 			}
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
 		for (idx_t i = 0; i < table->columns.size(); i++) {
-			expected_names.push_back(table->columns[i].name);
+			expected_names.push_back(table->columns[i].Name());
 		}
 	}
 

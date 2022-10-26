@@ -2,6 +2,7 @@
 
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
@@ -22,6 +23,7 @@
 #include <unistd.h>
 #else
 #include <string>
+#include <sysinfoapi.h>
 
 #ifdef __MINGW32__
 // need to manually define this for mingw
@@ -44,7 +46,20 @@ FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
 	return ClientData::Get(context).file_opener.get();
 }
 
+bool PathMatched(const string &path, const string &sub_path) {
+	if (path.rfind(sub_path, 0) == 0) {
+		return true;
+	}
+	return false;
+}
+
 #ifndef _WIN32
+
+bool FileSystem::IsPathAbsolute(const string &path) {
+	auto path_separator = FileSystem::PathSeparator();
+	return PathMatched(path, path_separator);
+}
+
 string FileSystem::PathSeparator() {
 	return "/";
 }
@@ -59,7 +74,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	errno = 0;
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 	if (errno != 0) {
-		throw IOException("Could not fetch available system memory!");
+		return DConstants::INVALID_INDEX;
 	}
 	return max_memory;
 }
@@ -74,6 +89,27 @@ string FileSystem::GetWorkingDirectory() {
 }
 #else
 
+bool FileSystem::IsPathAbsolute(const string &path) {
+	// 1) A single backslash
+	auto sub_path = FileSystem::PathSeparator();
+	if (PathMatched(path, sub_path)) {
+		return true;
+	}
+	// 2) check if starts with a double-backslash (i.e., \\)
+	sub_path += FileSystem::PathSeparator();
+	if (PathMatched(path, sub_path)) {
+		return true;
+	}
+	// 3) A disk designator with a backslash (e.g., C:\)
+	auto path_aux = path;
+	path_aux.erase(0, 1);
+	sub_path = ":" + FileSystem::PathSeparator();
+	if (PathMatched(path_aux, sub_path)) {
+		return true;
+	}
+	return false;
+}
+
 string FileSystem::PathSeparator() {
 	return "\\";
 }
@@ -86,10 +122,17 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 
 idx_t FileSystem::GetAvailableMemory() {
 	ULONGLONG available_memory_kb;
-	if (!GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
-		throw IOException("Could not fetch available system memory!");
+	if (GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
+		return MinValue<idx_t>(available_memory_kb * 1000, UINTPTR_MAX);
 	}
-	return MinValue<idx_t>(available_memory_kb * 1024, UINTPTR_MAX);
+	// fallback: try GlobalMemoryStatusEx
+	MEMORYSTATUSEX mem_state;
+	mem_state.dwLength = sizeof(MEMORYSTATUSEX);
+
+	if (GlobalMemoryStatusEx(&mem_state)) {
+		return MinValue<idx_t>(mem_state.ullTotalPhys, UINTPTR_MAX);
+	}
+	return DConstants::INVALID_INDEX;
 }
 
 string FileSystem::GetWorkingDirectory() {
@@ -130,13 +173,29 @@ string FileSystem::ConvertSeparators(const string &path) {
 }
 
 string FileSystem::ExtractBaseName(const string &path) {
+	if (path.empty()) {
+		return string();
+	}
 	auto normalized_path = ConvertSeparators(path);
 	auto sep = PathSeparator();
-	auto vec = StringUtil::Split(StringUtil::Split(normalized_path, sep).back(), ".");
+	auto splits = StringUtil::Split(normalized_path, sep);
+	D_ASSERT(!splits.empty());
+	auto vec = StringUtil::Split(splits.back(), ".");
+	D_ASSERT(!vec.empty());
 	return vec[0];
 }
 
-string FileSystem::GetHomeDirectory() {
+string FileSystem::GetHomeDirectory(FileOpener *opener) {
+	// read the home_directory setting first, if it is set
+	if (opener) {
+		Value result;
+		if (opener->TryGetCurrentSetting("home_directory", result)) {
+			if (!result.IsNull() && !result.ToString().empty()) {
+				return result.ToString();
+			}
+		}
+	}
+	// fallback to the default home directories for the specified system
 #ifdef DUCKDB_WINDOWS
 	const char *homedir = getenv("USERPROFILE");
 #else
@@ -146,6 +205,16 @@ string FileSystem::GetHomeDirectory() {
 		return homedir;
 	}
 	return string();
+}
+
+string FileSystem::ExpandPath(const string &path, FileOpener *opener) {
+	if (path.empty()) {
+		return path;
+	}
+	if (path[0] == '~') {
+		return GetHomeDirectory(opener) + path.substr(1);
+	}
+	return path;
 }
 
 // LCOV_EXCL_START

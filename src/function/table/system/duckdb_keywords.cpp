@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-struct DuckDBKeywordsData : public FunctionOperatorData {
+struct DuckDBKeywordsData : public GlobalTableFunctionState {
 	DuckDBKeywordsData() : offset(0) {
 	}
 
@@ -25,17 +25,14 @@ static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, Table
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBKeywordsInit(ClientContext &context, const FunctionData *bind_data,
-                                                    const vector<column_t> &column_ids,
-                                                    TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBKeywordsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBKeywordsData>();
 	result->entries = Parser::KeywordList();
 	return move(result);
 }
 
-void DuckDBKeywordsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                            DataChunk &output) {
-	auto &data = (DuckDBKeywordsData &)*operator_state;
+void DuckDBKeywordsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBKeywordsData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

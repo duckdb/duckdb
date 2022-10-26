@@ -41,6 +41,16 @@ CREATE TABLE uuid_values (
 );
 INSERT INTO uuid_values
     VALUES ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'), (NULL), ('47183823-2574-4bfd-b411-99ed177d3e43'), ('{10203040506070800102030405060708}');
+
+CREATE TYPE int_alias AS INTEGER;
+CREATE TYPE char_alias AS VARCHAR;
+CREATE TABLE alias_values (
+    i int_alias,
+    j varchar,
+    k char_alias
+);
+INSERT INTO alias_values
+    VALUES (2, 'hello world', 'alias'), (NULL, NULL, NULL);
 -- all types
 CREATE TABLE all_types AS SELECT * FROM test_all_types();
 -- test constraints

@@ -438,6 +438,14 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 
 			return SQL_SUCCESS;
 		}
+		case SQL_COLUMN_COUNT:
+		case SQL_DESC_COUNT: {
+			if (numeric_attribute_ptr) {
+				duckdb::Store<SQLLEN>(stmt->row_desc->ird->header.sql_desc_count,
+				                      (duckdb::data_ptr_t)numeric_attribute_ptr);
+			}
+			return SQL_SUCCESS;
+		}
 		case SQL_COLUMN_LENGTH:
 		case SQL_DESC_LENGTH:
 			if (numeric_attribute_ptr) {
@@ -498,6 +506,12 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 			}
 			return SQL_SUCCESS;
 		}
+		case SQL_COLUMN_NULLABLE: {
+			if (numeric_attribute_ptr) {
+				duckdb::Store<SQLINTEGER>(desc_record->sql_desc_nullable, (duckdb::data_ptr_t)numeric_attribute_ptr);
+			}
+			return SQL_SUCCESS;
+		}
 		case SQL_DESC_NULLABLE: {
 			if (numeric_attribute_ptr) {
 				duckdb::Store<SQLLEN>(desc_record->sql_desc_nullable, (duckdb::data_ptr_t)numeric_attribute_ptr);
@@ -529,9 +543,21 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 			}
 			return SQL_SUCCESS;
 		}
+		case SQL_COLUMN_SCALE: {
+			if (numeric_attribute_ptr) {
+				duckdb::Store<SQLINTEGER>(desc_record->sql_desc_scale, (duckdb::data_ptr_t)numeric_attribute_ptr);
+			}
+			return SQL_SUCCESS;
+		}
 		case SQL_DESC_SCALE: {
 			if (numeric_attribute_ptr) {
 				duckdb::Store<SQLLEN>(desc_record->sql_desc_scale, (duckdb::data_ptr_t)numeric_attribute_ptr);
+			}
+			return SQL_SUCCESS;
+		}
+		case SQL_COLUMN_PRECISION: {
+			if (numeric_attribute_ptr) {
+				duckdb::Store<SQLINTEGER>(desc_record->sql_desc_precision, (duckdb::data_ptr_t)numeric_attribute_ptr);
 			}
 			return SQL_SUCCESS;
 		}

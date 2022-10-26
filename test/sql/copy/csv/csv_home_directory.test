@@ -1,0 +1,61 @@
+# name: test/sql/copy/csv/csv_home_directory.test
+# description: CSV writer home directory
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET home_directory='__TEST_DIR__'
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(10)
+
+statement ok
+COPY integers TO '__TEST_DIR__/integers.csv' (FORMAT CSV);
+
+query I
+SELECT * FROM '~/integers.csv'
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement ok
+CREATE TABLE integers_load(i INTEGER);
+
+statement ok
+COPY integers_load FROM '~/integers.csv'
+
+query I
+SELECT * FROM integers_load
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# glob from home directory
+statement ok
+COPY integers TO '__TEST_DIR__/homedir_integers1.csv'
+
+statement ok
+COPY integers TO '__TEST_DIR__/homedir_integers2.csv'
+
+query I
+SELECT COUNT(*) FROM '~/homedir_integers*.csv'
+----
+20

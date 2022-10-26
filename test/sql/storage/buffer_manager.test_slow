@@ -2,6 +2,8 @@
 # description: Test that the buffer manager correctly frees any memory we use
 # group: [storage]
 
+require skip_reload
+
 load
 
 statement ok
@@ -11,7 +13,7 @@ statement ok
 PRAGMA threads=1
 
 statement ok
-PRAGMA memory_limit='1MB'
+PRAGMA memory_limit='2MB'
 
 # streaming results do not use any memory
 query II

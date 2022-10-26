@@ -3,6 +3,7 @@ const duckdb_database = Ptr{Cvoid}
 const duckdb_config = Ptr{Cvoid}
 const duckdb_connection = Ptr{Cvoid}
 const duckdb_prepared_statement = Ptr{Cvoid}
+const duckdb_pending_result = Ptr{Cvoid}
 const duckdb_logical_type = Ptr{Cvoid}
 const duckdb_data_chunk = Ptr{Cvoid}
 const duckdb_vector = Ptr{Cvoid}
@@ -14,9 +15,17 @@ const duckdb_bind_info = Ptr{Cvoid}
 const duckdb_init_info = Ptr{Cvoid}
 const duckdb_function_info = Ptr{Cvoid}
 const duckdb_replacement_scan_info = Ptr{Cvoid}
+const duckdb_task_state = Ptr{Cvoid}
+
+const duckdb_state = Int32;
 const DuckDBSuccess = 0;
 const DuckDBError = 1;
-const duckdb_state = Int32;
+
+const duckdb_pending_state = Int32;
+const DUCKDB_PENDING_RESULT_READY = 0;
+const DUCKDB_PENDING_RESULT_NOT_READY = 1;
+const DUCKDB_PENDING_ERROR = 2;
+
 
 @enum DUCKDB_TYPE_::UInt32 begin
     DUCKDB_TYPE_INVALID = 0
@@ -195,9 +204,9 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_TIMESTAMP_NS => DateTime,
     DUCKDB_TYPE_INTERVAL => Dates.CompoundPeriod,
     DUCKDB_TYPE_UUID => UUID,
-    DUCKDB_TYPE_VARCHAR => AbstractString,
-    DUCKDB_TYPE_JSON => AbstractString,
-    DUCKDB_TYPE_ENUM => AbstractString,
+    DUCKDB_TYPE_VARCHAR => String,
+    DUCKDB_TYPE_JSON => String,
+    DUCKDB_TYPE_ENUM => String,
     DUCKDB_TYPE_BLOB => Base.CodeUnits{UInt8, String},
     DUCKDB_TYPE_MAP => Dict
 )

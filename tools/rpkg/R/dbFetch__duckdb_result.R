@@ -6,6 +6,14 @@ dbFetch__duckdb_result <- function(res, n = -1, ...) {
   if (!res@env$open) {
     stop("result set was closed")
   }
+
+  if (res@arrow) {
+    if (n != -1) {
+      stop("Cannot dbFetch() an Arrow result unless n = -1")
+    }
+    return(as.data.frame(duckdb::duckdb_fetch_arrow(res)))
+  }
+
   if (is.null(res@env$resultset)) {
     stop("Need to call `dbBind()` before `dbFetch()`")
   }
@@ -27,13 +35,9 @@ dbFetch__duckdb_result <- function(res, n = -1, ...) {
   if (!is_wholenumber(n)) {
     stop("n needs to be not a whole number")
   }
-  if (res@stmt_lst$type != "SELECT") {
-    warning("Should not call dbFetch() on results that do not come from SELECT")
+  if (res@stmt_lst$type != "SELECT" && res@stmt_lst$type != "RELATION" && res@stmt_lst$return_type != "QUERY_RESULT") {
+    warning("Should not call dbFetch() on results that do not come from SELECT, got ", res@stmt_lst$type)
     return(data.frame())
-  }
-
-  if (res@arrow) {
-    stop("Cannot dbFetch() an Arrow result")
   }
 
   timezone_out <- res@connection@timezone_out

@@ -103,6 +103,18 @@ string Binder::RetrieveUsingBinding(Binder &current_binder, UsingColumnSet *curr
 	return binding;
 }
 
+static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_columns) {
+	vector<string> result;
+	case_insensitive_set_t handled_columns;
+	for (auto &using_column : using_columns) {
+		if (handled_columns.find(using_column) == handled_columns.end()) {
+			handled_columns.insert(using_column);
+			result.push_back(using_column);
+		}
+	}
+	return result;
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	auto result = make_unique<BoundJoinRef>();
 	result->left_binder = Binder::CreateBinder(context, this);
@@ -172,6 +184,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		D_ASSERT(!result->condition);
 		extra_using_columns = ref.using_columns;
 	}
+	extra_using_columns = RemoveDuplicateUsingColumns(extra_using_columns);
+
 	if (!extra_using_columns.empty()) {
 		vector<UsingColumnSet *> left_using_bindings;
 		vector<UsingColumnSet *> right_using_bindings;

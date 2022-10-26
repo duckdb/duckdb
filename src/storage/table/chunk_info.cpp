@@ -24,7 +24,7 @@ struct CommittedVersionOperator {
 	}
 };
 
-static bool UseVersion(Transaction &transaction, transaction_t id) {
+static bool UseVersion(TransactionData transaction, transaction_t id) {
 	return TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
@@ -59,7 +59,7 @@ idx_t ChunkConstantInfo::TemplatedGetSelVector(transaction_t start_time, transac
 	return 0;
 }
 
-idx_t ChunkConstantInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
+idx_t ChunkConstantInfo::GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) {
 	return TemplatedGetSelVector<TransactionVersionOperator>(transaction.start_time, transaction.transaction_id,
 	                                                         sel_vector, max_count);
 }
@@ -69,7 +69,7 @@ idx_t ChunkConstantInfo::GetCommittedSelVector(transaction_t min_start_id, trans
 	return TemplatedGetSelVector<CommittedVersionOperator>(min_start_id, min_transaction_id, sel_vector, max_count);
 }
 
-bool ChunkConstantInfo::Fetch(Transaction &transaction, row_t row) {
+bool ChunkConstantInfo::Fetch(TransactionData transaction, row_t row) {
 	return UseVersion(transaction, insert_id) && !UseVersion(transaction, delete_id);
 }
 
@@ -159,20 +159,20 @@ idx_t ChunkVectorInfo::GetCommittedSelVector(transaction_t min_start_id, transac
 	return TemplatedGetSelVector<CommittedVersionOperator>(min_start_id, min_transaction_id, sel_vector, max_count);
 }
 
-idx_t ChunkVectorInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
+idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) {
 	return GetSelVector(transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 }
 
-bool ChunkVectorInfo::Fetch(Transaction &transaction, row_t row) {
+bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
 	return UseVersion(transaction, inserted[row]) && !UseVersion(transaction, deleted[row]);
 }
 
-idx_t ChunkVectorInfo::Delete(Transaction &transaction, row_t rows[], idx_t count) {
+idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t count) {
 	any_deleted = true;
 
 	idx_t deleted_tuples = 0;
 	for (idx_t i = 0; i < count; i++) {
-		if (deleted[rows[i]] == transaction.transaction_id) {
+		if (deleted[rows[i]] == transaction_id) {
 			continue;
 		}
 		// first check the chunk for conflicts
@@ -180,11 +180,9 @@ idx_t ChunkVectorInfo::Delete(Transaction &transaction, row_t rows[], idx_t coun
 			// tuple was already deleted by another transaction
 			throw TransactionException("Conflict on tuple deletion!");
 		}
-		if (inserted[rows[i]] >= TRANSACTION_ID_START) {
-			throw TransactionException("Deleting non-committed tuples is not supported (for now...)");
-		}
 		// after verifying that there are no conflicts we mark the tuple as deleted
-		deleted[rows[i]] = transaction.transaction_id;
+		deleted[rows[i]] = transaction_id;
+		rows[deleted_tuples] = rows[i];
 		deleted_tuples++;
 	}
 	return deleted_tuples;

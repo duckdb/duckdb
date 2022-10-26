@@ -363,3 +363,16 @@ class TestArrowFilterPushdown(object):
 
         os.remove("data1.parquet")
         os.remove("data2.parquet")
+
+    def test_filter_column_removal(self,duckdb_cursor):
+        if not can_run:
+            return
+        duckdb_conn.execute("CREATE TABLE test AS SELECT range i, range j FROM range(5)")
+        duck_test_table = duckdb_conn.table("test")
+        arrow_test_table = duck_test_table.arrow()
+        duckdb_conn.register("arrow_test_table",arrow_test_table)
+
+        # PR 4817 - remove filter columns that are unused in the remainder of the query plan from the table function
+        query_res = duckdb_conn.execute("EXPLAIN SELECT count(*) from testarrow where a = 100 or b =1").fetchall()
+        match = re.search("│ +j +│", query_res[0][1])
+        assert not match

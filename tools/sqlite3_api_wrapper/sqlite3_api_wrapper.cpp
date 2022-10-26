@@ -1,4 +1,5 @@
 #include "sqlite3.h"
+#include "sql_auto_complete_extension.hpp"
 #include "udf_struct_sqlite3.h"
 #include "sqlite3_udf_wrapper.hpp"
 #include "cast_sqlite.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/preserved_error.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <ctype.h>
@@ -90,15 +92,25 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 	try {
 		pDb = new sqlite3();
 		DBConfig config;
-		config.access_mode = AccessMode::AUTOMATIC;
+		config.options.access_mode = AccessMode::AUTOMATIC;
 		if (flags & SQLITE_OPEN_READONLY) {
-			config.access_mode = AccessMode::READ_ONLY;
+			config.options.access_mode = AccessMode::READ_ONLY;
+		}
+		if (flags & DUCKDB_UNSIGNED_EXTENSIONS) {
+			config.options.allow_unsigned_extensions = true;
 		}
 		pDb->db = make_unique<DuckDB>(filename, &config);
+		pDb->db->LoadExtension<SQLAutoCompleteExtension>();
 		pDb->con = make_unique<Connection>(*pDb->db);
+	} catch (const Exception &ex) {
+		if (pDb) {
+			pDb->last_error = PreservedError(ex);
+			pDb->errCode = SQLITE_ERROR;
+		}
+		rc = SQLITE_ERROR;
 	} catch (std::exception &ex) {
 		if (pDb) {
-			pDb->last_error = ex.what();
+			pDb->last_error = PreservedError(ex);
 			pDb->errCode = SQLITE_ERROR;
 		}
 		rc = SQLITE_ERROR;
@@ -155,15 +167,15 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		// we directly execute all statements besides the final one
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
 			auto res = db->con->Query(move(statements[i]));
-			if (!res->success) {
-				db->last_error = res->error;
+			if (res->HasError()) {
+				db->last_error = res->GetErrorObject();
 				return SQLITE_ERROR;
 			}
 		}
 
 		// now prepare the query
 		auto prepared = db->con->Prepare(move(statements.back()));
-		if (!prepared->success) {
+		if (prepared->HasError()) {
 			// failed to prepare: set the error message
 			db->last_error = prepared->error;
 			return SQLITE_ERROR;
@@ -187,8 +199,11 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		*ppStmt = stmt.release();
 		return SQLITE_OK;
+	} catch (const Exception &ex) {
+		db->last_error = PreservedError(ex);
+		return SQLITE_ERROR;
 	} catch (std::exception &ex) {
-		db->last_error = ex.what();
+		db->last_error = PreservedError(ex);
 		return SQLITE_ERROR;
 	}
 }
@@ -199,16 +214,16 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		return SQLITE_MISUSE;
 	}
 	if (!pStmt->prepared) {
-		pStmt->db->last_error = "Attempting sqlite3_step() on a non-successfully prepared statement";
+		pStmt->db->last_error = PreservedError("Attempting sqlite3_step() on a non-successfully prepared statement");
 		return SQLITE_ERROR;
 	}
 	pStmt->current_text = nullptr;
 	if (!pStmt->result) {
 		// no result yet! call Execute()
 		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, true);
-		if (!pStmt->result->success) {
+		if (pStmt->result->HasError()) {
 			// error in execute: clear prepared statement
-			pStmt->db->last_error = pStmt->result->error;
+			pStmt->db->last_error = pStmt->result->GetErrorObject();
 			pStmt->prepared = nullptr;
 			return SQLITE_ERROR;
 		}
@@ -225,7 +240,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		    pStmt->current_chunk->size() > 0) {
 			// update total changes
 			auto row_changes = pStmt->current_chunk->GetValue(0, 0);
-			if (!row_changes.IsNull() && row_changes.TryCastAs(LogicalType::BIGINT)) {
+			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
 				pStmt->db->last_changes = row_changes.GetValue<int64_t>();
 				pStmt->db->total_changes += row_changes.GetValue<int64_t>();
 			}
@@ -433,7 +448,8 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType 
 		return false;
 	}
 	try {
-		val = pStmt->current_chunk->data[iCol].GetValue(pStmt->current_row).CastAs(target_type);
+		val =
+		    pStmt->current_chunk->data[iCol].GetValue(pStmt->current_row).CastAs(*pStmt->db->con->context, target_type);
 	} catch (...) {
 		return false;
 	}
@@ -638,8 +654,8 @@ int sqlite3_initialize(void) {
 
 int sqlite3_finalize(sqlite3_stmt *pStmt) {
 	if (pStmt) {
-		if (pStmt->result && !pStmt->result->success) {
-			pStmt->db->last_error = string(pStmt->result->error);
+		if (pStmt->result && pStmt->result->HasError()) {
+			pStmt->db->last_error = pStmt->result->GetErrorObject();
 			delete pStmt;
 			return SQLITE_ERROR;
 		}
@@ -761,11 +777,11 @@ const char *sqlite3_errmsg(sqlite3 *db) {
 	if (!db) {
 		return "";
 	}
-	return db->last_error.c_str();
+	return db->last_error.Message().c_str();
 }
 
 void sqlite3_interrupt(sqlite3 *db) {
-	if (db) {
+	if (db && db->con) {
 		db->con->Interrupt();
 	}
 }
@@ -1670,7 +1686,7 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 
 	if (pVal->type == SQLiteTypeValue::INTEGER || pVal->type == SQLiteTypeValue::FLOAT) {
 		Value value = (pVal->type == SQLiteTypeValue::INTEGER) ? Value::BIGINT(pVal->u.i) : Value::DOUBLE(pVal->u.r);
-		if (!value.TryCastAs(LogicalType::VARCHAR)) {
+		if (!value.DefaultTryCastAs(LogicalType::VARCHAR)) {
 			pVal->db->errCode = SQLITE_NOMEM;
 			return nullptr;
 		}

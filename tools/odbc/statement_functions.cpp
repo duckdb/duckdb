@@ -52,8 +52,8 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 
 		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
 		stmt->stmt = stmt->dbc->conn->Prepare(query);
-		if (!stmt->stmt->success) {
-			DiagRecord diag_rec(stmt->stmt->error, SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
+		if (stmt->stmt->HasError()) {
+			DiagRecord diag_rec(stmt->stmt->error.Message(), SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
 			                    stmt->dbc->GetDataSourceName());
 			throw OdbcException("PrepareStmt", SQL_ERROR, diag_rec);
 		}
@@ -107,8 +107,8 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 
 	stmt->res = stmt->stmt->Execute(values);
 
-	if (!stmt->res->success) {
-		duckdb::DiagRecord diag_rec("Statement execution was not successful", duckdb::SQLStateType::GENERAL_ERROR,
+	if (stmt->res->HasError()) {
+		duckdb::DiagRecord diag_rec(stmt->res->GetError(), duckdb::SQLStateType::GENERAL_ERROR,
 		                            stmt->dbc->GetDataSourceName());
 		throw duckdb::OdbcException("SingleExecuteStmt", SQL_ERROR, diag_rec);
 	}
@@ -161,7 +161,7 @@ static SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Va
 	// When the driver returns fixed-length data, such as an integer or a date structure, the driver ignores
 	// BufferLength... D_ASSERT(((size_t)buffer_length) >= sizeof(DEST));
 	try {
-		auto casted_value = val.CastAs(type).GetValue<SRC>();
+		auto casted_value = val.CastAs(*stmt->dbc->conn->context, type).GetValue<SRC>();
 		Store<DEST>(casted_value, (duckdb::data_ptr_t)target_value_ptr);
 		if (str_len_or_ind_ptr) {
 			*str_len_or_ind_ptr = sizeof(casted_value);

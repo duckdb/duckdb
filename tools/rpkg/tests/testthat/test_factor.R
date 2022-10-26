@@ -1,6 +1,3 @@
-library("DBI")
-library("testthat")
-
 test_that("factors can be round tripped", {
   con <- dbConnect(duckdb::duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))

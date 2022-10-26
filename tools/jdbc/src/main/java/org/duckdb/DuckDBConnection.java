@@ -35,6 +35,7 @@ public class DuckDBConnection implements java.sql.Connection {
 		conn_ref = DuckDBNative.duckdb_jdbc_connect(db.db_ref);
 		DuckDBNative.duckdb_jdbc_set_auto_commit(conn_ref, true);
 		this.db = db;
+		db.incrementConnections();
 	}
 	
 	public Statement createStatement(int resultSetType, int resultSetConcurrency, int resultSetHoldability)
@@ -99,6 +100,7 @@ public class DuckDBConnection implements java.sql.Connection {
 		if (conn_ref != null) {
 			DuckDBNative.duckdb_jdbc_disconnect(conn_ref);
 			conn_ref = null;
+			db.maybeShutdown();
 		}
 		db = null;
 	}
@@ -202,7 +204,7 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public String getSchema() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return DuckDBNative.duckdb_jdbc_get_schema(conn_ref);
 	}
 
 	public void abort(Executor executor) throws SQLException {

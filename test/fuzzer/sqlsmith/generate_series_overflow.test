@@ -1,0 +1,34 @@
+# name: test/fuzzer/sqlsmith/generate_series_overflow.test
+# description: Fuzzer #26: overflow in generate series
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(bigint BIGINT);
+
+statement ok
+INSERT INTO tbl VALUES(-9223372036854775808);
+
+statement ok
+INSERT INTO tbl VALUES(9223372036854775807);
+
+statement ok
+INSERT INTO tbl VALUES(NULL);
+
+statement error
+SELECT generate_series(CAST(ref_0."bigint" AS BIGINT)) AS c1 FROM tbl AS ref_0
+
+statement error
+SELECT generate_series(-9223372036854775808, 9223372036854775807, 1) AS c1
+
+query I
+SELECT generate_series(9223372036854775805, 9223372036854775807, 1) AS c1
+----
+[9223372036854775805, 9223372036854775806, 9223372036854775807]
+
+query I
+SELECT generate_series(-9223372036854775806, -9223372036854775808, -1) AS c1
+----
+[-9223372036854775806, -9223372036854775807, -9223372036854775808]

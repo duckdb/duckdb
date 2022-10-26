@@ -1,0 +1,226 @@
+# name: test/sql/aggregate/aggregates/test_any_value.test
+# description: Test the ANY_VALUE function
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement ok
+INSERT INTO tbl VALUES (NULL), (2), (3)
+
+# FIRST() here returns NULL
+query I
+SELECT ANY_VALUE(i) AS a FROM tbl
+----
+2
+
+
+statement ok
+DROP TABLE tbl
+
+#
+# Test all types
+#
+
+# Numerics
+foreach type <numeric>
+
+statement ok
+CREATE TABLE five AS SELECT i::${type} AS i FROM range(1, 6, 1) t1(i)
+
+query I
+SELECT ANY_VALUE(i) FROM five
+----
+1
+
+query II
+SELECT i % 3 AS g, ANY_VALUE(i) FROM five GROUP BY 1 ORDER BY 1
+----
+0	3
+1	1
+2	2
+
+query I
+SELECT ANY_VALUE(i ORDER BY 5-i) FROM five
+----
+5
+
+query II
+SELECT i % 3 AS g, ANY_VALUE(i ORDER BY 5-i) FROM five GROUP BY 1 ORDER BY 1
+----
+0	3
+1	4
+2	5
+
+statement ok
+DROP TABLE five
+
+endloop
+
+# Decimals
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE five AS SELECT i::${type} AS i FROM range(1, 6, 1) t1(i)
+
+query I
+SELECT ANY_VALUE(i ORDER BY 5-i) FROM five
+----
+5.0
+
+query II
+SELECT i::INTEGER % 3 AS g, ANY_VALUE(i ORDER BY 5-i) FROM five GROUP BY 1 ORDER BY 1
+----
+0	3.0
+1	4.0
+2	5.0
+
+statement ok
+DROP TABLE five
+
+endloop
+
+# Temporal
+statement ok
+CREATE TABLE five_dates AS
+        SELECT 1 AS i,
+               NULL::DATE AS d,
+               NULL::TIMESTAMP AS dt,
+               NULL::TIME AS t,
+               NULL::INTERVAL AS s
+        UNION ALL
+	SELECT
+		i::integer AS i,
+		'2021-08-20'::DATE + i::INTEGER AS d,
+		'2021-08-20'::TIMESTAMP + INTERVAL (i) HOUR AS dt,
+		'14:59:37'::TIME + INTERVAL (i) MINUTE AS t,
+		INTERVAL (i) SECOND AS s
+	FROM range(1, 6, 1) t1(i)
+
+query IIII
+SELECT ANY_VALUE(d), ANY_VALUE(dt), ANY_VALUE(t), ANY_VALUE(s) FROM five_dates
+----
+2021-08-21	2021-08-20 01:00:00	15:00:37	00:00:01
+
+query IIIII
+SELECT i % 3 AS g, ANY_VALUE(d), ANY_VALUE(dt), ANY_VALUE(t), ANY_VALUE(s)
+FROM five_dates
+GROUP BY 1
+ORDER BY 1
+----
+0	2021-08-23	2021-08-20 03:00:00	15:02:37	00:00:03
+1	2021-08-21	2021-08-20 01:00:00	15:00:37	00:00:01
+2	2021-08-22	2021-08-20 02:00:00	15:01:37	00:00:02
+
+query IIII
+SELECT ANY_VALUE(d ORDER BY 5-i), ANY_VALUE(dt ORDER BY 5-i), ANY_VALUE(t ORDER BY 5-i), ANY_VALUE(s ORDER BY 5-i) FROM five_dates
+----
+2021-08-25	2021-08-20 05:00:00	15:04:37	00:00:05
+
+query IIIII
+SELECT i % 3 AS g, ANY_VALUE(d ORDER BY 5-i), ANY_VALUE(dt ORDER BY 5-i), ANY_VALUE(t ORDER BY 5-i), ANY_VALUE(s ORDER BY 5-i)
+FROM five_dates
+GROUP BY 1
+ORDER BY 1
+----
+0	2021-08-23	2021-08-20 03:00:00	15:02:37	00:00:03
+1	2021-08-24	2021-08-20 04:00:00	15:03:37	00:00:04
+2	2021-08-25	2021-08-20 05:00:00	15:04:37	00:00:05
+
+# WITH TIME ZONE
+query II
+SELECT ANY_VALUE(dt::TIMESTAMPTZ), ANY_VALUE(t::TIMETZ) FROM five_dates
+----
+2021-08-20 01:00:00+00	15:00:37+00
+
+query III
+SELECT i % 3 AS g, ANY_VALUE(dt::TIMESTAMPTZ), ANY_VALUE(t::TIMETZ)
+FROM five_dates
+GROUP BY 1
+ORDER BY 1
+----
+0	2021-08-20 03:00:00+00	15:02:37+00
+1	2021-08-20 01:00:00+00	15:00:37+00
+2	2021-08-20 02:00:00+00	15:01:37+00
+
+query II
+SELECT ANY_VALUE(dt::TIMESTAMPTZ ORDER BY 5-i), ANY_VALUE(t::TIMETZ ORDER BY 5-i) FROM five_dates
+----
+2021-08-20 05:00:00+00	15:04:37+00
+
+query III
+SELECT i % 3 AS g, ANY_VALUE(dt::TIMESTAMPTZ ORDER BY 5-i), ANY_VALUE(t::TIMETZ ORDER BY 5-i)
+FROM five_dates
+GROUP BY 1
+ORDER BY 1
+----
+0	2021-08-20 03:00:00+00	15:02:37+00
+1	2021-08-20 04:00:00+00	15:03:37+00
+2	2021-08-20 05:00:00+00	15:04:37+00
+
+statement ok
+DROP TABLE five_dates
+
+# Complex
+statement ok
+CREATE TABLE five_complex AS
+	SELECT
+		1 AS i,
+		NULL::VARCHAR AS s,
+		NULL::BIGINT[] AS l,
+		NULL AS r
+        UNION ALL
+	SELECT
+		i::integer AS i,
+		i::VARCHAR AS s,
+		[i] AS l,
+		{'a': i} AS r
+	FROM range(1, 6, 1) t1(i)
+
+query III
+SELECT ANY_VALUE(s), ANY_VALUE(l), ANY_VALUE(r)
+FROM five_complex
+----
+1	[1]	{'a': 1}
+
+query IIII
+SELECT i % 3 AS g, ANY_VALUE(s), ANY_VALUE(l), ANY_VALUE(r)
+FROM five_complex
+GROUP BY 1
+ORDER BY 1
+----
+0	3	[3]	{'a': 3}
+1	1	[1]	{'a': 1}
+2	2	[2]	{'a': 2}
+
+query III
+SELECT ANY_VALUE(s ORDER BY 5-i), ANY_VALUE(l ORDER BY 5-i), ANY_VALUE(r ORDER BY 5-i)
+FROM five_complex
+----
+5	[5]	{'a': 5}
+
+query IIII
+SELECT i % 3 AS g, ANY_VALUE(s ORDER BY 5-i), ANY_VALUE(l ORDER BY 5-i), ANY_VALUE(r ORDER BY 5-i)
+FROM five_complex
+GROUP BY 1
+ORDER BY 1
+----
+0	3	[3]	{'a': 3}
+1	4	[4]	{'a': 4}
+2	5	[5]	{'a': 5}
+
+statement ok
+DROP TABLE five_complex
+
+# Window Function
+query I
+SELECT ANY_VALUE(i) OVER () AS a FROM generate_series(1, 5) t(i);
+----
+1
+1
+1
+1
+1
