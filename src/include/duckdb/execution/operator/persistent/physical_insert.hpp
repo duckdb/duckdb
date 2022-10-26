@@ -66,6 +66,12 @@ public:
 	bool ParallelSink() const override {
 		return parallel;
 	}
+
+public:
+	static void GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types,
+	                          vector<unique_ptr<Expression>> &bound_defaults);
+	static void ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk, const vector<idx_t> &column_index_map,
+	                            ExpressionExecutor &defaults_executor, DataChunk &result);
 };
 
 } // namespace duckdb

@@ -53,6 +53,7 @@ public:
 	case_insensitive_map_t<column_t> name_map;
 
 public:
+	bool HasGeneratedColumns() const;
 	//! For debugging purposes, count how many columns are STANDARD
 	idx_t StandardColumnCount() const;
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;

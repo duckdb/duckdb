@@ -2,10 +2,6 @@
 # description: Test parallel insert from many groups
 # group: [insert]
 
-# FIXME: this is required because of a bug in FSST, remove when that bug is fixed
-statement ok
-PRAGMA force_compression='uncompressed'
-
 statement ok
 CREATE TABLE integers AS SELECT * FROM range(1000000) tbl(i);
 
