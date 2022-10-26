@@ -112,11 +112,14 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 void ParquetOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(binary_as_string);
 	writer.WriteField<bool>(filename);
+	writer.WriteField<bool>(file_row_number);
 	writer.WriteField<bool>(hive_partitioning);
 }
+
 void ParquetOptions::Deserialize(FieldReader &reader) {
 	binary_as_string = reader.ReadRequired<bool>();
 	filename = reader.ReadRequired<bool>();
+	file_row_number = reader.ReadRequired<bool>();
 	hive_partitioning = reader.ReadRequired<bool>();
 }
 
