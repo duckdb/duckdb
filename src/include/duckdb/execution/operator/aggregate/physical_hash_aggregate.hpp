@@ -73,6 +73,8 @@ public:
 	//! The radix partitioned hash tables (one per grouping set)
 	vector<HashAggregateGroupingData> groupings;
 	unique_ptr<DistinctAggregateCollectionInfo> distinct_collection_info;
+	//! A recreation of the input chunk, with nulls for everything that isnt a group
+	vector<LogicalType> input_group_types;
 
 	unordered_map<Expression *, size_t> filter_indexes;
 
@@ -99,8 +101,8 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
-	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate,
-	                          bool check_distinct) const;
+	SinkFinalizeType FinalizeInternal(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate,
+	                                  bool check_distinct) const;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;

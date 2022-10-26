@@ -46,7 +46,7 @@ struct DistinctAggregateData {
 public:
 	DistinctAggregateData(const DistinctAggregateCollectionInfo &info);
 	DistinctAggregateData(const DistinctAggregateCollectionInfo &info, GroupingSet groups,
-	                      vector<unique_ptr<Expression>> group_expressions);
+	                      const vector<unique_ptr<Expression>> *group_expressions);
 	//! The data used by the hashtables
 	vector<unique_ptr<GroupedAggregateData>> grouped_aggregate_data;
 	//! The hashtables

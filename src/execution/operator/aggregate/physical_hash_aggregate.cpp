@@ -21,7 +21,7 @@ HashAggregateGroupingData::HashAggregateGroupingData(GroupingSet &grouping_set_p
                                                      unique_ptr<DistinctAggregateCollectionInfo> &info)
     : table_data(grouping_set_p, grouped_aggregate_data) {
 	if (info) {
-		distinct_data = make_unique<DistinctAggregateData>(*info);
+		distinct_data = make_unique<DistinctAggregateData>(*info, grouping_set_p, &grouped_aggregate_data.groups);
 	}
 }
 
@@ -70,6 +70,27 @@ HashAggregateGroupingLocalState::HashAggregateGroupingLocalState(const PhysicalH
 	}
 }
 
+static vector<LogicalType> CreateGroupChunkTypes(vector<unique_ptr<Expression>> &groups) {
+	set<idx_t> group_indices;
+
+	if (groups.empty()) {
+		return {};
+	}
+
+	for (auto &group : groups) {
+		D_ASSERT(group->type == ExpressionType::BOUND_REF);
+		auto &bound_ref = (BoundReferenceExpression &)*group;
+		group_indices.insert(bound_ref.index);
+	}
+	idx_t highest_index = *group_indices.rbegin();
+	vector<LogicalType> types(highest_index + 1, LogicalType::SQLNULL);
+	for (auto &group : groups) {
+		auto &bound_ref = (BoundReferenceExpression &)*group;
+		types[bound_ref.index] = bound_ref.return_type;
+	}
+	return types;
+}
+
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality)
     : PhysicalHashAggregate(context, move(types), move(expressions), {}, estimated_cardinality) {
@@ -97,6 +118,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		}
 		grouping_sets.push_back(move(set));
 	}
+	input_group_types = CreateGroupChunkTypes(groups_p);
+
 	grouped_aggregate_data.InitializeGroupby(move(groups_p), move(expressions), move(grouping_functions_p));
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
@@ -147,9 +170,22 @@ public:
 			auto &grouping = op.groupings[i];
 			grouping_states.emplace_back(grouping, context);
 		}
+		vector<LogicalType> filter_types;
+		for (auto &aggr : op.grouped_aggregate_data.aggregates) {
+			auto &aggregate = (BoundAggregateExpression &)*aggr;
+			for (auto &child : aggregate.children) {
+				payload_types.push_back(child->return_type);
+			}
+			if (aggregate.filter) {
+				filter_types.push_back(aggregate.filter->return_type);
+			}
+		}
+		payload_types.reserve(payload_types.size() + filter_types.size());
+		payload_types.insert(payload_types.end(), filter_types.begin(), filter_types.end());
 	}
 
 	vector<HashAggregateGroupingGlobalState> grouping_states;
+	vector<LogicalType> payload_types;
 	//! Whether or not the aggregate is finished
 	bool finished = false;
 };
@@ -392,7 +428,7 @@ public:
 
 	void AggregateDistinctGrouping(DistinctAggregateCollectionInfo &info,
 	                               const HashAggregateGroupingData &grouping_data,
-	                               HashAggregateGroupingGlobalState &grouping_state) {
+	                               HashAggregateGroupingGlobalState &grouping_state, idx_t grouping_idx) {
 		auto &aggregates = info.aggregates;
 		auto &data = *grouping_data.distinct_data;
 		auto &state = *grouping_state.distinct_state;
@@ -401,12 +437,15 @@ public:
 		ThreadContext temp_thread_context(context);
 		ExecutionContext temp_exec_context(context, temp_thread_context);
 
+		auto temp_local_state = grouping_data.table_data.GetLocalSinkState(temp_exec_context);
+
 		idx_t payload_idx = 0;
 		idx_t next_payload_idx = 0;
 
+		// Create a chunk that mimics the 'input' chunk in Sink, for storing the group vectors
 		DataChunk group_chunk;
-		group_chunk.Initialize(context, grouping_data.table_data.group_types);
-		auto distinct_aggr_children = info.total_child_count;
+		group_chunk.Initialize(context, op.input_group_types);
+
 		auto &groups = op.grouped_aggregate_data.groups;
 
 		for (idx_t i = 0; i < aggregates.size(); i++) {
@@ -431,17 +470,13 @@ public:
 
 			auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
 			DataChunk aggregate_input_chunk;
-			if (!grouped_aggregate_data.payload_types.empty()) {
-				aggregate_input_chunk.Initialize(context, grouped_aggregate_data.payload_types);
+			if (!gstate.payload_types.empty()) {
+				aggregate_input_chunk.Initialize(context, gstate.payload_types);
 			}
 
 			//! Retrieve the stored data from the hashtable
 			idx_t groups_size = grouped_aggregate_data.GroupCount();
-			idx_t group_by_size = groups_size - distinct_aggr_children;
-
-			// FIXME: this is deallocated at the end of this, but in Finalize this is read from, so that might be
-			// causing the `Invalid bool load` ?
-			auto temp_local_state = grouping_data.table_data.GetLocalSinkState(temp_exec_context);
+			idx_t group_by_size = groups_size - grouped_aggregate_data.payload_types.size();
 
 			while (true) {
 				output_chunk.Reset();
@@ -450,20 +485,29 @@ public:
 				if (output_chunk.size() == 0) {
 					break;
 				}
-				// Populate the group chunk
-				// FIXME: is this guaranteed to line up?
-				for (idx_t idx = 0; idx < group_chunk.ColumnCount(); idx++) {
-					group_chunk.data[idx].Reference(output_chunk.data[idx]);
-				}
+				//// FIXME: did we add the groups to the aggregate_input_chunk ?
+				// for (auto& entry : op.grouping_sets[grouping_idx]) {
+				//	auto& group_expr = op.grouped_aggregate_data.groups[entry];
+				//	auto& bound_ref_expr = (BoundReferenceExpression&)*group_expr;
+				//	aggregate_input_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
+				// }
 
 				// Skip the group_by vectors (located at the start of the 'groups' vector)
 				// Map from the output_chunk to the aggregate_input_chunk, using the child expressions
-				for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.aggregates.size(); child_idx++) {
-					auto &child = grouped_aggregate_data.aggregates[child_idx];
-					auto &bound_ref_expr = (BoundReferenceExpression &)*child;
-					aggregate_input_chunk.data[bound_ref_expr.index].Reference(
+
+				for (idx_t group_idx = 0; group_idx < group_by_size; group_idx++) {
+					auto &group = grouped_aggregate_data.groups[group_idx];
+					auto &bound_ref_expr = (BoundReferenceExpression &)*group;
+					group_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
+				}
+
+				for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.groups.size() - group_by_size;
+				     child_idx++) {
+					aggregate_input_chunk.data[payload_idx + child_idx].Reference(
 					    output_chunk.data[group_by_size + child_idx]);
 				}
+				aggregate_input_chunk.SetCardinality(output_chunk);
+				group_chunk.SetCardinality(output_chunk);
 
 				// Sink it into the main ht
 				grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
@@ -480,10 +524,10 @@ public:
 		for (idx_t i = 0; i < op.groupings.size(); i++) {
 			auto &grouping = op.groupings[i];
 			auto &grouping_state = gstate.grouping_states[i];
-			AggregateDistinctGrouping(info, grouping, grouping_state);
+			AggregateDistinctGrouping(info, grouping, grouping_state, i);
 		}
 		event->FinishTask();
-		op.Finalize(pipeline, *event, context, gstate, false);
+		op.FinalizeInternal(pipeline, *event, context, gstate, false);
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
@@ -602,8 +646,8 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
 	return SinkFinalizeType::READY;
 }
 
-SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                 GlobalSinkState &gstate_p, bool check_distinct) const {
+SinkFinalizeType PhysicalHashAggregate::FinalizeInternal(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                         GlobalSinkState &gstate_p, bool check_distinct) const {
 	auto &gstate = (HashAggregateGlobalState &)gstate_p;
 
 	if (check_distinct && distinct_collection_info) {
@@ -633,7 +677,7 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                  GlobalSinkState &gstate_p) const {
 	// return Finalize(pipeline, event, context, gstate_p, false); // DELETE ME
-	return Finalize(pipeline, event, context, gstate_p, true);
+	return FinalizeInternal(pipeline, event, context, gstate_p, true);
 }
 
 //===--------------------------------------------------------------------===//

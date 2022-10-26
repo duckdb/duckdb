@@ -42,7 +42,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 }
 
 void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggregate,
-                                              vector<unique_ptr<Expression>> &groups_p) {
+                                              const vector<unique_ptr<Expression>> *groups_p) {
 	auto &aggr = (BoundAggregateExpression &)*aggregate;
 	D_ASSERT(aggr.IsDistinct());
 
@@ -54,14 +54,18 @@ void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggr
 		auto &child = aggr.children[i];
 		group_types.push_back(child->return_type);
 		groups.push_back(child->Copy());
+		payload_types.push_back(child->return_type);
 	}
 	if (!aggr.function.combine) {
 		throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
 	}
 }
 
-void GroupedAggregateData::InitializeDistinctGroups(vector<unique_ptr<Expression>> &groups_p) {
-	for (auto &expr : groups_p) {
+void GroupedAggregateData::InitializeDistinctGroups(const vector<unique_ptr<Expression>> *groups_p) {
+	if (!groups_p) {
+		return;
+	}
+	for (auto &expr : *groups_p) {
 		group_types.push_back(expr->return_type);
 		groups.push_back(expr->Copy());
 	}

@@ -13,6 +13,7 @@ DistinctAggregateCollectionInfo::DistinctAggregateCollectionInfo(const vector<un
 
 	const idx_t aggregate_count = aggregates.size();
 
+	total_child_count = 0;
 	for (idx_t i = 0; i < aggregate_count; i++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 
@@ -77,11 +78,11 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 
 //! Persistent + shared (read-only) data for the distinct aggregates
 DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info)
-    : DistinctAggregateData(info, {}, {}) {
+    : DistinctAggregateData(info, {}, nullptr) {
 }
 
 DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info, GroupingSet groups,
-                                             vector<unique_ptr<Expression>> group_expressions)
+                                             const vector<unique_ptr<Expression>> *group_expressions)
     : info(info) {
 	grouped_aggregate_data.resize(info.table_count);
 	radix_tables.resize(info.table_count);
