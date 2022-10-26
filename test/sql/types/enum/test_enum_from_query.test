@@ -1,0 +1,27 @@
+# name: test/sql/types/enum/test_enum_from_query.test
+# description: ENUM tests
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE number_str AS (SELECT CAST(range AS VARCHAR) AS x FROM range(1, 100));
+
+
+statement ok
+CREATE TYPE number_enum AS ENUM (SELECT x FROM number_str WHERE x >= '50');
+
+statement ok
+CREATE TABLE test (x number_enum);
+
+statement error
+INSERT INTO test VALUES ('49');
+
+statement ok
+INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(50, 100);
+
+
+
+
+
