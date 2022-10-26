@@ -27,12 +27,15 @@ struct CreateTypeInfo : public CreateInfo {
 	//! Logical Type
 	LogicalType type;
 
+    std::unique_ptr<SQLStatement> query;
+
 public:
 	unique_ptr<CreateInfo> Copy() const override {
 		auto result = make_unique<CreateTypeInfo>();
 		CopyProperties(*result);
 		result->name = name;
 		result->type = type;
+        result->query = query->Copy();
 		return move(result);
 	}
 

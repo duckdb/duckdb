@@ -442,7 +442,20 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
+        result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
+        auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
+        if (create_type_info.query) {
+            auto query_obj = Bind(*create_type_info.query);
+            auto query = move(query_obj.plan);
+
+            auto &names = query_obj.names;
+            auto &sql_types = query_obj.types;
+            D_ASSERT(names.size() == sql_types.size());
+            if (sql_types.size() != 1 || sql_types[0].InternalType() != PhysicalType::VARCHAR) {
+                throw BinderException("The query must return one string column");
+            }
+            result.plan->AddChild(move(query));
+        }
 		break;
 	}
 	default:
