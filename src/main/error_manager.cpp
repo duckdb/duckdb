@@ -37,7 +37,7 @@ string ErrorManager::InvalidUnicodeError(string input, string context) {
 	auto unicode = Utf8Proc::Analyze((const char *)input.c_str(), input.size(), &reason, &pos);
 	D_ASSERT(unicode == UnicodeType::INVALID);
 	string base_message;
-	switch(reason) {
+	switch (reason) {
 	case UnicodeInvalidReason::NULL_BYTE:
 		base_message = "Null-byte (\\0)";
 		break;

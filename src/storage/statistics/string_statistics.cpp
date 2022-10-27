@@ -93,7 +93,8 @@ void StringStatistics::Update(const string_t &value) {
 		if (unicode == UnicodeType::UNICODE) {
 			has_unicode = true;
 		} else if (unicode == UnicodeType::INVALID) {
-			throw InternalException(ErrorManager::InvalidUnicodeError(string((char *) data, size), "segment statistics update"));
+			throw InternalException(
+			    ErrorManager::InvalidUnicodeError(string((char *)data, size), "segment statistics update"));
 		}
 	}
 }
