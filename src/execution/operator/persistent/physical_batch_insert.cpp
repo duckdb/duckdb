@@ -29,7 +29,7 @@ PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry
 
 class CollectionMerger {
 public:
-	CollectionMerger(ClientContext &context) : context(context) {
+	explicit CollectionMerger(ClientContext &context) : context(context) {
 	}
 
 	ClientContext &context;
@@ -156,6 +156,15 @@ public:
 		return merger.Flush(writer);
 	}
 
+	void VerifyUniqueBatch(idx_t batch_index) {
+		if (collections.find(batch_index) != collections.end()) {
+			throw InternalException("PhysicalBatchInsert::AddCollection error: batch index %d is present in multiple "
+			                        "collections. This occurs when "
+			                        "batch indexes are not uniquely distributed over threads",
+			                        batch_index);
+		}
+	}
+
 	void AddCollection(ClientContext &context, idx_t batch_index, unique_ptr<RowGroupCollection> current_collection,
 	                   OptimisticDataWriter *writer = nullptr) {
 		vector<unique_ptr<RowGroupCollection>> merge_collections;
@@ -164,13 +173,7 @@ public:
 			lock_guard<mutex> l(lock);
 			auto new_count = current_collection->GetTotalRows();
 			insert_count += new_count;
-			if (collections.find(batch_index) != collections.end()) {
-				throw InternalException(
-				    "PhysicalBatchInsert::AddCollection error: batch index %d is present in multiple "
-				    "collections. This occurs when "
-				    "batch indexes are not uniquely distributed over threads",
-				    batch_index);
-			}
+			VerifyUniqueBatch(batch_index);
 			if (writer && new_count < LocalStorage::MERGE_THRESHOLD) {
 				// we are inserting a small collection that has not yet been written to disk
 				// check if there are any collections with adjacent batch indexes that we can merge together
@@ -224,6 +227,7 @@ public:
 			// add the merged-together collection to the
 			{
 				lock_guard<mutex> l(lock);
+				VerifyUniqueBatch(batch_index);
 				collections[batch_index] = move(final_collection);
 			}
 		}
@@ -364,6 +368,9 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 			larger_merger->AddCollection(move(collection.second));
 			mergers.push_back(move(larger_merger));
 		}
+	}
+	if (current_merger) {
+		mergers.push_back(move(current_merger));
 	}
 
 	// now that we have created all of the mergers, perform the actual merging
