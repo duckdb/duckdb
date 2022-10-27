@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/csv_null_byte.test
+# description: Read a CSV with a null byte
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+mode output_result
+
+statement error
+select * from 'data/csv/nullbyte.csv';

@@ -1,5 +1,6 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/config.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -28,6 +29,28 @@ string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<Excep
 		throw InternalException("Invalid error type passed to ErrorManager::FormatError");
 	}
 	return ExceptionFormatValue::Format(error, values);
+}
+
+string ErrorManager::InvalidUnicodeError(string input, string context) {
+	UnicodeInvalidReason reason;
+	size_t pos;
+	auto unicode = Utf8Proc::Analyze((const char *)input.c_str(), input.size(), &reason, &pos);
+	D_ASSERT(unicode == UnicodeType::INVALID);
+	string base_message;
+	switch(reason) {
+	case UnicodeInvalidReason::NULL_BYTE:
+		base_message = "Null-byte (\\0)";
+		break;
+	case UnicodeInvalidReason::BYTE_MISMATCH:
+		base_message = "Invalid unicode (byte sequence mismatch)";
+		break;
+	case UnicodeInvalidReason::INVALID_UNICODE:
+		base_message = "Invalid unicode";
+		break;
+	default:
+		break;
+	}
+	return base_message + " detected in " + context;
 }
 
 void ErrorManager::AddCustomError(ErrorType type, string new_error) {
