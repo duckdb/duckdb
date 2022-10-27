@@ -68,7 +68,7 @@ public:
 	void CreateNewCollection(TableCatalogEntry *table, const vector<LogicalType> &insert_types) {
 		auto &table_info = table->storage->info;
 		auto &block_manager = TableIOManager::Get(*table->storage).GetBlockManagerForRowData();
-		current_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, 0);
+		current_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
 		written_to_disk = false;
@@ -170,7 +170,7 @@ struct CollectionMerger {
 			auto &table_info = storage.info;
 			auto &block_manager = TableIOManager::Get(storage).GetBlockManagerForRowData();
 			auto types = storage.GetTypes();
-			new_collection = make_unique<RowGroupCollection>(table_info, block_manager, types, 0);
+			new_collection = make_unique<RowGroupCollection>(table_info, block_manager, types, MAX_ROW_ID);
 			TableAppendState append_state;
 			new_collection->InitializeEmpty();
 			new_collection->InitializeAppend(append_state);

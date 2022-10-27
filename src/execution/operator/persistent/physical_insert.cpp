@@ -150,7 +150,8 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 		if (!lstate.local_collection) {
 			auto &table_info = table->storage->info;
 			auto &block_manager = TableIOManager::Get(*table->storage).GetBlockManagerForRowData();
-			lstate.local_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, 0);
+			lstate.local_collection =
+			    make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = make_unique<OptimisticDataWriter>(gstate.table->storage.get());
