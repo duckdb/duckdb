@@ -35,7 +35,9 @@ string ErrorManager::InvalidUnicodeError(string input, string context) {
 	UnicodeInvalidReason reason;
 	size_t pos;
 	auto unicode = Utf8Proc::Analyze((const char *)input.c_str(), input.size(), &reason, &pos);
-	D_ASSERT(unicode == UnicodeType::INVALID);
+	if (unicode != UnicodeType::INVALID) {
+		return "Invalid unicode error thrown but no invalid unicode detected in " + context;
+	}
 	string base_message;
 	switch (reason) {
 	case UnicodeInvalidReason::NULL_BYTE:
