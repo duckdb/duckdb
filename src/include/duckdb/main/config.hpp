@@ -30,6 +30,7 @@
 namespace duckdb {
 class CastFunctionSet;
 class ClientContext;
+class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
 
@@ -158,6 +159,8 @@ public:
 	vector<ParserExtension> parser_extensions;
 	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
+	//! Error manager
+	unique_ptr<ErrorManager> error_manager;
 
 	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
 	                                   set_option_callback_t function = nullptr);
