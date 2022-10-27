@@ -188,6 +188,9 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 	auto &distinct_state = *global_sink.distinct_state;
 	auto &distinct_info = *distinct_collection_info;
 	auto &distinct_indices = distinct_info.Indices();
+
+	DataChunk empty_chunk;
+
 	for (auto &idx : distinct_indices) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[idx];
 
@@ -209,10 +212,10 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 			idx_t count = filtered_data.ApplyFilter(input);
 			filtered_data.filtered_payload.SetCardinality(count);
 
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload,
-			                 filtered_data.filtered_payload, AggregateType::DISTINCT);
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload, empty_chunk,
+			                 AggregateType::DISTINCT);
 		} else {
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input, AggregateType::DISTINCT);
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, empty_chunk, AggregateType::DISTINCT);
 		}
 	}
 }
@@ -347,20 +350,12 @@ public:
 		auto &aggregates = op.aggregates;
 		auto &distinct_state = *gstate.distinct_state;
 		auto &distinct_data = *op.distinct_data;
-		auto &payload_chunk = distinct_state.payload_chunk;
 
 		ThreadContext temp_thread_context(context);
 		ExecutionContext temp_exec_context(context, temp_thread_context);
 
 		idx_t payload_idx = 0;
 		idx_t next_payload_idx = 0;
-
-		//! Copy of the payload chunk, used to store the data of the radix table for use with the expression executor
-		//! We can not directly use the payload chunk because the input and the output to the expression executor can
-		//! not be the same Vector
-		DataChunk expression_executor_input;
-		expression_executor_input.InitializeEmpty(payload_chunk.GetTypes());
-		expression_executor_input.SetCardinality(0);
 
 		for (idx_t i = 0; i < aggregates.size(); i++) {
 			auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
@@ -373,10 +368,20 @@ public:
 			if (!distinct_data.IsDistinct(i)) {
 				continue;
 			}
+
+			DataChunk expression_executor_input;
+			DataChunk payload_chunk;
+
 			D_ASSERT(distinct_data.info.table_map.count(i));
 			auto table_idx = distinct_data.info.table_map.at(i);
 			auto &radix_table_p = distinct_data.radix_tables[table_idx];
 			auto &output_chunk = *distinct_state.distinct_output_chunks[table_idx];
+			auto &grouped_aggregate_data = *distinct_data.grouped_aggregate_data[table_idx];
+
+			expression_executor_input.InitializeEmpty(grouped_aggregate_data.group_types);
+			expression_executor_input.SetCardinality(0);
+			payload_chunk.InitializeEmpty(grouped_aggregate_data.group_types);
+			payload_chunk.SetCardinality(0);
 
 			//! Create global and local state for the hashtable
 			auto global_source_state = radix_table_p->GetGlobalSourceState(context);
@@ -384,7 +389,6 @@ public:
 
 			//! Retrieve the stored data from the hashtable
 			while (true) {
-				payload_chunk.Reset();
 				output_chunk.Reset();
 				radix_table_p->GetData(temp_exec_context, output_chunk, *distinct_state.radix_states[table_idx],
 				                       *global_source_state, *local_source_state);
@@ -394,7 +398,7 @@ public:
 
 				// Retrieve the 'groups' part of the scan chunk
 				for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
-					expression_executor_input.data[payload_idx + child_idx].Reference(output_chunk.data[child_idx]);
+					expression_executor_input.data[child_idx].Reference(output_chunk.data[child_idx]);
 				}
 				expression_executor_input.SetCardinality(output_chunk);
 				// We dont need to resolve the filter, we already did this in Sink
@@ -413,15 +417,15 @@ public:
 					// Originally these indices correspond to the 'input' chunk,
 					// but 'groups' are placed at the very front of the chunk received from GetData
 					auto &child_ref = (BoundReferenceExpression &)*child;
-					child_ref.index = payload_idx + payload_cnt;
+					child_ref.index = payload_cnt;
 
 					//! The child_executor contains a pointer to the expression we altered above
 					distinct_state.child_executor.ExecuteExpression(payload_idx + payload_cnt,
-					                                                payload_chunk.data[payload_idx + payload_cnt]);
+					                                                payload_chunk.data[payload_cnt]);
 					payload_cnt++;
 				}
 
-				auto start_of_input = payload_cnt ? &payload_chunk.data[payload_idx] : nullptr;
+				auto start_of_input = payload_cnt ? &payload_chunk.data[0] : nullptr;
 				//! Update the aggregate state
 				AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
 				aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
@@ -504,14 +508,6 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 	auto &gstate = (UngroupedAggregateGlobalState &)gstate_p;
 	D_ASSERT(distinct_data);
 	auto &distinct_state = *gstate.distinct_state;
-	auto &payload_chunk = distinct_state.payload_chunk;
-
-	//! Copy of the payload chunk, used to store the data of the radix table for use with the expression executor
-	//! We can not directly use the payload chunk because the input and the output to the expression executor can not be
-	//! the same Vector
-	DataChunk expression_executor_input;
-	expression_executor_input.InitializeEmpty(payload_chunk.GetTypes());
-	expression_executor_input.SetCardinality(0);
 
 	bool any_partitioned = false;
 	for (idx_t table_idx = 0; table_idx < distinct_data->radix_tables.size(); table_idx++) {

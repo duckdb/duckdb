@@ -5,8 +5,8 @@
 #statement ok
 #PRAGMA disable_optimizer
 
-#statement ok
-#pragma enable_verification
+statement ok
+pragma enable_verification
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

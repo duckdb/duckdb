@@ -432,7 +432,6 @@ public:
 		auto &aggregates = info.aggregates;
 		auto &data = *grouping_data.distinct_data;
 		auto &state = *grouping_state.distinct_state;
-		auto &payload_chunk = state.payload_chunk;
 
 		ThreadContext temp_thread_context(context);
 		ExecutionContext temp_exec_context(context, temp_thread_context);
@@ -508,9 +507,10 @@ public:
 
 				auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
 
-				//! Retrieve the stored data from the hashtable
-				idx_t groups_size = grouped_aggregate_data.GroupCount();
-				idx_t group_by_size = groups_size - grouped_aggregate_data.payload_types.size();
+				////! Retrieve the stored data from the hashtable
+				// idx_t groups_size = grouped_aggregate_data.GroupCount();
+				// idx_t group_by_size = groups_size - grouped_aggregate_data.payload_types.size();
+				idx_t group_by_size = op.grouped_aggregate_data.groups.size();
 
 				// Skip the group_by vectors (located at the start of the 'groups' vector)
 				// Map from the output_chunk to the aggregate_input_chunk, using the child expressions
@@ -645,10 +645,6 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
 		auto &grouping = groupings[i];
 		auto &distinct_data = *grouping.distinct_data;
 		auto &distinct_state = *gstate.grouping_states[i].distinct_state;
-		auto &payload_chunk = distinct_state.payload_chunk;
-		DataChunk expression_executor_input;
-		expression_executor_input.InitializeEmpty(payload_chunk.GetTypes());
-		expression_executor_input.SetCardinality(0);
 
 		for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
 			if (!distinct_data.radix_tables[i]) {

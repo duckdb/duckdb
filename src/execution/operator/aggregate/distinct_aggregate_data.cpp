@@ -17,10 +17,6 @@ DistinctAggregateCollectionInfo::DistinctAggregateCollectionInfo(const vector<un
 	for (idx_t i = 0; i < aggregate_count; i++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 
-		// Initialize the child executor and get the payload types for every aggregate
-		for (auto &child : aggregate.children) {
-			payload_types.push_back(child->return_type);
-		}
 		if (!aggregate.IsDistinct()) {
 			continue;
 		}
@@ -32,7 +28,6 @@ DistinctAggregateCollectionInfo::DistinctAggregateCollectionInfo(const vector<un
 
 DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data, ClientContext &client)
     : child_executor(client) {
-	auto &allocator = Allocator::Get(client);
 
 	radix_states.resize(data.info.table_count);
 	distinct_output_chunks.resize(data.info.table_count);
@@ -69,10 +64,6 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 		// This is used in Finalize to get the data from the radix table
 		distinct_output_chunks[table_idx] = make_unique<DataChunk>();
 		distinct_output_chunks[table_idx]->Initialize(client, chunk_types);
-	}
-
-	if (!data.info.payload_types.empty()) {
-		payload_chunk.Initialize(allocator, data.info.payload_types);
 	}
 }
 
