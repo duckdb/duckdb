@@ -211,7 +211,6 @@ bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<std
 	idx_t pos = 0;
 	idx_t child_idx = 0;
     idx_t total_elements = 0;
-    std::set<idx_t> set_keys;
 
 	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 		pos++;
@@ -250,7 +249,6 @@ bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<std
         auto it = child_names.find(found_key);
         if(it != child_names.end()){
             child_idx = it->second;
-            set_keys.insert(child_idx);
         } else{
             return false; // a key was entered that does not correspond with any of the target keynames
         }

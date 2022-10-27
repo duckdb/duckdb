@@ -6,10 +6,11 @@ name Cast VARCHAR -> STRUCT
 group cast
 
 load
-CREATE TABLE structs AS SELECT {'key': i} v FROM range(0, 10000000) tbl(i);
+CREATE TABLE structs AS SELECT {'key_A': i} v FROM range(0, 10000000) tbl(i);
 
 run
 SELECT MIN(v) FROM structs;
 
 result I
-{'key': 0}
+{'key_A': 0}
+
