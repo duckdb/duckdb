@@ -81,8 +81,8 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 	// create an event and stack for all pipelines in the MetaPipeline
 	vector<shared_ptr<Pipeline>> pipelines;
-	meta_pipeline->GetPipelines(pipelines, false, false);
-	for (idx_t i = 1; i < pipelines.size(); i++) {
+	meta_pipeline->GetPipelines(pipelines, false);
+	for (idx_t i = 1; i < pipelines.size(); i++) { // loop starts at 1 because 0 is the base pipeline
 		auto &pipeline = pipelines[i];
 		D_ASSERT(pipeline);
 
@@ -284,18 +284,18 @@ void Executor::InitializeInternal(PhysicalOperator *plan) {
 		root_pipeline->Ready();
 
 		// set root pipelines, i.e., all pipelines that end in the final sink
-		root_pipeline->GetPipelines(root_pipelines, false, false);
+		root_pipeline->GetPipelines(root_pipelines, false);
 		root_pipeline_idx = 0;
 
 		// collect all meta-pipelines from the root pipeline
 		vector<shared_ptr<MetaPipeline>> to_schedule;
 		root_pipeline->GetMetaPipelines(to_schedule, true, true);
 
-		// number of 'complete events' is equal to the number of meta pipelines, so we have to set it here
+		// number of 'PipelineCompleteEvent's is equal to the number of meta pipelines, so we have to set it here
 		total_pipelines = to_schedule.size();
 
 		// collect all pipelines from the root pipelines (recursively) for the progress bar and verify them
-		root_pipeline->GetPipelines(pipelines, true, false);
+		root_pipeline->GetPipelines(pipelines, true);
 
 		// finally, verify and schedule
 		VerifyPipelines();
@@ -317,6 +317,7 @@ void Executor::CancelTasks() {
 			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
 		}
 		pipelines.clear();
+		root_pipelines.clear();
 		events.clear();
 	}
 	WorkOnTasks();

@@ -1,6 +1,8 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 
+#include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
 
@@ -29,13 +31,11 @@ shared_ptr<Pipeline> &MetaPipeline::GetBasePipeline() {
 	return pipelines[0];
 }
 
-void MetaPipeline::GetPipelines(vector<shared_ptr<Pipeline>> &result, bool recursive, bool skip) {
-	if (!skip) {
-		result.insert(result.end(), pipelines.begin(), pipelines.end());
-	}
+void MetaPipeline::GetPipelines(vector<shared_ptr<Pipeline>> &result, bool recursive) {
+	result.insert(result.end(), pipelines.begin(), pipelines.end());
 	if (recursive) {
 		for (auto &child : children) {
-			child->GetPipelines(result, true, false);
+			child->GetPipelines(result, true);
 		}
 	}
 }
@@ -80,25 +80,22 @@ void MetaPipeline::Ready() {
 	}
 }
 
-void MetaPipeline::Reset(ClientContext &context, bool reset_sink) {
+void MetaPipeline::Reset(bool reset_sink) {
 	if (sink && reset_sink) {
-		D_ASSERT(!HasRecursiveCTE());
-		sink->sink_state = sink->GetGlobalSinkState(context);
+		sink->sink_state = sink->GetGlobalSinkState(executor.context);
 	}
 	for (auto &pipeline : pipelines) {
 		for (auto &op : pipeline->GetOperators()) {
-			op->op_state = op->GetGlobalOperatorState(context);
+			op->op_state = op->GetGlobalOperatorState(executor.context);
 		}
 		pipeline->Reset();
 	}
 	for (auto &child : children) {
-		child->Reset(context, true);
+		child->Reset(true);
 	}
 }
 
 MetaPipeline *MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op) {
-	// rule 1: make sure that child MetaPipeline is created immediately after 'op' is added to 'current'
-	D_ASSERT(op == current.source || current.operators.back() == op);
 	children.push_back(make_unique<MetaPipeline>(executor, state, op));
 	auto child_meta_pipeline = children.back().get();
 	// child MetaPipeline must finish completely before this MetaPipeline can start
@@ -130,6 +127,11 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current) {
 	auto current_inter_deps = GetDependencies(&current);
 	if (current_inter_deps) {
 		dependencies[union_pipeline] = *current_inter_deps;
+	}
+
+	if (sink && (!sink->ParallelSink() || PhysicalPlanGenerator::)) {
+		// if the sink it not parallel, the union pipeline has to come after the current pipeline
+		dependencies[union_pipeline].push_back(&current);
 	}
 
 	return union_pipeline;

@@ -119,13 +119,19 @@ void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, 
 
 void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) const {
 	if (!recursive_meta_pipeline) {
-		throw InternalException("Missing pipelines for recursive CTE");
+		throw InternalException("Missing meta pipeline for recursive CTE");
 	}
 	D_ASSERT(recursive_meta_pipeline->HasRecursiveCTE());
 
-	auto &executor = recursive_meta_pipeline->GetExecutor();
+	// reset pipelines (excluding sink state of the top-level meta-pipeline, which is this recursive CTE)
+	recursive_meta_pipeline->Reset(context.client, false);
+
+	// get the MetaPipelines in the recursive_meta_pipeline
 	vector<shared_ptr<MetaPipeline>> meta_pipelines;
 	recursive_meta_pipeline->GetMetaPipelines(meta_pipelines, true, false);
+
+	// reschedule them
+	auto &executor = recursive_meta_pipeline->GetExecutor();
 	vector<shared_ptr<Event>> events;
 	executor.ReschedulePipelines(meta_pipelines, events);
 
