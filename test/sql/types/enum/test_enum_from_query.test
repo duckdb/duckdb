@@ -5,6 +5,21 @@
 statement ok
 PRAGMA enable_verification
 
+statement error
+CREATE TYPE type_a AS ENUM (SELECT '1', '2');
+
+statement error
+CREATE TYPE type_a AS ENUM (SELECT 1);
+
+statement ok
+CREATE TABLE test (x VARCHAR, y VARCHAR);
+
+statement error
+CREATE TYPE a AS ENUM (SELECT * FROM test);
+
+statement ok
+DROP TABLE test;
+
 statement ok
 CREATE TABLE number_str AS (SELECT CAST(range AS VARCHAR) AS x FROM range(1, 100));
 
