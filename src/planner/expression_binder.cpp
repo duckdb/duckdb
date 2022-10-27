@@ -128,6 +128,15 @@ bool ExpressionBinder::ContainsType(const LogicalType &type, LogicalTypeId targe
 		}
 		return false;
 	}
+	case LogicalTypeId::UNION: {
+		auto member_count = UnionType::GetMemberCount(type);
+		for (idx_t i = 0; i < member_count; i++) {
+			if (ContainsType(UnionType::GetMemberType(type, i), target)) {
+				return true;
+			}
+		}
+		return false;
+	}
 	case LogicalTypeId::LIST:
 		return ContainsType(ListType::GetChildType(type), target);
 	default:
@@ -149,6 +158,13 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 		}
 		return type.id() == LogicalTypeId::MAP ? LogicalType::MAP(move(child_types))
 		                                       : LogicalType::STRUCT(move(child_types));
+	}
+	case LogicalTypeId::UNION: {
+		auto member_types = UnionType::CopyMemberTypes(type);
+		for (auto &member_type : member_types) {
+			member_type.second = ExchangeType(member_type.second, target, new_type);
+		}
+		return LogicalType::UNION(move(member_types));
 	}
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(ExchangeType(ListType::GetChildType(type), target, new_type));
