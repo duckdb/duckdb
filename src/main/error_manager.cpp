@@ -16,6 +16,9 @@ static DefaultError internal_errors[] = {
     {ErrorType::INVALID, nullptr}};
 
 string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<ExceptionFormatValue> &values) {
+	if (error_type >= ErrorType::ERROR_COUNT) {
+		throw InternalException("Invalid error type passed to ErrorManager::FormatError");
+	}
 	auto entry = custom_errors.find(error_type);
 	string error;
 	if (entry == custom_errors.end()) {
@@ -24,9 +27,6 @@ string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<Excep
 	} else {
 		// error was overwritten
 		error = entry->second;
-	}
-	if (error_type >= ErrorType::ERROR_COUNT) {
-		throw InternalException("Invalid error type passed to ErrorManager::FormatError");
 	}
 	return ExceptionFormatValue::Format(error, values);
 }
