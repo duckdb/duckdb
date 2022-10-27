@@ -604,8 +604,6 @@ public:
 
 		// FIXME: this is needed?
 		grouping_data.table_data.Combine(temp_exec_context, *grouping_state.table_state, *temp_local_state);
-		D_ASSERT(!gstate.finished);
-		gstate.finished = true;
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -617,6 +615,8 @@ public:
 			AggregateDistinctGrouping(info, grouping, grouping_state, i);
 		}
 		op.FinalizeInternal(pipeline, *event, context, gstate, false);
+		D_ASSERT(!gstate.finished);
+		gstate.finished = true;
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -708,7 +708,7 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
 		auto &distinct_state = *gstate.grouping_states[i].distinct_state;
 
 		for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
-			if (!distinct_data.radix_tables[i]) {
+			if (!distinct_data.radix_tables[table_idx]) {
 				continue;
 			}
 			auto &radix_table = distinct_data.radix_tables[table_idx];

@@ -54,9 +54,8 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 		auto &radix_table = *data.radix_tables[table_idx];
 		radix_states[table_idx] = radix_table.GetGlobalSinkState(client);
 
-		// Fill the chunk_types (only contains the payload of the distinct aggregates)
+		// Fill the chunk_types (group_by + children)
 		vector<LogicalType> chunk_types;
-		// TODO: add the group types to the chunk_types
 		for (auto &group_type : data.grouped_aggregate_data[table_idx]->group_types) {
 			chunk_types.push_back(group_type);
 		}
@@ -96,7 +95,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 			grouping_set.insert(group);
 		}
 		for (idx_t set_idx = 0; set_idx < aggregate.children.size(); set_idx++) {
-			grouping_set.insert(set_idx + groups.size());
+			grouping_set.insert(set_idx + group_expressions->size());
 		}
 		// Create the hashtable for the aggregate
 		grouped_aggregate_data[table_idx] = make_unique<GroupedAggregateData>();
