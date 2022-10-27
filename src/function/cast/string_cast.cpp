@@ -201,27 +201,19 @@ bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters 
 
 bool StringToStructCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result, ValidityMask &result_mask,
                             idx_t count, CastParameters &parameters, const SelectionVector *sel) {
+
     auto &result_children = StructVector::GetEntries(result);
-    // ROW(i INT, j DATE)
-    // ROW(i VARCHAR, j VARCHAR)
-    // construct a new struct vector
-    //    auto &child_types = StructType::GetChildTypes(result.GetType());
-    //    child_list_t<LogicalType> new_types;
-    //    for (auto &child : child_types) {
-    //        new_types.push_back(make_pair(child.first, LogicalType::VARCHAR));
-    //    }
-    //    auto varchar_struct_type = LogicalType::STRUCT(new_types);
-    //    Vector varchar_vector(varchar_struct_type, count);
-    // ROW(i VARCHAR, j VARCHAR) -> ROW(i INT, j DATE)
-
-	std::vector<Vector> varchar_vectors;
+    auto &child_types = StructType::GetChildTypes(result.GetType());
+    child_list_t<LogicalType> new_types;
     string_map_t<idx_t> child_names_map;
-	for (idx_t child_idx = 0; child_idx < StructType::GetChildCount(result.GetType()); child_idx++) {
-		varchar_vectors.emplace_back(LogicalType::VARCHAR, count);  // calls a vector constructor with these arguments
-                                                                    // one temp varchar vector for each child of result
-
-        child_names_map.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx}); // create a map with the key "names"
+    for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+        new_types.push_back(make_pair(child_types[child_idx].first, LogicalType::VARCHAR));
+        child_names_map.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx}); // create a map with the key "keynames"
     }
+    auto varchar_struct_type = LogicalType::STRUCT(new_types);
+    Vector varchar_vector(varchar_struct_type, count);
+    auto &child_vectors = StructVector::GetEntries(varchar_vector);
+
 
 	bool all_converted = true;
 	for (idx_t i = 0; i < count; i++) {
@@ -234,7 +226,7 @@ bool StringToStructCastLoop(string_t *source_data, ValidityMask &source_mask, Ve
 			continue;
 		}
 
-		if (!VectorStringifiedStructParser::SplitStruct(source_data[idx], varchar_vectors, i, child_names_map)) {
+		if (!VectorStringifiedStructParser::SplitStruct(source_data[idx], child_vectors, i, child_names_map)) {
 			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
 			              "' can't be cast to the destination type STRUCT";
 			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, parameters.error_message, all_converted);
@@ -245,9 +237,9 @@ bool StringToStructCastLoop(string_t *source_data, ValidityMask &source_mask, Ve
 
 	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
 		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			(varchar_vectors[child_idx]).SetVectorType(VectorType::CONSTANT_VECTOR);
+			(child_vectors[child_idx])->SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
-		auto &varchar_vector = varchar_vectors[child_idx];
+		auto &varchar_vector = *child_vectors[child_idx];
 		auto &result_child_vector = *result_children[child_idx];
 		CastParameters child_parameters(parameters, cast_data.child_cast_info[child_idx].cast_data.get());
 		// get the correct casting function (VARCHAR -> result_child_type) from cast_data

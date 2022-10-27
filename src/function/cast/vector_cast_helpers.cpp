@@ -204,7 +204,7 @@ static bool FindValue(const char *buf, idx_t len, idx_t &pos, Vector &varchar_ch
 //bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<Vector> &varchar_vectors, idx_t &row_idx,
 //                                                std::vector<string_t> &child_names) {
 
-bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<Vector> &varchar_vectors, idx_t &row_idx,
+bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<std::unique_ptr<Vector>> &varchar_vectors, idx_t &row_idx,
                                                 string_map_t<idx_t> &child_names) {
 	const char *buf = input.GetDataUnsafe();
 	idx_t len = input.GetSize();
@@ -283,7 +283,7 @@ bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<Vec
 		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 			pos++;
 		}
-		if (!FindValue(buf, len, pos, varchar_vectors[child_idx], row_idx)) {
+		if (!FindValue(buf, len, pos, *varchar_vectors[child_idx], row_idx)) {
 			return false;
 		}
 		pos++;
@@ -297,10 +297,10 @@ bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<Vec
         for(idx_t i = 0; i < varchar_vectors.size(); i++){
             auto it = set_keys.find(i);
             if(it == set_keys.end()){
-                if (varchar_vectors[i].GetVectorType() == VectorType::CONSTANT_VECTOR){
-                    ConstantVector::SetNull(varchar_vectors[i], true);
+                if (varchar_vectors[i]->GetVectorType() == VectorType::CONSTANT_VECTOR){
+                    ConstantVector::SetNull(*varchar_vectors[i], true);
                 } else {
-                    FlatVector::SetNull(varchar_vectors[i], row_idx, true);
+                    FlatVector::SetNull(*varchar_vectors[i], row_idx, true);
                 }
                 total_elements++;
             }
