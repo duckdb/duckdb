@@ -292,7 +292,7 @@ public class DuckDBResultSet implements ResultSet {
 			return buf.getShort();
 
 		}
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getUint8");
 	}
 
 	private int getUint16(int columnIndex) throws SQLException {
@@ -305,7 +305,7 @@ public class DuckDBResultSet implements ResultSet {
 			getbuf(columnIndex, 2).get(buf.array(), 0, 2);
 			return buf.getInt();
 		}
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getUint16");
 
 	}
 
@@ -319,7 +319,7 @@ public class DuckDBResultSet implements ResultSet {
 			getbuf(columnIndex, 4).get(buf.array(), 0, 4);
 			return buf.getLong();
 		}
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getUint32");
 	}
 
 	private BigInteger getUint64(int columnIndex) throws SQLException {
@@ -335,7 +335,7 @@ public class DuckDBResultSet implements ResultSet {
 			}
 			return new BigInteger(buf_res);
 		}
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getUint64");
 	}
 
 	public long getLong(int columnIndex) throws SQLException {
@@ -447,11 +447,11 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getBigDecimal");
 	}
 
 	public byte[] getBytes(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getBytes");
 	}
 
 	public Date getDate(int columnIndex) throws SQLException {
@@ -571,11 +571,11 @@ public class DuckDBResultSet implements ResultSet {
 		}
 
 		public long position(Blob pattern, long start) throws SQLException {
-			throw new SQLFeatureNotSupportedException();
+			throw new SQLFeatureNotSupportedException("position");
 		}
 
 		public long position(byte[] pattern, long start) throws SQLException {
-			throw new SQLFeatureNotSupportedException();
+			throw new SQLFeatureNotSupportedException("position");
 		}
 
 		public long length() {
@@ -587,20 +587,20 @@ public class DuckDBResultSet implements ResultSet {
 		}
 
 		public OutputStream setBinaryStream(long pos) throws SQLException {
-			throw new SQLFeatureNotSupportedException();
+			throw new SQLFeatureNotSupportedException("setBinaryStream");
 		}
 
 		public void truncate(long length) throws SQLException {
-			throw new SQLFeatureNotSupportedException();
+			throw new SQLFeatureNotSupportedException("truncate");
 		}
 
 		public int setBytes(long pos, byte[] bytes) throws SQLException {
-			throw new SQLFeatureNotSupportedException();
+			throw new SQLFeatureNotSupportedException("setBytes");
 
 		}
 
 		public int setBytes(long pos, byte[] bytes, int offset, int len) throws SQLException {
-			throw new SQLFeatureNotSupportedException();
+			throw new SQLFeatureNotSupportedException("setBytes");
 
 		}
 
@@ -616,7 +616,7 @@ public class DuckDBResultSet implements ResultSet {
 			return new DuckDBBlobResult(((ByteBuffer[]) current_chunk[columnIndex - 1].varlen_data)[chunk_idx - 1]);
 		}
 
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getBlob");
 	}
 
 	public Blob getBlob(String columnLabel) throws SQLException {
@@ -624,23 +624,23 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public InputStream getAsciiStream(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getAsciiStream");
 	}
 
 	public InputStream getUnicodeStream(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getUnicodeStream");
 	}
 
 	public InputStream getBinaryStream(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getBinaryStream");
 	}
 
 	public BigDecimal getBigDecimal(String columnLabel, int scale) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getBigDecimal");
 	}
 
 	public byte[] getBytes(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getBytes");
 	}
 
 	public Date getDate(String columnLabel) throws SQLException {
@@ -656,35 +656,35 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public InputStream getAsciiStream(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getAsciiStream");
 	}
 
 	public InputStream getUnicodeStream(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getUnicodeStream");
 	}
 
 	public InputStream getBinaryStream(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getBinaryStream");
 	}
 
 	public SQLWarning getWarnings() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getWarnings");
 	}
 
 	public void clearWarnings() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("clearWarnings");
 	}
 
 	public String getCursorName() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getCursorName");
 	}
 
 	public Reader getCharacterStream(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getCharacterStream");
 	}
 
 	public Reader getCharacterStream(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getCharacterStream");
 	}
 
 	public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
@@ -719,56 +719,56 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public boolean isBeforeFirst() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("isBeforeFirst");
 	}
 
 	public boolean isAfterLast() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("isAfterLast");
 	}
 
 	public boolean isFirst() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("isFirst");
 	}
 
 	public boolean isLast() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("isLast");
 	}
 
 	public void beforeFirst() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("beforeFirst");
 	}
 
 	public void afterLast() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("afterLast");
 	}
 
 	public boolean first() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("first");
 	}
 
 	public boolean last() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("last");
 	}
 
 	public int getRow() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getRow");
 	}
 
 	public boolean absolute(int row) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("absolute");
 	}
 
 	public boolean relative(int rows) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("relative");
 	}
 
 	public boolean previous() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("previous");
 	}
 
 	public void setFetchDirection(int direction) throws SQLException {
 		if (direction != ResultSet.FETCH_FORWARD && direction != ResultSet.FETCH_UNKNOWN) {
-			throw new SQLFeatureNotSupportedException();
+			throw new SQLFeatureNotSupportedException("setFetchDirection");
 		}
 	}
 
@@ -796,479 +796,479 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public boolean rowUpdated() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("rowUpdated");
 	}
 
 	public boolean rowInserted() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("rowInserted");
 	}
 
 	public boolean rowDeleted() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("rowDeleted");
 	}
 
 	public void updateNull(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNull");
 	}
 
 	public void updateBoolean(int columnIndex, boolean x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBoolean");
 	}
 
 	public void updateByte(int columnIndex, byte x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateByte");
 	}
 
 	public void updateShort(int columnIndex, short x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateShort");
 	}
 
 	public void updateInt(int columnIndex, int x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateInt");
 	}
 
 	public void updateLong(int columnIndex, long x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateLong");
 	}
 
 	public void updateFloat(int columnIndex, float x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateFloat");
 	}
 
 	public void updateDouble(int columnIndex, double x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateDouble");
 	}
 
 	public void updateBigDecimal(int columnIndex, BigDecimal x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBigDecimal");
 	}
 
 	public void updateString(int columnIndex, String x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateString");
 	}
 
 	public void updateBytes(int columnIndex, byte[] x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBytes");
 	}
 
 	public void updateDate(int columnIndex, Date x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateDate");
 	}
 
 	public void updateTime(int columnIndex, Time x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateTime");
 	}
 
 	public void updateTimestamp(int columnIndex, Timestamp x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateTimestamp");
 	}
 
 	public void updateAsciiStream(int columnIndex, InputStream x, int length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateAsciiStream");
 	}
 
 	public void updateBinaryStream(int columnIndex, InputStream x, int length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBinaryStream");
 	}
 
 	public void updateCharacterStream(int columnIndex, Reader x, int length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateCharacterStream");
 	}
 
 	public void updateObject(int columnIndex, Object x, int scaleOrLength) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateObject");
 	}
 
 	public void updateObject(int columnIndex, Object x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateObject");
 	}
 
 	public void updateNull(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNull");
 	}
 
 	public void updateBoolean(String columnLabel, boolean x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBoolean");
 	}
 
 	public void updateByte(String columnLabel, byte x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateByte");
 	}
 
 	public void updateShort(String columnLabel, short x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateShort");
 	}
 
 	public void updateInt(String columnLabel, int x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateInt");
 	}
 
 	public void updateLong(String columnLabel, long x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateLong");
 	}
 
 	public void updateFloat(String columnLabel, float x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateFloat");
 	}
 
 	public void updateDouble(String columnLabel, double x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateDouble");
 	}
 
 	public void updateBigDecimal(String columnLabel, BigDecimal x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBigDecimal");
 	}
 
 	public void updateString(String columnLabel, String x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateString");
 	}
 
 	public void updateBytes(String columnLabel, byte[] x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBytes");
 	}
 
 	public void updateDate(String columnLabel, Date x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateDate");
 	}
 
 	public void updateTime(String columnLabel, Time x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateTime");
 	}
 
 	public void updateTimestamp(String columnLabel, Timestamp x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateTimestamp");
 	}
 
 	public void updateAsciiStream(String columnLabel, InputStream x, int length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateAsciiStream");
 	}
 
 	public void updateBinaryStream(String columnLabel, InputStream x, int length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBinaryStream");
 	}
 
 	public void updateCharacterStream(String columnLabel, Reader reader, int length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateCharacterStream");
 	}
 
 	public void updateObject(String columnLabel, Object x, int scaleOrLength) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateObject");
 	}
 
 	public void updateObject(String columnLabel, Object x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateObject");
 	}
 
 	public void insertRow() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("insertRow");
 	}
 
 	public void updateRow() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateRow");
 	}
 
 	public void deleteRow() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("deleteRow");
 	}
 
 	public void refreshRow() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("refreshRow");
 	}
 
 	public void cancelRowUpdates() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("cancelRowUpdates");
 	}
 
 	public void moveToInsertRow() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("moveToInsertRow");
 	}
 
 	public void moveToCurrentRow() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("moveToCurrentRow");
 	}
 
 	public Object getObject(int columnIndex, Map<String, Class<?>> map) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getObject");
 	}
 
 	public Ref getRef(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getRef");
 	}
 
 	public Clob getClob(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getClob");
 	}
 
 	public Array getArray(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getArray");
 	}
 
 	public Object getObject(String columnLabel, Map<String, Class<?>> map) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getObject");
 	}
 
 	public Ref getRef(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getRef");
 	}
 
 	public Clob getClob(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getClob");
 	}
 
 	public Array getArray(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getArray");
 	}
 
 	public Date getDate(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getDate");
 	}
 
 	public Date getDate(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getDate");
 	}
 
 	public Time getTime(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getTime");
 	}
 
 	public Time getTime(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getTime");
 	}
 
 	public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getTimestamp");
 	}
 
 	public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getTimestamp");
 	}
 
 	public URL getURL(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getURL");
 	}
 
 	public URL getURL(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getURL");
 	}
 
 	public void updateRef(int columnIndex, Ref x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateRef");
 	}
 
 	public void updateRef(String columnLabel, Ref x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateRef");
 	}
 
 	public void updateBlob(int columnIndex, Blob x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBlob");
 	}
 
 	public void updateBlob(String columnLabel, Blob x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBlob");
 	}
 
 	public void updateClob(int columnIndex, Clob x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateClob");
 	}
 
 	public void updateClob(String columnLabel, Clob x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateClob");
 	}
 
 	public void updateArray(int columnIndex, Array x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateArray");
 	}
 
 	public void updateArray(String columnLabel, Array x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateArray");
 	}
 
 	public RowId getRowId(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getRowId");
 	}
 
 	public RowId getRowId(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getRowId");
 	}
 
 	public void updateRowId(int columnIndex, RowId x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateRowId");
 	}
 
 	public void updateRowId(String columnLabel, RowId x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateRowId");
 	}
 
 	public int getHoldability() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getHoldability");
 	}
 
 	public void updateNString(int columnIndex, String nString) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNString");
 	}
 
 	public void updateNString(String columnLabel, String nString) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNString");
 	}
 
 	public void updateNClob(int columnIndex, NClob nClob) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNClob");
 	}
 
 	public void updateNClob(String columnLabel, NClob nClob) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNClob");
 	}
 
 	public NClob getNClob(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getNClob");
 	}
 
 	public NClob getNClob(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getNClob");
 	}
 
 	public SQLXML getSQLXML(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getSQLXML");
 	}
 
 	public SQLXML getSQLXML(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getSQLXML");
 	}
 
 	public void updateSQLXML(int columnIndex, SQLXML xmlObject) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateSQLXML");
 	}
 
 	public void updateSQLXML(String columnLabel, SQLXML xmlObject) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateSQLXML");
 	}
 
 	public String getNString(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getNString");
 	}
 
 	public String getNString(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getNString");
 	}
 
 	public Reader getNCharacterStream(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getNCharacterStream");
 	}
 
 	public Reader getNCharacterStream(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getNCharacterStream");
 	}
 
 	public void updateNCharacterStream(int columnIndex, Reader x, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNCharacterStream");
 	}
 
 	public void updateNCharacterStream(String columnLabel, Reader reader, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNCharacterStream");
 	}
 
 	public void updateAsciiStream(int columnIndex, InputStream x, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateAsciiStream");
 	}
 
 	public void updateBinaryStream(int columnIndex, InputStream x, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBinaryStream");
 	}
 
 	public void updateCharacterStream(int columnIndex, Reader x, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateCharacterStream");
 	}
 
 	public void updateAsciiStream(String columnLabel, InputStream x, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateAsciiStream");
 	}
 
 	public void updateBinaryStream(String columnLabel, InputStream x, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBinaryStream");
 	}
 
 	public void updateCharacterStream(String columnLabel, Reader reader, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateCharacterStream");
 	}
 
 	public void updateBlob(int columnIndex, InputStream inputStream, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBlob");
 	}
 
 	public void updateBlob(String columnLabel, InputStream inputStream, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBlob");
 	}
 
 	public void updateClob(int columnIndex, Reader reader, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateClob");
 	}
 
 	public void updateClob(String columnLabel, Reader reader, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateClob");
 	}
 
 	public void updateNClob(int columnIndex, Reader reader, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNClob");
 	}
 
 	public void updateNClob(String columnLabel, Reader reader, long length) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNClob");
 	}
 
 	public void updateNCharacterStream(int columnIndex, Reader x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNCharacterStream");
 	}
 
 	public void updateNCharacterStream(String columnLabel, Reader reader) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNCharacterStream");
 	}
 
 	public void updateAsciiStream(int columnIndex, InputStream x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateAsciiStream");
 	}
 
 	public void updateBinaryStream(int columnIndex, InputStream x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBinaryStream");
 	}
 
 	public void updateCharacterStream(int columnIndex, Reader x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateCharacterStream");
 	}
 
 	public void updateAsciiStream(String columnLabel, InputStream x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateAsciiStream");
 	}
 
 	public void updateBinaryStream(String columnLabel, InputStream x) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBinaryStream");
 	}
 
 	public void updateCharacterStream(String columnLabel, Reader reader) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateCharacterStream");
 	}
 
 	public void updateBlob(int columnIndex, InputStream inputStream) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBlob");
 	}
 
 	public void updateBlob(String columnLabel, InputStream inputStream) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateBlob");
 	}
 
 	public void updateClob(int columnIndex, Reader reader) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateClob");
 	}
 
 	public void updateClob(String columnLabel, Reader reader) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateClob");
 	}
 
 	public void updateNClob(int columnIndex, Reader reader) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNClob");
 	}
 
 	public void updateNClob(String columnLabel, Reader reader) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("updateNClob");
 	}
 
 	public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
@@ -1395,15 +1395,15 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getObject");
 	}
 
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("unwrap");
 	}
 
 	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("isWrapperFor");
 	}
 
 }

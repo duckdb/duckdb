@@ -2401,6 +2401,39 @@ public class TestDuckDBJDBC {
 		assertTrue(database.isShutdown());
 	}
 
+	public static void test_get_functions() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+			ResultSet functions = conn.getMetaData().getFunctions(null, "main", "string_split");
+
+			assertTrue(functions.next());
+			assertNull(functions.getObject("FUNCTION_CAT"));
+			assertEquals("main", functions.getString("FUNCTION_SCHEM"));
+			assertEquals("string_split", functions.getString("FUNCTION_NAME"));
+			assertNull(functions.getString("REMARKS"));
+			assertEquals(DatabaseMetaData.functionNoTable, functions.getInt("FUNCTION_TYPE"));
+
+			assertFalse(functions.next());
+
+			// two items for two overloads?
+			functions = conn.getMetaData().getFunctions(null, "main", "read_csv_auto");
+			assertTrue(functions.next());
+			assertNull(functions.getObject("FUNCTION_CAT"));
+			assertEquals("main", functions.getString("FUNCTION_SCHEM"));
+			assertEquals("read_csv_auto", functions.getString("FUNCTION_NAME"));
+			assertNull(functions.getString("REMARKS"));
+			assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
+
+			assertTrue(functions.next());
+			assertNull(functions.getObject("FUNCTION_CAT"));
+			assertEquals("main", functions.getString("FUNCTION_SCHEM"));
+			assertEquals("read_csv_auto", functions.getString("FUNCTION_NAME"));
+			assertNull(functions.getString("REMARKS"));
+			assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
+
+			assertFalse(functions.next());
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
