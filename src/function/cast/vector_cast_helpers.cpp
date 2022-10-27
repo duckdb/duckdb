@@ -295,7 +295,6 @@ bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<Vec
 
     if (total_elements < varchar_vectors.size()) { // missing values, so these need to be set to null
         for(idx_t i = 0; i < varchar_vectors.size(); i++){
-            //if (FlatVector::GetData<string_t>(varchar_vectors[i])[row_idx].GetSize() > 10000) { //FIXME: NEED A SOLUTION FOR THIS
             auto it = set_keys.find(i);
             if(it == set_keys.end()){
                 if (varchar_vectors[i].GetVectorType() == VectorType::CONSTANT_VECTOR){
