@@ -205,7 +205,7 @@ static bool FindValue(const char *buf, idx_t len, idx_t &pos, Vector &varchar_ch
 //                                                std::vector<string_t> &child_names) {
 
 bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<std::unique_ptr<Vector>> &varchar_vectors, idx_t &row_idx,
-                                                string_map_t<idx_t> &child_names) {
+                                                string_map_t<idx_t> &child_names, std::vector<ValidityMask*> &child_masks) {
 	const char *buf = input.GetDataUnsafe();
 	idx_t len = input.GetSize();
 	idx_t pos = 0;
@@ -286,6 +286,7 @@ bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<std
 		if (!FindValue(buf, len, pos, *varchar_vectors[child_idx], row_idx)) {
 			return false;
 		}
+        child_masks[child_idx]->SetValid(row_idx);
 		pos++;
 		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 			pos++;
@@ -293,22 +294,22 @@ bool VectorStringifiedStructParser::SplitStruct(string_t &input, std::vector<std
         total_elements++;
 	}
 
-    if (total_elements < varchar_vectors.size()) { // missing values, so these need to be set to null
-        for(idx_t i = 0; i < varchar_vectors.size(); i++){
-            auto it = set_keys.find(i);
-            if(it == set_keys.end()){
-                if (varchar_vectors[i]->GetVectorType() == VectorType::CONSTANT_VECTOR){
-                    ConstantVector::SetNull(*varchar_vectors[i], true);
-                } else {
-                    FlatVector::SetNull(*varchar_vectors[i], row_idx, true);
-                }
-                total_elements++;
-            }
-        }
-    }
-    if (total_elements != varchar_vectors.size()) { // string not splittable into correct number of values
-        return false;
-    }
+//    if (total_elements < varchar_vectors.size()) { // missing values, so these need to be set to null
+//        for(idx_t i = 0; i < varchar_vectors.size(); i++){
+//            auto it = set_keys.find(i);
+//            if(it == set_keys.end()){
+//                if (varchar_vectors[i]->GetVectorType() == VectorType::CONSTANT_VECTOR){
+//                    ConstantVector::SetNull(*varchar_vectors[i], true);
+//                } else {
+//                    FlatVector::SetNull(*varchar_vectors[i], row_idx, true);
+//                }
+//                total_elements++;
+//            }
+//        }
+//    }
+//    if (total_elements != varchar_vectors.size()) { // string not splittable into correct number of values
+//        return false;
+//    }
 	while (pos < len) {
 		if (!StringUtil::CharacterIsSpace(buf[pos])) {
 			return false;

@@ -205,15 +205,21 @@ bool StringToStructCastLoop(string_t *source_data, ValidityMask &source_mask, Ve
     auto &result_children = StructVector::GetEntries(result);
     auto &child_types = StructType::GetChildTypes(result.GetType());
     child_list_t<LogicalType> new_types;
-    string_map_t<idx_t> child_names_map;
-    for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
-        new_types.push_back(make_pair(child_types[child_idx].first, LogicalType::VARCHAR));
-        child_names_map.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx}); // create a map with the key "keynames"
+
+    for (auto &child : child_types) {
+        new_types.emplace_back(make_pair(child.first, LogicalType::VARCHAR));
     }
     auto varchar_struct_type = LogicalType::STRUCT(new_types);
     Vector varchar_vector(varchar_struct_type, count);
     auto &child_vectors = StructVector::GetEntries(varchar_vector);
 
+    string_map_t<idx_t> child_names;
+    std::vector<ValidityMask*> child_masks;
+    for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+        child_names.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx}); // create a map with the key "keynames"
+        child_masks.emplace_back(&FlatVector::Validity(*child_vectors[child_idx]));
+        child_masks[child_idx]->SetAllInvalid(count);
+    }
 
 	bool all_converted = true;
 	for (idx_t i = 0; i < count; i++) {
@@ -226,7 +232,7 @@ bool StringToStructCastLoop(string_t *source_data, ValidityMask &source_mask, Ve
 			continue;
 		}
 
-		if (!VectorStringifiedStructParser::SplitStruct(source_data[idx], child_vectors, i, child_names_map)) {
+		if (!VectorStringifiedStructParser::SplitStruct(source_data[idx], child_vectors, i, child_names, child_masks)) {
 			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
 			              "' can't be cast to the destination type STRUCT";
 			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, parameters.error_message, all_converted);
