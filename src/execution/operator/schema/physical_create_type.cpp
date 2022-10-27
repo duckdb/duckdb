@@ -10,6 +10,9 @@ PhysicalCreateType::PhysicalCreateType(unique_ptr<CreateTypeInfo> info, idx_t es
       info(move(info)) {
 }
 
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
 class CreateTypeGlobalState : public GlobalSinkState {
 public:
 	explicit CreateTypeGlobalState(ClientContext &context) : collection(context, {LogicalType::VARCHAR}) {
@@ -80,7 +83,8 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 			idx_t src_row_count = scan_chunk.size();
 			auto &src_vec = scan_chunk.data[0];
 			D_ASSERT(src_vec.GetVectorType() == VectorType::FLAT_VECTOR);
-			D_ASSERT(src_vec.GetType() == LogicalType::VARCHAR);
+			D_ASSERT(src_vec.GetType().id() == LogicalType::VARCHAR);
+
 			auto src_ptr = FlatVector::GetData<string_t>(src_vec);
 			auto &src_validity = FlatVector::Validity(src_vec);
 
@@ -111,8 +115,6 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 					    StringVector::AddStringOrBlob(result, src_ptr[i].GetDataUnsafe(), src_ptr[i].GetSize());
 				}
 			}
-
-			// result_ptr += src_row_count;
 
 			offset += src_row_count;
 		}

@@ -445,14 +445,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
 		if (create_type_info.query) {
+			// CREATE TYPE mood AS ENUM (SELECT 'happy')
 			auto query_obj = Bind(*create_type_info.query);
 			auto query = move(query_obj.plan);
 
-			auto &names = query_obj.names;
 			auto &sql_types = query_obj.types;
-			D_ASSERT(names.size() == sql_types.size());
-			if (sql_types.size() != 1 || sql_types[0].InternalType() != PhysicalType::VARCHAR) {
-				throw BinderException("The query must return one string column");
+			if (sql_types.size() != 1 || sql_types[0].id() != LogicalType::VARCHAR) {
+				// add cast expression?
+				throw BinderException("The query must return one varchar column");
 			}
 			result.plan->AddChild(move(query));
 		}
