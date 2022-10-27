@@ -490,7 +490,13 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 				continue;
 			} else if (env->IsInstanceOf(param, J_String)) {
 				auto param_string = jstring_to_string(env, (jstring)param);
-				duckdb_params.push_back(Value(param_string));
+				try {
+					duckdb_params.push_back(Value(param_string));
+				} catch (Exception const &e) {
+					delete res_ref;
+					env->ThrowNew(J_SQLException, e.what());
+					return nullptr;
+				}
 				continue;
 			} else {
 				delete res_ref;
