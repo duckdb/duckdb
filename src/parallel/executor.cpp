@@ -69,11 +69,15 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 	auto base_complete_event = make_shared<PipelineCompleteEvent>(base_pipeline->executor, event_data.initial_schedule);
 	PipelineEventStack base_stack {base_initialize_event.get(), base_event.get(), base_finish_event.get(),
 	                               base_complete_event.get()};
+	events.push_back(move(base_initialize_event));
+	events.push_back(move(base_event));
+	events.push_back(move(base_finish_event));
+	events.push_back(move(base_complete_event));
 
-	// initialize -> event -> finish -> complete
-	base_event->AddDependency(*base_initialize_event);
-	base_finish_event->AddDependency(*base_event);
-	base_complete_event->AddDependency(*base_finish_event);
+	// dependencies: initialize -> event -> finish -> complete
+	base_stack.pipeline_event->AddDependency(*base_stack.pipeline_initialize_event);
+	base_stack.pipeline_finish_event->AddDependency(*base_stack.pipeline_event);
+	base_stack.pipeline_complete_event->AddDependency(*base_stack.pipeline_finish_event);
 
 	// create an event and stack for all pipelines in the MetaPipeline
 	vector<shared_ptr<Pipeline>> pipelines;
@@ -86,21 +90,17 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 		auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 		PipelineEventStack pipeline_stack {base_stack.pipeline_initialize_event, pipeline_event.get(),
 		                                   base_stack.pipeline_finish_event, base_stack.pipeline_complete_event};
+		events.push_back(move(pipeline_event));
 
-		// base_initialize -> pipeline_event -> base_finish
+		// dependencies: base_initialize -> pipeline_event -> base_finish
 		pipeline_stack.pipeline_event->AddDependency(*base_stack.pipeline_initialize_event);
 		base_stack.pipeline_finish_event->AddDependency(*pipeline_stack.pipeline_event);
 
-		// add pipeline info the the event data
-		events.push_back(move(pipeline_event));
+		// add pipeline stack to event map
 		event_map.insert(make_pair(pipeline.get(), move(pipeline_stack)));
 	}
 
-	// add base pipeline info to the event data too
-	events.push_back(move(base_initialize_event));
-	events.push_back(move(base_event));
-	events.push_back(move(base_finish_event));
-	events.push_back(move(base_complete_event));
+	// add base stack to the event data too
 	event_map.insert(make_pair(base_pipeline.get(), move(base_stack)));
 
 	// set up the inter-MetaPipeline dependencies
@@ -180,17 +180,18 @@ void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<Ev
 		return; // early out: we already visited this vertex
 	}
 
-	if (!vertices[vertex]->HasDependencies()) {
-		return; // early out: no dependencies
+	auto &parents = vertices[vertex]->GetParentsVerification();
+	if (parents.empty()) {
+		return; // early out: outgoing edges
 	}
 
 	// create a vector the indices of the adjacent events
 	vector<idx_t> adjacent;
 	const idx_t count = vertices.size();
-	for (auto &dep : vertices[vertex]->GetDependenciesVerification()) {
+	for (auto parent : parents) {
 		idx_t i;
 		for (i = 0; i < count; i++) {
-			if (vertices[i] == dep) {
+			if (vertices[i] == parent) {
 				adjacent.push_back(i);
 				break;
 			}
@@ -276,21 +277,28 @@ void Executor::InitializeInternal(PhysicalOperator *plan) {
 		profiler->Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
 
+		// build and ready the pipelines
 		PipelineBuildState state;
 		auto root_pipeline = make_shared<MetaPipeline>(*this, state, nullptr);
 		root_pipeline->Build(physical_plan);
 		root_pipeline->Ready();
 
+		// set root pipelines, i.e., all pipelines that end in the final sink
 		root_pipeline->GetPipelines(root_pipelines, false, false);
 		root_pipeline_idx = 0;
 
-		root_pipeline->GetPipelines(pipelines, true, true);
-		total_pipelines = pipelines.size();
-
-		VerifyPipelines();
-
+		// collect all meta-pipelines from the root pipeline
 		vector<shared_ptr<MetaPipeline>> to_schedule;
 		root_pipeline->GetMetaPipelines(to_schedule, true, true);
+
+		// number of 'complete events' is equal to the number of meta pipelines, so we have to set it here
+		total_pipelines = to_schedule.size();
+
+		// collect all pipelines from the root pipelines (recursively) for the progress bar and verify them
+		root_pipeline->GetPipelines(pipelines, true, false);
+
+		// finally, verify and schedule
+		VerifyPipelines();
 		ScheduleEvents(to_schedule);
 	}
 }
@@ -403,13 +411,12 @@ shared_ptr<Pipeline> Executor::CreateChildPipeline(Pipeline *current, PhysicalOp
 	child_pipeline->source = op;
 
 	// the child pipeline has the same operators up until 'op'
-	for (auto &current_op : current->operators) {
+	for (auto current_op : current->operators) {
 		if (current_op == op) {
 			break;
 		}
 		child_pipeline->operators.push_back(current_op);
 	}
-	child_pipeline->operators = current->operators;
 
 	return child_pipeline;
 }

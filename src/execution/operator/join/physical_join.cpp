@@ -40,23 +40,25 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	// continue building the current pipeline on the LHS (probe side)
 	op.children[0]->BuildPipelines(current, meta_pipeline);
 
+	if (op.type == PhysicalOperatorType::CROSS_PRODUCT) {
+		return;
+	}
+
 	// Join can become a source operator if it's RIGHT/OUTER, or if the hash join goes out-of-core
 	bool add_child_pipeline = false;
-	if (op.type != PhysicalOperatorType::CROSS_PRODUCT) {
-		auto &join_op = (PhysicalJoin &)op;
-		if (IsRightOuterJoin(join_op.join_type)) {
-			if (meta_pipeline.HasRecursiveCTE()) {
-				throw NotImplementedException("FULL and RIGHT outer joins are not supported in recursive CTEs yet");
-			}
-			add_child_pipeline = true;
+	auto &join_op = (PhysicalJoin &)op;
+	if (IsRightOuterJoin(join_op.join_type)) {
+		if (meta_pipeline.HasRecursiveCTE()) {
+			throw NotImplementedException("FULL and RIGHT outer joins are not supported in recursive CTEs yet");
 		}
+		add_child_pipeline = true;
+	}
 
-		if (join_op.type == PhysicalOperatorType::HASH_JOIN) {
-			auto &hash_join_op = (PhysicalHashJoin &)join_op;
-			hash_join_op.can_go_external = !meta_pipeline.HasRecursiveCTE();
-			if (hash_join_op.can_go_external) {
-				add_child_pipeline = true;
-			}
+	if (join_op.type == PhysicalOperatorType::HASH_JOIN) {
+		auto &hash_join_op = (PhysicalHashJoin &)join_op;
+		hash_join_op.can_go_external = !meta_pipeline.HasRecursiveCTE();
+		if (hash_join_op.can_go_external) {
+			add_child_pipeline = true;
 		}
 	}
 

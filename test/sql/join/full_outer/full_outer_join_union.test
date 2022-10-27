@@ -2,11 +2,11 @@
 # description: Test FULL OUTER JOIN with unions
 # group: [full_outer]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
-pragma debug_force_external=true
+pragma verify_external
 
 statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
@@ -19,8 +19,6 @@ CREATE TABLE integers2(k INTEGER, l INTEGER);
 
 statement ok
 INSERT INTO integers2 VALUES (1, 10), (2, 20);
-
-mode skip
 
 # equality join
 query IIII
@@ -81,14 +79,6 @@ NULL	NULL	2	20
 1	1	1	10
 3	3	NULL	NULL
 
-mode unskip
-
-#query T
-#select 1 union all select 42
-#----
-#1
-#42
-
 # many unions/full outer joins with views
 statement ok
 CREATE VIEW v1 AS
@@ -96,7 +86,7 @@ SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers
 UNION ALL
 SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
 
-#loop i 0 10
+loop i 0 10
 
 query IIIIII
 SELECT * FROM v1 FULL OUTER JOIN v1 v2 USING (i, j) ORDER BY 1, 2, 3, 4, 5, 6
@@ -114,4 +104,4 @@ NULL	NULL	2	20	NULL	NULL
 3	3	NULL	NULL	NULL	NULL
 3	3	NULL	NULL	NULL	NULL
 
-#endloop
+endloop

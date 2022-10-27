@@ -37,7 +37,7 @@ public:
 	bool HasDependencies() const {
 		return total_dependencies != 0;
 	}
-	vector<Event *> GetDependenciesVerification() const;
+	const vector<Event *> &GetParentsVerification() const;
 
 	void CompleteDependency();
 
