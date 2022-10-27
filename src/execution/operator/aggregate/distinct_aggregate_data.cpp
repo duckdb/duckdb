@@ -94,8 +94,9 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 		for (auto &group : groups) {
 			grouping_set.insert(group);
 		}
+		idx_t group_by_size = group_expressions ? group_expressions->size() : 0;
 		for (idx_t set_idx = 0; set_idx < aggregate.children.size(); set_idx++) {
-			grouping_set.insert(set_idx + group_expressions->size());
+			grouping_set.insert(set_idx + group_by_size);
 		}
 		// Create the hashtable for the aggregate
 		grouped_aggregate_data[table_idx] = make_unique<GroupedAggregateData>();
