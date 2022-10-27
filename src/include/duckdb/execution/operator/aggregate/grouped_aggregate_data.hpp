@@ -34,6 +34,7 @@ public:
 	vector<LogicalType> aggregate_return_types;
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
+	idx_t filter_count;
 
 public:
 	idx_t GroupCount() const;

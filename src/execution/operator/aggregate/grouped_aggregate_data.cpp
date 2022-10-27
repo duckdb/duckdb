@@ -18,6 +18,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 
 	SetGroupingFunctions(grouping_functions);
 
+	filter_count = 0;
 	for (auto &expr : expressions) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
@@ -29,6 +30,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 			payload_types.push_back(child->return_type);
 		}
 		if (aggr.filter) {
+			filter_count++;
 			payload_types_filters.push_back(aggr.filter->return_type);
 		}
 		if (!aggr.function.combine) {
@@ -49,12 +51,16 @@ void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggr
 	// Add the (empty in ungrouped case) groups of the aggregates
 	InitializeDistinctGroups(groups_p);
 
+	filter_count = 0;
 	aggregate_return_types.push_back(aggr.return_type);
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		auto &child = aggr.children[i];
 		group_types.push_back(child->return_type);
 		groups.push_back(child->Copy());
 		payload_types.push_back(child->return_type);
+		if (aggr.filter) {
+			filter_count++;
+		}
 	}
 	if (!aggr.function.combine) {
 		throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);

@@ -204,9 +204,10 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 		auto &radix_global_sink = *distinct_state.radix_states[table_idx];
 		auto &radix_local_sink = *sink.radix_states[table_idx];
 
-		// FIXME: why is this being done here? The 'Sink' method already applies a filter if needed
-		// Ah that one only applies the filter to the payload, not the groups..
 		if (aggregate.filter) {
+			// The hashtable can apply a filter, but only on the payload
+			// And in our case, we need to filter the groups (the distinct aggr children)
+
 			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.filter_set.GetFilterData(idx);
 			idx_t count = filtered_data.ApplyFilter(input);

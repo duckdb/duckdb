@@ -141,9 +141,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
 			if (!filter_indexes.count(aggr.filter.get())) {
 				// Replace the bound reference expression's index with the corresponding index into the payload chunk
-				// FIXME: this adds only
 				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
-				bound_ref_expr.index = aggregate_input_idx;
+				bound_ref_expr.index = aggregate_input_idx++; // PUT THIS BACK IF STUFF STARTS BREAKING
 			}
 			aggregate_input_idx++;
 		}
@@ -211,6 +210,7 @@ public:
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
 			aggregate_objects.emplace_back(&aggr);
 		}
+
 		filter_set.Initialize(Allocator::Get(context.client), aggregate_objects, payload_types);
 	}
 
@@ -258,8 +258,26 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 	auto &distinct_indices = distinct_info.Indices();
 	auto &distinct_state = grouping_gstate.distinct_state;
 	auto &distinct_data = groupings[grouping_idx].distinct_data;
-	for (auto &idx : distinct_indices) {
+
+	DataChunk empty_chunk;
+
+	idx_t group_count = grouped_aggregate_data.groups.size();
+	idx_t payload_idx = 0;
+	idx_t next_payload_idx = 0;
+	idx_t total_child_count = grouped_aggregate_data.payload_types.size() - grouped_aggregate_data.filter_count;
+	idx_t filter_count = 0;
+	for (idx_t idx = 0; idx < grouped_aggregate_data.aggregates.size(); idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*grouped_aggregate_data.aggregates[idx];
+
+		payload_idx = next_payload_idx;
+		next_payload_idx = aggregate.children.size();
+
+		if (!aggregate.IsDistinct()) {
+			if (aggregate.filter) {
+				filter_count++;
+			}
+			continue;
+		}
 
 		idx_t table_idx = distinct_info.table_map[idx];
 		if (!distinct_data->radix_tables[table_idx]) {
@@ -271,17 +289,60 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 		auto &radix_local_sink = *grouping_lstate.distinct_states[table_idx];
 
 		if (aggregate.filter) {
+			DataChunk filter_chunk;
 			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.filter_set.GetFilterData(idx);
-			idx_t count = filtered_data.ApplyFilter(input);
-			filtered_data.filtered_payload.SetCardinality(count);
+			filter_chunk.InitializeEmpty(filtered_data.filtered_payload.GetTypes());
 
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload,
-			                 filtered_data.filtered_payload, AggregateType::DISTINCT);
+			// Add the child vectors
+			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
+				auto &child = aggregate.children[child_idx];
+				auto &bound_ref = (BoundReferenceExpression &)*child;
+
+				auto filter_idx = payload_idx + child_idx;
+				auto input_idx = bound_ref.index;
+				filter_chunk.data[filter_idx].Reference(input.data[input_idx]);
+			}
+			// Add the filter vector
+			auto it = filter_indexes.find(aggregate.filter.get());
+			D_ASSERT(it != filter_indexes.end());
+			D_ASSERT(it->second < input.data.size());
+			auto &filter_bound_ref = (BoundReferenceExpression &)*aggregate.filter;
+			filter_chunk.data[total_child_count + filter_count].Reference(input.data[it->second]);
+			filter_count++;
+
+			filter_chunk.SetCardinality(input.size());
+
+			SelectionVector sel_vec(STANDARD_VECTOR_SIZE);
+			idx_t count = filtered_data.filter_executor.SelectExpression(filter_chunk, sel_vec);
+
+			if (count == 0) {
+				continue;
+			}
+
+			DataChunk filtered_input;
+			filtered_input.InitializeEmpty(input.GetTypes());
+
+			for (idx_t group_idx = 0; group_idx < grouped_aggregate_data.groups.size(); group_idx++) {
+				auto &group = grouped_aggregate_data.groups[group_idx];
+				auto &bound_ref = (BoundReferenceExpression &)*group;
+				filtered_input.data[bound_ref.index].Reference(input.data[bound_ref.index]);
+			}
+			// And now put the vectors back together with the groups in the input chunk
+			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
+				auto &child = aggregate.children[child_idx];
+				auto &bound_ref = (BoundReferenceExpression &)*child;
+
+				filtered_input.data[bound_ref.index].Reference(input.data[bound_ref.index]);
+			}
+			filtered_input.Slice(sel_vec, count);
+			filtered_input.SetCardinality(count);
+
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_input, empty_chunk,
+			                 AggregateType::DISTINCT);
 		} else {
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input, AggregateType::DISTINCT);
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, empty_chunk, AggregateType::DISTINCT);
 		}
-		radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input, AggregateType::DISTINCT);
 	}
 }
 
