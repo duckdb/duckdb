@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
+import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URL;
@@ -125,14 +126,15 @@ public class DuckDBResultSet implements ResultSet {
 			}
 			Long stream_pointer = DuckDBNative.duckdb_jdbc_arrow_stream(result_ref, arrow_batch_size);
 			Class<?> arrow_array_stream_class = Class.forName("org.apache.arrow.c.ArrowArrayStream");
-			Object arrow_array_stream = arrow_array_stream_class.getMethod("wrap", long.class).invoke(null, stream_pointer);
+			Object arrow_array_stream = arrow_array_stream_class.getMethod("wrap", long.class).invoke(null,
+					stream_pointer);
 
 			Class<?> c_data_class = Class.forName("org.apache.arrow.c.Data");
 
-			return c_data_class
-					.getMethod("importArrayStream", buffer_allocator_class, arrow_array_stream_class)
+			return c_data_class.getMethod("importArrayStream", buffer_allocator_class, arrow_array_stream_class)
 					.invoke(null, arrow_buffer_allocator, arrow_array_stream);
-		} catch (Exception e) {
+		} catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException | SecurityException
+				| ClassNotFoundException e) {
 			throw new RuntimeException(e);
 		}
 	}
