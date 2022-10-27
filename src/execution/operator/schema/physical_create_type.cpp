@@ -22,14 +22,8 @@ public:
 	ColumnDataCollection collection;
 };
 
-class CreateTypeLocalState : public LocalSinkState {};
-
 unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<CreateTypeGlobalState>(context);
-}
-
-unique_ptr<LocalSinkState> PhysicalCreateType::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<CreateTypeLocalState>();
 }
 
 SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
