@@ -334,7 +334,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		//			                            new_group_count);
 		//		}
 		//	}
-		if (aggr.filter) {
+		if (filter != AggregateType::DISTINCT && aggr.filter) {
 			RowOperations::UpdateFilteredStates(filter_set.GetFilterData(aggr_idx), aggr, addresses, payload,
 			                                    payload_idx);
 		} else {
