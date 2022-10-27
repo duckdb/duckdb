@@ -83,6 +83,12 @@ NULL	NULL	2	20
 
 mode unskip
 
+#query T
+#select 1 union all select 42
+#----
+#1
+#42
+
 # many unions/full outer joins with views
 statement ok
 CREATE VIEW v1 AS

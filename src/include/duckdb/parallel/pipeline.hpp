@@ -61,6 +61,7 @@ public:
 
 	void Ready();
 	void Reset();
+	void ResetSink();
 	void ResetSource();
 	void Schedule(shared_ptr<Event> &event);
 
@@ -90,11 +91,11 @@ private:
 	//! Whether or not the pipeline has been initialized
 	atomic<bool> initialized;
 	//! The source of this pipeline
-	PhysicalOperator *source;
+	PhysicalOperator *source = nullptr;
 	//! The chain of intermediate operators
 	vector<PhysicalOperator *> operators;
 	//! The sink (i.e. destination) for data; this is e.g. a hash table to-be-built
-	PhysicalOperator *sink;
+	PhysicalOperator *sink = nullptr;
 
 	//! The global source state
 	unique_ptr<GlobalSourceState> source_state;

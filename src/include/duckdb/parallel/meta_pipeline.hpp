@@ -17,7 +17,7 @@ class PhysicalRecursiveCTE;
 //! MetaPipeline represents a set of pipelines that all have the same sink
 class MetaPipeline : public std::enable_shared_from_this<MetaPipeline> {
 	//! We follow these rules when building:
-	//! 1. When you encounter a join, build out the blocking side first
+	//! 1. Add join operators to the current pipeline, and build out the blocking side before going down the probe side
 	//!     - The current streaming pipeline will have an intra-MetaPipeline dependency on it
 	//!     - Unions of this streaming pipeline will automatically inherit this dependency
 	//! 2. Build child pipelines last (e.g., Hash Join becomes source after probe is done: scan HT for FULL OUTER JOIN)
@@ -45,11 +45,8 @@ public:
 	void GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip);
 	//! Get the inter-MetaPipeline dependencies of the given Pipeline
 	const vector<Pipeline *> *GetDependencies(Pipeline *dependant) const;
-
-	//! Recursive CTE stuff
+	//! Whether this MetaPipeline has a recursive CTE
 	bool HasRecursiveCTE() const;
-	PhysicalRecursiveCTE *GetRecursiveCTE() const;
-	void SetRecursiveCTE(PhysicalOperator *recursive_cte);
 
 public:
 	//! Build the MetaPipeline with 'op' as the first operator (excl. the shared sink)

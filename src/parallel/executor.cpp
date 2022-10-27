@@ -96,6 +96,13 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 		event_map.insert(make_pair(pipeline.get(), move(pipeline_stack)));
 	}
 
+	// add base pipeline info to the event data too
+	events.push_back(move(base_initialize_event));
+	events.push_back(move(base_event));
+	events.push_back(move(base_finish_event));
+	events.push_back(move(base_complete_event));
+	event_map.insert(make_pair(base_pipeline.get(), move(base_stack)));
+
 	// set up the inter-MetaPipeline dependencies
 	for (auto &pipeline : pipelines) {
 		auto dependencies = meta_pipeline->GetDependencies(pipeline.get());
@@ -108,13 +115,6 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 			pipeline_stack.pipeline_event->AddDependency(*dependency_stack.pipeline_event);
 		}
 	}
-
-	// add base pipeline info to the event data too
-	events.push_back(move(base_initialize_event));
-	events.push_back(move(base_event));
-	events.push_back(move(base_finish_event));
-	events.push_back(move(base_complete_event));
-	event_map.insert(make_pair(base_pipeline.get(), move(base_stack)));
 }
 
 void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
@@ -123,9 +123,6 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 
 	// create all the required pipeline events
 	for (auto &pipeline : event_data.meta_pipelines) {
-		if (!pipeline->GetSink()) {
-			continue;
-		}
 		SchedulePipeline(pipeline, event_data);
 	}
 

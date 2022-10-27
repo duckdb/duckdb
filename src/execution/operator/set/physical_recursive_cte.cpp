@@ -166,11 +166,10 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	// the LHS of the recursive CTE is our initial state, we build this pipeline as normal
 	auto initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
 	initial_state_pipeline->Build(children[0].get());
-	auto &initial_state_root_pipeline = *initial_state_pipeline->GetBasePipeline();
+	auto &initial_state_base_pipeline = *initial_state_pipeline->GetBasePipeline();
 
 	// the RHS is the recursive pipeline, which depends on the initial state
-	auto recursive_pipeline = initial_state_pipeline->CreateChildMetaPipeline(initial_state_root_pipeline, this);
-	recursive_pipeline->SetRecursiveCTE(this);
+	auto recursive_pipeline = initial_state_pipeline->CreateChildMetaPipeline(initial_state_base_pipeline, this);
 	recursive_pipeline->Build(children[1].get());
 
 	// set the recursive meta pipeline in this operator

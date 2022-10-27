@@ -118,6 +118,7 @@ bool Pipeline::IsOrderDependent() const {
 void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
 	D_ASSERT(sink);
+	Reset();
 	if (!ScheduleParallel(event)) {
 		// could not parallelize this pipeline: push a sequential task instead
 		ScheduleSequentialTask(event);
@@ -145,11 +146,14 @@ bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 	return true;
 }
 
-void Pipeline::Reset() {
-	if (!sink->sink_state) {
+void Pipeline::ResetSink() {
+	if (sink && !sink->sink_state) {
 		sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
 	}
+}
 
+void Pipeline::Reset() {
+	ResetSink();
 	for (auto &op : operators) {
 		if (op && !op->op_state) {
 			op->op_state = op->GetGlobalOperatorState(GetClientContext());

@@ -6,8 +6,11 @@ namespace duckdb {
 
 MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, PhysicalOperator *sink_p)
     : executor(executor_p), state(state_p), sink(sink_p) {
-	auto root_pipeline = CreatePipeline();
-	state.SetPipelineSink(*root_pipeline, sink, 0);
+	auto base_pipeline = CreatePipeline();
+	state.SetPipelineSink(*base_pipeline, sink, 0);
+	if (sink_p && sink_p->type == PhysicalOperatorType::RECURSIVE_CTE) {
+		recursive_cte = (PhysicalRecursiveCTE *)sink;
+	}
 }
 
 Executor &MetaPipeline::GetExecutor() const {
@@ -61,15 +64,6 @@ bool MetaPipeline::HasRecursiveCTE() const {
 	return recursive_cte != nullptr;
 }
 
-PhysicalRecursiveCTE *MetaPipeline::GetRecursiveCTE() const {
-	return (PhysicalRecursiveCTE *)recursive_cte;
-}
-
-void MetaPipeline::SetRecursiveCTE(PhysicalOperator *recursive_cte_p) {
-	D_ASSERT(recursive_cte_p->type == PhysicalOperatorType::RECURSIVE_CTE);
-	recursive_cte = (PhysicalRecursiveCTE *)recursive_cte_p;
-}
-
 void MetaPipeline::Build(PhysicalOperator *op) {
 	D_ASSERT(pipelines.size() == 1);
 	D_ASSERT(children.empty());
@@ -103,11 +97,16 @@ void MetaPipeline::Reset(ClientContext &context, bool reset_sink) {
 }
 
 MetaPipeline *MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op) {
-	D_ASSERT(pipelines.back().get() == &current); // rule 1
+	// rule 1: make sure that child MetaPipeline is created immediately after 'op' is added to 'current'
+	D_ASSERT(op == current.source || current.operators.back() == op);
 	children.push_back(make_unique<MetaPipeline>(executor, state, op));
 	auto child_meta_pipeline = children.back().get();
 	// child MetaPipeline must finish completely before this MetaPipeline can start
 	current.AddDependency(child_meta_pipeline->GetBasePipeline());
+	// child meta pipeline is part of the recursive CTE too
+	if (HasRecursiveCTE()) {
+		child_meta_pipeline->recursive_cte = recursive_cte;
+	}
 	return child_meta_pipeline;
 }
 
@@ -137,7 +136,8 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current) {
 }
 
 void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op) {
-	D_ASSERT(pipelines.back().get() != &current); // rule 2
+	// rule 2: 'current' must be fully built (down to the source) before creating the child pipeline
+	D_ASSERT(current.source);
 	if (HasRecursiveCTE()) {
 		throw NotImplementedException("Child pipelines are not supported in recursive CTEs yet");
 	}
@@ -151,6 +151,7 @@ void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op) 
 	vector<Pipeline *> scheduled_between;
 	while (it != pipelines.end()) {
 		scheduled_between.push_back(it->get());
+		it++;
 	}
 	D_ASSERT(!scheduled_between.empty());
 

@@ -1022,10 +1022,10 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 	// current depends on lhs
 	auto lhs_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
 	lhs_meta_pipeline->Build(children[0].get());
-	auto &lhs_root_pipeline = *lhs_meta_pipeline->GetBasePipeline();
+	auto &lhs_base_pipeline = *lhs_meta_pipeline->GetBasePipeline();
 
 	// lhs depends on rhs
-	auto rhs_pipeline = lhs_meta_pipeline->CreateChildMetaPipeline(lhs_root_pipeline, this);
+	auto rhs_pipeline = lhs_meta_pipeline->CreateChildMetaPipeline(lhs_base_pipeline, this);
 	rhs_pipeline->Build(children[1].get());
 }
 
