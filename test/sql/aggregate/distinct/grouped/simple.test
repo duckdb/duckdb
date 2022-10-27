@@ -3,7 +3,10 @@
 # group: [grouped]
 
 #statement ok
-#PRAGMA enable_verification
+#PRAGMA disable_optimizer
+
+#statement ok
+#pragma enable_verification
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
@@ -26,14 +29,14 @@ SELECT b, SUM(distinct a), SUM(distinct a+2), AVG(a) FROM test GROUP BY b ORDER 
 22	24	28	12.0
 23	13	15	13.0
 
-# aggregations with group by
-query II
-SELECT SUM(distinct a), SUM(distinct a+2) FROM test GROUP BY b ORDER BY b;
-----
-12	14
-12	14
-24	28
-13	15
+## aggregations with group by
+#query II
+#SELECT SUM(distinct a), SUM(distinct a+2) FROM test GROUP BY b ORDER BY b;
+#----
+#12	14
+#12	14
+#24	28
+#13	15
 
 # TEST THAT FAILS ON MASTER IF WE PARALLELIZE DISTINCT AGGREGATES WITH NO EXTRA WORK
 

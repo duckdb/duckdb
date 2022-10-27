@@ -555,8 +555,8 @@ public:
 			auto &grouping_state = gstate.grouping_states[i];
 			AggregateDistinctGrouping(info, grouping, grouping_state, i);
 		}
-		event->FinishTask();
 		op.FinalizeInternal(pipeline, *event, context, gstate, false);
+		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
