@@ -201,14 +201,26 @@ bool StringListCast(Vector &source, Vector &result, idx_t count, CastParameters 
 
 bool StringToStructCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result, ValidityMask &result_mask,
                             idx_t count, CastParameters &parameters, const SelectionVector *sel) {
-
     auto &result_children = StructVector::GetEntries(result);
+    // ROW(i INT, j DATE)
+    // ROW(i VARCHAR, j VARCHAR)
+    // construct a new struct vector
+    //    auto &child_types = StructType::GetChildTypes(result.GetType());
+    //    child_list_t<LogicalType> new_types;
+    //    for (auto &child : child_types) {
+    //        new_types.push_back(make_pair(child.first, LogicalType::VARCHAR));
+    //    }
+    //    auto varchar_struct_type = LogicalType::STRUCT(new_types);
+    //    Vector varchar_vector(varchar_struct_type, count);
+    // ROW(i VARCHAR, j VARCHAR) -> ROW(i INT, j DATE)
+
 	std::vector<Vector> varchar_vectors;
-    std::vector<string_t> child_names;
+    string_map_t<idx_t> child_names_map;
 	for (idx_t child_idx = 0; child_idx < StructType::GetChildCount(result.GetType()); child_idx++) {
 		varchar_vectors.emplace_back(LogicalType::VARCHAR, count);  // calls a vector constructor with these arguments
                                                                     // one temp varchar vector for each child of result
-        child_names.emplace_back(StructType::GetChildName(result.GetType(), child_idx)); // create a vector with the key "names"
+
+        child_names_map.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx}); // create a map with the key "names"
     }
 
 	bool all_converted = true;
@@ -222,7 +234,7 @@ bool StringToStructCastLoop(string_t *source_data, ValidityMask &source_mask, Ve
 			continue;
 		}
 
-		if (!VectorStringifiedStructParser::SplitStruct(source_data[idx], varchar_vectors, i, child_names)) {
+		if (!VectorStringifiedStructParser::SplitStruct(source_data[idx], varchar_vectors, i, child_names_map)) {
 			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
 			              "' can't be cast to the destination type STRUCT";
 			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, parameters.error_message, all_converted);

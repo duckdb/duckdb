@@ -13,6 +13,7 @@
 #include "duckdb/common/vector_operations/general_cast.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/common/string_map_set.hpp"
 
 namespace duckdb {
 
@@ -197,14 +198,15 @@ struct VectorCastHelpers {
 	}
 };
 
+
 struct VectorStringifiedListParser {
 	static idx_t CountParts(const string_t &input);
-	static bool SplitStringifiedList(const string_t &input, string_t *child_data, idx_t &child_start, Vector &child);
+	static bool SplitStringifiedList(const string_t &input, string_t *child_data, idx_t &child_start, Vector &child );
 };
 
 struct VectorStringifiedStructParser {
 	static bool SplitStruct(string_t &input, std::vector<Vector> &varchar_vectors, idx_t &row_idx,
-	                        std::vector<string_t> &child_names);
+                            string_map_t<idx_t> &child_names);
 };
 
 } // namespace duckdb

@@ -119,6 +119,21 @@ SELECT '{key_A: [[2, 3], [4]], key_B: [Hello, World]}'::STRUCT(key_A INT[][], ke
 {'key_A': [[2, 3], [4]], 'key_B': [Hello, World]}
 
 
+
+
+#               Unordered casting
+# ---------------------------------------------------
+query I 
+SELECT '{key_B: 2, key_A: 46}'::STRUCT(key_A INT, key_B INT);
+----
+{'key_A': 46, 'key_B': 2}
+
+
+
+
+
+
+
 #               Quote escaping
 # ---------------------------------------------------
 
@@ -172,9 +187,20 @@ SELECT '{key_A: 2, key_C: 8}'::STRUCT(key_A INT, key_B DOUBLE, key_C FLOAT);
 {'key_A': 2, 'key_B': NULL, 'key_C': 8.0}
 
 query I
+SELECT '{key_C: 8, key_A: 2}'::STRUCT(key_A INT, key_B DOUBLE, key_C FLOAT);
+----
+{'key_A': 2, 'key_B': NULL, 'key_C': 8.0}
+
+query I
 SELECT '{key_C: Quack}'::STRUCT(key_A INT, key_B VARCHAR, key_C VARCHAR);
 ----
 {'key_A': NULL, 'key_B': NULL, 'key_C': Quack}
+
+query I
+SELECT {'key_C': 2, 'key_A': 4}::VARCHAR::STRUCT(key_A INT, key_B VARCHAR, key_C VARCHAR);
+----
+{'key_A': 4, 'key_B': NULL, 'key_C': 2}
+
 
 # query I
 # SELECT '{}'::STRUCT(key_A INT, key_B VARCHAR);
