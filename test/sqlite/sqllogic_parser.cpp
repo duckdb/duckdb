@@ -92,16 +92,16 @@ string SQLLogicParser::ExtractExpectedError(bool expect_ok) {
 	if (current_line >= lines.size() || lines[current_line] != "----") {
 		return string();
 	}
-	current_line++;
 	if (expect_ok) {
-		FAIL("Failed to parse statement: only statement error can have an expected error message, not statement ok");
+		Fail("Failed to parse statement: only statement error can have an expected error message, not statement ok");
 	}
+	current_line++;
 	string error;
 	while (current_line < lines.size() && !lines[current_line].empty()) {
 		if (error.empty()) {
 			error = lines[current_line];
 		} else {
-			FAIL("Failed to parse statement error: expected single line error message");
+			Fail("Failed to parse statement error: expected single line error message");
 		}
 		current_line++;
 	}
