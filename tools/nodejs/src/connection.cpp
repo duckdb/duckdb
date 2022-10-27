@@ -18,7 +18,7 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	                 InstanceMethod("register_udf_bulk", &Connection::RegisterUdf),
 	                 InstanceMethod("register_buffer", &Connection::RegisterBuffer),
 	                 InstanceMethod("unregister_udf", &Connection::UnregisterUdf),
-					 InstanceMethod("unregister_buffer", &Connection::UnRegisterBuffer)});
+	                 InstanceMethod("unregister_buffer", &Connection::UnRegisterBuffer)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -59,13 +59,13 @@ struct ConnectTask : public Task {
 };
 
 struct NodeReplacementScanData : duckdb::ReplacementScanData {
-	NodeReplacementScanData(Connection* con_p) : connection_ref(con_p) {};
-	Connection* connection_ref;
+	NodeReplacementScanData(Connection *con_p) : connection_ref(con_p) {};
+	Connection *connection_ref;
 };
 
-static duckdb::unique_ptr<duckdb::TableFunctionRef> ScanReplacement(duckdb::ClientContext &context, const std::string &table_name,
-                                                                    duckdb::ReplacementScanData *data) {
-	auto& buffers = ((NodeReplacementScanData*)data)->connection_ref->buffers;
+static duckdb::unique_ptr<duckdb::TableFunctionRef>
+ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, duckdb::ReplacementScanData *data) {
+	auto &buffers = ((NodeReplacementScanData *)data)->connection_ref->buffers;
 	// Lookup buffer
 	auto lookup = buffers.find(table_name);
 	if (lookup == buffers.end()) {
@@ -82,7 +82,7 @@ static duckdb::unique_ptr<duckdb::TableFunctionRef> ScanReplacement(duckdb::Clie
 	duckdb::vector<duckdb::Value> list_children;
 
 	for (uint64_t ipc_idx = 0; ipc_idx < ipc_buffer_array.size(); ipc_idx++) {
-		auto& v = ipc_buffer_array[ipc_idx];
+		auto &v = ipc_buffer_array[ipc_idx];
 		duckdb::child_list_t<duckdb::Value> struct_children;
 		struct_children.push_back(make_pair("ptr", duckdb::Value::UBIGINT(v.first)));
 		struct_children.push_back(make_pair("size", duckdb::Value::UBIGINT(v.second)));
@@ -91,8 +91,10 @@ static duckdb::unique_ptr<duckdb::TableFunctionRef> ScanReplacement(duckdb::Clie
 		list_children.push_back(duckdb::Value::STRUCT(move(struct_children)));
 	}
 
-	table_fun_children.push_back(duckdb::make_unique<duckdb::ConstantExpression>(duckdb::Value::LIST(move(list_children))));
-	table_function->function = duckdb::make_unique<duckdb::FunctionExpression>("scan_arrow_ipc", move(table_fun_children));
+	table_fun_children.push_back(
+	    duckdb::make_unique<duckdb::ConstantExpression>(duckdb::Value::LIST(move(list_children))));
+	table_function->function =
+	    duckdb::make_unique<duckdb::FunctionExpression>("scan_arrow_ipc", move(table_fun_children));
 	return table_function;
 }
 
@@ -109,11 +111,13 @@ Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connec
 	database_ref->Ref();
 
 	if (!database_ref->database) {
-		Napi::Error::New(env, "Connection created on database that was not yet initialized").ThrowAsJavaScriptException();
+		Napi::Error::New(env, "Connection created on database that was not yet initialized")
+		    .ThrowAsJavaScriptException();
 		return;
 	}
 	// Register replacement scan
-	database_ref->database->instance->config.replacement_scans.emplace_back(ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(this));
+	database_ref->database->instance->config.replacement_scans.emplace_back(
+	    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(this));
 
 	Napi::Function callback;
 	if (info.Length() > 0 && info[1].IsFunction()) {

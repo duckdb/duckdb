@@ -31,7 +31,6 @@
 #include <utility>
 #include <cmath>
 
-
 namespace duckdb {
 
 Value::Value(LogicalType type) : type_(move(type)), is_null(true) {

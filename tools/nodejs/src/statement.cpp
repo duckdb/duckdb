@@ -258,7 +258,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 	return scope.Escape(result);
 }
 
-enum RunType { RUN, EACH, ALL, ARROW_ALL};
+enum RunType { RUN, EACH, ALL, ARROW_ALL };
 
 struct StatementParam {
 	std::vector<duckdb::Value> params;
@@ -278,7 +278,8 @@ struct RunPreparedTask : public Task {
 			return;
 		}
 
-		result = statement.statement->Execute(params->params, run_type != RunType::ALL  && run_type != RunType::ARROW_ALL);
+		result =
+		    statement.statement->Execute(params->params, run_type != RunType::ALL && run_type != RunType::ARROW_ALL);
 	}
 
 	void Callback() override {
@@ -356,10 +357,10 @@ struct RunPreparedTask : public Task {
 		case RunType::ARROW_ALL: {
 			auto materialized_result = (duckdb::MaterializedQueryResult *)result.get();
 			// +1 is for null bytes at end of stream
-			Napi::Array result_arr(Napi::Array::New(env, materialized_result->RowCount()+1));
+			Napi::Array result_arr(Napi::Array::New(env, materialized_result->RowCount() + 1));
 
-			auto deleter = [](Napi::Env, void* finalizeData, void* hint){
-				delete static_cast<std::shared_ptr<duckdb::QueryResult>*>(hint);
+			auto deleter = [](Napi::Env, void *finalizeData, void *hint) {
+				delete static_cast<std::shared_ptr<duckdb::QueryResult> *>(hint);
 			};
 
 			std::shared_ptr<duckdb::QueryResult> result_ptr = move(result);
@@ -377,15 +378,15 @@ struct RunPreparedTask : public Task {
 				D_ASSERT(chunk->data[1].GetType() == duckdb::LogicalType::BOOLEAN);
 
 				for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					duckdb::string_t blob = ((duckdb::string_t*)(chunk->data[0].GetData()))[row_idx];
+					duckdb::string_t blob = ((duckdb::string_t *)(chunk->data[0].GetData()))[row_idx];
 					bool is_header = chunk->data[1].GetData()[row_idx];
 
 					// Create shared pointer to give (shared) ownership to ArrayBuffer, not that for these materialized
 					// query results, the string data is owned by the QueryResult
 					auto result_ref_ptr = new std::shared_ptr<duckdb::QueryResult>(result_ptr);
 
-					auto array_buffer = Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(), deleter,
-					                                           result_ref_ptr);
+					auto array_buffer = Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(),
+					                                           deleter, result_ref_ptr);
 
 					auto typed_array = Napi::Uint8Array::New(env, blob.GetSize(), array_buffer, 0);
 
@@ -405,7 +406,7 @@ struct RunPreparedTask : public Task {
 			result_arr.Set(out_idx++, null_arr);
 
 			// Confirm all rows are set
-			D_ASSERT(out_idx == materialized_result->RowCount()+1);
+			D_ASSERT(out_idx == materialized_result->RowCount() + 1);
 
 			cb.MakeCallback(statement.Value(), {env.Null(), result_arr});
 		} break;
@@ -484,8 +485,8 @@ Napi::Value Statement::All(const Napi::CallbackInfo &info) {
 }
 
 Napi::Value Statement::ArrowIPCAll(const Napi::CallbackInfo &info) {
-	connection_ref->database_ref->Schedule(info.Env(),
-	                                       duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::ARROW_ALL));
+	connection_ref->database_ref->Schedule(
+	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::ARROW_ALL));
 	return info.This();
 }
 
@@ -537,8 +538,9 @@ Napi::FunctionReference QueryResult::constructor;
 Napi::Object QueryResult::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
-	Napi::Function t = DefineClass(env, "QueryResult", {InstanceMethod("nextChunk", &QueryResult::NextChunk),
-	                                                    InstanceMethod("nextIpcBuffer", &QueryResult::NextIpcBuffer)});
+	Napi::Function t = DefineClass(env, "QueryResult",
+	                               {InstanceMethod("nextChunk", &QueryResult::NextChunk),
+	                                InstanceMethod("nextIpcBuffer", &QueryResult::NextIpcBuffer)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -589,7 +591,8 @@ struct GetChunkTask : public Task {
 };
 
 struct GetNextArrowIpcTask : public Task {
-	GetNextArrowIpcTask(QueryResult &query_result, Napi::Promise::Deferred deferred) : Task(query_result), deferred(deferred) {
+	GetNextArrowIpcTask(QueryResult &query_result, Napi::Promise::Deferred deferred)
+	    : Task(query_result), deferred(deferred) {
 	}
 
 	void DoWork() override {
@@ -611,16 +614,17 @@ struct GetNextArrowIpcTask : public Task {
 		D_ASSERT(chunk->size() == 1 && chunk->ColumnCount() == 2);
 		D_ASSERT(chunk->data[0].GetType() == duckdb::LogicalType::BLOB);
 
-		duckdb::string_t blob = *(duckdb::string_t*)(chunk->data[0].GetData());
+		duckdb::string_t blob = *(duckdb::string_t *)(chunk->data[0].GetData());
 
 		// Transfer ownership and Construct ArrayBuffer
 		auto data_chunk_ptr = new std::unique_ptr<duckdb::DataChunk>();
 		*data_chunk_ptr = std::move(chunk);
-		auto deleter = [](Napi::Env, void* finalizeData, void* hint){ delete static_cast<std::unique_ptr<duckdb::DataChunk>*>(hint);};
-		auto array_buffer = Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(), deleter,
-		                                           data_chunk_ptr);
+		auto deleter = [](Napi::Env, void *finalizeData, void *hint) {
+			delete static_cast<std::unique_ptr<duckdb::DataChunk> *>(hint);
+		};
+		auto array_buffer =
+		    Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(), deleter, data_chunk_ptr);
 		// TODO duckdb in debug mode seems to complain about moving these buffers out of the query result?
-
 
 		deferred.Resolve(array_buffer);
 	}

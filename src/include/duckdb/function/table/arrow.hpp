@@ -129,8 +129,8 @@ protected:
 	                          DataChunk &output, idx_t start, bool arrow_scan_is_projected = true);
 
 	//! Get next scan state
-	static bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p, ArrowScanLocalState &state,
-	                                                    ArrowScanGlobalState &parallel_state);
+	static bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
+	                                       ArrowScanLocalState &state, ArrowScanGlobalState &parallel_state);
 
 	//! Initialize Global State
 	static unique_ptr<GlobalTableFunctionState> ArrowScanInitGlobal(ClientContext &context,
