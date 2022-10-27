@@ -112,27 +112,26 @@ public class DuckDBResultSet implements ResultSet {
 
 	}
 
-	// Export the result set schema to the Arrow C data interface schema pointed to
-	// in the argument, see
-	// https://arrow.apache.org/docs/format/CDataInterface.html#the-arrowschema-structure
-	protected void arrowExportSchema(long schema_pointer) throws SQLException {
+	// Export the result set as an ArrowReader
+	public Object arrowExportStream(Object arrow_buffer_allocator, long arrow_batch_size) throws Exception {
 		if (isClosed()) {
 			throw new SQLException("Result set is closed");
 		}
-		DuckDBNative.duckdb_jdbc_arrow_schema(result_ref, schema_pointer);
-	}
 
-	// Fetch a batch of results into the Arrow C data interface array pointed to in
-	// the argument, see
-	// https://arrow.apache.org/docs/format/CDataInterface.html#the-arrowarray-structure
-	protected boolean arrowFetch(long array_pointer) throws SQLException {
-		if (isClosed()) {
-			throw new SQLException("Result set is closed");
+		Class<?> buffer_allocator_class = Class.forName("org.apache.arrow.memory.BufferAllocator");
+		if (!buffer_allocator_class.isInstance(arrow_buffer_allocator)) {
+			throw new SQLException("Need to pass an Arrow BufferAllocator");
 		}
-		if (chunk_idx != 0) {
-			throw new SQLException("Result set is not new");
-		}
-		return DuckDBNative.duckdb_jdbc_arrow_fetch(result_ref, array_pointer);
+
+		Long stream_pointer = DuckDBNative.duckdb_jdbc_arrow_stream(result_ref, arrow_batch_size);
+		Class<?> arrow_array_stream_class = Class.forName("org.apache.arrow.c.ArrowArrayStream");
+		Object arrow_array_stream = arrow_array_stream_class.getMethod("wrap", long.class).invoke(null, stream_pointer);
+
+		Class<?> c_data_class = Class.forName("org.apache.arrow.c.Data");
+
+		return c_data_class
+				.getMethod("importArrayStream", buffer_allocator_class, arrow_array_stream_class)
+				.invoke(null, arrow_buffer_allocator, arrow_array_stream);
 	}
 
 	public Object getObject(int columnIndex) throws SQLException {
