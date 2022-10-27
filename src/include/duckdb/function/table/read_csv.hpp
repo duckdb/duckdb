@@ -74,84 +74,57 @@ struct ReadCSVTableFunction {
 };
 
 struct ReadCSVGlobalState : public GlobalTableFunctionState {
-	//! File Handle for current file
-	unique_ptr<CSVFileHandle> file_handle;
-	//! The index of the next file to read (i.e. current file + 1)
-	idx_t file_index;
-	//! How many bytes were read up to this point
-	atomic<idx_t> bytes_read;
-	//! Mutex to lock when getting next batch of bytes (Parallel Only)
-	mutex main_mutex;
-	//! Starting Byte of Next Thread
-	idx_t next_byte;
-	//! Size of current file
-	idx_t file_size;
-	//! How many bytes we should execute per local state
-	idx_t bytes_per_local_state;
-	//! If we finished reading the whole file
-	bool finished_file = false;
+public:
+	ReadCSVGlobalState(unique_ptr<CSVFileHandle> file_handle_p, vector<string> &files_path_p, idx_t system_threads_p)
+	    : file_handle(move(file_handle_p)), system_threads(system_threads_p) {
+		file_size = file_handle->FileSize();
+		first_file_size = file_size;
+		bytes_per_local_state = CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL / MaxThreads();
+		current_buffer = make_shared<CSVBuffer>(CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL, *file_handle);
+		next_buffer = current_buffer->Next(*file_handle);
+	}
 
-	idx_t children = 0;
-	idx_t children_done = 0;
+	ReadCSVGlobalState() {};
 
 	idx_t MaxThreads() const override;
+	//! Returns buffer and index that caller thread should read.
+	CSVBufferRead Next(ClientContext &context, ReadCSVData &bind_data);
+	//! If we finished reading all the CSV Files
+	bool Finished();
+
+private:
+	//! File Handle for current file
+	unique_ptr<CSVFileHandle> file_handle;
+
+	shared_ptr<CSVBuffer> current_buffer;
+	shared_ptr<CSVBuffer> next_buffer;
+	//! The index of the next file to read (i.e. current file + 1)
+	idx_t file_index = 1;
+	//! How many bytes were read up to this point
+	atomic<idx_t> bytes_read;
+
+	//! Mutex to lock when getting next batch of bytes (Parallel Only)
+	mutex main_mutex;
+	//! Byte set from for last thread
+	idx_t next_byte = 0;
+	//! Size of current file
+	idx_t file_size;
+
+	//! How many bytes we should execute per local state
+	idx_t bytes_per_local_state;
+
+	//! Size of first file
+	idx_t first_file_size;
+	//! Basically max number of threads in DuckDB
+	idx_t system_threads;
 };
 
 struct ReadCSVLocalState : public LocalTableFunctionState {
-	ReadCSVLocalState(ReadCSVGlobalState &global_state, idx_t bytes_per_thread_p,
-	                  unique_ptr<BufferedCSVReader> csv_reader_p)
-	    : global_state(global_state), bytes_per_thread(bytes_per_thread_p), csv_reader(move(csv_reader_p)) {
-		file_size = csv_reader->file_handle->FileSize();
-		csv_reader->bytes_per_thread = bytes_per_thread;
-		Next();
+public:
+	ReadCSVLocalState(unique_ptr<BufferedCSVReader> csv_reader_p) : csv_reader(move(csv_reader_p)) {
 	}
-
-	void Next() {
-		if (start_byte > file_size) {
-			return;
-		}
-		{
-			lock_guard<mutex> parallel_lock(global_state.main_mutex);
-			// Update the Global State with Remainder Lines
-			if (csv_reader->reminder_start) {
-				auto start = csv_reader->reminder_start->start;
-				global_state.remainder_lines.start_remainder[start] = move(csv_reader->reminder_start);
-			}
-			if (csv_reader->reminder_end) {
-				auto start = csv_reader->reminder_end->start;
-				global_state.remainder_lines.end_remainder[start] = move(csv_reader->reminder_end);
-			}
-			// Update Global State Next Position
-			start_byte = global_state.next_byte;
-			global_state.next_byte += bytes_per_thread;
-			if (start_byte > file_size) {
-				global_state.finished_file = true;
-				global_state.children_done++;
-			}
-		}
-		// We have to set the positions of the csv_reader
-		csv_reader->ResetBuffer();
-		csv_reader->start_buffer = start_byte;
-		csv_reader->position_buffer = start_byte;
-		csv_reader->start_position_csv = start_byte;
-		csv_reader->start_reading = false;
-		csv_reader->finished = false;
-	}
-
-	bool Valid() {
-		return start_byte < file_size;
-	}
-
-	ReadCSVGlobalState &global_state;
-	//! Start Byte (Relative to CSV File)
-	idx_t start_byte = 0;
-	//! How many bytes per thread
-	idx_t bytes_per_thread = 0;
-	//! The File Size
-	idx_t file_size = 0;
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
-	unique_ptr<CSVFileHandle> file_handle;
 };
 
 } // namespace duckdb

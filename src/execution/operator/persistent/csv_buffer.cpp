@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-CSVBuffer::CSVBuffer(idx_t buffer_size_p, CSVFileHandle &file_handle) : buffer_size(buffer_size_p) {
+CSVBuffer::CSVBuffer(idx_t buffer_size_p, CSVFileHandle &file_handle) : buffer_size(buffer_size_p), first_buffer(true) {
 	buffer = unique_ptr<char[]>(new char[buffer_size_p]);
 	actual_size = file_handle.Read(buffer.get(), buffer_size_p);
 	if (actual_size >= 3 && buffer[0] == '\xEF' && buffer[1] == '\xBB' && buffer[2] == '\xBF') {
@@ -11,10 +11,11 @@ CSVBuffer::CSVBuffer(idx_t buffer_size_p, CSVFileHandle &file_handle) : buffer_s
 }
 
 CSVBuffer::CSVBuffer(unique_ptr<char[]> buffer_p, idx_t buffer_size_p, idx_t actual_size_p)
-    : buffer(move(buffer_p)), buffer_size(buffer_size_p), actual_size(actual_size_p) {
+    : buffer(move(buffer_p)), buffer_size(buffer_size_p), actual_size(actual_size_p), first_buffer(false) {
 }
 
 unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle) {
+
 	if (actual_size < buffer_size) {
 		// this was the last buffer
 		return nullptr;
@@ -41,16 +42,18 @@ unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle) {
 	return make_unique<CSVBuffer>(move(next_buffer), next_buffer_size, next_buffer_actual_size);
 }
 
-const char *CSVBuffer::GetBuffer() {
-	return buffer.get();
-}
-
 idx_t CSVBuffer::GetBufferSize() {
 	return actual_size;
 }
 
 idx_t CSVBuffer::GetStart() {
 	return start_position;
+}
+
+bool CSVBuffer::FirstCSVRead() {
+	auto first_read = first_buffer;
+	first_buffer = false;
+	return first_read;
 }
 
 } // namespace duckdb

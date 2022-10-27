@@ -60,20 +60,25 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DA
 
 struct ReadCSVLocalState;
 
-struct RemainderLine {
-	RemainderLine(idx_t start_p, idx_t size_p, unique_ptr<char[]> remainder_p)
-	    : start(start_p), size(size_p), remainder(move(remainder_p)) {};
-	idx_t start;
-	idx_t size;
-	unique_ptr<char[]> remainder;
+struct CSVBufferRead {
+	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p)
+	    : buffer(move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p) {
+	}
+
+	CSVBufferRead() : buffer_start(0), buffer_end(NumericLimits<idx_t>::Maximum()) {};
+
+	void Reset() {
+		buffer.reset();
+		buffer_start = 0;
+		buffer_end = NumericLimits<idx_t>::Maximum();
+	}
+
+	shared_ptr<CSVBuffer> buffer;
+
+	idx_t buffer_start;
+	idx_t buffer_end;
 };
 
-struct RemainderLines {
-	//! start_remainder only stores the lines that started in the thread but did not finish there
-	map<idx_t, unique_ptr<RemainderLine>> start_remainder;
-	//! end_remainder only stores the lines that finished in the thread but did not start there
-	unordered_map<idx_t, unique_ptr<RemainderLine>> end_remainder;
-};
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BufferedCSVReader {
 	ParserMode mode;
@@ -82,6 +87,8 @@ public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, CSVFileHandle *file_handle,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
+	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, CSVBufferRead buffer,
+	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BufferedCSVReader();
 
 	Allocator &allocator;
@@ -99,13 +106,15 @@ public:
 	idx_t position_buffer = 0;
 	//! Start (Relative to the Buffer)
 	idx_t start_buffer = 0;
-	//! Start Position (Relative to the CSV File)
-	idx_t start_position_csv = 0;
+	//! End (Relative to the buffer)
+	idx_t end_buffer = NumericLimits<idx_t>::Maximum();
+	idx_t buffer_size = 0;
 
 	idx_t bytes_per_thread = 0;
 
-	unique_ptr<RemainderLine> reminder_start;
-	unique_ptr<RemainderLine> reminder_end;
+	char *buffer;
+
+	CSVBufferRead buffer_read;
 
 	//! If we are done scanning the buffer in this local state
 	bool finished = false;
@@ -118,7 +127,6 @@ public:
 	idx_t sample_chunk_idx = 0;
 	bool jumping_samples = false;
 	bool end_of_file_reached = false;
-	bool bom_checked = false;
 
 	idx_t bytes_in_chunk = 0;
 	double bytes_per_line_avg = 0;
@@ -131,12 +139,10 @@ public:
 
 	std::queue<unique_ptr<DataChunk>> cached_chunks;
 
-	//! If we already started reading after setting start and end bytes
-	bool start_reading = false;
-
 public:
+	void SetBufferRead(CSVBufferRead buffer_read);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
-	void ParseCSV(DataChunk &insert_chunk, RemainderLines *remainder_lines = nullptr);
+	void ParseCSV(DataChunk &insert_chunk);
 
 	//! Fill nulls into the cols that mismtach union names
 	void SetNullUnionCols(DataChunk &insert_chunk);
@@ -158,8 +164,7 @@ private:
 	//! Try to parse a single datachunk from the file. Returns whether or not the parsing is successful
 	bool TryParseCSV(ParserMode mode);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
-	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message,
-	                 RemainderLines *remainder_lines = nullptr);
+	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
 	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
 	//! Change the date format for the type to the string
@@ -180,9 +185,9 @@ private:
 	bool SetPosition();
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
-	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, RemainderLines *remainder_lines);
+	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message);
 	//! Parses more complex CSV files with multi-byte delimiters, escapes or quotes
-	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message, RemainderLines *remainder_lines);
+	//	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message, RemainderLines *remainder_lines);
 
 	//! Adds a value to the current row
 	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);

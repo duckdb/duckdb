@@ -188,47 +188,70 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
-	auto result = make_unique<ReadCSVGlobalState>();
 	// FIXME: Should I still care about this case?
 	//	if (bind_data.initial_reader) {
 	//		result->csv_reader = move(bind_data.initial_reader);
 	//	}
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
-		return move(result);
-	} else {
-		bind_data.options.file_path = bind_data.files[0];
-		result->file_handle = ReadCSV::OpenCSV(bind_data.options, context);
+		return make_unique<ReadCSVGlobalState>();
 	}
-	result->bytes_per_local_state = bind_data.options.bytes_per_thread;
-	result->file_size = result->file_handle->FileSize();
-	result->file_index = 1;
-	return move(result);
+
+	bind_data.options.file_path = bind_data.files[0];
+	auto file_handle = ReadCSV::OpenCSV(bind_data.options, context);
+	return make_unique<ReadCSVGlobalState>(move(file_handle), bind_data.files, context.db->NumberOfThreads());
 }
 
 idx_t ReadCSVGlobalState::MaxThreads() const {
-	return file_size / bytes_per_local_state + 1;
+	idx_t one_mb = 1000000;
+	idx_t threads_per_mb = first_file_size / one_mb + 1;
+	if (threads_per_mb < system_threads) {
+		return threads_per_mb;
+	}
+	return system_threads;
+}
+
+bool ReadCSVGlobalState::Finished() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	return current_buffer && next_buffer;
+}
+
+CSVBufferRead ReadCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	auto buffer_read = CSVBufferRead(current_buffer, next_byte, next_byte + bytes_per_local_state);
+	if (!current_buffer) {
+		// We are done scanning.
+		return buffer_read;
+	}
+	next_byte += bytes_per_local_state;
+	if (next_byte > current_buffer->GetBufferSize()) {
+		// We replace the current buffer with the next buffer
+		next_byte = 0;
+		current_buffer = next_buffer;
+		if (next_buffer) {
+			// Next buffer gets the next next buffer
+			next_buffer = next_buffer->Next(*file_handle);
+		}
+	}
+	if (current_buffer && !next_buffer) {
+		// This means we are done with the current file, we need to go to the next one (if exists).
+		if (file_index < bind_data.files.size()) {
+			bind_data.options.file_path = bind_data.files[file_index++];
+			file_handle = ReadCSV::OpenCSV(bind_data.options, context);
+			next_buffer = make_shared<CSVBuffer>(CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL, *file_handle);
+		}
+	}
+	return buffer_read;
 }
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                      GlobalTableFunctionState *global_state_p) {
 	auto &global_state = (ReadCSVGlobalState &)*global_state_p;
 	auto &csv_data = (ReadCSVData &)*input.bind_data;
-	CSVFileHandle *file_handle;
-	{
-		lock_guard<mutex> parallel_lock(global_state.main_mutex);
-		if (global_state.next_byte >= global_state.file_size) {
-			// Threads don't have data to read
-			return nullptr;
-		}
-		file_handle = global_state.file_handle.get();
-		global_state.children++;
-	}
-	unique_ptr<CSVFileHandle> file_handle_true = ReadCSV::OpenCSV(csv_data.options, context.client);
-	auto csv_reader = make_unique<BufferedCSVReader>(context.client, csv_data.options, file_handle, csv_data.sql_types);
-	auto new_local_state =
-	    make_unique<ReadCSVLocalState>(global_state, csv_data.options.bytes_per_thread, move(csv_reader));
-	new_local_state->file_handle = move(file_handle_true);
+	auto next_local_buffer = global_state.Next(context.client, csv_data);
+	auto csv_reader =
+	    make_unique<BufferedCSVReader>(context.client, csv_data.options, next_local_buffer, csv_data.sql_types);
+	auto new_local_state = make_unique<ReadCSVLocalState>(move(csv_reader));
 	return move(new_local_state);
 }
 
@@ -249,42 +272,16 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 
 	do {
-		while (output.size() == 0 && csv_local_state.Valid()) {
-			csv_local_state.csv_reader->ParseCSV(output);
-			if (csv_local_state.csv_reader->finished) {
-				csv_local_state.Next();
-			}
-		}
-		if (output.size() == 0 && csv_global_state.file_index < bind_data.files.size()) {
-			D_ASSERT(0);
-			// exhausted this file, but we have more files we can read
-			// open the next file and increment the counter
-			bind_data.options.file_path = bind_data.files[csv_global_state.file_index];
-			// reuse csv_readers was created during binding
-			//			if (bind_data.options.union_by_name) {
-			//				D_ASSERT(0);
-			////				csv_global_state.csv_reader =
-			/// move(bind_data.union_readers[csv_global_state.file_index]);
-			//			} else {
-			//				csv_global_state.csv_reader =
-			//				    make_unique<BufferedCSVReader>(context, bind_data.options,
-			// csv_global_state.csv_reader->sql_types);
-			//			}
-			csv_global_state.file_index++;
-		} else {
+		if (output.size() == STANDARD_VECTOR_SIZE || csv_global_state.Finished()) {
 			break;
 		}
-	} while (true);
-	{
-		lock_guard<mutex> parallel_lock(csv_global_state.main_mutex);
-		if (csv_global_state.children_done == csv_global_state.children) {
-			if (output.size() == 0) {
-				csv_local_state.csv_reader->ResetBuffer();
-				csv_local_state.csv_reader->ParseCSV(output, &csv_global_state.remainder_lines);
-				csv_global_state.children_done++;
-			}
+		if (csv_local_state.csv_reader->position_buffer >= csv_local_state.csv_reader->end_buffer) {
+			auto next_chunk = csv_global_state.Next(context, bind_data);
+			csv_local_state.csv_reader->SetBufferRead(move(next_chunk));
 		}
-	}
+		csv_local_state.csv_reader->ParseCSV(output);
+
+	} while (true);
 
 	if (bind_data.options.union_by_name) {
 		D_ASSERT(0);
@@ -351,11 +348,12 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
 	auto &data = (const ReadCSVGlobalState &)*global_state;
-	if (data.file_size == 0) {
-		return 100;
-	}
-	auto percentage = (data.bytes_read * 100.0) / data.file_size;
-	return percentage;
+	return 100;
+	//	if (data.file_size == 0) {
+	//		return 100;
+	//	}
+	//	auto percentage = (data.bytes_read * 100.0) / data.file_size;
+	//	return percentage;
 }
 
 void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
