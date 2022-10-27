@@ -317,10 +317,6 @@ vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {
 		// a bit from the max block size
 		auto space_in_block = Storage::BLOCK_SIZE - 4 * sizeof(block_id_t);
 		auto total_blocks = (total_size + space_in_block - 1) / space_in_block;
-		auto &config = DBConfig::GetConfig(db);
-		if (config.options.debug_many_free_list_blocks) {
-			total_blocks++;
-		}
 		D_ASSERT(total_size > 0);
 		D_ASSERT(total_blocks > 0);
 
