@@ -26,7 +26,7 @@ struct CreateTypeInfo : public CreateInfo {
 	string name;
 	//! Logical Type
 	LogicalType type;
-
+	//! Used by create enum from query
 	std::unique_ptr<SQLStatement> query;
 
 public:
