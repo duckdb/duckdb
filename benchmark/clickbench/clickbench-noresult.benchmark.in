@@ -14,3 +14,7 @@ cache clickbench
 load benchmark/clickbench/queries/load.sql
 
 run benchmark/clickbench/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result_query benchmark/clickbench/answers/q${QUERY_NUMBER_PADDED}.csv
+${RESULT_QUERY}
+----

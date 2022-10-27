@@ -1,0 +1,84 @@
+# name: test/sql/storage/parallel/insert_order_preserving.test_slow
+# description: Test parallel order-preserving insert
+# group: [parallel]
+
+load __TEST_DIR__/insert_order_preserving.db
+
+query I
+CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
+----
+10000000
+
+query I
+CREATE TABLE integers2 AS SELECT * FROM integers
+----
+10000000
+
+query I
+SELECT SUM(i) FROM integers
+----
+49999995000000
+
+query I
+SELECT SUM(i) FROM integers2
+----
+49999995000000
+
+query I
+SELECT * FROM integers2 LIMIT 5
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT * FROM integers2 LIMIT 5 OFFSET 777778
+----
+777778
+777779
+777780
+777781
+777782
+
+statement ok
+DROP TABLE integers
+
+statement ok
+DROP TABLE integers2
+
+# now with null values
+statement ok
+CREATE TABLE integers AS SELECT case when i%2=0 then null else i end AS i  FROM range(10000000) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM integers
+
+query I
+SELECT SUM(i) FROM integers
+----
+25000000000000
+
+query I
+SELECT SUM(i) FROM integers2
+----
+25000000000000
+
+query I
+SELECT * FROM integers2 LIMIT 5
+----
+NULL
+1
+NULL
+3
+NULL
+
+query I
+SELECT * FROM integers2 LIMIT 5 OFFSET 777778
+----
+NULL
+777779
+NULL
+777781
+NULL

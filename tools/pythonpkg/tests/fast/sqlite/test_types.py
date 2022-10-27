@@ -68,8 +68,10 @@ class DuckDBTypeTests(unittest.TestCase):
 
     def test_CheckDecimalTooBig(self):
         val = 17.29
-        with pytest.raises(duckdb.ConversionException):
-            self.cur.execute("insert into test(f) values (?)", (decimal.Decimal(val),))
+        self.cur.execute("insert into test(f) values (?)", (decimal.Decimal(val),))
+        self.cur.execute("select f from test")
+        row = self.cur.fetchone()
+        self.assertEqual(row[0], val)
 
     def test_CheckDecimal(self):
         val = '17.29'

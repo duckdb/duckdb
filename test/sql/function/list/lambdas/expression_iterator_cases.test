@@ -125,8 +125,6 @@ SELECT list_filter([1], x -> x = UNNEST([1]));
 ----
 [1]
 
-require vector_size 512
-
 # BOUND_WINDOW
 
 statement ok

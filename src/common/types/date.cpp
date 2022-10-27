@@ -198,6 +198,9 @@ static bool TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const 
 			return false;
 		}
 	}
+	if (*special) {
+		return false;
+	}
 	pos = p;
 	return true;
 }

@@ -2,8 +2,6 @@
 # description: Test read_csv_auto from cranlogs gzip
 # group: [auto]
 
-require vector_size 512
-
 statement ok
 CREATE TABLE cranlogs AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz');
 
