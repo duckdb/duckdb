@@ -66,6 +66,8 @@ PartitionableHashTable::PartitionableHashTable(Allocator &allocator, BufferManag
 
 idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes,
                                            DataChunk &payload, AggregateType filter) {
+	// If this is false, a single AddChunk would overflow the max capacity
+	D_ASSERT(list.empty() || groups.size() <= list.back()->MaxCapacity());
 	if (list.empty() || list.back()->Size() + groups.size() > list.back()->MaxCapacity()) {
 		if (!list.empty()) {
 			// early release first part of ht and prevent adding of more data
@@ -99,6 +101,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	hashes.Flatten(groups.size());
 	auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
 
+	// Determine for every partition how much data will be sinked into it
 	for (idx_t i = 0; i < groups.size(); i++) {
 		auto partition = partition_info.GetHashPartition(hashes_ptr[i]);
 		D_ASSERT(partition < partition_info.n_partitions);

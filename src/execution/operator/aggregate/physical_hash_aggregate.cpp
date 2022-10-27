@@ -448,12 +448,16 @@ public:
 
 		auto &groups = op.grouped_aggregate_data.groups;
 
+		DataChunk aggregate_input_chunk;
+		if (!gstate.payload_types.empty()) {
+			aggregate_input_chunk.Initialize(context, gstate.payload_types);
+		}
+
+		vector<unique_ptr<GlobalSourceState>> global_sources(aggregates.size());
+		vector<unique_ptr<LocalSourceState>> local_sources(aggregates.size());
+
 		for (idx_t i = 0; i < aggregates.size(); i++) {
 			auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
-
-			// Forward the payload idx
-			payload_idx = next_payload_idx;
-			next_payload_idx = payload_idx + aggregate.children.size();
 
 			// If aggregate is not distinct, skip it
 			if (!data.IsDistinct(i)) {
@@ -462,43 +466,63 @@ public:
 			D_ASSERT(data.info.table_map.count(i));
 			auto table_idx = data.info.table_map.at(i);
 			auto &radix_table_p = data.radix_tables[table_idx];
-			auto &output_chunk = *state.distinct_output_chunks[table_idx];
 
 			//! Create global and local state for the hashtable
-			auto global_source_state = radix_table_p->GetGlobalSourceState(context);
-			auto local_source_state = radix_table_p->GetLocalSourceState(temp_exec_context);
-
-			auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
-			DataChunk aggregate_input_chunk;
-			if (!gstate.payload_types.empty()) {
-				aggregate_input_chunk.Initialize(context, gstate.payload_types);
+			if (global_sources[table_idx] == nullptr) {
+				global_sources[table_idx] = radix_table_p->GetGlobalSourceState(context);
+				local_sources[table_idx] = radix_table_p->GetLocalSourceState(temp_exec_context);
 			}
+		}
 
-			//! Retrieve the stored data from the hashtable
-			idx_t groups_size = grouped_aggregate_data.GroupCount();
-			idx_t group_by_size = groups_size - grouped_aggregate_data.payload_types.size();
+		bool last_chunk = false;
+		while (!last_chunk) {
+			bool fetched_group = false;
 
-			while (true) {
+			for (idx_t i = 0; i < op.grouped_aggregate_data.aggregates.size(); i++) {
+				auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+
+				// Forward the payload idx
+				payload_idx = next_payload_idx;
+				next_payload_idx = payload_idx + aggregate.children.size();
+
+				// If aggregate is not distinct, skip it
+				if (!data.IsDistinct(i)) {
+					continue;
+				}
+				D_ASSERT(data.info.table_map.count(i));
+				auto table_idx = data.info.table_map.at(i);
+				auto &radix_table_p = data.radix_tables[table_idx];
+				auto &output_chunk = *state.distinct_output_chunks[table_idx];
+
+				// ????
 				output_chunk.Reset();
 				radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx],
-				                       *global_source_state, *local_source_state);
+				                       *global_sources[table_idx], *local_sources[table_idx]);
+
+				// FIXME: if this is the case, is this true for all aggregates??
 				if (output_chunk.size() == 0) {
+					last_chunk = true;
+					// FIXME: goto might be worth it here
 					break;
 				}
-				//// FIXME: did we add the groups to the aggregate_input_chunk ?
-				// for (auto& entry : op.grouping_sets[grouping_idx]) {
-				//	auto& group_expr = op.grouped_aggregate_data.groups[entry];
-				//	auto& bound_ref_expr = (BoundReferenceExpression&)*group_expr;
-				//	aggregate_input_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
-				// }
+
+				auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
+
+				//! Retrieve the stored data from the hashtable
+				idx_t groups_size = grouped_aggregate_data.GroupCount();
+				idx_t group_by_size = groups_size - grouped_aggregate_data.payload_types.size();
 
 				// Skip the group_by vectors (located at the start of the 'groups' vector)
 				// Map from the output_chunk to the aggregate_input_chunk, using the child expressions
 
-				for (idx_t group_idx = 0; group_idx < group_by_size; group_idx++) {
-					auto &group = grouped_aggregate_data.groups[group_idx];
-					auto &bound_ref_expr = (BoundReferenceExpression &)*group;
-					group_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
+				if (!fetched_group) {
+					for (idx_t group_idx = 0; group_idx < group_by_size; group_idx++) {
+						auto &group = grouped_aggregate_data.groups[group_idx];
+						auto &bound_ref_expr = (BoundReferenceExpression &)*group;
+						group_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
+					}
+					group_chunk.SetCardinality(output_chunk);
+					fetched_group = true;
 				}
 
 				for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.groups.size() - group_by_size;
@@ -507,13 +531,18 @@ public:
 					    output_chunk.data[group_by_size + child_idx]);
 				}
 				aggregate_input_chunk.SetCardinality(output_chunk);
-				group_chunk.SetCardinality(output_chunk);
-
-				// Sink it into the main ht
-				grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
-				                              group_chunk, aggregate_input_chunk, AggregateType::DISTINCT);
 			}
+			if (last_chunk) {
+				break;
+			}
+			// Sink it into the main ht
+			// AHA I need to populate the aggregate_input_chunk with all data for the given grouping, THEN sink
+			grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
+			                              group_chunk, aggregate_input_chunk, AggregateType::DISTINCT);
 		}
+
+		// FIXME: this is needed?
+		grouping_data.table_data.Combine(temp_exec_context, *grouping_state.table_state, *temp_local_state);
 		D_ASSERT(!gstate.finished);
 		gstate.finished = true;
 	}
