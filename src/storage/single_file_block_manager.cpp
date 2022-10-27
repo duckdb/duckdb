@@ -86,8 +86,9 @@ T DeserializeHeaderStructure(data_ptr_t ptr) {
 SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path_p, bool read_only, bool create_new,
                                                bool use_direct_io)
     : BlockManager(BufferManager::GetBufferManager(db)), db(db), path(move(path_p)),
-      header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER, Storage::FILE_HEADER_SIZE), iteration_count(0),
-      read_only(read_only), use_direct_io(use_direct_io) {
+      header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
+                    Storage::FILE_HEADER_SIZE - Storage::BLOCK_HEADER_SIZE),
+      iteration_count(0), read_only(read_only), use_direct_io(use_direct_io) {
 	uint8_t flags;
 	FileLockType lock;
 	if (read_only) {
