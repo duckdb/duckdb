@@ -211,6 +211,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	if (row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state)) {
 		return true;
 	}
+	scan_state.table_state.batch_index = state.scan_state.batch_index;
 	auto &local_storage = LocalStorage::Get(context);
 	if (local_storage.NextParallelScan(context, this, state.local_state, scan_state.local_state)) {
 		return true;
@@ -263,7 +264,9 @@ static void VerifyGeneratedExpressionSuccess(TableCatalogEntry &table, DataChunk
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (std::exception &ex) {
-		throw ConstraintException("Incorrect %s value for generated column \"%s\"", col.Type().ToString(), col.Name());
+
+		throw ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
+		                          col.Type().ToString(), col.GeneratedExpression().ToString(), ex.what());
 	}
 }
 
@@ -411,19 +414,21 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
-	auto binder = Binder::CreateBinder(context);
-	auto bound_columns = unordered_set<column_t>();
-	CheckBinder generated_check_binder(*binder, context, table.name, table.columns, bound_columns);
-	for (idx_t i = 0; i < table.columns.size(); i++) {
-		auto &col = table.columns[i];
-		if (!col.Generated()) {
-			continue;
+	if (table.HasGeneratedColumns()) {
+		auto binder = Binder::CreateBinder(context);
+		auto bound_columns = unordered_set<column_t>();
+		CheckBinder generated_check_binder(*binder, context, table.name, table.columns, bound_columns);
+		for (idx_t i = 0; i < table.columns.size(); i++) {
+			auto &col = table.columns[i];
+			if (!col.Generated()) {
+				continue;
+			}
+			D_ASSERT(col.Type().id() != LogicalTypeId::ANY);
+			generated_check_binder.target_type = col.Type();
+			auto to_be_bound_expression = col.GeneratedExpression().Copy();
+			auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
+			VerifyGeneratedExpressionSuccess(table, chunk, *bound_expression, i);
 		}
-		D_ASSERT(col.Type().id() != LogicalTypeId::ANY);
-		generated_check_binder.target_type = col.Type();
-		auto to_be_bound_expression = col.GeneratedExpression().Copy();
-		auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
-		VerifyGeneratedExpressionSuccess(table, chunk, *bound_expression, i);
 	}
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
 		auto &base_constraint = table.constraints[i];
@@ -563,14 +568,22 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 			break;
 		}
 		idx_t end_row = current_row + chunk.size();
+		// start of chunk is current_row
+		// end of chunk is end_row
 		// figure out if we need to write the entire chunk or just part of it
 		idx_t chunk_start = MaxValue<idx_t>(current_row, row_start);
 		idx_t chunk_end = MinValue<idx_t>(end_row, end);
 		D_ASSERT(chunk_start < chunk_end);
 		idx_t chunk_count = chunk_end - chunk_start;
 		if (chunk_count != chunk.size()) {
+			D_ASSERT(chunk_count <= chunk.size());
 			// need to slice the chunk before insert
-			auto start_in_chunk = chunk_start % STANDARD_VECTOR_SIZE;
+			idx_t start_in_chunk;
+			if (current_row >= row_start) {
+				start_in_chunk = 0;
+			} else {
+				start_in_chunk = row_start - current_row;
+			}
 			SelectionVector sel(start_in_chunk, chunk_count);
 			chunk.Slice(sel, chunk_count);
 			chunk.Verify();

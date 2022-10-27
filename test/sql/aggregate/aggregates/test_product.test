@@ -55,8 +55,6 @@ SELECT PRODUCT(i) FROM range(100) tbl(i) WHERE 1=0;
 NULL
 
 # Window Function
-require vector_size 512
-
 query I rowsort
 select product(i) over (partition by i%2)
     from integers;

@@ -1,0 +1,112 @@
+# name: test/sql/types/union/union_list.test
+# description: Test union types with list members
+# group: [union]
+
+# List of unions
+statement ok
+CREATE TABLE tbl1 (union_list UNION(str VARCHAR, num INT)[]);
+
+statement ok
+INSERT INTO tbl1 VALUES ([1, 'one']), (['two', 2]), ([3, 'three', '3']), ([4]), (list_value('five')), ([6])
+
+query I
+SELECT * FROM tbl1
+----
+[1, one]
+[two, 2]
+[3, three, 3]
+[4]
+[five]
+[6]
+
+# Union with lists
+statement ok
+CREATE TABLE tbl2 (union_with_list UNION(list INT[], num INT));
+
+statement ok
+INSERT INTO tbl2 VALUES ([1, 2, 3]), (4), ([5]), (6), (NULL), (7), (list_value(8, 9, 10));
+
+query I
+SELECT * FROM tbl2
+----
+[1, 2, 3]
+4
+[5]
+6
+NULL
+7
+[8, 9, 10]
+
+query I
+SELECT * FROM tbl2 WHERE union_with_list = [5]
+----
+[5]
+
+query I
+SELECT union_with_list.num FROM tbl2;
+----
+NULL
+4
+NULL
+6
+NULL
+7
+NULL
+
+query I
+SELECT union_list[1] FROM tbl2 JOIN tbl1 ON union_with_list.num = union_list[1].num;
+----
+4
+6
+
+query I
+SELECT union_list[1] FROM tbl2 JOIN tbl1 ON union_with_list.num = union_list[1];
+----
+4
+6
+
+# Union with multiple lists
+statement ok
+CREATE TABLE tbl3 (union_with_lists UNION(strs VARCHAR[], nums INT[]));
+
+# This doesnt work since casting to list costs the same
+statement error 
+INSERT INTO tbl3 VALUES 
+    (['one', 'two']), 
+    ([1, 2]), 
+    (['three', NULL]), 
+    ([3, 4]),
+    (['five']), 
+    ([5]), 
+    (['six']), 
+    ([NULL, 6]), 
+    (union_value(strs:=NULL)), 
+
+
+statement ok 
+INSERT INTO tbl3 VALUES 
+    (union_value(strs:=['one', 'two'])), 
+    (union_value(nums:=[1, 2])), 
+    (union_value(strs:=['three', NULL])), 
+    (union_value(nums:=[3, 4])),
+    (union_value(strs:=['five'])), 
+    (union_value(nums:=[5])), 
+    (union_value(strs:=['six'])), 
+    (union_value(nums:=[NULL, 6])), 
+    (union_value(strs:=NULL)), 
+    (union_value(strs:=[1]))
+
+query II
+SELECT union_tag(union_with_lists), union_with_lists FROM tbl3
+----
+strs	[one, two]
+nums	[1, 2]
+strs	[three, NULL]
+nums	[3, 4]
+strs	[five]
+nums	[5]
+strs	[six]
+nums	[NULL, 6]
+strs	NULL
+strs	[1]
+

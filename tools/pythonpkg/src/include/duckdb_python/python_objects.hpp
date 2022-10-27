@@ -102,6 +102,7 @@ public:
 
 private:
 	void SetExponent(py::handle &exponent);
+	py::handle &obj;
 };
 
 struct PyTimeDelta {

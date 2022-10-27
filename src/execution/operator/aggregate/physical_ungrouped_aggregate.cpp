@@ -347,7 +347,7 @@ public:
 		auto &payload_chunk = distinct_aggregate_data.payload_chunk;
 
 		ThreadContext temp_thread_context(context);
-		ExecutionContext temp_exec_context(context, temp_thread_context);
+		ExecutionContext temp_exec_context(context, temp_thread_context, nullptr);
 
 		idx_t payload_idx = 0;
 		idx_t next_payload_idx = 0;
