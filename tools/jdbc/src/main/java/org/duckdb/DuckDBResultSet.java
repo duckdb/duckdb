@@ -113,25 +113,28 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	// Export the result set as an ArrowReader
-	public Object arrowExportStream(Object arrow_buffer_allocator, long arrow_batch_size) throws Exception {
+	public Object arrowExportStream(Object arrow_buffer_allocator, long arrow_batch_size) throws SQLException {
 		if (isClosed()) {
 			throw new SQLException("Result set is closed");
 		}
 
-		Class<?> buffer_allocator_class = Class.forName("org.apache.arrow.memory.BufferAllocator");
-		if (!buffer_allocator_class.isInstance(arrow_buffer_allocator)) {
-			throw new SQLException("Need to pass an Arrow BufferAllocator");
+		try {
+			Class<?> buffer_allocator_class = Class.forName("org.apache.arrow.memory.BufferAllocator");
+			if (!buffer_allocator_class.isInstance(arrow_buffer_allocator)) {
+				throw new RuntimeException("Need to pass an Arrow BufferAllocator");
+			}
+			Long stream_pointer = DuckDBNative.duckdb_jdbc_arrow_stream(result_ref, arrow_batch_size);
+			Class<?> arrow_array_stream_class = Class.forName("org.apache.arrow.c.ArrowArrayStream");
+			Object arrow_array_stream = arrow_array_stream_class.getMethod("wrap", long.class).invoke(null, stream_pointer);
+
+			Class<?> c_data_class = Class.forName("org.apache.arrow.c.Data");
+
+			return c_data_class
+					.getMethod("importArrayStream", buffer_allocator_class, arrow_array_stream_class)
+					.invoke(null, arrow_buffer_allocator, arrow_array_stream);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
 		}
-
-		Long stream_pointer = DuckDBNative.duckdb_jdbc_arrow_stream(result_ref, arrow_batch_size);
-		Class<?> arrow_array_stream_class = Class.forName("org.apache.arrow.c.ArrowArrayStream");
-		Object arrow_array_stream = arrow_array_stream_class.getMethod("wrap", long.class).invoke(null, stream_pointer);
-
-		Class<?> c_data_class = Class.forName("org.apache.arrow.c.Data");
-
-		return c_data_class
-				.getMethod("importArrayStream", buffer_allocator_class, arrow_array_stream_class)
-				.invoke(null, arrow_buffer_allocator, arrow_array_stream);
 	}
 
 	public Object getObject(int columnIndex) throws SQLException {
