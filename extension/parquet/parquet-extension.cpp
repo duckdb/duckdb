@@ -95,7 +95,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	string file_name;
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
-	idx_t row_group_size = 100000;
+	idx_t row_group_size = RowGroup::ROW_GROUP_SIZE;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
