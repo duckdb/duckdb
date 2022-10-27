@@ -117,7 +117,7 @@ public class DuckDBResultSet implements ResultSet {
 	 * Export the result set as an ArrowReader
 	 *
 	 * @param arrow_buffer_allocator an instance of {@link org.apache.arrow.memory.BufferAllocator}
-	 * @param arrow_batch_size number of DuckDB vectors to return (should be multiple of 2)
+	 * @param arrow_batch_size batch size of arrow vectors to return
 	 * @return an instance of {@link org.apache.arrow.vector.ipc.ArrowReader}
 	 */
 	public Object arrowExportStream(Object arrow_buffer_allocator, long arrow_batch_size) throws SQLException {
