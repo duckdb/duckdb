@@ -21,7 +21,7 @@ public:
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
-	//! Write exactly nr_bytes to the specified location in the file. Fails if nr_bytes could not be write. This is
+	//! Write exactly nr_bytes to the specified location in the file. Fails if nr_bytes could not be written. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Write().
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	//! Read nr_bytes from the specified file into the buffer, moving the file pointer forward by nr_bytes. Returns the
