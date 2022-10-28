@@ -519,54 +519,47 @@ public:
 			}
 		}
 
-		idx_t chunk_count = 0;
-		while (true) {
-			idx_t distinct_agg_count = 0;
+		idx_t payload_idx;
+		idx_t next_payload_idx = 0;
 
-			idx_t payload_idx = 0;
-			idx_t next_payload_idx = 0;
+		for (idx_t i = 0; i < op.grouped_aggregate_data.aggregates.size(); i++) {
+			auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 
-			// Fill the 'aggregate_input_chunk' with the data from all the distinct aggregates, then sink
-			for (idx_t i = 0; i < op.grouped_aggregate_data.aggregates.size(); i++) {
-				auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+			// Forward the payload idx
+			payload_idx = next_payload_idx;
+			next_payload_idx = payload_idx + aggregate.children.size();
 
-				// Forward the payload idx
-				payload_idx = next_payload_idx;
-				next_payload_idx = payload_idx + aggregate.children.size();
+			// If aggregate is not distinct, skip it
+			if (!data.IsDistinct(i)) {
+				continue;
+			}
+			D_ASSERT(data.info.table_map.count(i));
+			auto table_idx = data.info.table_map.at(i);
+			auto &radix_table_p = data.radix_tables[table_idx];
+			auto &output_chunk = *state.distinct_output_chunks[table_idx];
 
-				// If aggregate is not distinct, skip it
-				if (!data.IsDistinct(i)) {
-					continue;
-				}
-				D_ASSERT(data.info.table_map.count(i));
-				auto table_idx = data.info.table_map.at(i);
-				auto &radix_table_p = data.radix_tables[table_idx];
-				auto &output_chunk = *state.distinct_output_chunks[table_idx];
-
+			// Fetch all the data from the aggregate ht, and Sink it into the main ht
+			while (true) {
 				// ????
 				output_chunk.Reset();
+				group_chunk.Reset();
+				aggregate_input_chunk.Reset();
 				radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx],
 				                       *global_sources[table_idx], *local_sources[table_idx]);
 
 				// FIXME: if this is the case, is this true for all aggregates??
 				if (output_chunk.size() == 0) {
-					goto finished_scan;
+					break;
 				}
 
 				auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
 
-				// Skip the group_by vectors (located at the start of the 'groups' vector)
-				// Map from the output_chunk to the aggregate_input_chunk, using the child expressions
-
-				if (!distinct_agg_count) {
-					// Only need to fetch the group for one of the aggregates, as they are identical
-					for (idx_t group_idx = 0; group_idx < group_by_size; group_idx++) {
-						auto &group = grouped_aggregate_data.groups[group_idx];
-						auto &bound_ref_expr = (BoundReferenceExpression &)*group;
-						group_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
-					}
-					group_chunk.SetCardinality(output_chunk);
+				for (idx_t group_idx = 0; group_idx < group_by_size; group_idx++) {
+					auto &group = grouped_aggregate_data.groups[group_idx];
+					auto &bound_ref_expr = (BoundReferenceExpression &)*group;
+					group_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
 				}
+				group_chunk.SetCardinality(output_chunk);
 
 				for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.groups.size() - group_by_size;
 				     child_idx++) {
@@ -574,16 +567,78 @@ public:
 					    output_chunk.data[group_by_size + child_idx]);
 				}
 				aggregate_input_chunk.SetCardinality(output_chunk);
-				distinct_agg_count++;
+
+				// Sink it into the main ht
+				grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
+				                              group_chunk, aggregate_input_chunk, {i});
 			}
-			// Sink it into the main ht
-			// AHA I need to populate the aggregate_input_chunk with all data for the given grouping, THEN sink
-			grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
-			                              group_chunk, aggregate_input_chunk, op.distinct_filter);
-			chunk_count++;
 		}
-	finished_scan:
-		// FIXME: this is needed?
+
+		// idx_t chunk_count = 0;
+		// while (true) {
+		//	idx_t distinct_agg_count = 0;
+
+		//	idx_t payload_idx = 0;
+		//	idx_t next_payload_idx = 0;
+
+		//	// Fill the 'aggregate_input_chunk' with the data from all the distinct aggregates, then sink
+		//	for (idx_t i = 0; i < op.grouped_aggregate_data.aggregates.size(); i++) {
+		//		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+
+		//		// Forward the payload idx
+		//		payload_idx = next_payload_idx;
+		//		next_payload_idx = payload_idx + aggregate.children.size();
+
+		//		// If aggregate is not distinct, skip it
+		//		if (!data.IsDistinct(i)) {
+		//			continue;
+		//		}
+		//		D_ASSERT(data.info.table_map.count(i));
+		//		auto table_idx = data.info.table_map.at(i);
+		//		auto &radix_table_p = data.radix_tables[table_idx];
+		//		auto &output_chunk = *state.distinct_output_chunks[table_idx];
+
+		//		// ????
+		//		output_chunk.Reset();
+		//		radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx],
+		//		                       *global_sources[table_idx], *local_sources[table_idx]);
+
+		//		// FIXME: if this is the case, is this true for all aggregates??
+		//		if (output_chunk.size() == 0) {
+		//			goto finished_scan;
+		//		}
+
+		//		auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
+
+		//		// Skip the group_by vectors (located at the start of the 'groups' vector)
+		//		// Map from the output_chunk to the aggregate_input_chunk, using the child expressions
+
+		//		if (!distinct_agg_count) {
+		//			// Only need to fetch the group for one of the aggregates, as they are identical
+		//			for (idx_t group_idx = 0; group_idx < group_by_size; group_idx++) {
+		//				auto &group = grouped_aggregate_data.groups[group_idx];
+		//				auto &bound_ref_expr = (BoundReferenceExpression &)*group;
+		//				group_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
+		//			}
+		//			group_chunk.SetCardinality(output_chunk);
+		//		}
+
+		//		for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.groups.size() - group_by_size;
+		//		     child_idx++) {
+		//			aggregate_input_chunk.data[payload_idx + child_idx].Reference(
+		//			    output_chunk.data[group_by_size + child_idx]);
+		//		}
+		//		aggregate_input_chunk.SetCardinality(output_chunk);
+		//		distinct_agg_count++;
+		//	}
+		//	// Sink it into the main ht
+		//	// AHA I need to populate the aggregate_input_chunk with all data for the given grouping, THEN sink
+		//	grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
+		//	                              group_chunk, aggregate_input_chunk, op.distinct_filter);
+		//	chunk_count++;
+		//}
+		// finished_scan:
+		//  FIXME: this is needed?
 		grouping_data.table_data.Combine(temp_exec_context, *grouping_state.table_state, *temp_local_state);
 	}
 

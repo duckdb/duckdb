@@ -36,7 +36,11 @@ select count(distinct many) from tbl group by groups;
 query II
 select count(distinct few), count(distinct many) from tbl group by groups;
 ----
-100	100000
+20	20000
+20	20000
+20	20000
+20	20000
+20	20000
 
 # Mixed, different order
 
