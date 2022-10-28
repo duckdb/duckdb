@@ -13,6 +13,7 @@
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
+#include "duckdb/execution/operator/persistent/csv_buffer.hpp"
 
 namespace duckdb {
 
@@ -79,8 +80,8 @@ public:
 	    : file_handle(move(file_handle_p)), system_threads(system_threads_p) {
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
-		bytes_per_local_state = CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL / MaxThreads();
-		current_buffer = make_shared<CSVBuffer>(CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL, *file_handle);
+		bytes_per_local_state = 32000000 / MaxThreads();
+		current_buffer = make_shared<CSVBuffer>(32000000, *file_handle);
 		next_buffer = current_buffer->Next(*file_handle);
 	}
 
@@ -101,7 +102,7 @@ private:
 	//! The index of the next file to read (i.e. current file + 1)
 	idx_t file_index = 1;
 	//! How many bytes were read up to this point
-	atomic<idx_t> bytes_read;
+	//	atomic<idx_t> bytes_read;
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;

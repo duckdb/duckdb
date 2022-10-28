@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/constants.hpp"
+#include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
+
 namespace duckdb {
 
 class CSVBuffer {
@@ -16,8 +19,9 @@ public:
 	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
 	//! Larger buffer size for non disk files
 	static constexpr idx_t INITIAL_BUFFER_SIZE_LARGE = 10000000; // 10MB
-	//! Larger buffer size for non disk files
+	//! Colossal buffer size for multi-threading
 	static constexpr idx_t INITIAL_BUFFER_SIZE_COLOSSAL = 32000000; // 32MB
+
 	//! Constructor for Initial Buffer
 	CSVBuffer(idx_t buffer_size_p, CSVFileHandle &file_handle);
 

@@ -63,6 +63,11 @@ struct ReadCSVLocalState;
 struct CSVBufferRead {
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p)
 	    : buffer(move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p) {
+		if (buffer) {
+			if (buffer_end > buffer->GetBufferSize()) {
+				buffer_end = buffer->GetBufferSize();
+			}
+		}
 	}
 
 	CSVBufferRead() : buffer_start(0), buffer_end(NumericLimits<idx_t>::Maximum()) {};
@@ -115,9 +120,6 @@ public:
 	char *buffer;
 
 	CSVBufferRead buffer_read;
-
-	//! If we are done scanning the buffer in this local state
-	bool finished = false;
 
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
@@ -193,9 +195,6 @@ private:
 	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
 	bool AddRow(DataChunk &insert_chunk, idx_t &column);
-
-	//! Reads a new buffer from the CSV file if the current one has been exhausted
-	bool ReadBuffer(idx_t &start);
 
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
 	void DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options,

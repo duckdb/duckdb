@@ -238,7 +238,7 @@ CSVBufferRead ReadCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind
 		if (file_index < bind_data.files.size()) {
 			bind_data.options.file_path = bind_data.files[file_index++];
 			file_handle = ReadCSV::OpenCSV(bind_data.options, context);
-			next_buffer = make_shared<CSVBuffer>(CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL, *file_handle);
+			next_buffer = make_shared<CSVBuffer>(32000000, *file_handle);
 		}
 	}
 	return buffer_read;
@@ -277,6 +277,10 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		}
 		if (csv_local_state.csv_reader->position_buffer >= csv_local_state.csv_reader->end_buffer) {
 			auto next_chunk = csv_global_state.Next(context, bind_data);
+			if (!next_chunk.buffer) {
+				// We are done
+				break;
+			}
 			csv_local_state.csv_reader->SetBufferRead(move(next_chunk));
 		}
 		csv_local_state.csv_reader->ParseCSV(output);
@@ -347,7 +351,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
-	auto &data = (const ReadCSVGlobalState &)*global_state;
+	//	auto &data = (const ReadCSVGlobalState &)*global_state;
 	return 100;
 	//	if (data.file_size == 0) {
 	//		return 100;

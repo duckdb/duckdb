@@ -7,7 +7,7 @@
 #
 
 statement ok
-pragma threads=4
+pragma threads=1
 
 query I
 SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='false', delim = '|', bytes_per_thread=20)
