@@ -60,7 +60,7 @@ public class TestDuckDBJDBC {
 		if (a == null && b == null) {
 			return;
 		}
-		assertTrue(a.equals(b), String.format("%s should equal %s", a, b));
+		assertTrue(a.equals(b), String.format("\"%s\" should equal \"%s\"", a, b));
 	}
 
 	private static void assertNull(Object a) throws Exception {
@@ -2399,6 +2399,20 @@ public class TestDuckDBJDBC {
 		}
 
 		assertTrue(database.isShutdown());
+	}
+
+	public static void test_null_bytes_in_string() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+			try (PreparedStatement stmt = conn.prepareStatement("select ?")) {
+				stmt.setObject(1, "bob\u0000r");
+
+				String message = assertThrows(
+						stmt::executeQuery,
+						SQLException.class
+				);
+				assertEquals(message, "String value is not valid UTF8");
+			}
+		}
 	}
 
 	public static void test_get_functions() throws Exception {

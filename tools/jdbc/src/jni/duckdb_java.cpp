@@ -430,12 +430,11 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	if (!stmt_ref) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
 	}
-	auto res_ref = new ResultHolder();
+	auto res_ref = make_unique<ResultHolder>();
 	vector<Value> duckdb_params;
 
 	idx_t param_len = env->GetArrayLength(params);
 	if (param_len != stmt_ref->stmt->n_param) {
-		delete res_ref;
 		env->ThrowNew(J_SQLException, "Parameter count mismatch");
 		return nullptr;
 	}
@@ -491,10 +490,14 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 				continue;
 			} else if (env->IsInstanceOf(param, J_String)) {
 				auto param_string = jstring_to_string(env, (jstring)param);
-				duckdb_params.push_back(Value(param_string));
+				try {
+					duckdb_params.push_back(Value(param_string));
+				} catch (Exception const &e) {
+					env->ThrowNew(J_SQLException, e.what());
+					return nullptr;
+				}
 				continue;
 			} else {
-				delete res_ref;
 				env->ThrowNew(J_SQLException, "Unsupported parameter type");
 				return nullptr;
 			}
@@ -505,11 +508,10 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	if (res_ref->res->HasError()) {
 		string error_msg = string(res_ref->res->GetError());
 		res_ref->res = nullptr;
-		delete res_ref;
 		env->ThrowNew(J_SQLException, error_msg.c_str());
 		return nullptr;
 	}
-	return env->NewDirectByteBuffer(res_ref, 0);
+	return env->NewDirectByteBuffer(res_ref.release(), 0);
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release(JNIEnv *env, jclass, jobject stmt_ref_buf) {

@@ -141,7 +141,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 				result_ref = null;
 			}
 			close();
-			throw new SQLException(e);
+			throw e;
 		}
 		return returnsResultSet;
 	}
