@@ -9,6 +9,9 @@ statement ok
 pragma enable_verification
 
 statement ok
+pragma verify_parallelism
+
+statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok
@@ -29,15 +32,6 @@ SELECT b, SUM(distinct a), SUM(distinct a+2), AVG(a) FROM test GROUP BY b ORDER 
 22	24	28	12.0
 23	13	15	13.0
 
-## aggregations with group by
-#query II
-#SELECT SUM(distinct a), SUM(distinct a+2) FROM test GROUP BY b ORDER BY b;
-#----
-#12	14
-#12	14
-#24	28
-#13	15
-
 # TEST THAT FAILS ON MASTER IF WE PARALLELIZE DISTINCT AGGREGATES WITH NO EXTRA WORK
 
 statement ok
@@ -56,144 +50,3 @@ pragma threads=1;
 query I nosort test1
 SELECT sum(distinct i) from distinct_sum group by j order by j;
 ----
-
-
-
-
-
-## ORDER BY aggregation that does not occur in SELECT clause
-#query IR
-#SELECT b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a);
-#----
-#21	12.000000
-#22	24.000000
-
-#query IR
-#SELECT b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC;
-#----
-#22	24.000000
-#21	12.000000
-
-#query IRIR
-#SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test GROUP BY b ORDER BY b;
-#----
-#21	12.000000	1	14.000000
-#22	24.000000	2	28.000000
-
-## group by alias
-#query IR
-#SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY f;
-#----
-#0	24.000000
-#1	12.000000
-
-## group by with filter
-#query IRIR
-#SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test WHERE a <= 12 GROUP BY b ORDER BY b;
-#----
-#21	12.000000	1	14.000000
-#22	11.000000	1	13.000000
-
-## nested aggregate in group by
-#statement error
-#SELECT b % 2 AS f, COUNT(SUM(a)) FROM test GROUP BY f;
-
-#statement ok
-#INSERT INTO test VALUES (12, 21), (12, 21), (12, 21)
-
-## group by with filter and multiple values per groups
-#query IRIR
-#SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test WHERE a <= 12 GROUP BY b ORDER BY b;
-#----
-#21	48.000000	4	56.000000
-#22	11.000000	1	13.000000
-
-## group by with filter and multiple values per groups
-#statement ok
-#CREATE TABLE integers(i INTEGER, j INTEGER);
-
-#statement ok
-#INSERT INTO integers VALUES (3, 4), (3, 4), (2, 4);
-
-## use GROUP BY column in math operator
-#query II
-#SELECT i, i + 10 FROM integers GROUP BY i ORDER BY i
-#----
-#2	12
-#3	13
-
-## using non-group column and non-aggregate should throw an error
-#statement error
-#SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i
-
-## but it works if we wrap it in FIRST() or LAST()
-#query IRI
-#SELECT i, SUM(j), FIRST(j) FROM integers GROUP BY i ORDER BY i
-#----
-#2	4.000000	4
-#3	8.000000	4
-
-#query IRI
-#SELECT i, SUM(j), LAST(j) FROM integers GROUP BY i ORDER BY i
-#----
-#2	4.000000	4
-#3	8.000000	4
-
-## group by constant alias
-#query IR
-#SELECT 1 AS k, SUM(i) FROM integers GROUP BY k ORDER BY 2;
-#----
-#1	8.000000
-
-## use an alias that is identical to a column name (should prioritize column name)
-#query IR
-#SELECT 1 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 2;
-#----
-#1	2.000000
-#1	6.000000
-
-## refer to the same alias twice
-#query IR
-#SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k, k ORDER BY 1;
-#----
-#0	2.000000
-#1	6.000000
-
-#statement ok
-#DROP TABLE integers;
-
-#statement ok
-#CREATE TABLE integers(i INTEGER);
-
-#statement ok
-#INSERT INTO integers VALUES (1), (2), (3), (NULL);
-
-## group by NULL
-#query IR
-#SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY 1;
-#----
-#NULL	NULL
-#1	1.000000
-#2	2.000000
-#3	3.000000
-
-## column reference should have preference over alias reference in grouping
-#query IIR
-#SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 1;
-#----
-#NULL	NULL	NULL
-#1	1	1.000000
-#2	0	2.000000
-#3	1	3.000000
-
-## aliases can only be referenced in the GROUP BY as the root column: operations not allowed
-## CONTROVERSIAL: this query DOES work in SQLite
-#statement error
-#SELECT 1 AS k, SUM(i) FROM integers GROUP BY k+1 ORDER BY 2;
-
-## group by column refs should be recognized, even if one uses an explicit table specifier and the other does not
-#query IR
-#SELECT test.b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC;
-#----
-#21	48.000000
-#22	24.000000

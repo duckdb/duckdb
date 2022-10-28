@@ -255,30 +255,17 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 	auto &grouping_lstate = sink.grouping_states[grouping_idx];
 	auto &distinct_info = *distinct_collection_info;
 
-	auto &distinct_indices = distinct_info.Indices();
 	auto &distinct_state = grouping_gstate.distinct_state;
 	auto &distinct_data = groupings[grouping_idx].distinct_data;
 
 	DataChunk empty_chunk;
 
-	idx_t group_count = grouped_aggregate_data.groups.size();
-	idx_t payload_idx = 0;
-	idx_t next_payload_idx = 0;
 	idx_t total_child_count = grouped_aggregate_data.payload_types.size() - grouped_aggregate_data.filter_count;
 	idx_t filter_count = 0;
-	for (idx_t idx = 0; idx < grouped_aggregate_data.aggregates.size(); idx++) {
+	for (idx_t &idx : distinct_info.indices) {
 		auto &aggregate = (BoundAggregateExpression &)*grouped_aggregate_data.aggregates[idx];
 
-		payload_idx = next_payload_idx;
-		next_payload_idx = aggregate.children.size();
-
-		if (!aggregate.IsDistinct()) {
-			if (aggregate.filter) {
-				filter_count++;
-			}
-			continue;
-		}
-
+		D_ASSERT(distinct_info.table_map.count(idx));
 		idx_t table_idx = distinct_info.table_map[idx];
 		if (!distinct_data->radix_tables[table_idx]) {
 			continue;
@@ -289,21 +276,12 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 		auto &radix_local_sink = *grouping_lstate.distinct_states[table_idx];
 
 		if (aggregate.filter) {
+			// FIXME: might be better to just use the filtered_data.filtered_payload directly?
 			DataChunk filter_chunk;
-			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.filter_set.GetFilterData(idx);
 			filter_chunk.InitializeEmpty(filtered_data.filtered_payload.GetTypes());
 
-			//// Add the child vectors
-			// for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
-			//	auto &child = aggregate.children[child_idx];
-			//	auto &bound_ref = (BoundReferenceExpression &)*child;
-
-			//	auto filter_idx = payload_idx + child_idx;
-			//	auto input_idx = bound_ref.index;
-			//	filter_chunk.data[filter_idx].Reference(input.data[input_idx]);
-			//}
-			// Add the filter vector
+			// Add the filter Vector (BOOL)
 			auto it = filter_indexes.find(aggregate.filter.get());
 			D_ASSERT(it != filter_indexes.end());
 			D_ASSERT(it->second < input.data.size());
@@ -501,14 +479,15 @@ public:
 
 		auto temp_local_state = grouping_data.table_data.GetLocalSinkState(temp_exec_context);
 
-		idx_t payload_idx = 0;
-		idx_t next_payload_idx = 0;
-
 		// Create a chunk that mimics the 'input' chunk in Sink, for storing the group vectors
 		DataChunk group_chunk;
-		group_chunk.Initialize(context, op.input_group_types);
+		if (!op.input_group_types.empty()) {
+			group_chunk.Initialize(context, op.input_group_types);
+		}
 
 		auto &groups = op.grouped_aggregate_data.groups;
+		// Retrieve the stored data from the hashtable
+		const idx_t group_by_size = groups.size();
 
 		DataChunk aggregate_input_chunk;
 		if (!gstate.payload_types.empty()) {
@@ -519,8 +498,6 @@ public:
 		vector<unique_ptr<LocalSourceState>> local_sources(aggregates.size());
 
 		for (auto &idx : info.indices) {
-			auto &aggregate = (BoundAggregateExpression &)*aggregates[idx];
-
 			D_ASSERT(data.info.table_map.count(idx));
 			auto table_idx = data.info.table_map.at(idx);
 			auto &radix_table_p = data.radix_tables[table_idx];
@@ -534,6 +511,11 @@ public:
 
 		while (true) {
 			idx_t distinct_agg_count = 0;
+
+			idx_t payload_idx = 0;
+			idx_t next_payload_idx = 0;
+
+			// Fill the 'aggregate_input_chunk' with the data from all the distinct aggregates, then sink
 			for (idx_t i = 0; i < op.grouped_aggregate_data.aggregates.size(); i++) {
 				auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 
@@ -561,9 +543,6 @@ public:
 				}
 
 				auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
-
-				// Retrieve the stored data from the hashtable
-				idx_t group_by_size = op.grouped_aggregate_data.groups.size();
 
 				// Skip the group_by vectors (located at the start of the 'groups' vector)
 				// Map from the output_chunk to the aggregate_input_chunk, using the child expressions
@@ -686,11 +665,7 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
                                                          GlobalSinkState &gstate_p) const {
 	auto &gstate = (HashAggregateGlobalState &)gstate_p;
 	D_ASSERT(distinct_collection_info);
-	auto &distinct_info = *distinct_collection_info;
 
-	//! Copy of the payload chunk, used to store the data of the radix table for use with the expression executor
-	//! We can not directly use the payload chunk because the input and the output to the expression executor can not
-	//! be the same Vector
 	bool any_partitioned = false;
 	for (idx_t i = 0; i < groupings.size(); i++) {
 		auto &grouping = groupings[i];
@@ -714,8 +689,8 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
 		auto new_event = make_shared<HashDistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
 		event.InsertEvent(move(new_event));
 	} else {
-		//! Hashtables aren't partitioned, they dont need to be joined first
-		//! So we can compute the aggregate already
+		// Hashtables aren't partitioned, they dont need to be joined first
+		// so we can already compute the aggregate
 		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
 		event.InsertEvent(move(new_event));
 	}
