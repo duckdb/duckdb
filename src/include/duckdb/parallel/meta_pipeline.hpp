@@ -27,7 +27,7 @@ class MetaPipeline : public std::enable_shared_from_this<MetaPipeline> {
 	//!         * And all pipelines that were added to the MetaPipeline after 'current'
 public:
 	//! Create a MetaPipeline with the given sink
-	explicit MetaPipeline(Executor &executor, PipelineBuildState &state, PhysicalOperator *sink);
+	explicit MetaPipeline(Executor &executor, PipelineBuildState &state, PhysicalOperator *sink, bool preserves_order);
 
 public:
 	//! Get the Executor for this MetaPipeline
@@ -47,6 +47,10 @@ public:
 	const vector<Pipeline *> *GetDependencies(Pipeline *dependant) const;
 	//! Whether this MetaPipeline has a recursive CTE
 	bool HasRecursiveCTE() const;
+	//! Whether the query plan preserves order
+	bool PreservesOrder() const;
+	//! Let 'dependant' depend on all pipeline that were created since 'start' (including)
+	void AddDependenciesFrom(Pipeline *dependant, Pipeline *start);
 
 public:
 	//! Build the MetaPipeline with 'op' as the first operator (excl. the shared sink)
@@ -84,6 +88,8 @@ private:
 	unordered_map<Pipeline *, vector<Pipeline *>> dependencies;
 	//! Other MetaPipelines that this MetaPipeline depends on
 	vector<shared_ptr<MetaPipeline>> children;
+	//! Whether the entire plan preserves order
+	bool preserves_order;
 };
 
 } // namespace duckdb

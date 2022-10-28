@@ -1,0 +1,91 @@
+# name: test/sql/types/union/union_struct.test
+# description: Test union types with struct members
+# group: [union]
+
+# Union with struct
+statement ok
+CREATE TABLE tbl1 (union_struct UNION(str VARCHAR, obj STRUCT(k VARCHAR, v INT)))
+
+statement ok
+INSERT INTO tbl1 VALUES 
+    ({'k': 'key1', 'v': 1}), 
+    ('not a struct'), 
+    (NULL), 
+    ({'k': NULL, 'v': 1}),
+    ({'k': 'key2', 'v': NULL}),
+    ('key2')
+
+query I
+SELECT * FROM tbl1
+----
+{'k': key1, 'v': 1}
+not a struct
+NULL
+{'k': NULL, 'v': 1}
+{'k': key2, 'v': NULL}
+key2
+
+query I
+SELECT union_struct.obj.k FROM tbl1
+----
+key1
+NULL
+NULL
+NULL
+key2
+NULL
+
+query I
+SELECT union_struct.obj.v FROM tbl1
+----
+1
+NULL
+NULL
+1
+NULL
+NULL
+
+query I
+SELECT union_struct.str FROM tbl1
+----
+NULL
+not a struct
+NULL
+NULL
+NULL
+key2
+
+query II
+SELECT * FROM tbl1 as l JOIN tbl1 as r ON l.union_struct.str = r.union_struct.obj.k
+----
+key2	{'k': key2, 'v': NULL}
+
+
+# Struct with union
+statement ok
+CREATE TABLE tbl2 (struct_union STRUCT(str VARCHAR, alt UNION(k VARCHAR, v INT)))
+
+statement ok
+INSERT INTO tbl2 VALUES 
+    ({'str': 'key1', 'alt': 1}), 
+    ({'str': 'key2', 'alt': 'key2'}), 
+    ({'str': NULL, 'alt': NULL}), 
+    ({'str': NULL, 'alt': union_value(v := NULL)}),
+    ({'str': 'key3', 'alt': union_value(k := NULL)}),
+    ({'str': 'key4', 'alt': 'key2'})
+
+query I
+SELECT * FROM tbl2
+----
+{'str': key1, 'alt': 1}
+{'str': key2, 'alt': key2}
+{'str': NULL, 'alt': NULL}
+{'str': NULL, 'alt': NULL}
+{'str': key3, 'alt': NULL}
+{'str': key4, 'alt': key2}
+
+query II
+SELECT * FROM tbl1 JOIN tbl2 ON tbl1.union_struct.str = tbl2.struct_union.alt.k
+----
+key2	{'str': key4, 'alt': key2}
+key2	{'str': key2, 'alt': key2}

@@ -8,7 +8,7 @@ namespace duckdb {
 
 PhysicalCrossProduct::PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
                                            unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, move(types), estimated_cardinality) {
+    : CachingPhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, move(types), estimated_cardinality) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 }
@@ -114,7 +114,7 @@ OperatorResultType CrossProductExecutor::Execute(DataChunk &input, DataChunk &ou
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-class CrossProductOperatorState : public OperatorState {
+class CrossProductOperatorState : public CachingOperatorState {
 public:
 	explicit CrossProductOperatorState(ColumnDataCollection &rhs) : executor(rhs) {
 	}
@@ -127,8 +127,8 @@ unique_ptr<OperatorState> PhysicalCrossProduct::GetOperatorState(ExecutionContex
 	return make_unique<CrossProductOperatorState>(sink.rhs_materialized);
 }
 
-OperatorResultType PhysicalCrossProduct::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                 GlobalOperatorState &gstate, OperatorState &state_p) const {
+OperatorResultType PhysicalCrossProduct::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                         GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (CrossProductOperatorState &)state_p;
 	return state.executor.Execute(input, chunk);
 }

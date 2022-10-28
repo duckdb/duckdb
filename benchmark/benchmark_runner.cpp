@@ -130,9 +130,7 @@ void BenchmarkRunner::LogOutput(string message) {
 void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler profiler;
 	auto display_name = benchmark->DisplayName();
-	// LogLine(string(display_name.size() + 6, '-'));
-	// LogLine("|| " + display_name + " ||");
-	// LogLine(string(display_name.size() + 6, '-'));
+
 	auto state = benchmark->Initialize(configuration);
 	auto nruns = benchmark->NRuns();
 	for (size_t i = 0; i < nruns + 1; i++) {
@@ -150,8 +148,6 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		profiler.Start();
 		benchmark->Run(state.get());
 		profiler.End();
-
-		benchmark->Cleanup(state.get());
 
 		is_active = false;
 		interrupt_thread.join();
@@ -174,6 +170,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 				}
 			}
 		}
+		benchmark->Cleanup(state.get());
 	}
 	benchmark->Finalize();
 }

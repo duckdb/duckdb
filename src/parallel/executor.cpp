@@ -279,7 +279,8 @@ void Executor::InitializeInternal(PhysicalOperator *plan) {
 
 		// build and ready the pipelines
 		PipelineBuildState state;
-		auto root_pipeline = make_shared<MetaPipeline>(*this, state, nullptr);
+		auto preserves_order = PhysicalPlanGenerator::PreserveInsertionOrder(context, *physical_plan);
+		auto root_pipeline = make_shared<MetaPipeline>(*this, state, nullptr, preserves_order);
 		root_pipeline->Build(physical_plan);
 		root_pipeline->Ready();
 

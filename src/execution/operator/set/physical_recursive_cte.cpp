@@ -5,6 +5,7 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -124,7 +125,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	D_ASSERT(recursive_meta_pipeline->HasRecursiveCTE());
 
 	// reset pipelines (excluding sink state of the top-level meta-pipeline, which is this recursive CTE)
-	recursive_meta_pipeline->Reset(context.client, false);
+	recursive_meta_pipeline->Reset(false);
 
 	// get the MetaPipelines in the recursive_meta_pipeline
 	vector<shared_ptr<MetaPipeline>> meta_pipelines;

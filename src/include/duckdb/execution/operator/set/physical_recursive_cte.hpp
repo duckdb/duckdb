@@ -12,7 +12,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
-class Pipeline;
+
 class RecursiveCTEState;
 
 class PhysicalRecursiveCTE : public PhysicalOperator {

@@ -1,13 +1,14 @@
 #include "duckdb/execution/operator/join/physical_join.hpp"
 
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 
 PhysicalJoin::PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type,
                            idx_t estimated_cardinality)
-    : PhysicalOperator(type, op.types, estimated_cardinality), join_type(join_type) {
+    : CachingPhysicalOperator(type, op.types, estimated_cardinality), join_type(join_type) {
 }
 
 bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {

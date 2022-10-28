@@ -137,13 +137,13 @@ public:
 	void ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result,
 	                 idx_t chunk_index, idx_t segment_index, idx_t row_index) const;
 
+	//! Initialize the column data collection
+	void Initialize(vector<LogicalType> types);
+
 	//! Get a vector of references to every chunk (segment, index in segment), and optionally sort by block id
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
 
 private:
-	//! Initialize the column data collection
-	void Initialize(vector<LogicalType> types);
-
 	//! Creates a new segment within the ColumnDataCollection
 	void CreateSegment();
 

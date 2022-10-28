@@ -66,7 +66,7 @@ private:
 	//! The block-level lock
 	mutex lock;
 	//! Whether or not the block is loaded/unloaded
-	BlockState state;
+	atomic<BlockState> state;
 	//! Amount of concurrent readers
 	atomic<int32_t> readers;
 	//! The block id of the block

@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-class IndexJoinOperatorState : public OperatorState {
+class IndexJoinOperatorState : public CachingOperatorState {
 public:
 	IndexJoinOperatorState(Allocator &allocator, const PhysicalIndexJoin &op)
 	    : probe_executor(allocator), arena_allocator(allocator), keys(STANDARD_VECTOR_SIZE) {
@@ -57,7 +57,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
                                      const vector<idx_t> &left_projection_map_p, vector<idx_t> right_projection_map_p,
                                      vector<column_t> column_ids_p, Index *index_p, bool lhs_first,
                                      idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::INDEX_JOIN, move(op.types), estimated_cardinality),
+    : CachingPhysicalOperator(PhysicalOperatorType::INDEX_JOIN, move(op.types), estimated_cardinality),
       left_projection_map(left_projection_map_p), right_projection_map(move(right_projection_map_p)), index(index_p),
       conditions(move(cond)), join_type(join_type), lhs_first(lhs_first) {
 	column_ids = move(column_ids_p);
@@ -182,8 +182,8 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 	}
 }
 
-OperatorResultType PhysicalIndexJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                              GlobalOperatorState &gstate, OperatorState &state_p) const {
+OperatorResultType PhysicalIndexJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                      GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (IndexJoinOperatorState &)state_p;
 
 	state.result_size = 0;

@@ -12,12 +12,13 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
+
 class Executor;
 class Event;
+class MetaPipeline;
 
 class PipelineBuildState {
 public:
@@ -80,6 +81,10 @@ public:
 
 	PhysicalOperator *GetSink() {
 		return sink;
+	}
+
+	PhysicalOperator *GetSource() {
+		return source;
 	}
 
 	//! Returns whether any of the operators in the pipeline care about preserving insertion order

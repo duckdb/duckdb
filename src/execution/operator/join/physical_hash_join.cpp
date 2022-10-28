@@ -408,7 +408,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-class HashJoinOperatorState : public OperatorState {
+class HashJoinOperatorState : public CachingOperatorState {
 public:
 	explicit HashJoinOperatorState(Allocator &allocator) : probe_executor(allocator), initialized(false) {
 	}
@@ -449,8 +449,8 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	return move(state);
 }
 
-OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                             GlobalOperatorState &gstate, OperatorState &state_p) const {
+OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                     GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (HashJoinOperatorState &)state_p;
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
 	D_ASSERT(sink.finalized);

@@ -22,8 +22,6 @@ class Executor;
 
 //! The Pipeline class represents an execution pipeline
 class PipelineExecutor {
-	static constexpr const idx_t CACHE_THRESHOLD = 64;
-
 public:
 	PipelineExecutor(ClientContext &context, Pipeline &pipeline);
 
@@ -71,6 +69,13 @@ private:
 	//! The final chunk used for moving data into the sink
 	DataChunk final_chunk;
 
+	//! Indicates that the first non-finished operator in the pipeline with RequireFinalExecute has some pending result
+	bool pending_final_execute = false;
+	//! The OperatorFinalizeResultType corresponding to the currently pending final_execute result
+	OperatorFinalizeResultType cached_final_execute_result;
+	//! Source has been exhausted
+	bool source_empty = false;
+
 	//! The operators that are not yet finished executing and have data remaining
 	//! If the stack of in_process_operators is empty, we fetch from the source instead
 	stack<idx_t> in_process_operators;
@@ -80,9 +85,6 @@ private:
 	int32_t finished_processing_idx = -1;
 	//! Whether or not this pipeline requires keeping track of the batch index of the source
 	bool requires_batch_index = false;
-
-	//! Cached chunks for any operators that require caching
-	vector<unique_ptr<DataChunk>> cached_chunks;
 
 private:
 	void StartOperator(PhysicalOperator *op);
@@ -99,6 +101,10 @@ private:
 	//! Pushes a chunk through the pipeline and returns a single result chunk
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
+
+	//! FlushCachedOperators methods push/pull any remaining cached results through the pipeline
+	void FlushCachingOperatorsPull(DataChunk &result);
+	void FlushCachingOperatorsPush();
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);

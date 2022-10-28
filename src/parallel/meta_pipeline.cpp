@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, PhysicalOperator *sink_p)
-    : executor(executor_p), state(state_p), sink(sink_p) {
+MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, PhysicalOperator *sink_p,
+                           bool preserves_order)
+    : executor(executor_p), state(state_p), sink(sink_p), preserves_order(preserves_order) {
 	auto base_pipeline = CreatePipeline();
 	state.SetPipelineSink(*base_pipeline, sink, 0);
 	if (sink_p && sink_p->type == PhysicalOperatorType::RECURSIVE_CTE) {
@@ -64,6 +65,10 @@ bool MetaPipeline::HasRecursiveCTE() const {
 	return recursive_cte != nullptr;
 }
 
+bool MetaPipeline::PreservesOrder() const {
+	return preserves_order;
+}
+
 void MetaPipeline::Build(PhysicalOperator *op) {
 	D_ASSERT(pipelines.size() == 1);
 	D_ASSERT(children.empty());
@@ -96,7 +101,7 @@ void MetaPipeline::Reset(bool reset_sink) {
 }
 
 MetaPipeline *MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op) {
-	children.push_back(make_unique<MetaPipeline>(executor, state, op));
+	children.push_back(make_unique<MetaPipeline>(executor, state, op, preserves_order));
 	auto child_meta_pipeline = children.back().get();
 	// child MetaPipeline must finish completely before this MetaPipeline can start
 	current.AddDependency(child_meta_pipeline->GetBasePipeline());
@@ -110,6 +115,27 @@ MetaPipeline *MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalO
 Pipeline *MetaPipeline::CreatePipeline() {
 	pipelines.emplace_back(make_unique<Pipeline>(executor));
 	return pipelines.back().get();
+}
+
+void MetaPipeline::AddDependenciesFrom(Pipeline *dependant, Pipeline *start) {
+	// find 'start'
+	auto it = pipelines.begin();
+	for (; it->get() != start; it++) {
+	}
+
+	// collect pipelines that were created from then
+	vector<Pipeline *> created_pipelines;
+	for (; it != pipelines.end(); it++) {
+		if (it->get() == dependant) {
+			// cannot depend on itself
+			continue;
+		}
+		created_pipelines.push_back(it->get());
+	}
+
+	// add them to the dependencies
+	auto &deps = dependencies[dependant];
+	deps.insert(deps.begin(), created_pipelines.begin(), created_pipelines.end());
 }
 
 Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current) {
@@ -129,8 +155,8 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current) {
 		dependencies[union_pipeline] = *current_inter_deps;
 	}
 
-	if (sink && (!sink->ParallelSink() || PhysicalPlanGenerator::)) {
-		// if the sink it not parallel, the union pipeline has to come after the current pipeline
+	if (sink && !sink->ParallelSink()) {
+		// if the sink is not parallel, we set a dependency
 		dependencies[union_pipeline].push_back(&current);
 	}
 
@@ -144,22 +170,14 @@ void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op) 
 		throw NotImplementedException("Child pipelines are not supported in recursive CTEs yet");
 	}
 
-	// child pipeline has an inter-MetaPipeline depency on all pipelines that were scheduled between 'current' and now
-	// (including 'current') - gather them
-	auto it = pipelines.begin();
-	while (it->get() != &current) {
-		it++;
-	}
-	vector<Pipeline *> scheduled_between;
-	while (it != pipelines.end()) {
-		scheduled_between.push_back(it->get());
-		it++;
-	}
-	D_ASSERT(!scheduled_between.empty());
-
-	// finally, create the child pipeline and set the dependencies
+	// create the child pipeline
 	pipelines.emplace_back(state.CreateChildPipeline(executor, current, op));
-	dependencies[pipelines.back().get()] = move(scheduled_between);
+	auto child_pipeline = pipelines.back().get();
+
+	// child pipeline has an inter-MetaPipeline depency on all pipelines that were scheduled between 'current' and now
+	// (including 'current') - set them up
+	AddDependenciesFrom(child_pipeline, &current);
+	D_ASSERT(!GetDependencies(child_pipeline)->empty());
 }
 
 } // namespace duckdb

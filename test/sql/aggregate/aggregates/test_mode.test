@@ -72,8 +72,6 @@ select mode(name) from names;
 ----
 pedro
 
-require vector_size 512
-
 query III
 select k, v, mode(v) over (partition by k)
     from aggr

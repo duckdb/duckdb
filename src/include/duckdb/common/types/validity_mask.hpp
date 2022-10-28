@@ -331,7 +331,7 @@ public:
 public:
 	DUCKDB_API void Resize(idx_t old_size, idx_t new_size);
 
-	DUCKDB_API void Slice(const ValidityMask &other, idx_t offset);
+	DUCKDB_API void Slice(const ValidityMask &other, idx_t offset, idx_t end);
 	DUCKDB_API void Combine(const ValidityMask &other, idx_t count);
 	DUCKDB_API string ToString(idx_t count) const;
 };

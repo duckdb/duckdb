@@ -39,10 +39,10 @@ static void test_in_memory_initialization(string dbdir) {
 	fs->RemoveDirectory(in_memory_tmp);
 }
 
-TEST_CASE("Test in-memory database initialization argument \":memory:\"", "[api]") {
+TEST_CASE("Test in-memory database initialization argument \":memory:\"", "[api][.]") {
 	test_in_memory_initialization(":memory:");
 }
 
-TEST_CASE("Test in-memory database initialization argument \"\"", "[api]") {
+TEST_CASE("Test in-memory database initialization argument \"\"", "[api][.]") {
 	test_in_memory_initialization("");
 }

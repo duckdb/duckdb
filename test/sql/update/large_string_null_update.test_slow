@@ -1,4 +1,4 @@
-# name: test/sql/update/large_string_null_update.test
+# name: test/sql/update/large_string_null_update.test_slow
 # description: Test back and forth update of string NULL values with many strings
 # group: [update]
 

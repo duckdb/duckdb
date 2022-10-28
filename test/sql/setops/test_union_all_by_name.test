@@ -17,6 +17,8 @@ CREATE TABLE t2 (y INT, z INT);
 statement ok
 INSERT INTO t2 VALUES (2, 2), (4, 4);
 
+mode skip
+
 query III
 SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2;
 ----
@@ -81,7 +83,7 @@ NULL	4
 3	NULL
 3	NULL
 
-
+mode unskip
 
 ########## test limit
 
@@ -93,6 +95,8 @@ NULL	2	NULL
 NULL	3	NULL
 NULL	4	NULL
 NULL	5	NULL
+
+mode skip
 
 ########## test order by
 

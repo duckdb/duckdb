@@ -67,6 +67,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "UNION";
 	case PhysicalOperatorType::INSERT:
 		return "INSERT";
+	case PhysicalOperatorType::BATCH_INSERT:
+		return "BATCH_INSERT";
 	case PhysicalOperatorType::DELETE_OPERATOR:
 		return "DELETE";
 	case PhysicalOperatorType::UPDATE:
@@ -77,6 +79,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_TABLE";
 	case PhysicalOperatorType::CREATE_TABLE_AS:
 		return "CREATE_TABLE_AS";
+	case PhysicalOperatorType::BATCH_CREATE_TABLE_AS:
+		return "BATCH_CREATE_TABLE_AS";
 	case PhysicalOperatorType::CREATE_INDEX:
 		return "CREATE_INDEX";
 	case PhysicalOperatorType::EXPLAIN:

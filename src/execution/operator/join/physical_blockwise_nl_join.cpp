@@ -74,7 +74,7 @@ SinkFinalizeType PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, Event &ev
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-class BlockwiseNLJoinState : public OperatorState {
+class BlockwiseNLJoinState : public CachingOperatorState {
 public:
 	explicit BlockwiseNLJoinState(ExecutionContext &context, ColumnDataCollection &rhs,
 	                              const PhysicalBlockwiseNLJoin &op)
@@ -94,8 +94,9 @@ unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionCon
 	return make_unique<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
 }
 
-OperatorResultType PhysicalBlockwiseNLJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                    GlobalOperatorState &gstate_p, OperatorState &state_p) const {
+OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
+                                                            DataChunk &chunk, GlobalOperatorState &gstate_p,
+                                                            OperatorState &state_p) const {
 	D_ASSERT(input.size() > 0);
 	auto &state = (BlockwiseNLJoinState &)state_p;
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;

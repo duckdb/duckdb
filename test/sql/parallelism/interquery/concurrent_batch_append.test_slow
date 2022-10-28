@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/interquery/concurrent_batch_append.test
+# name: test/sql/parallelism/interquery/concurrent_batch_append.test_slow
 # description: Test concurrent batch appends on persistent storage
 # group: [interquery]
 

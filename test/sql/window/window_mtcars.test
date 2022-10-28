@@ -2,8 +2,6 @@
 # description: Test window function without
 # group: [window]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 

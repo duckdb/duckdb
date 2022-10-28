@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
 
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
@@ -21,8 +22,17 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 
 	// create a union pipeline that is identical, inheriting any dependencies encountered so far
 	auto union_pipeline = meta_pipeline.CreateUnionPipeline(current);
-	// the remainder of the top and bottom pipelines of the union are independent of each other
+
+	// continue with the current pipeline
 	children[0]->BuildPipelines(current, meta_pipeline);
+
+	if (meta_pipeline.PreservesOrder()) {
+		// 'union_pipeline' must come after all pipelines created by building out 'current' if we want to preserve order
+		meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline);
+		// FIXME: use batch index to parallelize/preserve order
+	}
+
+	// build the union pipeline
 	children[1]->BuildPipelines(*union_pipeline, meta_pipeline);
 }
 

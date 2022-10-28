@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 
+#include "duckdb/parallel/meta_pipeline.hpp"
+
 namespace duckdb {
 
 PhysicalExecute::PhysicalExecute(PhysicalOperator *plan)

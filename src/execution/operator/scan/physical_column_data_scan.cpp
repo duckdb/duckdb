@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {

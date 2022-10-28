@@ -151,6 +151,19 @@ select_clause:
  * NOTE: only the leftmost component PGSelectStmt should have INTO.
  * However, this is not checked by the grammar; parse analysis must check it.
  */
+opt_select:
+		SELECT opt_all_clause opt_target_list_opt_comma
+			{
+				$$ = $3;
+			}
+		| /* empty */
+			{
+				PGAStar *star = makeNode(PGAStar);
+				$$ = list_make1(star);
+			}
+	;
+
+
 simple_select:
 			SELECT opt_all_clause opt_target_list_opt_comma
 			into_clause from_clause where_clause
@@ -183,6 +196,40 @@ simple_select:
 					n->windowClause = $9;
 					n->qualifyClause = $10;
 					n->sampleOptions = $11;
+					$$ = (PGNode *)n;
+				}
+			|  FROM from_list opt_select
+			into_clause where_clause
+			group_clause having_clause window_clause qualify_clause sample_clause
+				{
+					PGSelectStmt *n = makeNode(PGSelectStmt);
+					n->targetList = $3;
+					n->fromClause = $2;
+					n->intoClause = $4;
+					n->whereClause = $5;
+					n->groupClause = $6;
+					n->havingClause = $7;
+					n->windowClause = $8;
+					n->qualifyClause = $9;
+					n->sampleOptions = $10;
+					$$ = (PGNode *)n;
+				}
+			|
+			FROM from_list SELECT distinct_clause target_list_opt_comma
+			into_clause where_clause
+			group_clause having_clause window_clause qualify_clause sample_clause
+				{
+					PGSelectStmt *n = makeNode(PGSelectStmt);
+					n->targetList = $5;
+					n->distinctClause = $4;
+					n->fromClause = $2;
+					n->intoClause = $6;
+					n->whereClause = $7;
+					n->groupClause = $8;
+					n->havingClause = $9;
+					n->windowClause = $10;
+					n->qualifyClause = $11;
+					n->sampleOptions = $12;
 					$$ = (PGNode *)n;
 				}
 			| values_clause_opt_comma							{ $$ = $1; }
@@ -1281,6 +1328,12 @@ Typename:	SimpleTypename opt_array_bounds
                $$->arrayBounds = $5;
                $$->typmods = $3;
                $$->location = @1;
+			}
+			| UNION '(' colid_type_list ')' opt_array_bounds {
+			   $$ = SystemTypeName("union");
+			   $$->arrayBounds = $5;
+			   $$->typmods = $3;
+			   $$->location = @1;
 			}
 		;
 
