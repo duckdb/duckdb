@@ -108,15 +108,7 @@ unique_ptr<LocalSinkState> RadixPartitionedHashTable::GetLocalSinkState(Executio
 	return make_unique<RadixHTLocalState>(*this);
 }
 
-// TODO: write a method that lets us insert into a Combined ht (inserting only into the global state)
-
-void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                     DataChunk &groups_input, DataChunk &payload_input, AggregateType filter) const {
-	auto &llstate = (RadixHTLocalState &)lstate;
-	auto &gstate = (RadixHTGlobalState &)state;
-	D_ASSERT(!gstate.is_finalized);
-
-	DataChunk &group_chunk = llstate.group_chunk;
+void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const {
 	idx_t chunk_index = 0;
 	// Populate the group_chunk
 	for (auto &group_idx : grouping_set) {
@@ -125,10 +117,21 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		D_ASSERT(group->type == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = (BoundReferenceExpression &)*group;
 		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
-		group_chunk.data[chunk_index++].Reference(groups_input.data[bound_ref_expr.index]);
+		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.index]);
 	}
-	group_chunk.SetCardinality(groups_input.size());
+	group_chunk.SetCardinality(input_chunk.size());
 	group_chunk.Verify();
+}
+
+void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+                                     DataChunk &groups_input, DataChunk &payload_input,
+                                     const vector<idx_t> &filter) const {
+	auto &llstate = (RadixHTLocalState &)lstate;
+	auto &gstate = (RadixHTGlobalState &)state;
+	D_ASSERT(!gstate.is_finalized);
+
+	DataChunk &group_chunk = llstate.group_chunk;
+	PopulateGroupChunk(group_chunk, groups_input);
 
 	// if we have non-combinable aggregates (e.g. string_agg) we cannot keep parallel hash
 	// tables

@@ -51,6 +51,7 @@ void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggr
 	// Add the (empty in ungrouped case) groups of the aggregates
 	InitializeDistinctGroups(groups_p);
 
+	// bindings.push_back(&aggr);
 	filter_count = 0;
 	aggregate_return_types.push_back(aggr.return_type);
 	for (idx_t i = 0; i < aggr.children.size(); i++) {

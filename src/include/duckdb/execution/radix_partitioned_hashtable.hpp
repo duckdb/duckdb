@@ -42,7 +42,7 @@ public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 
 	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate, DataChunk &input,
-	          DataChunk &aggregate_input_chunk, AggregateType filter) const;
+	          DataChunk &aggregate_input_chunk, const vector<idx_t> &filter) const;
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
 	bool Finalize(ClientContext &context, GlobalSinkState &gstate_p) const;
 
@@ -61,6 +61,7 @@ public:
 
 private:
 	void SetGroupingValues();
+	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
 };
 
 } // namespace duckdb

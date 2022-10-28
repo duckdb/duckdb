@@ -126,9 +126,17 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...
 	// Because everything that lives in this class should be read only at execution time
 	idx_t aggregate_input_idx = 0;
-	for (auto &aggregate : aggregates) {
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggregate = aggregates[i];
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		aggregate_input_idx += aggr.children.size();
+		if (aggr.aggr_type == AggregateType::DISTINCT) {
+			distinct_filter.push_back(i);
+		} else if (aggr.aggr_type == AggregateType::NON_DISTINCT) {
+			non_distinct_filter.push_back(i);
+		} else { // LCOV_EXCL_START
+			throw NotImplementedException("AggregateType not implemented in PhysicalHashAggregate");
+		} // LCOV_EXCL_STOP
 	}
 	vector<idx_t> distinct_indices;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
@@ -142,7 +150,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 			if (!filter_indexes.count(aggr.filter.get())) {
 				// Replace the bound reference expression's index with the corresponding index into the payload chunk
 				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
-				bound_ref_expr.index = aggregate_input_idx++; // PUT THIS BACK IF STUFF STARTS BREAKING
+				bound_ref_expr.index = aggregate_input_idx++;
 			}
 			aggregate_input_idx++;
 		}
@@ -260,6 +268,9 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 
 	DataChunk empty_chunk;
 
+	// Create an empty filter for Sink, since we don't need to update any aggregate states here
+	vector<idx_t> empty_filter;
+
 	idx_t total_child_count = grouped_aggregate_data.payload_types.size() - grouped_aggregate_data.filter_count;
 	idx_t filter_count = 0;
 	for (idx_t &idx : distinct_info.indices) {
@@ -318,10 +329,9 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 			filtered_input.Slice(sel_vec, count);
 			filtered_input.SetCardinality(count);
 
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_input, empty_chunk,
-			                 AggregateType::DISTINCT);
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_input, empty_chunk, empty_filter);
 		} else {
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, empty_chunk, AggregateType::DISTINCT);
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, empty_chunk, empty_filter);
 		}
 	}
 }
@@ -379,7 +389,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 		auto &grouping = groupings[i];
 		auto &table = grouping.table_data;
 		table.Sink(context, *grouping_gstate.table_state, *grouping_lstate.table_state, input, aggregate_input_chunk,
-		           AggregateType::NON_DISTINCT);
+		           non_distinct_filter);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -509,6 +519,7 @@ public:
 			}
 		}
 
+		idx_t chunk_count = 0;
 		while (true) {
 			idx_t distinct_agg_count = 0;
 
@@ -568,7 +579,8 @@ public:
 			// Sink it into the main ht
 			// AHA I need to populate the aggregate_input_chunk with all data for the given grouping, THEN sink
 			grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
-			                              group_chunk, aggregate_input_chunk, AggregateType::DISTINCT);
+			                              group_chunk, aggregate_input_chunk, op.distinct_filter);
+			chunk_count++;
 		}
 	finished_scan:
 		// FIXME: this is needed?

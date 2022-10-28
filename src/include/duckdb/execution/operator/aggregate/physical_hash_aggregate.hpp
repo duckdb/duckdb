@@ -76,6 +76,10 @@ public:
 	//! A recreation of the input chunk, with nulls for everything that isnt a group
 	vector<LogicalType> input_group_types;
 
+	// Filters given to Sink and friends
+	vector<idx_t> non_distinct_filter;
+	vector<idx_t> distinct_filter;
+
 	unordered_map<Expression *, size_t> filter_indexes;
 
 public:

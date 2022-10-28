@@ -25,6 +25,8 @@ public:
 	PhysicalUngroupedAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                           idx_t estimated_cardinality);
 
+	vector<idx_t> distinct_filter;
+
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
 	unique_ptr<DistinctAggregateData> distinct_data;

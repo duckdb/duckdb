@@ -32,7 +32,7 @@ public:
 	                       vector<LogicalType> group_types_p, vector<LogicalType> payload_types_p,
 	                       vector<BoundAggregateExpression *> bindings_p);
 
-	idx_t AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition, AggregateType filter);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition, const vector<idx_t> &filter);
 	void Partition();
 	bool IsPartitioned();
 
@@ -60,6 +60,6 @@ private:
 
 private:
 	idx_t ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes, DataChunk &payload,
-	                   AggregateType filter);
+	                   const vector<idx_t> &filter);
 };
 } // namespace duckdb

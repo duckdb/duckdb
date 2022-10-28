@@ -29,6 +29,7 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		if (aggr.IsDistinct()) {
 			distinct_indices.push_back(i);
+			distinct_filter.push_back(i);
 		}
 	}
 	if (distinct_indices.empty()) {
@@ -214,9 +215,9 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 			filtered_data.filtered_payload.SetCardinality(count);
 
 			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload, empty_chunk,
-			                 AggregateType::DISTINCT);
+			                 distinct_filter);
 		} else {
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, empty_chunk, AggregateType::DISTINCT);
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, empty_chunk, distinct_filter);
 		}
 	}
 }
