@@ -306,8 +306,11 @@ typedef struct PGFuncCall {
 typedef struct PGAStar {
 	PGNodeTag type;
 	char *relation;       /* relation name (optional) */
+	char *regex;          /* optional: REGEX to select columns */
 	PGList *except_list;  /* optional: EXCLUDE list */
 	PGList *replace_list; /* optional: REPLACE list */
+	bool columns;         /* whether or not this is a columns list */
+	int location;
 } PGAStar;
 
 /*
