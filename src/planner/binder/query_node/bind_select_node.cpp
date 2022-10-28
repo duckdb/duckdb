@@ -6,6 +6,7 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -262,10 +263,16 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 
 bool Binder::FindStarExpression(ParsedExpression &expr, StarExpression **star) {
 	if (expr.GetExpressionClass() == ExpressionClass::STAR) {
+		auto current_star = (StarExpression *)&expr;
 		if (*star) {
-			throw BinderException(FormatError(expr, "Multiple STAR/COLUMNS in the same expression are not supported"));
+			// we can have multiple
+			if (!StarExpression::Equals(*star, current_star)) {
+				throw BinderException(
+				    FormatError(expr, "Multiple different STAR/COLUMNS in the same expression are not supported"));
+			}
+			return true;
 		}
-		*star = (StarExpression *)&expr;
+		*star = current_star;
 		return true;
 	}
 	bool has_star = false;
@@ -281,7 +288,7 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 	D_ASSERT(expr);
 	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
 		D_ASSERT(replacement);
-		expr = move(replacement);
+		expr = replacement->Copy();
 		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
@@ -306,7 +313,6 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 	for (idx_t i = 0; i < star_list.size(); i++) {
 		auto new_expr = expr->Copy();
 		ReplaceStarExpression(new_expr, star_list[i]);
-		D_ASSERT(!star_list[i]);
 		new_select_list.push_back(move(new_expr));
 	}
 }
