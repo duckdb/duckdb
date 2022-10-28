@@ -1,5 +1,6 @@
 #rm -rf build
-mkdir build
+set -e
+mkdir -p build
 pushd build
 
 # download ICU 66
