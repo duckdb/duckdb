@@ -17,7 +17,7 @@ wget -nc ${url/version/$code_version}
 unzip -o ${zip_file/version/$code_version}
 
 # download ICU 71 (replace with latest version)
-data_version="71-1"
+data_version="72-1"
 wget -nc ${url/version/$data_version}
 unzip -o ${zip_file/version/$data_version}
 
