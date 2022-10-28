@@ -288,6 +288,9 @@ private:
 	                                        vector<vector<LogicalType>> &best_sql_types_candidates,
 	                                        map<LogicalTypeId, vector<string>> &best_format_candidates);
 
+	void VerifyUTF8(idx_t col_idx);
+	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);
+
 private:
 	//! Whether or not the current row's columns have overflown sql_types.size()
 	bool error_column_overflow = false;

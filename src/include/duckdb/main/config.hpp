@@ -30,6 +30,7 @@
 namespace duckdb {
 class CastFunctionSet;
 class ClientContext;
+class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
 
@@ -114,8 +115,6 @@ struct DBConfigOptions {
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
-	//! Debug flag that adds additional (unnecessary) free_list blocks to the storage
-	bool debug_many_free_list_blocks = false;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
@@ -158,6 +157,8 @@ public:
 	vector<ParserExtension> parser_extensions;
 	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
+	//! Error manager
+	unique_ptr<ErrorManager> error_manager;
 
 	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
 	                                   set_option_callback_t function = nullptr);

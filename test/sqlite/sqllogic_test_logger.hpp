@@ -47,6 +47,7 @@ public:
 	void SplitMismatch(idx_t row_number, idx_t expected_column_count, idx_t split_count);
 	void WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result);
 	void UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result);
+	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
 
 private:
 	lock_guard<mutex> log_lock;
