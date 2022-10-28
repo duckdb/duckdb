@@ -534,10 +534,7 @@ public:
 			}
 		}
 
-		bool last_chunk = false;
-		while (!last_chunk) {
-			bool fetched_group = false;
-
+		while (true) {
 			for (idx_t i = 0; i < op.grouped_aggregate_data.aggregates.size(); i++) {
 				auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 
@@ -561,29 +558,25 @@ public:
 
 				// FIXME: if this is the case, is this true for all aggregates??
 				if (output_chunk.size() == 0) {
-					last_chunk = true;
-					// FIXME: goto might be worth it here
-					break;
+					goto finished_scan;
 				}
 
 				auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
 
-				////! Retrieve the stored data from the hashtable
-				// idx_t groups_size = grouped_aggregate_data.GroupCount();
-				// idx_t group_by_size = groups_size - grouped_aggregate_data.payload_types.size();
+				// Retrieve the stored data from the hashtable
 				idx_t group_by_size = op.grouped_aggregate_data.groups.size();
 
 				// Skip the group_by vectors (located at the start of the 'groups' vector)
 				// Map from the output_chunk to the aggregate_input_chunk, using the child expressions
 
-				if (!fetched_group) {
+				if (!i) {
+					// Only need to fetch the group for one of the aggregates, as they are identical
 					for (idx_t group_idx = 0; group_idx < group_by_size; group_idx++) {
 						auto &group = grouped_aggregate_data.groups[group_idx];
 						auto &bound_ref_expr = (BoundReferenceExpression &)*group;
 						group_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
 					}
 					group_chunk.SetCardinality(output_chunk);
-					fetched_group = true;
 				}
 
 				for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.groups.size() - group_by_size;
@@ -593,15 +586,12 @@ public:
 				}
 				aggregate_input_chunk.SetCardinality(output_chunk);
 			}
-			if (last_chunk) {
-				break;
-			}
 			// Sink it into the main ht
 			// AHA I need to populate the aggregate_input_chunk with all data for the given grouping, THEN sink
 			grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
 			                              group_chunk, aggregate_input_chunk, AggregateType::DISTINCT);
 		}
-
+	finished_scan:
 		// FIXME: this is needed?
 		grouping_data.table_data.Combine(temp_exec_context, *grouping_state.table_state, *temp_local_state);
 	}
