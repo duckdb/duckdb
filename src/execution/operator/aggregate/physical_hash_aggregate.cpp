@@ -294,25 +294,26 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 			auto &filtered_data = sink.filter_set.GetFilterData(idx);
 			filter_chunk.InitializeEmpty(filtered_data.filtered_payload.GetTypes());
 
-			// Add the child vectors
-			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
-				auto &child = aggregate.children[child_idx];
-				auto &bound_ref = (BoundReferenceExpression &)*child;
+			//// Add the child vectors
+			// for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
+			//	auto &child = aggregate.children[child_idx];
+			//	auto &bound_ref = (BoundReferenceExpression &)*child;
 
-				auto filter_idx = payload_idx + child_idx;
-				auto input_idx = bound_ref.index;
-				filter_chunk.data[filter_idx].Reference(input.data[input_idx]);
-			}
+			//	auto filter_idx = payload_idx + child_idx;
+			//	auto input_idx = bound_ref.index;
+			//	filter_chunk.data[filter_idx].Reference(input.data[input_idx]);
+			//}
 			// Add the filter vector
 			auto it = filter_indexes.find(aggregate.filter.get());
 			D_ASSERT(it != filter_indexes.end());
 			D_ASSERT(it->second < input.data.size());
-			auto &filter_bound_ref = (BoundReferenceExpression &)*aggregate.filter;
 			filter_chunk.data[total_child_count + filter_count].Reference(input.data[it->second]);
 			filter_count++;
 
 			filter_chunk.SetCardinality(input.size());
 
+			// We cant use the AggregateFilterData::ApplyFilter method, because the chunk we need to
+			// apply the filter to also has the groups, and the filtered_data.filtered_payload does not have those.
 			SelectionVector sel_vec(STANDARD_VECTOR_SIZE);
 			idx_t count = filtered_data.filter_executor.SelectExpression(filter_chunk, sel_vec);
 
@@ -320,6 +321,8 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 				continue;
 			}
 
+			// Because the 'input' chunk needs to be re-used after this, we need to create
+			// a duplicate of it, that we can apply the filter to
 			DataChunk filtered_input;
 			filtered_input.InitializeEmpty(input.GetTypes());
 
@@ -328,7 +331,6 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 				auto &bound_ref = (BoundReferenceExpression &)*group;
 				filtered_input.data[bound_ref.index].Reference(input.data[bound_ref.index]);
 			}
-			// And now put the vectors back together with the groups in the input chunk
 			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
 				auto &child = aggregate.children[child_idx];
 				auto &bound_ref = (BoundReferenceExpression &)*child;
@@ -516,18 +518,14 @@ public:
 		vector<unique_ptr<GlobalSourceState>> global_sources(aggregates.size());
 		vector<unique_ptr<LocalSourceState>> local_sources(aggregates.size());
 
-		for (idx_t i = 0; i < aggregates.size(); i++) {
-			auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+		for (auto &idx : info.indices) {
+			auto &aggregate = (BoundAggregateExpression &)*aggregates[idx];
 
-			// If aggregate is not distinct, skip it
-			if (!data.IsDistinct(i)) {
-				continue;
-			}
-			D_ASSERT(data.info.table_map.count(i));
-			auto table_idx = data.info.table_map.at(i);
+			D_ASSERT(data.info.table_map.count(idx));
+			auto table_idx = data.info.table_map.at(idx);
 			auto &radix_table_p = data.radix_tables[table_idx];
 
-			//! Create global and local state for the hashtable
+			// Create global and local state for the hashtable
 			if (global_sources[table_idx] == nullptr) {
 				global_sources[table_idx] = radix_table_p->GetGlobalSourceState(context);
 				local_sources[table_idx] = radix_table_p->GetLocalSourceState(temp_exec_context);
