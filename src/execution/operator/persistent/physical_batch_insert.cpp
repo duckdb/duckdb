@@ -166,7 +166,7 @@ public:
 	}
 
 	void AddCollection(ClientContext &context, idx_t batch_index, unique_ptr<RowGroupCollection> current_collection,
-	                   OptimisticDataWriter *writer = nullptr) {
+	                   OptimisticDataWriter *writer = nullptr, bool *written_to_disk = nullptr) {
 		vector<unique_ptr<RowGroupCollection>> merge_collections;
 		idx_t merge_count;
 		{
@@ -181,14 +181,16 @@ public:
 				// first check how many rows we will end up with by performing such a merge
 				// check backwards
 				merge_count = new_count;
-				for (idx_t i = batch_index; i > 0; i--) {
-					if (!CheckMerge(i - 1, merge_count)) {
+				idx_t start_batch_index;
+				idx_t end_batch_index;
+				for (start_batch_index = batch_index; start_batch_index > 0; start_batch_index--) {
+					if (!CheckMerge(start_batch_index - 1, merge_count)) {
 						break;
 					}
 				}
 				// check forwards
-				for (idx_t i = batch_index + 1;; i++) {
-					if (!CheckMerge(i, merge_count)) {
+				for (end_batch_index = batch_index;; end_batch_index++) {
+					if (!CheckMerge(end_batch_index + 1, merge_count)) {
 						break;
 					}
 				}
@@ -196,24 +198,20 @@ public:
 				// merge!
 				if (merge_count >= RowGroup::ROW_GROUP_SIZE) {
 					// gather the row groups to merge
-					// backwards again
-					for (idx_t i = batch_index; i > 0; i--) {
-						if (!CheckMerge(i - 1, merge_collections)) {
-							break;
+					// note that we need to gather them in order of batch index
+					for (idx_t i = start_batch_index; i <= end_batch_index; i++) {
+						if (i == batch_index) {
+							merge_collections.push_back(move(current_collection));
+							continue;
 						}
-					}
-					// and forwards
-					for (idx_t i = batch_index + 1;; i++) {
-						if (!CheckMerge(i, merge_collections)) {
-							break;
+						auto can_merge = CheckMerge(i, merge_collections);
+						if (!can_merge) {
+							throw InternalException("Could not merge row group in batch insert?!");
 						}
 					}
 				}
 			}
-			if (!merge_collections.empty()) {
-				// we have collections to merge together!
-				merge_collections.push_back(move(current_collection));
-			} else {
+			if (merge_collections.empty()) {
 				// no collections to merge together - add the collection to the batch index
 				collections[batch_index] = move(current_collection);
 			}
@@ -224,6 +222,9 @@ public:
 			auto final_collection = MergeCollections(context, move(merge_collections), *writer);
 			D_ASSERT(final_collection->GetTotalRows() == merge_count);
 			D_ASSERT(final_collection->GetTotalRows() >= RowGroup::ROW_GROUP_SIZE);
+			if (written_to_disk) {
+				*written_to_disk = true;
+			}
 			// add the merged-together collection to the
 			{
 				lock_guard<mutex> l(lock);
@@ -306,8 +307,8 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		lstate.FlushToDisk();
 
-		gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection),
-		                     lstate.writer.get());
+		gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection), lstate.writer.get(),
+		                     &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);
 	}
 	lstate.current_index = lstate.batch_index;
