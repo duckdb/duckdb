@@ -2,6 +2,8 @@
 # description: Recursive CTEs with complex pipelines
 # group: [cte]
 
+mode skip
+
 statement ok
 PRAGMA enable_verification
 
@@ -43,8 +45,12 @@ SELECT * FROM t ORDER BY 1;
 81
 243
 
+mode unskip
+
 statement ok
 CREATE TABLE a AS SELECT * FROM range(100) t1(i)
+
+mode skip
 
 # recursive CTE with aggregates
 query I
@@ -63,6 +69,8 @@ SELECT * FROM t ORDER BY 1 NULLS LAST;
 10000
 1000000
 NULL
+
+mode unskip
 
 # the same but with a hash join
 query I

@@ -219,7 +219,7 @@ public:
 	// Pipeline construction
 	virtual vector<const PhysicalOperator *> GetSources() const;
 	bool AllSourcesSupportBatchIndex() const;
-	bool AllOperatorsPreserveOrder() const;
+	virtual bool AllOperatorsPreserveOrder() const;
 
 	virtual void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline);
 };

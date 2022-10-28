@@ -45,12 +45,17 @@ public:
 	void GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip);
 	//! Get the inter-MetaPipeline dependencies of the given Pipeline
 	const vector<Pipeline *> *GetDependencies(Pipeline *dependant) const;
-	//! Whether this MetaPipeline has a recursive CTE
-	bool HasRecursiveCTE() const;
 	//! Whether the query plan preserves order
 	bool PreservesOrder() const;
-	//! Let 'dependant' depend on all pipeline that were created since 'start' (including)
-	void AddDependenciesFrom(Pipeline *dependant, Pipeline *start);
+	//! Whether this MetaPipeline has a recursive CTE
+	bool HasRecursiveCTE() const;
+	//! Gets all recursive CTE's in the MetaPipeline
+	void GetRecursiveCTEs(vector<PhysicalOperator *> &result) const;
+	//! Assign a batch index to the given pipeline
+	void AssignNextBatchIndex(Pipeline *pipeline);
+	//! Let 'dependant' depend on all pipeline that were created since 'start',
+	//! where 'including' determines whether 'start' is added to the dependencies
+	void AddDependenciesFrom(Pipeline *dependant, Pipeline *start, bool including);
 
 public:
 	//! Build the MetaPipeline with 'op' as the first operator (excl. the shared sink)
@@ -62,8 +67,9 @@ public:
 
 	//! Create a union pipeline (clone of 'current')
 	Pipeline *CreateUnionPipeline(Pipeline &current);
-	//! Create a child pipeline starting at 'op'
-	void CreateChildPipeline(Pipeline &current, PhysicalOperator *op);
+	//! Create a child pipeline op 'current' starting at 'op',
+	//! where 'last_pipeline' is the last pipeline added before building out 'current'
+	void CreateChildPipeline(Pipeline &current, PhysicalOperator *op, Pipeline *last_pipeline);
 	//! Create a MetaPipeline child that 'current' depends on
 	MetaPipeline *CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op);
 
@@ -88,7 +94,9 @@ private:
 	unordered_map<Pipeline *, vector<Pipeline *>> dependencies;
 	//! Other MetaPipelines that this MetaPipeline depends on
 	vector<shared_ptr<MetaPipeline>> children;
-	//! Whether the entire plan preserves order
+	//! Next batch index
+	idx_t next_batch_index;
+	//! Whether the query plan preserves order
 	bool preserves_order;
 };
 

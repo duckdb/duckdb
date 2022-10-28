@@ -115,6 +115,25 @@ bool Pipeline::IsOrderDependent() const {
 	return false;
 }
 
+bool Pipeline::PreservesOrder() const {
+	auto &config = DBConfig::GetConfig(executor.context);
+	if (!config.options.preserve_insertion_order) {
+		return false;
+	}
+	if (sink && sink->IsOrderPreserving()) {
+		return true;
+	}
+	if (source && source->IsOrderPreserving()) {
+		return true;
+	}
+	for (auto &op : operators) {
+		if (!op->IsOrderPreserving()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
 	D_ASSERT(sink);

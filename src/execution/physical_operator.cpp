@@ -189,7 +189,7 @@ bool PhysicalOperator::AllOperatorsPreserveOrder() const {
 		return false;
 	}
 	for (auto &child : children) {
-		if (!child->IsOrderPreserving()) {
+		if (!child->AllOperatorsPreserveOrder()) {
 			return false;
 		}
 	}

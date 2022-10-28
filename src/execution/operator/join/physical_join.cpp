@@ -34,6 +34,11 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	auto &state = meta_pipeline.GetState();
 	state.AddPipelineOperator(current, &op);
 
+	// save the last added pipeline (in case we need to add a child pipeline)
+	vector<shared_ptr<Pipeline>> pipelines_so_far;
+	meta_pipeline.GetPipelines(pipelines_so_far, false);
+	auto last_pipeline = pipelines_so_far.back().get();
+
 	// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
 	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, &op);
 	child_meta_pipeline->Build(op.children[1].get());
@@ -64,7 +69,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	}
 
 	if (add_child_pipeline) {
-		meta_pipeline.CreateChildPipeline(current, &op);
+		meta_pipeline.CreateChildPipeline(current, &op, last_pipeline);
 	}
 }
 

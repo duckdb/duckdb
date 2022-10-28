@@ -2,15 +2,14 @@
 
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
 
 MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, PhysicalOperator *sink_p,
                            bool preserves_order)
-    : executor(executor_p), state(state_p), sink(sink_p), preserves_order(preserves_order) {
+    : executor(executor_p), state(state_p), sink(sink_p), next_batch_index(0), preserves_order(preserves_order) {
 	auto base_pipeline = CreatePipeline();
-	state.SetPipelineSink(*base_pipeline, sink, 0);
+	state.SetPipelineSink(*base_pipeline, sink, next_batch_index++);
 	if (sink_p && sink_p->type == PhysicalOperatorType::RECURSIVE_CTE) {
 		recursive_cte = (PhysicalRecursiveCTE *)sink;
 	}
@@ -61,12 +60,25 @@ const vector<Pipeline *> *MetaPipeline::GetDependencies(Pipeline *dependant) con
 	}
 }
 
+bool MetaPipeline::PreservesOrder() const {
+	return preserves_order;
+}
+
 bool MetaPipeline::HasRecursiveCTE() const {
 	return recursive_cte != nullptr;
 }
 
-bool MetaPipeline::PreservesOrder() const {
-	return preserves_order;
+void MetaPipeline::GetRecursiveCTEs(vector<PhysicalOperator *> &result) const {
+	if (sink && sink->type == PhysicalOperatorType::RECURSIVE_CTE) {
+		result.push_back(sink);
+	}
+	for (auto &child : children) {
+		child->GetRecursiveCTEs(result);
+	}
+}
+
+void MetaPipeline::AssignNextBatchIndex(Pipeline *pipeline) {
+	pipeline->base_batch_index = next_batch_index++ * PipelineBuildState::BATCH_INCREMENT;
 }
 
 void MetaPipeline::Build(PhysicalOperator *op) {
@@ -91,7 +103,9 @@ void MetaPipeline::Reset(bool reset_sink) {
 	}
 	for (auto &pipeline : pipelines) {
 		for (auto &op : pipeline->GetOperators()) {
-			op->op_state = op->GetGlobalOperatorState(executor.context);
+			if (op) {
+				op->op_state = op->GetGlobalOperatorState(executor.context);
+			}
 		}
 		pipeline->Reset();
 	}
@@ -117,10 +131,14 @@ Pipeline *MetaPipeline::CreatePipeline() {
 	return pipelines.back().get();
 }
 
-void MetaPipeline::AddDependenciesFrom(Pipeline *dependant, Pipeline *start) {
+void MetaPipeline::AddDependenciesFrom(Pipeline *dependant, Pipeline *start, bool including) {
 	// find 'start'
 	auto it = pipelines.begin();
 	for (; it->get() != start; it++) {
+	}
+
+	if (!including) {
+		it++;
 	}
 
 	// collect pipelines that were created from then
@@ -146,7 +164,7 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current) {
 	// create the union pipeline
 	auto union_pipeline = CreatePipeline();
 	state.SetPipelineOperators(*union_pipeline, state.GetPipelineOperators(current));
-	state.SetPipelineSink(*union_pipeline, sink, pipelines.size() - 1);
+	state.SetPipelineSink(*union_pipeline, sink, 0);
 
 	// 'union_pipeline' inherits ALL dependencies of 'current' (intra- and inter-MetaPipeline)
 	union_pipeline->dependencies = current.dependencies;
@@ -155,15 +173,15 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current) {
 		dependencies[union_pipeline] = *current_inter_deps;
 	}
 
-	if (sink && !sink->ParallelSink()) {
-		// if the sink is not parallel, we set a dependency
+	if (sink && sink->IsOrderPreserving() && !sink->RequiresBatchIndex()) {
+		// if we need to preserve order, or if the sink is not parallel, we set a dependency
 		dependencies[union_pipeline].push_back(&current);
 	}
 
 	return union_pipeline;
 }
 
-void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op) {
+void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op, Pipeline *last_pipeline) {
 	// rule 2: 'current' must be fully built (down to the source) before creating the child pipeline
 	D_ASSERT(current.source);
 	if (HasRecursiveCTE()) {
@@ -176,7 +194,8 @@ void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op) 
 
 	// child pipeline has an inter-MetaPipeline depency on all pipelines that were scheduled between 'current' and now
 	// (including 'current') - set them up
-	AddDependenciesFrom(child_pipeline, &current);
+	dependencies[child_pipeline].push_back(&current);
+	AddDependenciesFrom(child_pipeline, last_pipeline, false);
 	D_ASSERT(!GetDependencies(child_pipeline)->empty());
 }
 

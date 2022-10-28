@@ -3,6 +3,7 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parallel/pipeline_complete_event.hpp"
@@ -288,6 +289,9 @@ void Executor::InitializeInternal(PhysicalOperator *plan) {
 		root_pipeline->GetPipelines(root_pipelines, false);
 		root_pipeline_idx = 0;
 
+		// collect the recursive CTE's (needed to be able to cancel query execution
+		root_pipeline->GetRecursiveCTEs(recursive_ctes);
+
 		// collect all meta-pipelines from the root pipeline
 		vector<shared_ptr<MetaPipeline>> to_schedule;
 		root_pipeline->GetMetaPipelines(to_schedule, true, true);
@@ -316,6 +320,11 @@ void Executor::CancelTasks() {
 		cancelled = true;
 		for (auto &pipeline : pipelines) {
 			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+		}
+		for (auto op : recursive_ctes) {
+			D_ASSERT(op->type == PhysicalOperatorType::RECURSIVE_CTE);
+			auto &rec_cte = (PhysicalRecursiveCTE &)*op;
+			rec_cte.recursive_meta_pipeline.reset();
 		}
 		pipelines.clear();
 		root_pipelines.clear();
