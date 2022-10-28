@@ -44,7 +44,7 @@ public:
 		return FormatExceptionRecursive(error_type, values, params...);
 	}
 
-	DUCKDB_API static string InvalidUnicodeError(string input, string context);
+	DUCKDB_API static string InvalidUnicodeError(const string &input, const string &context);
 
 	//! Adds a custom error for a specific error type
 	void AddCustomError(ErrorType type, string new_error);

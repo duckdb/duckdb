@@ -31,7 +31,7 @@ string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<Excep
 	return ExceptionFormatValue::Format(error, values);
 }
 
-string ErrorManager::InvalidUnicodeError(string input, string context) {
+string ErrorManager::InvalidUnicodeError(const string &input, const string &context) {
 	UnicodeInvalidReason reason;
 	size_t pos;
 	auto unicode = Utf8Proc::Analyze((const char *)input.c_str(), input.size(), &reason, &pos);
