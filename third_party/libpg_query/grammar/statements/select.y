@@ -2484,6 +2484,14 @@ func_application:       func_name '(' ')'
 					n->agg_star = true;
 					$$ = (PGNode *)n;
 				}
+			| COLUMNS '(' '*' opt_except_list opt_replace_list ')'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->except_list = $4;
+					star->replace_list = $5;
+
+					$$ = (PGNode *) star;
+				}
 		;
 
 

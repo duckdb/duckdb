@@ -65,6 +65,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 		return BindExpression((ParameterExpression &)expr_ref, depth);
 	case ExpressionClass::POSITIONAL_REFERENCE:
 		return BindExpression((PositionalReferenceExpression &)expr_ref, depth);
+	case ExpressionClass::STAR:
+		return BindResult(binder.FormatError(expr_ref, "STAR expression is not supported here"));
 	default:
 		throw NotImplementedException("Unimplemented expression class");
 	}

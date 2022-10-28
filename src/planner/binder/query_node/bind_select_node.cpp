@@ -19,6 +19,7 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -259,6 +260,64 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 	}
 }
 
+bool Binder::FindStarExpression(ParsedExpression &expr, StarExpression **star) {
+	if (expr.GetExpressionClass() == ExpressionClass::STAR) {
+		if (*star) {
+			throw BinderException(FormatError(expr, "Multiple STAR/COLUMNS in the same expression are not supported"));
+		}
+		*star = (StarExpression *)&expr;
+		return true;
+	}
+	bool has_star = false;
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child_expr) {
+		if (FindStarExpression(child_expr, star)) {
+			has_star = true;
+		}
+	});
+	return has_star;
+}
+
+void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement) {
+	D_ASSERT(expr);
+	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
+		D_ASSERT(replacement);
+		expr = move(replacement);
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { ReplaceStarExpression(child_expr, replacement); });
+}
+
+void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
+                                  vector<unique_ptr<ParsedExpression>> &new_select_list) {
+	StarExpression *star = nullptr;
+	if (!FindStarExpression(*expr, &star)) {
+		// no star expression: add it as-is
+		D_ASSERT(!star);
+		new_select_list.push_back(move(expr));
+		return;
+	}
+	D_ASSERT(star);
+	vector<unique_ptr<ParsedExpression>> star_list;
+	// we have star expressions! expand the list of star expressions
+	bind_context.GenerateAllColumnExpressions(*star, star_list);
+
+	// now perform the replacement
+	for (idx_t i = 0; i < star_list.size(); i++) {
+		auto new_expr = expr->Copy();
+		ReplaceStarExpression(new_expr, star_list[i]);
+		D_ASSERT(!star_list[i]);
+		new_select_list.push_back(move(new_expr));
+	}
+}
+
+void Binder::ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
+                                   vector<unique_ptr<ParsedExpression>> &new_select_list) {
+	for (auto &select_element : select_list) {
+		ExpandStarExpression(move(select_element), new_select_list);
+	}
+}
+
 unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	auto result = make_unique<BoundSelectNode>();
 	result->projection_index = GenerateTableIndex();
@@ -279,15 +338,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;
-	for (auto &select_element : statement.select_list) {
-		if (select_element->GetExpressionType() == ExpressionType::STAR) {
-			// * statement, expand to all columns from the FROM clause
-			bind_context.GenerateAllColumnExpressions((StarExpression &)*select_element, new_select_list);
-		} else {
-			// regular statement, add it to the list
-			new_select_list.push_back(move(select_element));
-		}
-	}
+	ExpandStarExpressions(statement.select_list, new_select_list);
+
 	if (new_select_list.empty()) {
 		throw BinderException("SELECT list is empty after resolving * expressions!");
 	}
