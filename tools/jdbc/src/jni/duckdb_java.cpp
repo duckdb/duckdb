@@ -6,6 +6,7 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
+#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -933,4 +934,17 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 		env->ThrowNew(J_SQLException, e.what());
 		return;
 	}
+}
+
+JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream(JNIEnv *env, jclass,
+                                                                                 jobject res_ref_buf,
+                                                                                 jlong batch_size) {
+
+	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
+	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
+		env->ThrowNew(J_SQLException, "Invalid result set");
+	}
+
+	auto wrapper = new ResultArrowArrayStreamWrapper(move(res_ref->res), batch_size);
+	return (jlong)&wrapper->stream;
 }
