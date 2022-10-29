@@ -265,19 +265,24 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
 
 #if STANDARD_VECTOR_SIZE >= 128
-	if (!context.pipeline || !caching_supported) {
+	if (!state.initialized) {
+		state.initialized = true;
+		state.can_cache_chunk = true;
+		if (!context.pipeline || !caching_supported) {
+			state.can_cache_chunk = false;
+		}
+
+		if (context.pipeline->GetSink() && context.pipeline->GetSink()->RequiresBatchIndex()) {
+			state.can_cache_chunk = false;
+		}
+
+		if (context.pipeline->IsOrderDependent()) {
+			state.can_cache_chunk = false;
+		}
+	}
+	if (!state.can_cache_chunk) {
 		return child_result;
 	}
-
-	if (context.pipeline->GetSink() && context.pipeline->GetSink()->RequiresBatchIndex() &&
-	    context.pipeline->GetSource()->SupportsBatchIndex()) {
-		return child_result;
-	}
-
-	if (context.pipeline->IsOrderDependent()) {
-		return child_result;
-	}
-
 	if (chunk.size() < CACHE_THRESHOLD) {
 		// we have filtered out a significant amount of tuples
 		// add this chunk to the cache and continue
