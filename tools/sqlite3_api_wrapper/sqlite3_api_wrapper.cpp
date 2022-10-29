@@ -28,7 +28,7 @@ using namespace duckdb;
 using namespace std;
 
 extern "C" {
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows);
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value);
 }
 
 static char *sqlite3_strdup(const char *str);
@@ -213,7 +213,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	}
 }
 
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows) {
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value) {
 	if (!pStmt) {
 		return nullptr;
 	}
@@ -225,20 +225,37 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows) {
 		pStmt->db->last_error = PreservedError("Statement has already been executed");
 		return nullptr;
 	}
-	auto result = pStmt->prepared->Execute(pStmt->bound_values, false);
-	if (result->HasError()) {
+	pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
+	if (pStmt->result->HasError()) {
 		// error in execute: clear prepared statement
-		pStmt->db->last_error = result->GetErrorObject();
+		pStmt->db->last_error = pStmt->result->GetErrorObject();
 		pStmt->prepared = nullptr;
 		return nullptr;
 	}
-	auto &materialized = (MaterializedQueryResult &) *result;
+	auto &materialized = (MaterializedQueryResult &)*pStmt->result;
+	auto properties = pStmt->prepared->GetStatementProperties();
+	if (properties.return_type == StatementReturnType::CHANGED_ROWS && materialized.RowCount() > 0) {
+		// update total changes
+		auto row_changes = materialized.Collection().GetRows().GetValue(0, 0);
+		if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
+			pStmt->db->last_changes = row_changes.GetValue<int64_t>();
+			pStmt->db->total_changes += row_changes.GetValue<int64_t>();
+		}
+	}
+	if (properties.return_type != StatementReturnType::QUERY_RESULT) {
+		// only SELECT statements return results
+		return nullptr;
+	}
 	BoxRendererConfig config;
 	if (max_rows != 0) {
 		config.max_rows = max_rows;
 	}
+	if (null_value) {
+		config.null_value = null_value;
+	}
 	BoxRenderer renderer(config);
-	auto result_rendering = renderer.ToString(*pStmt->db->con->context, result->names, materialized.Collection());
+	auto result_rendering =
+	    renderer.ToString(*pStmt->db->con->context, pStmt->result->names, materialized.Collection());
 	return sqlite3_strdup(result_rendering.c_str());
 }
 

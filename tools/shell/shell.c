@@ -12880,7 +12880,7 @@ columnar_end:
   sqlite3_free(azData);
 }
 
-extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows);
+extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value);
 
 /*
 ** Run a prepared statement
@@ -12891,7 +12891,7 @@ static void exec_prepared_stmt(
 ){
   int rc;
   if (pArg->cMode == MODE_DuckBox) {
-	  char *str = sqlite3_print_duckbox(pStmt, pArg->max_rows);
+	  char *str = sqlite3_print_duckbox(pStmt, pArg->max_rows, pArg->nullValue);
 	  if (str) {
 		  utf8_printf(pArg->out, "%s", str);
 		  sqlite3_free(str);
@@ -14318,6 +14318,10 @@ static void open_db(ShellState *p, int openFlags){
     sqlite3_create_function(p->db, "edit", 2, SQLITE_UTF8, 0,
                             editFunc, 0, 0);
 #endif
+	if (stdout_is_console) {
+		sqlite3_exec(p->db, "PRAGMA enable_progress_bar", NULL, NULL, NULL);
+		sqlite3_exec(p->db, "PRAGMA enable_print_progress_bar", NULL, NULL, NULL);
+	}
     if( p->openMode==SHELL_OPEN_ZIPFILE ){
       char *zSql = sqlite3_mprintf(
          "CREATE VIRTUAL TABLE zip USING zipfile(%Q);", p->zDbFilename);
@@ -18289,6 +18293,8 @@ static int do_meta_command(char *zLine, ShellState *p){
       p->mode = MODE_Table;
     }else if( c2=='b' && strncmp(azArg[1],"box",n2)==0 ){
       p->mode = MODE_Box;
+    }else if( c2=='d' && strncmp(azArg[1],"duckbox",n2)==0 ){
+      p->mode = MODE_DuckBox;
     }else if( c2=='j' && strncmp(azArg[1],"json",n2)==0 ){
       p->mode = MODE_Json;
     }else if( c2=='l' && strncmp(azArg[1],"latex",n2)==0 ){
@@ -18301,7 +18307,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       raw_printf(p->out, "current output mode: %s\n", modeDescr[p->mode]);
     }else{
       raw_printf(stderr, "Error: mode should be one of: "
-         "ascii box column csv html insert json line list markdown "
+         "ascii duckbox box column csv html insert json line list markdown "
          "quote table tabs tcl latex trash \n");
       rc = 1;
     }

@@ -24,11 +24,11 @@ void Printer::Print(const string &str) {
 	if (IsTerminal()) {
 		// print utf8 to terminal
 		auto unicode = WindowsUtil::UTF8ToMBCS(str.c_str());
-		fprintf(stdout, "%s\n", unicode.c_str());
+		fprintf(stderr, "%s\n", unicode.c_str());
 		return;
 	}
 #endif
-	fprintf(stdout, "%s\n", str.c_str());
+	fprintf(stderr, "%s\n", str.c_str());
 #endif
 }
 
@@ -62,11 +62,11 @@ bool Printer::IsTerminal() {
 idx_t Printer::TerminalWidth() {
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    int columns, rows;
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	int columns, rows;
 
-    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+	rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
 	return rows;
 #else
 	struct winsize w;

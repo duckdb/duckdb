@@ -3,6 +3,7 @@
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -93,6 +94,15 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 			interrupted = false;
 			return PreservedError("EXPLAIN failed but query did not (" + string(ex.what()) + ")");
 		} // LCOV_EXCL_STOP
+
+		// test the box renderer on the result
+		// we mostly care that this does not crash
+		RandomEngine random;
+		BoxRendererConfig config;
+		// test with a random width
+		config.max_width = random.NextRandomInteger() % 500;
+		BoxRenderer renderer(config);
+		renderer.ToString(*this, original->materialized_result->names, original->materialized_result->Collection());
 	}
 
 	// Restore profiler setting
