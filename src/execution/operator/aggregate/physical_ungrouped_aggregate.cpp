@@ -371,7 +371,6 @@ public:
 				continue;
 			}
 
-			DataChunk expression_executor_input;
 			DataChunk payload_chunk;
 
 			D_ASSERT(distinct_data.info.table_map.count(i));
@@ -380,8 +379,6 @@ public:
 			auto &output_chunk = *distinct_state.distinct_output_chunks[table_idx];
 			auto &grouped_aggregate_data = *distinct_data.grouped_aggregate_data[table_idx];
 
-			expression_executor_input.InitializeEmpty(grouped_aggregate_data.group_types);
-			expression_executor_input.SetCardinality(0);
 			payload_chunk.InitializeEmpty(grouped_aggregate_data.group_types);
 			payload_chunk.SetCardinality(0);
 
@@ -398,34 +395,15 @@ public:
 					break;
 				}
 
-				// Retrieve the 'groups' part of the scan chunk
-				for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
-					expression_executor_input.data[child_idx].Reference(output_chunk.data[child_idx]);
-				}
-				expression_executor_input.SetCardinality(output_chunk);
 				// We dont need to resolve the filter, we already did this in Sink
-				distinct_state.child_executor.SetChunk(expression_executor_input);
-
+				idx_t payload_cnt = aggregate.children.size();
+				for (idx_t i = 0; i < payload_cnt; i++) {
+					payload_chunk.data[i].Reference(output_chunk.data[i]);
+				}
 				payload_chunk.SetCardinality(output_chunk);
-
 #ifdef DEBUG
 				gstate.state.counts[i] += payload_chunk.size();
 #endif
-
-				// resolve the child expressions of the aggregate (if any)
-				idx_t payload_cnt = 0;
-				for (auto &child : aggregate.children) {
-					// Before executing, remap the indices to point to the payload_chunk
-					// Originally these indices correspond to the 'input' chunk,
-					// but 'groups' are placed at the very front of the chunk received from GetData
-					auto &child_ref = (BoundReferenceExpression &)*child;
-					child_ref.index = payload_cnt;
-
-					//! The child_executor contains a pointer to the expression we altered above
-					distinct_state.child_executor.ExecuteExpression(payload_idx + payload_cnt,
-					                                                payload_chunk.data[payload_cnt]);
-					payload_cnt++;
-				}
 
 				auto start_of_input = payload_cnt ? &payload_chunk.data[0] : nullptr;
 				//! Update the aggregate state
