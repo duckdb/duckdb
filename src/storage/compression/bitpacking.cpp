@@ -26,6 +26,172 @@ struct EmptyBitpackingWriter {
 	}
 };
 
+enum class BitpackingMode : uint8_t {
+	CONSTANT,
+	CONSTANT_DELTA,
+	DELTA_FOR,
+	FOR,
+};
+
+// Option 1: Allows random access
+typedef struct {
+	BitpackingMode mode;
+	uint32_t offset;
+} bitpacking_metadata_t;
+
+// TODO switch to encoded
+typedef uint32_t bitpacking_metadata_encoded_t;
+bitpacking_metadata_encoded_t encode_meta(bitpacking_metadata_t metadata);
+bitpacking_metadata_t decode_meta(bitpacking_metadata_encoded_t metadata);
+
+// Types of blocks
+// CONSTANT
+// - BLOCK is [CONSTANT VALUE]
+// - Compression ratio: VectorSize*sizeof(T)/(sizeof(T)+4) (INT64 @ VZ2048 = 1048x)
+// CONSTANT_DELTA
+// - BLOCK IS [FOR VALUE, DELTA]
+// - Compression ratio: VectorSize*sizeof(T)/(sizeof(T)*2+4) (INT64 @ VZ2048 = between 819x)
+// DELTA_FOR
+// - BLOCK IS [FOR VALUE, BP_WIDTH, BITPACKED_BUFFER]
+// - Compression ratio: VectorSize*sizeof(T)/(2 + 8 + ((VectorSize * bitwidth)/8)) (INT64 @ VZ2048 = between 1x and 61.59x)
+// FOR
+// - META bytes is bitwidth of bitpacked buffer
+// - BLOCK IS [FOR VALUE, BP_WIDTH, BITPACKED_BUFFER]
+// - Compression ratio: VectorSize*sizeof(T)/(2 + 8 + ((VectorSize * bitwidth)/8)) (INT64 @ VZ2048 = between 1x and 61.59x)
+
+// Option 2 No random access
+//typedef struct {
+//	BitpackingMode mode;
+//	uint8_t meta_byte;
+//} bitpacking_metadata_t;
+
+// Types of blocks
+// CONSTANT
+// - META byte is: value, or uint8_t::max for indicating that the block contains the Value
+// - BLOCK is (empty) or [CONSTANT VALUE]
+// - Compression ratio: VectorSize*sizeof(T)/2 (INT64 @ VZ2048 = 8192x)
+// CONSTANT_DELTA
+// - META bytes is: upper 4 bits for byte-width of FOR Value, lower 4 bits for byte-width of DELTA
+// - BLOCK IS (empty) or [(OPTIONALLY) FOR VALUE, (OPTIONALLY) DELTA]
+// - Compression ratio: VectorSize*sizeof(T)/(2+BlockBytes) (INT64 @ VZ2048 = between 8192x and 910x)
+// DELTA_FOR
+// - META bytes is bitwidth of bitpacked buffer
+// - BLOCK IS [FOR VALUE, BITPACKED_BUFFER]
+// - Compression ratio: VectorSize*sizeof(T)/(2 + 8 + ((VectorSize * bitwidth)/8)) (INT64 @ VZ2048 = between 1x and 61.59x)
+// FOR
+// - META bytes is bitwidth of bitpacked buffer
+// - BLOCK IS [FOR VALUE, BITPACKED_BUFFER]
+// - Compression ratio: VectorSize*sizeof(T)/(2 + 8 + ((VectorSize * bitwidth)/8)) (INT64 @ VZ2048 = between 1x and 61.59x)
+
+
+template <class T, class T_U = typename std::make_unsigned<T>::type, class T_S = typename std::make_unsigned<T>::type>
+struct BitpackingStateNew {
+public:
+	BitpackingStateNew() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr), can_do_delta(true) {
+		compression_buffer_internal[0] = (T)0;
+		compression_buffer = &compression_buffer_internal[1];
+
+	}
+
+	// this allows -1 index of compression_buffer to be 0 for easy delta encoding
+	T compression_buffer_internal[BITPACKING_METADATA_GROUP_SIZE+1];
+	T* compression_buffer;
+	T delta_buffer[BITPACKING_METADATA_GROUP_SIZE];
+	bool compression_buffer_validity[BITPACKING_METADATA_GROUP_SIZE];
+
+	idx_t compression_buffer_idx;
+	idx_t total_size;
+	void *data_ptr;
+
+	T minimum;
+	T maximum;
+	T_S minimum_delta = NumericLimits<T>::Maximum();
+	T_S maximum_delta = NumericLimits<T>::Minimum();
+	bool all_valid;
+	bool all_invalid;
+	bool can_do_delta;
+
+public:
+
+	void Reset() {
+		minimum = NumericLimits<T>::Maximum();
+		minimum_delta = NumericLimits<T>::Maximum();
+		maximum = NumericLimits<T>::Minimum();
+		maximum_delta = NumericLimits<T>::Minimum();
+		all_valid = false;
+		all_invalid = false;
+		can_do_delta = false;
+		compression_buffer_idx = 0;
+	}
+
+	// ->    Easy way: only allow delta if falls within corresponding signed domain
+	// TODO  Harder way: also allow shifting -> separate method?
+	void CalculateDeltaStats() {
+		if (maximum > NumericLimits<T_S>::Maximum()){
+			return
+		}
+
+		for (idx_t i = 0; i < compression_buffer_idx; i++) {
+			auto success = TrySubtractOperator::Operation(compression_buffer[i], compression_buffer[i-1], &delta_buffer[i]);
+			if (!success) {
+				return
+			}
+		}
+		can_do_delta = true;
+	}
+
+	bool CanDoFOR() {
+		T ignore;
+		return TrySubtractOperator::Operation(maximum, minimum, ignore);
+	}
+
+	template <class OP>
+	bool Flush() {
+		if (all_invalid) {
+			OP::template WriteConstant<T>((T)0, data_ptr);
+		}
+		if (maximum == minimum) {
+			OP::template WriteConstant<T>(maximum, data_ptr);
+		}
+
+		CalculateDeltaStats();
+		if (false && can_do_delta) {
+			if (maximum_delta == minimum_delta) {
+				throw NotImplementedException("DELTA CONSTANT");
+			}
+
+			// Check if delta has benefit
+			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum_delta-minimum_delta);
+			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum_delta-minimum_delta);
+
+			if (delta_required_bitwidth < regular_required_bitwidth) {
+				throw NotImplementedException("DELTA FOR");
+			}
+		}
+
+		if (CanDoFOR()) {
+			OP::template WriteFor<T>(compression_buffer, compression_buffer_validity, width, frame_of_reference,
+			                          compression_buffer_idx, data_ptr);
+		}
+
+		return false;
+	}
+
+	template <class OP = EmptyBitpackingWriter>
+	bool Update(T value, bool is_valid) {
+		compression_buffer[compression_buffer_idx+1] = value;
+		compression_buffer_validity[compression_buffer_idx] = is_valid;
+		all_valid |= is_valid;
+		all_invalid &= is_valid;
+		minimum = MinValue<T>(minimum, value);
+		maximum = MaxValue<T>(maximum, value);
+		if (compression_buffer_idx == BITPACKING_METADATA_GROUP_SIZE) {
+			return Flush<OP>();
+		}
+		return true;
+	}
+};
+
 template <class T>
 struct BitpackingState {
 public:
@@ -187,6 +353,65 @@ public:
 	BitpackingState<T> state;
 
 public:
+	struct BitpackingWriterNew {
+		template <class T>
+		static void WriteConstant(T constant, void* data_ptr) {
+			auto state = (BitpackingCompressState<T> *)data_ptr;
+			idx_t total_bytes_needed = sizeof(bitpacking_metadata_t) + sizeof(T);
+			state->FlushAndCreateSegmentIfFull(total_bytes_needed);
+			D_ASSERT(total_bytes_needed >= state->RemainingSize());
+
+			// Write data/meta
+			*(T*)state->data_ptr = constant;
+			Store<bitpacking_metadata_t>(bitpacking_metadata_t{BitpackingMode::CONSTANT, state->data_ptr - state->handle.Ptr()});
+
+			state->data_ptr += sizeof(T);
+			state->metadata_ptr -= sizeof(bitpacking_metadata_t);
+			state.current_segment->count += count;
+
+			NumericStatistics::Update<T>(state->current_segment->stats, constant);
+		}
+
+		template <class T>
+		static void WriteConstantDelta(T constant, T frame_of_reference, void* data_ptr) {
+
+		}
+
+		template <class T>
+		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {
+			auto state = (BitpackingCompressState<T> *)data_ptr;
+		}
+
+		template <class T>
+		static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {
+				auto state = (BitpackingCompressState<T> *)data_ptr;
+				auto bits_required_for_bp = (width * BITPACKING_METADATA_GROUP_SIZE);
+				D_ASSERT(bits_required_for_bp % 8 == 0);
+				auto data_bytes = bits_required_for_bp / 8 + sizeof(T);
+				auto meta_bytes = sizeof(bitpacking_metadata_t);
+
+				state->FlushAndCreateSegmentIfFull(data_bytes + meta_bytes);
+
+				bitpacking_metadata_t metadata{BitpackingMode::FOR, state->data_ptr - state->handle.Ptr()};
+
+				*(T*)state->data_ptr = frame_of_reference;
+			    state->data_ptr += sizeof(T);
+				BitpackingPrimitives::PackBuffer<T, false>(data_ptr, values, count, width);
+			    state->data_ptr += (BITPACKING_METADATA_GROUP_SIZE * width) / 8;
+
+			    Store<bitpacking_metadata_t>(metadata);
+				metadata_ptr -= sizeof(bitpacking_metadata_t);
+
+				current_segment->count += count;
+
+				for (idx_t i = 0; i < count; i++) {
+					if (validity[i]) {
+						NumericStatistics::Update<T>(state->current_segment->stats, values[i] + frame_of_reference);
+					}
+				}
+		}
+	};
+
 	struct BitpackingWriter {
 
 		template <class VALUE_TYPE>
@@ -257,6 +482,14 @@ public:
 		metadata_ptr -= sizeof(bitpacking_width_t);
 
 		current_segment->count += count;
+	}
+
+	void FlushAndCreateSegmentIfFull(idx_t required_space) {
+		if (RemainingSize() < required_space) {
+			auto row_start = current_segment->start + >current_segment->count;
+			FlushSegment();
+			CreateEmptySegment(row_start);
+		}
 	}
 
 	void FlushSegment() {
