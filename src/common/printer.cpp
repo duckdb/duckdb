@@ -7,6 +7,11 @@
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
 #include <io.h>
+#include "duckdb/common/windows.hpp"
+#else
+#include <sys/ioctl.h>
+#include <stdio.h>
+#include <unistd.h>
 #endif
 #endif
 
@@ -19,11 +24,11 @@ void Printer::Print(const string &str) {
 	if (IsTerminal()) {
 		// print utf8 to terminal
 		auto unicode = WindowsUtil::UTF8ToMBCS(str.c_str());
-		fprintf(stderr, "%s\n", unicode.c_str());
+		fprintf(stdout, "%s\n", unicode.c_str());
 		return;
 	}
 #endif
-	fprintf(stderr, "%s\n", str.c_str());
+	fprintf(stdout, "%s\n", str.c_str());
 #endif
 }
 
@@ -47,12 +52,28 @@ void Printer::FinishProgressBarPrint(const char *pbstr, int pbwidth) {
 bool Printer::IsTerminal() {
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
-	return GetFileType(GetStdHandle(STD_ERROR_HANDLE)) == FILE_TYPE_CHAR;
+	return GetFileType(GetStdHandle(STD_OUTPUT_HANDLE)) == FILE_TYPE_CHAR;
 #else
-	throw InternalException("IsTerminal is only implemented for Windows");
+	return isatty(1);
 #endif
 #endif
-	return false;
+}
+
+idx_t Printer::TerminalWidth() {
+#ifndef DUCKDB_DISABLE_PRINT
+#ifdef DUCKDB_WINDOWS
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    int columns, rows;
+
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+	return rows;
+#else
+	struct winsize w;
+	ioctl(0, TIOCGWINSZ, &w);
+	return w.ws_col;
+#endif
+#endif
 }
 // LCOV_EXCL_STOP
 

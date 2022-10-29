@@ -23,5 +23,7 @@ public:
 	DUCKDB_API static void FinishProgressBarPrint(const char *pbstr, int pbwidth);
 	//! Whether or not we are printing to a terminal
 	DUCKDB_API static bool IsTerminal();
+	//! The terminal width
+	DUCKDB_API static idx_t TerminalWidth();
 };
 } // namespace duckdb
