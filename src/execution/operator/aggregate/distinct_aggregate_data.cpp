@@ -8,7 +8,7 @@ namespace duckdb {
 //! Shared information about a collection of distinct aggregates
 DistinctAggregateCollectionInfo::DistinctAggregateCollectionInfo(const vector<unique_ptr<Expression>> &aggregates,
                                                                  vector<idx_t> indices)
-    : indices(indices), aggregates(aggregates) {
+    : indices(move(indices)), aggregates(aggregates) {
 	table_count = CreateTableIndexMap();
 
 	const idx_t aggregate_count = aggregates.size();
@@ -71,7 +71,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
     : DistinctAggregateData(info, {}, nullptr) {
 }
 
-DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info, GroupingSet groups,
+DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionInfo &info, const GroupingSet &groups,
                                              const vector<unique_ptr<Expression>> *group_expressions)
     : info(info) {
 	grouped_aggregate_data.resize(info.table_count);
