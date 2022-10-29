@@ -11,7 +11,6 @@ WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(BlockManager &block_manag
 
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
 	if (offset > 0) {
-		handle.GetFileBuffer().Resize(offset);
 		block_manager.Write(handle.GetFileBuffer(), block_id);
 	}
 }

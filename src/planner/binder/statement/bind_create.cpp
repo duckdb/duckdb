@@ -142,6 +142,15 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 			type = LogicalType::MAP(child_types);
 		}
 		type.SetAlias(alias);
+	} else if (type.id() == LogicalTypeId::UNION) {
+		auto member_types = UnionType::CopyMemberTypes(type);
+		for (auto &member_type : member_types) {
+			BindLogicalType(context, member_type.second, schema);
+		}
+		// Generate new Union Type
+		auto alias = type.GetAlias();
+		type = LogicalType::UNION(member_types);
+		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto &catalog = Catalog::GetCatalog(context);
 		type = catalog.GetType(context, schema, UserType::GetTypeName(type));

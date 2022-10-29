@@ -4,8 +4,6 @@
 statement ok
 pragma enable_verification
 
-mode skip
-
 statement ok
 CREATE TABLE t1(a int);
 

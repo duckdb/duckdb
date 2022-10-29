@@ -3,6 +3,7 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/main/error_manager.hpp"
 
 namespace duckdb {
 
@@ -92,7 +93,8 @@ void StringStatistics::Update(const string_t &value) {
 		if (unicode == UnicodeType::UNICODE) {
 			has_unicode = true;
 		} else if (unicode == UnicodeType::INVALID) {
-			throw InternalException("Invalid unicode detected in segment statistics update!");
+			throw InternalException(
+			    ErrorManager::InvalidUnicodeError(string((char *)data, size), "segment statistics update"));
 		}
 	}
 }
