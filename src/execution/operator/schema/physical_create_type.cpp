@@ -18,7 +18,7 @@ public:
 	explicit CreateTypeGlobalState(ClientContext &context) : collection(context, {LogicalType::VARCHAR}) {
 	}
 
-	mutex glock;
+	// mutex glock;
 	ColumnDataCollection collection;
 };
 
@@ -29,7 +29,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext
 SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                         DataChunk &input) const {
 	auto &gstate = (CreateTypeGlobalState &)gstate_p;
-	lock_guard<mutex> lock(gstate.glock);
+	// lock_guard<mutex> lock(gstate.glock);
 	gstate.collection.Append(input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -70,7 +70,6 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 		idx_t total_row_count = collection.Count();
 		Vector result(LogicalType::VARCHAR, total_row_count);
 		auto result_ptr = FlatVector::GetData<string_t>(result);
-		auto &res_validity = FlatVector::Validity(result);
 
 		idx_t offset = 0;
 		while (collection.Scan(scan_state, scan_chunk)) {
