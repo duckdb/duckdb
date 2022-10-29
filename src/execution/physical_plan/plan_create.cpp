@@ -25,8 +25,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreate &op
 		return make_unique<PhysicalCreateFunction>(unique_ptr_cast<CreateInfo, CreateMacroInfo>(move(op.info)),
 		                                           op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE: {
-		auto create = make_unique<PhysicalCreateType>(unique_ptr_cast<CreateInfo, CreateTypeInfo>(move(op.info)),
-		                                              op.estimated_cardinality);
+		unique_ptr<PhysicalOperator> create = make_unique<PhysicalCreateType>(
+		    unique_ptr_cast<CreateInfo, CreateTypeInfo>(move(op.info)), op.estimated_cardinality);
 		if (!op.children.empty()) {
 			D_ASSERT(op.children.size() == 1);
 			auto plan = CreatePlan(*op.children[0]);

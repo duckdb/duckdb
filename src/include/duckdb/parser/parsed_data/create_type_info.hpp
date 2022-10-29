@@ -27,7 +27,7 @@ struct CreateTypeInfo : public CreateInfo {
 	//! Logical Type
 	LogicalType type;
 	//! Used by create enum from query
-	std::unique_ptr<SQLStatement> query;
+	unique_ptr<SQLStatement> query;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
