@@ -95,6 +95,8 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 			return PreservedError("EXPLAIN failed but query did not (" + string(ex.what()) + ")");
 		} // LCOV_EXCL_STOP
 
+#ifdef DUCKDB_VERIFY_BOX_RENDERER
+		// this is pretty slow, so disabled by default
 		// test the box renderer on the result
 		// we mostly care that this does not crash
 		RandomEngine random;
@@ -103,6 +105,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		config.max_width = random.NextRandomInteger() % 500;
 		BoxRenderer renderer(config);
 		renderer.ToString(*this, original->materialized_result->names, original->materialized_result->Collection());
+#endif
 	}
 
 	// Restore profiler setting
