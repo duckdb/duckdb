@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
-#include "duckdb/common/types/null_value.hpp"
 
 namespace duckdb {
 
@@ -83,34 +82,15 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 			auto src_ptr = FlatVector::GetData<string_t>(src_vec);
 			auto &src_validity = FlatVector::Validity(src_vec);
 
-			if (!src_validity.AllValid()) {
-				// lazy initialize
-				if (res_validity.AllValid()) {
-					res_validity.Initialize(total_row_count);
-				}
-
-				if (offset % ValidityMask::BITS_PER_VALUE == 0) {
-					auto dst = res_validity.GetData() + res_validity.EntryCount(offset);
-					auto src = src_validity.GetData();
-
-					for (auto entry_count = src_validity.EntryCount(src_row_count); entry_count-- > 0;) {
-						*dst++ = *src++;
-					}
-				} else {
-					for (idx_t i = 0; i < src_row_count; ++i) {
-						res_validity.Set(offset + i, src_validity.RowIsValid(i));
-					}
-				}
+			// Input vector has NULL value, we just throw an exception
+			if (!src_validity.CheckAllValid(src_row_count)) {
+				throw InvalidInputException("ENUM type can't accept NULL value!");
 			}
 
 			for (idx_t i = 0; i < src_row_count; i++) {
 				idx_t target_index = offset + i;
-				if (res_validity.RowIsValid(target_index)) {
-					result_ptr[target_index] =
-					    StringVector::AddStringOrBlob(result, src_ptr[i].GetDataUnsafe(), src_ptr[i].GetSize());
-				} else {
-					result_ptr[target_index] = NullValue<string_t>();
-				}
+				result_ptr[target_index] =
+				    StringVector::AddStringOrBlob(result, src_ptr[i].GetDataUnsafe(), src_ptr[i].GetSize());
 			}
 
 			offset += src_row_count;
