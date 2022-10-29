@@ -150,7 +150,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 			if (!filter_indexes.count(aggr.filter.get())) {
 				// Replace the bound reference expression's index with the corresponding index into the payload chunk
 				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
-				bound_ref_expr.index = aggregate_input_idx++;
+				bound_ref_expr.index = aggregate_input_idx;
 			}
 			aggregate_input_idx++;
 		}
