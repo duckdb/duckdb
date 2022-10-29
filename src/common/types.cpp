@@ -1357,7 +1357,10 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		for (idx_t i = 0; i < size_p; i++) {
 			auto idx = vdata.sel->get_index(i);
 			if (!vdata.validity.RowIsValid(idx)) {
-				continue;
+				throw InvalidInputException("ENUM type can't accept NULL value");
+			}
+			if (values.count(data[idx]) > 0) {
+				throw InvalidInputException("ENUM type can't accept duplicate values");
 			}
 			values[data[idx]] = i;
 		}
