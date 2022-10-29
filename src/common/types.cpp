@@ -1288,7 +1288,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		auto data = (string_t *)vdata.data;
 		for (idx_t i = 0; i < size_p; i++) {
 			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(i)) {
+			if (!vdata.validity.RowIsValid(idx)) {
 				continue;
 			}
 			values[data[idx]] = i;

@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
 namespace duckdb {
 
@@ -107,6 +108,8 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 				if (res_validity.RowIsValid(target_index)) {
 					result_ptr[target_index] =
 					    StringVector::AddStringOrBlob(result, src_ptr[i].GetDataUnsafe(), src_ptr[i].GetSize());
+				} else {
+					result_ptr[target_index] = NullValue<string_t>();
 				}
 			}
 
