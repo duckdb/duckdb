@@ -271,8 +271,6 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 	// Create an empty filter for Sink, since we don't need to update any aggregate states here
 	vector<idx_t> empty_filter;
 
-	idx_t total_child_count = grouped_aggregate_data.payload_types.size() - grouped_aggregate_data.filter_count;
-	idx_t filter_count = 0;
 	for (idx_t &idx : distinct_info.indices) {
 		auto &aggregate = (BoundAggregateExpression &)*grouped_aggregate_data.aggregates[idx];
 
@@ -296,9 +294,8 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 			auto it = filter_indexes.find(aggregate.filter.get());
 			D_ASSERT(it != filter_indexes.end());
 			D_ASSERT(it->second < input.data.size());
-			filter_chunk.data[total_child_count + filter_count].Reference(input.data[it->second]);
-			filter_count++;
-
+			auto &filter_bound_ref = (BoundReferenceExpression &)*aggregate.filter;
+			filter_chunk.data[filter_bound_ref.index].Reference(input.data[it->second]);
 			filter_chunk.SetCardinality(input.size());
 
 			// We cant use the AggregateFilterData::ApplyFilter method, because the chunk we need to
