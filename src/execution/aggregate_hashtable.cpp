@@ -306,7 +306,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 			VectorOperations::AddInPlace(addresses, aggr.payload_size, payload.size());
 			continue;
 		}
-		filter_idx++;
+		D_ASSERT(i == filter[filter_idx]);
 
 		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
 			RowOperations::UpdateFilteredStates(filter_set.GetFilterData(i), aggr, addresses, payload, payload_idx);
@@ -317,6 +317,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		// move to the next aggregate
 		payload_idx += aggr.child_count;
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, payload.size());
+		filter_idx++;
 	}
 
 	Verify();
