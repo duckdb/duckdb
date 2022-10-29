@@ -1,5 +1,5 @@
 # name: test/sql/aggregate/distinct/grouped/identical_inputs.test
-# description: DISTINCT aggregations, without GROUP BY
+# description: DISTINCT aggregations
 # group: [grouped]
 
 statement ok

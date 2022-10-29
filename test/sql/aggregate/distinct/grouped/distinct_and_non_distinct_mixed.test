@@ -2,7 +2,7 @@
 # description: DISTINCT aggregations
 # group: [grouped]
 
-# Since these tests are made to test the ungrouped operator, and not necessarily the functions themselves
+# Since these tests are made to test the grouped operator, and not necessarily the functions themselves
 # This test will mostly focus on the order and mixing of distinct and non-distinct aggregates
 # And not on variation between types and functions
 

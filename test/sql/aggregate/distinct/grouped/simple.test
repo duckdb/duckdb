@@ -2,9 +2,6 @@
 # description: Test aggregation/group by statements
 # group: [grouped]
 
-#statement ok
-#PRAGMA disable_optimizer
-
 statement ok
 pragma enable_verification
 

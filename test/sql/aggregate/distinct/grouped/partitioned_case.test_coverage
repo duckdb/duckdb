@@ -5,7 +5,6 @@
 statement ok
 PRAGMA verify_parallelism
 
-
 statement ok
 create table tbl as select i%100 as few, i%100000 as many, i%5 as groups from range(1000000) tbl(i);
 
