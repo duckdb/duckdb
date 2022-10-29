@@ -32,7 +32,7 @@ data_ptr_t my_reallocate_function(PrivateAllocatorData *private_data, data_ptr_t
 	return (data_ptr_t)realloc(pointer, size);
 }
 
-TEST_CASE("Test using a custom allocator", "[api]") {
+TEST_CASE("Test using a custom allocator", "[api][.]") {
 	atomic<idx_t> memory_counter;
 	memory_counter = 0;
 

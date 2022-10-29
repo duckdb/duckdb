@@ -142,6 +142,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		case LogicalTypeId::STRUCT:
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP:
+		case LogicalTypeId::UNION:
 			category = "COMPOSITE";
 			break;
 		default:

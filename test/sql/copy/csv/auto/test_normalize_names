@@ -2,8 +2,6 @@
 # description: Test csv header normalization
 # group: [auto]
 
-require vector_size 512
-
 # CSV file with uppercase header
 statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/normalize_names_1.csv', normalize_names=TRUE);

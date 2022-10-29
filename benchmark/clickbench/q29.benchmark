@@ -2,6 +2,6 @@
 # description: Run query 29 from the ClickBench benchmark
 # group: [clickbench]
 
-template benchmark/clickbench/clickbench-noresult.benchmark.in
+template benchmark/clickbench/clickbench.benchmark.in
 QUERY_NUMBER=29
 QUERY_NUMBER_PADDED=29

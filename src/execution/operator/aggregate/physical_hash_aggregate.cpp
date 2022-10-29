@@ -485,7 +485,7 @@ public:
 		auto &state = *grouping_state.distinct_state;
 
 		ThreadContext temp_thread_context(context);
-		ExecutionContext temp_exec_context(context, temp_thread_context);
+		ExecutionContext temp_exec_context(context, temp_thread_context, &pipeline);
 
 		auto temp_local_state = grouping_data.table_data.GetLocalSinkState(temp_exec_context);
 
@@ -812,27 +812,27 @@ public:
 	}
 
 	const PhysicalHashAggregate &op;
-	std::atomic<size_t> state_index;
+	mutex lock;
+	atomic<idx_t> state_index;
 
 	vector<unique_ptr<GlobalSourceState>> radix_states;
 
 public:
-#if 0
 	idx_t MaxThreads() override {
 		// If there are no tables, we only need one thread.
-		if (op.radix_tables.empty()) {
+		if (op.groupings.empty()) {
 			return 1;
 		}
 
 		auto &ht_state = (HashAggregateGlobalState &)*op.sink_state;
 		idx_t count = 0;
-		for (size_t sidx = 0; sidx < op.radix_tables.size(); ++sidx) {
-			count += op.radix_tables[sidx].Size(*ht_state.radix_states[sidx]);
+		for (size_t sidx = 0; sidx < op.groupings.size(); ++sidx) {
+			auto &grouping = op.groupings[sidx];
+			auto &grouping_gstate = ht_state.grouping_states[sidx];
+			count += grouping.table_data.Size(*grouping_gstate.table_state);
 		}
-
-		return (count + STANDARD_VECTOR_SIZE - 1 ) / STANDARD_VECTOR_SIZE;
+		return MaxValue<idx_t>(1, count / RowGroup::ROW_GROUP_SIZE);
 	}
-#endif
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(ClientContext &context) const {
@@ -861,16 +861,26 @@ void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
 	auto &sink_gstate = (HashAggregateGlobalState &)*sink_state;
 	auto &gstate = (PhysicalHashAggregateGlobalSourceState &)gstate_p;
 	auto &lstate = (PhysicalHashAggregateLocalSourceState &)lstate_p;
-	for (size_t sidx = gstate.state_index; sidx < groupings.size(); sidx = ++gstate.state_index) {
-		auto &grouping = groupings[sidx];
-		auto &table = grouping.table_data;
-
-		auto &grouping_gstate = sink_gstate.grouping_states[sidx];
-
-		table.GetData(context, chunk, *grouping_gstate.table_state, *gstate.radix_states[sidx],
-		              *lstate.radix_states[sidx]);
+	while (true) {
+		idx_t radix_idx = gstate.state_index;
+		if (radix_idx >= groupings.size()) {
+			break;
+		}
+		auto &grouping = groupings[radix_idx];
+		auto &radix_table = grouping.table_data;
+		auto &grouping_gstate = sink_gstate.grouping_states[radix_idx];
+		radix_table.GetData(context, chunk, *grouping_gstate.table_state, *gstate.radix_states[radix_idx],
+		                    *lstate.radix_states[radix_idx]);
 		if (chunk.size() != 0) {
 			return;
+		}
+		// move to the next table
+		lock_guard<mutex> l(gstate.lock);
+		radix_idx++;
+		if (radix_idx > gstate.state_index) {
+			// we have not yet worked on the table
+			// move the global index forwards
+			gstate.state_index = radix_idx;
 		}
 	}
 }

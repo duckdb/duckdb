@@ -109,6 +109,8 @@ public:
 
 	DUCKDB_API static bool UncaughtException();
 
+	DUCKDB_API static string GetStackTrace(int max_depth = 120);
+
 private:
 	string exception_message_;
 	string raw_message_;

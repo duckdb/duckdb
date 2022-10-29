@@ -1,0 +1,81 @@
+# name: test/sql/types/union/union_tag.test
+# description: Test union_tag
+# group: [union]
+
+# Union type must be fully resolved
+statement error
+SELECT union_tag(1);
+
+query I
+SELECT union_tag(1::UNION(a INT, b VARCHAR));
+----
+a
+
+# Table queries
+statement ok
+CREATE TABLE tbl1 (u UNION(a INT, b FLOAT, c VARCHAR));
+
+statement ok
+INSERT INTO tbl1 VALUES (1), ('text'), (2.0);
+
+query I
+SELECT union_tag(u) FROM tbl1
+----
+a
+c
+b
+
+query I
+SELECT u FROM tbl1;
+----
+1
+text
+2.0
+
+
+query I
+SELECT union_tag(u) FROM tbl1 WHERE u = (1::UNION(a INT, b FLOAT, c VARCHAR));
+----
+a
+
+query I
+SELECT enum_first(union_tag(u)) FROM tbl1 LIMIT 1;
+----
+a
+
+query I
+SELECT enum_last(union_tag(u)) FROM tbl1 LIMIT 1;
+----
+c
+
+query I
+SELECT enum_range(union_tag(u)) FROM tbl1 LIMIT 1;
+----
+[a, b, c]
+
+query I 
+SELECT union_tag('foo'::UNION(num INT, str VARCHAR))
+----
+str
+
+# Prepared statements
+statement ok
+PREPARE p1 as SELECT union_tag(u) FROM tbl1;
+
+query I
+EXECUTE p1;
+----
+a
+c
+b
+
+statement ok
+PREPARE p2 as SELECT union_tag(?);
+
+statement error
+EXECUTE p2(1);
+
+query I
+EXECUTE p2('woo'::UNION(a INT, b VARCHAR));
+----
+b

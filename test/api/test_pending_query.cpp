@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test Pending Query API", "[api]") {
+TEST_CASE("Test Pending Query API", "[api][.]") {
 	DuckDB db;
 	Connection con(db);
 
@@ -145,7 +145,7 @@ TEST_CASE("Test parallel usage of pending query API", "[api][.]") {
 	}
 }
 
-TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
+TEST_CASE("Test Pending Query Prepared Statements API", "[api][.]") {
 	DuckDB db;
 	Connection con(db);
 

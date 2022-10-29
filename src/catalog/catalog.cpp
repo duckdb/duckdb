@@ -27,7 +27,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
-#include "extension_functions.hpp"
+#include "duckdb/main/extension_functions.hpp"
 #include <algorithm>
 namespace duckdb {
 

@@ -626,28 +626,32 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 	D_ASSERT(total_count == entries);
 }
 
-idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
-	if (scan_position >= entries) {
-		return 0;
-	}
-	auto remaining = entries - scan_position;
-	auto this_n = MinValue((idx_t)STANDARD_VECTOR_SIZE, remaining);
-
+idx_t GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChunk &result) {
+	idx_t this_n;
 	Vector addresses(LogicalType::POINTER);
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
-
-	auto chunk_idx = scan_position / tuples_per_block;
-	auto chunk_offset = (scan_position % tuples_per_block) * tuple_size;
-	D_ASSERT(chunk_offset + tuple_size <= Storage::BLOCK_SIZE);
-
-	auto read_ptr = payload_hds_ptrs[chunk_idx++];
-	for (idx_t i = 0; i < this_n; i++) {
-		data_pointers[i] = read_ptr + chunk_offset;
-		chunk_offset += tuple_size;
-		if (chunk_offset >= tuples_per_block * tuple_size) {
-			read_ptr = payload_hds_ptrs[chunk_idx++];
-			chunk_offset = 0;
+	{
+		lock_guard<mutex> l(scan_state.lock);
+		if (scan_state.scan_position >= entries) {
+			return 0;
 		}
+		auto remaining = entries - scan_state.scan_position;
+		this_n = MinValue((idx_t)STANDARD_VECTOR_SIZE, remaining);
+
+		auto chunk_idx = scan_state.scan_position / tuples_per_block;
+		auto chunk_offset = (scan_state.scan_position % tuples_per_block) * tuple_size;
+		D_ASSERT(chunk_offset + tuple_size <= Storage::BLOCK_SIZE);
+
+		auto read_ptr = payload_hds_ptrs[chunk_idx++];
+		for (idx_t i = 0; i < this_n; i++) {
+			data_pointers[i] = read_ptr + chunk_offset;
+			chunk_offset += tuple_size;
+			if (chunk_offset >= tuples_per_block * tuple_size) {
+				read_ptr = payload_hds_ptrs[chunk_idx++];
+				chunk_offset = 0;
+			}
+		}
+		scan_state.scan_position += this_n;
 	}
 
 	result.SetCardinality(this_n);
@@ -660,8 +664,6 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 
 	RowOperations::FinalizeStates(layout, addresses, result, group_cols);
-
-	scan_position += this_n;
 	return this_n;
 }
 

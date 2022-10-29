@@ -46,7 +46,7 @@ public class DuckDBConnection implements java.sql.Connection {
 		if (resultSetConcurrency == ResultSet.CONCUR_READ_ONLY && resultSetType == ResultSet.TYPE_FORWARD_ONLY) {
 			return new DuckDBPreparedStatement(this);
 		}
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("createStatement");
 	}
 
 	public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency,
@@ -57,7 +57,7 @@ public class DuckDBConnection implements java.sql.Connection {
 		if (resultSetConcurrency == ResultSet.CONCUR_READ_ONLY && resultSetType == ResultSet.TYPE_FORWARD_ONLY) {
 			return new DuckDBPreparedStatement(this, sql);
 		}
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("prepareStatement");
 	}
 
 	public Statement createStatement() throws SQLException {
@@ -136,7 +136,7 @@ public class DuckDBConnection implements java.sql.Connection {
 
 	public void setTransactionIsolation(int level) throws SQLException {
 		if (level > TRANSACTION_REPEATABLE_READ) {
-			throw new SQLFeatureNotSupportedException();
+			throw new SQLFeatureNotSupportedException("setTransactionIsolation");
 		}
 	}
 
@@ -200,7 +200,7 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public void setSchema(String schema) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("setSchema");
 	}
 
 	public String getSchema() throws SQLException {
@@ -208,33 +208,33 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public void abort(Executor executor) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("abort");
 	}
 
 	public Clob createClob() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("createClob");
 	}
 
 	public Blob createBlob() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("createBlob");
 	}
 
 	// less likely to implement this stuff
 
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("unwrap");
 	}
 
 	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("isWrapperFor");
 	}
 
 	public CallableStatement prepareCall(String sql) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("prepareCall");
 	}
 
 	public String nativeSQL(String sql) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("nativeSQL");
 	}
 
 	public Statement createStatement(int resultSetType, int resultSetConcurrency) throws SQLException {
@@ -247,64 +247,64 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("prepareCall");
 	}
 
 	public Map<String, Class<?>> getTypeMap() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getTypeMap");
 	}
 
 	public void setTypeMap(Map<String, Class<?>> map) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("setTypeMap");
 	}
 
 	public void setHoldability(int holdability) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("setHoldability");
 	}
 
 	public int getHoldability() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getHoldability");
 	}
 
 	public Savepoint setSavepoint() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("setSavepoint");
 	}
 
 	public Savepoint setSavepoint(String name) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("setSavepoint");
 	}
 
 	public void rollback(Savepoint savepoint) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("rollback");
 	}
 
 	public void releaseSavepoint(Savepoint savepoint) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("releaseSavepoint");
 	}
 
 	public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency,
 			int resultSetHoldability) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("prepareCall");
 	}
 
 	public PreparedStatement prepareStatement(String sql, int autoGeneratedKeys) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("prepareStatement");
 	}
 
 	public PreparedStatement prepareStatement(String sql, int[] columnIndexes) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("prepareStatement");
 	}
 
 	public PreparedStatement prepareStatement(String sql, String[] columnNames) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("prepareStatement");
 	}
 
 	public NClob createNClob() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("createNClob");
 	}
 
 	public SQLXML createSQLXML() throws SQLException {
-		throw new SQLFeatureNotSupportedException(); // hell no
+		throw new SQLFeatureNotSupportedException("createSQLXML"); // hell no
 	}
 
 	public void setClientInfo(String name, String value) throws SQLClientInfoException {
@@ -316,27 +316,27 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public String getClientInfo(String name) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getClientInfo");
 	}
 
 	public Properties getClientInfo() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getClientInfo");
 	}
 
 	public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("createArrayOf");
 	}
 
 	public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("createStruct");
 	}
 
 	public void setNetworkTimeout(Executor executor, int milliseconds) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("setNetworkTimeout");
 	}
 
 	public int getNetworkTimeout() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("getNetworkTimeout");
 	}
 
 	public DuckDBAppender createAppender(String schemaName, String tableName) throws SQLException {

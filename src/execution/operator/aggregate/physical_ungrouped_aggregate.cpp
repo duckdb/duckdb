@@ -354,7 +354,7 @@ public:
 		auto &distinct_data = *op.distinct_data;
 
 		ThreadContext temp_thread_context(context);
-		ExecutionContext temp_exec_context(context, temp_thread_context);
+		ExecutionContext temp_exec_context(context, temp_thread_context, nullptr);
 
 		idx_t payload_idx = 0;
 		idx_t next_payload_idx = 0;

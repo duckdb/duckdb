@@ -217,8 +217,6 @@ ok
 
 statement error
 SELECT CAST ('bla' as mood)
-----
-ok
 
 query I
 SELECT TRY_CAST ('bla' as mood)

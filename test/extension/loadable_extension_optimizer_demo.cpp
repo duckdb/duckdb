@@ -4,7 +4,8 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
-#include "duckdb/planner/operator/logical_chunk_get.hpp"
+#include "duckdb/planner/operator/logical_column_data_get.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 using namespace duckdb;
 
@@ -80,7 +81,7 @@ public:
 		D_ASSERT(write(sockfd, &len, sizeof(idx_t)) == sizeof(idx_t));
 		D_ASSERT(write(sockfd, data.data.get(), len) == len);
 
-		auto chunk_collection = make_unique<ChunkCollection>(Allocator::DefaultAllocator());
+		auto chunk_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator());
 		idx_t n_chunks;
 		D_ASSERT(read(sockfd, &n_chunks, sizeof(idx_t)) == sizeof(idx_t));
 		for (idx_t i = 0; i < n_chunks; i++) {
@@ -91,13 +92,15 @@ public:
 			D_ASSERT(read(sockfd, buffer, chunk_len) == chunk_len);
 			BufferedDeserializer deserializer((data_ptr_t)buffer, chunk_len);
 			DataChunk chunk;
+
 			chunk.Deserialize(deserializer);
+			chunk_collection->Initialize(chunk.GetTypes());
 			chunk_collection->Append(chunk);
 			free(buffer);
 		}
 
 		auto types = chunk_collection->Types();
-		plan = make_unique<LogicalChunkGet>(0, types, move(chunk_collection));
+		plan = make_unique<LogicalColumnDataGet>(0, types, move(chunk_collection));
 
 		len = 0;
 		(void)len;
