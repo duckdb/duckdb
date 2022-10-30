@@ -20,86 +20,9 @@ CREATE TYPE a AS ENUM (SELECT * FROM test);
 statement ok
 DROP TABLE test;
 
+# Test different size
 statement ok
-CREATE TABLE number_str AS (SELECT CAST(range AS VARCHAR) AS x FROM range(1, 100));
-
-statement ok
-CREATE TYPE number_enum AS ENUM (SELECT x FROM number_str WHERE x >= '50');
-
-statement ok
-CREATE TABLE test (x number_enum);
-
-statement error
-INSERT INTO test VALUES ('49');
-
-statement ok
-INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(50, 100);
-
-statement ok
-INSERT INTO test VALUES ('6'), ('7'), ('8'), ('9');
-
-statement ok
-INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(50, 100);
-
-statement ok
-DROP TABLE number_str;
-
-statement ok
-DROP TABLE test;
-
-statement ok
-DROP TYPE number_enum;
-
-
-# Test multiple vector
-statement ok
-CREATE TABLE number_str AS (SELECT CAST(range AS VARCHAR) AS x FROM range(1, 4000));
-
-statement ok
-CREATE TYPE number_enum AS ENUM (SELECT x FROM number_str WHERE x != '500' AND x != '1500');
-
-statement ok
-CREATE TABLE test (x number_enum);
-
-statement ok
-INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(1, 500);
-
-statement ok
-INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(501, 1500);
-
-statement ok
-INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(1501, 4000);
-
-statement error
-INSERT INTO test VALUES ('500');
-
-statement error
-INSERT INTO test VALUES ('1500');
-
-statement ok
-DROP TABLE number_str;
-
-statement ok
-DROP TABLE test;
-
-statement ok
-DROP TYPE number_enum;
-
-# Test NULL handing
-statement ok
-CREATE TABLE number_str AS (SELECT CAST(range AS VARCHAR) AS x FROM range(0, 64));
-
-statement ok
-INSERT INTO number_str SELECT NULL FROM range(0, 64);
-
-statement ok
-INSERT INTO number_str SELECT CAST(range AS VARCHAR) FROM range(64, 96);
-
-statement ok
-INSERT INTO number_str SELECT NULL FROM range(0, 64);
-
-statement ok
-INSERT INTO number_str SELECT CAST(range AS VARCHAR) FROM range(96, 100);
+CREATE TABLE number_str AS (SELECT CAST(range AS VARCHAR) AS x FROM range(0, 100));
 
 statement ok
 CREATE TYPE number_enum AS ENUM (SELECT x FROM number_str);
@@ -110,6 +33,9 @@ CREATE TABLE test (x number_enum);
 statement ok
 INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(0, 100);
 
+statement error
+INSERT INTO test VALUES ('100');
+
 statement ok
 DROP TABLE number_str;
 
@@ -119,12 +45,8 @@ DROP TABLE test;
 statement ok
 DROP TYPE number_enum;
 
-# Test NULL handing
 statement ok
-CREATE TABLE number_str (x VARCHAR);
-
-statement ok
-INSERT INTO number_str VALUES ('1'), ('2'), (NULL), ('3'), (NULL), (NULL), ('4');
+CREATE TABLE number_str AS (SELECT CAST(range AS VARCHAR) AS x FROM range(0, 10000));
 
 statement ok
 CREATE TYPE number_enum AS ENUM (SELECT x FROM number_str);
@@ -133,7 +55,7 @@ statement ok
 CREATE TABLE test (x number_enum);
 
 statement ok
-INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(1, 5);
+INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(0, 10000);
 
 statement ok
 DROP TABLE number_str;
@@ -144,5 +66,60 @@ DROP TABLE test;
 statement ok
 DROP TYPE number_enum;
 
+statement ok
+CREATE TABLE number_str AS (SELECT CAST(range AS VARCHAR) AS x FROM range(0, 100000));
+
+statement ok
+CREATE TYPE number_enum AS ENUM (SELECT x FROM number_str);
+
+statement ok
+CREATE TABLE test (x number_enum);
+
+statement ok
+INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(0, 100000);
+
+statement ok
+DROP TABLE number_str;
+
+statement ok
+DROP TABLE test;
+
+statement ok
+DROP TYPE number_enum;
+
+# Test auto deduplicate
+statement ok
+CREATE TABLE number_str (x VARCHAR);
+
+statement ok
+INSERT INTO number_str VALUES ('1'), ('2'), ('1');
+
+statement ok
+CREATE TYPE number_enum AS ENUM (SELECT x FROM number_str);
+
+statement ok
+DROP TABLE number_str;
+
+statement ok
+DROP TYPE number_enum;
+
+# Throw exception for NULL
+statement error
+CREATE TYPE number_enum AS ENUM (SELECT NULL::VARCHAR);
+
+# Test inserted order
+statement ok
+CREATE TABLE number_str (x VARCHAR);
+
+statement ok
+INSERT INTO number_str VALUES ('1'), ('3'), ('2');
+
+statement ok
+CREATE TYPE number_enum AS ENUM (SELECT x FROM number_str ORDER BY x DESC);
+
+query I
+SELECT enum_first('1'::number_enum);
+----
+3
 
 
