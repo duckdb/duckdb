@@ -22,7 +22,7 @@ ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpc
                  'release.h', 'genrand.cpp', 'address.cpp', 'visualizer_constants.hpp', 'icu-collate.cpp', 'icu-collate.hpp',
                  'yyjson.cpp', 'yyjson.hpp', 'duckdb_pdqsort.hpp',
                  'nf_calendar.cpp', 'nf_calendar.h', 'nf_localedata.cpp', 'nf_localedata.h', 'nf_zformat.cpp', 'nf_zformat.h', 'expr.cc']
-ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen', os.path.join('tools', 'pythonpkg', 'duckdb'), os.path.join('tools', 'pythonpkg', 'build'), os.path.join('tools', 'rpkg', 'src', 'duckdb'), os.path.join('tools', 'rpkg', 'inst', 'include', 'cpp11'), os.path.join('extension', 'tpcds', 'dsdgen')]
+ignored_directories = ['.eggs', '__pycache__', 'extension', 'icu', 'dbgen', os.path.join('tools', 'pythonpkg', 'duckdb'), os.path.join('tools', 'pythonpkg', 'build'), os.path.join('tools', 'rpkg', 'src', 'duckdb'), os.path.join('tools', 'rpkg', 'inst', 'include', 'cpp11'), os.path.join('extension', 'tpcds', 'dsdgen')]
 format_all = False
 check_only = True
 confirm = True
@@ -96,6 +96,10 @@ def get_changed_files(revision):
     changed_files = []
     for f in files:
         if not can_format_file(f):
+            continue
+        if os.path.basename(f) in ignored_files:
+            continue
+        if f.split('/')[0] in ignored_directories:
             continue
         changed_files.append(f)
     return changed_files
