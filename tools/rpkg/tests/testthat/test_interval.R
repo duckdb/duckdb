@@ -2,7 +2,7 @@ expect_equal_difftime <- function (a, b)
     expect_equal(as.numeric(a, units = "secs"), as.numeric(b, units = "secs"))
 
 test_that("we can retrieve an interval", {
-    con <- dbConnect(duckdb::duckdb())
+    con <- dbConnect(duckdb())
     on.exit(dbDisconnect(con, shutdown = TRUE))
 
     res <- dbGetQuery(con, "SELECT '2021-11-26'::TIMESTAMP-'1984-04-24'::TIMESTAMP i")
