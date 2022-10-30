@@ -49,6 +49,7 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 
 			idx_t child_offset;
 			if (offsets_entry < 0) {
+				// Convert a negative index to: length - (-index)
 				if ((idx_t)-offsets_entry > list_entry.length) {
 					result_mask.SetInvalid(i);
 					continue;
@@ -61,6 +62,9 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 				}
 				child_offset = list_entry.offset + offsets_entry;
 			}
+
+			child_offset = child_data.sel->get_index(child_offset);
+			// Copy if valid
 			if (child_data.validity.RowIsValid(child_offset)) {
 				if (!VALIDITY_ONLY) {
 					result_data[i] = ((T *)child_data.data)[child_offset];

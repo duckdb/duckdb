@@ -113,6 +113,14 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
+		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT) {
+			// Make sure we don't try to scan more than this row group contains
+			// If this value gets truncated, we need to get the remaining values for this list from the next rowgroup
+			idx_t highest_row_index = child_column->start + child_column->GetMaxEntry();
+			D_ASSERT(state.child_states[1].row_index <= highest_row_index);
+			child_scan_count =
+			    MinValue(child_scan_count, highest_row_index - (state.child_states[1].row_index + child_scan_count));
+		}
 		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT ||
 		         state.child_states[1].row_index + child_scan_count <=
 		             child_column->start + child_column->GetMaxEntry());
