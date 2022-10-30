@@ -3,7 +3,6 @@
 #include "duckdb/common/printer.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/box_renderer.hpp"
 #include <sstream>
 
 namespace duckdb {
