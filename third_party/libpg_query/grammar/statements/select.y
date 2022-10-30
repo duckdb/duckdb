@@ -2197,6 +2197,23 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
+			| COLUMNS '(' '*' opt_except_list opt_replace_list ')'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->except_list = $4;
+					star->replace_list = $5;
+					star->columns = true;
+
+					$$ = (PGNode *) star;
+				}
+			| COLUMNS '(' Sconst ')'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->regex = $3;
+					star->columns = true;
+
+					$$ = (PGNode *) star;
+				}
 		;
 
 /*

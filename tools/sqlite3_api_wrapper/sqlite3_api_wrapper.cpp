@@ -10,6 +10,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/main/error_manager.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/box_renderer.hpp"
 
@@ -104,6 +105,11 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		if (flags & DUCKDB_UNSIGNED_EXTENSIONS) {
 			config.options.allow_unsigned_extensions = true;
 		}
+		config.error_manager->AddCustomError(
+		    ErrorType::UNSIGNED_EXTENSION,
+		    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
+		    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
+		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_unique<DuckDB>(filename, &config);
 		pDb->db->LoadExtension<SQLAutoCompleteExtension>();
 		pDb->con = make_unique<Connection>(*pDb->db);
