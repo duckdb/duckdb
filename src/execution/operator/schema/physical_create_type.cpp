@@ -86,8 +86,10 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 			auto &src_validity = FlatVector::Validity(src_vec);
 
 			// Input vector has NULL value, we just throw an exception
-			if (!src_validity.CheckAllValid(src_row_count)) {
-				throw InvalidInputException("ENUM type can't accept NULL value!");
+			for (idx_t i = 0; i < src_row_count; i++) {
+				if (!src_validity.RowIsValid(i)) {
+					throw InvalidInputException("ENUM type can't accept NULL value!");
+				}
 			}
 
 			for (idx_t i = 0; i < src_row_count; i++) {
