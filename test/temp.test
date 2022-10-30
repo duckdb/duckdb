@@ -3,7 +3,6 @@
 
 
 query I
-SELECT '{key_A: 2, key_C: 8}'::STRUCT(key_A INT, key_B DOUBLE, key_C FLOAT);
+SELECT TRY_CAST('{a: "hiii", b:"Ducky"}' AS STRUCT(a VARCHAR, b INT));
 ----
-{'key_A': 2, 'key_B': NULL, 'key_C': 8.0}
-
+{'key_A': 2, 'key_B': 46}

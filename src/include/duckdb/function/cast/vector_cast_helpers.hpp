@@ -198,15 +198,18 @@ struct VectorCastHelpers {
 	}
 };
 
-
-struct VectorStringifiedListParser {
+struct VectorStringToList {
 	static idx_t CountParts(const string_t &input);
-	static bool SplitStringifiedList(const string_t &input, string_t *child_data, idx_t &child_start, Vector &child );
+	static bool SplitStringifiedList(const string_t &input, string_t *child_data, idx_t &child_start, Vector &child);
+    static bool StringToNestedTypeCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result, ValidityMask &result_mask,
+                                    idx_t count, CastParameters &parameters, const SelectionVector *sel);
 };
 
-struct VectorStringifiedStructParser {
+struct VectorStringToStruct {
 	static bool SplitStruct(string_t &input, std::vector<std::unique_ptr<Vector>> &varchar_vectors, idx_t &row_idx,
-                            string_map_t<idx_t> &child_names, std::vector<ValidityMask*> &child_masks);
+	                        string_map_t<idx_t> &child_names, std::vector<ValidityMask *> &child_masks);
+    static bool StringToNestedTypeCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result, ValidityMask &result_mask,
+            idx_t count, CastParameters &parameters, const SelectionVector *sel);
 };
 
 } // namespace duckdb

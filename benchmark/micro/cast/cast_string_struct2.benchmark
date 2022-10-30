@@ -1,4 +1,4 @@
-# name: benchmark/micro/cast/cast_string_struct_2.benchmark
+# name: benchmark/micro/cast/cast_string_struct2.benchmark
 # description: Cast string values to struct
 # group: [cast]
 

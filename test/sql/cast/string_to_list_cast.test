@@ -368,6 +368,17 @@ SELECT col::STRUCT(a VARCHAR)[] FROM struct_tbl1;
 ----
 [{'a': hii}, {'a': hellooo}]
 
+query I
+SELECT CAST('[ [{a:[12,13,14], b:"🦆"}], [{a:[12,13,14], b:"🦆", c:100}] ]' AS STRUCT(a INT[], b VARCHAR, c FLOAT)[][]);
+----
+[[{'a': [12, 13, 14], 'b': 🦆, 'c': NULL}], [{'a': [12, 13, 14], 'b': 🦆, 'c': 100.0}]]
+
+query I
+SELECT CAST('[{a:[12,13,14], b:"🦆", c:{a:[[a], [b, c]], b:[123]}}]' AS STRUCT(a INT[], b VARCHAR, c STRUCT(a VARCHAR[][], b INT[]))[]);
+----
+[{'a': [12, 13, 14], 'b': 🦆, 'c': {'a': [[a], [b, c]], 'b': [123]}}]
+
+
 # ---------------------------------------------------
 statement ok
 CREATE TABLE struct_tbl2(col VARCHAR);
@@ -379,6 +390,7 @@ query I
 SELECT col::STRUCT(a INT, b VARCHAR)[] FROM struct_tbl2;
 ----
 [{'a': 7, 'b': Duck}, {'a': 7000, 'b': 🦆🦆🦆🦆🦆🦆}]
+
 
 #               All types:
 # ---------------------------------------------------
