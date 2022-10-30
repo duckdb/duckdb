@@ -557,7 +557,7 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 	}
 	auto max_width = config.max_width;
 	if (max_width == 0) {
-		if (Printer::IsTerminal()) {
+		if (Printer::IsTerminal(OutputStream::STREAM_STDOUT)) {
 			max_width = Printer::TerminalWidth();
 		} else {
 			max_width = 120;
