@@ -202,11 +202,15 @@ string ConvertRenderValue(const string &input) {
 }
 
 string BoxRenderer::GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r) {
-	auto row = rows.GetValue(c, r);
-	if (row.IsNull()) {
-		return config.null_value;
+	try {
+		auto row = rows.GetValue(c, r);
+		if (row.IsNull()) {
+			return config.null_value;
+		}
+		return ConvertRenderValue(StringValue::Get(row));
+	} catch (std::exception &ex) {
+		return "????INVALID VALUE - " + string(ex.what()) + "?????";
 	}
-	return ConvertRenderValue(StringValue::Get(row));
 }
 
 vector<idx_t> BoxRenderer::ComputeRenderWidths(const vector<string> &names, const ColumnDataCollection &result,
