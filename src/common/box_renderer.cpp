@@ -33,7 +33,7 @@ void BoxRenderer::RenderValue(std::ostream &ss, const string &value, idx_t colum
 		// the size of this column must have been reduced
 		// figure out how much of this value we can render
 		idx_t pos = 0;
-		idx_t current_render_width = 3;
+		idx_t current_render_width = config.DOTDOTDOT_LENGTH;
 		while (pos < value.size()) {
 			// check if this character fits...
 			auto char_size = Utf8Proc::RenderWidth(value.c_str(), value.size(), pos);
@@ -45,7 +45,7 @@ void BoxRenderer::RenderValue(std::ostream &ss, const string &value, idx_t colum
 			current_render_width += char_size;
 			pos = Utf8Proc::NextGraphemeCluster(value.c_str(), value.size(), pos);
 		}
-		small_value = value.substr(0, pos) + "...";
+		small_value = value.substr(0, pos) + config.DOTDOTDOT;
 		render_value = &small_value;
 		render_width = current_render_width;
 	}
@@ -283,7 +283,7 @@ vector<idx_t> BoxRenderer::ComputeRenderWidths(const vector<string> &names, cons
 			// we need to remove columns!
 			// first, we add 6 characters to the total length
 			// this is what we need to add the "..." in the middle
-			total_length += 6;
+			total_length += 3 + config.DOTDOTDOT_LENGTH;
 			// now select columns to prune
 			// we select columns in zig-zag order starting from the middle
 			// e.g. if we have 10 columns, we remove #5, then #4, then #6, then #3, then #7, etc
@@ -311,7 +311,7 @@ vector<idx_t> BoxRenderer::ComputeRenderWidths(const vector<string> &names, cons
 			if (!added_split_column) {
 				// "..."
 				column_map.push_back(SPLIT_COLUMN);
-				new_widths.push_back(3);
+				new_widths.push_back(config.DOTDOTDOT_LENGTH);
 				added_split_column = true;
 			}
 		}
@@ -343,7 +343,7 @@ void BoxRenderer::RenderHeader(const vector<string> &names, const vector<Logical
 		auto column_idx = column_map[c];
 		string name;
 		if (column_idx == SPLIT_COLUMN) {
-			name = "...";
+			name = config.DOTDOTDOT;
 		} else {
 			name = ConvertRenderValue(names[column_idx]);
 		}
@@ -385,17 +385,27 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 	auto bottom_rows = bottom_collection.Count();
 	auto column_count = column_map.size();
 
+	vector<ValueRenderAlignment> alignments;
+	for (idx_t c = 0; c < column_count; c++) {
+		auto column_idx = column_map[c];
+		if (column_idx == SPLIT_COLUMN) {
+			alignments.push_back(ValueRenderAlignment::MIDDLE);
+		} else {
+			alignments.push_back(TypeAlignment(result_types[column_idx]));
+		}
+	}
+
 	auto rows = top_collection.GetRows();
 	for (idx_t r = 0; r < top_rows; r++) {
 		for (idx_t c = 0; c < column_count; c++) {
 			auto column_idx = column_map[c];
 			string str;
 			if (column_idx == SPLIT_COLUMN) {
-				str = "...";
+				str = config.DOTDOTDOT;
 			} else {
 				str = GetRenderValue(rows, column_idx, r);
 			}
-			RenderValue(ss, str, widths[c], TypeAlignment(result_types[c]));
+			RenderValue(ss, str, widths[c], alignments[c]);
 		}
 		ss << config.VERTICAL;
 		ss << std::endl;
@@ -404,25 +414,66 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 	if (bottom_rows > 0) {
 		// render the bottom rows
 		// first render the divider
+		auto brows = bottom_collection.GetRows();
 		for (idx_t k = 0; k < 3; k++) {
 			for (idx_t c = 0; c < column_count; c++) {
-				RenderValue(ss, ".", widths[c], TypeAlignment(result_types[c]));
+				auto column_idx = column_map[c];
+				string str;
+				auto alignment = alignments[c];
+				if (alignment == ValueRenderAlignment::MIDDLE || column_idx == SPLIT_COLUMN) {
+					str = config.DOT;
+				} else {
+					// align the dots in the center of the column
+					auto top_value = GetRenderValue(rows, column_idx, top_rows - 1);
+					auto bottom_value = GetRenderValue(brows, column_idx, bottom_rows - 1);
+					auto top_length = MinValue<idx_t>(widths[c], Utf8Proc::RenderWidth(top_value));
+					auto bottom_length = MinValue<idx_t>(widths[c], Utf8Proc::RenderWidth(bottom_value));
+					auto dot_length = MinValue<idx_t>(top_length, bottom_length);
+					if (top_length == 0) {
+						dot_length = bottom_length;
+					} else if (bottom_length == 0) {
+						dot_length = top_length;
+					}
+					if (dot_length > 1) {
+						auto padding = dot_length - 1;
+						idx_t left_padding, right_padding;
+						switch (alignment) {
+						case ValueRenderAlignment::LEFT:
+							left_padding = padding / 2;
+							right_padding = padding - left_padding;
+							break;
+						case ValueRenderAlignment::RIGHT:
+							right_padding = padding / 2;
+							left_padding = padding - right_padding;
+							break;
+						default:
+							throw InternalException("Unrecognized value renderer alignment");
+						}
+						str = string(left_padding, ' ') + config.DOT + string(right_padding, ' ');
+					} else {
+						if (dot_length == 0) {
+							// everything is empty
+							alignment = ValueRenderAlignment::MIDDLE;
+						}
+						str = config.DOT;
+					}
+				}
+				RenderValue(ss, str, widths[c], alignment);
 			}
 			ss << config.VERTICAL;
 			ss << std::endl;
 		}
 		// note that the bottom rows are in reverse order
-		auto brows = bottom_collection.GetRows();
 		for (idx_t r = 0; r < bottom_rows; r++) {
 			for (idx_t c = 0; c < column_count; c++) {
 				auto column_idx = column_map[c];
 				string str;
 				if (column_idx == SPLIT_COLUMN) {
-					str = "...";
+					str = config.DOTDOTDOT;
 				} else {
 					str = GetRenderValue(brows, column_idx, bottom_rows - r - 1);
 				}
-				RenderValue(ss, str, widths[c], TypeAlignment(result_types[c]));
+				RenderValue(ss, str, widths[c], alignments[c]);
 			}
 			ss << config.VERTICAL;
 			ss << std::endl;

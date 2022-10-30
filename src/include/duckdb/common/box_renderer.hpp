@@ -43,6 +43,10 @@ struct BoxRendererConfig {
 	const char *VERTICAL = "\342\224\202";   // "│";
 	const char *HORIZONTAL = "\342\224\200"; // "─";
 
+	const char *DOTDOTDOT = "\xE2\x80\xA6"; // "…";
+	const char *DOT = "\xC2\xB7";           // "·";
+	const idx_t DOTDOTDOT_LENGTH = 1;
+
 #else
 	// ASCII version
 	const char *LTCORNER = "<";
@@ -58,6 +62,10 @@ struct BoxRendererConfig {
 
 	const char *VERTICAL = "|";
 	const char *HORIZONTAL = "-";
+
+	const char *DOTDOTDOT = "..."; // "...";
+	const char *DOT = ".";         // ".";
+	const idx_t DOTDOTDOT_LENGTH = 3;
 #endif
 };
 
