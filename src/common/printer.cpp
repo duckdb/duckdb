@@ -55,6 +55,8 @@ bool Printer::IsTerminal() {
 #else
 	return isatty(1);
 #endif
+#else
+	throw InternalException("IsTerminal called while printing is disabled");
 #endif
 }
 
@@ -72,6 +74,8 @@ idx_t Printer::TerminalWidth() {
 	ioctl(0, TIOCGWINSZ, &w);
 	return w.ws_col;
 #endif
+#else
+	throw InternalException("TerminalWidth called while printing is disabled");
 #endif
 }
 // LCOV_EXCL_STOP
