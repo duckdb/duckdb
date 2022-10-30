@@ -7,7 +7,6 @@
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
 #include <io.h>
-#include "duckdb/common/windows.hpp"
 #else
 #include <sys/ioctl.h>
 #include <stdio.h>
