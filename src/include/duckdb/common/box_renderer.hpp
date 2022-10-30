@@ -102,8 +102,9 @@ private:
 	void RenderValues(const list<ColumnDataCollection> &collections, const vector<idx_t> &column_map,
 	                  const vector<idx_t> &widths, const vector<LogicalType> &result_types, std::ostream &ss);
 	void RenderRowCount(string row_count_str, string shown_str, const string &column_count_str,
-	                    const vector<idx_t> &boundaries, bool has_hidden_rows, idx_t total_length, idx_t row_count,
-	                    idx_t column_count, idx_t minimum_row_length, std::ostream &ss);
+	                    const vector<idx_t> &boundaries, bool has_hidden_rows, bool has_hidden_columns,
+	                    idx_t total_length, idx_t row_count, idx_t column_count, idx_t minimum_row_length,
+	                    std::ostream &ss);
 };
 
 } // namespace duckdb

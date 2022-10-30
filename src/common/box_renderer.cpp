@@ -482,8 +482,9 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 }
 
 void BoxRenderer::RenderRowCount(string row_count_str, string shown_str, const string &column_count_str,
-                                 const vector<idx_t> &boundaries, bool has_hidden_rows, idx_t total_length,
-                                 idx_t row_count, idx_t column_count, idx_t minimum_row_length, std::ostream &ss) {
+                                 const vector<idx_t> &boundaries, bool has_hidden_rows, bool has_hidden_columns,
+                                 idx_t total_length, idx_t row_count, idx_t column_count, idx_t minimum_row_length,
+                                 std::ostream &ss) {
 	// check if we can merge the row_count_str and the shown_str
 	bool display_shown_separately = has_hidden_rows;
 	if (has_hidden_rows && total_length >= row_count_str.size() + shown_str.size() + 5) {
@@ -494,14 +495,16 @@ void BoxRenderer::RenderRowCount(string row_count_str, string shown_str, const s
 		minimum_row_length = row_count_str.size() + 4;
 	}
 	auto minimum_length = row_count_str.size() + column_count_str.size() + 6;
-	bool render_rows_and_columns = total_length >= minimum_length && (row_count > 1 && column_count > 1);
+	bool render_rows_and_columns = total_length >= minimum_length &&
+	                               ((has_hidden_columns && row_count > 0) || (row_count > 1 && column_count > 1));
 	bool render_rows = total_length >= minimum_row_length && row_count != 1;
+	bool render_anything = true;
 	if (!render_rows && !render_rows_and_columns) {
-		return;
+		render_anything = false;
 	}
 	// render the bottom of the result values, if there are any
-	if (row_count > 1) {
-		ss << config.LMIDDLE;
+	if (row_count > 0) {
+		ss << (render_anything ? config.LMIDDLE : config.LDCORNER);
 		idx_t column_index = 0;
 		for (idx_t k = 0; k < total_length - 2; k++) {
 			if (column_index + 1 < boundaries.size() && k == boundaries[column_index]) {
@@ -511,8 +514,11 @@ void BoxRenderer::RenderRowCount(string row_count_str, string shown_str, const s
 				ss << config.HORIZONTAL;
 			}
 		}
-		ss << config.RMIDDLE;
+		ss << (render_anything ? config.RMIDDLE : config.RDCORNER);
 		ss << std::endl;
+	}
+	if (!render_anything) {
+		return;
 	}
 
 	if (render_rows_and_columns) {
@@ -535,6 +541,13 @@ void BoxRenderer::RenderRowCount(string row_count_str, string shown_str, const s
 			ss << std::endl;
 		}
 	}
+	// render the bottom line
+	ss << config.LDCORNER;
+	for (idx_t k = 0; k < total_length - 2; k++) {
+		ss << config.HORIZONTAL;
+	}
+	ss << config.RDCORNER;
+	ss << std::endl;
 }
 
 void BoxRenderer::Render(ClientContext &context, const vector<string> &names, const ColumnDataCollection &result,
@@ -621,16 +634,8 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 		column_count--;
 		column_count_str += " (" + to_string(column_count) + " shown)";
 	}
-	RenderRowCount(move(row_count_str), move(shown_str), column_count_str, boundaries, has_hidden_rows, total_length,
-	               row_count, column_count, minimum_row_length, ss);
-
-	// render the bottom line
-	ss << config.LDCORNER;
-	for (idx_t k = 0; k < total_length - 2; k++) {
-		ss << config.HORIZONTAL;
-	}
-	ss << config.RDCORNER;
-	ss << std::endl;
+	RenderRowCount(move(row_count_str), move(shown_str), column_count_str, boundaries, has_hidden_rows,
+	               has_hidden_columns, total_length, row_count, column_count, minimum_row_length, ss);
 }
 
 } // namespace duckdb
