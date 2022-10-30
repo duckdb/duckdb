@@ -504,7 +504,7 @@ void BoxRenderer::RenderRowCount(string row_count_str, string shown_str, const s
 		ss << config.LMIDDLE;
 		idx_t column_index = 0;
 		for (idx_t k = 0; k < total_length - 2; k++) {
-			if (column_index + 1 < column_count && k == boundaries[column_index]) {
+			if (column_index + 1 < boundaries.size() && k == boundaries[column_index]) {
 				ss << config.DMIDDLE;
 				column_index++;
 			} else {
@@ -584,7 +584,6 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 	vector<idx_t> column_map;
 	idx_t total_length;
 	auto widths = ComputeRenderWidths(names, result, collections, min_width, max_width, column_map, total_length);
-	idx_t column_count = column_map.size();
 
 	// render boundaries for the individual columns
 	vector<idx_t> boundaries;
@@ -610,7 +609,16 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 	if (result.ColumnCount() > 1) {
 		column_count_str += "s";
 	}
-	if (column_count < result.ColumnCount()) {
+	bool has_hidden_columns = false;
+	for (auto entry : column_map) {
+		if (entry == SPLIT_COLUMN) {
+			has_hidden_columns = true;
+			break;
+		}
+	}
+	idx_t column_count = column_map.size();
+	if (has_hidden_columns) {
+		column_count--;
 		column_count_str += " (" + to_string(column_count) + " shown)";
 	}
 	RenderRowCount(move(row_count_str), move(shown_str), column_count_str, boundaries, has_hidden_rows, total_length,
