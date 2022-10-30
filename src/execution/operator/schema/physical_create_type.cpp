@@ -28,9 +28,10 @@ unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext
 SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                         DataChunk &input) const {
 	auto &gstate = (CreateTypeGlobalState &)gstate_p;
-	if (gstate.collection.Count() + input.size() > NumericLimits<uint32_t>::Maximum()) {
-		throw InvalidInputException("Enum size must be lower than " +
-		                            std::to_string(NumericLimits<uint32_t>::Maximum()));
+	idx_t total_row_count = gstate.collection.Count() + input.size();
+	if (total_row_count > NumericLimits<uint32_t>::Maximum()) {
+		throw InvalidInputException("Attempted to create ENUM of size %, which exceeds the maximum size of %",
+		                            total_row_count, NumericLimits<uint32_t>::Maximum());
 	}
 	UnifiedVectorFormat sdata;
 	input.data[0].ToUnifiedFormat(input.size(), sdata);
