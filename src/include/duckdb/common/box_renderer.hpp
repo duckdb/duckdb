@@ -29,10 +29,10 @@ struct BoxRendererConfig {
 	string null_value = "NULL";
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
-	const char *LTCORNER = "\xE2\x95\xAD"; // "╭";
-	const char *RTCORNER = "\xE2\x95\xAE"; // "╮";
-	const char *LDCORNER = "\xE2\x95\xB0"; // "╰";
-	const char *RDCORNER = "\xE2\x95\xAF"; // "╯";
+	const char *LTCORNER = "\342\224\214"; // "┌";
+	const char *RTCORNER = "\342\224\220"; // "┐";
+	const char *LDCORNER = "\342\224\224"; // "└";
+	const char *RDCORNER = "\342\224\230"; // "┘";
 
 	const char *MIDDLE = "\342\224\274";  // "┼";
 	const char *TMIDDLE = "\342\224\254"; // "┬";
