@@ -267,12 +267,12 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	duckdb_decimal decimal = result->Fetch<duckdb_decimal>(0, 1);
 	REQUIRE(duckdb_decimal_to_double(decimal) == 12.3);
 	// test more decimal physical types
-	result = tester.Query(	"SELECT "
-							"1.2::DECIMAL(4,1),"
-							"100.3::DECIMAL(9,1),"
-							"-320938.4298::DECIMAL(18,4),"
-							"49082094824.904820482094::DECIMAL(30,12),"
-							"NULL::DECIMAL");
+	result = tester.Query("SELECT "
+	                      "1.2::DECIMAL(4,1),"
+	                      "100.3::DECIMAL(9,1),"
+	                      "-320938.4298::DECIMAL(18,4),"
+	                      "49082094824.904820482094::DECIMAL(30,12),"
+	                      "NULL::DECIMAL");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(0, 0)) == 1.2);
 	REQUIRE(duckdb_decimal_to_double(result->Fetch<duckdb_decimal>(1, 0)) == 100.3);
@@ -294,49 +294,49 @@ TEST_CASE("Test different types of C API", "[capi]") {
 
 	REQUIRE(result->Fetch<int8_t>(0, 0) == 1);
 	REQUIRE(result->Fetch<int8_t>(1, 0) == 100);
-	REQUIRE(result->Fetch<int8_t>(2, 0) == 0); //overflow
-	REQUIRE(result->Fetch<int8_t>(3, 0) == 0); //overflow
+	REQUIRE(result->Fetch<int8_t>(2, 0) == 0); // overflow
+	REQUIRE(result->Fetch<int8_t>(3, 0) == 0); // overflow
 	REQUIRE(result->Fetch<int8_t>(4, 0) == 0);
 
 	REQUIRE(result->Fetch<uint8_t>(0, 0) == 1);
 	REQUIRE(result->Fetch<uint8_t>(1, 0) == 100);
-	REQUIRE(result->Fetch<uint8_t>(2, 0) == 0); //overflow
-	REQUIRE(result->Fetch<uint8_t>(3, 0) == 0); //overflow
+	REQUIRE(result->Fetch<uint8_t>(2, 0) == 0); // overflow
+	REQUIRE(result->Fetch<uint8_t>(3, 0) == 0); // overflow
 	REQUIRE(result->Fetch<uint8_t>(4, 0) == 0);
 
 	REQUIRE(result->Fetch<int16_t>(0, 0) == 1);
 	REQUIRE(result->Fetch<int16_t>(1, 0) == 100);
-	REQUIRE(result->Fetch<int16_t>(2, 0) == 0); //overflow
-	REQUIRE(result->Fetch<int16_t>(3, 0) == 0); //overflow
+	REQUIRE(result->Fetch<int16_t>(2, 0) == 0); // overflow
+	REQUIRE(result->Fetch<int16_t>(3, 0) == 0); // overflow
 	REQUIRE(result->Fetch<int16_t>(4, 0) == 0);
 
 	REQUIRE(result->Fetch<uint16_t>(0, 0) == 1);
 	REQUIRE(result->Fetch<uint16_t>(1, 0) == 100);
-	REQUIRE(result->Fetch<uint16_t>(2, 0) == 0); //overflow
-	REQUIRE(result->Fetch<uint16_t>(3, 0) == 0); //overflow
+	REQUIRE(result->Fetch<uint16_t>(2, 0) == 0); // overflow
+	REQUIRE(result->Fetch<uint16_t>(3, 0) == 0); // overflow
 	REQUIRE(result->Fetch<uint16_t>(4, 0) == 0);
 
 	REQUIRE(result->Fetch<int32_t>(0, 0) == 1);
 	REQUIRE(result->Fetch<int32_t>(1, 0) == 100);
 	REQUIRE(result->Fetch<int32_t>(2, 0) == -320938);
-	REQUIRE(result->Fetch<int32_t>(3, 0) == 0); //overflow
+	REQUIRE(result->Fetch<int32_t>(3, 0) == 0); // overflow
 	REQUIRE(result->Fetch<int32_t>(4, 0) == 0);
 
 	REQUIRE(result->Fetch<uint32_t>(0, 0) == 1);
 	REQUIRE(result->Fetch<uint32_t>(1, 0) == 100);
-	REQUIRE(result->Fetch<uint32_t>(2, 0) == 0); //overflow
-	REQUIRE(result->Fetch<uint32_t>(3, 0) == 0); //overflow
+	REQUIRE(result->Fetch<uint32_t>(2, 0) == 0); // overflow
+	REQUIRE(result->Fetch<uint32_t>(3, 0) == 0); // overflow
 	REQUIRE(result->Fetch<uint32_t>(4, 0) == 0);
 
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 1);
 	REQUIRE(result->Fetch<int64_t>(1, 0) == 100);
 	REQUIRE(result->Fetch<int64_t>(2, 0) == -320938);
-	REQUIRE(result->Fetch<int64_t>(3, 0) == 49082094825); //ceiling
+	REQUIRE(result->Fetch<int64_t>(3, 0) == 49082094825); // ceiling
 	REQUIRE(result->Fetch<int64_t>(4, 0) == 0);
 
 	REQUIRE(result->Fetch<uint64_t>(0, 0) == 1);
 	REQUIRE(result->Fetch<uint64_t>(1, 0) == 100);
-	REQUIRE(result->Fetch<uint64_t>(2, 0) == 0); //overflow
+	REQUIRE(result->Fetch<uint64_t>(2, 0) == 0); // overflow
 	REQUIRE(result->Fetch<uint64_t>(3, 0) == 49082094825);
 	REQUIRE(result->Fetch<uint64_t>(4, 0) == 0);
 
@@ -345,7 +345,6 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	require_hugeint_eq(result->Fetch<duckdb_hugeint>(2, 0), 18446744073709230678ul, -1);
 	require_hugeint_eq(result->Fetch<duckdb_hugeint>(3, 0), 49082094825, 0);
 	require_hugeint_eq(result->Fetch<duckdb_hugeint>(4, 0), 0, 0);
-
 
 	REQUIRE(result->Fetch<float>(0, 0) == 1.2f);
 	REQUIRE(result->Fetch<float>(1, 0) == 100.3f);
@@ -563,6 +562,6 @@ TEST_CASE("Decimal -> Double casting issue", "[capi]") {
 	auto double_from_decimal = result->Fetch<double>(0, 0);
 	REQUIRE(double_from_decimal == (double)-0.5);
 
-	auto string_from_decimal = result->Fetch<string>(0,0);
+	auto string_from_decimal = result->Fetch<string>(0, 0);
 	REQUIRE(string_from_decimal == "-0.5");
 }
