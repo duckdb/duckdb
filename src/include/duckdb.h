@@ -228,15 +228,33 @@ typedef struct {
 	void *internal_data;
 } duckdb_result;
 
-typedef struct { void *__db; } *duckdb_database;
-typedef struct { void *__conn; } *duckdb_connection;
-typedef struct { void *__prep; } *duckdb_prepared_statement;
-typedef struct { void *__pend; } *duckdb_pending_result;
-typedef struct { void *__appn; } *duckdb_appender;
-typedef struct { void *__arrw; } *duckdb_arrow;
-typedef struct { void *__cnfg; } *duckdb_config;
-typedef struct { void *__arrs; } *duckdb_arrow_schema;
-typedef struct { void *__arra; } *duckdb_arrow_array;
+typedef struct _duckdb_database {
+	void *__db;
+} * duckdb_database;
+typedef struct _duckdb_connection {
+	void *__conn;
+} * duckdb_connection;
+typedef struct _duckdb_prepared_statement {
+	void *__prep;
+} * duckdb_prepared_statement;
+typedef struct _duckdb_pending_result {
+	void *__pend;
+} * duckdb_pending_result;
+typedef struct _duckdb_appender {
+	void *__appn;
+} * duckdb_appender;
+typedef struct _duckdb_arrow {
+	void *__arrw;
+} * duckdb_arrow;
+typedef struct _duckdb_config {
+	void *__cnfg;
+} * duckdb_config;
+typedef struct _duckdb_arrow_schema {
+	void *__arrs;
+} * duckdb_arrow_schema;
+typedef struct _duckdb_arrow_array {
+	void *__arra;
+} * duckdb_arrow_array;
 // typedef struct { void *__lglt; } *duckdb_logical_type;
 // typedef struct { void *__dtck; } *duckdb_data_chunk;
 // typedef struct { void *__vctr; } *duckdb_vector;
