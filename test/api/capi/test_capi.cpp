@@ -473,21 +473,20 @@ TEST_CASE("Issue #2058: Cleanup after execution of invalid SQL statement causes 
 }
 
 TEST_CASE("Decimal -> Double casting issue", "[capi]") {
-	duckdb_database db = nullptr;
-	duckdb_connection con = nullptr;
-	duckdb_result result;
 
-	REQUIRE(duckdb_open(NULL, &db) != DuckDBError);
-	REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
 
-	REQUIRE(duckdb_query(con, "SELECT -0.5;", &result) == DuckDBSuccess);
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
 
-	REQUIRE(duckdb_column_type(&result, 0) == DUCKDB_TYPE_DECIMAL);
-	REQUIRE(duckdb_value_double(&result, 0, 0) == (double)-0.5);
-	auto str = duckdb_value_varchar(&result, 0, 0);
-	REQUIRE(!strcmp(str, "-0.5"));
-	duckdb_free(str);
-	duckdb_destroy_result(&result);
-	duckdb_disconnect(&con);
-	duckdb_close(&db);
+	result = tester.Query("select -0.5;");
+	REQUIRE_NO_FAIL(*result);
+
+	REQUIRE(result->ColumnType(0) == DUCKDB_TYPE_DECIMAL);
+	auto double_from_decimal = result->Fetch<double>(0, 0);
+	REQUIRE(double_from_decimal == (double)-0.5);
+
+	auto string_from_decimal = result->Fetch<string>(0,0);
+	REQUIRE(string_from_decimal == "-0.5");
 }
