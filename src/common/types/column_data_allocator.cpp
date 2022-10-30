@@ -112,7 +112,7 @@ void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t 
 		AllocateMemory(size, block_id, offset, chunk_state);
 		break;
 	default:
-		break;
+		throw InternalException("Unrecognized allocator type");
 	}
 }
 
