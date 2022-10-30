@@ -204,7 +204,6 @@ class VectorChildBuffer : public VectorBuffer {
 public:
 	explicit VectorChildBuffer(Vector vector)
 	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(move(vector)) {
-		D_ASSERT(data.GetVectorType() != VectorType::DICTIONARY_VECTOR);
 	}
 
 public:
