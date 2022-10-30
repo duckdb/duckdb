@@ -161,6 +161,7 @@ public:
 		group_state.Init(segment_data + data_byte_offset);
 
 		idx_t group_size = MinValue((idx_t)PatasPrimitives::PATAS_GROUP_SIZE, (count - total_value_count));
+
 		// Read the compacted blocks of (7 + 6 + 3 bits) value stats
 		metadata_ptr -= sizeof(uint16_t) * group_size;
 		group_state.LoadPackedData((uint16_t *)metadata_ptr, group_size);
@@ -180,6 +181,8 @@ public:
 			skip_count -= to_skip;
 			ScanGroup<EXACT_TYPE, true>(nullptr, to_skip);
 		}
+		// Figure out how many entire groups we can skip
+		// For these groups, we don't even need to process the metadata or values
 		idx_t groups_to_skip = skip_count / PatasPrimitives::PATAS_GROUP_SIZE;
 		for (idx_t i = 0; i < groups_to_skip; i++) {
 			SkipGroup();
@@ -188,7 +191,8 @@ public:
 		if (skip_count == 0) {
 			return;
 		}
-		LoadGroup(group_state.values);
+		// For the last group that this skip (partially) touches, we do need to
+		// load the metadata and values into the group_state
 		ScanGroup<EXACT_TYPE, true>(nullptr, skip_count);
 	}
 };
@@ -208,15 +212,15 @@ void PatasScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 	auto &scan_state = (PatasScanState<T> &)*state.scan_state;
 
-	T *result_data = FlatVector::GetData<T>(result);
+	// Get the pointer to the result values
+	auto current_result_ptr = FlatVector::GetData<EXACT_TYPE>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-
-	auto current_result_ptr = (EXACT_TYPE *)(result_data + result_offset);
+	current_result_ptr += result_offset;
 
 	idx_t scanned = 0;
-
 	while (scanned < scan_count) {
-		const idx_t to_scan = MinValue(scan_count - scanned, scan_state.LeftInGroup());
+		const auto remaining = scan_count - scanned;
+		const idx_t to_scan = MinValue(remaining, scan_state.LeftInGroup());
 
 		scan_state.template ScanGroup<EXACT_TYPE>(current_result_ptr + scanned, to_scan);
 		scanned += to_scan;
