@@ -18,7 +18,6 @@ public:
 	explicit CreateTypeGlobalState(ClientContext &context) : collection(context, {LogicalType::VARCHAR}) {
 	}
 
-	// mutex glock;
 	ColumnDataCollection collection;
 };
 
@@ -29,7 +28,6 @@ unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext
 SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                         DataChunk &input) const {
 	auto &gstate = (CreateTypeGlobalState &)gstate_p;
-	// lock_guard<mutex> lock(gstate.glock);
 	gstate.collection.Append(input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -68,6 +66,12 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 		collection.InitializeScanChunk(scan_chunk);
 
 		idx_t total_row_count = collection.Count();
+
+		if (total_row_count > NumericLimits<uint32_t>::Maximum()) {
+			throw InvalidInputException("Enum size must be lower than " +
+			                            std::to_string(NumericLimits<uint32_t>::Maximum()));
+		}
+
 		Vector result(LogicalType::VARCHAR, total_row_count);
 		auto result_ptr = FlatVector::GetData<string_t>(result);
 
