@@ -30,7 +30,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkSta
 	auto &gstate = (CreateTypeGlobalState &)gstate_p;
 	idx_t total_row_count = gstate.collection.Count() + input.size();
 	if (total_row_count > NumericLimits<uint32_t>::Maximum()) {
-		throw InvalidInputException("Attempted to create ENUM of size %, which exceeds the maximum size of %",
+		throw InvalidInputException("Attempted to create ENUM of size %llu, which exceeds the maximum size of %llu",
 		                            total_row_count, NumericLimits<uint32_t>::Maximum());
 	}
 	UnifiedVectorFormat sdata;
@@ -40,7 +40,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkSta
 	for (idx_t i = 0; i < input.size(); i++) {
 		idx_t idx = sdata.sel->get_index(i);
 		if (!sdata.validity.RowIsValid(idx)) {
-			throw InvalidInputException("ENUM type can't accept NULL value!");
+			throw InvalidInputException("Attempted to create ENUM type with NULL value!");
 		}
 	}
 
