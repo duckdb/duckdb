@@ -46,12 +46,18 @@ public:
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
 
 private:
+	void AllocateEmptyBlock(idx_t size);
 	void AllocateBlock();
 	BufferHandle Pin(uint32_t block_id);
 
 	bool HasBlocks() {
 		return !blocks.empty();
 	}
+
+private:
+	void AllocateBuffer(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
+	void AllocateMemory(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
+	void AssignPointer(uint32_t &block_id, uint32_t &offset, data_ptr_t pointer);
 
 private:
 	ColumnDataAllocatorType type;

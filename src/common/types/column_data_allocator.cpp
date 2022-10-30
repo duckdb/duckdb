@@ -41,23 +41,36 @@ void ColumnDataAllocator::AllocateBlock() {
 	blocks.push_back(move(data));
 }
 
-void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset,
-                                       ChunkManagementState *chunk_state) {
-	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
-		// in-memory allocator
-		auto allocated = alloc.allocator->Allocate(size);
-		auto pointer_value = uintptr_t(allocated.get());
-		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
-			block_id = uint32_t(pointer_value);
-		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
-			block_id = uint32_t(pointer_value & 0xFFFFFFFF);
-			offset = uint32_t(pointer_value >> 32);
-		} else {
-			throw InternalException("ColumnDataCollection: Architecture not supported!?");
-		}
-		allocated_data.push_back(move(allocated));
-		return;
+void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
+	auto allocation_amount = MaxValue<idx_t>(NextPowerOfTwo(size), 4096);
+	if (!blocks.empty()) {
+		auto last_capacity = blocks.back().capacity;
+		auto next_capacity = MinValue<idx_t>(last_capacity * 2, last_capacity + Storage::BLOCK_SIZE);
+		allocation_amount = MaxValue<idx_t>(next_capacity, allocation_amount);
 	}
+	D_ASSERT(type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
+	BlockMetaData data;
+	data.size = 0;
+	data.capacity = allocation_amount;
+	data.handle = nullptr;
+	blocks.push_back(move(data));
+}
+
+void ColumnDataAllocator::AssignPointer(uint32_t &block_id, uint32_t &offset, data_ptr_t pointer) {
+	auto pointer_value = uintptr_t(pointer);
+	if (sizeof(uintptr_t) == sizeof(uint32_t)) {
+		block_id = uint32_t(pointer_value);
+	} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
+		block_id = uint32_t(pointer_value & 0xFFFFFFFF);
+		offset = uint32_t(pointer_value >> 32);
+	} else {
+		throw InternalException("ColumnDataCollection: Architecture not supported!?");
+	}
+}
+
+void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_t &offset,
+                                         ChunkManagementState *chunk_state) {
+	D_ASSERT(allocated_data.empty());
 	if (blocks.empty() || blocks.back().Capacity() < size) {
 		AllocateBlock();
 		if (chunk_state && !blocks.empty()) {
@@ -72,6 +85,35 @@ void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t 
 	block_id = blocks.size() - 1;
 	offset = block.size;
 	block.size += size;
+}
+
+void ColumnDataAllocator::AllocateMemory(idx_t size, uint32_t &block_id, uint32_t &offset,
+                                         ChunkManagementState *chunk_state) {
+	D_ASSERT(blocks.size() == allocated_data.size());
+	if (blocks.empty() || blocks.back().Capacity() < size) {
+		AllocateEmptyBlock(size);
+		auto &last_block = blocks.back();
+		auto allocated = alloc.allocator->Allocate(last_block.capacity);
+		allocated_data.push_back(move(allocated));
+	}
+	auto &block = blocks.back();
+	D_ASSERT(size <= block.capacity - block.size);
+	AssignPointer(block_id, offset, allocated_data.back().get() + block.size);
+	block.size += size;
+}
+
+void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset,
+                                       ChunkManagementState *chunk_state) {
+	switch (type) {
+	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
+		AllocateBuffer(size, block_id, offset, chunk_state);
+		break;
+	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
+		AllocateMemory(size, block_id, offset, chunk_state);
+		break;
+	default:
+		break;
+	}
 }
 
 void ColumnDataAllocator::Initialize(ColumnDataAllocator &other) {
