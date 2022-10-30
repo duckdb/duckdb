@@ -28,6 +28,21 @@ unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext
 SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                         DataChunk &input) const {
 	auto &gstate = (CreateTypeGlobalState &)gstate_p;
+	if (gstate.collection.Count() + input.size() > NumericLimits<uint32_t>::Maximum()) {
+		throw InvalidInputException("Enum size must be lower than " +
+		                            std::to_string(NumericLimits<uint32_t>::Maximum()));
+	}
+	UnifiedVectorFormat sdata;
+	input.data[0].ToUnifiedFormat(input.size(), sdata);
+
+	// Input vector has NULL value, we just throw an exception
+	for (idx_t i = 0; i < input.size(); i++) {
+		idx_t idx = sdata.sel->get_index(i);
+		if (!sdata.validity.RowIsValid(idx)) {
+			throw InvalidInputException("ENUM type can't accept NULL value!");
+		}
+	}
+
 	gstate.collection.Append(input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -59,18 +74,14 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 
 		auto &g_sink_state = (CreateTypeGlobalState &)*sink_state;
 		auto &collection = g_sink_state.collection;
+
+		idx_t total_row_count = collection.Count();
+
 		ColumnDataScanState scan_state;
 		collection.InitializeScan(scan_state);
 
 		DataChunk scan_chunk;
 		collection.InitializeScanChunk(scan_chunk);
-
-		idx_t total_row_count = collection.Count();
-
-		if (total_row_count > NumericLimits<uint32_t>::Maximum()) {
-			throw InvalidInputException("Enum size must be lower than " +
-			                            std::to_string(NumericLimits<uint32_t>::Maximum()));
-		}
 
 		Vector result(LogicalType::VARCHAR, total_row_count);
 		auto result_ptr = FlatVector::GetData<string_t>(result);
@@ -83,14 +94,6 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 			D_ASSERT(src_vec.GetType().id() == LogicalType::VARCHAR);
 
 			auto src_ptr = FlatVector::GetData<string_t>(src_vec);
-			auto &src_validity = FlatVector::Validity(src_vec);
-
-			// Input vector has NULL value, we just throw an exception
-			for (idx_t i = 0; i < src_row_count; i++) {
-				if (!src_validity.RowIsValid(i)) {
-					throw InvalidInputException("ENUM type can't accept NULL value!");
-				}
-			}
 
 			for (idx_t i = 0; i < src_row_count; i++) {
 				idx_t target_index = offset + i;
