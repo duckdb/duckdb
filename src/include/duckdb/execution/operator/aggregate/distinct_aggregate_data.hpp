@@ -33,6 +33,7 @@ public:
 	idx_t total_child_count;
 
 public:
+	static unique_ptr<DistinctAggregateCollectionInfo> Create(vector<unique_ptr<Expression>> &aggregates);
 	const vector<idx_t> &Indices() const;
 	bool AnyDistinct() const;
 
@@ -55,7 +56,6 @@ public:
 	const DistinctAggregateCollectionInfo &info;
 
 public:
-	static vector<idx_t> GetDistinctIndices(vector<unique_ptr<Expression>> &aggregates);
 	bool IsDistinct(idx_t index) const;
 };
 

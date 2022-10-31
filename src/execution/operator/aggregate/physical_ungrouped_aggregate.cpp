@@ -23,11 +23,10 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types
     : PhysicalOperator(PhysicalOperatorType::UNGROUPED_AGGREGATE, move(types), estimated_cardinality),
       aggregates(move(expressions)) {
 
-	vector<idx_t> distinct_indices = DistinctAggregateData::GetDistinctIndices(aggregates);
-	if (distinct_indices.empty()) {
+	distinct_collection_info = DistinctAggregateCollectionInfo::Create(aggregates);
+	if (!distinct_collection_info) {
 		return;
 	}
-	distinct_collection_info = make_unique<DistinctAggregateCollectionInfo>(aggregates, move(distinct_indices));
 	distinct_data = make_unique<DistinctAggregateData>(*distinct_collection_info);
 }
 

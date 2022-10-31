@@ -174,7 +174,7 @@ const vector<idx_t> &DistinctAggregateCollectionInfo::Indices() const {
 	return this->indices;
 }
 
-vector<idx_t> DistinctAggregateData::GetDistinctIndices(vector<unique_ptr<Expression>> &aggregates) {
+static vector<idx_t> GetDistinctIndices(vector<unique_ptr<Expression>> &aggregates) {
 	vector<idx_t> distinct_indices;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i];
@@ -184,6 +184,15 @@ vector<idx_t> DistinctAggregateData::GetDistinctIndices(vector<unique_ptr<Expres
 		}
 	}
 	return distinct_indices;
+}
+
+unique_ptr<DistinctAggregateCollectionInfo>
+DistinctAggregateCollectionInfo::Create(vector<unique_ptr<Expression>> &aggregates) {
+	vector<idx_t> indices = GetDistinctIndices(aggregates);
+	if (indices.empty()) {
+		return nullptr;
+	}
+	return make_unique<DistinctAggregateCollectionInfo>(aggregates, move(indices));
 }
 
 bool DistinctAggregateData::IsDistinct(idx_t index) const {

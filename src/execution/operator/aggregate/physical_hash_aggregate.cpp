@@ -147,12 +147,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		}
 	}
 
-	vector<idx_t> distinct_indices = DistinctAggregateData::GetDistinctIndices(aggregates);
-
-	if (!distinct_indices.empty()) {
-		distinct_collection_info =
-		    make_unique<DistinctAggregateCollectionInfo>(grouped_aggregate_data.aggregates, move(distinct_indices));
-	}
+	distinct_collection_info = DistinctAggregateCollectionInfo::Create(grouped_aggregate_data.aggregates);
 
 	for (idx_t i = 0; i < grouping_sets.size(); i++) {
 		groupings.emplace_back(grouping_sets[i], grouped_aggregate_data, distinct_collection_info);
