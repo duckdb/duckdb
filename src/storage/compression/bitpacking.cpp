@@ -24,8 +24,8 @@ struct EmptyBitpackingWriter {
 	static void WriteConstant(T constant, idx_t count, void* data_ptr, bool all_invalid) {}
 	template <class T, class T_S=typename std::make_signed<T>::type>
 	static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T* values, bool* validity, void* data_ptr) {}
-	template <class T>
-	static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {}
+	template <class T, class T_S=typename std::make_signed<T>::type>
+	static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, T delta_offset, T* original_values, idx_t count, void *data_ptr) {}
 	template <class T>
 	static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {}
 };
@@ -76,7 +76,7 @@ public:
 	// this allows -1 index of compression_buffer to be 0 for easy delta encoding
 	T compression_buffer_internal[BITPACKING_METADATA_GROUP_SIZE+1];
 	T* compression_buffer;
-	T delta_buffer[BITPACKING_METADATA_GROUP_SIZE];
+	T_S delta_buffer[BITPACKING_METADATA_GROUP_SIZE];
 	bool compression_buffer_validity[BITPACKING_METADATA_GROUP_SIZE];
 
 	idx_t compression_buffer_idx;
@@ -118,8 +118,9 @@ public:
 		D_ASSERT(compression_buffer_idx >= 2);
 
 		// TODO handle NULLS here? By patching i think?
+
 		for (int64_t i = 0; i < (int64_t)compression_buffer_idx; i++) {
-			auto success = TrySubtractOperator::Operation(compression_buffer[i], compression_buffer[i-1], delta_buffer[i]);
+			auto success = TrySubtractOperator::Operation(compression_buffer[i], compression_buffer[i-1], *(T*)&delta_buffer[i]);
 			if (!success) {
 				return;
 			}
@@ -140,9 +141,10 @@ public:
 		delta_buffer[0] = minimum_delta;
 	}
 
-	void SubtractFrameOfReference() {
+	template <class T_INNER>
+	void SubtractFrameOfReference(T_INNER* buffer, T_INNER frame_of_reference) {
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			compression_buffer[i] -= minimum;
+			buffer[i] -= frame_of_reference;
 		}
 	}
 
@@ -192,17 +194,28 @@ public:
 			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum_delta-minimum_delta);
 			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum-minimum);
 
-			if (false && delta_required_bitwidth < regular_required_bitwidth) {
-				//// - BLOCK IS [DELTA_VALUE, FOR VALUE, BP_WIDTH, BITPACKED_BUFFER]
-				throw NotImplementedException("DELTA FOR");
+			if (delta_required_bitwidth < regular_required_bitwidth) {
+				auto width = BitpackingPrimitives::MinimumBitWidth<T_U>(maximum-minimum);
+				PatchNullValues(minimum_delta);
+				SubtractFrameOfReference(delta_buffer, minimum_delta);
+
+				// TODO: shouldnt this and others be T_S instead? we should guaranteed non-signed anyway i think?
+				OP::WriteDeltaFor((T*)delta_buffer, compression_buffer_validity, width, (T)minimum_delta, (T)compression_buffer[0], (T*)compression_buffer,
+				             compression_buffer_idx, data_ptr);
+
+				total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, width);
+				total_size += sizeof(T); // FOR value
+				total_size += sizeof(T); // Delta offset value
+				total_size += AlignValue(sizeof(bitpacking_width_t)); // FOR value
+
 				return true;
 			}
 		}
 
 		if (CanDoFOR()) {
 			auto width = BitpackingPrimitives::MinimumBitWidth<T_U>(maximum-minimum);
-			SubtractFrameOfReference();
 			PatchNullValues(minimum);
+			SubtractFrameOfReference(compression_buffer, minimum);
 			OP::WriteFor(compression_buffer, compression_buffer_validity, width, minimum,
 			                          compression_buffer_idx, data_ptr);
 
@@ -360,15 +373,67 @@ public:
 			}
 		}
 
-		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {
+		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, T delta_offset, T* original_values, idx_t count, void *data_ptr) {
 			auto state = (BitpackingCompressState<T> *)data_ptr;
+			auto bits_required_for_bp = (width * BITPACKING_METADATA_GROUP_SIZE);
+			D_ASSERT(bits_required_for_bp % 8 == 0);
+			// buffer, FOR, delta offset and width
+			auto data_bytes = bits_required_for_bp / 8 + sizeof(T) + sizeof(T) + AlignValue(sizeof(bitpacking_width_t));
+			auto meta_bytes = AlignValue<T>(sizeof(bitpacking_metadata_t));
+
+			state->FlushAndCreateSegmentIfFull(data_bytes + meta_bytes);
+
+			bitpacking_metadata_t metadata{BitpackingMode::DELTA_FOR, (uint32_t)(state->data_ptr - state->handle.Ptr())};
+
+			*(T*)state->data_ptr = frame_of_reference;
+			state->data_ptr += sizeof(T);
+			*(T *)state->data_ptr = width;
+			state->data_ptr += sizeof(T);
+			*(T*)state->data_ptr = delta_offset;
+			state->data_ptr += sizeof(T);
+
+			BitpackingPrimitives::PackBuffer<T, false>(state->data_ptr, values, count, width);
+			state->data_ptr += (BITPACKING_METADATA_GROUP_SIZE * width) / 8;
+
+			state->metadata_ptr -= sizeof(bitpacking_metadata_t)-1;
+			//			    std::cout << "Writing meta to " << state->metadata_ptr - state->handle.Ptr() << "\n";
+			Store<bitpacking_metadata_t>(metadata, state->metadata_ptr);
+			state->metadata_ptr -= 1;
+
+			state->current_segment->count += count;
+
+			for (idx_t i = 0; i < count; i++) {
+				if (validity[i]) {
+					NumericStatistics::Update<T>(state->current_segment->stats, original_values[i]);
+				}
+			}
+
+			std::cout << "\nWriting FOR-DELTA to offset " << metadata.offset << " of " << count << " values at width " << (uint64_t)width << " with for " << (int64_t)frame_of_reference << " and offset " << (int64_t)delta_offset <<"\n[";
+			for (idx_t i = 0; i < count; i++) {
+				if (validity[i]) {
+					std::cout << (int64_t)original_values[i] << ",";
+				} else {
+					std::cout << "(null),";
+				}
+			}
+			std::cout << "]\n deltas: [";
+			for (idx_t i = 0; i < count; i++) {
+				if (validity[i]) {
+					std::cout << (int64_t)values[i] << ",";
+				} else {
+					std::cout << "(null),";
+				}
+			}
+			std::cout << "]\n";
+
 		}
 
+		// TODO values should be T_S?
 		static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {
 				auto state = (BitpackingCompressState<T> *)data_ptr;
 				auto bits_required_for_bp = (width * BITPACKING_METADATA_GROUP_SIZE);
 				D_ASSERT(bits_required_for_bp % 8 == 0);
-				auto data_bytes = bits_required_for_bp / 8 + sizeof(T);
+				auto data_bytes = bits_required_for_bp / 8 + sizeof(T) + AlignValue(sizeof(bitpacking_width_t));
 				auto meta_bytes = AlignValue<T>(sizeof(bitpacking_metadata_t));
 
 				state->FlushAndCreateSegmentIfFull(data_bytes + meta_bytes);
@@ -494,7 +559,7 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-template <class T>
+template <class T, class T_S = typename std::make_signed<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
 	explicit BitpackingScanState(ColumnSegment &segment): current_segment(segment) {
@@ -518,8 +583,9 @@ public:
 	bitpacking_metadata_t current_group;
 
 	bitpacking_width_t current_width;
-	T current_frame_of_reference;
+	T_S current_frame_of_reference;
 	T current_constant;
+	T current_delta_offset;
 
 	idx_t current_group_offset = 0;
 	data_ptr_t current_group_ptr;
@@ -570,6 +636,20 @@ public:
 		case BitpackingMode::CONSTANT:
 			break;
 		}
+
+		// Read third meta value
+		switch (current_group.mode) {
+		case BitpackingMode::DELTA_FOR:
+			current_delta_offset = *(T*)(current_group_ptr);
+			current_group_ptr += sizeof(T);
+			break;
+		case BitpackingMode::CONSTANT_DELTA:
+		case BitpackingMode::FOR:
+		case BitpackingMode::CONSTANT:
+			break;
+		}
+
+
 
 		switch (current_group.mode) {
 		case BitpackingMode::CONSTANT:
@@ -637,10 +717,25 @@ static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
 	}
 }
 
+
+// TODO there's probably some efficient variant for this shit
+template <class T>
+static T ApplyDelta(T *dst, T previous_value, idx_t size) {
+	D_ASSERT(size >= 1);
+
+	dst[0] += previous_value;
+
+	for (idx_t i = 1; i < size; i++) {
+		dst[i] += dst[i-1];
+	}
+
+	return dst[size-1];
+}
+
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-template <class T>
+template <class T, class T_S = typename std::make_signed<T>::type>
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
 	auto &scan_state = (BitpackingScanState<T> &)*state.scan_state;
@@ -694,11 +789,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			scan_state.current_group_offset += to_scan;
 			continue;
 		}
-		else if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
-			throw NotImplementedException("Delta encoding not yet implemented");
-		}
-
-		D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR);
+		D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR || scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
 		// TODO: should we modify this to allow scanning multiple blocks? should be a bit faster
 		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
@@ -725,12 +816,31 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			       to_scan * sizeof(T));
 		}
 
-//		std::cout << "\nReading FOR to " << scan_state.current_group.offset << " of " << to_scan << " values at width " << (uint64_t)scan_state.current_width << " with for " << scan_state.current_frame_of_reference << "\n";
-//		for (idx_t i = 0; i < to_scan; i++) {
-//				std::cout << (int64_t)current_result_ptr[i] << ",";
-//		}
-//		std::cout << "]\n";
-		ApplyFrameOfReference((T *)current_result_ptr, scan_state.current_frame_of_reference, to_scan);
+		std::cout << "\nReading FOR to " << scan_state.current_group.offset << " of " << to_scan << " values at width " << (uint64_t)scan_state.current_width << " with for " << scan_state.current_frame_of_reference << "\n";
+		for (idx_t i = 0; i < to_scan; i++) {
+				std::cout << (int64_t)current_result_ptr[i] << ",";
+		}
+		std::cout << "]\n";
+		ApplyFrameOfReference<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_frame_of_reference, to_scan);
+		std::cout << "\nApplied FOR to " << scan_state.current_group.offset << " of " << to_scan << " values at width " << (uint64_t)scan_state.current_width << " with for " << scan_state.current_frame_of_reference << "\n";
+		for (idx_t i = 0; i < to_scan; i++) {
+			std::cout << (int64_t)current_result_ptr[i] << ",";
+		}
+		std::cout << "]\n";
+
+		// TODO how to delta decode when skipping?
+		if(scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
+			// TODO: this is confusing now, as we are substracting the for again, this should however come in handy when we
+			//       add the possibility to cache the for skips.
+			ApplyDelta<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_delta_offset - scan_state.current_frame_of_reference, to_scan);
+		}
+
+		std::cout << "\nApplied DELTA to " << scan_state.current_group.offset << " of " << to_scan << " values at width " << (uint64_t)scan_state.current_width << " with for " << scan_state.current_frame_of_reference << "\n";
+		for (idx_t i = 0; i < to_scan; i++) {
+			std::cout << (int64_t)current_result_ptr[i] << ",";
+		}
+		std::cout << "]\n";
+
 		scanned += to_scan;
 		scan_state.current_group_offset += to_scan;
 	}
