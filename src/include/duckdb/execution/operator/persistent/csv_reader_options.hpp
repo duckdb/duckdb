@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "csv_buffer.hpp"
+
 namespace duckdb {
 
 struct BufferedCSVReaderOptions {
@@ -36,7 +38,7 @@ struct BufferedCSVReaderOptions {
 	//! Expected number of columns
 	idx_t num_cols = 0;
 	//! Number of samples to buffer
-	idx_t buffer_size = STANDARD_VECTOR_SIZE * 100;
+	idx_t buffer_sample_size = STANDARD_VECTOR_SIZE * 100;
 	//! Specifies the string that represents a null value
 	string null_str;
 	//! Whether file is compressed or not, and if so which compression type
@@ -75,7 +77,7 @@ struct BufferedCSVReaderOptions {
 	//! Whether or not to union files with different (but compatible) columns
 	bool union_by_name = false;
 	//! Number of bytes used per thread (Parallel Scan)
-	idx_t bytes_per_thread = 100000000;
+	idx_t buffer_size = CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions

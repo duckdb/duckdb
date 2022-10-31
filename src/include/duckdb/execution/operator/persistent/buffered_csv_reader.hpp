@@ -92,7 +92,7 @@ public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, CSVFileHandle *file_handle,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
-	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, CSVBufferRead buffer,
+	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, const CSVBufferRead &buffer,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BufferedCSVReader();
 
@@ -142,7 +142,7 @@ public:
 	std::queue<unique_ptr<DataChunk>> cached_chunks;
 
 public:
-	void SetBufferRead(CSVBufferRead buffer_read);
+	void SetBufferRead(const CSVBufferRead &buffer_read);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
 

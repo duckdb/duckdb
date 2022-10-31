@@ -80,10 +80,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.include_file_name = BooleanValue::Get(kv.second);
 		} else if (loption == "hive_partitioning") {
 			options.include_parsed_hive_partitions = BooleanValue::Get(kv.second);
-		} else if (loption == "bytes_per_thread") {
-			options.bytes_per_thread = kv.second.GetValue<uint64_t>();
-			if (options.bytes_per_thread == 0) {
-				throw InvalidInputException("Bytes Per Thread option must be higher than 0");
+		} else if (loption == "buffer_size") {
+			options.buffer_size = kv.second.GetValue<uint64_t>();
+			if (options.buffer_size == 0) {
+				throw InvalidInputException("Buffer Size option must be higher than 0");
 			}
 		} else {
 			options.SetReadOption(loption, kv.second, names);
@@ -199,7 +199,8 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 
 	bind_data.options.file_path = bind_data.files[0];
 	auto file_handle = ReadCSV::OpenCSV(bind_data.options, context);
-	return make_unique<ReadCSVGlobalState>(move(file_handle), bind_data.files, context.db->NumberOfThreads());
+	return make_unique<ReadCSVGlobalState>(move(file_handle), bind_data.files, context.db->NumberOfThreads(),
+	                                       bind_data.options.buffer_size);
 }
 
 idx_t ReadCSVGlobalState::MaxThreads() const {
@@ -213,7 +214,7 @@ idx_t ReadCSVGlobalState::MaxThreads() const {
 
 bool ReadCSVGlobalState::Finished() {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	return current_buffer && next_buffer;
+	return !current_buffer;
 }
 
 CSVBufferRead ReadCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data) {
@@ -224,7 +225,7 @@ CSVBufferRead ReadCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind
 		return buffer_read;
 	}
 	next_byte += bytes_per_local_state;
-	if (next_byte > current_buffer->GetBufferSize()) {
+	if (next_byte >= current_buffer->GetBufferSize()) {
 		// We replace the current buffer with the next buffer
 		next_byte = 0;
 		current_buffer = next_buffer;
@@ -238,7 +239,7 @@ CSVBufferRead ReadCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind
 		if (file_index < bind_data.files.size()) {
 			bind_data.options.file_path = bind_data.files[file_index++];
 			file_handle = ReadCSV::OpenCSV(bind_data.options, context);
-			next_buffer = make_shared<CSVBuffer>(32000000, *file_handle);
+			next_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
 		}
 	}
 	return buffer_read;
@@ -272,16 +273,18 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 
 	do {
-		if (output.size() == STANDARD_VECTOR_SIZE || csv_global_state.Finished()) {
+		if (output.size() != 0 || csv_global_state.Finished()) {
+			output.Print();
 			break;
 		}
 		if (csv_local_state.csv_reader->position_buffer >= csv_local_state.csv_reader->end_buffer) {
 			auto next_chunk = csv_global_state.Next(context, bind_data);
 			if (!next_chunk.buffer) {
 				// We are done
+				output.Print();
 				break;
 			}
-			csv_local_state.csv_reader->SetBufferRead(move(next_chunk));
+			csv_local_state.csv_reader->SetBufferRead(next_chunk);
 		}
 		csv_local_state.csv_reader->ParseCSV(output);
 
@@ -346,7 +349,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["bytes_per_thread"] = LogicalType::UBIGINT;
+	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -394,7 +397,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(header);
 	writer.WriteField<bool>(ignore_errors);
 	writer.WriteField<idx_t>(num_cols);
-	writer.WriteField<idx_t>(buffer_size);
+	writer.WriteField<idx_t>(buffer_sample_size);
 	writer.WriteString(null_str);
 	writer.WriteField<FileCompressionType>(compression);
 	// read options
@@ -426,7 +429,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	header = reader.ReadRequired<bool>();
 	ignore_errors = reader.ReadRequired<bool>();
 	num_cols = reader.ReadRequired<idx_t>();
-	buffer_size = reader.ReadRequired<idx_t>();
+	buffer_sample_size = reader.ReadRequired<idx_t>();
 	null_str = reader.ReadRequired<string>();
 	compression = reader.ReadRequired<FileCompressionType>();
 	// read options

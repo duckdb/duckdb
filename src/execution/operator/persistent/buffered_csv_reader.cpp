@@ -387,13 +387,11 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOp
 	//! fixme: have to set end bufefr and buffer size
 }
 
-BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p, CSVBufferRead buffer_p,
-                                     const vector<LogicalType> &requested_types)
-    : allocator(Allocator::Get(context)), options(move(options_p)), position_buffer(buffer_p.buffer_start),
-      start_buffer(buffer_p.buffer_start), end_buffer(buffer_p.buffer_end),
-      buffer_size(buffer_p.buffer->GetBufferSize()), buffer(buffer_p.buffer->buffer.get()),
-      buffer_read(move(buffer_p)) {
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
+                                     const CSVBufferRead &buffer_p, const vector<LogicalType> &requested_types)
+    : allocator(Allocator::Get(context)), options(move(options_p)) {
 	Initialize(requested_types);
+	SetBufferRead(buffer_p);
 }
 
 BufferedCSVReader::~BufferedCSVReader() {
@@ -1148,7 +1146,7 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 			}
 
 			if (!jumping_samples) {
-				if ((sample_chunk_idx)*options.sample_chunk_size <= options.buffer_size) {
+				if ((sample_chunk_idx)*options.sample_chunk_size <= options.buffer_sample_size) {
 					// cache parse chunk
 					// create a new chunk and fill it with the remainder
 					auto chunk = make_unique<DataChunk>();
@@ -1475,32 +1473,30 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 // }
 
 bool BufferedCSVReader::SetPosition() {
-	if (start_buffer == position_buffer && start_buffer == buffer_read.buffer_start) {
-		// First time scanning this buffer, we have to jump to the next line
-		if (buffer_read.buffer->FirstCSVRead()) {
-			// This is the beginning of the CSV File.
-			return true;
-		}
-		bool not_read_anything = true;
-		// We have to move position up to next new line
-		for (; position_buffer < end_buffer; position_buffer++) {
-			if (StringUtil::CharacterIsNewline(buffer[position_buffer])) {
-				position_buffer++;
-				break;
-			}
-		}
-		start_buffer = position_buffer;
-		not_read_anything = position_buffer > end_buffer;
-		return !not_read_anything;
+	if (start_buffer == position_buffer && start_buffer == buffer_read.buffer->GetStart()) {
+		// Buffer always start in a new line
+		return true;
 	}
-	return true;
+	// We have to jump to the next line within the buffer
+	bool not_read_anything = true;
+	// We have to move position up to next new line
+	for (; position_buffer < end_buffer; position_buffer++) {
+		if (StringUtil::CharacterIsNewline(buffer[position_buffer])) {
+			position_buffer++;
+			break;
+		}
+	}
+	start_buffer = position_buffer;
+	not_read_anything = position_buffer > end_buffer;
+	return !not_read_anything;
 }
-void BufferedCSVReader::SetBufferRead(CSVBufferRead buffer_read_p) {
+void BufferedCSVReader::SetBufferRead(const CSVBufferRead &buffer_read_p) {
+	position_buffer = buffer_read_p.buffer_start;
+	start_buffer = buffer_read_p.buffer_start;
+	end_buffer = buffer_read_p.buffer_end;
+	buffer_size = buffer_read_p.buffer->GetBufferSize();
+	buffer = buffer_read_p.buffer->buffer.get();
 	buffer_read = buffer_read_p;
-	start_buffer = buffer_read.buffer_start;
-	position_buffer = buffer_read.buffer_start;
-	end_buffer = buffer_read.buffer_end;
-	buffer = buffer_read.buffer->buffer.get();
 }
 
 bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message) {
@@ -1568,7 +1564,7 @@ add_value:
 	offset = 0;
 	has_quotes = false;
 	start_buffer = ++position_buffer;
-	if (position_buffer >= end_buffer) {
+	if (position_buffer >= buffer_size) {
 		// file ends right after delimiter, go to final state
 		goto final_state;
 	}
@@ -1692,11 +1688,11 @@ final_state:
 		return true;
 	}
 
-	if (column > 0 || position_buffer > start_buffer) {
-		// remaining values to be added to the chunk
-		AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions, has_quotes);
-		finished_chunk = AddRow(insert_chunk, column);
-	}
+	//	if (column > 0 || position_buffer > start_buffer) {
+	//		// remaining values to be added to the chunk
+	//		AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions,
+	//has_quotes); 		finished_chunk = AddRow(insert_chunk, column);
+	//	}
 
 	// final stage, only reached after parsing the file is finished
 	// flush the parsed chunk and finalize parsing

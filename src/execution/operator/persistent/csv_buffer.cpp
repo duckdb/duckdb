@@ -21,13 +21,15 @@ unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle) {
 		return nullptr;
 	}
 	// Figure out the remaining part of this buffer
-	idx_t remaining_start_pos = buffer_size;
+	idx_t remaining_start_pos = buffer_size - 1;
 	for (; remaining_start_pos >= 0; remaining_start_pos--) {
 		if (StringUtil::CharacterIsNewline(buffer[remaining_start_pos])) {
-			// found a newline, add the row
 			break;
 		}
 	}
+	// Next point right after new line
+	remaining_start_pos++;
+
 	idx_t remaining = buffer_size - remaining_start_pos;
 	idx_t next_buffer_size = buffer_size + remaining;
 
@@ -37,7 +39,7 @@ unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle) {
 		// remaining from this buffer: copy it here
 		memcpy(next_buffer.get(), this->buffer.get() + remaining_start_pos, remaining);
 	}
-	idx_t next_buffer_actual_size = file_handle.Read(buffer.get() + remaining, buffer_size);
+	idx_t next_buffer_actual_size = file_handle.Read(next_buffer.get() + remaining, buffer_size) + remaining;
 
 	return make_unique<CSVBuffer>(move(next_buffer), next_buffer_size, next_buffer_actual_size);
 }

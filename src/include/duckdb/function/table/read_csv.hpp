@@ -76,12 +76,13 @@ struct ReadCSVTableFunction {
 
 struct ReadCSVGlobalState : public GlobalTableFunctionState {
 public:
-	ReadCSVGlobalState(unique_ptr<CSVFileHandle> file_handle_p, vector<string> &files_path_p, idx_t system_threads_p)
-	    : file_handle(move(file_handle_p)), system_threads(system_threads_p) {
+	ReadCSVGlobalState(unique_ptr<CSVFileHandle> file_handle_p, vector<string> &files_path_p, idx_t system_threads_p,
+	                   idx_t buffer_size_p)
+	    : file_handle(move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p) {
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
-		bytes_per_local_state = 32000000 / MaxThreads();
-		current_buffer = make_shared<CSVBuffer>(32000000, *file_handle);
+		bytes_per_local_state = buffer_size / MaxThreads();
+		current_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
 		next_buffer = current_buffer->Next(*file_handle);
 	}
 
@@ -118,11 +119,13 @@ private:
 	idx_t first_file_size;
 	//! Basically max number of threads in DuckDB
 	idx_t system_threads;
+	//! Size of the buffers
+	idx_t buffer_size;
 };
 
 struct ReadCSVLocalState : public LocalTableFunctionState {
 public:
-	ReadCSVLocalState(unique_ptr<BufferedCSVReader> csv_reader_p) : csv_reader(move(csv_reader_p)) {
+	explicit ReadCSVLocalState(unique_ptr<BufferedCSVReader> csv_reader_p) : csv_reader(move(csv_reader_p)) {
 	}
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
