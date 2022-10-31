@@ -54,19 +54,13 @@ HashAggregateGroupingLocalState::HashAggregateGroupingLocalState(const PhysicalH
 
 	for (auto &idx : distinct_indices) {
 		idx_t table_idx = table_map[idx];
-		// FIXME: make this data accessible in the DistinctAggregateCollectionInfo
-		if (data.distinct_data->radix_tables[table_idx] == nullptr) {
+		auto &radix_table = distinct_data.radix_tables[table_idx];
+		if (radix_table == nullptr) {
 			// This aggregate has identical input as another aggregate, so no table is created for it
 			continue;
 		}
 		// Initialize the states of the radix tables used for the distinct aggregates
-		auto &radix_table = *data.distinct_data->radix_tables[table_idx];
-		distinct_states[table_idx] = radix_table.GetLocalSinkState(context);
-	}
-
-	distinct_states.reserve(distinct_data.radix_tables.size());
-	for (idx_t i = 0; i < distinct_data.radix_tables.size(); i++) {
-		distinct_states.push_back(distinct_data.radix_tables[i]->GetLocalSinkState(context));
+		distinct_states[table_idx] = radix_table->GetLocalSinkState(context);
 	}
 }
 
@@ -124,7 +118,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...
-	// Because everything that lives in this class should be read only at execution time
+	// Because everything that lives in this class should be read-only at execution time
 	idx_t aggregate_input_idx = 0;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i];
@@ -148,7 +142,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		if (aggr.filter) {
 			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
 			if (!filter_indexes.count(aggr.filter.get())) {
-				// Replace the bound reference expression's index with the corresponding index into the payload chunk
+				// Replace the bound reference expression's index with the corresponding index of the payload chunk
 				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
 				bound_ref_expr.index = aggregate_input_idx;
 			}
@@ -210,7 +204,6 @@ public:
 		for (auto &grouping : op.groupings) {
 			grouping_states.emplace_back(op, grouping, context);
 		}
-		// FIXME: missing filter_set??
 		// The filter set is only needed here for the distinct aggregates
 		// the filtering of data for the regular aggregates is done within the hashtable
 		vector<AggregateObject> aggregate_objects;
@@ -285,7 +278,6 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 		auto &radix_local_sink = *grouping_lstate.distinct_states[table_idx];
 
 		if (aggregate.filter) {
-			// FIXME: might be better to just use the filtered_data.filtered_payload directly?
 			DataChunk filter_chunk;
 			auto &filtered_data = sink.filter_set.GetFilterData(idx);
 			filter_chunk.InitializeEmpty(filtered_data.filtered_payload.GetTypes());
@@ -493,27 +485,11 @@ public:
 		}
 
 		auto &groups = op.grouped_aggregate_data.groups;
-		// Retrieve the stored data from the hashtable
 		const idx_t group_by_size = groups.size();
 
 		DataChunk aggregate_input_chunk;
 		if (!gstate.payload_types.empty()) {
 			aggregate_input_chunk.Initialize(context, gstate.payload_types);
-		}
-
-		vector<unique_ptr<GlobalSourceState>> global_sources(aggregates.size());
-		vector<unique_ptr<LocalSourceState>> local_sources(aggregates.size());
-
-		for (auto &idx : info.indices) {
-			D_ASSERT(data.info.table_map.count(idx));
-			auto table_idx = data.info.table_map.at(idx);
-			auto &radix_table_p = data.radix_tables[table_idx];
-
-			// Create global and local state for the hashtable
-			if (global_sources[table_idx] == nullptr) {
-				global_sources[table_idx] = radix_table_p->GetGlobalSourceState(context);
-				local_sources[table_idx] = radix_table_p->GetLocalSourceState(temp_exec_context);
-			}
 		}
 
 		idx_t payload_idx;
@@ -535,16 +511,17 @@ public:
 			auto &radix_table_p = data.radix_tables[table_idx];
 			auto &output_chunk = *state.distinct_output_chunks[table_idx];
 
+			auto global_source = radix_table_p->GetGlobalSourceState(context);
+			auto local_source = radix_table_p->GetLocalSourceState(temp_exec_context);
+
 			// Fetch all the data from the aggregate ht, and Sink it into the main ht
 			while (true) {
-				// ????
 				output_chunk.Reset();
 				group_chunk.Reset();
 				aggregate_input_chunk.Reset();
-				radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx],
-				                       *global_sources[table_idx], *local_sources[table_idx]);
+				radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx], *global_source,
+				                       *local_source);
 
-				// FIXME: if this is the case, is this true for all aggregates??
 				if (output_chunk.size() == 0) {
 					break;
 				}
@@ -570,72 +547,6 @@ public:
 				                              group_chunk, aggregate_input_chunk, {i});
 			}
 		}
-
-		// idx_t chunk_count = 0;
-		// while (true) {
-		//	idx_t distinct_agg_count = 0;
-
-		//	idx_t payload_idx = 0;
-		//	idx_t next_payload_idx = 0;
-
-		//	// Fill the 'aggregate_input_chunk' with the data from all the distinct aggregates, then sink
-		//	for (idx_t i = 0; i < op.grouped_aggregate_data.aggregates.size(); i++) {
-		//		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
-
-		//		// Forward the payload idx
-		//		payload_idx = next_payload_idx;
-		//		next_payload_idx = payload_idx + aggregate.children.size();
-
-		//		// If aggregate is not distinct, skip it
-		//		if (!data.IsDistinct(i)) {
-		//			continue;
-		//		}
-		//		D_ASSERT(data.info.table_map.count(i));
-		//		auto table_idx = data.info.table_map.at(i);
-		//		auto &radix_table_p = data.radix_tables[table_idx];
-		//		auto &output_chunk = *state.distinct_output_chunks[table_idx];
-
-		//		// ????
-		//		output_chunk.Reset();
-		//		radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx],
-		//		                       *global_sources[table_idx], *local_sources[table_idx]);
-
-		//		// FIXME: if this is the case, is this true for all aggregates??
-		//		if (output_chunk.size() == 0) {
-		//			goto finished_scan;
-		//		}
-
-		//		auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
-
-		//		// Skip the group_by vectors (located at the start of the 'groups' vector)
-		//		// Map from the output_chunk to the aggregate_input_chunk, using the child expressions
-
-		//		if (!distinct_agg_count) {
-		//			// Only need to fetch the group for one of the aggregates, as they are identical
-		//			for (idx_t group_idx = 0; group_idx < group_by_size; group_idx++) {
-		//				auto &group = grouped_aggregate_data.groups[group_idx];
-		//				auto &bound_ref_expr = (BoundReferenceExpression &)*group;
-		//				group_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
-		//			}
-		//			group_chunk.SetCardinality(output_chunk);
-		//		}
-
-		//		for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.groups.size() - group_by_size;
-		//		     child_idx++) {
-		//			aggregate_input_chunk.data[payload_idx + child_idx].Reference(
-		//			    output_chunk.data[group_by_size + child_idx]);
-		//		}
-		//		aggregate_input_chunk.SetCardinality(output_chunk);
-		//		distinct_agg_count++;
-		//	}
-		//	// Sink it into the main ht
-		//	// AHA I need to populate the aggregate_input_chunk with all data for the given grouping, THEN sink
-		//	grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
-		//	                              group_chunk, aggregate_input_chunk, op.distinct_filter);
-		//	chunk_count++;
-		//}
-		// finished_scan:
-		//  FIXME: this is needed?
 		grouping_data.table_data.Combine(temp_exec_context, *grouping_state.table_state, *temp_local_state);
 	}
 
@@ -791,7 +702,6 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeInternal(Pipeline &pipeline, Eve
 
 SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                  GlobalSinkState &gstate_p) const {
-	// return Finalize(pipeline, event, context, gstate_p, false); // DELETE ME
 	return FinalizeInternal(pipeline, event, context, gstate_p, true);
 }
 
