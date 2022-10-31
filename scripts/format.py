@@ -99,7 +99,7 @@ def get_changed_files(revision):
             continue
         if os.path.basename(f) in ignored_files:
             continue
-        if f.split('/')[0] in ignored_directories:
+        if f.split(os.sep)[0] in ignored_directories:
             continue
         changed_files.append(f)
     return changed_files
