@@ -1,0 +1,44 @@
+# name: test/sql/aggregate/distinct/grouped/distinct_grouping_tpch.test
+# group: [grouped]
+
+require tpch
+
+statement ok
+pragma enable_verification
+
+statement ok
+pragma verify_parallelism
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+select
+	grouping(l_returnflag, l_linestatus),
+	l_returnflag,
+	l_linestatus,
+	count(distinct l_orderkey),
+	count(distinct l_comment)
+from lineitem
+group by cube(l_returnflag, l_linestatus)
+order by all;
+
+statement ok
+SELECT
+	COUNT(DISTINCT l_orderkey),
+	COUNT(DISTINCT l_partkey),
+	COUNT(*),
+	MIN(l_orderkey),
+	MAX(l_orderkey),
+	MIN(l_partkey),
+	MAX(l_partkey),
+	SUM(distinct_comment),
+	AVG(distinct_comment)
+FROM (
+	select
+		l_orderkey,
+		l_partkey,
+		count(distinct l_comment) AS distinct_comment
+	from lineitem
+	group by cube(l_orderkey, l_partkey)
+);
