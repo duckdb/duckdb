@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -41,55 +42,76 @@ Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool i
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
 	root_statement = &statement;
-	switch (statement.type) {
-	case StatementType::SELECT_STATEMENT:
-		return Bind((SelectStatement &)statement);
-	case StatementType::INSERT_STATEMENT:
-		return Bind((InsertStatement &)statement);
-	case StatementType::COPY_STATEMENT:
-		return Bind((CopyStatement &)statement);
-	case StatementType::DELETE_STATEMENT:
-		return Bind((DeleteStatement &)statement);
-	case StatementType::UPDATE_STATEMENT:
-		return Bind((UpdateStatement &)statement);
-	case StatementType::RELATION_STATEMENT:
-		return Bind((RelationStatement &)statement);
-	case StatementType::CREATE_STATEMENT:
-		return Bind((CreateStatement &)statement);
-	case StatementType::DROP_STATEMENT:
-		return Bind((DropStatement &)statement);
-	case StatementType::ALTER_STATEMENT:
-		return Bind((AlterStatement &)statement);
-	case StatementType::TRANSACTION_STATEMENT:
-		return Bind((TransactionStatement &)statement);
-	case StatementType::PRAGMA_STATEMENT:
-		return Bind((PragmaStatement &)statement);
-	case StatementType::EXPLAIN_STATEMENT:
-		return Bind((ExplainStatement &)statement);
-	case StatementType::VACUUM_STATEMENT:
-		return Bind((VacuumStatement &)statement);
-	case StatementType::SHOW_STATEMENT:
-		return Bind((ShowStatement &)statement);
-	case StatementType::CALL_STATEMENT:
-		return Bind((CallStatement &)statement);
-	case StatementType::EXPORT_STATEMENT:
-		return Bind((ExportStatement &)statement);
-	case StatementType::SET_STATEMENT:
-		return Bind((SetStatement &)statement);
-	case StatementType::LOAD_STATEMENT:
-		return Bind((LoadStatement &)statement);
-	case StatementType::EXTENSION_STATEMENT:
-		return Bind((ExtensionStatement &)statement);
-	case StatementType::PREPARE_STATEMENT:
-		return Bind((PrepareStatement &)statement);
-	case StatementType::EXECUTE_STATEMENT:
-		return Bind((ExecuteStatement &)statement);
-	case StatementType::LOGICAL_PLAN_STATEMENT:
-		return Bind((LogicalPlanStatement &)statement);
-	default: // LCOV_EXCL_START
-		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
-		                              StatementTypeToString(statement.type));
-	} // LCOV_EXCL_STOP
+	try {
+		switch (statement.type) {
+		case StatementType::SELECT_STATEMENT:
+			return Bind((SelectStatement &)statement);
+		case StatementType::INSERT_STATEMENT:
+			return Bind((InsertStatement &)statement);
+		case StatementType::COPY_STATEMENT:
+			return Bind((CopyStatement &)statement);
+		case StatementType::DELETE_STATEMENT:
+			return Bind((DeleteStatement &)statement);
+		case StatementType::UPDATE_STATEMENT:
+			return Bind((UpdateStatement &)statement);
+		case StatementType::RELATION_STATEMENT:
+			return Bind((RelationStatement &)statement);
+		case StatementType::CREATE_STATEMENT:
+			return Bind((CreateStatement &)statement);
+		case StatementType::DROP_STATEMENT:
+			return Bind((DropStatement &)statement);
+		case StatementType::ALTER_STATEMENT:
+			return Bind((AlterStatement &)statement);
+		case StatementType::TRANSACTION_STATEMENT:
+			return Bind((TransactionStatement &)statement);
+		case StatementType::PRAGMA_STATEMENT:
+			return Bind((PragmaStatement &)statement);
+		case StatementType::EXPLAIN_STATEMENT:
+			return Bind((ExplainStatement &)statement);
+		case StatementType::VACUUM_STATEMENT:
+			return Bind((VacuumStatement &)statement);
+		case StatementType::SHOW_STATEMENT:
+			return Bind((ShowStatement &)statement);
+		case StatementType::CALL_STATEMENT:
+			return Bind((CallStatement &)statement);
+		case StatementType::EXPORT_STATEMENT:
+			return Bind((ExportStatement &)statement);
+		case StatementType::SET_STATEMENT:
+			return Bind((SetStatement &)statement);
+		case StatementType::LOAD_STATEMENT:
+			return Bind((LoadStatement &)statement);
+		case StatementType::EXTENSION_STATEMENT:
+			return Bind((ExtensionStatement &)statement);
+		case StatementType::PREPARE_STATEMENT:
+			return Bind((PrepareStatement &)statement);
+		case StatementType::EXECUTE_STATEMENT:
+			return Bind((ExecuteStatement &)statement);
+		case StatementType::LOGICAL_PLAN_STATEMENT:
+			return Bind((LogicalPlanStatement &)statement);
+		default: // LCOV_EXCL_START
+			auto &config = DBConfig::GetConfig(context);
+
+			for (auto &extension_op : config.operator_extensions) {
+				auto bound_statement = extension_op.Bind(context, *this, extension_op.operator_info.get(), statement);
+				if (bound_statement.plan != nullptr)
+					return bound_statement;
+			}
+
+			throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
+			                              StatementTypeToString(statement.type));
+		} // LCOV_EXCL_STOP
+	} catch (const StandardException &e) {
+		auto &config = DBConfig::GetConfig(context);
+
+		for (auto &extension_op : config.operator_extensions) {
+			auto bound_statement = extension_op.Bind(context, *this, extension_op.operator_info.get(), statement);
+			if (bound_statement.plan != nullptr)
+				return bound_statement;
+		}
+
+		// rethrow since no extension could bind the query either
+		throw e;
+	}
 }
 
 void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
