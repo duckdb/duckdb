@@ -21,8 +21,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Scanning CSV files is disabled through configuration");
 	}
-	// to fetch read types from the catalog
-	auto &catalog = Catalog::GetCatalog(context);
 
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
