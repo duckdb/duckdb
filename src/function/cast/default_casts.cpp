@@ -119,7 +119,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return IntervalCastSwitch(input, source, target);
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
-		return StringCastSwitch(input, source, target); // struct casting journey starts here!!!
+		return StringCastSwitch(input, source, target);
 	case LogicalTypeId::BLOB:
 		return BlobCastSwitch(input, source, target);
 	case LogicalTypeId::SQLNULL:
