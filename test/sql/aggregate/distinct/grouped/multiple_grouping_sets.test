@@ -29,7 +29,7 @@ insert into students
 		('Math', NULL, 15);
 
 query IIII
-select course, type, count(*), sum(distinct value) from students group by course, type order by 1, 2, 3;
+select course, type, count(*), sum(distinct value) from students group by course, type order by all;
 ----
 CS	NULL	2	-5
 CS	Bachelor	2	30
@@ -38,7 +38,7 @@ Math	NULL	1	15
 Math	Masters	1	10
 
 query IIII
-select course, type, count(*), sum(distinct value) from students group by (course, type) order by 1, 2, 3;
+select course, type, count(*), sum(distinct value) from students group by (course, type) order by all;
 ----
 CS	NULL	2	-5
 CS	Bachelor	2	30
@@ -47,7 +47,7 @@ Math	NULL	1	15
 Math	Masters	1	10
 
 query III
-select course, count(*), sum(distinct value) from students group by (), course, () ORDER BY 1;
+select course, count(*), sum(distinct value) from students group by (), course, () order by all;
 ----
 CS	5	-5
 Math	2	25
@@ -57,7 +57,7 @@ query IIII
 select count(*), course, type, sum(distinct value)
 	from students
 	group by grouping sets ((course), (type))
-	order by 1, 2, 3;
+	order by all;
 ----
 1	NULL	Masters	10
 1	NULL	PhD	-20
@@ -76,7 +76,7 @@ query IIIII
 select sum(distinct value), count(*), course, avg(distinct value), type
 	from students
 	group by grouping sets (course), grouping sets(type)
-	order by 1, 2, 3;
+	order by all;
 ----
 -20	1	CS	-20.0	PhD
 -5	2	CS	-2.5	NULL
@@ -89,7 +89,7 @@ query IIIII
 select sum(distinct value), count(*), count(distinct value), course, type
 	from students
 	group by course, grouping sets(type)
-	order by 1, 2, 3;
+	order by all;
 ----
 -20	1	1	CS	PhD
 -5	2	2	CS	NULL
@@ -102,13 +102,13 @@ query IIIII
 select count(*), ARG_MIN(distinct value%5, value), course, sum(distinct value), type
 	from students
 	group by course, grouping sets(type, ())
-	order by 1, 2, 3;
+	order by all;
 ----
 1	0	CS	-20	PhD
 1	0	Math	10	Masters
 1	0	Math	15	NULL
-2	0	CS	30	Bachelor
 2	0	CS	-5	NULL
+2	0	CS	30	Bachelor
 2	0	Math	25	NULL
 5	0	CS	-5	NULL
 
@@ -116,7 +116,7 @@ query IIII
 select sum(distinct value), count(*), course, type
 	from students
 	group by grouping sets((course, type), (course))
-	order by 1, 2, 3;
+	order by all;
 ----
 -20	1	CS	PhD
 -5	2	CS	NULL
@@ -133,12 +133,12 @@ query IIIIII
 select count(*), count(distinct value), count(value), course, sum(distinct value), type
 	from students
 	group by grouping sets (grouping sets(course), grouping sets(type))
-	order by 1, 2, 3;
+	order by all;
 ----
 1	1	1	NULL	-20	PhD
 1	1	1	NULL	10	Masters
-2	2	2	Math	25	NULL
 2	2	2	NULL	30	Bachelor
+2	2	2	Math	25	NULL
 3	3	3	NULL	10	NULL
 5	4	5	CS	-5	NULL
 
@@ -146,7 +146,7 @@ query IIIIII
 select count(*), avg(distinct value) FILTER (where value < 5), avg(distinct value), course, avg(value), type
         from students
         group by grouping sets (grouping sets(course, ()), grouping sets(type))
-        order by 1, 2, 3;
+        order by all;
 ----
 1	NULL	10.0	NULL	10.0	Masters
 1	-20.0	-20.0	NULL	-20.0	PhD
@@ -160,7 +160,7 @@ query IIII
 select count(*), sum(distinct value), course, type
         from students
         group by grouping sets ((course), (), (type))
-        order by 1, 2, 3;
+        order by all;
 ----
 1	-20	NULL	PhD
 1	10	NULL	Masters
@@ -174,23 +174,23 @@ query IIIII
 select count(*), count(distinct value), sum(distinct value), course, type
         from students
         group by grouping sets(course, ()), grouping sets(type)
-        order by 1, 2, 3;
+        order by all;
 ----
-1	1	-20	CS	PhD
 1	1	-20	NULL	PhD
-1	1	10	Math	Masters
+1	1	-20	CS	PhD
 1	1	10	NULL	Masters
+1	1	10	Math	Masters
 1	1	15	Math	NULL
 2	2	-5	CS	NULL
-2	2	30	CS	Bachelor
 2	2	30	NULL	Bachelor
+2	2	30	CS	Bachelor
 3	3	10	NULL	NULL
 
 query IIIII
 select sum(distinct value), count(*), course, type, sum(distinct value)
         from students
         group by grouping sets(course, ()), type
-        order by 1, 2, 3;
+        order by all;
 ----
 -20	1	NULL	PhD	-20
 -20	1	CS	PhD	-20
@@ -206,10 +206,10 @@ query IIIII
 select sum(distinct value) FILTER (where value % 10 != 0), count(*), course, type, sum(distinct value)
         from students
         group by grouping sets((course, type), (type))
-        order by 1, 2, 3;
+        order by all;
 ----
-NULL	1	NULL	PhD	-20
 NULL	1	NULL	Masters	10
+NULL	1	NULL	PhD	-20
 NULL	1	CS	PhD	-20
 NULL	1	Math	Masters	10
 NULL	2	NULL	Bachelor	30
@@ -223,7 +223,7 @@ query IIII
 select count(*), sum(distinct value), course, type
         from students
         group by grouping sets((3, 4), (4))
-        order by 1, 2, 3;
+        order by all;
 ----
 1	-20	NULL	PhD
 1	-20	CS	PhD
@@ -239,7 +239,7 @@ query IIII
 select count(*), course AS crs, sum(distinct value), type AS tp
         from students
         group by grouping sets((crs, tp), (tp))
-        order by 1, 2, 3;
+        order by all;
 ----
 1	NULL	-20	PhD
 1	NULL	10	Masters
@@ -255,7 +255,7 @@ query IIII
 select sum(distinct value), count(*), course, type
         from students
         group by grouping sets (grouping sets(course, ()), grouping sets(type, ()))
-        order by 1, 2, 3;
+        order by all;
 ----
 -20	1	NULL	PhD
 -5	5	CS	NULL
