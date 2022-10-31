@@ -2,8 +2,6 @@
 # description: Issue #3350: SEGV in duckdb::EncodeStringDataPrefix
 # group: [fuzz]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 

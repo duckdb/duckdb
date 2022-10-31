@@ -71,6 +71,7 @@ struct ParquetOptions {
 
 	bool binary_as_string = false;
 	bool filename = false;
+	bool file_row_number = false;
 	bool hive_partitioning = false;
 
 public:

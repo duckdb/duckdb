@@ -14,16 +14,16 @@ namespace duckdb {
 class Allocator;
 struct FileHandle;
 
-enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2 };
+enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2, TINY_BUFFER = 3 };
 
 //! The FileBuffer represents a buffer that can be read or written to a Direct IO FileHandle.
 class FileBuffer {
 public:
-	//! Allocates a buffer of the specified size that is sector-aligned. bufsiz must be a multiple of
-	//! FileSystemConstants::FILE_BUFFER_BLOCK_SIZE. The content in this buffer can be written to FileHandles that have
-	//! been opened with DIRECT_IO on all operating systems, however, the entire buffer must be written to the file.
-	//! Note that the returned size is 8 bytes less than the allocation size to account for the checksum.
-	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsiz);
+	//! Allocates a buffer of the specified size, with room for additional header bytes
+	//! (typically 8 bytes). On return, this->AllocSize() >= this->size >= user_size.
+	//! Our allocation size will always be page-aligned, which is necessary to support
+	//! DIRECT_IO
+	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size);
 	FileBuffer(FileBuffer &source, FileBufferType type);
 
 	virtual ~FileBuffer();
@@ -41,18 +41,20 @@ public:
 	void Read(FileHandle &handle, uint64_t location);
 	//! Read into the FileBuffer from the specified location. Automatically verifies the checksum, and throws an
 	//! exception if the checksum does not match correctly.
-	void ReadAndChecksum(FileHandle &handle, uint64_t location);
+	virtual void ReadAndChecksum(FileHandle &handle, uint64_t location);
 	//! Write the contents of the FileBuffer to the specified location.
 	void Write(FileHandle &handle, uint64_t location);
 	//! Write the contents of the FileBuffer to the specified location. Automatically adds a checksum of the contents of
 	//! the filebuffer in front of the written data.
-	void ChecksumAndWrite(FileHandle &handle, uint64_t location);
+	virtual void ChecksumAndWrite(FileHandle &handle, uint64_t location);
 
 	void Clear();
 
-	void Resize(uint64_t bufsiz);
+	// Same rules as the constructor. We will add room for a header, in additio to
+	// the requested user bytes. We will then sector-align the result.
+	virtual void Resize(uint64_t user_size);
 
-	uint64_t AllocSize() {
+	uint64_t AllocSize() const {
 		return internal_size;
 	}
 
@@ -61,6 +63,8 @@ protected:
 	data_ptr_t internal_buffer;
 	//! The aligned size as passed to the constructor. This is the size that is read or written to disk.
 	uint64_t internal_size;
+
+	void ReallocBuffer(size_t malloc_size);
 
 private:
 	//! The buffer that was actually malloc'd, i.e. the pointer that must be freed when the FileBuffer is destroyed
@@ -71,10 +75,7 @@ protected:
 	uint64_t GetMallocedSize() {
 		return malloced_size;
 	}
-	//! Sets malloced_size given the requested buffer size
-	void SetMallocedSize(uint64_t &bufsiz);
-	//! Constructs the Filebuffer object
-	void Construct(uint64_t bufsiz);
+	void Init();
 };
 
 } // namespace duckdb

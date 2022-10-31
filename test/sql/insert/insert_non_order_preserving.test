@@ -2,10 +2,6 @@
 # description: Test parallel non order-preserving insert
 # group: [insert]
 
-# FIXME: this is required because of a bug in FSST, remove when that bug is fixed
-statement ok
-PRAGMA force_compression='uncompressed'
-
 statement ok
 PRAGMA preserve_insertion_order=false
 

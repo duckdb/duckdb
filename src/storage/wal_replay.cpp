@@ -20,54 +20,6 @@
 
 namespace duckdb {
 
-class ReplayState {
-public:
-	ReplayState(DatabaseInstance &db, ClientContext &context, Deserializer &source)
-	    : db(db), context(context), source(source), current_table(nullptr), deserialize_only(false),
-	      checkpoint_id(INVALID_BLOCK) {
-	}
-
-	DatabaseInstance &db;
-	ClientContext &context;
-	Deserializer &source;
-	TableCatalogEntry *current_table;
-	bool deserialize_only;
-	block_id_t checkpoint_id;
-
-public:
-	void ReplayEntry(WALType entry_type);
-
-private:
-	void ReplayCreateTable();
-	void ReplayDropTable();
-	void ReplayAlter();
-
-	void ReplayCreateView();
-	void ReplayDropView();
-
-	void ReplayCreateSchema();
-	void ReplayDropSchema();
-
-	void ReplayCreateType();
-	void ReplayDropType();
-
-	void ReplayCreateSequence();
-	void ReplayDropSequence();
-	void ReplaySequenceValue();
-
-	void ReplayCreateMacro();
-	void ReplayDropMacro();
-
-	void ReplayCreateTableMacro();
-	void ReplayDropTableMacro();
-
-	void ReplayUseTable();
-	void ReplayInsert();
-	void ReplayDelete();
-	void ReplayUpdate();
-	void ReplayCheckpoint();
-};
-
 bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 	auto initial_reader = make_unique<BufferedFileReader>(database.GetFileSystem(), path.c_str());
 	if (initial_reader->Finished()) {
@@ -222,7 +174,6 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_TYPE:
 		ReplayDropType();
 		break;
-
 	default:
 		throw InternalException("Invalid WAL entry type!");
 	}

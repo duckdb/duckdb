@@ -17,7 +17,7 @@
 namespace duckdb {
 
 //! PhysicalIndexJoin represents an index join between two tables
-class PhysicalIndexJoin : public PhysicalOperator {
+class PhysicalIndexJoin : public CachingPhysicalOperator {
 public:
 	PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                  vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
@@ -51,16 +51,14 @@ public:
 
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
-	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
 		return true;
 	}
 
-	bool RequiresCache() const override {
-		return true;
-	}
+protected:
+	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
 
 	bool IsOrderPreserving() const override {
 		return false;

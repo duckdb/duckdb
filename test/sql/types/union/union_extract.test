@@ -1,0 +1,134 @@
+# name: test/sql/types/union/union_extract.test
+# description: Test union_extract
+# group: [union]
+
+statement error
+SELECT union_extract(1, 'b');
+
+query I
+SELECT union_extract(1::UNION(a INT, b FLOAT), 'a');
+----
+1
+
+statement ok
+CREATE TABLE tbl1 (u UNION(a INT, b FLOAT, c VARCHAR));
+
+statement ok
+INSERT INTO tbl1 VALUES (1), ('text'), (2.0);
+
+# Dot syntax
+query I
+SELECT u.a FROM tbl1 WHERE u.a IS NOT NULL
+----
+1
+
+query I
+SELECT u.a FROM tbl1
+----
+1
+NULL
+NULL
+
+query I
+SELECT u.b FROM tbl1 WHERE u.b IS NOT NULL
+----
+2.0
+
+query I
+SELECT u.b FROM tbl1
+----
+NULL
+NULL
+2.0
+
+query I
+SELECT u.c FROM tbl1 WHERE u.c IS NOT NULL
+----
+text
+
+query I
+SELECT u.c FROM tbl1
+----
+NULL
+text
+NULL
+
+query III
+SELECT u.a, u.b, u.c FROM tbl1
+----
+1		NULL	NULL
+NULL	NULL	text
+NULL	2.0		NULL
+
+# Function call
+query I
+SELECT union_extract(u, 'a') FROM tbl1 WHERE union_extract(u, 'a') IS NOT NULL
+----
+1 
+
+query I
+SELECT union_extract(u, 'a') FROM tbl1
+----
+1 
+NULL
+NULL
+
+query I
+SELECT union_extract(u, 'b') FROM tbl1 WHERE union_extract(u, 'b') IS NOT NULL
+----
+2.0
+
+query I
+SELECT union_extract(u, 'b') FROM tbl1
+----
+NULL
+NULL
+2.0
+
+query I
+SELECT union_extract(u, 'c') FROM tbl1 WHERE union_extract(u, 'c') IS NOT NULL
+----
+text
+
+query I
+SELECT union_extract(u, 'c') FROM tbl1
+----
+NULL
+text
+NULL
+
+query III
+SELECT 
+    union_extract(u, 'a'), 
+    union_extract(u, 'c'),
+    union_extract(u, 'b')
+FROM tbl1
+----
+1		NULL	NULL
+NULL	text	NULL
+NULL	NULL	2.0
+
+# Prepared statements
+statement ok
+PREPARE p1 AS SELECT union_extract(u, ?) FROM tbl1;
+
+query I
+EXECUTE p1('a');
+----
+1
+NULL
+NULL
+
+query I
+EXECUTE p1('b');
+----
+NULL
+NULL
+2.0
+
+query I
+EXECUTE p1('c');
+----
+NULL
+text
+NULL

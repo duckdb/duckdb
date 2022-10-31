@@ -23,9 +23,14 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *tab
 
 PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info_p,
                                idx_t estimated_cardinality, bool parallel)
-    : PhysicalOperator(PhysicalOperatorType::INSERT, op.types, estimated_cardinality), insert_table(nullptr),
+    : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality), insert_table(nullptr),
       return_chunk(false), schema(schema), info(move(info_p)), parallel(parallel) {
-	auto &create_info = (CreateTableInfo &)*info->base;
+	GetInsertInfo(*info, insert_types, bound_defaults);
+}
+
+void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types,
+                                   vector<unique_ptr<Expression>> &bound_defaults) {
+	auto &create_info = (CreateTableInfo &)*info.base;
 	for (auto &col : create_info.columns) {
 		if (col.Generated()) {
 			continue;
@@ -85,18 +90,14 @@ unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &c
 	return make_unique<InsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
-SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
-                                    DataChunk &chunk) const {
-	auto &gstate = (InsertGlobalState &)state;
-	auto &lstate = (InsertLocalState &)lstate_p;
-
+void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk, const vector<idx_t> &column_index_map,
+                                     ExpressionExecutor &default_executor, DataChunk &result) {
 	chunk.Flatten();
-	lstate.default_executor.SetChunk(chunk);
+	default_executor.SetChunk(chunk);
 
-	lstate.insert_chunk.Reset();
-	lstate.insert_chunk.SetCardinality(chunk);
+	result.Reset();
+	result.SetCardinality(chunk);
 
-	auto table = gstate.table;
 	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
 		for (idx_t i = 0; i < table->columns.size(); i++) {
@@ -107,21 +108,30 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			auto storage_idx = col.StorageOid();
 			if (column_index_map[i] == DConstants::INVALID_INDEX) {
 				// insert default value
-				lstate.default_executor.ExecuteExpression(i, lstate.insert_chunk.data[storage_idx]);
+				default_executor.ExecuteExpression(i, result.data[storage_idx]);
 			} else {
 				// get value from child chunk
 				D_ASSERT((idx_t)column_index_map[i] < chunk.ColumnCount());
-				D_ASSERT(lstate.insert_chunk.data[storage_idx].GetType() == chunk.data[column_index_map[i]].GetType());
-				lstate.insert_chunk.data[storage_idx].Reference(chunk.data[column_index_map[i]]);
+				D_ASSERT(result.data[storage_idx].GetType() == chunk.data[column_index_map[i]].GetType());
+				result.data[storage_idx].Reference(chunk.data[column_index_map[i]]);
 			}
 		}
 	} else {
 		// no columns specified, just append directly
-		for (idx_t i = 0; i < lstate.insert_chunk.ColumnCount(); i++) {
-			D_ASSERT(lstate.insert_chunk.data[i].GetType() == chunk.data[i].GetType());
-			lstate.insert_chunk.data[i].Reference(chunk.data[i]);
+		for (idx_t i = 0; i < result.ColumnCount(); i++) {
+			D_ASSERT(result.data[i].GetType() == chunk.data[i].GetType());
+			result.data[i].Reference(chunk.data[i]);
 		}
 	}
+}
+
+SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
+                                    DataChunk &chunk) const {
+	auto &gstate = (InsertGlobalState &)state;
+	auto &lstate = (InsertLocalState &)lstate_p;
+
+	auto table = gstate.table;
+	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	if (!parallel) {
 		if (!gstate.initialized) {
@@ -140,11 +150,13 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 		if (!lstate.local_collection) {
 			auto &table_info = table->storage->info;
 			auto &block_manager = TableIOManager::Get(*table->storage).GetBlockManagerForRowData();
-			lstate.local_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, 0);
+			lstate.local_collection =
+			    make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = make_unique<OptimisticDataWriter>(gstate.table->storage.get());
 		}
+		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
 			lstate.writer->CheckFlushToDisk(*lstate.local_collection);

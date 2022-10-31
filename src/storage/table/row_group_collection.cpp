@@ -112,6 +112,7 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.current_row_group = (RowGroup *)row_groups->GetRootSegment();
 	state.vector_index = 0;
 	state.max_row = row_start + total_rows;
+	state.batch_index = 0;
 }
 
 bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
@@ -140,6 +141,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		} else {
 			state.current_row_group = (RowGroup *)state.current_row_group->Next();
 		}
+		scan_state.batch_index = ++state.batch_index;
 		if (!need_to_scan) {
 			// filters allow us to skip this row group: move to the next row group
 			continue;

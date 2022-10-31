@@ -97,7 +97,7 @@ struct arena_s {
 	 * The arena is allocated alongside its bins; really this is a
 	 * dynamically sized array determined by the binshard settings.
 	 */
-	bin_t			bins[0];
+	bin_t			*bins;
 };
 
 } // namespace duckdb_jemalloc

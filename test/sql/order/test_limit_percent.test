@@ -142,7 +142,6 @@ SELECT * FROM test LIMIT 30% OFFSET RANDOM() / 10.0;
 
 statement ok
 SELECT b FROM test LIMIT 0%
-----
 
 #Subqueries that return negative values
 statement error

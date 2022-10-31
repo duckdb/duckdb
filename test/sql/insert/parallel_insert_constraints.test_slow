@@ -1,0 +1,63 @@
+# name: test/sql/insert/parallel_insert_constraints.test_slow
+# description: Test parallel insert from many groups
+# group: [insert]
+
+# run both with and without preserving insertion order
+loop i 0 2
+
+# not null constraint
+statement ok
+CREATE OR REPLACE TABLE integers AS SELECT * FROM range(1000000) tbl(i) UNION ALL SELECT NULL;
+
+statement ok
+CREATE OR REPLACE TABLE integers_not_null(i INTEGER NOT NULL);
+
+statement error
+INSERT INTO integers_not_null SELECT * FROM integers;
+
+# generated columns
+statement ok
+CREATE OR REPLACE TABLE varchars AS SELECT i::VARCHAR s FROM range(1000000) tbl(i) UNION ALL SELECT 'hello';
+
+statement ok
+CREATE OR REPLACE TABLE varchars_generated(s VARCHAR, i AS (s::INT));
+
+statement error
+INSERT INTO varchars_generated (s) SELECT * FROM varchars;
+
+# primary key
+statement ok
+CREATE OR REPLACE TABLE integers AS SELECT * FROM range(1000000) tbl(i) UNION ALL SELECT 7777;
+
+statement ok
+CREATE OR REPLACE TABLE integers_pk(i INTEGER PRIMARY KEY);
+
+statement error
+INSERT INTO integers_pk SELECT * FROM integers;
+
+# foreign key
+statement ok
+CREATE OR REPLACE TABLE integers AS SELECT * FROM range(1000000) tbl(i) UNION ALL SELECT -1;
+
+statement ok
+CREATE OR REPLACE TABLE integers_pk(i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO integers_pk SELECT * FROM range(1000000)
+
+statement ok
+CREATE OR REPLACE TABLE integers_fk(i INTEGER PRIMARY KEY REFERENCES integers_pk(i));
+
+statement error
+INSERT INTO integers_fk SELECT * FROM integers
+
+statement ok
+DROP TABLE integers_fk;
+
+statement ok
+DROP TABLE integers_pk;
+
+statement ok
+PRAGMA preserve_insertion_order=false
+
+endloop
