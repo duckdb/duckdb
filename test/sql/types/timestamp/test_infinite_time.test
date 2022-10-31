@@ -315,3 +315,15 @@ select
   subtract(
     timestamp '1970-01-01',
     cast('-infinity' as timestamp))
+
+statement error
+SELECT 'e'::TIMESTAMP
+
+statement error
+SELECT 'e'::DATE
+
+statement error
+SELECT 'i'::TIMESTAMP
+
+statement error
+SELECT 'i'::DATE

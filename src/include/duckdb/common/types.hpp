@@ -216,6 +216,8 @@ struct list_entry_t {
 	uint64_t length;
 };
 
+using union_tag_t = uint8_t; 
+
 //===--------------------------------------------------------------------===//
 // Internal Types
 //===--------------------------------------------------------------------===//
@@ -388,7 +390,8 @@ enum class LogicalTypeId : uint8_t {
 	TABLE = 103,
 	ENUM = 104,
 	AGGREGATE_STATE = 105,
-	LAMBDA = 106
+	LAMBDA = 106,
+	UNION = 107
 };
 
 struct ExtraTypeInfo;
@@ -524,6 +527,7 @@ public:
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
+	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType DEDUP_POINTER_ENUM(); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
@@ -574,6 +578,14 @@ struct StructType {
 struct MapType {
 	DUCKDB_API static const LogicalType &KeyType(const LogicalType &type);
 	DUCKDB_API static const LogicalType &ValueType(const LogicalType &type);
+};
+
+struct UnionType {
+	DUCKDB_API static const idx_t MAX_UNION_MEMBERS = 256;
+	DUCKDB_API static idx_t GetMemberCount(const LogicalType &type);
+	DUCKDB_API static const LogicalType &GetMemberType(const LogicalType &type, idx_t index);
+	DUCKDB_API static const string &GetMemberName(const LogicalType &type, idx_t index);
+	DUCKDB_API static const child_list_t<LogicalType> CopyMemberTypes(const LogicalType &type);
 };
 
 struct AggregateStateType {

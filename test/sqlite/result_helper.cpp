@@ -263,6 +263,12 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		} else {
 			expect_ok = true;
 		}
+		if (result.HasError() && !statement.expected_error.empty()) {
+			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
+				logger.ExpectedErrorMismatch(statement.expected_error, result);
+				return false;
+			}
+		}
 	}
 
 	/* Report an error if the results do not match expectation */

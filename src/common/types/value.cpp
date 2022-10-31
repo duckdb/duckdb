@@ -27,6 +27,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/main/error_manager.hpp"
 
 #include <utility>
 #include <cmath>
@@ -63,7 +64,7 @@ Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false), str_value(move(val)) {
 	if (!Value::StringIsValid(str_value.c_str(), str_value.size())) {
-		throw Exception("String value is not valid UTF8");
+		throw Exception(ErrorManager::InvalidUnicodeError(str_value, "value construction"));
 	}
 }
 
@@ -538,6 +539,30 @@ Value Value::MAP(Value key, Value value) {
 	result.struct_value.push_back(move(key));
 	result.struct_value.push_back(move(value));
 	result.is_null = false;
+	return result;
+}
+
+Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) {
+	D_ASSERT(members.size() > 0);
+	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
+	D_ASSERT(members.size() > tag);
+
+	D_ASSERT(value.type() == members[tag].second);
+
+	Value result;
+	result.is_null = false;
+	// add the tag to the front of the struct
+	result.struct_value.emplace_back(Value::TINYINT(tag));
+	for (idx_t i = 0; i < members.size(); i++) {
+		if (i != tag) {
+			result.struct_value.emplace_back(members[i].second);
+		} else {
+			result.struct_value.emplace_back(nullptr);
+		}
+	}
+	result.struct_value[tag + 1] = move(value);
+
+	result.type_ = LogicalType::UNION(move(members));
 	return result;
 }
 
@@ -1378,6 +1403,21 @@ const vector<Value> &StructValue::GetChildren(const Value &value) {
 const vector<Value> &ListValue::GetChildren(const Value &value) {
 	D_ASSERT(value.type().InternalType() == PhysicalType::LIST);
 	return value.list_value;
+}
+
+const Value &UnionValue::GetValue(const Value &value) {
+	D_ASSERT(value.type() == LogicalTypeId::UNION);
+	auto &children = StructValue::GetChildren(value);
+	auto tag = children[0].GetValueUnsafe<uint8_t>();
+	D_ASSERT(tag < children.size() - 1);
+	return children[tag + 1];
+}
+
+uint8_t UnionValue::GetTag(const Value &value) {
+	D_ASSERT(value.type() == LogicalTypeId::UNION);
+	auto children = StructValue::GetChildren(value);
+	auto tag = children[0].GetValueUnsafe<uint8_t>();
+	return tag;
 }
 
 hugeint_t IntegralValue::Get(const Value &value) {

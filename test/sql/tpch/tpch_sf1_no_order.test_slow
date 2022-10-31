@@ -1,0 +1,36 @@
+# name: test/sql/tpch/tpch_sf1_no_order.test_slow
+# description: Test TPC-H SF1 with unpreserved insertion order
+# group: [tpch]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1, suffix='_original');
+
+statement ok
+SET preserve_insertion_order=false;
+
+foreach tbl lineitem orders partsupp part customer supplier nation region
+
+statement ok
+CREATE TABLE ${tbl} AS SELECT * FROM ${tbl}_original
+
+endloop
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

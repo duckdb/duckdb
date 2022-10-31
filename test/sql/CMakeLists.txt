@@ -1,3 +1,5 @@
+add_subdirectory(filter)
+add_subdirectory(function)
 add_subdirectory(index)
 add_subdirectory(parallelism)
 add_subdirectory(storage)

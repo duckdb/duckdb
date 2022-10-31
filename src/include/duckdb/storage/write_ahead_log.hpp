@@ -34,6 +34,54 @@ class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
 
+class ReplayState {
+public:
+	ReplayState(DatabaseInstance &db, ClientContext &context, Deserializer &source)
+	    : db(db), context(context), source(source), current_table(nullptr), deserialize_only(false),
+	      checkpoint_id(INVALID_BLOCK) {
+	}
+
+	DatabaseInstance &db;
+	ClientContext &context;
+	Deserializer &source;
+	TableCatalogEntry *current_table;
+	bool deserialize_only;
+	block_id_t checkpoint_id;
+
+public:
+	void ReplayEntry(WALType entry_type);
+
+protected:
+	virtual void ReplayCreateTable();
+	void ReplayDropTable();
+	void ReplayAlter();
+
+	void ReplayCreateView();
+	void ReplayDropView();
+
+	void ReplayCreateSchema();
+	void ReplayDropSchema();
+
+	void ReplayCreateType();
+	void ReplayDropType();
+
+	void ReplayCreateSequence();
+	void ReplayDropSequence();
+	void ReplaySequenceValue();
+
+	void ReplayCreateMacro();
+	void ReplayDropMacro();
+
+	void ReplayCreateTableMacro();
+	void ReplayDropTableMacro();
+
+	void ReplayUseTable();
+	void ReplayInsert();
+	void ReplayDelete();
+	void ReplayUpdate();
+	void ReplayCheckpoint();
+};
+
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
 //! the database to the log, which can then be replayed upon startup in case the
