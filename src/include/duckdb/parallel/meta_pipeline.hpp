@@ -18,11 +18,11 @@ class PhysicalRecursiveCTE;
 class MetaPipeline : public std::enable_shared_from_this<MetaPipeline> {
 	//! We follow these rules when building:
 	//! 1. For joins, build out the blocking side before going down the probe side
-	//!     - The current streaming pipeline will have an intra-MetaPipeline dependency on it
+	//!     - The current streaming pipeline will have a dependency on it (dependency across MetaPipelines)
 	//!     - Unions of this streaming pipeline will automatically inherit this dependency
 	//! 2. Build child pipelines last (e.g., Hash Join becomes source after probe is done: scan HT for FULL OUTER JOIN)
 	//!     - 'last' means after building out all other pipelines associated with this operator
-	//!     - The child pipeline automatically has inter-MetaPipeline dependencies on:
+	//!     - The child pipeline automatically has dependencies (within this MetaPipeline) on:
 	//!         * The 'current' streaming pipeline
 	//!         * And all pipelines that were added to the MetaPipeline after 'current'
 public:
@@ -43,7 +43,7 @@ public:
 	void GetPipelines(vector<shared_ptr<Pipeline>> &result, bool recursive);
 	//! Get the MetaPipeline children of this MetaPipeline
 	void GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip);
-	//! Get the inter-MetaPipeline dependencies of the given Pipeline
+	//! Get the dependencies (within this MetaPipeline) of the given Pipeline
 	const vector<Pipeline *> *GetDependencies(Pipeline *dependant) const;
 	//! Whether this MetaPipeline has a recursive CTE
 	bool HasRecursiveCTE() const;
@@ -59,6 +59,8 @@ public:
 	//! Ready all the pipelines (recursively)
 	void Ready();
 
+	//! Create an empty pipeline within this MetaPipeline
+	Pipeline *CreatePipeline();
 	//! Create a union pipeline (clone of 'current')
 	Pipeline *CreateUnionPipeline(Pipeline &current);
 	//! Create a child pipeline op 'current' starting at 'op',
@@ -66,10 +68,6 @@ public:
 	void CreateChildPipeline(Pipeline &current, PhysicalOperator *op, Pipeline *last_pipeline);
 	//! Create a MetaPipeline child that 'current' depends on
 	MetaPipeline *CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op);
-
-private:
-	//! Create an empty pipeline within this MetaPipeline
-	Pipeline *CreatePipeline();
 
 private:
 	//! The executor for all MetaPipelines in the query plan

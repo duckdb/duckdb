@@ -1016,19 +1016,27 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 		throw NotImplementedException("IEJoins are not supported in recursive CTEs yet");
 	}
 
-	// create LHS as a child MetaPipeline
+	// becomes a source after both children fully sink their data
+	meta_pipeline.GetState().SetPipelineSource(current, this);
+
+	// create LHS as a child MetaPipeline of 'current', then build
 	auto lhs_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
 	lhs_meta_pipeline->Build(children[0].get());
 
-	// create RHS as a child MetaPipeline
+	// create RHS as a child MetaPipeline of 'current', then build
 	auto rhs_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
 	rhs_meta_pipeline->Build(children[1].get());
 
-	// RHS depends on LHS
-	rhs_meta_pipeline->GetBasePipeline()->AddDependency(lhs_meta_pipeline->GetBasePipeline());
-
-	// this operator becomes a source for the current pipeline after RHS and LHS have been built
-	meta_pipeline.GetState().SetPipelineSource(current, this);
+	// RHS pipelines depend on everything in LHS, set up the dependencies correctly
+	vector<shared_ptr<Pipeline>> lhs_pipelines;
+	lhs_meta_pipeline->GetPipelines(lhs_pipelines, false);
+	vector<shared_ptr<Pipeline>> rhs_pipelines;
+	rhs_meta_pipeline->GetPipelines(rhs_pipelines, false);
+	for (auto &rhs_pipeline : rhs_pipelines) {
+		for (auto &lhs_pipeline : lhs_pipelines) {
+			rhs_pipeline->AddDependency(lhs_pipeline);
+		}
+	}
 }
 
 } // namespace duckdb

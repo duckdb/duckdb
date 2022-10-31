@@ -34,7 +34,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	auto &state = meta_pipeline.GetState();
 	state.AddPipelineOperator(current, &op);
 
-	// save the last added pipeline (in case we need to add a child pipeline)
+	// save the last added pipeline to set up dependencies later (in case we need to add a child pipeline)
 	vector<shared_ptr<Pipeline>> pipelines_so_far;
 	meta_pipeline.GetPipelines(pipelines_so_far, false);
 	auto last_pipeline = pipelines_so_far.back().get();

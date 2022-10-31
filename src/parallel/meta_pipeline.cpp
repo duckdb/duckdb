@@ -7,8 +7,7 @@ namespace duckdb {
 
 MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, PhysicalOperator *sink_p)
     : executor(executor_p), state(state_p), sink(sink_p), next_batch_index(0) {
-	auto base_pipeline = CreatePipeline();
-	state.SetPipelineSink(*base_pipeline, sink, next_batch_index++);
+	CreatePipeline();
 	if (sink_p && sink_p->type == PhysicalOperatorType::RECURSIVE_CTE) {
 		recursive_cte = (PhysicalRecursiveCTE *)sink;
 	}
@@ -97,6 +96,7 @@ MetaPipeline *MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalO
 
 Pipeline *MetaPipeline::CreatePipeline() {
 	pipelines.emplace_back(make_unique<Pipeline>(executor));
+	state.SetPipelineSink(*pipelines.back(), sink, next_batch_index++);
 	return pipelines.back().get();
 }
 
@@ -130,16 +130,16 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current) {
 		throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");
 	}
 
-	// create the union pipeline
+	// create the union pipeline (batch index 0, should be set correctly afterwards)
 	auto union_pipeline = CreatePipeline();
 	state.SetPipelineOperators(*union_pipeline, state.GetPipelineOperators(current));
 	state.SetPipelineSink(*union_pipeline, sink, 0);
 
-	// 'union_pipeline' inherits ALL dependencies of 'current' (intra- and inter-MetaPipeline)
+	// 'union_pipeline' inherits ALL dependencies of 'current' (within this MetaPipeline, and across MetaPipelines)
 	union_pipeline->dependencies = current.dependencies;
-	auto current_inter_deps = GetDependencies(&current);
-	if (current_inter_deps) {
-		dependencies[union_pipeline] = *current_inter_deps;
+	auto current_deps = GetDependencies(&current);
+	if (current_deps) {
+		dependencies[union_pipeline] = *current_deps;
 	}
 
 	if (sink && sink->IsOrderPreserving() && !sink->RequiresBatchIndex()) {
@@ -157,12 +157,13 @@ void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op, 
 		throw NotImplementedException("Child pipelines are not supported in recursive CTEs yet");
 	}
 
-	// create the child pipeline
+	// create the child pipeline (same batch index)
 	pipelines.emplace_back(state.CreateChildPipeline(executor, current, op));
 	auto child_pipeline = pipelines.back().get();
+	child_pipeline->base_batch_index = current.base_batch_index;
 
-	// child pipeline has an inter-MetaPipeline depency on all pipelines that were scheduled between 'current' and now
-	// (including 'current') - set them up
+	// child pipeline has a depency (within this MetaPipeline on all pipelines that were scheduled
+	// between 'current' and now (including 'current') - set them up
 	dependencies[child_pipeline].push_back(&current);
 	AddDependenciesFrom(child_pipeline, last_pipeline, false);
 	D_ASSERT(!GetDependencies(child_pipeline)->empty());

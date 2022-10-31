@@ -97,13 +97,13 @@ True	False	1
 NULL	NULL	2
 
 # old behavior: cast NULL to integer explicitly
-query III
+query III sort
 SELECT NULL::INTEGER as a, NULL::INTEGER as b, 1 as id UNION SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 2 as id
 ----
-NULL	NULL	1
 1	0	2
+NULL	NULL	1
 
-query III
+query III sort
 SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 1 as id UNION SELECT NULL::INTEGER as a, NULL::INTEGER as b, 2 as id
 ----
 1	0	1
