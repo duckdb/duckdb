@@ -412,7 +412,6 @@ public:
 				                                 gstate.state.aggregates[i].get(), payload_chunk.size());
 			}
 		}
-		// TODO: cant the global HT become partitioned because of this?
 		D_ASSERT(!gstate.finished);
 		gstate.finished = true;
 	}
