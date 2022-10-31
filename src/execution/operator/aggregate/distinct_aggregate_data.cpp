@@ -138,7 +138,6 @@ struct FindMatchingAggregate {
 	const aggr_ref_t aggr_r;
 };
 
-// FIXME: does this take into account that they also need to share the same filter?
 idx_t DistinctAggregateCollectionInfo::CreateTableIndexMap() {
 	vector<aggr_ref_t> table_inputs;
 
