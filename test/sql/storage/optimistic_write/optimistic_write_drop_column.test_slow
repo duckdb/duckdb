@@ -1,0 +1,104 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_drop_column.test_slow
+# description: Test optimistic write with drop column in transaction-local storage
+# group: [optimistic_write]
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_drop.db
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT i, i+1, i+2 FROM range(1000000) tbl(i)
+
+statement ok
+ALTER TABLE test DROP COLUMN c
+
+statement ok
+COMMIT
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+499999500000	500000500000
+
+restart
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+499999500000	500000500000
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT i, i FROM range(1000000) t(i)
+
+statement ok
+ALTER TABLE test DROP COLUMN b
+
+statement ok
+ROLLBACK
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+499999500000	500000500000
+
+# temp table
+require skip_reload
+
+# ensure the drop column does not lead to leaking blocks
+statement ok
+CREATE TEMPORARY TABLE blocks AS SELECT total_blocks FROM pragma_database_size();
+
+loop i 0 10
+
+statement ok
+DROP TABLE test
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT i, i+1, i+2 FROM range(1000000) tbl(i)
+
+statement ok
+ALTER TABLE test DROP COLUMN c
+
+statement ok
+COMMIT
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+499999500000	500000500000
+
+statement ok
+CREATE TEMPORARY TABLE new_blocks AS SELECT total_blocks FROM pragma_database_size();
+
+query I
+SELECT new_blocks.total_blocks - blocks.total_blocks < 20 FROM blocks, new_blocks
+----
+true
+
+statement ok
+DROP TABLE blocks;
+
+statement ok
+CREATE TEMPORARY TABLE blocks AS SELECT * FROM new_blocks;
+
+statement ok
+DROP TABLE new_blocks
+
+statement ok
+CHECKPOINT;
+
+endloop

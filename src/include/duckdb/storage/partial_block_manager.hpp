@@ -45,6 +45,8 @@ struct PartialBlock {
 
 public:
 	virtual void Flush() = 0;
+	virtual void Clear() {
+	}
 };
 
 struct PartialBlockAllocation {
@@ -73,9 +75,8 @@ public:
 
 public:
 	PartialBlockManager(BlockManager &block_manager, uint32_t max_partial_block_size = DEFAULT_MAX_PARTIAL_BLOCK_SIZE,
-	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT)
-	    : block_manager(block_manager), max_partial_block_size(max_partial_block_size), max_use_count(max_use_count) {
-	}
+	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT);
+	virtual ~PartialBlockManager();
 
 public:
 	//! Flush any remaining partial blocks to disk
@@ -87,6 +88,9 @@ public:
 
 	//! Register a partially filled block that is filled with "segment_size" entries
 	void RegisterPartialBlock(PartialBlockAllocation &&allocation);
+
+	//! Clears all blocks
+	void Clear();
 
 protected:
 	BlockManager &block_manager;

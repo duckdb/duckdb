@@ -9,13 +9,27 @@
 namespace duckdb {
 
 struct ApproxDistinctCountState {
+	ApproxDistinctCountState() : log(nullptr) {
+	}
+	~ApproxDistinctCountState() {
+		if (log) {
+			delete log;
+		}
+	}
+	void Resize(idx_t count) {
+		indices.resize(count);
+		counts.resize(count);
+	}
+
 	HyperLogLog *log;
+	vector<uint64_t> indices;
+	vector<uint8_t> counts;
 };
 
 struct ApproxCountDistinctFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->log = nullptr;
+		new (state) STATE;
 	}
 
 	template <class STATE, class OP>
@@ -47,9 +61,7 @@ struct ApproxCountDistinctFunction {
 	}
 	template <class STATE>
 	static void Destroy(STATE *state) {
-		if (state->log) {
-			delete state->log;
-		}
+		state->~STATE();
 	}
 };
 
@@ -65,8 +77,9 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateIn
 	UnifiedVectorFormat vdata;
 	inputs[0].ToUnifiedFormat(count, vdata);
 
-	uint64_t indices[STANDARD_VECTOR_SIZE];
-	uint8_t counts[STANDARD_VECTOR_SIZE];
+	agg_state->Resize(count);
+	auto indices = agg_state->indices.data();
+	auto counts = agg_state->counts.data();
 
 	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
 	agg_state->log->AddToLog(vdata, count, indices, counts);
@@ -80,18 +93,22 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 	state_vector.ToUnifiedFormat(count, sdata);
 	auto states = (ApproxDistinctCountState **)sdata.data;
 
+	uint64_t *indices;
+	uint8_t *counts;
 	for (idx_t i = 0; i < count; i++) {
 		auto agg_state = states[sdata.sel->get_index(i)];
 		if (!agg_state->log) {
 			agg_state->log = new HyperLogLog();
 		}
+		if (i == 0) {
+			agg_state->Resize(count);
+			indices = agg_state->indices.data();
+			counts = agg_state->counts.data();
+		}
 	}
 
 	UnifiedVectorFormat vdata;
 	inputs[0].ToUnifiedFormat(count, vdata);
-
-	uint64_t indices[STANDARD_VECTOR_SIZE];
-	uint8_t counts[STANDARD_VECTOR_SIZE];
 
 	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
 	HyperLogLog::AddToLogs(vdata, count, indices, counts, (HyperLogLog ***)states, sdata.sel);

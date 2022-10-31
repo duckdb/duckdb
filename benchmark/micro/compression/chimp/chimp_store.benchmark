@@ -1,0 +1,21 @@
+# name: benchmark/micro/compression/chimp/chimp_store.benchmark
+# description: Scanning a large amount of doubles
+# group: [chimp]
+
+name Chimp Insert
+group chimp
+storage persistent
+require_reinit
+require parquet
+require httpfs
+
+load
+PRAGMA force_compression='chimp';
+DROP TABLE IF EXISTS temperatures;
+CREATE TABLE temperatures (
+	temperature DOUBLE
+);
+
+run
+INSERT INTO temperatures SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(28);
+checkpoint;

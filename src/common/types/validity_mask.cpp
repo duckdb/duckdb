@@ -68,7 +68,7 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	}
 }
 
-void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
+void ValidityMask::Slice(const ValidityMask &other, idx_t offset, idx_t end) {
 	if (other.AllValid()) {
 		validity_mask = nullptr;
 		validity_data.reset();
@@ -78,11 +78,11 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 		Initialize(other);
 		return;
 	}
-	ValidityMask new_mask(STANDARD_VECTOR_SIZE);
+	ValidityMask new_mask(end - offset);
 
 // FIXME THIS NEEDS FIXING!
 #if 1
-	for (idx_t i = offset; i < STANDARD_VECTOR_SIZE; i++) {
+	for (idx_t i = offset; i < end; i++) {
 		new_mask.Set(i - offset, other.RowIsValid(i));
 	}
 	Initialize(new_mask);

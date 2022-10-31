@@ -50,7 +50,7 @@ struct DateDiff {
 	struct DayOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::EpochDays(enddate) - Date::EpochDays(startdate);
+			return TR(Date::EpochDays(enddate)) - TR(Date::EpochDays(startdate));
 		}
 	};
 

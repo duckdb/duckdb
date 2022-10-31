@@ -45,11 +45,15 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
 	    .def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute")
-	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
-	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
+	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()", py::kw_only(),
+	         py::arg("date_as_object") = false)
+	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()",
+	         py::kw_only(), py::arg("date_as_object") = false)
 	    .def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
-	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1)
-	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
+	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1,
+	         py::kw_only(), py::arg("date_as_object") = false)
+	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()", py::kw_only(),
+	         py::arg("date_as_object") = false)
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
@@ -278,7 +282,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	return make_unique<DuckDBPyRelation>(connection->Table(tname));
+	auto qualified_name = QualifiedName::Parse(tname);
+	if (qualified_name.schema.empty()) {
+		qualified_name.schema = DEFAULT_SCHEMA;
+	}
+	return make_unique<DuckDBPyRelation>(connection->Table(qualified_name.schema, qualified_name.name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
@@ -518,18 +526,18 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	}
 	return result->FetchNumpyInternal();
 }
-DataFrame DuckDBPyConnection::FetchDF() {
+DataFrame DuckDBPyConnection::FetchDF(bool date_as_object) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->FetchDF();
+	return result->FetchDF(date_as_object);
 }
 
-DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
+DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk, bool date_as_object) const {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->FetchDFChunk(vectors_per_chunk);
+	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
 }
 
 duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {

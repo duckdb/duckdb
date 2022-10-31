@@ -76,7 +76,7 @@ list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64
 template <>
 string_t SliceValue(Vector &result, string_t input, int32_t begin, int32_t end) {
 	// one-based - zero has strange semantics
-	return SubstringFun::SubstringScalarFunction(result, input, begin + 1, end - begin);
+	return SubstringFun::SubstringUnicode(result, input, begin + 1, end - begin);
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>

@@ -58,7 +58,8 @@ public:
 	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
 	                                                         idx_t start, idx_t count, CompressionType compression_type,
 	                                                         unique_ptr<BaseStatistics> statistics);
-	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start);
+	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start,
+	                                                        idx_t segment_size = Storage::BLOCK_SIZE);
 	static unique_ptr<ColumnSegment> CreateSegment(ColumnSegment &other, idx_t start);
 
 public:
@@ -74,6 +75,11 @@ public:
 	//! Skip a scan forward to the row_index specified in the scan state
 	void Skip(ColumnScanState &state);
 
+	// The maximum size of the buffer (in bytes)
+	idx_t SegmentSize() const;
+	//! Resize the block
+	void Resize(idx_t segment_size);
+
 	//! Initialize an append of this segment. Appends are only supported on transient segments.
 	void InitializeAppend(ColumnAppendState &state);
 	//! Appends a (part of) vector to the segment, returns the amount of entries successfully appended
@@ -81,7 +87,7 @@ public:
 	//! Finalize the segment for appending - no more appends can follow on this segment
 	//! The segment should be compacted as much as possible
 	//! Returns the number of bytes occupied within the segment
-	idx_t FinalizeAppend();
+	idx_t FinalizeAppend(ColumnAppendState &state);
 	//! Revert an append made to this segment
 	void RevertAppend(idx_t start_row);
 
@@ -119,7 +125,7 @@ public:
 public:
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type, ColumnSegmentType segment_type,
 	              idx_t start, idx_t count, CompressionFunction *function, unique_ptr<BaseStatistics> statistics,
-	              block_id_t block_id, idx_t offset);
+	              block_id_t block_id, idx_t offset, idx_t segment_size);
 	ColumnSegment(ColumnSegment &other, idx_t start);
 
 private:
@@ -131,6 +137,8 @@ private:
 	block_id_t block_id;
 	//! The offset into the block (persistent segment only)
 	idx_t offset;
+	//! The allocated segment size
+	idx_t segment_size;
 	//! Storage associated with the compressed segment
 	unique_ptr<CompressedSegmentState> segment_state;
 };

@@ -65,7 +65,7 @@ private:
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
 	//! Set to true if a fatal exception has occurred
-	bool is_invalidated = false;
+	atomic<bool> is_invalidated;
 };
 
 //! The database object. This object holds the catalog and all the

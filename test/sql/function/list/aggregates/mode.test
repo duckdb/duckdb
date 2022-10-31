@@ -2,6 +2,8 @@
 # description: Test the list_mode aggregate function
 # group: [aggregates]
 
+require strinline
+
 # incorrect usage
 statement error
 select list_mode()
@@ -26,8 +28,6 @@ query I
 select list_mode(name) from names;
 ----
 pedro
-
-require vector_size 512
 
 # temporal types
 

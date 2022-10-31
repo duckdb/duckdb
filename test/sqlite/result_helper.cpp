@@ -1,53 +1,35 @@
 #include "result_helper.hpp"
-#include "termcolor.hpp"
 #include "re2/re2.h"
-#include "duckdb/parser/parser.hpp"
 #include "catch.hpp"
+#include "termcolor.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "test_helpers.hpp"
+#include "sqllogic_test_logger.hpp"
 
 #include <thread>
 
 namespace duckdb {
 
-TestResultHelper::TestResultHelper(Command &command, MaterializedQueryResult &result_p)
-    : runner(command.runner), result(result_p), file_name(command.file_name), query_line(command.query_line),
-      sql_query(command.sql_query) {
-}
+bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &context,
+                                        unique_ptr<MaterializedQueryResult> owned_result) {
+	auto &result = *owned_result;
+	auto &runner = query.runner;
+	auto expected_column_count = query.expected_column_count;
+	auto &values = query.values;
+	auto sort_style = query.sort_style;
+	auto query_has_label = query.query_has_label;
+	auto &query_label = query.query_label;
 
-TestResultHelper::TestResultHelper(Query &query, MaterializedQueryResult &result_p)
-    : TestResultHelper((Command &)query, result_p) {
-	query_ptr = &query;
-}
-
-TestResultHelper::TestResultHelper(Statement &stmt, MaterializedQueryResult &result_p)
-    : TestResultHelper((Command &)stmt, result_p) {
-	expect_ok = stmt.expect_ok;
-}
-
-void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owned_result) {
-	D_ASSERT(query_ptr);
-	auto &expected_column_count = query_ptr->expected_column_count;
-	auto &values = query_ptr->values;
-	auto &sort_style = query_ptr->sort_style;
-	auto &query_has_label = query_ptr->query_has_label;
-	auto &query_label = query_ptr->query_label;
-
+	SQLLogicTestLogger logger(context, query);
 	if (result.HasError()) {
-		PrintLineSep();
-		std::cerr << "Query unexpectedly failed (" << file_name.c_str() << ":" << query_line << ")\n";
-		PrintLineSep();
-		PrintSQL(sql_query);
-		PrintLineSep();
-		PrintHeader("Actual result:");
-		result.Print();
+		logger.UnexpectedFailure(result);
 		if (SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
-			return;
+			return true;
 		}
-		FAIL_LINE(file_name, query_line, 0);
+		return false;
 	}
 	idx_t row_count = result.RowCount();
 	idx_t column_count = result.ColumnCount();
@@ -64,32 +46,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 	vector<string> result_values_string;
 	DuckDBConvertResult(result, runner.original_sqlite_test, result_values_string);
 	if (runner.output_result_mode) {
-		// names
-		for (idx_t c = 0; c < result.ColumnCount(); c++) {
-			if (c != 0) {
-				std::cerr << "\t";
-			}
-			std::cerr << result.names[c];
-		}
-		std::cerr << std::endl;
-		// types
-		for (idx_t c = 0; c < result.ColumnCount(); c++) {
-			if (c != 0) {
-				std::cerr << "\t";
-			}
-			std::cerr << result.types[c].ToString();
-		}
-		std::cerr << std::endl;
-		PrintLineSep();
-		for (idx_t r = 0; r < result.RowCount(); r++) {
-			for (idx_t c = 0; c < result.ColumnCount(); c++) {
-				if (c != 0) {
-					std::cerr << "\t";
-				}
-				std::cerr << result_values_string[r * result.ColumnCount() + c];
-			}
-			std::cerr << std::endl;
-		}
+		logger.OutputResult(result, result_values_string);
 	}
 
 	// perform any required query sorts
@@ -130,8 +87,13 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
-		comparison_values =
-		    LoadResultFromFile(SQLLogicTestRunner::LoopReplacement(values[0], runner.running_loops), result.names);
+		auto fname = SQLLogicTestRunner::LoopReplacement(values[0], context.running_loops);
+		string csv_error;
+		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
+		if (!csv_error.empty()) {
+			logger.PrintErrorHeader(csv_error);
+			return false;
+		}
 	} else {
 		comparison_values = values;
 	}
@@ -147,12 +109,8 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		string digest = context.FinishHex();
 		hash_value = to_string(total_value_count) + " values hashing to " + digest;
 		if (runner.output_hash_mode) {
-			PrintLineSep();
-			PrintSQL(sql_query);
-			PrintLineSep();
-			std::cerr << hash_value << std::endl;
-			PrintLineSep();
-			return;
+			logger.OutputHash(hash_value);
+			return true;
 		}
 	}
 
@@ -188,27 +146,19 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 			row_wise = true;
 		} else if (comparison_values.size() % expected_column_count != 0) {
 			if (column_count_mismatch) {
-				ColumnCountMismatch(original_expected_columns, row_wise);
+				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+			} else {
+				logger.NotCleanlyDivisible(expected_column_count, comparison_values.size());
 			}
-			PrintErrorHeader("Error in test!");
-			PrintLineSep();
-			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int)expected_column_count,
-			        (int)comparison_values.size());
-			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
-			FAIL_LINE(file_name, query_line, 0);
+			return false;
 		}
 		if (expected_rows != result.RowCount()) {
 			if (column_count_mismatch) {
-				ColumnCountMismatch(original_expected_columns, row_wise);
+				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+			} else {
+				logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise);
 			}
-			PrintErrorHeader("Wrong row count in query!");
-			std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got "
-			          << termcolor::bold << result.RowCount() << termcolor::reset << " rows" << std::endl;
-			PrintLineSep();
-			PrintSQL(sql_query);
-			PrintLineSep();
-			PrintResultError(result, comparison_values, expected_column_count, row_wise);
-			FAIL_LINE(file_name, query_line, 0);
+			return false;
 		}
 
 		if (row_wise) {
@@ -218,27 +168,17 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 				auto splits = StringUtil::Split(comparison_values[i], "\t");
 				if (splits.size() != expected_column_count) {
 					if (column_count_mismatch) {
-						ColumnCountMismatch(original_expected_columns, row_wise);
+						logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
 					}
-					PrintLineSep();
-					PrintErrorHeader("Error in test! Column count mismatch after splitting on tab on row " +
-					                 to_string(i + 1) + "!");
-					std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset
-					          << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset
-					          << " columns" << std::endl;
-					std::cerr << "Does the result contain tab values? In that case, place every value on a single row."
-					          << std::endl;
-					PrintLineSep();
-					PrintSQL(sql_query);
-					PrintLineSep();
-					FAIL_LINE(file_name, query_line, 0);
+					logger.SplitMismatch(i + 1, expected_column_count, splits.size());
+					return false;
 				}
 				for (idx_t c = 0; c < splits.size(); c++) {
-					bool success = CompareValues(result_values_string[current_row * expected_column_count + c],
-					                             splits[c], current_row, c, comparison_values, expected_column_count,
-					                             row_wise, result_values_string);
+					bool success = CompareValues(
+					    logger, result, result_values_string[current_row * expected_column_count + c], splits[c],
+					    current_row, c, comparison_values, expected_column_count, row_wise, result_values_string);
 					if (!success) {
-						FAIL_LINE(file_name, query_line, 0);
+						return false;
 					}
 					// we do this just to increment the assertion counter
 					REQUIRE(success);
@@ -248,11 +188,12 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		} else {
 			idx_t current_row = 0, current_column = 0;
 			for (idx_t i = 0; i < total_value_count && i < comparison_values.size(); i++) {
-				bool success = CompareValues(result_values_string[current_row * expected_column_count + current_column],
+				bool success = CompareValues(logger, result,
+				                             result_values_string[current_row * expected_column_count + current_column],
 				                             comparison_values[i], current_row, current_column, comparison_values,
 				                             expected_column_count, row_wise, result_values_string);
 				if (!success) {
-					FAIL_LINE(file_name, query_line, 0);
+					return false;
 				}
 				// we do this just to increment the assertion counter
 				REQUIRE(success);
@@ -265,21 +206,8 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 			}
 		}
 		if (column_count_mismatch) {
-			PrintLineSep();
-			PrintErrorHeader("Wrong column count in query!");
-			std::cerr << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset
-			          << " columns, but got " << termcolor::bold << expected_column_count << termcolor::reset
-			          << " columns" << std::endl;
-			PrintLineSep();
-			PrintSQL(sql_query);
-			PrintLineSep();
-			std::cerr << "The expected result " << termcolor::bold << "matched" << termcolor::reset
-			          << " the query result." << std::endl;
-			std::cerr << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query "
-			          << string(result.ColumnCount(), 'I') << termcolor::reset << termcolor::bold << "\""
-			          << termcolor::reset << std::endl;
-			PrintLineSep();
-			FAIL_LINE(file_name, query_line, 0);
+			logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
+			return false;
 		}
 	} else {
 		bool hash_compare_error = false;
@@ -299,34 +227,30 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 			hash_compare_error = values[0] != hash_value;
 		}
 		if (hash_compare_error) {
-			PrintErrorHeader("Wrong result hash!");
-			PrintLineSep();
-			PrintSQL(sql_query);
-			PrintLineSep();
-			PrintHeader("Expected result:");
-			PrintLineSep();
+			QueryResult *expected_result = nullptr;
 			if (runner.result_label_map.find(query_label) != runner.result_label_map.end()) {
-				runner.result_label_map[query_label]->Print();
-			} else {
-				std::cerr << "???" << std::endl;
+				expected_result = runner.result_label_map[query_label].get();
 			}
-			PrintHeader("Actual result:");
-			PrintLineSep();
-			result.Print();
-			FAIL_LINE(file_name, query_line, 0);
+			logger.WrongResultHash(expected_result, result);
+			return false;
 		}
 		REQUIRE(!hash_compare_error);
 	}
+	return true;
 }
 
-void TestResultHelper::CheckStatementResult() {
+bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteContext &context,
+                                            unique_ptr<MaterializedQueryResult> owned_result) {
+	auto &result = *owned_result;
 	bool error = result.HasError();
 
+	SQLLogicTestLogger logger(context, statement);
 	if (runner.output_result_mode || runner.debug_mode) {
 		result.Print();
 	}
 
 	/* Check to see if we are expecting success or failure */
+	auto expect_ok = statement.expect_ok;
 	if (!expect_ok) {
 		// even in the case of "statement error", we do not accept ALL errors
 		// internal errors are never expected
@@ -339,25 +263,29 @@ void TestResultHelper::CheckStatementResult() {
 		} else {
 			expect_ok = true;
 		}
+		if (result.HasError() && !statement.expected_error.empty()) {
+			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
+				logger.ExpectedErrorMismatch(statement.expected_error, result);
+				return false;
+			}
+		}
 	}
 
 	/* Report an error if the results do not match expectation */
 	if (error) {
-		PrintErrorHeader(!expect_ok ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!");
-		PrintLineSep();
-		PrintSQL(sql_query);
-		PrintLineSep();
-		result.Print();
+		logger.UnexpectedStatement(expect_ok, result);
 		if (expect_ok && SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
-			return;
+			return true;
 		}
-		FAIL_LINE(file_name, query_line, 0);
+		return false;
 	}
 	REQUIRE(!error);
+	return true;
 }
 
-vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string> names) {
+vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string> names, idx_t &expected_column_count,
+                                                    string &error) {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.Query("PRAGMA threads=" + to_string(std::thread::hardware_concurrency()));
@@ -375,11 +303,10 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 	auto csv_result =
 	    con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', columns=" + struct_definition + ")");
 	if (csv_result->HasError()) {
-		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->GetError());
-		PrintErrorHeader(error.c_str());
-		FAIL_LINE(file_name, query_line, 0);
+		error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->GetError());
+		return vector<string>();
 	}
-	query_ptr->expected_column_count = csv_result->ColumnCount();
+	expected_column_count = csv_result->ColumnCount();
 
 	vector<string> values;
 	while (true) {
@@ -394,27 +321,6 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 		}
 	}
 	return values;
-}
-
-void TestResultHelper::PrintExpectedResult(vector<string> &values, idx_t columns, bool row_wise) {
-	if (row_wise) {
-		for (idx_t r = 0; r < values.size(); r++) {
-			fprintf(stderr, "%s\n", values[r].c_str());
-		}
-	} else {
-		idx_t c = 0;
-		for (idx_t r = 0; r < values.size(); r++) {
-			if (c != 0) {
-				fprintf(stderr, "\t");
-			}
-			fprintf(stderr, "%s", values[r].c_str());
-			c++;
-			if (c >= columns) {
-				fprintf(stderr, "\n");
-				c = 0;
-			}
-		}
-	}
 }
 
 bool TestResultHelper::SkipErrorMessage(const string &message) {
@@ -473,74 +379,6 @@ void TestResultHelper::DuckDBConvertResult(MaterializedQueryResult &result, bool
 	}
 }
 
-void TestResultHelper::PrintLineSep() {
-	string line_sep = string(80, '=');
-	std::cerr << termcolor::color<128, 128, 128> << line_sep << termcolor::reset << std::endl;
-}
-
-void TestResultHelper::PrintHeader(string header) {
-	std::cerr << termcolor::bold << header << termcolor::reset << std::endl;
-}
-
-void TestResultHelper::PrintSQL(string sql) {
-	std::cerr << termcolor::bold << "SQL Query" << termcolor::reset << std::endl;
-	auto tokens = Parser::Tokenize(sql);
-	for (idx_t i = 0; i < tokens.size(); i++) {
-		auto &token = tokens[i];
-		idx_t next = i + 1 < tokens.size() ? tokens[i + 1].start : sql.size();
-		// adjust the highlighting based on the type
-		switch (token.type) {
-		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
-			break;
-		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
-		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
-			std::cerr << termcolor::yellow;
-			break;
-		case SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
-			break;
-		case SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
-			std::cerr << termcolor::green << termcolor::bold;
-			break;
-		case SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
-			std::cerr << termcolor::grey;
-			break;
-		}
-		// print the current token
-		std::cerr << sql.substr(token.start, next - token.start);
-		// reset and move to the next token
-		std::cerr << termcolor::reset;
-	}
-	std::cerr << std::endl;
-}
-
-void TestResultHelper::PrintErrorHeader(const string &description) {
-	PrintLineSep();
-	std::cerr << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
-	std::cerr << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset << std::endl;
-}
-
-void TestResultHelper::PrintResultError(vector<string> &result_values, vector<string> &values,
-                                        idx_t expected_column_count, bool row_wise) {
-	PrintHeader("Expected result:");
-	PrintLineSep();
-	PrintExpectedResult(values, expected_column_count, row_wise);
-	PrintLineSep();
-	PrintHeader("Actual result:");
-	PrintLineSep();
-	PrintExpectedResult(result_values, expected_column_count, false);
-}
-
-void TestResultHelper::PrintResultError(MaterializedQueryResult &result, vector<string> &values,
-                                        idx_t expected_column_count, bool row_wise) {
-	PrintHeader("Expected result:");
-	PrintLineSep();
-	PrintExpectedResult(values, expected_column_count, row_wise);
-	PrintLineSep();
-	PrintHeader("Actual result:");
-	PrintLineSep();
-	result.Print();
-}
-
 bool TestResultHelper::ResultIsHash(const string &result) {
 	idx_t pos = 0;
 	// first parse the rows
@@ -570,9 +408,9 @@ bool TestResultHelper::ResultIsFile(string result) {
 	return StringUtil::StartsWith(result, "<FILE>:");
 }
 
-bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, idx_t current_row, idx_t current_column,
-                                     vector<string> &values, idx_t expected_column_count, bool row_wise,
-                                     vector<string> &result_values) {
+bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string lvalue_str,
+                                     string rvalue_str, idx_t current_row, idx_t current_column, vector<string> &values,
+                                     idx_t expected_column_count, bool row_wise, vector<string> &result_values) {
 	Value lvalue, rvalue;
 	bool error = false;
 	// simple first test: compare string value directly
@@ -586,11 +424,11 @@ bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, idx_t
 		options.set_dot_nl(true);
 		RE2 re(regex_str, options);
 		if (!re.ok()) {
-			PrintErrorHeader("Test error!");
-			PrintLineSep();
+			logger.PrintErrorHeader("Test error!");
+			logger.PrintLineSep();
 			std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error()
 			          << termcolor::reset << std::endl;
-			PrintLineSep();
+			logger.PrintLineSep();
 			return false;
 		}
 		bool regex_matches = RE2::FullMatch(lvalue_str, re);
@@ -650,30 +488,19 @@ bool TestResultHelper::CompareValues(string lvalue_str, string rvalue_str, idx_t
 		error = true;
 	}
 	if (error) {
-		PrintErrorHeader("Wrong result in query!");
-		PrintLineSep();
-		PrintSQL(sql_query);
-		PrintLineSep();
+		logger.PrintErrorHeader("Wrong result in query!");
+		logger.PrintLineSep();
+		logger.PrintSQL();
+		logger.PrintLineSep();
 		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
 		          << current_column + 1 << std::endl
 		          << termcolor::reset;
 		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
-		PrintLineSep();
-		PrintResultError(result_values, values, expected_column_count, row_wise);
+		logger.PrintLineSep();
+		logger.PrintResultError(result_values, values, expected_column_count, row_wise);
 		return false;
 	}
 	return true;
-}
-
-void TestResultHelper::ColumnCountMismatch(idx_t expected_column_count, bool row_wise) {
-	PrintErrorHeader("Wrong column count in query!");
-	std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got "
-	          << termcolor::bold << result.ColumnCount() << termcolor::reset << " columns" << std::endl;
-	PrintLineSep();
-	PrintSQL(sql_query);
-	PrintLineSep();
-	PrintResultError(result, query_ptr->values, expected_column_count, row_wise);
-	FAIL_LINE(file_name, query_line, 0);
 }
 
 } // namespace duckdb

@@ -1,0 +1,33 @@
+# name: test/sql/update/large_string_null_update.test_slow
+# description: Test back and forth update of string NULL values with many strings
+# group: [update]
+
+load __TEST_DIR__/string_null_update.db
+
+statement ok
+create table t (id int, col varchar);
+
+statement ok
+insert into t (id) select range as id from range(0, 1000000);
+
+
+query III
+SELECT COUNT(*), COUNT(id), COUNT(col) FROM t
+----
+1000000	1000000	0
+
+statement ok
+update t set col = 'x';
+
+query III
+SELECT COUNT(*), COUNT(id), COUNT(col) FROM t
+----
+1000000	1000000	1000000
+
+statement ok
+update t set col = NULL;
+
+query III
+SELECT COUNT(*), COUNT(id), COUNT(col) FROM t
+----
+1000000	1000000	0

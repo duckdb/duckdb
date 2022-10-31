@@ -63,6 +63,8 @@ public:
 	DataTableInfo &GetTableInfo() const;
 	virtual idx_t GetMaxEntry();
 
+	void IncrementVersion();
+
 	//! The root type of the column
 	const LogicalType &RootType() const;
 
@@ -108,9 +110,10 @@ public:
 
 	virtual void CommitDropColumn();
 
-	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, RowGroupWriter &writer);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, RowGroupWriter &writer,
-	                                                     ColumnCheckpointInfo &checkpoint_info);
+	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
+	                                                                PartialBlockManager &partial_block_manager);
+	virtual unique_ptr<ColumnCheckpointState>
+	Checkpoint(RowGroup &row_group, PartialBlockManager &partial_block_manager, ColumnCheckpointInfo &checkpoint_info);
 
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
@@ -133,7 +136,7 @@ public:
 
 protected:
 	//! Append a transient segment
-	void AppendTransientSegment(idx_t start_row);
+	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
 
 	//! Scans a base vector from the column
 	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining);
@@ -149,6 +152,8 @@ protected:
 	mutex update_lock;
 	//! The updates for this column segment
 	unique_ptr<UpdateSegment> updates;
+	//! The internal version of the column data
+	idx_t version;
 };
 
 } // namespace duckdb

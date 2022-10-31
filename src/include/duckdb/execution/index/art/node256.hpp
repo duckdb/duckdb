@@ -15,7 +15,7 @@ namespace duckdb {
 class Node256 : public Node {
 public:
 	explicit Node256();
-	SwizzleablePointer children[256];
+	ARTPointer children[256];
 
 public:
 	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists

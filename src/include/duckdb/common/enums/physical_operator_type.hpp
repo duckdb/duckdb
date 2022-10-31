@@ -64,6 +64,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// Updates
 	// -----------------------------
 	INSERT,
+	BATCH_INSERT,
 	DELETE_OPERATOR,
 	UPDATE,
 
@@ -72,6 +73,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	CREATE_TABLE,
 	CREATE_TABLE_AS,
+	BATCH_CREATE_TABLE_AS,
 	CREATE_INDEX,
 	ALTER,
 	CREATE_SEQUENCE,

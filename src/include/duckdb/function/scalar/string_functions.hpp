@@ -49,14 +49,25 @@ struct ConcatFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ConcatWSFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct LengthFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+	static inline bool IsCharacter(char c) {
+		return (c & 0xc0) != 0x80;
+	}
+
 	template <class TA, class TR>
 	static inline TR Length(TA input) {
+		auto input_data = input.GetDataUnsafe();
+		auto input_length = input.GetSize();
+		TR length = 0;
+		for (idx_t i = 0; i < input_length; i++) {
+			length += IsCharacter(input_data[i]);
+		}
+		return length;
+	}
+
+	template <class TA, class TR>
+	static inline TR GraphemeCount(TA input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		for (idx_t i = 0; i < input_length; i++) {
@@ -110,7 +121,8 @@ struct RegexpFun {
 
 struct SubstringFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static string_t SubstringScalarFunction(Vector &result, string_t input, int64_t offset, int64_t length);
+	static string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length);
+	static string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length);
 };
 
 struct PrintfFun {

@@ -38,8 +38,19 @@ EXECUTE v2('hello world', 'hello mars')
 ----
 false
 
-statement error
+query I
+EXECUTE v2(1, 1.0)
+----
+true
+
+#is true now string to list casting is implemented
+query I
 EXECUTE v2([1, 2, 3], '[1, 2, 3]')
+----
+true
+
+statement error
+EXECUTE v2([[1, 2, 3]], [1, 2, 3])
 
 # unbound parameter in scalar subquery
 statement ok
@@ -128,8 +139,6 @@ time: 27
 
 statement error
 EXECUTE v7('hello world', [1, 2, 3])
-----
-hello world: [1, 2, 3]
 
 # unbound parameter with lists
 statement ok
