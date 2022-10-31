@@ -25,13 +25,14 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 	D_ASSERT(source_children.size() == StructType::GetChildTypes(result.GetType()).size());
 
 	auto &result_children = StructVector::GetEntries(result);
+	bool all_converted = true;
 	for (idx_t c_idx = 0; c_idx < source_child_types.size(); c_idx++) {
 		auto &result_child_vector = *result_children[c_idx];
 		auto &source_child_vector = *source_children[c_idx];
 		CastParameters child_parameters(parameters, cast_data.child_cast_info[c_idx].cast_data.get());
 		if (!cast_data.child_cast_info[c_idx].function(source_child_vector, result_child_vector, count,
 		                                               child_parameters)) {
-			return false;
+			all_converted = false;
 		}
 	}
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -41,7 +42,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 		source.Flatten(count);
 		FlatVector::Validity(result) = FlatVector::Validity(source);
 	}
-	return true;
+	return all_converted;
 }
 
 static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {

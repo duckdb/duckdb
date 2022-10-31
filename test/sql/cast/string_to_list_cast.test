@@ -2,8 +2,8 @@
 # description: cast strings into (nested) list structures
 # group: [cast]
 
-# statement ok
-# PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 #               Basic tests:
 # ---------------------------------------------------
@@ -299,6 +299,21 @@ SELECT TRY_CAST('Hello World' AS INT[]);
 ----
 NULL
 
+statement ok
+CREATE TABLE try_cast_tbl (col1 VARCHAR);
+
+statement ok
+INSERT INTO try_cast_tbl VALUES ('[1,2,X,2]'), ('[hello DuckDB]'), ('[345,oops,44,4.0]'), ('[12345678901]'), ('[5,6,7]'), ('[3 0, 1]');
+
+query I
+SELECT TRY_CAST(col1 AS INT[]) FROM try_cast_tbl;
+----
+[1, 2, NULL, 2]
+[NULL]
+[345, NULL, 44, 4]
+[NULL]
+[5, 6, 7]
+[NULL, 1]
 
 #               Syntax error checking
 # ---------------------------------------------------
@@ -377,6 +392,11 @@ query I
 SELECT CAST('[{a:[12,13,14], b:"🦆", c:{a:[[a], [b, c]], b:[123]}}]' AS STRUCT(a INT[], b VARCHAR, c STRUCT(a VARCHAR[][], b INT[]))[]);
 ----
 [{'a': [12, 13, 14], 'b': 🦆, 'c': {'a': [[a], [b, c]], 'b': [123]}}]
+
+query I
+SELECT '[{a: hii}, {a: "{" }]'::STRUCT(a VARCHAR)[] FROM struct_tbl1;
+----
+[{'a': hii}, {'a': {}]
 
 
 # ---------------------------------------------------

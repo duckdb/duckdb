@@ -1,8 +1,0 @@
-
-
-
-
-query I
-SELECT TRY_CAST('{a: "hiii", b:"Ducky"}' AS STRUCT(a VARCHAR, b INT));
-----
-{'key_A': 2, 'key_B': 46}
