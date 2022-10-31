@@ -82,3 +82,41 @@ SELECT ARG_MIN(distinct i%5, i) from tbl group by j;
 2
 3
 4
+
+# Distinct lists
+
+statement ok
+CREATE TABLE lists_tbl AS SELECT i%20 as groups, [x + i for x in range(280)] AS l FROM range(200000) tmp(i);
+
+query IIII
+SELECT COUNT(l), avg(groups), COUNT(DISTINCT l), groups FROM lists_tbl group by groups order by groups limit 10;
+----
+10000	0.0	10000	0
+10000	1.0	10000	1
+10000	2.0	10000	2
+10000	3.0	10000	3
+10000	4.0	10000	4
+10000	5.0	10000	5
+10000	6.0	10000	6
+10000	7.0	10000	7
+10000	8.0	10000	8
+10000	9.0	10000	9
+
+# Non-inlined (>12 length) strings
+
+statement ok
+create table strings_tbl as select gen_random_uuid() as strings, i as groups from range(200000) tbl(i);
+
+query II
+select count(strings), count(distinct strings) from strings_tbl group by groups order by groups limit 10;
+----
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
