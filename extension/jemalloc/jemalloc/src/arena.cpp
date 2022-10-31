@@ -1661,7 +1661,7 @@ arena_new(tsdn_t *tsdn, unsigned ind, const arena_config_t *config) {
 	/* Initialize bins. */
 	atomic_store_u(&arena->binshard_next, 0, ATOMIC_RELEASE);
 	for (i = 0; i < nbins_total; i++) {
-		bool err = bin_init(&arena->bins[i]);
+		bool err = bin_init(arena->bins + i);
 		if (err) {
 			goto label_error;
 		}
@@ -1839,14 +1839,14 @@ arena_prefork7(tsdn_t *tsdn, arena_t *arena) {
 void
 arena_prefork8(tsdn_t *tsdn, arena_t *arena) {
 	for (unsigned i = 0; i < nbins_total; i++) {
-		bin_prefork(tsdn, &arena->bins[i]);
+		bin_prefork(tsdn, arena->bins + i);
 	}
 }
 
 void
 arena_postfork_parent(tsdn_t *tsdn, arena_t *arena) {
 	for (unsigned i = 0; i < nbins_total; i++) {
-		bin_postfork_parent(tsdn, &arena->bins[i]);
+		bin_postfork_parent(tsdn, arena->bins + i);
 	}
 
 	malloc_mutex_postfork_parent(tsdn, &arena->large_mtx);
@@ -1884,7 +1884,7 @@ arena_postfork_child(tsdn_t *tsdn, arena_t *arena) {
 	}
 
 	for (unsigned i = 0; i < nbins_total; i++) {
-		bin_postfork_child(tsdn, &arena->bins[i]);
+		bin_postfork_child(tsdn, arena->bins + i);
 	}
 
 	malloc_mutex_postfork_child(tsdn, &arena->large_mtx);
