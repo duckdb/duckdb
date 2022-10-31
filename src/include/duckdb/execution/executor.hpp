@@ -81,6 +81,7 @@ public:
 	}
 	void AddEvent(shared_ptr<Event> event);
 
+	void AddRecursiveCTE(PhysicalOperator *rec_cte);
 	void ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
 	//! Whether or not the root of the pipeline is a result collector object

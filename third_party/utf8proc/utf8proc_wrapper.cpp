@@ -155,4 +155,17 @@ size_t Utf8Proc::RenderWidth(const char *s, size_t len, size_t pos) {
     return properties->charwidth;
 }
 
+size_t Utf8Proc::RenderWidth(const std::string &str) {
+	size_t render_width = 0;
+	size_t pos = 0;
+	while(pos < str.size()) {
+		int sz;
+		auto codepoint = duckdb::utf8proc_codepoint(str.c_str() + pos, sz);
+		auto properties = duckdb::utf8proc_get_property(codepoint);
+		render_width += properties->charwidth;
+		pos += sz;
+	}
+	return render_width;
+}
+
 }

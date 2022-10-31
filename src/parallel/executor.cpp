@@ -3,7 +3,6 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parallel/pipeline_complete_event.hpp"
@@ -213,6 +212,10 @@ void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<Ev
 	recursion_stack[vertex] = false;
 }
 
+void Executor::AddRecursiveCTE(PhysicalOperator *rec_cte) {
+	recursive_ctes.push_back(rec_cte);
+}
+
 void Executor::ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines_p,
                                    vector<shared_ptr<Event>> &events_p) {
 	ScheduleEventData event_data(pipelines_p, events_p, false);
@@ -280,17 +283,20 @@ void Executor::InitializeInternal(PhysicalOperator *plan) {
 
 		// build and ready the pipelines
 		PipelineBuildState state;
-		auto preserves_order = PhysicalPlanGenerator::PreserveInsertionOrder(context, *physical_plan);
-		auto root_pipeline = make_shared<MetaPipeline>(*this, state, nullptr, preserves_order);
+		auto root_pipeline = make_shared<MetaPipeline>(*this, state, nullptr);
 		root_pipeline->Build(physical_plan);
 		root_pipeline->Ready();
+
+		// ready recursive cte pipelines too
+		for (auto &rec_cte : recursive_ctes) {
+			D_ASSERT(rec_cte->type == PhysicalOperatorType::RECURSIVE_CTE);
+			auto &rec_cte_op = (PhysicalRecursiveCTE &)*rec_cte;
+			rec_cte_op.recursive_meta_pipeline->Ready();
+		}
 
 		// set root pipelines, i.e., all pipelines that end in the final sink
 		root_pipeline->GetPipelines(root_pipelines, false);
 		root_pipeline_idx = 0;
-
-		// collect the recursive CTE's (needed to be able to cancel query execution
-		root_pipeline->GetRecursiveCTEs(recursive_ctes);
 
 		// collect all meta-pipelines from the root pipeline
 		vector<shared_ptr<MetaPipeline>> to_schedule;

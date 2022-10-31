@@ -124,14 +124,26 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	}
 	D_ASSERT(recursive_meta_pipeline->HasRecursiveCTE());
 
-	// reset pipelines (excluding sink state of the top-level meta-pipeline, which is this recursive CTE)
-	recursive_meta_pipeline->Reset(false);
+	// get and reset pipelines
+	vector<shared_ptr<Pipeline>> pipelines;
+	recursive_meta_pipeline->GetPipelines(pipelines, true);
+	for (auto &pipeline : pipelines) {
+		auto sink = pipeline->GetSink();
+		if (sink != this) {
+			// reset the sink state for any intermediate sinks
+			sink->sink_state = sink->GetGlobalSinkState(context.client);
+		}
+		for (auto &op : pipeline->GetOperators()) {
+			if (op) {
+				op->op_state = op->GetGlobalOperatorState(context.client);
+			}
+		}
+		pipeline->Reset();
+	}
 
-	// get the MetaPipelines in the recursive_meta_pipeline
+	// get the MetaPipelines in the recursive_meta_pipeline and reschedule them
 	vector<shared_ptr<MetaPipeline>> meta_pipelines;
 	recursive_meta_pipeline->GetMetaPipelines(meta_pipelines, true, false);
-
-	// reschedule them
 	auto &executor = recursive_meta_pipeline->GetExecutor();
 	vector<shared_ptr<Event>> events;
 	executor.ReschedulePipelines(meta_pipelines, events);
@@ -166,21 +178,20 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	auto &state = meta_pipeline.GetState();
 	state.SetPipelineSource(current, this);
 
+	auto &executor = meta_pipeline.GetExecutor();
+	executor.AddRecursiveCTE(this);
+
 	if (meta_pipeline.HasRecursiveCTE()) {
 		throw InternalException("Recursive CTE detected WITHIN a recursive CTE node");
 	}
 
-	// the LHS of the recursive CTE is our initial state, we build this pipeline as normal
+	// the LHS of the recursive CTE is our initial state
 	auto initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
 	initial_state_pipeline->Build(children[0].get());
-	auto &initial_state_base_pipeline = *initial_state_pipeline->GetBasePipeline();
 
-	// the RHS is the recursive pipeline, which depends on the initial state
-	auto recursive_pipeline = initial_state_pipeline->CreateChildMetaPipeline(initial_state_base_pipeline, this);
-	recursive_pipeline->Build(children[1].get());
-
-	// set the recursive meta pipeline in this operator
-	recursive_meta_pipeline = recursive_pipeline->shared_from_this();
+	// the RHS is the recursive pipeline
+	recursive_meta_pipeline = make_shared<MetaPipeline>(executor, state, this);
+	recursive_meta_pipeline->Build(children[1].get());
 }
 
 vector<const PhysicalOperator *> PhysicalRecursiveCTE::GetSources() const {

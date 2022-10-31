@@ -597,9 +597,17 @@ void WindowGlobalSinkState::Finalize() {
 }
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list_p,
                                idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types), estimated_cardinality), select_list(move(select_list)) {
+    : PhysicalOperator(type, move(types), estimated_cardinality), select_list(move(select_list_p)) {
+	is_order_dependent = false;
+	for (auto &expr : select_list) {
+		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_WINDOW);
+		auto &bound_window = (BoundWindowExpression &)*expr;
+		if (bound_window.partitions.empty() && bound_window.orders.empty()) {
+			is_order_dependent = true;
+		}
+	}
 }
 
 static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {

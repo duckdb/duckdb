@@ -5,9 +5,8 @@
 
 namespace duckdb {
 
-MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, PhysicalOperator *sink_p,
-                           bool preserves_order)
-    : executor(executor_p), state(state_p), sink(sink_p), next_batch_index(0), preserves_order(preserves_order) {
+MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, PhysicalOperator *sink_p)
+    : executor(executor_p), state(state_p), sink(sink_p), next_batch_index(0) {
 	auto base_pipeline = CreatePipeline();
 	state.SetPipelineSink(*base_pipeline, sink, next_batch_index++);
 	if (sink_p && sink_p->type == PhysicalOperatorType::RECURSIVE_CTE) {
@@ -60,21 +59,8 @@ const vector<Pipeline *> *MetaPipeline::GetDependencies(Pipeline *dependant) con
 	}
 }
 
-bool MetaPipeline::PreservesOrder() const {
-	return preserves_order;
-}
-
 bool MetaPipeline::HasRecursiveCTE() const {
 	return recursive_cte != nullptr;
-}
-
-void MetaPipeline::GetRecursiveCTEs(vector<PhysicalOperator *> &result) const {
-	if (sink && sink->type == PhysicalOperatorType::RECURSIVE_CTE) {
-		result.push_back(sink);
-	}
-	for (auto &child : children) {
-		child->GetRecursiveCTEs(result);
-	}
 }
 
 void MetaPipeline::AssignNextBatchIndex(Pipeline *pipeline) {
@@ -97,25 +83,8 @@ void MetaPipeline::Ready() {
 	}
 }
 
-void MetaPipeline::Reset(bool reset_sink) {
-	if (sink && reset_sink) {
-		sink->sink_state = sink->GetGlobalSinkState(executor.context);
-	}
-	for (auto &pipeline : pipelines) {
-		for (auto &op : pipeline->GetOperators()) {
-			if (op) {
-				op->op_state = op->GetGlobalOperatorState(executor.context);
-			}
-		}
-		pipeline->Reset();
-	}
-	for (auto &child : children) {
-		child->Reset(true);
-	}
-}
-
 MetaPipeline *MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op) {
-	children.push_back(make_unique<MetaPipeline>(executor, state, op, preserves_order));
+	children.push_back(make_unique<MetaPipeline>(executor, state, op));
 	auto child_meta_pipeline = children.back().get();
 	// child MetaPipeline must finish completely before this MetaPipeline can start
 	current.AddDependency(child_meta_pipeline->GetBasePipeline());

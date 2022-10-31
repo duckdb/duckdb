@@ -27,7 +27,7 @@ class MetaPipeline : public std::enable_shared_from_this<MetaPipeline> {
 	//!         * And all pipelines that were added to the MetaPipeline after 'current'
 public:
 	//! Create a MetaPipeline with the given sink
-	explicit MetaPipeline(Executor &executor, PipelineBuildState &state, PhysicalOperator *sink, bool preserves_order);
+	explicit MetaPipeline(Executor &executor, PipelineBuildState &state, PhysicalOperator *sink);
 
 public:
 	//! Get the Executor for this MetaPipeline
@@ -45,12 +45,8 @@ public:
 	void GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip);
 	//! Get the inter-MetaPipeline dependencies of the given Pipeline
 	const vector<Pipeline *> *GetDependencies(Pipeline *dependant) const;
-	//! Whether the query plan preserves order
-	bool PreservesOrder() const;
 	//! Whether this MetaPipeline has a recursive CTE
 	bool HasRecursiveCTE() const;
-	//! Gets all recursive CTE's in the MetaPipeline
-	void GetRecursiveCTEs(vector<PhysicalOperator *> &result) const;
 	//! Assign a batch index to the given pipeline
 	void AssignNextBatchIndex(Pipeline *pipeline);
 	//! Let 'dependant' depend on all pipeline that were created since 'start',
@@ -62,8 +58,6 @@ public:
 	void Build(PhysicalOperator *op);
 	//! Ready all the pipelines (recursively)
 	void Ready();
-	//! All pipelines (recursively)
-	void Reset(bool reset_sink);
 
 	//! Create a union pipeline (clone of 'current')
 	Pipeline *CreateUnionPipeline(Pipeline &current);
@@ -96,8 +90,6 @@ private:
 	vector<shared_ptr<MetaPipeline>> children;
 	//! Next batch index
 	idx_t next_batch_index;
-	//! Whether the query plan preserves order
-	bool preserves_order;
 };
 
 } // namespace duckdb

@@ -234,6 +234,9 @@ public:
 	}
 
 	unique_ptr<DataChunk> cached_chunk;
+	bool initialized = false;
+	//! Whether or not the chunk can be cached
+	bool can_cache_chunk = false;
 };
 
 //! Base class that caches output from child Operator class. Note that Operators inheriting from this class should also

@@ -8,6 +8,8 @@ CREATE TABLE dates (d DATE);
 # base date format does not work here
 statement error
 COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (AUTO_DETECT 0, HEADER 0)
+----
+line 1
 
 statement ok
 COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')

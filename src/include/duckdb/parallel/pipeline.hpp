@@ -89,8 +89,6 @@ public:
 
 	//! Returns whether any of the operators in the pipeline care about preserving insertion order
 	bool IsOrderDependent() const;
-	//! Returns whether all operators in this pipeline preserve order
-	bool PreservesOrder() const;
 
 private:
 	//! Whether or not the pipeline has been readied

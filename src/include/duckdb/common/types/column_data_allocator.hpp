@@ -55,13 +55,18 @@ public:
 	void DeleteBlock(uint32_t block_id);
 
 private:
-	void AllocateDataInternal(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
+	void AllocateEmptyBlock(idx_t size);
 	void AllocateBlock();
 	BufferHandle Pin(uint32_t block_id);
 
 	bool HasBlocks() const {
 		return !blocks.empty();
 	}
+
+private:
+	void AllocateBuffer(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
+	void AllocateMemory(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
+	void AssignPointer(uint32_t &block_id, uint32_t &offset, data_ptr_t pointer);
 
 private:
 	ColumnDataAllocatorType type;
