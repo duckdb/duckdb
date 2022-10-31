@@ -1,0 +1,26 @@
+# name: test/sql/storage/compression/bitpacking/contant_compression.test
+# description: Test that will use the BitpackingMode::CONSTANT compression mode
+# group: [test]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE test as SELECT i::UINT16 FROM (
+    SELECT i from range(0,2000) tbl(i) UNION ALL
+    SELECT 1337 from range(0,2000) UNION ALL
+    SELECT i from range(0,2000) tbl(i)
+   ) tbl(i);
+
+query I
+SELECT * FROM test limit 1 OFFSET 3500
+----
+1337
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'USMALLINT' LIMIT 1
+----
+BitPacking

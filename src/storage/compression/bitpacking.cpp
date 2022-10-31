@@ -22,8 +22,8 @@ static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SI
 struct EmptyBitpackingWriter {
 	template <class T>
 	static void WriteConstant(T constant, idx_t count, void* data_ptr, bool all_invalid) {}
-	template <class T>
-	static void WriteConstantDelta(T constant, T frame_of_reference, void* data_ptr) {}
+	template <class T, class T_S=typename std::make_signed<T>::type>
+	static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T* values, bool* validity, void* data_ptr) {}
 	template <class T>
 	static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {}
 	template <class T>
@@ -57,14 +57,14 @@ bitpacking_metadata_t decode_meta(bitpacking_metadata_encoded_t metadata);
 // - BLOCK IS [FOR VALUE, DELTA]
 // - Compression ratio: VectorSize*sizeof(T)/(sizeof(T)*2+4) (INT64 @ VZ2048 = between 819x)
 // DELTA_FOR
-// - BLOCK IS [FOR VALUE, BP_WIDTH, BITPACKED_BUFFER]
+// - BLOCK IS [DELTA_VALUE, FOR VALUE, BP_WIDTH, BITPACKED_BUFFER]
 // - Compression ratio: VectorSize*sizeof(T)/(2 + 8 + ((VectorSize * bitwidth)/8)) (INT64 @ VZ2048 = between 1x and 61.59x)
 // FOR
 // - META bytes is bitwidth of bitpacked buffer
 // - BLOCK IS [FOR VALUE, BP_WIDTH, BITPACKED_BUFFER]
 // - Compression ratio: VectorSize*sizeof(T)/(2 + 8 + ((VectorSize * bitwidth)/8)) (INT64 @ VZ2048 = between 1x and 61.59x)
 
-template <class T, class T_U = typename std::make_unsigned<T>::type, class T_S = typename std::make_unsigned<T>::type>
+template <class T, class T_U = typename std::make_unsigned<T>::type, class T_S = typename std::make_signed<T>::type>
 struct BitpackingState {
 public:
 	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr){
@@ -85,8 +85,9 @@ public:
 
 	T minimum;
 	T maximum;
-	T_S minimum_delta = NumericLimits<T>::Maximum();
-	T_S maximum_delta = NumericLimits<T>::Minimum();
+	T_S minimum_delta;
+	T_S maximum_delta;
+	T_S delta_offset;
 	bool all_valid;
 	bool all_invalid;
 	bool can_do_delta;
@@ -94,9 +95,10 @@ public:
 public:
 	void Reset() {
 		minimum = NumericLimits<T>::Maximum();
-		minimum_delta = NumericLimits<T>::Maximum();
+		minimum_delta = NumericLimits<T_S>::Maximum();
 		maximum = NumericLimits<T>::Minimum();
-		maximum_delta = NumericLimits<T>::Minimum();
+		maximum_delta = NumericLimits<T_S>::Minimum();
+		delta_offset = 0;
 		all_valid = true;
 		all_invalid = true;
 		can_do_delta = false;
@@ -106,17 +108,36 @@ public:
 	// ->    Easy way: only allow delta if falls within corresponding signed domain
 	// TODO  Harder way: also allow shifting -> separate method?
 	void CalculateDeltaStats() {
-		if (maximum > (T)NumericLimits<T_S>::Maximum()){
+		T_S limit1 = NumericLimits<T_S>::Maximum();
+		T limit = (T)limit1;
+
+		if (maximum >= limit){
 			return;
 		}
 
+		D_ASSERT(compression_buffer_idx >= 2);
+
+		// TODO handle NULLS here? By patching i think?
 		for (int64_t i = 0; i < (int64_t)compression_buffer_idx; i++) {
 			auto success = TrySubtractOperator::Operation(compression_buffer[i], compression_buffer[i-1], delta_buffer[i]);
 			if (!success) {
 				return;
 			}
 		}
+
 		can_do_delta = true;
+
+		// Note: skips the first as it will be corrected with the for
+		for (int64_t i = 1; i < (int64_t)compression_buffer_idx; i++) {
+			if (compression_buffer_validity[i]) {
+				maximum_delta = MaxValue<T_S>(maximum_delta, delta_buffer[i]);
+				minimum_delta = MinValue<T_S>(minimum_delta, delta_buffer[i]);
+			}
+		}
+
+		// Since we can set the first value arbitrarily, we want to pick one from the current domain
+		// TODO:
+		delta_buffer[0] = minimum_delta;
 	}
 
 	void SubtractFrameOfReference() {
@@ -145,6 +166,10 @@ public:
 
 	template <class OP>
 	bool Flush() {
+		if (compression_buffer_idx == 0) {
+			return true;
+		}
+
 		if (all_invalid || maximum == minimum) {
 			// Note: if all are invalid, we will write NumericLimits<T>::Minimum(), which is fine as these are not used
 			// TODO: do we want to have an optimization where we can just skip NULLS? this should slightly speed up
@@ -155,17 +180,20 @@ public:
 		}
 
 		CalculateDeltaStats();
-		if (false && can_do_delta) {
+		if (can_do_delta) {
 			if (maximum_delta == minimum_delta) {
-				throw NotImplementedException("DELTA CONSTANT");
+				idx_t frame_of_reference = compression_buffer[0];
+//				static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T* values, bool* validity, void* data_ptr)
+				OP::WriteConstantDelta((T_S)maximum_delta, (T)frame_of_reference, compression_buffer_idx, (T*)compression_buffer, (bool*)compression_buffer_validity, data_ptr);
 				return true;
 			}
 
-			// Check if delta has benefit
+			// Check if delta has benefit TODO rework this
 			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum_delta-minimum_delta);
 			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum-minimum);
 
-			if (delta_required_bitwidth < regular_required_bitwidth) {
+			if (false && delta_required_bitwidth < regular_required_bitwidth) {
+				//// - BLOCK IS [DELTA_VALUE, FOR VALUE, BP_WIDTH, BITPACKED_BUFFER]
 				throw NotImplementedException("DELTA FOR");
 				return true;
 			}
@@ -254,7 +282,7 @@ idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-template <class T>
+template <class T, class T_S = typename std::make_signed<T>::type>
 struct BitpackingCompressState : public CompressionState {
 public:
 	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
@@ -284,7 +312,7 @@ public:
 		// TODO fails for all NULL?
 		static void WriteConstant(T constant, idx_t count, void* data_ptr, bool all_invalid) {
 			auto state = (BitpackingCompressState<T> *)data_ptr;
-			idx_t total_bytes_needed = sizeof(bitpacking_metadata_t) + sizeof(T);
+			idx_t total_bytes_needed = AlignValue<T>(sizeof(bitpacking_metadata_t)) + sizeof(T);
 			state->FlushAndCreateSegmentIfFull(total_bytes_needed);
 			D_ASSERT(total_bytes_needed <= state->RemainingSize());
 
@@ -305,8 +333,31 @@ public:
 			}
 		}
 
-		static void WriteConstantDelta(T constant, T frame_of_reference, void* data_ptr) {
+		static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T* values, bool* validity, void* data_ptr) {
+			auto state = (BitpackingCompressState<T> *)data_ptr;
+			idx_t total_bytes_needed = AlignValue<T>(sizeof(bitpacking_metadata_t)) + sizeof(T);
+			state->FlushAndCreateSegmentIfFull(total_bytes_needed);
+			D_ASSERT(total_bytes_needed <= state->RemainingSize());
 
+			// Meta
+			state->metadata_ptr -= sizeof(bitpacking_metadata_t)-1;
+			Store<bitpacking_metadata_t>(bitpacking_metadata_t{BitpackingMode::CONSTANT_DELTA, (uint32_t)(state->data_ptr - state->handle.Ptr())}, state->metadata_ptr);
+			state->metadata_ptr -= 1;
+
+			// Data
+			*(T*)state->data_ptr = frame_of_reference;
+			state->data_ptr += sizeof(T);
+			*(T*)state->data_ptr = constant;
+			state->data_ptr += sizeof(T);
+
+			state->current_segment->count += count;
+
+			// Update Validity TODO: clean this up?
+			for (idx_t i = 0; i < count; i++) {
+				if (validity[i]) {
+					NumericStatistics::Update<T>(state->current_segment->stats, values[i]);
+				}
+			}
 		}
 
 		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {
@@ -318,7 +369,7 @@ public:
 				auto bits_required_for_bp = (width * BITPACKING_METADATA_GROUP_SIZE);
 				D_ASSERT(bits_required_for_bp % 8 == 0);
 				auto data_bytes = bits_required_for_bp / 8 + sizeof(T);
-				auto meta_bytes = sizeof(bitpacking_metadata_t);
+				auto meta_bytes = AlignValue<T>(sizeof(bitpacking_metadata_t));
 
 				state->FlushAndCreateSegmentIfFull(data_bytes + meta_bytes);
 
@@ -382,7 +433,7 @@ public:
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			state.template Update<BitpackingCompressState<T>::BitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx));
+			state.template Update<BitpackingCompressState<T, T_S>::BitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx));
 		}
 	}
 
@@ -414,7 +465,7 @@ public:
 	}
 
 	void Finalize() {
-		state.template Flush<BitpackingCompressState<T>::BitpackingWriter>();
+		state.template Flush<BitpackingCompressState<T, T_S>::BitpackingWriter>();
 		FlushSegment();
 		current_segment.reset();
 	}
@@ -630,7 +681,20 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			scan_state.current_group_offset += to_scan;
 			continue;
 		}
-		else if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA || scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
+		if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
+			idx_t remaining = scan_count-scanned;
+			idx_t to_scan = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+			T* target_ptr = result_data + result_offset + scanned;
+
+			for (idx_t i = 0; i < to_scan; i++){
+				target_ptr[i] = ((scan_state.current_group_offset + i) * scan_state.current_constant) + scan_state.current_frame_of_reference;
+			}
+
+			scanned += to_scan;
+			scan_state.current_group_offset += to_scan;
+			continue;
+		}
+		else if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
 			throw NotImplementedException("Delta encoding not yet implemented");
 		}
 
@@ -700,6 +764,11 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 
 	if (scan_state.current_group.mode == BitpackingMode::CONSTANT) {
 		*current_result_ptr = scan_state.current_constant;
+		return;
+	}
+
+	if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
+		*current_result_ptr = ((scan_state.current_group_offset) * scan_state.current_constant) + scan_state.current_frame_of_reference;
 		return;
 	}
 
