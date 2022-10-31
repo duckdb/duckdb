@@ -132,13 +132,10 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 			throw NotImplementedException("AggregateType not implemented in PhysicalHashAggregate");
 		} // LCOV_EXCL_STOP
 	}
-	vector<idx_t> distinct_indices;
+
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i];
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
-		if (aggr.IsDistinct()) {
-			distinct_indices.push_back(i);
-		}
 		if (aggr.filter) {
 			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
 			if (!filter_indexes.count(aggr.filter.get())) {
@@ -149,6 +146,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 			aggregate_input_idx++;
 		}
 	}
+
+	vector<idx_t> distinct_indices = DistinctAggregateData::GetDistinctIndices(aggregates);
 
 	if (!distinct_indices.empty()) {
 		distinct_collection_info =

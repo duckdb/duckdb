@@ -23,15 +23,7 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types
     : PhysicalOperator(PhysicalOperatorType::UNGROUPED_AGGREGATE, move(types), estimated_cardinality),
       aggregates(move(expressions)) {
 
-	vector<idx_t> distinct_indices;
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &aggregate = aggregates[i];
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
-		if (aggr.IsDistinct()) {
-			distinct_indices.push_back(i);
-			distinct_filter.push_back(i);
-		}
-	}
+	vector<idx_t> distinct_indices = DistinctAggregateData::GetDistinctIndices(aggregates);
 	if (distinct_indices.empty()) {
 		return;
 	}
@@ -191,6 +183,8 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 	auto &distinct_indices = distinct_info.Indices();
 
 	DataChunk empty_chunk;
+
+	auto &distinct_filter = distinct_info.Indices();
 
 	for (auto &idx : distinct_indices) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[idx];

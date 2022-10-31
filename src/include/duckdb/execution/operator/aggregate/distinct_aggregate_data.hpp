@@ -55,6 +55,7 @@ public:
 	const DistinctAggregateCollectionInfo &info;
 
 public:
+	static vector<idx_t> GetDistinctIndices(vector<unique_ptr<Expression>> &aggregates);
 	bool IsDistinct(idx_t index) const;
 };
 

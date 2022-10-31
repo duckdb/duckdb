@@ -174,6 +174,18 @@ const vector<idx_t> &DistinctAggregateCollectionInfo::Indices() const {
 	return this->indices;
 }
 
+vector<idx_t> DistinctAggregateData::GetDistinctIndices(vector<unique_ptr<Expression>> &aggregates) {
+	vector<idx_t> distinct_indices;
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggregate = aggregates[i];
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		if (aggr.IsDistinct()) {
+			distinct_indices.push_back(i);
+		}
+	}
+	return distinct_indices;
+}
+
 bool DistinctAggregateData::IsDistinct(idx_t index) const {
 	bool is_distinct = !radix_tables.empty() && info.table_map.count(index);
 #ifdef DEBUG
