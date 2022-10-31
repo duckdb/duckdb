@@ -1,0 +1,271 @@
+# name: test/sql/aggregate/distinct/grouped/combined_with_grouping.test
+# group: [grouped]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+create table students (
+	course VARCHAR,
+	type VARCHAR,
+	value BIGINT
+);
+
+statement ok
+insert into students
+		(course, type, value)
+	values
+		('CS', 'Bachelor', 34),
+		('CS', 'Bachelor', 34),
+		('CS', 'PhD', 12),
+		('Math', 'Masters', 12),
+		('CS', NULL, 10),
+		('CS', NULL, 12),
+		('Math', NULL, 12),
+		('Math', NULL, NULL);
+
+query IIII
+SELECT GROUPING(course), course, sum(distinct value), COUNT(*) FROM students GROUP BY course ORDER BY 1, 2, 3;
+----
+0	CS	56	5
+0	Math	12	3
+
+query IIII
+SELECT sum(distinct value), GROUPING_ID(course), course, COUNT(*) FROM students GROUP BY course ORDER BY 1, 2, 3;
+----
+12	0	Math	3
+56	0	CS	5
+
+query IIIIIII
+SELECT GROUPING(course), GROUPING(type), course, type, sum(distinct value), COUNT(*), sum(distinct value), FROM students GROUP BY course, type ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	CS	NULL	22	2	22
+0	0	CS	Bachelor	34	2	34
+0	0	CS	PhD	12	1	12
+0	0	Math	NULL	12	2	12
+0	0	Math	Masters	12	1	12
+
+query IIIIIII
+SELECT GROUPING(course), GROUPING(type), avg(distinct value), course, type, COUNT(*), sum(distinct value), FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	11.0	CS	NULL	2	22
+0	0	12.0	CS	PhD	1	12
+0	0	12.0	Math	NULL	2	12
+0	0	12.0	Math	Masters	1	12
+0	0	34.0	CS	Bachelor	2	34
+0	1	12.0	Math	NULL	3	12
+0	1	18.666666666666668	CS	NULL	5	56
+1	0	11.0	NULL	NULL	4	22
+1	0	12.0	NULL	Masters	1	12
+1	0	12.0	NULL	PhD	1	12
+1	0	34.0	NULL	Bachelor	2	34
+1	1	18.666666666666668	NULL	NULL	8	56
+
+query IIIIII
+SELECT sum(distinct value), GROUPING(course, type), course, type, COUNT(*), sum(distinct value), FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4;
+----
+12	0	CS	PhD	1	12
+12	0	Math	NULL	2	12
+12	0	Math	Masters	1	12
+12	1	Math	NULL	3	12
+12	2	NULL	Masters	1	12
+12	2	NULL	PhD	1	12
+22	0	CS	NULL	2	22
+22	2	NULL	NULL	4	22
+34	0	CS	Bachelor	2	34
+34	2	NULL	Bachelor	2	34
+56	1	CS	NULL	5	56
+56	3	NULL	NULL	8	56
+
+query IIIIIIII
+SELECT GROUPING(course), GROUPING(type), sum(distinct value), GROUPING(course)+GROUPING(type), course, type, count(distinct value), COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	12	0	CS	PhD	1	1
+0	0	12	0	Math	Masters	1	1
+0	0	12	0	Math	NULL	1	2
+0	0	22	0	CS	NULL	2	2
+0	0	34	0	CS	Bachelor	1	2
+0	1	12	1	Math	NULL	1	3
+0	1	56	1	CS	NULL	3	5
+1	0	12	1	NULL	PhD	1	1
+1	0	12	1	NULL	Masters	1	1
+1	0	22	1	NULL	NULL	2	4
+1	0	34	1	NULL	Bachelor	1	2
+1	1	56	2	NULL	NULL	3	8
+
+# many repeated groupings
+query IIIIIII
+SELECT GROUPING(course, type, course, course, type, value, type, course), avg(distinct value), avg(value), avg(distinct value), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type, value) ORDER BY 1, 2, 3, 4;
+----
+0	NULL	NULL	NULL	Math	NULL	1
+0	10.0	10.0	10.0	CS	NULL	1
+0	12.0	12.0	12.0	CS	PhD	1
+0	12.0	12.0	12.0	Math	Masters	1
+0	12.0	12.0	12.0	CS	NULL	1
+0	12.0	12.0	12.0	Math	NULL	1
+0	34.0	34.0	34.0	CS	Bachelor	2
+4	11.0	11.0	11.0	CS	NULL	2
+4	12.0	12.0	12.0	CS	PhD	1
+4	12.0	12.0	12.0	Math	Masters	1
+4	12.0	12.0	12.0	Math	NULL	2
+4	34.0	34.0	34.0	CS	Bachelor	2
+74	NULL	NULL	NULL	Math	NULL	1
+74	10.0	10.0	10.0	CS	NULL	1
+74	12.0	12.0	12.0	CS	NULL	2
+74	12.0	12.0	12.0	Math	NULL	2
+74	34.0	34.0	34.0	CS	NULL	2
+78	12.0	12.0	12.0	Math	NULL	3
+78	18.666666666666668	20.4	18.666666666666668	CS	NULL	5
+177	NULL	NULL	NULL	NULL	NULL	1
+177	10.0	10.0	10.0	NULL	NULL	1
+177	12.0	12.0	12.0	NULL	PhD	1
+177	12.0	12.0	12.0	NULL	Masters	1
+177	12.0	12.0	12.0	NULL	NULL	2
+177	34.0	34.0	34.0	NULL	Bachelor	2
+181	11.0	11.333333333333334	11.0	NULL	NULL	4
+181	12.0	12.0	12.0	NULL	PhD	1
+181	12.0	12.0	12.0	NULL	Masters	1
+181	34.0	34.0	34.0	NULL	Bachelor	2
+251	NULL	NULL	NULL	NULL	NULL	1
+251	10.0	10.0	10.0	NULL	NULL	1
+251	12.0	12.0	12.0	NULL	NULL	4
+251	34.0	34.0	34.0	NULL	NULL	2
+255	18.666666666666668	18.0	18.666666666666668	NULL	NULL	8
+
+# GROUPING with different table qualifications
+query IIIIIIII
+SELECT GROUPING(students.course), GROUPING(students.type), sum(distinct value), GROUPING(course)+GROUPING(type), course, avg(distinct value), type, COUNT(*) FROM students GROUP BY CUBE(course, type, value) ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	NULL	0	Math	NULL	NULL	1
+0	0	10	0	CS	10.0	NULL	1
+0	0	12	0	CS	12.0	PhD	1
+0	0	12	0	CS	12.0	PhD	1
+0	0	12	0	CS	12.0	NULL	1
+0	0	12	0	Math	12.0	Masters	1
+0	0	12	0	Math	12.0	NULL	2
+0	0	12	0	Math	12.0	Masters	1
+0	0	12	0	Math	12.0	NULL	1
+0	0	22	0	CS	11.0	NULL	2
+0	0	34	0	CS	34.0	Bachelor	2
+0	0	34	0	CS	34.0	Bachelor	2
+0	1	NULL	1	Math	NULL	NULL	1
+0	1	10	1	CS	10.0	NULL	1
+0	1	12	1	CS	12.0	NULL	2
+0	1	12	1	Math	12.0	NULL	2
+0	1	12	1	Math	12.0	NULL	3
+0	1	34	1	CS	34.0	NULL	2
+0	1	56	1	CS	18.666666666666668	NULL	5
+1	0	NULL	1	NULL	NULL	NULL	1
+1	0	10	1	NULL	10.0	NULL	1
+1	0	12	1	NULL	12.0	PhD	1
+1	0	12	1	NULL	12.0	Masters	1
+1	0	12	1	NULL	12.0	NULL	2
+1	0	12	1	NULL	12.0	PhD	1
+1	0	12	1	NULL	12.0	Masters	1
+1	0	22	1	NULL	11.0	NULL	4
+1	0	34	1	NULL	34.0	Bachelor	2
+1	0	34	1	NULL	34.0	Bachelor	2
+1	1	NULL	2	NULL	NULL	NULL	1
+1	1	10	2	NULL	10.0	NULL	1
+1	1	12	2	NULL	12.0	NULL	4
+1	1	34	2	NULL	34.0	NULL	2
+1	1	56	2	NULL	18.666666666666668	NULL	8
+
+query IIIIIIII
+SELECT GROUPING(course), GROUPING(type), avg(value), GROUPING(course)+GROUPING(type), avg(distinct value), course, type, COUNT(*) FROM students GROUP BY CUBE(students.course, students.type) ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	11.0	0	11.0	CS	NULL	2
+0	0	12.0	0	12.0	CS	PhD	1
+0	0	12.0	0	12.0	Math	Masters	1
+0	0	12.0	0	12.0	Math	NULL	2
+0	0	34.0	0	34.0	CS	Bachelor	2
+0	1	12.0	1	12.0	Math	NULL	3
+0	1	20.4	1	18.666666666666668	CS	NULL	5
+1	0	11.333333333333334	1	11.0	NULL	NULL	4
+1	0	12.0	1	12.0	NULL	PhD	1
+1	0	12.0	1	12.0	NULL	Masters	1
+1	0	34.0	1	34.0	NULL	Bachelor	2
+1	1	18.0	2	18.666666666666668	NULL	NULL	8
+
+# GROUPING in HAVING clause
+query IIIII
+SELECT GROUPING(course), GROUPING(value), course, sum(distinct value), COUNT(*) FROM students GROUP BY CUBE(course, value) HAVING GROUPING(course)=0 ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	CS	10	1
+0	0	CS	12	2
+0	0	CS	34	2
+0	0	Math	NULL	1
+0	0	Math	12	2
+0	1	CS	56	5
+0	1	Math	12	3
+
+query IIIIIIII
+SELECT GROUPING(course), GROUPING(type), sum(distinct value), course, type, sum(distinct value), avg(distinct value), COUNT(*) FROM students GROUP BY CUBE(course, value, type, value) HAVING GROUPING(students.course)=0 ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	NULL	Math	NULL	NULL	NULL	1
+0	0	NULL	Math	NULL	NULL	NULL	1
+0	0	NULL	Math	NULL	NULL	NULL	1
+0	0	10	CS	NULL	10	10.0	1
+0	0	10	CS	NULL	10	10.0	1
+0	0	10	CS	NULL	10	10.0	1
+0	0	12	CS	NULL	12	12.0	1
+0	0	12	CS	NULL	12	12.0	1
+0	0	12	CS	NULL	12	12.0	1
+0	0	12	CS	PhD	12	12.0	1
+0	0	12	CS	PhD	12	12.0	1
+0	0	12	CS	PhD	12	12.0	1
+0	0	12	CS	PhD	12	12.0	1
+0	0	12	Math	NULL	12	12.0	2
+0	0	12	Math	NULL	12	12.0	1
+0	0	12	Math	NULL	12	12.0	1
+0	0	12	Math	NULL	12	12.0	1
+0	0	12	Math	Masters	12	12.0	1
+0	0	12	Math	Masters	12	12.0	1
+0	0	12	Math	Masters	12	12.0	1
+0	0	12	Math	Masters	12	12.0	1
+0	0	22	CS	NULL	22	11.0	2
+0	0	34	CS	Bachelor	34	34.0	2
+0	0	34	CS	Bachelor	34	34.0	2
+0	0	34	CS	Bachelor	34	34.0	2
+0	0	34	CS	Bachelor	34	34.0	2
+0	1	NULL	Math	NULL	NULL	NULL	1
+0	1	NULL	Math	NULL	NULL	NULL	1
+0	1	NULL	Math	NULL	NULL	NULL	1
+0	1	10	CS	NULL	10	10.0	1
+0	1	10	CS	NULL	10	10.0	1
+0	1	10	CS	NULL	10	10.0	1
+0	1	12	CS	NULL	12	12.0	2
+0	1	12	CS	NULL	12	12.0	2
+0	1	12	CS	NULL	12	12.0	2
+0	1	12	Math	NULL	12	12.0	2
+0	1	12	Math	NULL	12	12.0	2
+0	1	12	Math	NULL	12	12.0	2
+0	1	12	Math	NULL	12	12.0	3
+0	1	34	CS	NULL	34	34.0	2
+0	1	34	CS	NULL	34	34.0	2
+0	1	34	CS	NULL	34	34.0	2
+0	1	56	CS	NULL	56	18.666666666666668	5
+
+
+# GROUPING in ORDER BY clause
+query IIIII
+SELECT type, COUNT(*), avg(value), sum(distinct value), avg(distinct value), FROM students GROUP BY CUBE(value, type) ORDER BY GROUPING(value), GROUPING(type), 1, 2, 3;
+----
+NULL	1	NULL	NULL	NULL
+NULL	1	10.0	10	10.0
+NULL	2	12.0	12	12.0
+Bachelor	2	34.0	34	34.0
+Masters	1	12.0	12	12.0
+PhD	1	12.0	12	12.0
+NULL	1	NULL	NULL	NULL
+NULL	1	10.0	10	10.0
+NULL	2	34.0	34	34.0
+NULL	4	12.0	12	12.0
+NULL	4	11.333333333333334	22	11.0
+Bachelor	2	34.0	34	34.0
+Masters	1	12.0	12	12.0
+PhD	1	12.0	12	12.0
+NULL	8	18.0	56	18.666666666666668
