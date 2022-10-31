@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/distinct/grouped/distinct_grouping_tpch.test
+# name: test/sql/aggregate/distinct/grouped/distinct_grouping_tpch.test_slow
 # group: [grouped]
 
 require tpch
