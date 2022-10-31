@@ -4,11 +4,13 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class DuckDBDatabase {
 
 	protected String url;
 	protected boolean read_only;
+	private AtomicInteger connections;
 
 	public DuckDBDatabase(String url, boolean read_only, Properties props) throws SQLException {
 		if (!url.startsWith("jdbc:duckdb")) {
@@ -21,6 +23,7 @@ public class DuckDBDatabase {
 		}
 		this.read_only = read_only;
 		db_ref = DuckDBNative.duckdb_jdbc_startup(db_dir.getBytes(StandardCharsets.UTF_8), read_only, props);
+		connections = new AtomicInteger();
 	}
 
 	public void shutdown() {
@@ -39,4 +42,16 @@ public class DuckDBDatabase {
 
 	protected ByteBuffer db_ref;
 
+	void incrementConnections() {
+		this.connections.incrementAndGet();
+	}
+	void maybeShutdown() {
+		if (this.connections.decrementAndGet() == 0) {
+			this.shutdown();
+		}
+	}
+
+	public boolean isShutdown() {
+		return db_ref == null;
+	}
 }

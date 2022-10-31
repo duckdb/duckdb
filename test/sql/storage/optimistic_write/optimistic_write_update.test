@@ -1,0 +1,50 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_update.test
+# description: Test optimistic write with updates in transaction-local storage
+# group: [optimistic_write]
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_update.db
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000)
+
+statement ok
+UPDATE test SET a=500000 WHERE a=0
+
+statement ok
+COMMIT
+
+query I
+SELECT SUM(a) FROM test
+----
+500000000000
+
+restart
+
+query I
+SELECT SUM(a) FROM test
+----
+500000000000
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000)
+
+statement ok
+UPDATE test SET a=500000 WHERE a=0
+
+statement ok
+ROLLBACK
+
+query I
+SELECT SUM(a) FROM test
+----
+500000000000

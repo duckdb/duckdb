@@ -637,7 +637,7 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
 		if (offset > 0) {
-			Vector sliced_vector(update_chunk.data[i], offset);
+			Vector sliced_vector(update_chunk.data[i], offset, offset + count);
 			sliced_vector.Flatten(count);
 			columns[column]->Update(transaction, column, sliced_vector, ids + offset, count);
 		} else {
@@ -680,10 +680,11 @@ void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	other.Merge(*stats[column_idx]->statistics);
 }
 
-RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
-	RowGroupPointer row_group_pointer;
-	vector<unique_ptr<ColumnCheckpointState>> states;
-	states.reserve(columns.size());
+RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
+                                        const vector<CompressionType> &compression_types) {
+	RowGroupWriteData result;
+	result.states.reserve(columns.size());
+	result.statistics.reserve(columns.size());
 
 	// Checkpoint the individual columns of the row group
 	// Here we're iterating over columns. Each column can have multiple segments.
@@ -695,23 +696,39 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<B
 	// pointers all end up densely packed, and thus more cache-friendly.
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
-		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(column_idx)};
-		auto checkpoint_state = column->Checkpoint(*this, writer, checkpoint_info);
+		ColumnCheckpointInfo checkpoint_info {compression_types[column_idx]};
+		auto checkpoint_state = column->Checkpoint(*this, manager, checkpoint_info);
 		D_ASSERT(checkpoint_state);
 
 		auto stats = checkpoint_state->GetStatistics();
 		D_ASSERT(stats);
 
-		global_stats[column_idx]->Merge(*stats);
-		row_group_pointer.statistics.push_back(move(stats));
-		states.push_back(move(checkpoint_state));
+		result.statistics.push_back(move(stats));
+		result.states.push_back(move(checkpoint_state));
 	}
+	D_ASSERT(result.states.size() == result.statistics.size());
+	return result;
+}
+
+RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+	RowGroupPointer row_group_pointer;
+
+	vector<CompressionType> compression_types;
+	compression_types.reserve(columns.size());
+	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
+	}
+	auto result = WriteToDisk(writer.GetPartialBlockManager(), compression_types);
+	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+		global_stats[column_idx]->Merge(*result.statistics[column_idx]);
+	}
+	row_group_pointer.statistics = move(result.statistics);
 
 	// construct the row group pointer and write the column meta data to disk
-	D_ASSERT(states.size() == columns.size());
+	D_ASSERT(result.states.size() == columns.size());
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
-	for (auto &state : states) {
+	for (auto &state : result.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
 		auto pointer = data_writer.GetBlockPointer();
@@ -723,7 +740,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<B
 		//
 		// Just as above, the state can refer to many other states, so this
 		// can cascade recursively into more pointer writes.
-		state->WriteDataPointers();
+		state->WriteDataPointers(writer);
 	}
 	row_group_pointer.versions = version_info;
 	Verify();

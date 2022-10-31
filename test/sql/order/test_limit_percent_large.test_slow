@@ -1,0 +1,26 @@
+# name: test/sql/order/test_limit_percent_large.test_slow
+# description: Test LIMIT keyword {% | PERCENT}
+# group: [order]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM range(1000000) LIMIT 10%) LIMIT 10%) LIMIT 10%)
+----
+1000
+
+query I
+SELECT * FROM range(10) UNION ALL SELECT * FROM range(10, 20) LIMIT 10%;
+----
+0
+1
+
+#boundary values
+# big value
+query I
+SELECT * FROM range(1000000) LIMIT 0.0001%
+----
+0

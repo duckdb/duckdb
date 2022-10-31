@@ -104,8 +104,6 @@ SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, 0.5) FROM quant
 
 statement error
 SELECT quantile_cont(interval (r/100) second, 0.5) FROM quantile
-----
-01:23:19
 
 # WITH TIME ZONE
 query I

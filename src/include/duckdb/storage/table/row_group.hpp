@@ -22,14 +22,21 @@ class BlockManager;
 class ColumnData;
 class DatabaseInstance;
 class DataTable;
+class PartialBlockManager;
 struct DataTableInfo;
 class ExpressionExecutor;
 class RowGroupWriter;
 class UpdateSegment;
 class Vector;
+struct ColumnCheckpointState;
 struct RowGroupPointer;
 struct TransactionData;
 struct VersionNode;
+
+struct RowGroupWriteData {
+	vector<unique_ptr<ColumnCheckpointState>> states;
+	vector<unique_ptr<BaseStatistics>> statistics;
+};
 
 class RowGroup : public SegmentBase {
 public:
@@ -37,8 +44,8 @@ public:
 	friend class VersionDeleteState;
 
 public:
-	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = 120;
-	static constexpr const idx_t ROW_GROUP_SIZE = STANDARD_VECTOR_SIZE * ROW_GROUP_VECTOR_COUNT;
+	static constexpr const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
+	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
 
 public:
 	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start, idx_t count);
@@ -123,6 +130,7 @@ public:
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(TransactionData transaction, DataTable *table, row_t *row_ids, idx_t count);
 
+	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
 	RowGroupPointer Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);

@@ -94,6 +94,8 @@ public:
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 	//! Append a column data collection to the transaction-local storage of this table
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection);
+	//! Merge a row group collection into the transaction-local storage
+	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
 
 	//! Delete the entries with the specified row identifier from the table
 	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
@@ -130,7 +132,7 @@ public:
 	void ScanTableSegment(idx_t start_row, idx_t count, const std::function<void(DataChunk &chunk)> &function);
 
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
-	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes, TableStatistics &stats);
+	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded
@@ -170,11 +172,12 @@ public:
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
 
+	//! Verify constraints with a chunk from the Append containing all columns of the table
+	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+
 private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint);
-	//! Verify constraints with a chunk from the Append containing all columns of the table
-	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, const vector<column_t> &column_ids);
 	//! Verify constraints with a chunk from the Delete containing all columns of the table
@@ -188,8 +191,6 @@ private:
 	mutex append_lock;
 	//! The row groups of the table
 	shared_ptr<RowGroupCollection> row_groups;
-	//! Table statistics
-	TableStatistics stats;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
 	//! that can be appended to
 	atomic<bool> is_root;

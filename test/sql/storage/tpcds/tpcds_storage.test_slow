@@ -31,7 +31,7 @@ PRAGMA tpcds(${i})
 
 endloop
 
-loop i 10 99
+loop i 10 100
 
 query I
 PRAGMA tpcds(${i})

@@ -29,8 +29,6 @@ select list_mode(name) from names;
 ----
 pedro
 
-require vector_size 512
-
 # temporal types
 
 # date

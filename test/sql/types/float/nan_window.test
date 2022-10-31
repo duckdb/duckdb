@@ -2,8 +2,6 @@
 # description: Test NaN and inf in windowing functions
 # group: [float]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 

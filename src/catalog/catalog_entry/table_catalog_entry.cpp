@@ -28,6 +28,15 @@
 
 namespace duckdb {
 
+bool TableCatalogEntry::HasGeneratedColumns() const {
+	for (auto &col : columns) {
+		if (col.Generated()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 const string &TableCatalogEntry::GetColumnName(column_t index) {
 	return columns[index].Name();
 }

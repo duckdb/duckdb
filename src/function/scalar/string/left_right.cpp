@@ -6,54 +6,84 @@
 
 namespace duckdb {
 
-static string_t LeftScalarFunction(Vector &result, const string_t str, int64_t pos) {
-	if (pos >= 0) {
-		return SubstringFun::SubstringScalarFunction(result, str, 1, pos);
+struct LeftRightUnicode {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return LengthFun::Length<TA, TR>(input);
 	}
 
-	int64_t num_characters = LengthFun::Length<string_t, int64_t>(str);
+	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
+		return SubstringFun::SubstringUnicode(result, input, offset, length);
+	}
+};
+
+struct LeftRightGrapheme {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return LengthFun::GraphemeCount<TA, TR>(input);
+	}
+
+	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
+		return SubstringFun::SubstringGrapheme(result, input, offset, length);
+	}
+};
+
+template <class OP>
+static string_t LeftScalarFunction(Vector &result, const string_t str, int64_t pos) {
+	if (pos >= 0) {
+		return OP::Substring(result, str, 1, pos);
+	}
+
+	int64_t num_characters = OP::template Operation<string_t, int64_t>(str);
 	pos = MaxValue<int64_t>(0, num_characters + pos);
-	return SubstringFun::SubstringScalarFunction(result, str, 1, pos);
+	return OP::Substring(result, str, 1, pos);
 }
 
+template <class OP>
 static void LeftFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &str_vec = args.data[0];
 	auto &pos_vec = args.data[1];
 
 	BinaryExecutor::Execute<string_t, int64_t, string_t>(
 	    str_vec, pos_vec, result, args.size(),
-	    [&](string_t str, int64_t pos) { return LeftScalarFunction(result, str, pos); });
+	    [&](string_t str, int64_t pos) { return LeftScalarFunction<OP>(result, str, pos); });
 }
 
 void LeftFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("left", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, LeftFunction));
+	set.AddFunction(ScalarFunction("left", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                               LeftFunction<LeftRightUnicode>));
+	set.AddFunction(ScalarFunction("left_grapheme", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                               LeftFunction<LeftRightGrapheme>));
 }
 
+template <class OP>
 static string_t RightScalarFunction(Vector &result, const string_t str, int64_t pos) {
-	int64_t num_characters = LengthFun::Length<string_t, int64_t>(str);
+	int64_t num_characters = OP::template Operation<string_t, int64_t>(str);
 	if (pos >= 0) {
 		int64_t len = MinValue<int64_t>(num_characters, pos);
 		int64_t start = num_characters - len + 1;
-		return SubstringFun::SubstringScalarFunction(result, str, start, len);
+		return OP::Substring(result, str, start, len);
 	}
 
 	int64_t len = num_characters - MinValue<int64_t>(num_characters, -pos);
 	int64_t start = num_characters - len + 1;
-	return SubstringFun::SubstringScalarFunction(result, str, start, len);
+	return OP::Substring(result, str, start, len);
 }
 
+template <class OP>
 static void RightFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &str_vec = args.data[0];
 	auto &pos_vec = args.data[1];
 	BinaryExecutor::Execute<string_t, int64_t, string_t>(
 	    str_vec, pos_vec, result, args.size(),
-	    [&](string_t str, int64_t pos) { return RightScalarFunction(result, str, pos); });
+	    [&](string_t str, int64_t pos) { return RightScalarFunction<OP>(result, str, pos); });
 }
 
 void RightFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("right", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, RightFunction));
+	set.AddFunction(ScalarFunction("right", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                               RightFunction<LeftRightUnicode>));
+	set.AddFunction(ScalarFunction("right_grapheme", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                               RightFunction<LeftRightGrapheme>));
 }
 
 } // namespace duckdb

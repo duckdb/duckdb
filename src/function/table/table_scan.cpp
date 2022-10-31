@@ -100,8 +100,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
                                                       column_t column_id) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	auto &transaction = Transaction::GetTransaction(context);
-	if (transaction.storage.Find(bind_data.table->storage.get())) {
+	auto &local_storage = LocalStorage::Get(context);
+	if (local_storage.Find(bind_data.table->storage.get())) {
 		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
 	}
@@ -164,10 +164,10 @@ idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_da
                              LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
 	auto &state = (TableScanLocalState &)*local_state;
 	if (state.scan_state.table_state.row_group_state.row_group) {
-		return state.scan_state.table_state.row_group_state.row_group->start;
+		return state.scan_state.table_state.batch_index;
 	}
 	if (state.scan_state.local_state.row_group_state.row_group) {
-		return state.scan_state.local_state.row_group_state.row_group->start;
+		return state.scan_state.table_state.batch_index + state.scan_state.local_state.batch_index;
 	}
 	return 0;
 }
@@ -179,9 +179,9 @@ void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionD
 
 unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &local_storage = LocalStorage::Get(context);
 	idx_t estimated_cardinality =
-	    bind_data.table->storage->info->cardinality + transaction.storage.AddedRows(bind_data.table->storage.get());
+	    bind_data.table->storage->info->cardinality + local_storage.AddedRows(bind_data.table->storage.get());
 	return make_unique<NodeStatistics>(bind_data.table->storage->info->cardinality, estimated_cardinality);
 }
 
@@ -206,11 +206,11 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 		row_id_data = (data_ptr_t)&bind_data.result_ids[0];
 	}
 	auto result = make_unique<IndexScanGlobalState>(row_id_data);
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &local_storage = LocalStorage::Get(context);
 	result->column_ids = input.column_ids;
 	result->local_storage_state.Initialize(input.column_ids, input.filters);
-	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state.local_state,
-	                                   input.filters);
+	local_storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state.local_state,
+	                             input.filters);
 
 	result->finished = false;
 	return move(result);
@@ -220,13 +220,15 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 	auto &bind_data = (const TableScanBindData &)*data_p.bind_data;
 	auto &state = (IndexScanGlobalState &)*data_p.global_state;
 	auto &transaction = Transaction::GetTransaction(context);
+	auto &local_storage = LocalStorage::Get(transaction);
+
 	if (!state.finished) {
 		bind_data.table->storage->Fetch(transaction, output, state.column_ids, state.row_ids,
 		                                bind_data.result_ids.size(), state.fetch_state);
 		state.finished = true;
 	}
 	if (output.size() == 0) {
-		transaction.storage.Scan(state.local_storage_state.local_state, state.column_ids, output);
+		local_storage.Scan(state.local_storage_state.local_state, state.column_ids, output);
 	}
 }
 

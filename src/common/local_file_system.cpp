@@ -853,7 +853,7 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 		result.push_back(path);
 	} else if (!absolute_path) {
 		Value value;
-		if (opener->TryGetCurrentSetting("file_search_path", value)) {
+		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
 			auto search_paths_str = value.ToString();
 			std::vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
@@ -919,7 +919,18 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (absolute_path) {
 		// for absolute paths, we don't start by scanning the current directory
 		previous_directories.push_back(splits[0]);
+	} else {
+		// If file_search_path is set, use those paths as the first glob elements
+		Value value;
+		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
+			auto search_paths_str = value.ToString();
+			std::vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
+			for (const auto &search_path : search_paths) {
+				previous_directories.push_back(search_path);
+			}
+		}
 	}
+
 	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
 		bool has_glob = HasGlob(splits[i]);

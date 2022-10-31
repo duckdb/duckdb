@@ -21,6 +21,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	} else {
 		tree = nullptr;
 	}
+	serialized_data_pointer = BlockPointer(block_id, block_offset);
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
 		case PhysicalType::BOOL:
@@ -286,19 +287,6 @@ void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_s
 	}
 }
 
-void FindFirstNotNullKey(vector<Key> &keys, bool &skipped_all_nulls, idx_t &start_idx) {
-
-	if (!skipped_all_nulls) {
-		for (idx_t i = 0; i < keys.size(); i++) {
-			if (!keys[i].Empty()) {
-				start_idx = i;
-				skipped_all_nulls = true;
-				return;
-			}
-		}
-	}
-}
-
 void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) {
 
 	auto payload_types = logical_types;
@@ -307,7 +295,6 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 	ArenaAllocator arena_allocator(allocator);
 	vector<Key> keys(STANDARD_VECTOR_SIZE);
 
-	auto skipped_all_nulls = false;
 	auto temp_art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
 	                                 this->constraint_type, this->db);
 
@@ -332,22 +319,6 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 		arena_allocator.Reset();
 		GenerateKeys(arena_allocator, ordered_chunk, keys);
 
-		// we order NULLS FIRST, so we might have to skip nulls at the start of our sorted data
-		idx_t start_idx = 0;
-		FindFirstNotNullKey(keys, skipped_all_nulls, start_idx);
-
-		if (start_idx != 0 && IsPrimary()) {
-			throw ConstraintException("NULLs in new data violate the primary key constraint of the index");
-		}
-
-		if (!skipped_all_nulls) {
-			if (IsPrimary()) {
-				// chunk consists only of NULLs
-				throw ConstraintException("NULLs in new data violate the primary key constraint of the index");
-			}
-			continue;
-		}
-
 		// prepare the row_identifiers
 		row_identifiers.Flatten(ordered_chunk.size());
 		auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
@@ -355,7 +326,7 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 		// construct the ART of this chunk
 		auto art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
 		                            this->constraint_type, this->db);
-		auto key_section = KeySection(start_idx, ordered_chunk.size() - 1, 0, 0);
+		auto key_section = KeySection(0, ordered_chunk.size() - 1, 0, 0);
 		auto has_constraint = IsUnique();
 		Construct(keys, row_ids, art->tree, key_section, has_constraint);
 
@@ -906,9 +877,11 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
 	if (tree) {
-		return tree->Serialize(*this, writer);
+		serialized_data_pointer = tree->Serialize(*this, writer);
+	} else {
+		serialized_data_pointer = {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 	}
-	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
+	return serialized_data_pointer;
 }
 
 //===--------------------------------------------------------------------===//

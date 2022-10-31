@@ -75,8 +75,6 @@ NULL	NULL	NULL
 2021-02-10	1	1
 
 # Window Function
-require vector_size 512
-
 query I
 select bool_or(d > '2021-02-09') over (partition by d)
     from t order by d;

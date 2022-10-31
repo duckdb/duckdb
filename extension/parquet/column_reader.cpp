@@ -6,6 +6,7 @@
 #include "boolean_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "generated_column_reader.hpp"
+#include "row_number_column_reader.hpp"
 #include "callback_column_reader.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "list_column_reader.hpp"
@@ -114,7 +115,7 @@ idx_t ColumnReader::GroupRowsAvailable() {
 	return group_rows_available;
 }
 
-unique_ptr<BaseStatistics> ColumnReader::Stats(const std::vector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) {
 	if (Type().id() == LogicalTypeId::LIST || Type().id() == LogicalTypeId::STRUCT ||
 	    Type().id() == LogicalTypeId::MAP) {
 		return nullptr;
@@ -141,7 +142,8 @@ void ColumnReader::DictReference(Vector &result) {
 void ColumnReader::PlainReference(shared_ptr<ByteBuffer>, Vector &result) { // NOLINT
 }
 
-void ColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+void ColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
+                                  TProtocol &protocol_p) {
 	D_ASSERT(file_idx < columns.size());
 	chunk = &columns[file_idx];
 	protocol = &protocol_p;
@@ -665,7 +667,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		// we have read more values from the child reader than we can fit into the result for this read
 		// we have to pass everything from child_idx to child_actual_num_values into the next call
 		if (child_idx < child_actual_num_values && result_offset == num_values) {
-			read_vector.Slice(read_vector, child_idx);
+			read_vector.Slice(read_vector, child_idx, child_actual_num_values);
 			overflow_child_count = child_actual_num_values - child_idx;
 			read_vector.Verify(overflow_child_count);
 
@@ -734,6 +736,50 @@ idx_t GeneratedConstantColumnReader::Read(uint64_t num_values, parquet_filter_t 
 }
 
 //===--------------------------------------------------------------------===//
+// Row NumberColumn Reader
+//===--------------------------------------------------------------------===//
+RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
+                                             idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p)
+    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
+}
+
+unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
+                                                        const std::vector<ColumnChunk> &columns) {
+	auto stats = make_unique<NumericStatistics>(type, StatisticsType::LOCAL_STATS);
+	auto &row_groups = reader.GetFileMetadata()->row_groups;
+	D_ASSERT(row_group_idx_p < row_groups.size());
+	idx_t row_group_offset_min = 0;
+	for (idx_t i = 0; i < row_group_idx_p; i++) {
+		row_group_offset_min += row_groups[i].num_rows;
+	}
+
+	stats->min = Value::BIGINT(row_group_offset_min);
+	stats->max = Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows);
+
+	D_ASSERT(!stats->CanHaveNull() && stats->CanHaveNoNull());
+	return move(stats);
+}
+
+void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
+                                           TProtocol &protocol_p) {
+	row_group_offset = 0;
+	auto &row_groups = reader.GetFileMetadata()->row_groups;
+	for (idx_t i = 0; i < row_group_idx_p; i++) {
+		row_group_offset += row_groups[i].num_rows;
+	}
+}
+
+idx_t RowNumberColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out,
+                                  uint8_t *repeat_out, Vector &result) {
+
+	auto data_ptr = FlatVector::GetData<int64_t>(result);
+	for (idx_t i = 0; i < num_values; i++) {
+		data_ptr[i] = row_group_offset++;
+	}
+	return num_values;
+}
+
+//===--------------------------------------------------------------------===//
 // Cast Column Reader
 //===--------------------------------------------------------------------===//
 CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, LogicalType target_type_p)
@@ -744,13 +790,14 @@ CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, Logi
 	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }
 
-unique_ptr<BaseStatistics> CastColumnReader::Stats(const std::vector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> CastColumnReader::Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) {
 	// casting stats is not supported (yet)
 	return nullptr;
 }
 
-void CastColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
-	child_reader->InitializeRead(columns, protocol_p);
+void CastColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
+                                      TProtocol &protocol_p) {
+	child_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
 }
 
 idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
@@ -794,12 +841,14 @@ StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p
 }
 
 ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
+	D_ASSERT(child_idx < child_readers.size());
 	return child_readers[child_idx].get();
 }
 
-void StructColumnReader::InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
+                                        TProtocol &protocol_p) {
 	for (auto &child : child_readers) {
-		child->InitializeRead(columns, protocol_p);
+		child->InitializeRead(row_group_idx_p, columns, protocol_p);
 	}
 }
 
@@ -859,7 +908,7 @@ static bool TypeHasExactRowCount(const LogicalType &type) {
 		return false;
 	case LogicalTypeId::STRUCT:
 		for (auto &kv : StructType::GetChildTypes(type)) {
-			if (TypeHasExactRowCount(kv.second.id())) {
+			if (TypeHasExactRowCount(kv.second)) {
 				return true;
 			}
 		}
