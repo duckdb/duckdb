@@ -74,36 +74,36 @@ static bool SkipToCloseQuotes(idx_t &pos, const char *buf, idx_t &len) {
 }
 
 static bool SkipToClose(idx_t &idx, const char *buf, idx_t &len, idx_t &lvl, char close_bracket) {
-   char bracket = buf[idx];
-   idx++;
+	char bracket = buf[idx];
+	idx++;
 
-   while (idx < len) {
-       if (buf[idx] == bracket) {
-           if (!SkipToClose(idx, buf, len, lvl, close_bracket)) {
-               return false;
-           }
-           lvl++;
-           idx++;
-       }
-       if (buf[idx] == '"' || buf[idx] == '\'') {
-           SkipToCloseQuotes(idx, buf, len);
-       }
-       if (buf[idx] == '{') {
-           SkipToClose(idx, buf, len, lvl, '}');
-       }
-	    if (buf[idx] == '[') {
-           SkipToClose(idx, buf, len, lvl, ']');
-           lvl++;
-       }
-       if (buf[idx] == close_bracket) {
-           if (close_bracket == ']'){
-               lvl--;
-           }
-           return true;
-       }
-       idx++;
-   }
-   return false;
+	while (idx < len) {
+		if (buf[idx] == bracket) {
+			if (!SkipToClose(idx, buf, len, lvl, close_bracket)) {
+				return false;
+			}
+			lvl++;
+			idx++;
+		}
+		if (buf[idx] == '"' || buf[idx] == '\'') {
+			SkipToCloseQuotes(idx, buf, len);
+		}
+		if (buf[idx] == '{') {
+			SkipToClose(idx, buf, len, lvl, '}');
+		}
+		if (buf[idx] == '[') {
+			SkipToClose(idx, buf, len, lvl, ']');
+			lvl++;
+		}
+		if (buf[idx] == close_bracket) {
+			if (close_bracket == ']') {
+				lvl--;
+			}
+			return true;
+		}
+		idx++;
+	}
+	return false;
 }
 
 template <class OP>
@@ -122,14 +122,14 @@ static bool SplitStringifiedListInternal(const string_t &input, OP &state) {
 	idx_t start_pos = pos;
 	while (pos < len) {
 		if (buf[pos] == '[') {
-            if (!SkipToClose(pos, buf, len, ++lvl, ']')) {
-                return false;
-            }
+			if (!SkipToClose(pos, buf, len, ++lvl, ']')) {
+				return false;
+			}
 		} else if (buf[pos] == '"' || buf[pos] == '\'') {
 			SkipToCloseQuotes(pos, buf, len);
 		} else if (buf[pos] == '{') {
-            idx_t struct_lvl = 0;
-            SkipToClose(pos, buf, len, struct_lvl, '}');
+			idx_t struct_lvl = 0;
+			SkipToClose(pos, buf, len, struct_lvl, '}');
 		} else if (buf[pos] == ',' || buf[pos] == ']') {
 			idx_t trailing_whitespace = 0;
 			while (StringUtil::CharacterIsSpace(buf[pos - trailing_whitespace - 1])) {
@@ -177,14 +177,14 @@ static bool FindKey(const char *buf, idx_t len, idx_t &pos) {
 static bool FindValue(const char *buf, idx_t len, idx_t &pos, Vector &varchar_child, idx_t &row_idx,
                       ValidityMask *child_mask) {
 	auto start_pos = pos;
-    idx_t lvl = 0;
+	idx_t lvl = 0;
 	while (pos < len) {
 		if (buf[pos] == '"' || buf[pos] == '\'') {
 			SkipToCloseQuotes(pos, buf, len);
 		} else if (buf[pos] == '{') {
-            SkipToClose(pos, buf, len, lvl, '}');
+			SkipToClose(pos, buf, len, lvl, '}');
 		} else if (buf[pos] == '[') {
-            SkipToClose(pos, buf, len, lvl, ']');
+			SkipToClose(pos, buf, len, lvl, ']');
 		} else if (buf[pos] == ',' || buf[pos] == '}') {
 			idx_t end_pos = StringTrim(buf, start_pos, pos);
 			if ((end_pos - start_pos) == 4 && isNull(buf, start_pos, varchar_child, row_idx)) {
