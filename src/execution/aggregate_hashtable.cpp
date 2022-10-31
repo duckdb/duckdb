@@ -71,25 +71,6 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(Allocator &allocator, Buffe
 		throw InternalException("Unknown HT entry width");
 	}
 
-	//// create additional hash tables for distinct aggrs
-	// auto &aggregates = layout.GetAggregates();
-	// distinct_hashes.resize(aggregates.size());
-
-	// idx_t payload_idx = 0;
-	// for (idx_t i = 0; i < aggregates.size(); i++) {
-	//	auto &aggr = aggregates[i];
-	//	if (aggr.IsDistinct()) {
-	//		// layout types minus hash column plus aggr return type
-	//		vector<LogicalType> distinct_group_types(layout.GetTypes());
-	//		(void)distinct_group_types.pop_back();
-	//		for (idx_t child_idx = 0; child_idx < aggr.child_count; child_idx++) {
-	//			distinct_group_types.push_back(payload_types[payload_idx + child_idx]);
-	//		}
-	//		distinct_hashes[i] =
-	//		    make_unique<GroupedAggregateHashTable>(allocator, buffer_manager, distinct_group_types);
-	//	}
-	//	payload_idx += aggr.child_count;
-	// }
 	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
 	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 }
