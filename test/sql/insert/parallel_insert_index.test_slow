@@ -1,4 +1,4 @@
-# name: test/sql/insert/parallel_insert_index.test
+# name: test/sql/insert/parallel_insert_index.test_slow
 # description: Test that parallel data insertion correctly verifies primary/unique key constraints
 # group: [insert]
 
