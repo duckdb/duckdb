@@ -11,6 +11,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
+#include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -26,6 +27,8 @@ public:
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
+	unique_ptr<DistinctAggregateData> distinct_data;
+	unique_ptr<DistinctAggregateCollectionInfo> distinct_collection_info;
 
 public:
 	// Source interface

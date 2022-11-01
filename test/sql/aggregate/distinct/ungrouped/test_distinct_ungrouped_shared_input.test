@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/aggregates/distinct/ungrouped/test_distinct_ungrouped_shared_input.test
+# name: test/sql/aggregate/distinct/ungrouped/test_distinct_ungrouped_shared_input.test
 # description: DISTINCT aggregations, without GROUP BY
 # group: [ungrouped]
 

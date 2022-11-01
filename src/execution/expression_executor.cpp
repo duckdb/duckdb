@@ -6,6 +6,9 @@
 
 namespace duckdb {
 
+ExpressionExecutor::ExpressionExecutor(ClientContext &client) : allocator(Allocator::Get(client)) {
+}
+
 ExpressionExecutor::ExpressionExecutor(Allocator &allocator) : allocator(allocator) {
 }
 

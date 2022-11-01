@@ -26,6 +26,8 @@ struct CreateTypeInfo : public CreateInfo {
 	string name;
 	//! Logical Type
 	LogicalType type;
+	//! Used by create enum from query
+	unique_ptr<SQLStatement> query;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
@@ -33,6 +35,9 @@ public:
 		CopyProperties(*result);
 		result->name = name;
 		result->type = type;
+		if (query) {
+			result->query = query->Copy();
+		}
 		return move(result);
 	}
 

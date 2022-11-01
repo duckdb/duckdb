@@ -1,0 +1,52 @@
+# name: test/sql/aggregate/distinct/grouped/string_agg.test
+# group: [grouped]
+
+statement ok
+pragma enable_verification
+
+statement ok
+pragma verify_parallelism
+
+# test string aggregation on a set of values
+statement ok
+CREATE TABLE strings(
+	g INTEGER,
+	x VARCHAR,
+	y VARCHAR
+);
+
+statement ok
+INSERT INTO strings VALUES
+	(1,'a','/'),
+	(1,'b','-'),
+	(2,'i','/'),
+	(2,NULL,'-'),
+	(2,'j','+'),
+	(3,'p','/'),
+	(4,'x','/'),
+	(4,'y','-'),
+	(4,'z','+');
+
+# ORDER + FILTER + DISTINCT
+query II
+SELECT g, STRING_AGG(DISTINCT y, ',' ORDER BY x DESC) FILTER (WHERE g < 4)
+FROM strings
+GROUP BY g
+ORDER BY 1
+----
+1	-,/
+2	-,+,/
+3	/
+4	NULL
+
+# ORDER + FILTER + DISTINCT
+query IIII
+SELECT g, count(y), STRING_AGG(DISTINCT y, ',' ORDER BY x DESC) FILTER (WHERE g < 4), sum(1)
+FROM strings
+GROUP BY g
+ORDER BY 1
+----
+1	2	-,/	2
+2	3	-,+,/	3
+3	1	/	1
+4	3	NULL	3
