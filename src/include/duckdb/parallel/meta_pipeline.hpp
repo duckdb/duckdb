@@ -47,6 +47,8 @@ public:
 	const vector<Pipeline *> *GetDependencies(Pipeline *dependant) const;
 	//! Whether this MetaPipeline has a recursive CTE
 	bool HasRecursiveCTE() const;
+	//! Set the flag that this MetaPipeline is a recursive CTE pipeline
+	void SetRecursiveCTE();
 	//! Assign a batch index to the given pipeline
 	void AssignNextBatchIndex(Pipeline *pipeline);
 	//! Let 'dependant' depend on all pipeline that were created since 'start',
@@ -80,8 +82,8 @@ private:
 	PipelineBuildState &state;
 	//! The sink of all pipelines within this MetaPipeline
 	PhysicalOperator *sink;
-	//! The recursive CTE of this MetaPipeline (if any)
-	PhysicalRecursiveCTE *recursive_cte = nullptr;
+	//! Whether this MetaPipeline is a the recursive pipeline of a recursive CTE
+	bool recursive_cte;
 	//! All pipelines with a different source, but the same sink
 	vector<shared_ptr<Pipeline>> pipelines;
 	//! The pipelines that must finish before the MetaPipeline is finished

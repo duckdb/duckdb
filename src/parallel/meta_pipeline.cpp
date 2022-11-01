@@ -6,11 +6,8 @@
 namespace duckdb {
 
 MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, PhysicalOperator *sink_p)
-    : executor(executor_p), state(state_p), sink(sink_p), next_batch_index(0) {
+    : executor(executor_p), state(state_p), sink(sink_p), recursive_cte(false), next_batch_index(0) {
 	CreatePipeline();
-	if (sink_p && sink_p->type == PhysicalOperatorType::RECURSIVE_CTE) {
-		recursive_cte = (PhysicalRecursiveCTE *)sink;
-	}
 }
 
 Executor &MetaPipeline::GetExecutor() const {
@@ -59,7 +56,11 @@ const vector<Pipeline *> *MetaPipeline::GetDependencies(Pipeline *dependant) con
 }
 
 bool MetaPipeline::HasRecursiveCTE() const {
-	return recursive_cte != nullptr;
+	return recursive_cte;
+}
+
+void MetaPipeline::SetRecursiveCTE() {
+	recursive_cte = true;
 }
 
 void MetaPipeline::AssignNextBatchIndex(Pipeline *pipeline) {
@@ -88,9 +89,7 @@ MetaPipeline *MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalO
 	// child MetaPipeline must finish completely before this MetaPipeline can start
 	current.AddDependency(child_meta_pipeline->GetBasePipeline());
 	// child meta pipeline is part of the recursive CTE too
-	if (HasRecursiveCTE()) {
-		child_meta_pipeline->recursive_cte = recursive_cte;
-	}
+	child_meta_pipeline->recursive_cte = recursive_cte;
 	return child_meta_pipeline;
 }
 
