@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-static bool isNull(const char *buf, idx_t start_pos, Vector &child, idx_t row_idx) {
+static bool IsNull(const char *buf, idx_t start_pos, Vector &child, idx_t row_idx) {
 	if (buf[start_pos] == 'N' && buf[start_pos + 1] == 'U' && buf[start_pos + 2] == 'L' && buf[start_pos + 3] == 'L') {
 		if (child.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			ConstantVector::SetNull(child, true);
@@ -18,7 +18,7 @@ inline static void SkipWhitespace(const char *buf, idx_t &pos, idx_t len) {
 	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 		pos++;
 	}
-};
+}
 
 static idx_t StringTrim(const char *buf, idx_t &start_pos, idx_t pos) {
 	idx_t trailing_whitespace = 0;
@@ -51,7 +51,7 @@ struct SplitStringOperation {
 	Vector &child;
 
 	void HandleValue(const char *buf, idx_t start_pos, idx_t pos) {
-		if ((pos - start_pos) == 4 && isNull(buf, start_pos, child, child_start)) {
+		if ((pos - start_pos) == 4 && IsNull(buf, start_pos, child, child_start)) {
 			child_start++;
 			return;
 		}
@@ -74,28 +74,23 @@ static bool SkipToCloseQuotes(idx_t &pos, const char *buf, idx_t &len) {
 }
 
 static bool SkipToClose(idx_t &idx, const char *buf, idx_t &len, idx_t &lvl, char close_bracket) {
-	char bracket = buf[idx];
 	idx++;
 
 	while (idx < len) {
-		if (buf[idx] == bracket) {
-			if (!SkipToClose(idx, buf, len, lvl, close_bracket)) {
+		if (buf[idx] == '"' || buf[idx] == '\'') {
+			if (!SkipToCloseQuotes(idx, buf, len)) {
+				return false;
+			}
+		} else if (buf[idx] == '{') {
+			if (!SkipToClose(idx, buf, len, lvl, '}')) {
+				return false;
+			}
+		} else if (buf[idx] == '[') {
+			if (!SkipToClose(idx, buf, len, lvl, ']')) {
 				return false;
 			}
 			lvl++;
-			idx++;
-		}
-		if (buf[idx] == '"' || buf[idx] == '\'') {
-			SkipToCloseQuotes(idx, buf, len);
-		}
-		if (buf[idx] == '{') {
-			SkipToClose(idx, buf, len, lvl, '}');
-		}
-		if (buf[idx] == '[') {
-			SkipToClose(idx, buf, len, lvl, ']');
-			lvl++;
-		}
-		if (buf[idx] == close_bracket) {
+		} else if (buf[idx] == close_bracket) {
 			if (close_bracket == ']') {
 				lvl--;
 			}
@@ -187,7 +182,7 @@ static bool FindValue(const char *buf, idx_t len, idx_t &pos, Vector &varchar_ch
 			SkipToClose(pos, buf, len, lvl, ']');
 		} else if (buf[pos] == ',' || buf[pos] == '}') {
 			idx_t end_pos = StringTrim(buf, start_pos, pos);
-			if ((end_pos - start_pos) == 4 && isNull(buf, start_pos, varchar_child, row_idx)) {
+			if ((end_pos - start_pos) == 4 && IsNull(buf, start_pos, varchar_child, row_idx)) {
 				return true;
 			}
 			FlatVector::GetData<string_t>(varchar_child)[row_idx] =
