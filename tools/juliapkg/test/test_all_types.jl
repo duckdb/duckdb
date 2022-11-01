@@ -38,7 +38,6 @@
         df.dec38_10,
         [-9999999999999999999999999999.9999999999, 9999999999999999999999999999.9999999999, missing]
     )
-    @test isequal(df.json, ["🦆🦆🦆🦆🦆🦆", "goose", missing])
     @test isequal(df.small_enum, ["DUCK_DUCK_ENUM", "GOOSE", missing])
     @test isequal(df.medium_enum, ["enum_0", "enum_299", missing])
     @test isequal(df.large_enum, ["enum_0", "enum_69999", missing])
