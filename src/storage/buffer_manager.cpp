@@ -304,10 +304,10 @@ template <typename... ARGS>
 TempBufferPoolReservation BufferManager::EvictBlocksOrThrow(idx_t memory_delta, idx_t limit,
                                                             unique_ptr<FileBuffer> *buffer, ARGS... args) {
 	auto r = EvictBlocks(memory_delta, limit, buffer);
-	if (!r.first) {
+	if (!r.success) {
 		throw OutOfMemoryException(args..., InMemoryWarning());
 	}
-	return move(r.second);
+	return move(r.reservation);
 }
 
 shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {
@@ -413,10 +413,12 @@ BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 }
 
 void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+	constexpr int INSERT_INTERVAL = 1024;
+
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;
 	// After each 1024 insertions, run through the queue and purge.
-	if ((++queue_insertions & 0x3ff) == 0) {
+	if ((++queue_insertions % INSERT_INTERVAL) == 0) {
 		PurgeQueue();
 	}
 	queue->q.enqueue(BufferEvictionNode(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
@@ -434,8 +436,8 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	}
 }
 
-std::pair<bool, TempBufferPoolReservation> BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
-                                                                      unique_ptr<FileBuffer> *buffer) {
+BufferManager::EvictionResult BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
+                                                         unique_ptr<FileBuffer> *buffer) {
 	BufferEvictionNode node;
 	TempBufferPoolReservation r(current_memory, extra_memory);
 	while (current_memory > memory_limit) {
@@ -502,7 +504,7 @@ void BlockManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 void BufferManager::SetLimit(idx_t limit) {
 	lock_guard<mutex> l_lock(limit_lock);
 	// try to evict until the limit is reached
-	if (!EvictBlocks(0, limit).first) {
+	if (!EvictBlocks(0, limit).success) {
 		throw OutOfMemoryException(
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    InMemoryWarning());
@@ -511,7 +513,7 @@ void BufferManager::SetLimit(idx_t limit) {
 	// set the global maximum memory to the new limit if successful
 	maximum_memory = limit;
 	// evict again
-	if (!EvictBlocks(0, limit).first) {
+	if (!EvictBlocks(0, limit).success) {
 		// failed: go back to old limit
 		maximum_memory = old_limit;
 		throw OutOfMemoryException(
@@ -863,6 +865,7 @@ void BufferManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer
 	}
 	// get the path to write to
 	auto path = GetTemporaryPath(block_id);
+	D_ASSERT(buffer.size > Storage::BLOCK_SIZE);
 	// create the file and write the size followed by the buffer contents
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);

@@ -95,8 +95,11 @@ private:
 	//! "buffer" will be made to point to the re-usable memory. Note that this is not guaranteed.
 	//! Returns a pair. result.first indicates if eviction was successful. result.second contains the
 	//! reservation handle, which can be moved to the BlockHandle that will own the reservation.
-	std::pair<bool, TempBufferPoolReservation> EvictBlocks(idx_t extra_memory, idx_t memory_limit,
-	                                                       unique_ptr<FileBuffer> *buffer = nullptr);
+	struct EvictionResult {
+		bool success;
+		TempBufferPoolReservation reservation;
+	};
+	EvictionResult EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
 
 	//! Helper
 	template <typename... ARGS>
