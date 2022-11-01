@@ -19,7 +19,7 @@ public:
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		pipeline.Reset();
+		pipeline.ResetSink();
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}

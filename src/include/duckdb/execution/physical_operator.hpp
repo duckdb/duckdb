@@ -107,6 +107,8 @@ public:
 	unique_ptr<GlobalSinkState> sink_state;
 	//! The global state of this operator
 	unique_ptr<GlobalOperatorState> op_state;
+	//! Lock for (re)setting any of the operator states
+	mutex lock;
 
 public:
 	virtual string GetName() const;

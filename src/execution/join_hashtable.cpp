@@ -221,7 +221,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		}
 		info.correlated_payload.SetCardinality(keys);
 		info.correlated_payload.data[0].Reference(keys.data[info.correlated_types.size()]);
-		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload);
+		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload, AggregateType::NON_DISTINCT);
 	}
 
 	// prepare the keys for processing

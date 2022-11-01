@@ -12,6 +12,7 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -20,6 +21,7 @@ class ExecutionContext;
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
 class ExpressionExecutor {
 public:
+	DUCKDB_API ExpressionExecutor(ClientContext &client);
 	DUCKDB_API ExpressionExecutor(Allocator &allocator);
 	DUCKDB_API explicit ExpressionExecutor(Allocator &allocator, const Expression *expression);
 	DUCKDB_API explicit ExpressionExecutor(Allocator &allocator, const Expression &expression);

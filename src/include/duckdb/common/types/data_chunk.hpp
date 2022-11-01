@@ -87,9 +87,17 @@ public:
 	//! the DataChunk.
 	DUCKDB_API void Initialize(Allocator &allocator, const vector<LogicalType> &types,
 	                           idx_t capacity = STANDARD_VECTOR_SIZE);
-	DUCKDB_API void Initialize(ClientContext &context, const vector<LogicalType> &types);
+	DUCKDB_API void Initialize(ClientContext &context, const vector<LogicalType> &types,
+	                           idx_t capacity = STANDARD_VECTOR_SIZE);
 	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
 	DUCKDB_API void InitializeEmpty(const vector<LogicalType> &types);
+
+	DUCKDB_API void InitializeEmpty(vector<LogicalType>::const_iterator begin, vector<LogicalType>::const_iterator end);
+	DUCKDB_API void Initialize(Allocator &allocator, vector<LogicalType>::const_iterator begin,
+	                           vector<LogicalType>::const_iterator end, idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API void Initialize(ClientContext &context, vector<LogicalType>::const_iterator begin,
+	                           vector<LogicalType>::const_iterator end, idx_t capacity = STANDARD_VECTOR_SIZE);
+
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk and resize is not allowed.
