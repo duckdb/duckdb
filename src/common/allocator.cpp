@@ -11,7 +11,7 @@
 #include <execinfo.h>
 #endif
 
-#if defined(BUILD_JEMALLOC_EXTENSION)
+#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
 #include "jemalloc-extension.hpp"
 #endif
 
@@ -83,9 +83,20 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 // Allocator
 //===--------------------------------------------------------------------===//
-#if defined(BUILD_JEMALLOC_EXTENSION)
-Allocator::Allocator()
-    : Allocator(JEMallocExtension::Allocate, JEMallocExtension::Free, JEMallocExtension::Reallocate, nullptr) {
+#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
+static constexpr allocate_function_ptr_t GetAllocateFunction() {
+	return sizeof(data_ptr_t) == 4 ? Allocator::DefaultAllocate : JEMallocExtension::Allocate;
+}
+
+static constexpr free_function_ptr_t GetFreeFunction() {
+	return sizeof(data_ptr_t) == 4 ? Allocator::DefaultFree : JEMallocExtension::Free;
+}
+
+static constexpr reallocate_function_ptr_t GetReallocateFunction() {
+	return sizeof(data_ptr_t) == 4 ? Allocator::DefaultReallocate : JEMallocExtension::Reallocate;
+}
+
+Allocator::Allocator() : Allocator(GetAllocateFunction(), GetFreeFunction(), GetReallocateFunction(), nullptr) {
 }
 #else
 Allocator::Allocator()
