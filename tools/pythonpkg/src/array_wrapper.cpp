@@ -485,7 +485,6 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::LIST:
@@ -551,7 +550,6 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
@@ -693,7 +691,6 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumn<interval_t, int64_t, duckdb_py_convert::IntervalConvert>(current_offset, dataptr,
 		                                                                                       maskptr, idata, count);
 		break;
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::StringConvert>(current_offset, dataptr,
 		                                                                                      maskptr, idata, count);

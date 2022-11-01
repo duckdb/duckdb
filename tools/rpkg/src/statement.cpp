@@ -242,7 +242,6 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 		varvalue = r_varvalue.Protect(cpp11::as_sexp(dest_list));
 		break;
 	}
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		auto wrapper = new DuckDBAltrepStringWrapper();
 		wrapper->length = nrows;
@@ -466,7 +465,6 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 	case LogicalTypeId::DOUBLE:
 		VectorToR<double, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 		break;
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		auto wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(R_altrep_data1(dest));
 		auto src_data = FlatVector::GetData<string_t>(src_vec);

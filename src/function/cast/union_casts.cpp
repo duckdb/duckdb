@@ -1,6 +1,7 @@
-#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+
 #include <algorithm> // for std::sort
 
 namespace duckdb {
@@ -327,7 +328,6 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 BoundCastInfo DefaultCasts::UnionCastSwitch(BindCastInput &input, const LogicalType &source,
                                             const LogicalType &target) {
 	switch (target.id()) {
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		// bind a cast in which we convert all members to VARCHAR first
 		child_list_t<LogicalType> varchar_members;
