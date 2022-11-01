@@ -167,6 +167,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	// get the child vector and child data
 	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetEntry(lists);
+	child_vector.Flatten(lists_size);
 	UnifiedVectorFormat child_data;
 	child_vector.ToUnifiedFormat(lists_size, child_data);
 
@@ -251,10 +252,8 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 
 		// iterate list elements and create transformed expression columns
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-
 			// reached STANDARD_VECTOR_SIZE elements
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
-
 				lambda_chunk.Reset();
 				ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk,
 				                  child_vector, args, expr_executor);
