@@ -52,6 +52,10 @@ public:
 	//! Let 'dependant' depend on all pipeline that were created since 'start',
 	//! where 'including' determines whether 'start' is added to the dependencies
 	void AddDependenciesFrom(Pipeline *dependant, Pipeline *start, bool including);
+	//! Make sure that the given pipeline has its own PipelineFinishEvent (e.g., for IEJoin - double Finalize)
+	void AddFinishEvent(Pipeline *pipeline);
+	//! Whether the pipeline needs its own PipelineFinishEvent
+	bool HasFinishEvent(Pipeline *pipeline);
 
 public:
 	//! Build the MetaPipeline with 'op' as the first operator (excl. the shared sink)
@@ -88,6 +92,8 @@ private:
 	vector<shared_ptr<MetaPipeline>> children;
 	//! Next batch index
 	idx_t next_batch_index;
+	//! Pipelines (other than the base pipeline) that need their own PipelineFinishEvent (e.g., for IEJoin)
+	unordered_set<Pipeline *> finish_pipelines;
 };
 
 } // namespace duckdb

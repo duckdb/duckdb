@@ -54,7 +54,6 @@ struct ScheduleEventData {
 	vector<shared_ptr<Event>> &events;
 	bool initial_schedule;
 	event_map_t event_map;
-	unordered_map<PhysicalOperator *, Event *> sink_init_map;
 };
 
 void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, ScheduleEventData &event_data) {
@@ -64,26 +63,13 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 	// create events/stack for the base pipeline
 	auto base_pipeline = meta_pipeline->GetBasePipeline();
-	auto shared_sink = meta_pipeline->GetSink();
-
-	Event *init_event;
-	auto &sink_init_map = event_data.sink_init_map;
-	auto it = sink_init_map.find(shared_sink);
-	if (it == sink_init_map.end()) {
-		auto base_initialize_event = make_shared<PipelineInitializeEvent>(base_pipeline);
-		init_event = base_initialize_event.get();
-		sink_init_map[shared_sink] = init_event;
-		events.push_back(move(base_initialize_event));
-	} else {
-		// sink shared across multiple MetaPipelines (double pipeline breakers like IEJoin)
-		init_event = it->second;
-	}
-
+	auto base_initialize_event = make_shared<PipelineInitializeEvent>(base_pipeline);
 	auto base_event = make_shared<PipelineEvent>(base_pipeline);
 	auto base_finish_event = make_shared<PipelineFinishEvent>(base_pipeline);
 	auto base_complete_event = make_shared<PipelineCompleteEvent>(base_pipeline->executor, event_data.initial_schedule);
-	PipelineEventStack base_stack {init_event, base_event.get(), base_finish_event.get(), base_complete_event.get()};
-
+	PipelineEventStack base_stack {base_initialize_event.get(), base_event.get(), base_finish_event.get(),
+	                               base_complete_event.get()};
+	events.push_back(move(base_initialize_event));
 	events.push_back(move(base_event));
 	events.push_back(move(base_finish_event));
 	events.push_back(move(base_complete_event));
@@ -102,13 +88,23 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 		// create events/stack for this pipeline
 		auto pipeline_event = make_shared<PipelineEvent>(pipeline);
+		Event *pipeline_finish_event_ptr;
+		if (meta_pipeline->HasFinishEvent(pipeline.get())) {
+			// this pipeline has its own finish event (despite going into the same sink - Finalize twice!)
+			auto pipeline_finish_event = make_unique<PipelineFinishEvent>(pipeline);
+			pipeline_finish_event_ptr = pipeline_finish_event.get();
+			events.push_back(move(pipeline_finish_event));
+			base_stack.pipeline_complete_event->AddDependency(*pipeline_finish_event_ptr);
+		} else {
+			pipeline_finish_event_ptr = base_stack.pipeline_finish_event;
+		}
 		PipelineEventStack pipeline_stack {base_stack.pipeline_initialize_event, pipeline_event.get(),
-		                                   base_stack.pipeline_finish_event, base_stack.pipeline_complete_event};
+		                                   pipeline_finish_event_ptr, base_stack.pipeline_complete_event};
 		events.push_back(move(pipeline_event));
 
 		// dependencies: base_initialize -> pipeline_event -> base_finish
 		pipeline_stack.pipeline_event->AddDependency(*base_stack.pipeline_initialize_event);
-		base_stack.pipeline_finish_event->AddDependency(*pipeline_stack.pipeline_event);
+		pipeline_stack.pipeline_finish_event->AddDependency(*pipeline_stack.pipeline_event);
 
 		// add pipeline stack to event map
 		event_map.insert(make_pair(pipeline.get(), move(pipeline_stack)));

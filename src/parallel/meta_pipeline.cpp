@@ -125,6 +125,14 @@ void MetaPipeline::AddDependenciesFrom(Pipeline *dependant, Pipeline *start, boo
 	deps.insert(deps.begin(), created_pipelines.begin(), created_pipelines.end());
 }
 
+void MetaPipeline::AddFinishEvent(Pipeline *pipeline) {
+	finish_pipelines.insert(pipeline);
+}
+
+bool MetaPipeline::HasFinishEvent(Pipeline *pipeline) {
+	return finish_pipelines.find(pipeline) != finish_pipelines.end();
+}
+
 Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matters) {
 	if (HasRecursiveCTE()) {
 		throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");

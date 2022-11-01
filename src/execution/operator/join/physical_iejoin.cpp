@@ -1019,24 +1019,22 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 	// becomes a source after both children fully sink their data
 	meta_pipeline.GetState().SetPipelineSource(current, this);
 
-	// create LHS as a child MetaPipeline of 'current', then build
-	auto lhs_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	lhs_meta_pipeline->Build(children[0].get());
+	// Create one child meta pipeline that will hold the LHS and RHS pipelines
+	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
+	auto lhs_pipeline = child_meta_pipeline->GetBasePipeline();
+	auto rhs_pipeline = child_meta_pipeline->CreatePipeline();
 
-	// create RHS as a child MetaPipeline of 'current', then build
-	auto rhs_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	rhs_meta_pipeline->Build(children[1].get());
+	// Build out LHS
+	children[0]->BuildPipelines(*lhs_pipeline, *child_meta_pipeline);
 
-	// RHS pipelines depend on everything in LHS, set up the dependencies correctly
-	vector<shared_ptr<Pipeline>> lhs_pipelines;
-	lhs_meta_pipeline->GetPipelines(lhs_pipelines, false);
-	vector<shared_ptr<Pipeline>> rhs_pipelines;
-	rhs_meta_pipeline->GetPipelines(rhs_pipelines, false);
-	for (auto &rhs_pipeline : rhs_pipelines) {
-		for (auto &lhs_pipeline : lhs_pipelines) {
-			rhs_pipeline->AddDependency(lhs_pipeline);
-		}
-	}
+	// RHS depends on everything in LHS
+	child_meta_pipeline->AddDependenciesFrom(rhs_pipeline, lhs_pipeline.get(), true);
+
+	// Build out RHS
+	children[1]->BuildPipelines(*rhs_pipeline, *child_meta_pipeline);
+
+	// Despite having the same sink, RHS needs its own PipelineFinishEvent
+	child_meta_pipeline->AddFinishEvent(rhs_pipeline);
 }
 
 } // namespace duckdb
