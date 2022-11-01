@@ -57,7 +57,12 @@ public:
 		return file_size;
 	}
 
+	bool FinishedReading() {
+		return requested_bytes >= file_size;
+	}
+
 	idx_t Read(void *buffer, idx_t nr_bytes) {
+		requested_bytes += nr_bytes;
 		if (!plain_file_source) {
 			// not a plain file source: we need to do some bookkeeping around the reset functionality
 			idx_t result_offset = 0;
@@ -71,7 +76,7 @@ public:
 					return nr_bytes;
 				}
 			} else if (!reset_enabled && cached_buffer) {
-				// reset is disabled but we still have cached data
+				// reset is disabled, but we still have cached data
 				// we can remove any cached data
 				cached_buffer.reset();
 				buffer_size = 0;
@@ -135,6 +140,7 @@ private:
 	idx_t read_position = 0;
 	idx_t buffer_size = 0;
 	idx_t buffer_capacity = 0;
+	idx_t requested_bytes = 0;
 };
 
 } // namespace duckdb

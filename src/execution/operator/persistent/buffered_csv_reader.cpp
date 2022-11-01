@@ -1700,16 +1700,26 @@ carriage_return:
 		return true;
 	}
 	goto value_start;
-final_state:
+final_state : {
+	/* state: final_stage reached after we finished reading the end_buffer of the csv buffer */
 	if (finished_chunk) {
 		return true;
 	}
-	// final stage, only reached after parsing the file is finished
+	// If this is the last buffer, we have to read the last value
+	if (buffer_read.buffer->IsCSVFileLastBuffer()) {
+		if (column > 0 || position_buffer > start_buffer) {
+			// remaining values to be added to the chunk
+			AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions,
+			         has_quotes);
+			finished_chunk = AddRow(insert_chunk, column);
+		}
+	}
 	// flush the parsed chunk and finalize parsing
 	if (mode == ParserMode::PARSING) {
 		Flush(insert_chunk);
 	}
 	return true;
+};
 }
 
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
