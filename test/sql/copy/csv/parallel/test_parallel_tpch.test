@@ -7,9 +7,27 @@
 #
 
 statement ok
-pragma threads=2
+pragma threads=4
 
 query I
-SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='false', delim = '|', buffer_size=1)
+SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='false', delim = '|', buffer_size=20)
 ----
 79
+
+query I
+SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', buffer_size=20)
+----
+79
+
+query IIII
+select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', buffer_size=20)
+----
+1	6370	371	p1
+2	214	465	p2
+3	2403	160	p3
+5	1564	67	p4
+7	10617	138	p5
+11	430	181	p6
+13	1904	658	p7
+17	12845	370	p8
+20	15519	785	p9

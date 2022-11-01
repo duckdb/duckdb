@@ -121,6 +121,8 @@ private:
 	idx_t system_threads;
 	//! Size of the buffers
 	idx_t buffer_size;
+	//! Current batch index
+	idx_t batch_index = 0;
 };
 
 struct ReadCSVLocalState : public LocalTableFunctionState {

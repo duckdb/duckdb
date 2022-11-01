@@ -61,8 +61,8 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DA
 struct ReadCSVLocalState;
 
 struct CSVBufferRead {
-	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p)
-	    : buffer(move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p) {
+	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index)
+	    : buffer(move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index) {
 		if (buffer) {
 			if (buffer_end > buffer->GetBufferSize()) {
 				buffer_end = buffer->GetBufferSize();
@@ -82,6 +82,7 @@ struct CSVBufferRead {
 
 	idx_t buffer_start;
 	idx_t buffer_end;
+	idx_t batch_index;
 };
 
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
@@ -93,7 +94,7 @@ public:
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, const CSVBufferRead &buffer,
-	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
+	                  bool single_threaded, const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BufferedCSVReader();
 
 	Allocator &allocator;
@@ -120,6 +121,9 @@ public:
 	idx_t bytes_per_thread = 0;
 
 	char *buffer;
+
+	//! If we are running this scanner single threaded
+	bool single_threaded = false;
 
 	CSVBufferRead buffer_read;
 

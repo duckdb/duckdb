@@ -41,7 +41,8 @@ unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t set_buff
 	}
 	idx_t next_buffer_actual_size = file_handle.Read(next_buffer.get() + remaining, set_buffer_size) + remaining;
 
-	return make_unique<CSVBuffer>(move(next_buffer), next_buffer_size, next_buffer_actual_size, file_handle.FinishedReading());
+	return make_unique<CSVBuffer>(move(next_buffer), next_buffer_size, next_buffer_actual_size,
+	                              file_handle.FinishedReading());
 }
 
 idx_t CSVBuffer::GetBufferSize() {
