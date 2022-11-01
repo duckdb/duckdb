@@ -79,7 +79,7 @@ SELECT '-0.5'::${inttype};
 endloop
 
 # Casting hex strings to integral types should round to be consistent.
-foreach inttype TINYINT SMALLINT INTEGER BIGINT HUGEINT
+foreach inttype TINYINT SMALLINT INTEGER BIGINT
 
 query I
 SELECT '0x1e'::${inttype};
