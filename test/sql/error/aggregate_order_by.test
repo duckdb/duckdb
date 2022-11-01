@@ -3,7 +3,7 @@
 # group: [error]
 
 statement ok
-CREATE TABLE lists_tbl AS SELECT i%20 as groups, [x + i for x in range(5)] AS l FROM range(1000) tmp(i);
+CREATE TABLE lists_tbl AS SELECT i%20 as groups, i AS l FROM range(1000) tmp(i);
 
 statement error
 SELECT COUNT(DISTINCT l) FROM lists_tbl group by groups order by l limit 10;

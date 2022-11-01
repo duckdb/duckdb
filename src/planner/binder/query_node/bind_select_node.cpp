@@ -476,7 +476,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 				auto &bound_columns = select_binder.GetBoundColumns();
 				string error;
 				error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
-				error += "\nUse \"ANY_VALUE(%s)\" if you do not care about which value of \"%s\" you are selecting";
+				error += "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
+				         "is not important.";
 				throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
 				                                  bound_columns[0].name, bound_columns[0].name));
 			}
