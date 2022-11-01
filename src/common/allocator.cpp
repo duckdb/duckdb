@@ -3,6 +3,9 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
+
+#include <cstdint>
+
 #ifdef DUCKDB_DEBUG_ALLOCATION
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
@@ -11,7 +14,7 @@
 #include <execinfo.h>
 #endif
 
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
+#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32) && INTPTR_MAX == INT64_MAX
 #include "jemalloc-extension.hpp"
 #endif
 
@@ -83,20 +86,9 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 // Allocator
 //===--------------------------------------------------------------------===//
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
-static constexpr allocate_function_ptr_t GetAllocateFunction() {
-	return sizeof(data_ptr_t) == 4 ? Allocator::DefaultAllocate : JEMallocExtension::Allocate;
-}
-
-static constexpr free_function_ptr_t GetFreeFunction() {
-	return sizeof(data_ptr_t) == 4 ? Allocator::DefaultFree : JEMallocExtension::Free;
-}
-
-static constexpr reallocate_function_ptr_t GetReallocateFunction() {
-	return sizeof(data_ptr_t) == 4 ? Allocator::DefaultReallocate : JEMallocExtension::Reallocate;
-}
-
-Allocator::Allocator() : Allocator(GetAllocateFunction(), GetFreeFunction(), GetReallocateFunction(), nullptr) {
+#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32) && INTPTR_MAX == INT64_MAX
+Allocator::Allocator()
+    : Allocator(JEMallocExtension::Allocate, JEMallocExtension::Free, JEMallocExtension::Reallocate, nullptr) {
 }
 #else
 Allocator::Allocator()
