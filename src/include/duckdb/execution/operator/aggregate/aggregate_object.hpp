@@ -17,17 +17,21 @@ class BoundAggregateExpression;
 
 struct AggregateObject {
 	AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count, idx_t payload_size,
-	                bool distinct, PhysicalType return_type, Expression *filter = nullptr);
+	                AggregateType aggr_type, PhysicalType return_type, Expression *filter = nullptr);
 	AggregateObject(BoundAggregateExpression *aggr);
 
 	AggregateFunction function;
 	FunctionData *bind_data;
 	idx_t child_count;
 	idx_t payload_size;
-	bool distinct;
+	AggregateType aggr_type;
 	PhysicalType return_type;
 	Expression *filter = nullptr;
 
+public:
+	bool IsDistinct() const {
+		return aggr_type == AggregateType::DISTINCT;
+	}
 	static vector<AggregateObject> CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings);
 };
 
