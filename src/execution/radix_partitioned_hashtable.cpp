@@ -17,7 +17,6 @@ void RadixPartitionedHashTable::SetGroupingValues() {
 		for (idx_t i = 0; i < grouping.size(); i++) {
 			if (grouping_set.find(grouping[i]) == grouping_set.end()) {
 				// we don't group on this value!
-				// FIXME: cant we just use bitwise-and to combine these rather than += ?
 				grouping_value += (int64_t)1 << (grouping.size() - (i + 1));
 			}
 		}

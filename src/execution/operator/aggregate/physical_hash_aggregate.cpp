@@ -222,14 +222,6 @@ void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
 		if (!grouping_state.distinct_state) {
 			continue;
 		}
-		// FIXME: what does this do? is this the right action to take here ?
-		for (auto &distinct_radix_state : grouping_state.distinct_state->radix_states) {
-			if (!distinct_radix_state) {
-				// Table unused
-				continue;
-			}
-			RadixPartitionedHashTable::SetMultiScan(*distinct_radix_state);
-		}
 	}
 }
 
