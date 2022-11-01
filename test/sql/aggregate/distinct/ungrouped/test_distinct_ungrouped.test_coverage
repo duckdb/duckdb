@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/aggregates/distinct/ungrouped/test_distinct_ungrouped.test_coverage
+# name: test/sql/aggregate/distinct/ungrouped/test_distinct_ungrouped.test_coverage
 # description: DISTINCT aggregations, without GROUP BY
 # group: [ungrouped]
 

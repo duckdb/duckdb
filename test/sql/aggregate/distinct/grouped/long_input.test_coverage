@@ -1,6 +1,8 @@
-# name: test/sql/aggregate/aggregates/distinct/ungrouped/test_distinct_ungrouped_min.test_coverage
-# description: DISTINCT aggregations, without GROUP BY
-# group: [ungrouped]
+# name: test/sql/aggregate/distinct/grouped/long_input.test_coverage
+# description: DISTINCT aggregations
+# group: [grouped]
+
+# This is string aggr, which goes through the HashAggregateOperator, so this is in fact 'grouped'
 
 statement ok
 create or replace table tbl as select * FROM ( VALUES
@@ -15,6 +17,7 @@ create or replace table tbl as select * FROM ( VALUES
 ) tbl(i)
 
 query I
-select (min(distinct i)::TEXT)[2:2] from tbl;
+select (min(distinct i)::TEXT)[2:2] from tbl group by i;
 ----
 a
+b

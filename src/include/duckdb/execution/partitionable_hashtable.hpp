@@ -32,7 +32,7 @@ public:
 	                       vector<LogicalType> group_types_p, vector<LogicalType> payload_types_p,
 	                       vector<BoundAggregateExpression *> bindings_p);
 
-	idx_t AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition, const vector<idx_t> &filter);
 	void Partition();
 	bool IsPartitioned();
 
@@ -59,6 +59,7 @@ private:
 	unordered_map<hash_t, HashTableList> radix_partitioned_hts;
 
 private:
-	idx_t ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes, DataChunk &payload);
+	idx_t ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes, DataChunk &payload,
+	                   const vector<idx_t> &filter);
 };
 } // namespace duckdb
