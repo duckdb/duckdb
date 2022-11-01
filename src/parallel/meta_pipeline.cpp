@@ -125,7 +125,7 @@ void MetaPipeline::AddDependenciesFrom(Pipeline *dependant, Pipeline *start, boo
 	deps.insert(deps.begin(), created_pipelines.begin(), created_pipelines.end());
 }
 
-Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current) {
+Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matters) {
 	if (HasRecursiveCTE()) {
 		throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");
 	}
@@ -142,7 +142,7 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current) {
 		dependencies[union_pipeline] = *current_deps;
 	}
 
-	if (sink && sink->IsOrderPreserving() && !sink->RequiresBatchIndex()) {
+	if (order_matters) {
 		// if we need to preserve order, or if the sink is not parallel, we set a dependency
 		dependencies[union_pipeline].push_back(&current);
 	}

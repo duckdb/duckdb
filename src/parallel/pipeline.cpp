@@ -104,7 +104,7 @@ bool Pipeline::IsOrderDependent() const {
 	if (sink && sink->IsOrderDependent()) {
 		return true;
 	}
-	if (source->IsOrderDependent()) {
+	if (source && source->IsOrderDependent()) {
 		return true;
 	}
 	for (auto &op : operators) {

@@ -62,7 +62,7 @@ public:
 	//! Create an empty pipeline within this MetaPipeline
 	Pipeline *CreatePipeline();
 	//! Create a union pipeline (clone of 'current')
-	Pipeline *CreateUnionPipeline(Pipeline &current);
+	Pipeline *CreateUnionPipeline(Pipeline &current, bool order_matters);
 	//! Create a child pipeline op 'current' starting at 'op',
 	//! where 'last_pipeline' is the last pipeline added before building out 'current'
 	void CreateChildPipeline(Pipeline &current, PhysicalOperator *op, Pipeline *last_pipeline);
