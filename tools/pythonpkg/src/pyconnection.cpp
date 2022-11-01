@@ -282,7 +282,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	return make_unique<DuckDBPyRelation>(connection->Table(tname));
+	auto qualified_name = QualifiedName::Parse(tname);
+	if (qualified_name.schema.empty()) {
+		qualified_name.schema = DEFAULT_SCHEMA;
+	}
+	return make_unique<DuckDBPyRelation>(connection->Table(qualified_name.schema, qualified_name.name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
@@ -713,6 +717,9 @@ DuckDBPyConnection *DuckDBPyConnection::Enter() {
 bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
                               const py::object &traceback) {
 	self.Close();
+	if (exc_type.ptr() != Py_None) {
+		return false;
+	}
 	return true;
 }
 

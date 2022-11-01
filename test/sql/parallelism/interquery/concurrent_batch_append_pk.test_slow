@@ -1,0 +1,27 @@
+# name: test/sql/parallelism/interquery/concurrent_batch_append_pk.test_slow
+# description: Test concurrent batch appends on persistent storage with primary key
+# group: [interquery]
+
+load __TEST_DIR__/concurrent_batch_append.db
+
+statement ok
+CREATE TABLE test(a INTEGER PRIMARY KEY)
+
+concurrentloop threadid 0 10
+
+statement ok
+INSERT INTO test SELECT * FROM range(250000 * ${threadid}, 250000 * (${threadid} + 1))
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(a) FROM test
+----
+2500000	3124998750000
+
+concurrentloop threadid 0 10
+
+statement error
+INSERT INTO test VALUES ({${threadid} * 17171)
+
+endloop

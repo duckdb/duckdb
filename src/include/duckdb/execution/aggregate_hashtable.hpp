@@ -57,6 +57,11 @@ struct aggr_ht_entry_32 {
 
 enum HtEntryType { HT_WIDTH_32, HT_WIDTH_64 };
 
+struct AggregateHTScanState {
+	mutex lock;
+	idx_t scan_position = 0;
+};
+
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	//! The hash table load factor, when a resize is triggered
@@ -80,13 +85,14 @@ public:
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
-	idx_t AddChunk(DataChunk &groups, DataChunk &payload);
-	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, const vector<idx_t> &filter);
+	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload, const vector<idx_t> &filter);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter);
 
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
 	//! Returns the amount of elements found.
-	idx_t Scan(idx_t &scan_position, DataChunk &result);
+	idx_t Scan(AggregateHTScanState &scan_state, DataChunk &result);
 
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);

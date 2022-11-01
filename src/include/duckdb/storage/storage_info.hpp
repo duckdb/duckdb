@@ -9,11 +9,21 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
 class Serializer;
 class Deserializer;
 struct FileHandle;
+
+#define STANDARD_ROW_GROUPS_SIZE 122880
+#if STANDARD_ROW_GROUPS_SIZE < STANDARD_VECTOR_SIZE
+#error Row groups should be able to hold at least one vector
+#endif
+
+#if ((STANDARD_ROW_GROUPS_SIZE % STANDARD_VECTOR_SIZE) != 0)
+#error Row group size should be cleanly divisible by vector size
+#endif
 
 //! The version number of the database storage format
 extern const uint64_t VERSION_NUMBER;
@@ -29,7 +39,7 @@ using block_id_t = int64_t;
 //! file.
 struct MainHeader {
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
-	static constexpr idx_t MAGIC_BYTE_OFFSET = sizeof(uint64_t);
+	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
 	// the magic bytes in front of the file
 	// should be "DUCK"

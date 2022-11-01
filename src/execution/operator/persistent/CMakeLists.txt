@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   buffered_csv_reader.cpp
   csv_buffer.cpp
+  physical_batch_insert.cpp
   physical_copy_to_file.cpp
   physical_delete.cpp
   physical_export.cpp

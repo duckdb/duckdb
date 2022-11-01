@@ -231,6 +231,9 @@ private:
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
 	void Flush(DataChunk &insert_chunk);
 
+	void VerifyUTF8(idx_t col_idx);
+	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);
+
 private:
 	//! Whether or not the current row's columns have overflown sql_types.size()
 	bool error_column_overflow = false;

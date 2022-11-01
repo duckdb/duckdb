@@ -88,6 +88,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 			if (!expr->alias.empty()) {
 				new_expr->alias = expr->alias;
 			}
+			new_expr->query_location = colref.query_location;
 			expr = move(new_expr);
 		}
 		break;
@@ -117,6 +118,21 @@ void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpre
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,
                                                                    string field_name) {
+
+	// we need to transform the struct extract if it is inside a lambda expression
+	// because we cannot bind to an existing table, so we remove the dummy table also
+	if (lambda_bindings && base->type == ExpressionType::COLUMN_REF) {
+		auto &lambda_column_ref = (ColumnRefExpression &)*base;
+		D_ASSERT(!lambda_column_ref.column_names.empty());
+
+		if (lambda_column_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos) {
+			D_ASSERT(lambda_column_ref.column_names.size() == 2);
+			auto lambda_param_name = lambda_column_ref.column_names.back();
+			lambda_column_ref.column_names.clear();
+			lambda_column_ref.column_names.push_back(lambda_param_name);
+		}
+	}
+
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(base));
 	children.push_back(make_unique_base<ParsedExpression, ConstantExpression>(Value(move(field_name))));
@@ -243,7 +259,9 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	if (!expr) {
 		return BindResult(binder.FormatError(colref_p, error_message));
 	}
-	//! Generated column returns generated expression
+	expr->query_location = colref_p.query_location;
+
+	// a generated column returns a generated expression, a struct on a column returns a struct extract
 	if (expr->type != ExpressionType::COLUMN_REF) {
 		auto alias = expr->alias;
 		auto result = BindExpression(&expr, depth);
@@ -252,6 +270,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 		}
 		return result;
 	}
+
 	auto &colref = (ColumnRefExpression &)*expr;
 	D_ASSERT(colref.IsQualified());
 	auto &table_name = colref.GetTableName();

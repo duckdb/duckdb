@@ -148,7 +148,8 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			// we need a count_star and a count to get counts with and without NULLs
 
 			FunctionBinder function_binder(context);
-			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr, false);
+			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
+			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
@@ -157,7 +158,8 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
 			children.push_back(make_unique_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
-			aggr = function_binder.BindAggregateFunction(count_fun, move(children), nullptr, false);
+			aggr =
+			    function_binder.BindAggregateFunction(count_fun, move(children), nullptr, AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
@@ -403,7 +405,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-class HashJoinOperatorState : public OperatorState {
+class HashJoinOperatorState : public CachingOperatorState {
 public:
 	explicit HashJoinOperatorState(Allocator &allocator) : probe_executor(allocator), spill_collection(nullptr) {
 	}
@@ -448,8 +450,8 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	return move(state);
 }
 
-OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                             GlobalOperatorState &gstate, OperatorState &state_p) const {
+OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                     GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (HashJoinOperatorState &)state_p;
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
 	D_ASSERT(sink.finalized);

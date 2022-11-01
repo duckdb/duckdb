@@ -254,6 +254,7 @@ bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind
 		return false;
 	}
 	state.chunk_offset = 0;
+	state.batch_index = ++parallel_state.batch_index;
 
 	auto current_chunk = parallel_state.stream->GetNextChunk();
 	while (current_chunk->arrow_array.length == 0 && current_chunk->arrow_array.release) {
@@ -339,10 +340,17 @@ unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContex
 	return make_unique<NodeStatistics>();
 }
 
+idx_t ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p, LocalTableFunctionState *local_state,
+                         GlobalTableFunctionState *global_state) {
+	auto &state = (ArrowScanLocalState &)*local_state;
+	return state.batch_index;
+}
+
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction arrow("arrow_scan", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
 	                    ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow.cardinality = ArrowScanCardinality;
+	arrow.get_batch_index = ArrowGetBatchIndex;
 	arrow.projection_pushdown = true;
 	arrow.filter_pushdown = true;
 	arrow.filter_prune = true;

@@ -1,0 +1,51 @@
+# name: test/sql/storage/parallel/insert_non_order_preserving.test_slow
+# description: Test parallel non order-preserving insert
+# group: [parallel]
+
+load __TEST_DIR__/insert_non_order_preserving.db
+
+statement ok
+PRAGMA preserve_insertion_order=false
+
+query I
+CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
+----
+10000000
+
+query I
+CREATE TABLE integers2 AS SELECT * FROM integers
+----
+10000000
+
+query I
+SELECT SUM(i) FROM integers
+----
+49999995000000
+
+query I
+SELECT SUM(i) FROM integers2
+----
+49999995000000
+
+statement ok
+DROP TABLE integers
+
+statement ok
+DROP TABLE integers2
+
+# now with null values
+statement ok
+CREATE TABLE integers AS SELECT case when i%2=0 then null else i end AS i  FROM range(10000000) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM integers
+
+query I
+SELECT SUM(i) FROM integers
+----
+25000000000000
+
+query I
+SELECT SUM(i) FROM integers2
+----
+25000000000000

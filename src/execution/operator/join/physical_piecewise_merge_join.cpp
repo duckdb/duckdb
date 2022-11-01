@@ -155,7 +155,7 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-class PiecewiseMergeJoinState : public OperatorState {
+class PiecewiseMergeJoinState : public CachingOperatorState {
 public:
 	using LocalSortedTable = PhysicalRangeJoin::LocalSortedTable;
 
@@ -618,8 +618,9 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-OperatorResultType PhysicalPiecewiseMergeJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                       GlobalOperatorState &gstate_p, OperatorState &state) const {
+OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
+                                                               DataChunk &chunk, GlobalOperatorState &gstate_p,
+                                                               OperatorState &state) const {
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 
 	if (gstate.Count() == 0) {

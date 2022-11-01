@@ -2,8 +2,6 @@
 # description: Test csv type detection
 # group: [auto]
 
-require vector_size 512
-
 # a CSV file with many strings
 statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/large_mixed_data.csv', SAMPLE_SIZE=-1);

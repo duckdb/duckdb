@@ -306,8 +306,11 @@ typedef struct PGFuncCall {
 typedef struct PGAStar {
 	PGNodeTag type;
 	char *relation;       /* relation name (optional) */
+	char *regex;          /* optional: REGEX to select columns */
 	PGList *except_list;  /* optional: EXCLUDE list */
 	PGList *replace_list; /* optional: REPLACE list */
+	bool columns;         /* whether or not this is a columns list */
+	int location;
 } PGAStar;
 
 /*
@@ -1687,7 +1690,7 @@ typedef struct PGCreateFunctionStmt {
 	PGList *params;
 	PGNode *function;
   	PGNode *query;
-	char relpersistence;
+	PGOnCreateConflict onconflict;
 } PGCreateFunctionStmt;
 
 /* ----------------------
@@ -2045,6 +2048,7 @@ typedef struct PGCreateTypeStmt
 	PGList	   *typeName;		/* qualified name (list of Value strings) */
 	PGList	   *vals;			/* enum values (list of Value strings) */
 	PGTypeName *ofType;			/* original type of alias name */
+    PGNode *query;
 } PGCreateTypeStmt;
 
 

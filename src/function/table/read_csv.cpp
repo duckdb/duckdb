@@ -90,7 +90,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 	if (!options.auto_detect && return_types.empty()) {
-		throw BinderException("read_csv requires columns to be specified. Use read_csv_auto or set read_csv(..., "
+		throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
+		                      "read_csv_auto or set read_csv(..., "
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
 	if (options.auto_detect) {
