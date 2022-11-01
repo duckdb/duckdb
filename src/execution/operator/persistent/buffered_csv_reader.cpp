@@ -1487,7 +1487,7 @@ bool BufferedCSVReader::SetPosition() {
 		}
 	}
 	start_buffer = position_buffer;
-	not_read_anything = position_buffer > end_buffer;
+	not_read_anything = position_buffer >= end_buffer;
 	return !not_read_anything;
 }
 void BufferedCSVReader::SetBufferRead(const CSVBufferRead &buffer_read_p) {
@@ -1499,13 +1499,33 @@ void BufferedCSVReader::SetBufferRead(const CSVBufferRead &buffer_read_p) {
 	buffer_read = buffer_read_p;
 }
 
+// If BufferRemainder returns false, it means we are done scanning this buffer and should go to the end_state
+bool BufferedCSVReader::BufferRemainder(bool &reached_remainder_state) {
+	if (position_buffer >= end_buffer && !reached_remainder_state) {
+		// First time we finish the buffer piece we should scan here, we set the variables
+		// to allow this piece to be scanned up to the end of the buffer or the next new line
+		reached_remainder_state = true;
+		// end_buffer is allowed to go to buffer size to finish its last line
+		end_buffer = buffer_size;
+	}
+	if (position_buffer >= end_buffer) {
+		// buffer ends, return false
+		return false;
+	}
+	// we can still scan stuff, return true
+	return true;
+}
+
 bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message) {
 	// used for parsing algorithm
+	D_ASSERT(end_buffer <= buffer_size);
 	bool finished_chunk = false;
 	idx_t column = 0;
 	idx_t offset = 0;
 	bool has_quotes = false;
 	vector<idx_t> escape_positions;
+	// If this flag is set, it means we are about to try to read our last row.
+	bool reached_remainder_state = false;
 
 	if (!SetPosition()) {
 		//! This means the buffer size does not contain a new line
@@ -1513,9 +1533,14 @@ bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	}
 	// start parsing the first value
 	goto value_start;
-value_start:
-	offset = 0;
+
+value_start : {
 	/* state: value_start */
+	if (!BufferRemainder(reached_remainder_state)) {
+		goto final_state;
+	}
+	offset = 0;
+
 	// this state parses the first character of a value
 	if (buffer[position_buffer] == options.quote[0]) {
 		// quote: actual value starts in the next position
@@ -1527,10 +1552,11 @@ value_start:
 		start_buffer = position_buffer;
 		goto normal;
 	}
-normal:
+};
+
+normal : {
 	/* state: normal parsing state */
 	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
-	//	do {
 	for (; position_buffer < end_buffer; position_buffer++) {
 		if (buffer[position_buffer] == options.delimiter[0]) {
 			// delimiter: end the value and add it to the chunk
@@ -1540,36 +1566,28 @@ normal:
 			goto add_row;
 		}
 	}
-	//	} while (ReadBuffer(start_buffer));
-	// file ends during normal scan: go to end state
-	goto add_remainder;
-add_remainder:
-	/* state: add remainder of line that started to be scanned in this local_state */
-	// this continues the parsing up until finding the next new line or the buffer ends
-	while (position_buffer < buffer_size) {
-		if (buffer[position_buffer] == options.delimiter[0]) {
-			// delimiter: end the value and add it to the chunk
-			goto add_value;
-		} else if (StringUtil::CharacterIsNewline(buffer[position_buffer])) {
-			// newline: add row
-			goto add_row;
-		}
-		position_buffer++;
+	if (!BufferRemainder(reached_remainder_state)) {
+		goto final_state;
+	} else {
+		goto normal;
 	}
-	// file ends during normal scan: go to end state
-	goto final_state;
-add_value:
+};
+
+add_value : {
+	/* state: Add value to string vector */
 	AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
 	start_buffer = ++position_buffer;
-	if (position_buffer >= buffer_size) {
-		// file ends right after delimiter, go to final state
+	if (!BufferRemainder(reached_remainder_state)) {
 		goto final_state;
 	}
 	goto value_start;
+};
+
 add_row : {
+	/* state: Add Row to Parse chunk */
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position_buffer] == '\r';
 	AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions, has_quotes);
@@ -1578,8 +1596,7 @@ add_row : {
 	offset = 0;
 	has_quotes = false;
 	start_buffer = ++position_buffer;
-	if (position_buffer >= end_buffer) {
-		// file ends right after delimiter, go to final state
+	if (!BufferRemainder(reached_remainder_state)) {
 		goto final_state;
 	}
 	if (carriage_return) {
@@ -1594,11 +1611,11 @@ add_row : {
 	}
 }
 in_quotes:
+	D_ASSERT(0);
 	/* state: in_quotes */
 	// this state parses the remainder of a quoted value
 	has_quotes = true;
 	position_buffer++;
-	//	do {
 	for (; position_buffer < end_buffer; position_buffer++) {
 		if (buffer[position_buffer] == options.quote[0]) {
 			// quote: move to unquoted state
@@ -1609,7 +1626,6 @@ in_quotes:
 			goto handle_escape;
 		}
 	}
-	//	} while (ReadBuffer(start_buffer));
 	// still in quoted state at the end of the file, error:
 	throw InvalidInputException("Error in file \"%s\" on line %s: unterminated quotes. (%s)", options.file_path,
 	                            GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
@@ -1664,6 +1680,7 @@ handle_escape:
 //	// escape was followed by quote or escape, go back to quoted state
 //	goto in_quotes;
 carriage_return:
+	D_ASSERT(0);
 	/* state: carriage_return */
 	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
 	if (buffer[position_buffer] == '\n') {
@@ -1671,7 +1688,7 @@ carriage_return:
 		// increase position by 1 and move start to the new position
 		start_buffer = ++position_buffer;
 		if (position_buffer >= end_buffer) {
-			// file ends right after delimiter, go to final state
+			// buffer ends, go to final state
 			goto final_state;
 		}
 		//		if (position_buffer >= buffer_size && !ReadBuffer(start_buffer)) {
@@ -1687,20 +1704,11 @@ final_state:
 	if (finished_chunk) {
 		return true;
 	}
-
-	//	if (column > 0 || position_buffer > start_buffer) {
-	//		// remaining values to be added to the chunk
-	//		AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions,
-	//has_quotes); 		finished_chunk = AddRow(insert_chunk, column);
-	//	}
-
 	// final stage, only reached after parsing the file is finished
 	// flush the parsed chunk and finalize parsing
 	if (mode == ParserMode::PARSING) {
 		Flush(insert_chunk);
 	}
-
-	//	end_of_file_reached = true;
 	return true;
 }
 
@@ -1776,8 +1784,6 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 
 	// insert the line number into the chunk
 	idx_t row_entry = parse_chunk.size();
-
-	//	str_val[length] = '\0';
 
 	// test against null string, but only if the value was not quoted
 	if ((!has_quotes || sql_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&

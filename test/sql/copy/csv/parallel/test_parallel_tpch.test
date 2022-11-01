@@ -7,9 +7,9 @@
 #
 
 statement ok
-pragma threads=1
+pragma threads=2
 
 query I
-SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='false', delim = '|', buffer_size=20)
+SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='false', delim = '|', buffer_size=1)
 ----
 79

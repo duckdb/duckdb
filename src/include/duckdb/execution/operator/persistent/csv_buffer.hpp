@@ -29,16 +29,13 @@ public:
 	CSVBuffer(unique_ptr<char[]> buffer_p, idx_t buffer_size_p, idx_t actual_size_p);
 
 	//! Creates a new buffer with the next part of the CSV File
-	unique_ptr<CSVBuffer> Next(CSVFileHandle &file_handle);
+	unique_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t set_buffer_size);
 
 	//! Gets the buffer actual size
 	idx_t GetBufferSize();
 
 	//! Gets the start position of the buffer, only relevant for the first time it's scanned
 	idx_t GetStart();
-
-	//! If it's the first buffer and the first time we are reading it.
-	bool FirstCSVRead();
 
 	//! The actual buffer
 	unique_ptr<char[]> buffer;
@@ -51,8 +48,6 @@ private:
 	//! We need to check for Byte Order Mark, to define the start position of this buffer
 	//! https://en.wikipedia.org/wiki/Byte_order_mark#UTF-8
 	idx_t start_position = 0;
-	//! If this is the first buffer of the file
-	bool first_buffer = false;
 
 	//	bool large_buffers = mode == ParserMode::PARSING && !file_handle->OnDiskFile() && file_handle->CanSeek();
 	//	//	idx_t buffer_read_size = large_buffers ? INITIAL_BUFFER_SIZE_LARGE : INITIAL_BUFFER_SIZE;

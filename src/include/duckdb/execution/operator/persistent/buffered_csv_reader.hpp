@@ -109,10 +109,12 @@ public:
 
 	//! Current Position (Relative to the Buffer)
 	idx_t position_buffer = 0;
-	//! Start (Relative to the Buffer)
+
+	//! Start of the piece of the buffer this thread should read
 	idx_t start_buffer = 0;
-	//! End (Relative to the buffer)
+	//! End of the piece of this buffer this thread should read
 	idx_t end_buffer = NumericLimits<idx_t>::Maximum();
+	//! The actual buffer size
 	idx_t buffer_size = 0;
 
 	idx_t bytes_per_thread = 0;
@@ -185,7 +187,11 @@ private:
 	void ResetStream();
 	//! Sets Position depending on the byte_start of this thread
 	bool SetPosition();
-
+	//! When a buffer finishes reading its piece, it still can try to scan up to the real end of the buffer
+	//! Up to finding a new line. This function sets the buffer_end and marks a boolean variable
+	//! when changing the buffer end the first time.
+	//! It returns FALSE if the parser should jump to the final state of parsing or not
+	bool BufferRemainder(bool &reached_remainder_state);
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message);
 	//! Parses more complex CSV files with multi-byte delimiters, escapes or quotes

@@ -230,8 +230,8 @@ CSVBufferRead ReadCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind
 		next_byte = 0;
 		current_buffer = next_buffer;
 		if (next_buffer) {
-			// Next buffer gets the next next buffer
-			next_buffer = next_buffer->Next(*file_handle);
+			// Next buffer gets the next-next buffer
+			next_buffer = next_buffer->Next(*file_handle, buffer_size);
 		}
 	}
 	if (current_buffer && !next_buffer) {

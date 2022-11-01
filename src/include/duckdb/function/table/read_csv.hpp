@@ -83,7 +83,7 @@ public:
 		first_file_size = file_size;
 		bytes_per_local_state = buffer_size / MaxThreads();
 		current_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
-		next_buffer = current_buffer->Next(*file_handle);
+		next_buffer = current_buffer->Next(*file_handle, buffer_size);
 	}
 
 	ReadCSVGlobalState() {};
