@@ -109,11 +109,11 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 		pipeline_stack.pipeline_finish_event->AddDependency(*pipeline_stack.pipeline_event);
 
 		// add pipeline stack to event map
-		event_map.insert(make_pair(pipeline.get(), move(pipeline_stack)));
+		event_map.insert(make_pair(pipeline.get(), pipeline_stack));
 	}
 
 	// add base stack to the event data too
-	event_map.insert(make_pair(base_pipeline.get(), move(base_stack)));
+	event_map.insert(make_pair(base_pipeline.get(), base_stack));
 
 	// set up the dependencies within this MetaPipeline
 	for (auto &pipeline : pipelines) {
