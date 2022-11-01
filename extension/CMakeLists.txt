@@ -41,7 +41,3 @@ endif()
 if(${BUILD_INET_EXTENSION})
   add_subdirectory(inet)
 endif()
-
-if(${BUILD_ARROW_EXTENSION})
-  add_subdirectory(arrow)
-endif()

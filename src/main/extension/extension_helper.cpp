@@ -70,10 +70,6 @@
 #include "inet-extension.hpp"
 #endif
 
-#if defined(BUILD_ARROW_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#include "arrow-extension.hpp"
-#endif
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -212,13 +208,6 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		db.LoadExtension<INETExtension>();
 #else
 		// inet extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "arrow") {
-#if defined(BUILD_ARROW_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<ArrowExtension>();
-#else
-		// arrow extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else {
