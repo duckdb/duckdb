@@ -54,6 +54,15 @@ SELECT 2::DOUBLE::VARCHAR, 0.5::DOUBLE::VARCHAR, (-128.5)::DOUBLE::VARCHAR
 0.5
 -128.5
 
+query IIIII
+SELECT '0xF'::INTEGER, '0x0'::INTEGER, '0xFEE'::INTEGER, '0xfee'::INTEGER, '0x00FEE'::INTEGER
+----
+15
+0
+4078
+4078
+4078
+
 # Casting decimal strings to integral types should round to be consistent.
 foreach inttype TINYINT SMALLINT INTEGER BIGINT HUGEINT
 
@@ -66,5 +75,15 @@ query I
 SELECT '-0.5'::${inttype};
 ----
 -1
+
+endloop
+
+# Casting hex strings to integral types should round to be consistent.
+foreach inttype TINYINT SMALLINT INTEGER BIGINT HUGEINT
+
+query I
+SELECT '0x1e'::${inttype};
+----
+30
 
 endloop
