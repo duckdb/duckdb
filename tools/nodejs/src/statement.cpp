@@ -228,8 +228,7 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 		value = object_value;
 	} break;
 	default:
-		Napi::Error::New(env, "Data type is not supported " + dval.type().ToString()).ThrowAsJavaScriptException();
-		return env.Null();
+		value = Napi::String::New(env, dval.ToString());
 	}
 
 	return value;

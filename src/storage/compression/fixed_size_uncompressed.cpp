@@ -233,7 +233,7 @@ idx_t FixedSizeAppend(CompressionAppendState &append_state, ColumnSegment &segme
 	D_ASSERT(segment.GetBlockOffset() == 0);
 
 	auto target_ptr = append_state.handle.Ptr();
-	idx_t max_tuple_count = Storage::BLOCK_SIZE / sizeof(T);
+	idx_t max_tuple_count = segment.SegmentSize() / sizeof(T);
 	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
 
 	AppendLoop<T>(stats, target_ptr, segment.count, data, offset, copy_count);

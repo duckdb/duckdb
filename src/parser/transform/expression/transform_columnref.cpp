@@ -36,6 +36,13 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			result->replace_list.insert(make_pair(move(exclude_entry), move(replace_expression)));
 		}
 	}
+	if (star->regex) {
+		D_ASSERT(result->relation_name.empty());
+		D_ASSERT(result->exclude_list.empty());
+		D_ASSERT(result->replace_list.empty());
+		result->regex = star->regex;
+	}
+	result->columns = star->columns;
 	return move(result);
 }
 
