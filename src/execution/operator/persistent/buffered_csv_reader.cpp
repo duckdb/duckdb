@@ -384,6 +384,7 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOp
     : allocator(Allocator::Get(context)), file_handle(file_handle_p), options(move(options_p)), position_buffer(0),
       start_buffer(0) {
 	Initialize(requested_types);
+	throw InternalException("FIXME: have to set end buffer and buffer size");
 	//! fixme: have to set end bufefr and buffer size
 }
 
@@ -1497,12 +1498,16 @@ bool BufferedCSVReader::SetPosition() {
 	return !not_read_anything;
 }
 void BufferedCSVReader::SetBufferRead(const CSVBufferRead &buffer_read_p) {
+	if (!buffer_read_p.buffer) {
+		throw InternalException("BufferedCSVReader::SetBufferRead - CSVBufferRead does not have a buffer to read");
+	}
 	position_buffer = buffer_read_p.buffer_start;
 	start_buffer = buffer_read_p.buffer_start;
 	end_buffer = buffer_read_p.buffer_end;
 	buffer_size = buffer_read_p.buffer->GetBufferSize();
 	buffer = buffer_read_p.buffer->buffer.get();
 	buffer_read = buffer_read_p;
+	D_ASSERT(end_buffer <= buffer_size);
 }
 
 // If BufferRemainder returns false, it means we are done scanning this buffer and should go to the end_state

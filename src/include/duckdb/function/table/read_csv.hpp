@@ -90,7 +90,7 @@ public:
 
 	idx_t MaxThreads() const override;
 	//! Returns buffer and index that caller thread should read.
-	CSVBufferRead Next(ClientContext &context, ReadCSVData &bind_data);
+	unique_ptr<CSVBufferRead> Next(ClientContext &context, ReadCSVData &bind_data);
 	//! If we finished reading all the CSV Files
 	bool Finished();
 

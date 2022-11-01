@@ -67,22 +67,26 @@ struct CSVBufferRead {
 			if (buffer_end > buffer->GetBufferSize()) {
 				buffer_end = buffer->GetBufferSize();
 			}
+		} else {
+			buffer_start = 0;
+			buffer_end = 0;
 		}
 	}
 
 	CSVBufferRead() : buffer_start(0), buffer_end(NumericLimits<idx_t>::Maximum()) {};
-
-	void Reset() {
-		buffer.reset();
-		buffer_start = 0;
-		buffer_end = NumericLimits<idx_t>::Maximum();
-	}
 
 	shared_ptr<CSVBuffer> buffer;
 
 	idx_t buffer_start;
 	idx_t buffer_end;
 	idx_t batch_index;
+
+public:
+	void Reset() {
+		buffer.reset();
+		buffer_start = 0;
+		buffer_end = NumericLimits<idx_t>::Maximum();
+	}
 };
 
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file

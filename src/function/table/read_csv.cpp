@@ -217,13 +217,16 @@ bool ReadCSVGlobalState::Finished() {
 	return !current_buffer;
 }
 
-CSVBufferRead ReadCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data) {
+unique_ptr<CSVBufferRead> ReadCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	auto buffer_read = CSVBufferRead(current_buffer, next_byte, next_byte + bytes_per_local_state, batch_index++);
 	if (!current_buffer) {
 		// We are done scanning.
-		return buffer_read;
+		return nullptr;
 	}
+	// set up the current buffer
+	auto result =
+	    make_unique<CSVBufferRead>(current_buffer, next_byte, next_byte + bytes_per_local_state, batch_index++);
+	// move the byte index of the CSV reader to the next buffer
 	next_byte += bytes_per_local_state;
 	if (next_byte >= current_buffer->GetBufferSize()) {
 		// We replace the current buffer with the next buffer
@@ -242,7 +245,7 @@ CSVBufferRead ReadCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind
 			next_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
 		}
 	}
-	return buffer_read;
+	return result;
 }
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
@@ -250,9 +253,12 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 	auto &global_state = (ReadCSVGlobalState &)*global_state_p;
 	auto &csv_data = (ReadCSVData &)*input.bind_data;
 	auto next_local_buffer = global_state.Next(context.client, csv_data);
-	bool single_threaded = global_state.MaxThreads() == 1;
-	auto csv_reader = make_unique<BufferedCSVReader>(context.client, csv_data.options, next_local_buffer,
-	                                                 single_threaded, csv_data.sql_types);
+	unique_ptr<BufferedCSVReader> csv_reader;
+	if (next_local_buffer) {
+		bool single_threaded = global_state.MaxThreads() == 1;
+		csv_reader = make_unique<BufferedCSVReader>(context.client, csv_data.options, *next_local_buffer,
+		                                            single_threaded, csv_data.sql_types);
+	}
 	auto new_local_state = make_unique<ReadCSVLocalState>(move(csv_reader));
 	return move(new_local_state);
 }
@@ -276,17 +282,14 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	do {
 		if (output.size() != 0 || (csv_global_state.Finished() && csv_local_state.csv_reader->position_buffer >=
 		                                                              csv_local_state.csv_reader->end_buffer)) {
-			//			output.Print();
 			break;
 		}
 		if (csv_local_state.csv_reader->position_buffer >= csv_local_state.csv_reader->end_buffer) {
 			auto next_chunk = csv_global_state.Next(context, bind_data);
-			if (!next_chunk.buffer) {
-				// We are done
-				//				output.Print();
+			if (!next_chunk) {
 				break;
 			}
-			csv_local_state.csv_reader->SetBufferRead(next_chunk);
+			csv_local_state.csv_reader->SetBufferRead(*next_chunk);
 		}
 		csv_local_state.csv_reader->ParseCSV(output);
 
