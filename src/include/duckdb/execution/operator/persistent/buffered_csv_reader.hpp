@@ -1,29 +1,18 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/buffered_csv_reader.hpp
+// duckdb/execution/operator/persistent/base_csv_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/parser/parsed_data/copy_info.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/common/enums/file_compression_type.hpp"
-#include "duckdb/common/map.hpp"
-#include "duckdb/common/queue.hpp"
-#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
-#include "duckdb/execution/operator/persistent/csv_buffer.hpp"
-
-#include <sstream>
+#include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
 
 namespace duckdb {
 struct CopyInfo;
+struct CSVFileHandle;
 struct FileHandle;
 struct StrpTimeFormat;
 
@@ -56,119 +45,50 @@ struct TextSearchShiftArray {
 	unique_ptr<uint8_t[]> shifts;
 };
 
-enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2, PARSING_HEADER = 3 };
-
-struct ReadCSVLocalState;
-
-struct CSVBufferRead {
-	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index)
-	    : buffer(move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index) {
-		if (buffer) {
-			if (buffer_end > buffer->GetBufferSize()) {
-				buffer_end = buffer->GetBufferSize();
-			}
-		} else {
-			buffer_start = 0;
-			buffer_end = 0;
-		}
-	}
-
-	CSVBufferRead() : buffer_start(0), buffer_end(NumericLimits<idx_t>::Maximum()) {};
-
-	shared_ptr<CSVBuffer> buffer;
-
-	idx_t buffer_start;
-	idx_t buffer_end;
-	idx_t batch_index;
-
-public:
-	void Reset() {
-		buffer.reset();
-		buffer_start = 0;
-		buffer_end = NumericLimits<idx_t>::Maximum();
-	}
-};
-
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
-class BufferedCSVReader {
-	ParserMode mode;
+class BufferedCSVReader : public BaseCSVReader {
+	//! Initial buffer read size; can be extended for long lines
+	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
+	//! Larger buffer size for non disk files
+	static constexpr idx_t INITIAL_BUFFER_SIZE_LARGE = 10000000; // 10MB
 
 public:
-	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, CSVFileHandle *file_handle,
+	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
-
-	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, const CSVBufferRead &buffer,
-	                  bool single_threaded, const vector<LogicalType> &requested_types = vector<LogicalType>());
+	BufferedCSVReader(FileSystem &fs, Allocator &allocator, FileOpener *opener, BufferedCSVReaderOptions options,
+	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BufferedCSVReader();
 
-	Allocator &allocator;
-	CSVFileHandle *file_handle;
-	BufferedCSVReaderOptions options;
-	vector<LogicalType> sql_types;
-	vector<string> col_names;
-
-	//! remap parse_chunk col to insert_chunk col, because when
-	//! union_by_name option on insert_chunk may have more cols
-	vector<idx_t> insert_cols_idx;
-	vector<idx_t> insert_nulls_idx;
-
-	//! Current Position (Relative to the Buffer)
-	idx_t position_buffer = 0;
-
-	//! Start of the piece of the buffer this thread should read
-	idx_t start_buffer = 0;
-	//! End of the piece of this buffer this thread should read
-	idx_t end_buffer = NumericLimits<idx_t>::Maximum();
-	//! The actual buffer size
-	idx_t buffer_size = 0;
-
-	idx_t bytes_per_thread = 0;
-
-	char *buffer;
-
-	//! If we are running this scanner single threaded
-	bool single_threaded = false;
-
-	CSVBufferRead buffer_read;
-
-	idx_t linenr = 0;
-	bool linenr_estimated = false;
-
-	vector<idx_t> sniffed_column_counts;
-	bool row_empty = false;
-	idx_t sample_chunk_idx = 0;
-	bool jumping_samples = false;
-	bool end_of_file_reached = false;
-
-	idx_t bytes_in_chunk = 0;
-	double bytes_per_line_avg = 0;
+	unique_ptr<char[]> buffer;
+	idx_t buffer_size;
+	idx_t position;
+	idx_t start = 0;
 
 	vector<unique_ptr<char[]>> cached_buffers;
 
+	unique_ptr<CSVFileHandle> file_handle;
+
 	TextSearchShiftArray delimiter_search, escape_search, quote_search;
 
-	DataChunk parse_chunk;
-
-	std::queue<unique_ptr<DataChunk>> cached_chunks;
-
 public:
-	void SetBufferRead(const CSVBufferRead &buffer_read);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
-
-	//! Fill nulls into the cols that mismtach union names
-	void SetNullUnionCols(DataChunk &insert_chunk);
-
-	//! Resets the buffer
-	void ResetBuffer();
 
 private:
 	//! Initialize Parser
 	void Initialize(const vector<LogicalType> &requested_types);
-	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
-	void InitParseChunk(idx_t num_cols);
-	//! Initializes the insert_chunk idx for mapping parse_chunk cols to insert_chunk cols
-	void InitInsertChunkIdx(idx_t num_cols);
+	//! Skips skip_rows, reads header row from input stream
+	void SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header);
+	//! Jumps back to the beginning of input stream and resets necessary internal states
+	void JumpToBeginning(idx_t skip_rows, bool skip_header);
+	//! Resets the buffer
+	void ResetBuffer();
+	//! Resets the steam
+	void ResetStream();
+	//! Reads a new buffer from the CSV file if the current one has been exhausted
+	bool ReadBuffer(idx_t &start);
+	//! Jumps back to the beginning of input stream and resets necessary internal states
+	bool JumpToNextSample();
 	//! Initializes the TextSearchShiftArrays for complex parser
 	void PrepareComplexParser();
 	//! Try to parse a single datachunk from the file. Throws an exception if anything goes wrong.
@@ -177,38 +97,13 @@ private:
 	bool TryParseCSV(ParserMode mode);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
-	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
-	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
-	//! Change the date format for the type to the string
-	void SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type);
-	//! Try to cast a string value to the specified sql type
-	bool TryCastValue(const Value &value, const LogicalType &sql_type);
-	//! Try to cast a vector of values to the specified sql type
-	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
-	//! Skips skip_rows, reads header row from input stream
-	void SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header);
-	//! Jumps back to the beginning of input stream and resets necessary internal states
-	void JumpToBeginning(idx_t skip_rows, bool skip_header);
-	//! Jumps back to the beginning of input stream and resets necessary internal states
-	bool JumpToNextSample();
-	//! Resets the steam
-	void ResetStream();
-	//! Sets Position depending on the byte_start of this thread
-	bool SetPosition();
-	//! When a buffer finishes reading its piece, it still can try to scan up to the real end of the buffer
-	//! Up to finding a new line. This function sets the buffer_end and marks a boolean variable
-	//! when changing the buffer end the first time.
-	//! It returns FALSE if the parser should jump to the final state of parsing or not
-	bool BufferRemainder(bool &reached_remainder_state);
+
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message);
 	//! Parses more complex CSV files with multi-byte delimiters, escapes or quotes
-	//	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message, RemainderLines *remainder_lines);
-
-	//! Adds a value to the current row
-	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
-	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
-	bool AddRow(DataChunk &insert_chunk, idx_t &column);
+	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message);
+	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
+	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
 
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
 	void DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options,
@@ -228,15 +123,6 @@ private:
 	                                        const vector<LogicalType> &requested_types,
 	                                        vector<vector<LogicalType>> &best_sql_types_candidates,
 	                                        map<LogicalTypeId, vector<string>> &best_format_candidates);
-	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
-	void Flush(DataChunk &insert_chunk);
-
-	void VerifyUTF8(idx_t col_idx);
-	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);
-
-private:
-	//! Whether or not the current row's columns have overflown sql_types.size()
-	bool error_column_overflow = false;
 };
 
 } // namespace duckdb

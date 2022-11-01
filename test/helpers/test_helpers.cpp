@@ -267,8 +267,7 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 
 	DuckDB db;
 	Connection con(db);
-	auto file_handler = ReadCSV::OpenCSV(options, *con.context);
-	BufferedCSVReader reader(*con.context, move(options), file_handler.get(), sql_types);
+	BufferedCSVReader reader(*con.context, move(options), sql_types);
 
 	ColumnDataCollection csv_data_collection(*con.context, sql_types);
 	while (true) {

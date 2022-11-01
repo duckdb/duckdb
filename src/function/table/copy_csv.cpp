@@ -1,5 +1,5 @@
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"

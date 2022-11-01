@@ -96,8 +96,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 	if (options.auto_detect) {
 		options.file_path = result->files[0];
-		result->initial_file_handler = ReadCSV::OpenCSV(options, context);
-		auto initial_reader = make_unique<BufferedCSVReader>(context, options, result->initial_file_handler.get());
+		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
 		return_types.assign(initial_reader->sql_types.begin(), initial_reader->sql_types.end());
 		if (names.empty()) {
 			names.assign(initial_reader->col_names.begin(), initial_reader->col_names.end());
@@ -112,61 +111,62 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	// union_col_names will exclude filename and hivepartition
 	if (options.union_by_name) {
-		idx_t union_names_index = 0;
-		case_insensitive_map_t<idx_t> union_names_map;
-		vector<string> union_col_names;
-		vector<LogicalType> union_col_types;
-
-		for (idx_t file_idx = 0; file_idx < result->files.size(); ++file_idx) {
-			options.file_path = result->files[file_idx];
-			auto handler = ReadCSV::OpenCSV(options, context);
-			auto reader = make_unique<BufferedCSVReader>(context, options, handler.get());
-			auto &col_names = reader->col_names;
-			auto &sql_types = reader->sql_types;
-			D_ASSERT(col_names.size() == sql_types.size());
-
-			for (idx_t col = 0; col < col_names.size(); ++col) {
-				auto union_find = union_names_map.find(col_names[col]);
-
-				if (union_find != union_names_map.end()) {
-					// given same name , union_col's type must compatible with col's type
-					LogicalType compatible_type;
-					compatible_type = LogicalType::MaxLogicalType(union_col_types[union_find->second], sql_types[col]);
-					union_col_types[union_find->second] = compatible_type;
-				} else {
-					union_names_map[col_names[col]] = union_names_index;
-					union_names_index++;
-
-					union_col_names.emplace_back(col_names[col]);
-					union_col_types.emplace_back(sql_types[col]);
-				}
-			}
-			result->union_file_handlers.push_back(move(handler));
-			result->union_readers.push_back(move(reader));
-		}
-
-		for (auto &reader : result->union_readers) {
-			auto &col_names = reader->col_names;
-			vector<bool> is_null_cols(union_col_names.size(), true);
-
-			for (idx_t col = 0; col < col_names.size(); ++col) {
-				idx_t remap_col = union_names_map[col_names[col]];
-				reader->insert_cols_idx[col] = remap_col;
-				is_null_cols[remap_col] = false;
-			}
-			for (idx_t col = 0; col < union_col_names.size(); ++col) {
-				if (is_null_cols[col]) {
-					reader->insert_nulls_idx.push_back(col);
-				}
-			}
-		}
-
-		const idx_t first_file_index = 0;
-		result->initial_reader = move(result->union_readers[first_file_index]);
-
-		names.assign(union_col_names.begin(), union_col_names.end());
-		return_types.assign(union_col_types.begin(), union_col_types.end());
-		D_ASSERT(names.size() == return_types.size());
+		throw InternalException("FIXME: union by name");
+//		idx_t union_names_index = 0;
+//		case_insensitive_map_t<idx_t> union_names_map;
+//		vector<string> union_col_names;
+//		vector<LogicalType> union_col_types;
+//
+//		for (idx_t file_idx = 0; file_idx < result->files.size(); ++file_idx) {
+//			options.file_path = result->files[file_idx];
+//			auto handler = ReadCSV::OpenCSV(options, context);
+//			auto reader = make_unique<BufferedCSVReader>(context, options, handler.get());
+//			auto &col_names = reader->col_names;
+//			auto &sql_types = reader->sql_types;
+//			D_ASSERT(col_names.size() == sql_types.size());
+//
+//			for (idx_t col = 0; col < col_names.size(); ++col) {
+//				auto union_find = union_names_map.find(col_names[col]);
+//
+//				if (union_find != union_names_map.end()) {
+//					// given same name , union_col's type must compatible with col's type
+//					LogicalType compatible_type;
+//					compatible_type = LogicalType::MaxLogicalType(union_col_types[union_find->second], sql_types[col]);
+//					union_col_types[union_find->second] = compatible_type;
+//				} else {
+//					union_names_map[col_names[col]] = union_names_index;
+//					union_names_index++;
+//
+//					union_col_names.emplace_back(col_names[col]);
+//					union_col_types.emplace_back(sql_types[col]);
+//				}
+//			}
+//			result->union_file_handlers.push_back(move(handler));
+//			result->union_readers.push_back(move(reader));
+//		}
+//
+//		for (auto &reader : result->union_readers) {
+//			auto &col_names = reader->col_names;
+//			vector<bool> is_null_cols(union_col_names.size(), true);
+//
+//			for (idx_t col = 0; col < col_names.size(); ++col) {
+//				idx_t remap_col = union_names_map[col_names[col]];
+//				reader->insert_cols_idx[col] = remap_col;
+//				is_null_cols[remap_col] = false;
+//			}
+//			for (idx_t col = 0; col < union_col_names.size(); ++col) {
+//				if (is_null_cols[col]) {
+//					reader->insert_nulls_idx.push_back(col);
+//				}
+//			}
+//		}
+//
+//		const idx_t first_file_index = 0;
+//		result->initial_reader = move(result->union_readers[first_file_index]);
+//
+//		names.assign(union_col_names.begin(), union_col_names.end());
+//		return_types.assign(union_col_types.begin(), union_col_types.end());
+//		D_ASSERT(names.size() == return_types.size());
 	}
 
 	if (result->options.include_file_name) {
@@ -187,22 +187,59 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	return move(result);
 }
 
-static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (ReadCSVData &)*input.bind_data;
-	// FIXME: Should I still care about this case?
-	//	if (bind_data.initial_reader) {
-	//		result->csv_reader = move(bind_data.initial_reader);
-	//	}
-	if (bind_data.files.empty()) {
-		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
-		return make_unique<ReadCSVGlobalState>();
+//===--------------------------------------------------------------------===//
+// Read CSV Global State
+//===--------------------------------------------------------------------===//
+struct ReadCSVGlobalState : public GlobalTableFunctionState {
+public:
+	ReadCSVGlobalState(unique_ptr<CSVFileHandle> file_handle_p, vector<string> &files_path_p, idx_t system_threads_p,
+	                   idx_t buffer_size_p)
+	    : file_handle(move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p) {
+		file_size = file_handle->FileSize();
+		first_file_size = file_size;
+		bytes_per_local_state = buffer_size / MaxThreads();
+		current_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
+		next_buffer = current_buffer->Next(*file_handle, buffer_size);
 	}
 
-	bind_data.options.file_path = bind_data.files[0];
-	auto file_handle = ReadCSV::OpenCSV(bind_data.options, context);
-	return make_unique<ReadCSVGlobalState>(move(file_handle), bind_data.files, context.db->NumberOfThreads(),
-	                                       bind_data.options.buffer_size);
-}
+	ReadCSVGlobalState() {};
+
+	idx_t MaxThreads() const override;
+	//! Returns buffer and index that caller thread should read.
+	unique_ptr<CSVBufferRead> Next(ClientContext &context, ReadCSVData &bind_data);
+	//! If we finished reading all the CSV Files
+	bool Finished();
+
+private:
+	//! File Handle for current file
+	unique_ptr<CSVFileHandle> file_handle;
+
+	shared_ptr<CSVBuffer> current_buffer;
+	shared_ptr<CSVBuffer> next_buffer;
+	//! The index of the next file to read (i.e. current file + 1)
+	idx_t file_index = 1;
+	//! How many bytes were read up to this point
+	//	atomic<idx_t> bytes_read;
+
+	//! Mutex to lock when getting next batch of bytes (Parallel Only)
+	mutex main_mutex;
+	//! Byte set from for last thread
+	idx_t next_byte = 0;
+	//! Size of current file
+	idx_t file_size;
+
+	//! How many bytes we should execute per local state
+	idx_t bytes_per_local_state;
+
+	//! Size of first file
+	idx_t first_file_size;
+	//! Basically max number of threads in DuckDB
+	idx_t system_threads;
+	//! Size of the buffers
+	idx_t buffer_size;
+	//! Current batch index
+	idx_t batch_index = 0;
+};
 
 idx_t ReadCSVGlobalState::MaxThreads() const {
 	//	idx_t one_mb = 1000000;
@@ -249,16 +286,43 @@ unique_ptr<CSVBufferRead> ReadCSVGlobalState::Next(ClientContext &context, ReadC
 	return result;
 }
 
+static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
+	auto &bind_data = (ReadCSVData &)*input.bind_data;
+	// FIXME: Should I still care about this case?
+	if (bind_data.initial_reader) {
+		throw InternalException("FIXME: auto-detect");
+	}
+	if (bind_data.files.empty()) {
+		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
+		return make_unique<ReadCSVGlobalState>();
+	}
+
+	bind_data.options.file_path = bind_data.files[0];
+	auto file_handle = ReadCSV::OpenCSV(bind_data.options, context);
+	return make_unique<ReadCSVGlobalState>(move(file_handle), bind_data.files, context.db->NumberOfThreads(),
+	                                       bind_data.options.buffer_size);
+}
+
+//===--------------------------------------------------------------------===//
+// Read CSV Local State
+//===--------------------------------------------------------------------===//
+struct ReadCSVLocalState : public LocalTableFunctionState {
+public:
+	explicit ReadCSVLocalState(unique_ptr<ParallelCSVReader> csv_reader_p) : csv_reader(move(csv_reader_p)) {
+	}
+	//! The CSV reader
+	unique_ptr<ParallelCSVReader> csv_reader;
+};
+
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                      GlobalTableFunctionState *global_state_p) {
 	auto &global_state = (ReadCSVGlobalState &)*global_state_p;
 	auto &csv_data = (ReadCSVData &)*input.bind_data;
 	auto next_local_buffer = global_state.Next(context.client, csv_data);
-	unique_ptr<BufferedCSVReader> csv_reader;
+	unique_ptr<ParallelCSVReader> csv_reader;
 	if (next_local_buffer) {
-		bool single_threaded = global_state.MaxThreads() == 1;
-		csv_reader = make_unique<BufferedCSVReader>(context.client, csv_data.options, *next_local_buffer,
-		                                            single_threaded, csv_data.sql_types);
+		csv_reader = make_unique<ParallelCSVReader>(context.client, csv_data.options, *next_local_buffer,
+		                                            csv_data.sql_types);
 	}
 	auto new_local_state = make_unique<ReadCSVLocalState>(move(csv_reader));
 	return move(new_local_state);

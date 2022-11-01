@@ -1,6 +1,6 @@
 #include "duckdb/main/connection.hpp"
 
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -194,8 +194,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
 	BufferedCSVReaderOptions options;
 	options.file_path = csv_file;
 	options.auto_detect = true;
-	auto file_handle = ReadCSV::OpenCSV(options, *context);
-	BufferedCSVReader reader(*context, options, file_handle.get());
+	BufferedCSVReader reader(*context, options);
 	vector<ColumnDefinition> column_list;
 	for (idx_t i = 0; i < reader.sql_types.size(); i++) {
 		column_list.emplace_back(reader.col_names[i], reader.sql_types[i]);
