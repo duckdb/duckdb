@@ -474,10 +474,11 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {
 			if (select_binder.HasBoundColumns()) {
 				auto &bound_columns = select_binder.GetBoundColumns();
-				throw BinderException(
-				    FormatError(bound_columns[0].query_location,
-				                "column \"%s\" must appear in the GROUP BY clause or be used in an aggregate function",
-				                bound_columns[0].name));
+				string error;
+				error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
+				error += "\nUse \"ANY_VALUE(%s)\" if you do not care about which value of \"%s\" you are selecting";
+				throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
+				                                  bound_columns[0].name, bound_columns[0].name));
 			}
 		}
 	}

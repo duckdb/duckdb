@@ -32,6 +32,7 @@ struct DummyBinding;
 struct BoundColumnReferenceInfo {
 	string name;
 	idx_t query_location;
+	idx_t select_index;
 };
 
 struct BindResult {
@@ -70,7 +71,7 @@ public:
 	bool HasBoundColumns() {
 		return !bound_columns.empty();
 	}
-	const vector<BoundColumnReferenceInfo> &GetBoundColumns() {
+	vector<BoundColumnReferenceInfo> &GetBoundColumns() {
 		return bound_columns;
 	}
 
