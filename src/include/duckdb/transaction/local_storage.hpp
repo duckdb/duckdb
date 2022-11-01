@@ -80,6 +80,8 @@ public:
 
 	void AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
 	                     bool append_to_table);
+	bool AppendToIndexes(Transaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
+	                     const vector<LogicalType> &table_types, row_t &start_row);
 };
 
 class LocalTableManager {

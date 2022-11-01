@@ -184,6 +184,33 @@ void LocalTableStorage::FlushToDisk() {
 	optimistic_writer.FinalFlush();
 }
 
+bool LocalTableStorage::AppendToIndexes(Transaction &transaction, RowGroupCollection &source,
+                                        TableIndexList &index_list, const vector<LogicalType> &table_types,
+                                        row_t &start_row) {
+	// only need to scan for index append
+	// figure out which columns we need to scan for the set of indexes
+	auto columns = index_list.GetRequiredColumns();
+	// create an empty mock chunk that contains all the correct types for the table
+	DataChunk mock_chunk;
+	mock_chunk.InitializeEmpty(table_types);
+	bool success = true;
+	source.Scan(transaction, columns, [&](DataChunk &chunk) -> bool {
+		// construct the mock chunk by referencing the required columns
+		for (idx_t i = 0; i < columns.size(); i++) {
+			mock_chunk.data[columns[i]].Reference(chunk.data[i]);
+		}
+		mock_chunk.SetCardinality(chunk);
+		// append this chunk to the indexes of the table
+		if (!DataTable::AppendToIndexes(index_list, mock_chunk, start_row)) {
+			success = false;
+			return false;
+		}
+		start_row += chunk.size();
+		return true;
+	});
+	return success;
+}
+
 void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
                                         bool append_to_table) {
 	bool constraint_violated = false;
@@ -203,26 +230,8 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 			return true;
 		});
 	} else {
-		// only need to scan for index append
-		// figure out which columns we need to scan for the set of indexes
-		auto columns = table->info->indexes.GetRequiredColumns();
-		// create an empty mock chunk that contains all the correct types for the table
-		DataChunk mock_chunk;
-		mock_chunk.InitializeEmpty(table->GetTypes());
-		row_groups->Scan(transaction, columns, [&](DataChunk &chunk) -> bool {
-			// construct the mock chunk by referencing the required columns
-			for (idx_t i = 0; i < columns.size(); i++) {
-				mock_chunk.data[columns[i]].Reference(chunk.data[i]);
-			}
-			mock_chunk.SetCardinality(chunk);
-			// append this chunk to the indexes of the table
-			if (!table->AppendToIndexes(mock_chunk, append_state.current_row)) {
-				constraint_violated = true;
-				return false;
-			}
-			append_state.current_row += chunk.size();
-			return true;
-		});
+		constraint_violated = !AppendToIndexes(transaction, *row_groups, table->info->indexes, table->GetTypes(),
+		                                       append_state.current_row);
 	}
 	if (constraint_violated) {
 		// need to revert the append
@@ -382,6 +391,14 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 
 void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection) {
 	auto storage = table_manager.GetOrCreateStorage(table);
+	if (!storage->indexes.Empty()) {
+		// append data to indexes if required
+		row_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows();
+		bool success = storage->AppendToIndexes(transaction, collection, storage->indexes, table->GetTypes(), base_id);
+		if (!success) {
+			throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+		}
+	}
 	storage->row_groups->MergeStorage(collection);
 }
 
