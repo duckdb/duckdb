@@ -1,0 +1,93 @@
+# name: test/sql/storage/list_dictionary.test
+# description: Test list functions on a list with a child with dictionary encoding
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/list_dictionary.db
+
+statement ok
+PRAGMA force_compression='dictionary'
+
+statement ok
+CREATE TABLE test (a VARCHAR[]);
+
+statement ok
+INSERT INTO test SELECT CASE WHEN i%2=0 THEN [] ELSE ['Hello', 'World'] END FROM range(10000) t(i);
+
+query III
+SELECT MIN(t), MAX(t), COUNT(t) FROM (SELECT a[2] FROM test) t(t)
+----
+World	World	5000
+
+query I
+SELECT SUM(CASE WHEN a IS DISTINCT FROM ['Hello', 'World'] THEN 1 ELSE 0 END) FROM test
+----
+5000
+
+query I
+SELECT COUNT(*) FROM test WHERE a=['Hello', 'World']
+----
+5000
+
+query I
+SELECT DISTINCT a FROM test ORDER BY ALL
+----
+[]
+[Hello, World]
+
+query III
+SELECT MIN(t), MAX(t), COUNT(t) FROM (SELECT a[2:2] FROM test) t(t)
+----
+[]	[World]	10000
+
+statement ok
+CREATE TABLE test2 AS SELECT * FROM test ORDER BY a
+
+query I
+SELECT * FROM test2 LIMIT 3
+----
+[]
+[]
+[]
+
+query I
+SELECT * FROM test2 LIMIT 3 OFFSET 5000
+----
+[Hello, World]
+[Hello, World]
+[Hello, World]
+
+query II
+SELECT MIN(t), MAX(t) FROM (SELECT UNNEST(a) AS t FROM test) t(t)
+----
+Hello	World
+
+query I
+SELECT COUNT(*) FROM test WHERE a IN (SELECT * FROM test)
+----
+10000
+
+query IIIIII
+SELECT MIN(t), MAX(t), MIN(t[1]), MAX(t[1]), MIN(t[2]), MAX(t[2]) FROM (SELECT [lower(x) for x in a] FROM test) t(t)
+----
+[]	[hello, world]	hello	hello	world	world
+
+query II
+SELECT MIN(t), MAX(t) FROM (SELECT [lower(x) for x in a if x!='Hello'] FROM test) t(t)
+----
+[]	[world]
+
+query IIII
+SELECT MIN(a), MAX(a), MIN(b), MAX(b) FROM (SELECT list_min(a), list_max(a) FROM test) t(a, b)
+----
+Hello	Hello	World	World
+
+query I
+SELECT MIN(list_sort(a)[2]) FROM test
+----
+World
+
+query I
+SELECT COUNT(*) FROM test WHERE array_contains(a, 'World')
+----
+5000

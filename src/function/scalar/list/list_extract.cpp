@@ -15,8 +15,8 @@ namespace duckdb {
 template <class T, bool HEAP_REF = false, bool VALIDITY_ONLY = false>
 void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVectorFormat &offsets_data,
                          Vector &child_vector, idx_t list_size, Vector &result) {
-	UnifiedVectorFormat child_data;
-	child_vector.ToUnifiedFormat(list_size, child_data);
+	UnifiedVectorFormat child_format;
+	child_vector.ToUnifiedFormat(list_size, child_format);
 
 	T *result_data;
 
@@ -33,40 +33,46 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 
 	// this is lifted from ExecuteGenericLoop because we can't push the list child data into this otherwise
 	// should have gone with GetValue perhaps
+	auto child_data = (T *)child_format.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
 		auto offsets_index = offsets_data.sel->get_index(i);
-		if (list_data.validity.RowIsValid(list_index) && offsets_data.validity.RowIsValid(offsets_index)) {
-			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
-			auto offsets_entry = ((int64_t *)offsets_data.data)[offsets_index];
+		if (!list_data.validity.RowIsValid(list_index)) {
+			result_mask.SetInvalid(i);
+			continue;
+		}
+		if (!offsets_data.validity.RowIsValid(offsets_index)) {
+			result_mask.SetInvalid(i);
+			continue;
+		}
+		auto list_entry = ((list_entry_t *)list_data.data)[list_index];
+		auto offsets_entry = ((int64_t *)offsets_data.data)[offsets_index];
 
-			// 1-based indexing
-			if (offsets_entry == 0) {
+		// 1-based indexing
+		if (offsets_entry == 0) {
+			result_mask.SetInvalid(i);
+			continue;
+		}
+		offsets_entry = (offsets_entry > 0) ? offsets_entry - 1 : offsets_entry;
+
+		idx_t child_offset;
+		if (offsets_entry < 0) {
+			if ((idx_t)-offsets_entry > list_entry.length) {
 				result_mask.SetInvalid(i);
 				continue;
 			}
-			offsets_entry = (offsets_entry > 0) ? offsets_entry - 1 : offsets_entry;
-
-			idx_t child_offset;
-			if (offsets_entry < 0) {
-				if ((idx_t)-offsets_entry > list_entry.length) {
-					result_mask.SetInvalid(i);
-					continue;
-				}
-				child_offset = list_entry.offset + list_entry.length + offsets_entry;
-			} else {
-				if ((idx_t)offsets_entry >= list_entry.length) {
-					result_mask.SetInvalid(i);
-					continue;
-				}
-				child_offset = list_entry.offset + offsets_entry;
-			}
-			if (child_data.validity.RowIsValid(child_offset)) {
-				if (!VALIDITY_ONLY) {
-					result_data[i] = ((T *)child_data.data)[child_offset];
-				}
-			} else {
+			child_offset = list_entry.offset + list_entry.length + offsets_entry;
+		} else {
+			if ((idx_t)offsets_entry >= list_entry.length) {
 				result_mask.SetInvalid(i);
+				continue;
+			}
+			child_offset = list_entry.offset + offsets_entry;
+		}
+		auto child_index = child_format.sel->get_index(child_offset);
+		if (child_format.validity.RowIsValid(child_index)) {
+			if (!VALIDITY_ONLY) {
+				result_data[i] = child_data[child_index];
 			}
 		} else {
 			result_mask.SetInvalid(i);
