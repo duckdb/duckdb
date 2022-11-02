@@ -10,6 +10,8 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/mutex.hpp"
+
 #include <random>
 
 namespace duckdb {
