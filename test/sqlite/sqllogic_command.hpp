@@ -68,6 +68,7 @@ public:
 	Statement(SQLLogicTestRunner &runner);
 
 	bool expect_ok;
+	string expected_error;
 
 public:
 	void ExecuteInternal(ExecuteContext &context) const override;

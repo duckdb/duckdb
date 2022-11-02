@@ -52,8 +52,6 @@ SELECT COUNT(i) AS i FROM integers HAVING i=5;
 
 statement error
 SELECT COUNT(i) AS i FROM integers HAVING i=5 ORDER BY i;
-----
-5
 
 # use the same alias multiple times
 query I

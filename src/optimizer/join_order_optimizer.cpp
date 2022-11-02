@@ -561,8 +561,8 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 		auto connections = query_graph.GetConnections(new_set, neighbor_relation);
 		// recurse and update up the tree if the combined set produces a plan with a lower cost
 		// only recurse on neighbor relations that have plans.
-		auto &right_plan = plans[neighbor_relation];
-		if (!right_plan) {
+		auto right_plan = plans.find(neighbor_relation);
+		if (right_plan == plans.end()) {
 			continue;
 		}
 		auto updated_plan = EmitPair(new_set, neighbor_relation, connections);

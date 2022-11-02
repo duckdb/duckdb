@@ -149,7 +149,7 @@ unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(
 		auto handle = buffer_manager.Pin(segment.block);
 		StringDictionaryContainer dictionary;
 		dictionary.size = 0;
-		dictionary.end = Storage::BLOCK_SIZE;
+		dictionary.end = segment.SegmentSize();
 		SetDictionary(segment, handle, dictionary);
 	}
 	return make_unique<UncompressedStringSegmentState>();
@@ -159,16 +159,16 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	auto dict = GetDictionary(segment, handle);
-	D_ASSERT(dict.end == Storage::BLOCK_SIZE);
+	D_ASSERT(dict.end == segment.SegmentSize());
 	// compute the total size required to store this segment
 	auto offset_size = DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t);
 	auto total_size = offset_size + dict.size;
 	if (total_size >= COMPACTION_FLUSH_LIMIT) {
 		// the block is full enough, don't bother moving around the dictionary
-		return Storage::BLOCK_SIZE;
+		return segment.SegmentSize();
 	}
 	// the block has space left: figure out how much space we can save
-	auto move_amount = Storage::BLOCK_SIZE - total_size;
+	auto move_amount = segment.SegmentSize() - total_size;
 	// move the dictionary so it lines up exactly with the offsets
 	auto dataptr = handle.Ptr();
 	memmove(dataptr + offset_size, dataptr + dict.end - dict.size, dict.size);
@@ -215,10 +215,10 @@ StringDictionaryContainer UncompressedStringStorage::GetDictionary(ColumnSegment
 
 idx_t UncompressedStringStorage::RemainingSpace(ColumnSegment &segment, BufferHandle &handle) {
 	auto dictionary = GetDictionary(segment, handle);
-	D_ASSERT(dictionary.end == Storage::BLOCK_SIZE);
+	D_ASSERT(dictionary.end == segment.SegmentSize());
 	idx_t used_space = dictionary.size + segment.count * sizeof(int32_t) + DICTIONARY_HEADER_SIZE;
-	D_ASSERT(Storage::BLOCK_SIZE >= used_space);
-	return Storage::BLOCK_SIZE - used_space;
+	D_ASSERT(segment.SegmentSize() >= used_space);
+	return segment.SegmentSize() - used_space;
 }
 
 void UncompressedStringStorage::WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block,

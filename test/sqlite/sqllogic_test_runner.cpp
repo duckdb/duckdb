@@ -268,10 +268,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// extract the SQL statement
 			parser.NextLine();
-			auto statement_text = parser.ExtractStatement(false);
+			auto statement_text = parser.ExtractStatement();
 			if (statement_text.empty()) {
 				parser.Fail("Unexpected empty statement text");
 			}
+			command->expected_error = parser.ExtractExpectedError(command->expect_ok);
 
 			// perform any renames in the text
 			command->base_sql_query = ReplaceKeywords(move(statement_text));
@@ -305,7 +306,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// extract the SQL statement
 			parser.NextLine();
-			auto statement_text = parser.ExtractStatement(true);
+			auto statement_text = parser.ExtractStatement();
 
 			// perform any renames in the text
 			command->base_sql_query = ReplaceKeywords(move(statement_text));

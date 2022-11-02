@@ -58,7 +58,19 @@ def op_inspect(op):
 
 
 def query_plan_cost(cli, dbname, query):
-    subprocess.run(f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"", shell=True, check=True, capture_output=True)
+    try:
+        subprocess.run(f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"", shell=True, check=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        print("-------------------------")
+        print("--------Failure----------")
+        print("-------------------------")
+        print(e.stderr.decode('utf8'))
+        print("-------------------------")
+        print("--------Output----------")
+        print("-------------------------")
+        print(e.output.decode('utf8'))
+        print("-------------------------")
+        raise e
     with open(PROFILE_FILENAME, 'r') as file:
         return op_inspect(json.load(file))
 

@@ -23,8 +23,9 @@ public:
 
 	void ApplyPendingSkips(idx_t num_values) override;
 
-	void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
-		child_column_reader->InitializeRead(columns, protocol_p);
+	void InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
+	                    TProtocol &protocol_p) override {
+		child_column_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
 	}
 
 	idx_t GroupRowsAvailable() override {

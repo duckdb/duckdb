@@ -564,8 +564,8 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
-	ListVector::GetEntry(left).Flatten(count);
-	ListVector::GetEntry(right).Flatten(count);
+	ListVector::GetEntry(left).Flatten(ListVector::GetListSize(left));
+	ListVector::GetEntry(right).Flatten(ListVector::GetListSize(right));
 	Vector lchild(ListVector::GetEntry(left), lcursor, count);
 	Vector rchild(ListVector::GetEntry(right), rcursor, count);
 

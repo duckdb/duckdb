@@ -64,23 +64,27 @@ void FileBuffer::ReallocBuffer(size_t new_size) {
 }
 
 void FileBuffer::Resize(uint64_t new_size) {
+	idx_t header_size = Storage::BLOCK_HEADER_SIZE;
 	{
 		// TODO: All the logic here is specific to SingleFileBlockManager.
 		// and should be moved there, via a specific implementation of FileBuffer.
 		//
 		// make room for the block header (if this is not the db file header)
-		if (type == FileBufferType::MANAGED_BUFFER && new_size != Storage::FILE_HEADER_SIZE) {
-			new_size += Storage::BLOCK_HEADER_SIZE;
-			// If we don't write/read an entire block, our checksum won't match.
-			new_size = AlignValue<uint32_t, Storage::BLOCK_ALLOC_SIZE>(new_size);
+		if (type == FileBufferType::TINY_BUFFER) {
+			header_size = 0;
 		}
-		new_size = AlignValue<uint32_t, Storage::SECTOR_SIZE>(new_size);
+		if (type == FileBufferType::MANAGED_BUFFER) {
+			new_size += Storage::BLOCK_HEADER_SIZE;
+		}
+		if (type != FileBufferType::TINY_BUFFER) {
+			new_size = AlignValue<uint32_t, Storage::SECTOR_SIZE>(new_size);
+		}
 		ReallocBuffer(new_size);
 	}
 
 	if (new_size > 0) {
-		buffer = internal_buffer + Storage::BLOCK_HEADER_SIZE;
-		size = internal_size - Storage::BLOCK_HEADER_SIZE;
+		buffer = internal_buffer + header_size;
+		size = internal_size - header_size;
 	}
 }
 

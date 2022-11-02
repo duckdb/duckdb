@@ -24,6 +24,10 @@ public:
 	case_insensitive_set_t exclude_list;
 	//! List of columns to replace with another expression
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> replace_list;
+	//! Regular expression to select columns (if any)
+	string regex;
+	//! Whether or not this is a COLUMNS expression
+	bool columns = false;
 
 public:
 	string ToString() const override;

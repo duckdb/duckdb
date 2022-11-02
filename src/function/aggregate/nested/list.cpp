@@ -479,10 +479,11 @@ static void InitializeValidities(Vector &vector, idx_t &capacity) {
 	auto &validity_mask = FlatVector::Validity(vector);
 	validity_mask.Initialize(capacity);
 
-	if (vector.GetType().id() == LogicalTypeId::LIST) {
+	auto internal_type = vector.GetType().InternalType();
+	if (internal_type == PhysicalType::LIST) {
 		auto &child_vector = ListVector::GetEntry(vector);
 		InitializeValidities(child_vector, capacity);
-	} else if (vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP) {
+	} else if (internal_type == PhysicalType::STRUCT) {
 		auto &children = StructVector::GetEntries(vector);
 		for (auto &child : children) {
 			InitializeValidities(*child, capacity);
@@ -496,12 +497,12 @@ static void RecursiveFlatten(Vector &vector, idx_t &count) {
 		vector.Flatten(count);
 	}
 
-	if (vector.GetType().id() == LogicalTypeId::LIST) {
+	auto internal_type = vector.GetType().InternalType();
+	if (internal_type == PhysicalType::LIST) {
 		auto &child_vector = ListVector::GetEntry(vector);
 		auto child_vector_count = ListVector::GetListSize(vector);
 		RecursiveFlatten(child_vector, child_vector_count);
-
-	} else if (vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP) {
+	} else if (internal_type == PhysicalType::STRUCT) {
 		auto &children = StructVector::GetEntries(vector);
 		for (auto &child : children) {
 			RecursiveFlatten(*child, count);
