@@ -591,7 +591,7 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 
 		throw InvalidInputException(
 		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
-		    "that \"%s\" is either a pandas.DataFrame, or pyarrow Table, FileSystemDataset, InMemoryDataset, "
+		    "that \"%s\" is either a pandas.DataFrame, or pyarrow Table, Dataset, "
 		    "RecordBatchReader, or Scanner",
 		    cpp_table_name, py_object_type, location, cpp_table_name);
 	}
@@ -737,8 +737,7 @@ bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	return import_cache.arrow.lib.Table.IsInstance(object) ||
 	       import_cache.arrow.lib.RecordBatchReader.IsInstance(object) ||
-	       import_cache.arrow.dataset.FileSystemDataset.IsInstance(object) ||
-	       import_cache.arrow.dataset.InMemoryDataset.IsInstance(object) ||
+	       import_cache.arrow.dataset.Dataset.IsInstance(object) ||
 	       import_cache.arrow.dataset.Scanner.IsInstance(object);
 }
 

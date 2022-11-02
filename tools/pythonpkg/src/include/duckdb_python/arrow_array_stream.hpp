@@ -48,7 +48,7 @@ public:
 };
 } // namespace pyarrow
 
-enum class PyArrowObjectType { Invalid, Table, RecordBatchReader, Scanner, InMemoryDataset, FileSystemDataset };
+enum class PyArrowObjectType { Invalid, Table, RecordBatchReader, Scanner, Dataset };
 
 PyArrowObjectType GetArrowType(const py::handle &obj);
 
