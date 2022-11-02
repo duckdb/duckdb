@@ -173,7 +173,7 @@ class IpcResultStreamIterator {
  * @return {void}
  */
 Connection.prototype.arrowIPCAll = function (sql) {
-    const query = "SELECT * FROM get_arrow_ipc((" + sql + "));";
+    const query = "SELECT * FROM to_arrow_ipc((" + sql + "));";
     var statement = new Statement(this, query);
     return statement.arrowIPCAll.apply(statement, arguments);
 }
@@ -188,7 +188,7 @@ Connection.prototype.arrowIPCAll = function (sql) {
  * @return IpcResultStreamIterator
  */
 Connection.prototype.arrowIPCStream = async function (sql) {
-    const query = "SELECT * FROM get_arrow_ipc((" + sql + "));";
+    const query = "SELECT * FROM to_arrow_ipc((" + sql + "));";
     const statement = new Statement(this, query);
     return new IpcResultStreamIterator(await statement.stream.apply(statement, arguments));
 }
