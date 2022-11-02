@@ -635,7 +635,9 @@ public:
 		}
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
+	}
 
+	void FinishEvent() override {
 		//! Now that everything is added to the main ht, we can actually finalize
 		auto new_event = make_shared<HashAggregateFinalizeEvent>(op, gstate, pipeline.get(), context);
 		this->InsertEvent(move(new_event));
