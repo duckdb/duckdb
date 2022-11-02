@@ -14,7 +14,7 @@
 #include <execinfo.h>
 #endif
 
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32) && INTPTR_MAX == INT64_MAX
+#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
 #include "jemalloc-extension.hpp"
 #endif
 
@@ -86,7 +86,7 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 // Allocator
 //===--------------------------------------------------------------------===//
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32) && INTPTR_MAX == INT64_MAX
+#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
 Allocator::Allocator()
     : Allocator(JEMallocExtension::Allocate, JEMallocExtension::Free, JEMallocExtension::Reallocate, nullptr) {
 }
