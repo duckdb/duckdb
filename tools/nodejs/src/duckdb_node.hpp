@@ -4,7 +4,6 @@
 
 #include <napi.h>
 #include <queue>
-#include <list>
 #include <unordered_map>
 
 namespace node_duckdb {

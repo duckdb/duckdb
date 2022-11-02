@@ -810,12 +810,14 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanL
 	vector.Slice(*dict_vectors[col_idx], sel, size);
 }
 
-// TODO should be a template?
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
                                        unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
                                        DataChunk &output, idx_t start, bool arrow_scan_is_projected) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
 		auto col_idx = scan_state.column_ids[idx];
+
+		// If projection was not pushed down into the arrow scanner, but projection pushdown is enabled on the
+		// table function, we need to use original column ids here.
 		auto arrow_array_idx = arrow_scan_is_projected ? idx : col_idx;
 
 		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {

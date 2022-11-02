@@ -399,7 +399,7 @@ struct RunPreparedTask : public Task {
 				}
 			}
 
-			// TODO we should handle this in duckdb probably, either way check if arrow really specifies this footer
+			// TODO we should handle this in duckdb probably
 			auto null_arr = Napi::Uint8Array::New(env, 4);
 			memset(null_arr.Data(), '\0', 4);
 			result_arr.Set(out_idx++, null_arr);
@@ -623,7 +623,6 @@ struct GetNextArrowIpcTask : public Task {
 		};
 		auto array_buffer =
 		    Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(), deleter, data_chunk_ptr);
-		// TODO duckdb in debug mode seems to complain about moving these buffers out of the query result?
 
 		deferred.Resolve(array_buffer);
 	}

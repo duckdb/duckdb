@@ -568,7 +568,6 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/inet/include)
     add_definitions(-DBUILD_INET_EXTENSION=${BUILD_INET_EXTENSION})
   endif()
-
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -610,6 +609,10 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_SQLSMITH_EXTENSION})
     add_dependencies(${LIBRARY} sqlsmith_extension)
+  endif()
+
+  if(${BUILD_INET_EXTENSION})
+    add_dependencies(${LIBRARY} inet_extension)
   endif()
 
 endfunction()
@@ -658,6 +661,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_SQLSMITH_EXTENSION})
     target_link_libraries(${LIBRARY} sqlsmith_extension)
+  endif()
+
+  if(${BUILD_INET_EXTENSION})
+    target_link_libraries(${LIBRARY} inet_extension)
   endif()
 endfunction()
 

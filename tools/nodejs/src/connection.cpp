@@ -343,6 +343,7 @@ Napi::Value Connection::RegisterUdf(const Napi::CallbackInfo &info) {
 	return Value();
 }
 
+// Register Arrow IPC buffers for scanning from DuckDB
 Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	if (info.Length() < 2 || !info[0].IsString() || !info[1].IsObject()) {
