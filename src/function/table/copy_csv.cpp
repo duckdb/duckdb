@@ -91,7 +91,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->sql_types = expected_types;
 
 	string file_pattern = info.file_path;
-	vector<string> patterns { file_pattern };
+	vector<string> patterns {file_pattern};
 
 	bind_data->InitializeFiles(context, patterns);
 

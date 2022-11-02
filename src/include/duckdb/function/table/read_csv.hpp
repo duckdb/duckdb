@@ -24,6 +24,8 @@ public:
 };
 
 struct BaseCSVData : public TableFunctionData {
+	virtual ~BaseCSVData() {
+	}
 	//! The file path of the CSV file to read or write
 	vector<string> files;
 	//! The CSV reader options

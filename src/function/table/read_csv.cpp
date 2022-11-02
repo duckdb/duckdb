@@ -22,7 +22,6 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const BufferedCSVReaderOptions &optio
 	return make_unique<CSVFileHandle>(move(file_handle));
 }
 
-
 void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &patterns) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	for (auto &file_pattern : patterns) {
@@ -211,8 +210,8 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 //===--------------------------------------------------------------------===//
 struct ParallelCSVGlobalState : public GlobalTableFunctionState {
 public:
-	ParallelCSVGlobalState(unique_ptr<CSVFileHandle> file_handle_p, vector<string> &files_path_p, idx_t system_threads_p,
-	                   idx_t buffer_size_p, idx_t rows_to_skip)
+	ParallelCSVGlobalState(unique_ptr<CSVFileHandle> file_handle_p, vector<string> &files_path_p,
+	                       idx_t system_threads_p, idx_t buffer_size_p, idx_t rows_to_skip)
 	    : file_handle(move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p) {
 		for (idx_t i = 0; i < rows_to_skip; i++) {
 			file_handle->ReadLine();
@@ -224,7 +223,8 @@ public:
 		current_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
 		next_buffer = current_buffer->Next(*file_handle, buffer_size);
 	}
-	ParallelCSVGlobalState() {}
+	ParallelCSVGlobalState() {
+	}
 
 	idx_t MaxThreads() const override;
 	//! Returns buffer and index that caller thread should read.
@@ -310,7 +310,8 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 	}
 	return result;
 }
-static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
+static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
+                                                                  TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
@@ -326,7 +327,7 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	}
 	idx_t rows_to_skip = bind_data.options.skip_rows + (bind_data.options.has_header ? 1 : 0);
 	return make_unique<ParallelCSVGlobalState>(move(file_handle), bind_data.files, context.db->NumberOfThreads(),
-	                                       bind_data.options.buffer_size, rows_to_skip);
+	                                           bind_data.options.buffer_size, rows_to_skip);
 }
 
 //===--------------------------------------------------------------------===//
@@ -442,13 +443,13 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 	//! How many bytes were read up to this point
 	atomic<idx_t> bytes_read;
 
-
 	idx_t MaxThreads() const override {
 		return 1;
 	}
 };
 
-static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext &context, TableFunctionInitInput &input) {
+static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext &context,
+                                                                  TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	auto result = make_unique<SingleThreadedCSVState>();
 	if (bind_data.initial_reader) {
@@ -543,6 +544,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	if (bind_data.single_threaded) {
 		SingleThreadedCSVFunction(context, data_p, output);
 	} else {
+		throw InternalException("FIXME: parallel csv read");
 		ParallelReadCSVFunction(context, data_p, output);
 	}
 }
@@ -678,6 +680,7 @@ static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_dat
 	writer.WriteField<idx_t>(bind_data.filename_col_idx);
 	writer.WriteField<idx_t>(bind_data.hive_partition_col_idx);
 	bind_data.options.Serialize(writer);
+	writer.WriteField<bool>(bind_data.single_threaded);
 }
 
 static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, FieldReader &reader,
@@ -688,6 +691,7 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, Fie
 	result_data->filename_col_idx = reader.ReadRequired<idx_t>();
 	result_data->hive_partition_col_idx = reader.ReadRequired<idx_t>();
 	result_data->options.Deserialize(reader);
+	result_data->single_threaded = reader.ReadField<bool>(true);
 	return move(result_data);
 }
 
