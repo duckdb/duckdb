@@ -1,0 +1,10 @@
+# name: test/sql/types/enum/enum_from_query.test_slow
+# description: Test ENUMS
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+CREATE TYPE number_enum AS ENUM (SELECT CAST(range AS VARCHAR) AS x FROM range(0, 4294967296));
+

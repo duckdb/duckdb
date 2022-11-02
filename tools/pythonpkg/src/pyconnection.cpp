@@ -717,6 +717,9 @@ DuckDBPyConnection *DuckDBPyConnection::Enter() {
 bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
                               const py::object &traceback) {
 	self.Close();
+	if (exc_type.ptr() != Py_None) {
+		return false;
+	}
 	return true;
 }
 

@@ -1,0 +1,16 @@
+# name: test/sql/error/aggregate_order_by.test
+# description: Use non-aggregated column in the ORDER BY clause
+# group: [error]
+
+statement ok
+CREATE TABLE lists_tbl AS SELECT i%20 as groups, i AS l FROM range(1000) tmp(i);
+
+statement error
+SELECT COUNT(DISTINCT l) FROM lists_tbl group by groups order by l limit 10;
+----
+GROUP BY clause
+
+statement error
+SELECT DISTINCT ON(l) COUNT(DISTINCT l) FROM lists_tbl group by groups;
+----
+GROUP BY clause
