@@ -196,12 +196,14 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
-execute_process(
-        COMMAND git log -1 --format=%h
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        RESULT_VARIABLE GIT_RESULT
-        OUTPUT_VARIABLE GIT_COMMIT_HASH
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
+if (NOT DEFINED GIT_COMMIT_HASH)
+  execute_process(
+          COMMAND git log -1 --format=%h
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          RESULT_VARIABLE GIT_RESULT
+          OUTPUT_VARIABLE GIT_COMMIT_HASH
+          OUTPUT_STRIP_TRAILING_WHITESPACE)
+endif()
 execute_process(
         COMMAND git describe --tags --abbrev=0
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
