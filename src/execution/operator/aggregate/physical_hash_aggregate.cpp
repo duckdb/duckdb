@@ -629,6 +629,7 @@ public:
 		vector<unique_ptr<Task>> tasks;
 		auto &scheduler = TaskScheduler::GetScheduler(context);
 		auto number_of_threads = scheduler.NumberOfThreads();
+		tasks.reserve(number_of_threads);
 		for (int32_t i = 0; i < number_of_threads; i++) {
 			tasks.push_back(make_unique<HashDistinctAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate,
 			                                                               context, op, global_sources));
