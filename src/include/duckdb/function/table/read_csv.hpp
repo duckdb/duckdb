@@ -32,7 +32,7 @@ struct BaseCSVData : public TableFunctionData {
 	idx_t filename_col_idx;
 	idx_t hive_partition_col_idx;
 
-	void Finalize();
+	virtual void Finalize();
 };
 
 struct WriteCSVData : public BaseCSVData {
@@ -60,6 +60,11 @@ struct ReadCSVData : public BaseCSVData {
 	//! The union readers are created (when csv union_by_name option is on) during binding
 	//! Those readers can be re-used during ReadCSVFunction
 	vector<unique_ptr<BufferedCSVReader>> union_readers;
+	//! Whether or not the single-threaded reader should be used
+	bool single_threaded = false;
+
+	void InitializeFiles(ClientContext &context, const vector<string> &patterns);
+	void Finalize() override;
 };
 
 struct CSVCopyFunction {

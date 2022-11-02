@@ -71,8 +71,6 @@ public:
 	ParserMode mode;
 
 public:
-	idx_t GetFileSize();
-
 	//! Fill nulls into the cols that mismtach union names
 	void SetNullUnionCols(DataChunk &insert_chunk);
 

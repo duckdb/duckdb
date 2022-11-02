@@ -91,12 +91,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->sql_types = expected_types;
 
 	string file_pattern = info.file_path;
+	vector<string> patterns { file_pattern };
 
-	auto &fs = FileSystem::GetFileSystem(context);
-	bind_data->files = fs.Glob(file_pattern, context);
-	if (bind_data->files.empty()) {
-		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
-	}
+	bind_data->InitializeFiles(context, patterns);
 
 	auto &options = bind_data->options;
 
