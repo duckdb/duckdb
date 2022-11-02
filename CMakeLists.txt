@@ -413,15 +413,8 @@ if(UNIX AND NOT APPLE)
 endif()
 
 if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
-  if(CMAKE_SIZEOF_VOID_P EQUAL 4 OR FORCE_32_BIT)
-    if(BUILD_JEMALLOC_EXTENSION EQUAL 1)
-      # have to throw an error because this will crash at runtime
-      message(FATAL_ERROR "The jemalloc extension is not supported for 32bit CPU architecture")
-    endif()
-  else()
-    # always build jemalloc for 64bit linux
-    set(BUILD_JEMALLOC_EXTENSION 1)
-  endif()
+  # always build jemalloc for linux
+  set(BUILD_JEMALLOC_EXTENSION 1)
 elseif(OS_NAME STREQUAL "windows")
   if(BUILD_JEMALLOC_EXTENSION EQUAL 1)
     # have to throw an error because this will crash at runtime
