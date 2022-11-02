@@ -54,14 +54,11 @@ struct WriteCSVData : public BaseCSVData {
 struct ReadCSVData : public BaseCSVData {
 	//! The expected SQL types to read
 	vector<LogicalType> sql_types;
-	//! The initial file handler (if any): used in combination with the initial reader for automatic detection.
-	unique_ptr<CSVFileHandle> initial_file_handler;
 	//! The initial reader (if any): this is used when automatic detection is used during binding.
 	//! In this case, the CSV reader is already created and might as well be re-used.
 	unique_ptr<BufferedCSVReader> initial_reader;
-	//! The union readers is created (when csv union_by_name option is on) during binding
+	//! The union readers are created (when csv union_by_name option is on) during binding
 	//! Those readers can be re-used during ReadCSVFunction
-	vector<unique_ptr<CSVFileHandle>> union_file_handlers;
 	vector<unique_ptr<BufferedCSVReader>> union_readers;
 };
 

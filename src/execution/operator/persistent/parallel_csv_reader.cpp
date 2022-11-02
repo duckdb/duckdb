@@ -36,7 +36,6 @@ ParallelCSVReader::~ParallelCSVReader() {
 }
 
 void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
-	D_ASSERT(!options.auto_detect);
 	sql_types = requested_types;
 	if (options.header || options.skip_rows > 0) {
 //		SkipRowsAndReadHeader(options.skip_rows, options.header);

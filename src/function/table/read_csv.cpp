@@ -103,6 +103,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		} else {
 			D_ASSERT(return_types.size() == names.size());
 		}
+		options = result->options;
 		result->initial_reader = move(initial_reader);
 	} else {
 		result->sql_types = return_types;
@@ -111,62 +112,59 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	// union_col_names will exclude filename and hivepartition
 	if (options.union_by_name) {
-		throw InternalException("FIXME: union by name");
-//		idx_t union_names_index = 0;
-//		case_insensitive_map_t<idx_t> union_names_map;
-//		vector<string> union_col_names;
-//		vector<LogicalType> union_col_types;
-//
-//		for (idx_t file_idx = 0; file_idx < result->files.size(); ++file_idx) {
-//			options.file_path = result->files[file_idx];
-//			auto handler = ReadCSV::OpenCSV(options, context);
-//			auto reader = make_unique<BufferedCSVReader>(context, options, handler.get());
-//			auto &col_names = reader->col_names;
-//			auto &sql_types = reader->sql_types;
-//			D_ASSERT(col_names.size() == sql_types.size());
-//
-//			for (idx_t col = 0; col < col_names.size(); ++col) {
-//				auto union_find = union_names_map.find(col_names[col]);
-//
-//				if (union_find != union_names_map.end()) {
-//					// given same name , union_col's type must compatible with col's type
-//					LogicalType compatible_type;
-//					compatible_type = LogicalType::MaxLogicalType(union_col_types[union_find->second], sql_types[col]);
-//					union_col_types[union_find->second] = compatible_type;
-//				} else {
-//					union_names_map[col_names[col]] = union_names_index;
-//					union_names_index++;
-//
-//					union_col_names.emplace_back(col_names[col]);
-//					union_col_types.emplace_back(sql_types[col]);
-//				}
-//			}
-//			result->union_file_handlers.push_back(move(handler));
-//			result->union_readers.push_back(move(reader));
-//		}
-//
-//		for (auto &reader : result->union_readers) {
-//			auto &col_names = reader->col_names;
-//			vector<bool> is_null_cols(union_col_names.size(), true);
-//
-//			for (idx_t col = 0; col < col_names.size(); ++col) {
-//				idx_t remap_col = union_names_map[col_names[col]];
-//				reader->insert_cols_idx[col] = remap_col;
-//				is_null_cols[remap_col] = false;
-//			}
-//			for (idx_t col = 0; col < union_col_names.size(); ++col) {
-//				if (is_null_cols[col]) {
-//					reader->insert_nulls_idx.push_back(col);
-//				}
-//			}
-//		}
-//
-//		const idx_t first_file_index = 0;
-//		result->initial_reader = move(result->union_readers[first_file_index]);
-//
-//		names.assign(union_col_names.begin(), union_col_names.end());
-//		return_types.assign(union_col_types.begin(), union_col_types.end());
-//		D_ASSERT(names.size() == return_types.size());
+		idx_t union_names_index = 0;
+		case_insensitive_map_t<idx_t> union_names_map;
+		vector<string> union_col_names;
+		vector<LogicalType> union_col_types;
+
+		for (idx_t file_idx = 0; file_idx < result->files.size(); ++file_idx) {
+			options.file_path = result->files[file_idx];
+			auto reader = make_unique<BufferedCSVReader>(context, options);
+			auto &col_names = reader->col_names;
+			auto &sql_types = reader->sql_types;
+			D_ASSERT(col_names.size() == sql_types.size());
+
+			for (idx_t col = 0; col < col_names.size(); ++col) {
+				auto union_find = union_names_map.find(col_names[col]);
+
+				if (union_find != union_names_map.end()) {
+					// given same name , union_col's type must compatible with col's type
+					LogicalType compatible_type;
+					compatible_type = LogicalType::MaxLogicalType(union_col_types[union_find->second], sql_types[col]);
+					union_col_types[union_find->second] = compatible_type;
+				} else {
+					union_names_map[col_names[col]] = union_names_index;
+					union_names_index++;
+
+					union_col_names.emplace_back(col_names[col]);
+					union_col_types.emplace_back(sql_types[col]);
+				}
+			}
+			result->union_readers.push_back(move(reader));
+		}
+
+		for (auto &reader : result->union_readers) {
+			auto &col_names = reader->col_names;
+			vector<bool> is_null_cols(union_col_names.size(), true);
+
+			for (idx_t col = 0; col < col_names.size(); ++col) {
+				idx_t remap_col = union_names_map[col_names[col]];
+				reader->insert_cols_idx[col] = remap_col;
+				is_null_cols[remap_col] = false;
+			}
+			for (idx_t col = 0; col < union_col_names.size(); ++col) {
+				if (is_null_cols[col]) {
+					reader->insert_nulls_idx.push_back(col);
+				}
+			}
+		}
+
+		const idx_t first_file_index = 0;
+		result->initial_reader = move(result->union_readers[first_file_index]);
+
+		names.assign(union_col_names.begin(), union_col_names.end());
+		return_types.assign(union_col_types.begin(), union_col_types.end());
+		D_ASSERT(names.size() == return_types.size());
 	}
 
 	if (result->options.include_file_name) {
@@ -288,17 +286,18 @@ unique_ptr<CSVBufferRead> ReadCSVGlobalState::Next(ClientContext &context, ReadC
 
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
-	// FIXME: Should I still care about this case?
-	if (bind_data.initial_reader) {
-		throw InternalException("FIXME: auto-detect");
-	}
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
 		return make_unique<ReadCSVGlobalState>();
 	}
-
-	bind_data.options.file_path = bind_data.files[0];
-	auto file_handle = ReadCSV::OpenCSV(bind_data.options, context);
+	unique_ptr<CSVFileHandle> file_handle;
+	if (bind_data.initial_reader) {
+		file_handle = move(bind_data.initial_reader->file_handle);
+		bind_data.initial_reader.reset();
+	} else {
+		bind_data.options.file_path = bind_data.files[0];
+		file_handle = ReadCSV::OpenCSV(bind_data.options, context);
+	}
 	return make_unique<ReadCSVGlobalState>(move(file_handle), bind_data.files, context.db->NumberOfThreads(),
 	                                       bind_data.options.buffer_size);
 }
