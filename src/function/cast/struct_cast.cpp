@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-unique_ptr<BoundCastData> BindStructToStructCast(BindCastInput &input, const LogicalType &source,
-                                                 const LogicalType &target) {
+unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastInput &input, const LogicalType &source,
+                                                                      const LogicalType &target) {
 	vector<BoundCastInfo> child_cast_info;
 	auto &source_child_types = StructType::GetChildTypes(source);
 	auto &result_child_types = StructType::GetChildTypes(target);
@@ -121,7 +121,7 @@ BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const Logical
                                              const LogicalType &target) {
 	switch (target.id()) {
 	case LogicalTypeId::STRUCT:
-		return BoundCastInfo(StructToStructCast, BindStructToStructCast(input, source, target));
+		return BoundCastInfo(StructToStructCast, StructBoundCastData::BindStructToStructCast(input, source, target));
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		// bind a cast in which we convert all child entries to VARCHAR entries
@@ -131,7 +131,8 @@ BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const Logical
 			varchar_children.push_back(make_pair(child_entry.first, LogicalType::VARCHAR));
 		}
 		auto varchar_type = LogicalType::STRUCT(move(varchar_children));
-		return BoundCastInfo(StructToVarcharCast, BindStructToStructCast(input, source, varchar_type));
+		return BoundCastInfo(StructToVarcharCast,
+		                     StructBoundCastData::BindStructToStructCast(input, source, varchar_type));
 	}
 	default:
 		return TryVectorNullCast;

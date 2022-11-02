@@ -91,6 +91,9 @@ struct StructBoundCastData : public BoundCastData {
 	vector<BoundCastInfo> child_cast_info;
 	LogicalType target;
 
+	static unique_ptr<BoundCastData> BindStructToStructCast(BindCastInput &input, const LogicalType &source,
+	                                                        const LogicalType &target);
+
 public:
 	unique_ptr<BoundCastData> Copy() const override {
 		vector<BoundCastInfo> copy_info;
@@ -100,9 +103,6 @@ public:
 		return make_unique<StructBoundCastData>(move(copy_info), target);
 	}
 };
-
-unique_ptr<BoundCastData> BindStructToStructCast(BindCastInput &input, const LogicalType &source,
-                                                 const LogicalType &target); // TODO put in struct
 
 struct DefaultCasts {
 	static BoundCastInfo GetDefaultCastFunction(BindCastInput &input, const LogicalType &source,

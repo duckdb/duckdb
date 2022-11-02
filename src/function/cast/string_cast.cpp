@@ -183,7 +183,6 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(string_t *source_data, Val
 
 	string_map_t<idx_t> child_names;
 	vector<ValidityMask *> child_masks;
-	// to cover missing values, set all child masks to invalid, then only set the found values to valid
 	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
 		child_names.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx});
 		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -216,15 +215,16 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(string_t *source_data, Val
 	}
 
 	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
+	D_ASSERT(cast_data.child_cast_info.size() == result_children.size());
 
 	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
 		auto &varchar_vector = *child_vectors[child_idx];
 		auto &result_child_vector = *result_children[child_idx];
-		CastParameters child_parameters(parameters, cast_data.child_cast_info[child_idx].cast_data.get());
+		auto &child_cast_info = cast_data.child_cast_info[child_idx];
 		// get the correct casting function (VARCHAR -> result_child_type) from cast_data
 		// casting functions are determined by BindStructtoStructCast
-		if (!cast_data.child_cast_info[child_idx].function(varchar_vector, result_child_vector, count,
-		                                                   child_parameters)) {
+		CastParameters child_parameters(parameters, child_cast_info.cast_data.get());
+		if (!child_cast_info.function(varchar_vector, result_child_vector, count, child_parameters)) {
 			all_converted = false;
 		}
 	}
@@ -290,14 +290,14 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::JSON:
 		return &DefaultCasts::ReinterpretCast;
-	// the second argument allows for a secondary casting function to be passed in the CastParameters
 	case LogicalTypeId::LIST:
+        // the second argument allows for a secondary casting function to be passed in the CastParameters
 		return BoundCastInfo(
 		    &StringToNestedTypeCast<VectorStringToList>,
 		    ListBoundCastData::BindListToListCast(input, LogicalType::LIST(LogicalType::VARCHAR), target));
 	case LogicalTypeId::STRUCT:
 		return BoundCastInfo(&StringToNestedTypeCast<VectorStringToStruct>,
-		                     BindStructToStructCast(input, InitVarcharStructType(target), target));
+		                     StructBoundCastData::BindStructToStructCast(input, InitVarcharStructType(target), target));
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
 	}

@@ -220,11 +220,10 @@ bool VectorStringToStruct::SplitStruct(string_t &input, std::vector<std::unique_
 			string_t found_key(buf + key_start, key_end - key_start);
 
 			auto it = child_names.find(found_key);
-			if (it != child_names.end()) {
-				child_idx = it->second;
-			} else {
-				return false; // a key was entered that does not correspond with any of the target keynames
+			if (it == child_names.end()) {
+				return false; // false key
 			}
+			child_idx = it->second;
 			SkipWhitespace(buf, ++pos, len);
 			if (!FindValue(buf, len, pos, *varchar_vectors[child_idx], row_idx, child_masks[child_idx])) {
 				return false;
