@@ -88,6 +88,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			if (c > 0) {
 				string_length += SEP_LENGTH;
 			}
+			children[c]->Flatten(count);
 			auto &child_validity = FlatVector::Validity(*children[c]);
 			auto data = FlatVector::GetData<string_t>(*children[c]);
 			auto &name = child_types[c].first;
