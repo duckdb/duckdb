@@ -1,0 +1,2 @@
+%type <list> opt_enum_val_list
+%type <list> enum_val_list
