@@ -49,8 +49,10 @@ namespace duckdb_jemalloc {
  */
 #if INTPTR_MAX == INT64_MAX
   #define LG_VADDR 48
+  #define LG_SIZEOF_PTR 3
 #else
   #define LG_VADDR 32
+  #define LG_SIZEOF_PTR 2
 #endif
 
 /* Defined if C11 atomics are available. */
