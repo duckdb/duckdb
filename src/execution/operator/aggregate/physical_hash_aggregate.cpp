@@ -417,10 +417,9 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 
 //! REGULAR FINALIZE EVENT
 
-class HashAggregateFinalizeEvent : public BasePipelineEvent {
+class HashAggregateMergeEvent : public BasePipelineEvent {
 public:
-	HashAggregateFinalizeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p,
-	                           Pipeline *pipeline_p)
+	HashAggregateMergeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p, Pipeline *pipeline_p)
 	    : BasePipelineEvent(*pipeline_p), op(op_p), gstate(gstate_p) {
 	}
 
@@ -442,14 +441,61 @@ public:
 	}
 };
 
+//! REGULAR FINALIZE FROM DISTINCT FINALIZE
+
+class HashAggregateFinalizeTask : public ExecutorTask {
+public:
+	HashAggregateFinalizeTask(Pipeline &pipeline, shared_ptr<Event> event_p, HashAggregateGlobalState &state_p,
+	                          ClientContext &context, const PhysicalHashAggregate &op)
+	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(move(event_p)), gstate(state_p), context(context),
+	      op(op) {
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		op.FinalizeInternal(pipeline, *event, context, gstate, false);
+		D_ASSERT(!gstate.finished);
+		gstate.finished = true;
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	Pipeline &pipeline;
+	shared_ptr<Event> event;
+	HashAggregateGlobalState &gstate;
+	ClientContext &context;
+	const PhysicalHashAggregate &op;
+};
+
+class HashAggregateFinalizeEvent : public BasePipelineEvent {
+public:
+	HashAggregateFinalizeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p,
+	                           Pipeline *pipeline_p, ClientContext &context)
+	    : BasePipelineEvent(*pipeline_p), op(op_p), gstate(gstate_p), context(context) {
+	}
+
+	const PhysicalHashAggregate &op;
+	HashAggregateGlobalState &gstate;
+	ClientContext &context;
+
+public:
+	void Schedule() override {
+		vector<unique_ptr<Task>> tasks;
+		tasks.push_back(make_unique<HashAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate, context, op));
+		D_ASSERT(!tasks.empty());
+		SetTasks(move(tasks));
+	}
+};
+
 //! DISTINCT FINALIZE TASK
 
 class HashDistinctAggregateFinalizeTask : public ExecutorTask {
 public:
 	HashDistinctAggregateFinalizeTask(Pipeline &pipeline, shared_ptr<Event> event_p, HashAggregateGlobalState &state_p,
-	                                  ClientContext &context, const PhysicalHashAggregate &op)
+	                                  ClientContext &context, const PhysicalHashAggregate &op,
+	                                  vector<vector<unique_ptr<GlobalSourceState>>> &global_sources_p)
 	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(move(event_p)), gstate(state_p), context(context),
-	      op(op) {
+	      op(op), global_sources(global_sources_p) {
 	}
 
 	void AggregateDistinctGrouping(DistinctAggregateCollectionInfo &info,
@@ -458,6 +504,7 @@ public:
 		auto &aggregates = info.aggregates;
 		auto &data = *grouping_data.distinct_data;
 		auto &state = *grouping_state.distinct_state;
+		auto &table_state = *grouping_state.table_state;
 
 		ThreadContext temp_thread_context(context);
 		ExecutionContext temp_exec_context(context, temp_thread_context, &pipeline);
@@ -495,9 +542,12 @@ public:
 			D_ASSERT(data.info.table_map.count(i));
 			auto table_idx = data.info.table_map.at(i);
 			auto &radix_table_p = data.radix_tables[table_idx];
-			auto &output_chunk = *state.distinct_output_chunks[table_idx];
 
-			auto global_source = radix_table_p->GetGlobalSourceState(context);
+			// Create a duplicate of the output_chunk, because of multi-threading we cant alter the original
+			DataChunk output_chunk;
+			output_chunk.Initialize(context, state.distinct_output_chunks[table_idx]->GetTypes());
+
+			auto &global_source = global_sources[grouping_idx][i];
 			auto local_source = radix_table_p->GetLocalSourceState(temp_exec_context);
 
 			// Fetch all the data from the aggregate ht, and Sink it into the main ht
@@ -529,11 +579,11 @@ public:
 				aggregate_input_chunk.SetCardinality(output_chunk);
 
 				// Sink it into the main ht
-				grouping_data.table_data.Sink(temp_exec_context, *grouping_state.table_state, *temp_local_state,
-				                              group_chunk, aggregate_input_chunk, {i});
+				grouping_data.table_data.Sink(temp_exec_context, table_state, *temp_local_state, group_chunk,
+				                              aggregate_input_chunk, {i});
 			}
 		}
-		grouping_data.table_data.Combine(temp_exec_context, *grouping_state.table_state, *temp_local_state);
+		grouping_data.table_data.Combine(temp_exec_context, table_state, *temp_local_state);
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -544,9 +594,6 @@ public:
 			auto &grouping_state = gstate.grouping_states[i];
 			AggregateDistinctGrouping(info, grouping, grouping_state, i);
 		}
-		op.FinalizeInternal(pipeline, *event, context, gstate, false);
-		D_ASSERT(!gstate.finished);
-		gstate.finished = true;
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -557,6 +604,7 @@ private:
 	HashAggregateGlobalState &gstate;
 	ClientContext &context;
 	const PhysicalHashAggregate &op;
+	vector<vector<unique_ptr<GlobalSourceState>>> &global_sources;
 };
 
 //! DISTINCT FINALIZE EVENT
@@ -571,14 +619,56 @@ public:
 	const PhysicalHashAggregate &op;
 	HashAggregateGlobalState &gstate;
 	ClientContext &context;
+	//! The GlobalSourceStates for all the radix tables of the distinct aggregates
+	vector<vector<unique_ptr<GlobalSourceState>>> global_sources;
 
 public:
 	void Schedule() override {
+		global_sources = CreateGlobalSources();
+
 		vector<unique_ptr<Task>> tasks;
-		tasks.push_back(
-		    make_unique<HashDistinctAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate, context, op));
+		auto &scheduler = TaskScheduler::GetScheduler(context);
+		auto number_of_threads = scheduler.NumberOfThreads();
+		for (int32_t i = 0; i < number_of_threads; i++) {
+			tasks.push_back(make_unique<HashDistinctAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate,
+			                                                               context, op, global_sources));
+		}
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
+
+		//! Now that everything is added to the main ht, we can actually finalize
+		auto new_event = make_shared<HashAggregateFinalizeEvent>(op, gstate, pipeline.get(), context);
+		this->InsertEvent(move(new_event));
+	}
+
+private:
+	vector<vector<unique_ptr<GlobalSourceState>>> CreateGlobalSources() {
+		vector<vector<unique_ptr<GlobalSourceState>>> grouping_sources;
+		grouping_sources.reserve(op.groupings.size());
+		for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
+			auto &grouping = op.groupings[grouping_idx];
+			auto &data = *grouping.distinct_data;
+
+			vector<unique_ptr<GlobalSourceState>> aggregate_sources;
+			aggregate_sources.reserve(op.grouped_aggregate_data.aggregates.size());
+
+			for (idx_t i = 0; i < op.grouped_aggregate_data.aggregates.size(); i++) {
+				auto &aggregate = op.grouped_aggregate_data.aggregates[i];
+				auto &aggr = (BoundAggregateExpression &)*aggregate;
+
+				if (!aggr.IsDistinct()) {
+					aggregate_sources.push_back(nullptr);
+					continue;
+				}
+
+				D_ASSERT(data.info.table_map.count(i));
+				auto table_idx = data.info.table_map.at(i);
+				auto &radix_table_p = data.radix_tables[table_idx];
+				aggregate_sources.push_back(radix_table_p->GetGlobalSourceState(context));
+			}
+			grouping_sources.push_back(move(aggregate_sources));
+		}
+		return grouping_sources;
 	}
 };
 
@@ -611,12 +701,12 @@ public:
 			}
 		}
 
+		D_ASSERT(!tasks.empty());
+		SetTasks(move(tasks));
+
 		//! Now that all tables are combined, it's time to do the distinct aggregations
 		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
 		this->InsertEvent(move(new_event));
-
-		D_ASSERT(!tasks.empty());
-		SetTasks(move(tasks));
 	}
 };
 
@@ -680,7 +770,7 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeInternal(Pipeline &pipeline, Eve
 		}
 	}
 	if (any_partitioned) {
-		auto new_event = make_shared<HashAggregateFinalizeEvent>(*this, gstate, &pipeline);
+		auto new_event = make_shared<HashAggregateMergeEvent>(*this, gstate, &pipeline);
 		event.InsertEvent(move(new_event));
 	}
 	return SinkFinalizeType::READY;
