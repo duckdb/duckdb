@@ -1,9 +1,6 @@
 # name: test/sql/parallelism/interquery/concurrent_append_transactions.test
-# description: Test concurrent appends on persistent storage
+# description: Test concurrent appends and transaction isolation
 # group: [interquery]
-
-#load test.db
-mode skip
 
 statement ok
 CREATE TABLE integers(i INTEGER)
@@ -14,23 +11,20 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-CREATE TABLE count_table_${threadid} AS SELECT COUNT(*) AS count FROM integers
+CREATE TABLE count_table_${threadid} AS SELECT * FROM integers
 
 loop i 0 100
 
 statement ok
-INSERT INTO integers VALUES (${i})
+INSERT INTO integers VALUES (${threadid} * 10000 + ${i})
 
 # verify that we inserted exactly one element in this transaction
 query I
-SELECT COUNT(*) FROM integers EXCEPT SELECT MIN(count) + 1 FROM count_table_${threadid}
+SELECT * FROM integers EXCEPT (SELECT * FROM count_table_${threadid} UNION SELECT ${threadid} * 10000 + ${i})
 ----
 
 statement ok
-DROP TABLE count_table_${threadid}
-
-statement ok
-CREATE TABLE count_table_${threadid} AS SELECT COUNT(*) AS count FROM integers
+CREATE OR REPLACE TABLE count_table_${threadid} AS (SELECT * FROM count_table_${threadid} UNION SELECT ${threadid} * 10000 + ${i})
 
 endloop
 
@@ -41,3 +35,5 @@ endloop
 
 query II
 SELECT COUNT(*), SUM(i) FROM integers
+----
+1000	45049500

@@ -89,8 +89,6 @@ select argmin(a,b), argmax(a,b)  from blobs ;
 5	20
 
 # Window Function
-require vector_size 512
-
 query I rowsort
 select argmin(a,b) over ( partition by a%2) from args;
 ----

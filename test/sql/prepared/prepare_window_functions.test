@@ -2,8 +2,6 @@
 # description: PREPARE of window functions
 # group: [prepared]
 
-require vector_size 512
-
 # ambiguous window function usage
 statement ok
 PREPARE v1 AS SELECT SUM(?) OVER ()

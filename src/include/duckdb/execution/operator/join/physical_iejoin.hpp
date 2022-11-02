@@ -25,9 +25,9 @@ public:
 	vector<vector<BoundOrderByNode>> rhs_orders;
 
 public:
-	// Operator Interface
-	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                           GlobalOperatorState &gstate, OperatorState &state) const override;
+	// CachingOperator Interface
+	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
 
 public:
 	// Source interface

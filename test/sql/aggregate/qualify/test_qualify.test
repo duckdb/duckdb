@@ -2,8 +2,6 @@
 # description: Test QUALIFY clause
 # group: [qualify]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 
@@ -132,7 +130,6 @@ SELECT b, SUM(a) AS sum FROM test GROUP BY b QUALIFY row_number() OVER (PARTITIO
 # expression in qualify
 statement ok
 SELECT b, SUM(a) AS sum FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) > sum * 10;
-----
 
 query ITI
 SELECT * FROM qt QUALIFY row_number() OVER (PARTITION BY b ORDER BY c) = (SELECT max(c) FROM qt) ORDER BY b;

@@ -94,13 +94,14 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		D_ASSERT(op.children[1]->expression_class == ExpressionClass::BOUND_EXPRESSION);
 		auto &extract_exp = (BoundExpression &)*op.children[0];
 		auto &name_exp = (BoundExpression &)*op.children[1];
-		if (extract_exp.expr->return_type.id() != LogicalTypeId::STRUCT &&
-		    extract_exp.expr->return_type.id() != LogicalTypeId::SQLNULL) {
-			return BindResult(
-			    StringUtil::Format("Cannot extract field %s from expression \"%s\" because it is not a struct",
-			                       name_exp.ToString(), extract_exp.ToString()));
+		auto extract_expr_type = extract_exp.expr->return_type.id();
+		if (extract_expr_type != LogicalTypeId::STRUCT && extract_expr_type != LogicalTypeId::UNION &&
+		    extract_expr_type != LogicalTypeId::SQLNULL) {
+			return BindResult(StringUtil::Format(
+			    "Cannot extract field %s from expression \"%s\" because it is not a struct or a union",
+			    name_exp.ToString(), extract_exp.ToString()));
 		}
-		function_name = "struct_extract";
+		function_name = extract_expr_type == LogicalTypeId::UNION ? "union_extract" : "struct_extract";
 		break;
 	}
 	case ExpressionType::ARRAY_CONSTRUCTOR:

@@ -250,14 +250,14 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	auto plan = plans.find(set);
 	// if we have already calculated an expected cardinality for this set,
 	// just re-use that cardinality
-	if (left->GetCardinality() < right->GetCardinality()) {
+	if (left->GetCardinality<double>() < right->GetCardinality<double>()) {
 		return CreateJoinTree(set, possible_connections, right, left);
 	}
 	if (plan != plans.end()) {
 		if (!plan->second) {
 			throw InternalException("No plan: internal error in join order optimizer");
 		}
-		expected_cardinality = plan->second->GetCardinality();
+		expected_cardinality = plan->second->GetCardinality<double>();
 		best_connection = possible_connections.back();
 	} else if (possible_connections.empty()) {
 		// cross product
@@ -561,8 +561,8 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 		auto connections = query_graph.GetConnections(new_set, neighbor_relation);
 		// recurse and update up the tree if the combined set produces a plan with a lower cost
 		// only recurse on neighbor relations that have plans.
-		auto &right_plan = plans[neighbor_relation];
-		if (!right_plan) {
+		auto right_plan = plans.find(neighbor_relation);
+		if (right_plan == plans.end()) {
 			continue;
 		}
 		auto updated_plan = EmitPair(new_set, neighbor_relation, connections);
@@ -622,7 +622,8 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 				auto current_plan = plans[join_relations[i]].get();
 				// check if the cardinality is smaller than the smallest two found so far
 				for (idx_t j = 0; j < 2; j++) {
-					if (!smallest_plans[j] || smallest_plans[j]->GetCardinality() > current_plan->GetCardinality()) {
+					if (!smallest_plans[j] ||
+					    smallest_plans[j]->GetCardinality<double>() > current_plan->GetCardinality<double>()) {
 						smallest_plans[j] = current_plan;
 						smallest_index[j] = i;
 						break;
@@ -757,8 +758,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 		result_relation = node->set;
 		result_operator = move(extracted_relations[node->set->relations[0]]);
 	}
-	auto max_idx_t = NumericLimits<idx_t>::Maximum() - 10000;
-	result_operator->estimated_cardinality = MinValue<idx_t>(node->GetCardinality(), max_idx_t);
+	result_operator->estimated_cardinality = node->GetCardinality<idx_t>();
 	result_operator->has_estimated_cardinality = true;
 	result_operator->estimated_props = node->estimated_props->Copy();
 	// check if we should do a pushdown on this node

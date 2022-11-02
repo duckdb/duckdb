@@ -88,6 +88,10 @@ public:
 		return sink;
 	}
 
+	PhysicalOperator *GetSource() {
+		return source;
+	}
+
 	//! Returns whether any of the operators in the pipeline care about preserving insertion order
 	bool IsOrderDependent() const;
 

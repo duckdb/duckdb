@@ -35,7 +35,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 		auto &aggr = (BoundAggregateExpression &)*expr;
 		bindings.push_back(&aggr);
 
-		D_ASSERT(!aggr.distinct);
+		D_ASSERT(!aggr.IsDistinct());
 		D_ASSERT(aggr.function.combine);
 		for (auto &child : aggr.children) {
 			payload_types.push_back(child->return_type);

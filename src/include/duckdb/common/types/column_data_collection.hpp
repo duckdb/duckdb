@@ -136,10 +136,10 @@ public:
 	void ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result,
 	                 idx_t chunk_index, idx_t segment_index, idx_t row_index) const;
 
-private:
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
 
+private:
 	//! Creates a new segment within the ColumnDataCollection
 	void CreateSegment();
 

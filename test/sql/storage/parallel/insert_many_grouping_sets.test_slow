@@ -1,0 +1,53 @@
+# name: test/sql/storage/parallel/insert_many_grouping_sets.test_slow
+# description: Test parallel insert from many groups
+# group: [parallel]
+
+load __TEST_DIR__/insert_many_grouping_sets.db
+
+
+query I
+CREATE TABLE integers AS SELECT i, i%2 as j FROM generate_series(0,9999999,1) tbl(i);
+----
+10000000
+
+query I
+CREATE TABLE integers2 AS SELECT * FROM integers GROUP BY GROUPING SETS ((), (i), (i, j), (j));
+----
+20000003
+
+query IIIII
+SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers;
+----
+49999995000000	5000000	10000000	10000000	10000000
+
+query IIIII
+SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers2;
+----
+99999990000000	5000001	20000003	20000000	10000002
+
+statement ok
+DROP TABLE integers;
+
+statement ok
+DROP TABLE integers2;
+
+# now with null values
+query I
+CREATE TABLE integers AS SELECT case when i%2=0 then null else i end AS i, i%2 as j  FROM generate_series(0,9999999,1) tbl(i);
+----
+10000000
+
+query I
+CREATE TABLE integers2 AS SELECT * FROM integers GROUP BY GROUPING SETS ((), (i), (i, j), (j));
+----
+10000005
+
+query IIIII
+SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers
+----
+25000000000000	5000000	10000000	5000000	10000000
+
+query IIIII
+SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers2
+----
+50000000000000	5000001	10000005	10000000	5000003

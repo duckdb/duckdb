@@ -109,7 +109,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 	}
 	for (auto &expression : op.expressions) {
 		auto &aggregate = (BoundAggregateExpression &)*expression;
-		if (aggregate.distinct || !aggregate.function.combine) {
+		if (aggregate.IsDistinct() || !aggregate.function.combine) {
 			// distinct aggregates are not supported in perfect hash aggregates
 			return false;
 		}
