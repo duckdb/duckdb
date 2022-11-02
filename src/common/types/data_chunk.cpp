@@ -107,8 +107,8 @@ bool DataChunk::AllConstant() const {
 
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
-	SetCardinality(chunk);
 	SetCapacity(chunk);
+	SetCardinality(chunk);
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 		data[i].Reference(chunk.data[i]);
 	}

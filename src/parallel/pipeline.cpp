@@ -147,7 +147,7 @@ bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 }
 
 void Pipeline::ResetSink() {
-	if (sink && !sink->sink_state) {
+	if (sink) {
 		lock_guard<mutex> guard(sink->lock);
 		if (!sink->sink_state) {
 			sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
@@ -158,7 +158,7 @@ void Pipeline::ResetSink() {
 void Pipeline::Reset() {
 	ResetSink();
 	for (auto &op : operators) {
-		if (op && !op->op_state) {
+		if (op) {
 			lock_guard<mutex> guard(op->lock);
 			if (!op->op_state) {
 				op->op_state = op->GetGlobalOperatorState(GetClientContext());
