@@ -17,6 +17,9 @@
 
 namespace duckdb {
 
+//! This allows us to use the & operator to check if the type is contained in the set
+enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
+
 class BoundAggregateExpression;
 
 struct AggregateInputData {
@@ -156,16 +159,6 @@ public:
 	DUCKDB_API bool operator!=(const AggregateFunction &rhs) const {
 		return !(*this == rhs);
 	}
-
-	DUCKDB_API static unique_ptr<BoundAggregateExpression>
-	BindAggregateFunction(ClientContext &context, AggregateFunction bound_function,
-	                      vector<unique_ptr<Expression>> children, unique_ptr<Expression> filter = nullptr,
-	                      bool is_distinct = false, unique_ptr<BoundOrderModifier> order_bys = nullptr);
-
-	DUCKDB_API static unique_ptr<FunctionData> BindSortedAggregate(AggregateFunction &bound_function,
-	                                                               vector<unique_ptr<Expression>> &children,
-	                                                               unique_ptr<FunctionData> bind_info,
-	                                                               unique_ptr<BoundOrderModifier> order_bys);
 
 public:
 	template <class STATE, class RESULT_TYPE, class OP>

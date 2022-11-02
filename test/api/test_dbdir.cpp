@@ -21,13 +21,13 @@ static void test_in_memory_initialization(string dbdir) {
 	REQUIRE_NOTHROW(con = make_unique<Connection>(*db));
 
 	// force the in-memory directory to be created by creating a table bigger than the memory limit
-	REQUIRE_NO_FAIL(con->Query("PRAGMA memory_limit='1MB'"));
+	REQUIRE_NO_FAIL(con->Query("PRAGMA memory_limit='2MB'"));
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers AS SELECT * FROM range(1000000)"));
 
-	// the temporary folder .tmp should be created in in-memory mode, but was not
+	// the temporary folder .tmp should be created in in-memory mode
 	REQUIRE(fs->DirectoryExists(in_memory_tmp));
 
-	// the database dir should not be created in in-memory mode, but was
+	// the database dir should not be created in in-memory mode
 	REQUIRE(!fs->DirectoryExists(dbdir));
 
 	// clean up
@@ -39,10 +39,10 @@ static void test_in_memory_initialization(string dbdir) {
 	fs->RemoveDirectory(in_memory_tmp);
 }
 
-TEST_CASE("Test in-memory database initialization argument \":memory:\"", "[api]") {
+TEST_CASE("Test in-memory database initialization argument \":memory:\"", "[api][.]") {
 	test_in_memory_initialization(":memory:");
 }
 
-TEST_CASE("Test in-memory database initialization argument \"\"", "[api]") {
+TEST_CASE("Test in-memory database initialization argument \"\"", "[api][.]") {
 	test_in_memory_initialization("");
 }

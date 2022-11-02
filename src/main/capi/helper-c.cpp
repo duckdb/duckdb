@@ -114,6 +114,8 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_STRUCT;
 	case LogicalTypeId::MAP:
 		return DUCKDB_TYPE_MAP;
+	case LogicalTypeId::UNION:
+		return DUCKDB_TYPE_UNION;
 	case LogicalTypeId::UUID:
 		return DUCKDB_TYPE_UUID;
 	default: // LCOV_EXCL_START

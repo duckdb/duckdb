@@ -1,0 +1,63 @@
+# name: test/sql/storage/compression/string/table_copy.test
+# description: Tests a table copy on a table spanning multiple segments
+# group: [string]
+
+require tpch
+
+# load the DB from disk
+load __TEST_DIR__/test_string_compression.db
+
+foreach compression fsst dictionary
+
+foreach enable_fsst_vector true false
+
+statement ok
+SET enable_fsst_vectors='${enable_fsst_vector}'
+
+statement ok
+PRAGMA force_compression='${compression}'
+
+statement ok
+CREATE TABLE test (a VARCHAR);
+
+statement ok
+INSERT INTO test SELECT (i%500)::VARCHAR FROM range(0,150000) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+CREATE TABLE test_2 AS SELECT a FROM test;
+
+statement ok
+checkpoint
+
+query I
+select sum(a::INT) from test;
+----
+37425000
+
+query I
+select sum(a::INT) from test_2;
+----
+37425000
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_2') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+statement ok
+DROP TABLE test;
+
+statement ok
+DROP TABLE test_2;
+
+endloop
+
+endloop

@@ -2,8 +2,6 @@
 # description: Test IGNORE NULLS window syntax
 # group: [window]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 
@@ -231,6 +229,30 @@ FROM issue2549
 2	1	NULL	NULL
 3	1	639	639
 4	1	2027	2027
+
+# Multiple blocks for ignore nulls
+query IIII
+WITH gen AS (
+    SELECT *,
+        ((id * 1327) % 9973) / 10000.0 AS rnd
+    FROM generate_series(1, 10000) tbl(id)
+),
+lvl AS (
+    SELECT id,
+        rnd,
+        CASE
+            WHEN rnd <= 0.1 THEN 'shallow'
+            WHEN rnd >= 0.9 THEN 'high'
+        END AS water_level
+    FROM gen
+)
+SELECT *,
+    LAST_VALUE(water_level IGNORE NULLS) OVER (
+        ORDER BY id
+    ) AS grade
+FROM lvl
+----
+40000 values hashing to c302c8b0f3c10c1e5cc7211c4af7a8d6
 
 #
 # Unsupported

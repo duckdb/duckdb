@@ -24,12 +24,24 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
 
-	auto &file_pattern = StringValue::Get(input.inputs[0]);
+	vector<string> patterns;
+	if (input.inputs[0].type().id() == LogicalTypeId::LIST) {
+		// list of globs
+		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
+			patterns.push_back(StringValue::Get(val));
+		}
+	} else {
+		// single glob pattern
+		patterns.push_back(StringValue::Get(input.inputs[0]));
+	}
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	result->files = fs.Glob(file_pattern, context);
-	if (result->files.empty()) {
-		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+	for (auto &file_pattern : patterns) {
+		auto files = fs.Glob(file_pattern, context);
+		if (files.empty()) {
+			throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+		}
+		result->files.insert(result->files.end(), files.begin(), files.end());
 	}
 
 	for (auto &kv : input.named_parameters) {
@@ -66,7 +78,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 	if (!options.auto_detect && return_types.empty()) {
-		throw BinderException("read_csv requires columns to be specified. Use read_csv_auto or set read_csv(..., "
+		throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
+		                      "read_csv_auto or set read_csv(..., "
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
 	if (options.auto_detect) {
@@ -84,6 +97,64 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		result->sql_types = return_types;
 		D_ASSERT(return_types.size() == names.size());
 	}
+
+	// union_col_names will exclude filename and hivepartition
+	if (options.union_by_name) {
+		idx_t union_names_index = 0;
+		case_insensitive_map_t<idx_t> union_names_map;
+		vector<string> union_col_names;
+		vector<LogicalType> union_col_types;
+
+		for (idx_t file_idx = 0; file_idx < result->files.size(); ++file_idx) {
+			options.file_path = result->files[file_idx];
+			auto reader = make_unique<BufferedCSVReader>(context, options);
+			auto &col_names = reader->col_names;
+			auto &sql_types = reader->sql_types;
+			D_ASSERT(col_names.size() == sql_types.size());
+
+			for (idx_t col = 0; col < col_names.size(); ++col) {
+				auto union_find = union_names_map.find(col_names[col]);
+
+				if (union_find != union_names_map.end()) {
+					// given same name , union_col's type must compatible with col's type
+					LogicalType compatible_type;
+					compatible_type = LogicalType::MaxLogicalType(union_col_types[union_find->second], sql_types[col]);
+					union_col_types[union_find->second] = compatible_type;
+				} else {
+					union_names_map[col_names[col]] = union_names_index;
+					union_names_index++;
+
+					union_col_names.emplace_back(col_names[col]);
+					union_col_types.emplace_back(sql_types[col]);
+				}
+			}
+			result->union_readers.push_back(move(reader));
+		}
+
+		for (auto &reader : result->union_readers) {
+			auto &col_names = reader->col_names;
+			vector<bool> is_null_cols(union_col_names.size(), true);
+
+			for (idx_t col = 0; col < col_names.size(); ++col) {
+				idx_t remap_col = union_names_map[col_names[col]];
+				reader->insert_cols_idx[col] = remap_col;
+				is_null_cols[remap_col] = false;
+			}
+			for (idx_t col = 0; col < union_col_names.size(); ++col) {
+				if (is_null_cols[col]) {
+					reader->insert_nulls_idx.push_back(col);
+				}
+			}
+		}
+
+		const idx_t first_file_index = 0;
+		result->initial_reader = move(result->union_readers[first_file_index]);
+
+		names.assign(union_col_names.begin(), union_col_names.end());
+		return_types.assign(union_col_types.begin(), union_col_types.end());
+		D_ASSERT(names.size() == return_types.size());
+	}
+
 	if (result->options.include_file_name) {
 		result->filename_col_idx = names.size();
 		return_types.emplace_back(LogicalType::VARCHAR);
@@ -152,13 +223,22 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			// exhausted this file, but we have more files we can read
 			// open the next file and increment the counter
 			bind_data.options.file_path = bind_data.files[data.file_index];
-			data.csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, data.csv_reader->sql_types);
+			// reuse csv_readers was created during binding
+			if (bind_data.options.union_by_name) {
+				data.csv_reader = move(bind_data.union_readers[data.file_index]);
+			} else {
+				data.csv_reader =
+				    make_unique<BufferedCSVReader>(context, bind_data.options, data.csv_reader->sql_types);
+			}
 			data.file_index++;
 		} else {
 			break;
 		}
 	} while (true);
 
+	if (bind_data.options.union_by_name) {
+		data.csv_reader->SetNullUnionCols(output);
+	}
 	if (bind_data.options.include_file_name) {
 		auto &col = output.data[bind_data.filename_col_idx];
 		col.SetValue(0, Value(data.csv_reader->options.file_path));
@@ -210,6 +290,8 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["skip"] = LogicalType::BIGINT;
 	table_function.named_parameters["max_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
+	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -328,8 +410,9 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, Fie
 	return move(result_data);
 }
 
-TableFunction ReadCSVTableFunction::GetFunction() {
-	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInit);
+TableFunction ReadCSVTableFunction::GetFunction(bool list_parameter) {
+	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
+	TableFunction read_csv("read_csv", {parameter}, ReadCSVFunction, ReadCSVBind, ReadCSVInit);
 	read_csv.table_scan_progress = CSVReaderProgress;
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
@@ -338,15 +421,26 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	return read_csv;
 }
 
-void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ReadCSVTableFunction::GetFunction());
-
-	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVAutoBind, ReadCSVInit);
+TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
+	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
+	TableFunction read_csv_auto("read_csv_auto", {parameter}, ReadCSVFunction, ReadCSVAutoBind, ReadCSVInit);
 	read_csv_auto.table_scan_progress = CSVReaderProgress;
 	read_csv_auto.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv_auto.serialize = CSVReaderSerialize;
 	read_csv_auto.deserialize = CSVReaderDeserialize;
 	ReadCSVAddNamedParameters(read_csv_auto);
+	return read_csv_auto;
+}
+
+void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
+	TableFunctionSet read_csv("read_csv");
+	read_csv.AddFunction(ReadCSVTableFunction::GetFunction());
+	read_csv.AddFunction(ReadCSVTableFunction::GetFunction(true));
+	set.AddFunction(read_csv);
+
+	TableFunctionSet read_csv_auto("read_csv_auto");
+	read_csv_auto.AddFunction(ReadCSVTableFunction::GetAutoFunction());
+	read_csv_auto.AddFunction(ReadCSVTableFunction::GetAutoFunction(true));
 	set.AddFunction(read_csv_auto);
 }
 
@@ -359,7 +453,8 @@ unique_ptr<TableFunctionRef> ReadCSVReplacement(ClientContext &context, const st
 	} else if (StringUtil::EndsWith(lower_name, ".zst")) {
 		lower_name = lower_name.substr(0, lower_name.size() - 4);
 	}
-	if (!StringUtil::EndsWith(lower_name, ".csv") && !StringUtil::EndsWith(lower_name, ".tsv")) {
+	if (!StringUtil::EndsWith(lower_name, ".csv") && !StringUtil::Contains(lower_name, ".csv?") &&
+	    !StringUtil::EndsWith(lower_name, ".tsv") && !StringUtil::Contains(lower_name, ".tsv?")) {
 		return nullptr;
 	}
 	auto table_function = make_unique<TableFunctionRef>();

@@ -2,7 +2,10 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -189,8 +192,8 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 		                      arguments[0]->return_type.ToString(), arguments[1]->return_type.ToString());
 	}
 
-	// following error states are only reachable when someone messes up creating the state_type which is impossible from
-	// SQL
+	// following error states are only reachable when someone messes up creating the state_type
+	// which is impossible from SQL
 
 	auto state_type = AggregateStateType::GetStateType(arg_return_type);
 
@@ -203,11 +206,27 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	auto aggr = (AggregateFunctionCatalogEntry *)func;
 
 	string error;
-	idx_t best_function = Function::BindFunction(aggr->name, aggr->functions, state_type.bound_argument_types, error);
+
+	FunctionBinder function_binder(context);
+	idx_t best_function =
+	    function_binder.BindFunction(aggr->name, aggr->functions, state_type.bound_argument_types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name, error);
 	}
 	auto bound_aggr = aggr->functions.GetFunctionByOffset(best_function);
+	if (bound_aggr.bind) {
+		// FIXME: this is really hacky
+		// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
+		vector<unique_ptr<Expression>> args;
+		for (auto &arg_type : state_type.bound_argument_types) {
+			args.push_back(make_unique<BoundConstantExpression>(Value(arg_type)));
+		}
+		auto bind_info = bound_aggr.bind(context, bound_aggr, args);
+		if (bind_info) {
+			throw BinderException("Aggregate function with bind info not supported yet in aggregate state export");
+		}
+	}
+
 	if (bound_aggr.return_type != state_type.return_type || bound_aggr.arguments != state_type.bound_argument_types) {
 		throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
 	}
@@ -307,7 +326,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 
 	return make_unique<BoundAggregateExpression>(export_function, move(child_aggregate->children),
 	                                             move(child_aggregate->filter), move(export_bind_data),
-	                                             child_aggregate->distinct);
+	                                             child_aggregate->aggr_type);
 }
 
 ScalarFunction ExportAggregateFunction::GetFinalize() {

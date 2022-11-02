@@ -16,56 +16,9 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
-
-class ReplayState {
-public:
-	ReplayState(DatabaseInstance &db, ClientContext &context, Deserializer &source)
-	    : db(db), context(context), source(source), current_table(nullptr), deserialize_only(false),
-	      checkpoint_id(INVALID_BLOCK) {
-	}
-
-	DatabaseInstance &db;
-	ClientContext &context;
-	Deserializer &source;
-	TableCatalogEntry *current_table;
-	bool deserialize_only;
-	block_id_t checkpoint_id;
-
-public:
-	void ReplayEntry(WALType entry_type);
-
-private:
-	void ReplayCreateTable();
-	void ReplayDropTable();
-	void ReplayAlter();
-
-	void ReplayCreateView();
-	void ReplayDropView();
-
-	void ReplayCreateSchema();
-	void ReplayDropSchema();
-
-	void ReplayCreateType();
-	void ReplayDropType();
-
-	void ReplayCreateSequence();
-	void ReplayDropSequence();
-	void ReplaySequenceValue();
-
-	void ReplayCreateMacro();
-	void ReplayDropMacro();
-
-	void ReplayCreateTableMacro();
-	void ReplayDropTableMacro();
-
-	void ReplayUseTable();
-	void ReplayInsert();
-	void ReplayDelete();
-	void ReplayUpdate();
-	void ReplayCheckpoint();
-};
 
 bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 	auto initial_reader = make_unique<BufferedFileReader>(database.GetFileSystem(), path.c_str());
@@ -105,8 +58,8 @@ bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 	initial_reader.reset();
 	if (checkpoint_state.checkpoint_id != INVALID_BLOCK) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
-		auto &manager = BlockManager::GetBlockManager(database);
-		if (manager.IsRootBlock(checkpoint_state.checkpoint_id)) {
+		auto &manager = StorageManager::GetStorageManager(database);
+		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
 			// the contents of the WAL have already been checkpointed
 			// we can safely truncate the WAL and ignore its contents
 			return true;
@@ -221,7 +174,6 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_TYPE:
 		ReplayDropType();
 		break;
-
 	default:
 		throw InternalException("Invalid WAL entry type!");
 	}
@@ -466,7 +418,7 @@ void ReplayState::ReplayInsert() {
 	}
 
 	// append to the current table
-	current_table->storage->Append(*current_table, context, chunk);
+	current_table->storage->LocalAppend(*current_table, context, chunk);
 }
 
 void ReplayState::ReplayDelete() {

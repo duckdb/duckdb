@@ -9,10 +9,14 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
+class BlockHandle;
+class BufferManager;
 class ClientContext;
 class DatabaseInstance;
 
@@ -20,11 +24,16 @@ class DatabaseInstance;
 //! BlockManager creates and accesses blocks. The concrete types implements how blocks are stored.
 class BlockManager {
 public:
+	explicit BlockManager(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
+	}
 	virtual ~BlockManager() = default;
 
-	virtual void StartCheckpoint() = 0;
+	//! The buffer manager
+	BufferManager &buffer_manager;
+
+public:
 	//! Creates a new block inside the block manager
-	virtual unique_ptr<Block> CreateBlock(block_id_t block_id) = 0;
+	virtual unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) = 0;
 	//! Return the next free block id
 	virtual block_id_t GetFreeBlockId() = 0;
 	//! Returns whether or not a specified block is the root block
@@ -53,7 +62,20 @@ public:
 	//! Returns the number of free blocks
 	virtual idx_t FreeBlocks() = 0;
 
+	//! Register a block with the given block id in the base file
+	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id);
+	//! Convert an existing in-memory buffer into a persistent disk-backed block
+	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
+
+	void UnregisterBlock(block_id_t block_id, bool can_destroy);
+
 	static BlockManager &GetBlockManager(ClientContext &context);
 	static BlockManager &GetBlockManager(DatabaseInstance &db);
+
+private:
+	//! The lock for the set of blocks
+	mutex blocks_lock;
+	//! A mapping of block id -> BlockHandle
+	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
 };
 } // namespace duckdb

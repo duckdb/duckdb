@@ -54,11 +54,13 @@ public:
 	//! The block that this segment relates to
 	shared_ptr<BlockHandle> block;
 
-	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset,
-	                                                         const LogicalType &type_p, idx_t start, idx_t count,
-	                                                         CompressionType compression_type,
+	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
+	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
+	                                                         idx_t start, idx_t count, CompressionType compression_type,
 	                                                         unique_ptr<BaseStatistics> statistics);
-	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start);
+	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start,
+	                                                        idx_t segment_size = Storage::BLOCK_SIZE);
+	static unique_ptr<ColumnSegment> CreateSegment(ColumnSegment &other, idx_t start);
 
 public:
 	void InitializeScan(ColumnScanState &state);
@@ -73,6 +75,11 @@ public:
 	//! Skip a scan forward to the row_index specified in the scan state
 	void Skip(ColumnScanState &state);
 
+	// The maximum size of the buffer (in bytes)
+	idx_t SegmentSize() const;
+	//! Resize the block
+	void Resize(idx_t segment_size);
+
 	//! Initialize an append of this segment. Appends are only supported on transient segments.
 	void InitializeAppend(ColumnAppendState &state);
 	//! Appends a (part of) vector to the segment, returns the amount of entries successfully appended
@@ -80,19 +87,24 @@ public:
 	//! Finalize the segment for appending - no more appends can follow on this segment
 	//! The segment should be compacted as much as possible
 	//! Returns the number of bytes occupied within the segment
-	idx_t FinalizeAppend();
+	idx_t FinalizeAppend(ColumnAppendState &state);
 	//! Revert an append made to this segment
 	void RevertAppend(idx_t start_row);
 
 	//! Convert a transient in-memory segment into a persistent segment blocked by an on-disk block.
 	//! Only used during checkpointing.
-	void ConvertToPersistent(block_id_t block_id);
-	//! Convert a transient in-memory segment into a persistent segment blocked by an on-disk block.
-	void ConvertToPersistent(shared_ptr<BlockHandle> block, block_id_t block_id, uint32_t offset_in_block);
+	void ConvertToPersistent(BlockManager *block_manager, block_id_t block_id);
+	//! Updates pointers to refer to the given block and offset. This is only used
+	//! when sharing a block among segments. This is invoked only AFTER the block is written.
+	void MarkAsPersistent(shared_ptr<BlockHandle> block, uint32_t offset_in_block);
 
 	block_id_t GetBlockId() {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
 		return block_id;
+	}
+
+	BlockManager &GetBlockManager() const {
+		return block->block_manager;
 	}
 
 	idx_t GetBlockOffset() {
@@ -111,9 +123,10 @@ public:
 	}
 
 public:
-	ColumnSegment(DatabaseInstance &db, LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
-	              CompressionFunction *function, unique_ptr<BaseStatistics> statistics, block_id_t block_id,
-	              idx_t offset);
+	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type, ColumnSegmentType segment_type,
+	              idx_t start, idx_t count, CompressionFunction *function, unique_ptr<BaseStatistics> statistics,
+	              block_id_t block_id, idx_t offset, idx_t segment_size);
+	ColumnSegment(ColumnSegment &other, idx_t start);
 
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);
@@ -124,6 +137,8 @@ private:
 	block_id_t block_id;
 	//! The offset into the block (persistent segment only)
 	idx_t offset;
+	//! The allocated segment size
+	idx_t segment_size;
 	//! Storage associated with the compressed segment
 	unique_ptr<CompressedSegmentState> segment_state;
 };

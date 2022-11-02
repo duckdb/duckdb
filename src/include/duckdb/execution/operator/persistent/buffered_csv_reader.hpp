@@ -115,6 +115,8 @@ struct BufferedCSVReaderOptions {
 	bool include_file_name = false;
 	//! Whether or not to include a parsed hive partition columns
 	bool include_parsed_hive_partitions = false;
+	//! Whether or not to union files with different (but compatible) columns
+	bool union_by_name = false;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
@@ -174,6 +176,12 @@ public:
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
 	vector<string> col_names;
+
+	//! remap parse_chunk col to insert_chunk col, because when
+	//! union_by_name option on insert_chunk may have more cols
+	vector<idx_t> insert_cols_idx;
+	vector<idx_t> insert_nulls_idx;
+
 	unique_ptr<CSVFileHandle> file_handle;
 
 	unique_ptr<char[]> buffer;
@@ -208,11 +216,16 @@ public:
 
 	idx_t GetFileSize();
 
+	//! Fill nulls into the cols that mismtach union names
+	void SetNullUnionCols(DataChunk &insert_chunk);
+
 private:
 	//! Initialize Parser
 	void Initialize(const vector<LogicalType> &requested_types);
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
+	//! Initializes the insert_chunk idx for mapping parse_chunk cols to insert_chunk cols
+	void InitInsertChunkIdx(idx_t num_cols);
 	//! Initializes the TextSearchShiftArrays for complex parser
 	void PrepareComplexParser();
 	//! Try to parse a single datachunk from the file. Throws an exception if anything goes wrong.
@@ -246,7 +259,7 @@ private:
 	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message);
 
 	//! Adds a value to the current row
-	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions);
+	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
 	bool AddRow(DataChunk &insert_chunk, idx_t &column);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
@@ -274,6 +287,9 @@ private:
 	                                        const vector<LogicalType> &requested_types,
 	                                        vector<vector<LogicalType>> &best_sql_types_candidates,
 	                                        map<LogicalTypeId, vector<string>> &best_format_candidates);
+
+	void VerifyUTF8(idx_t col_idx);
+	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);
 
 private:
 	//! Whether or not the current row's columns have overflown sql_types.size()

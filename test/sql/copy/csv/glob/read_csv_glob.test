@@ -29,6 +29,44 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/a*.csv', auto_detect=1) O
 2019-07-15
 2019-07-25
 
+# list parameter
+query I
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a1/a1.csv', 'test/sql/copy/csv/data/glob/a2/a2.csv'], auto_detect=1) ORDER BY 1
+----
+2019-06-05
+2019-06-15
+2019-06-25
+2019-07-05
+2019-07-15
+2019-07-25
+
+query I
+SELECT * FROM read_csv_auto(['test/sql/copy/csv/data/glob/a1/a1.csv', 'test/sql/copy/csv/data/glob/a2/a2.csv']) ORDER BY 1
+----
+2019-06-05
+2019-06-15
+2019-06-25
+2019-07-05
+2019-07-15
+2019-07-25
+
+# multiple globs
+query I
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a?/a*.csv', 'test/sql/copy/csv/data/glob/a?/a*.csv'], auto_detect=1) ORDER BY 1
+----
+2019-06-05
+2019-06-05
+2019-06-15
+2019-06-15
+2019-06-25
+2019-06-25
+2019-07-05
+2019-07-05
+2019-07-15
+2019-07-15
+2019-07-25
+2019-07-25
+
 # more asterisks for directories
 query I
 SELECT * FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_detect=1) ORDER BY 1
@@ -109,6 +147,12 @@ SELECT COUNT(*) FROM glob('test//sql////copy//csv/////data///glob///*//////*.csv
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/a*a.csv', auto_detect=1) ORDER BY 1
 
+statement error
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/*/a*a.csv'], auto_detect=1) ORDER BY 1
+
+statement error
+SELECT * FROM read_csv_auto(['test/sql/copy/csv/data/glob/*/a*a.csv']) ORDER BY 1
+
 query I
 SELECT COUNT(*) FROM glob('test/sql/copy/csv/data/glob/*/a*a.csv')
 ----
@@ -123,3 +167,47 @@ query I
 select count(*) from glob('~/rewoiarwiouw3rajkawrasdf790273489*.py') limit 10;
 ----
 0
+
+require skip_reload
+
+# file_search_path with one path
+statement ok
+set file_search_path='test/sql/copy/csv/data/glob';
+
+query I
+SELECT COUNT(*) FROM glob('*/*.csv');
+----
+5
+
+# file_search_path with multiple paths
+statement ok
+set file_search_path='test/sql/copy/csv/data/glob/a1,test/sql/copy/csv/data/glob/a2';
+
+query I
+SELECT COUNT(*) FROM glob('*.csv');
+----
+2
+
+# file_search_path with a non-existent path
+statement ok
+set file_search_path='test/sql/copy/csv/data/glob,garbage';
+
+query I
+SELECT COUNT(*) FROM glob('*/*.csv');
+----
+5
+
+# Only file_search_path is searched
+query I
+SELECT COUNT(*) FROM glob('test/sql/copy/csv/data/glob/*/*.csv');
+----
+0
+
+# file_search_path can be cleared
+statement ok
+set file_search_path='';
+
+query I
+SELECT COUNT(*) FROM glob('test/sql/copy/csv/data/glob/*/*.csv');
+----
+5

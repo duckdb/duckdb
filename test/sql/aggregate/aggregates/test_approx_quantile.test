@@ -4,8 +4,6 @@
 
 require skip_reload
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 
@@ -124,7 +122,7 @@ FROM (
 	FROM quantile
 ) tbl;
 ----
-[True, True, True]
+[true, true, true]
 
 query I
 SELECT [
@@ -138,7 +136,7 @@ FROM (
 	FROM quantile
 ) tbl;
 ----
-[True, True, True]
+[true, true, true]
 
 # Errors
 statement error

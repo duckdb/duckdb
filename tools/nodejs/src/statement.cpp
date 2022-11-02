@@ -139,17 +139,35 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 	case duckdb::LogicalTypeId::BOOLEAN: {
 		value = Napi::Boolean::New(env, duckdb::BooleanValue::Get(dval));
 	} break;
+	case duckdb::LogicalTypeId::TINYINT: {
+		value = Napi::Number::New(env, duckdb::TinyIntValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::SMALLINT: {
+		value = Napi::Number::New(env, duckdb::SmallIntValue::Get(dval));
+	} break;
 	case duckdb::LogicalTypeId::INTEGER: {
 		value = Napi::Number::New(env, duckdb::IntegerValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::BIGINT: {
+		value = Napi::Number::New(env, duckdb::BigIntValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::UTINYINT: {
+		value = Napi::Number::New(env, duckdb::UTinyIntValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::USMALLINT: {
+		value = Napi::Number::New(env, duckdb::USmallIntValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::UINTEGER: {
+		value = Napi::Number::New(env, duckdb::UIntegerValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::UBIGINT: {
+		value = Napi::Number::New(env, duckdb::UBigIntValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::FLOAT: {
 		value = Napi::Number::New(env, duckdb::FloatValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::DOUBLE: {
 		value = Napi::Number::New(env, duckdb::DoubleValue::Get(dval));
-	} break;
-	case duckdb::LogicalTypeId::BIGINT: {
-		value = Napi::Number::New(env, duckdb::BigIntValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::HUGEINT: {
 		value = Napi::Number::New(env, dval.GetValue<double>());
@@ -207,8 +225,7 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 		value = object_value;
 	} break;
 	default:
-		Napi::Error::New(env, "Data type is not supported " + dval.type().ToString()).ThrowAsJavaScriptException();
-		return env.Null();
+		value = Napi::String::New(env, dval.ToString());
 	}
 
 	return value;

@@ -58,7 +58,19 @@ def op_inspect(op):
 
 
 def query_plan_cost(cli, dbname, query):
-    subprocess.run(f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"", shell=True, check=True, capture_output=True)
+    try:
+        subprocess.run(f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"", shell=True, check=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        print("-------------------------")
+        print("--------Failure----------")
+        print("-------------------------")
+        print(e.stderr.decode('utf8'))
+        print("-------------------------")
+        print("--------Output----------")
+        print("-------------------------")
+        print(e.output.decode('utf8'))
+        print("-------------------------")
+        raise e
     with open(PROFILE_FILENAME, 'r') as file:
         return op_inspect(json.load(file))
 
@@ -83,6 +95,10 @@ def print_diffs(diffs):
         print("Old cost:", old_cost)
         print("New cost:", new_cost)
 
+def cardinality_is_higher(card_a, card_b):
+    # card_a > card_b?
+    # add 20% threshold before we start caring
+    return card_a > (card_b + card_b / 5)
 
 def main():
     old, new, benchmark_dir = parse_args()
@@ -105,9 +121,9 @@ def main():
         old_cost = query_plan_cost(old, OLD_DB_NAME, query)
         new_cost = query_plan_cost(new, NEW_DB_NAME, query)
 
-        if new_cost < old_cost:
+        if cardinality_is_higher(old_cost, new_cost):
             improvements.append((query_name, old_cost, new_cost))
-        elif new_cost > old_cost:
+        elif cardinality_is_higher(new_cost, old_cost):
             regressions.append((query_name, old_cost, new_cost))
             
     exit_code = 0

@@ -1,0 +1,16 @@
+# name: benchmark/micro/compression/fsst/fsst_store.benchmark
+# description: Storing strings compressed at ~3.3x compression
+# group: [fsst]
+
+name fsst Compression Write
+group aggregate
+storage persistent
+require_reinit
+
+load
+PRAGMA force_compression='fsst';
+
+run
+CREATE TABLE test_compressed AS SELECT (100 + (i%1000))::VARCHAR AS i FROM range(0, 2500000) tbl(i);
+checkpoint;
+

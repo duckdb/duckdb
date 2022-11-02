@@ -60,7 +60,7 @@ public class TestDuckDBJDBC {
 		if (a == null && b == null) {
 			return;
 		}
-		assertTrue(a.equals(b), String.format("%s should equal %s", a, b));
+		assertTrue(a.equals(b), String.format("\"%s\" should equal \"%s\"", a, b));
 	}
 
 	private static void assertNull(Object a) throws Exception {
@@ -72,7 +72,22 @@ public class TestDuckDBJDBC {
 	}
 
 	private static void fail() throws Exception {
-		assertTrue(false);
+		fail(null);
+	}
+
+	private static void fail(String s) throws Exception {
+		throw new Exception(s);
+	}
+
+	private static <T extends Throwable> String assertThrows(Thrower thrower, Class<T> exception) throws Exception {
+		try {
+			thrower.run();
+			fail("Expected to throw " + exception.getName());
+			return null;
+		} catch (Throwable e) {
+			assertEquals(e.getClass(), exception);
+			return e.getMessage();
+		}
 	}
 
 	static {
@@ -427,7 +442,7 @@ public class TestDuckDBJDBC {
 		assertTrue(((OffsetDateTime) rs.getObject(2)).isEqual(odt2Rounded));
 
 		// Metadata tests
-		assertEquals(Types.TIME_WITH_TIMEZONE,
+		assertEquals(Types.TIMESTAMP_WITH_TIMEZONE,
 				((DuckDBResultSetMetaData) meta).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
 		assertTrue(OffsetDateTime.class.toString().equals(meta.getColumnClassName(2)));
 
@@ -2249,7 +2264,7 @@ public class TestDuckDBJDBC {
 	}
 
 	/**
-	 * @see GH3906
+	 * @see {https://github.com/duckdb/duckdb/issues/3906}
 	 */
 	public static void test_cached_row_set() throws Exception {
 		CachedRowSet rowSet = RowSetProvider.newFactory().createCachedRowSet();
@@ -2267,14 +2282,25 @@ public class TestDuckDBJDBC {
 		try (Statement stmt = conn.createStatement()) {
 			ResultSet rs = stmt.executeQuery("select [1, 5]::JSON");
 			rs.next();
+			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
 			JsonNode jsonNode = (JsonNode) rs.getObject(1);
 			assertTrue(jsonNode.isArray());
 			assertEquals(jsonNode.toString(), "[1, 5]");
 		}
 
 		try (Statement stmt = conn.createStatement()) {
-			ResultSet rs = stmt.executeQuery("select \'hello\'::JSON");
+			ResultSet rs = stmt.executeQuery("select {'key': 'value'}::JSON");
 			rs.next();
+			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
+			JsonNode jsonNode = (JsonNode) rs.getObject(1);
+			assertTrue(jsonNode.isObject());
+			assertEquals(jsonNode.toString(), "{'key': value}"); // this isn't valid json output, must load json extension for that
+		}
+
+		try (Statement stmt = conn.createStatement()) {
+			ResultSet rs = stmt.executeQuery("select 'hello'::JSON");
+			rs.next();
+			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
 			JsonNode jsonNode = (JsonNode) rs.getObject(1);
 			assertTrue(jsonNode.isString());
 			assertEquals(jsonNode.toString(), "hello");
@@ -2309,6 +2335,117 @@ public class TestDuckDBJDBC {
 
 		rs.next();
 		assertEquals(rs.getString(1), "INTEGER");
+	}
+	
+	public static void test_config() throws Exception {
+		String memory_limit = "memory_limit";
+		String threads = "threads";
+
+		Properties info = new Properties();
+		info.put(memory_limit, "500MB");
+		info.put(threads, "5");
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:", info);
+
+		assertEquals("500.0MB", getSetting(conn, memory_limit));
+		assertEquals("5", getSetting(conn, threads));
+	}
+
+	public static void test_invalid_config() throws Exception {
+		Properties info = new Properties();
+		info.put("invalid config name", "true");
+
+		String message = assertThrows(
+				() -> DriverManager.getConnection("jdbc:duckdb:", info),
+				SQLException.class
+		);
+
+		assertEquals(message, "Catalog Error: unrecognized configuration parameter \"invalid config name\"\n\nDid you mean: \"enable_profiling\"");
+	}
+
+	private static String getSetting(Connection conn, String settingName) throws Exception {
+		try (PreparedStatement stmt = conn.prepareStatement("select value from duckdb_settings() where name = ?")) {
+			stmt.setString(1, settingName);
+			ResultSet rs = stmt.executeQuery();
+			rs.next();
+
+			return rs.getString(1);
+		}
+	}
+
+	public static void test_describe() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+
+		try (Statement stmt = conn.createStatement()) {
+			stmt.execute("CREATE TABLE TEST (COL INT DEFAULT 42)");
+
+			ResultSet rs = stmt.executeQuery("DESCRIBE SELECT * FROM TEST");
+			rs.next();
+			assertEquals(rs.getString("column_name"), "COL");
+			assertEquals(rs.getString("column_type"), "INTEGER");
+			assertEquals(rs.getString("null"), "YES");
+			assertNull(rs.getString("key"));
+			assertNull(rs.getString("default"));
+			assertNull(rs.getString("extra"));
+		}
+	}
+
+	public static void test_dont_leak_database() throws Exception {
+		DuckDBDatabase database;
+
+		try (DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:")) {
+			conn.duplicate().close();
+
+			database = conn.getDatabase();
+		}
+
+		assertTrue(database.isShutdown());
+	}
+
+	public static void test_null_bytes_in_string() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+			try (PreparedStatement stmt = conn.prepareStatement("select ?")) {
+				stmt.setObject(1, "bob\u0000r");
+
+				String message = assertThrows(
+						stmt::executeQuery,
+						SQLException.class
+				);
+				assertEquals(message, "Null-byte (\\0) detected in value construction");
+			}
+		}
+	}
+
+	public static void test_get_functions() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+			ResultSet functions = conn.getMetaData().getFunctions(null, "main", "string_split");
+
+			assertTrue(functions.next());
+			assertNull(functions.getObject("FUNCTION_CAT"));
+			assertEquals("main", functions.getString("FUNCTION_SCHEM"));
+			assertEquals("string_split", functions.getString("FUNCTION_NAME"));
+			assertNull(functions.getString("REMARKS"));
+			assertEquals(DatabaseMetaData.functionNoTable, functions.getInt("FUNCTION_TYPE"));
+
+			assertFalse(functions.next());
+
+			// two items for two overloads?
+			functions = conn.getMetaData().getFunctions(null, "main", "read_csv_auto");
+			assertTrue(functions.next());
+			assertNull(functions.getObject("FUNCTION_CAT"));
+			assertEquals("main", functions.getString("FUNCTION_SCHEM"));
+			assertEquals("read_csv_auto", functions.getString("FUNCTION_NAME"));
+			assertNull(functions.getString("REMARKS"));
+			assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
+
+			assertTrue(functions.next());
+			assertNull(functions.getObject("FUNCTION_CAT"));
+			assertEquals("main", functions.getString("FUNCTION_SCHEM"));
+			assertEquals("read_csv_auto", functions.getString("FUNCTION_NAME"));
+			assertNull(functions.getString("REMARKS"));
+			assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
+
+			assertFalse(functions.next());
+		}
 	}
 
 	public static void main(String[] args) throws Exception {

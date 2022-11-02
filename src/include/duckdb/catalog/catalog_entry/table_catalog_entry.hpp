@@ -53,6 +53,7 @@ public:
 	case_insensitive_map_t<column_t> name_map;
 
 public:
+	bool HasGeneratedColumns() const;
 	//! For debugging purposes, count how many columns are STANDARD
 	idx_t StandardColumnCount() const;
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
@@ -61,9 +62,12 @@ public:
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
 	ColumnDefinition &GetColumn(const string &name);
-	//! Returns a list of types of the table
+	//! Returns a list of types of the table, excluding generated columns
 	vector<LogicalType> GetTypes();
 	string ToSQL() override;
+
+	//! Get statistics of a column (physical or virtual) within the table
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
 
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
@@ -79,8 +83,8 @@ public:
 
 	//! Returns the column index of the specified column name.
 	//! If the column does not exist:
-	//! If if_exists is true, returns DConstants::INVALID_INDEX
-	//! If if_exists is false, throws an exception
+	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
+	//! If if_column_exists is false, throws an exception
 	column_t GetColumnIndex(string &name, bool if_exists = false);
 
 private:

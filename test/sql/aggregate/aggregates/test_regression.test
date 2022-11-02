@@ -278,8 +278,6 @@ select regr_intercept(v, v2) from aggr;
 
 
 # Window Function
-require vector_size 512
-
 query I rowsort
 select  regr_avgx(v, v2) over (partition by k)
     from aggr;

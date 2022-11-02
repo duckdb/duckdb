@@ -1,4 +1,6 @@
 #include "mbedtls_wrapper.hpp"
+// otherwise we have different definitions for mbedtls_pk_context / mbedtls_sha256_context
+#define MBEDTLS_ALLOW_PRIVATE_ACCESS
 
 #include "mbedtls/sha256.h"
 #include "mbedtls/pk.h"
@@ -24,16 +26,20 @@ openssl pkeyutl -sign -in hash -inkey private.pem -pkeyopt digest:sha256 -out du
 */
 
 
-string MbedTlsWrapper::ComputeSha256Hash(const string& file_content) {
-	string hash;
-	hash.resize(32);
+void MbedTlsWrapper::ComputeSha256Hash(const char* in, size_t in_len, char* out) {
 
 	mbedtls_sha256_context sha_context;
 	mbedtls_sha256_init(&sha_context);
-	if(mbedtls_sha256_starts(&sha_context, false) || mbedtls_sha256_update(&sha_context, (const unsigned char*) file_content.data(), file_content.size()) || mbedtls_sha256_finish(&sha_context, (unsigned char*)hash.data())) {
+	if(mbedtls_sha256_starts(&sha_context, false) || mbedtls_sha256_update(&sha_context, (const unsigned char*) in, in_len) || mbedtls_sha256_finish(&sha_context, (unsigned char*)out)) {
 		throw runtime_error("SHA256 Error");
 	}
 	mbedtls_sha256_free(&sha_context);
+}
+
+string MbedTlsWrapper::ComputeSha256Hash(const string& file_content) {
+	string hash;
+	hash.resize(MbedTlsWrapper::SHA256_HASH_BYTES);
+	ComputeSha256Hash(file_content.data(), file_content.size(), (char*)hash.data());
 	return hash;
 }
 
@@ -58,4 +64,21 @@ bool MbedTlsWrapper::IsValidSha256Signature(const std::string &pubkey, const std
 
 	mbedtls_pk_free(&pk_context);
 	return valid;
+}
+
+// used in s3fs
+void MbedTlsWrapper::Hmac256(const char* key, size_t key_len, const char* message, size_t message_len, char* out) {
+	mbedtls_md_context_t hmac_ctx;
+	const mbedtls_md_info_t *md_type = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+	if (!md_type) {
+		throw runtime_error("failed to init hmac");
+	}
+
+	if (mbedtls_md_setup(&hmac_ctx, md_type, 1) ||
+	    mbedtls_md_hmac_starts(&hmac_ctx, (const unsigned char *) key, key_len) ||
+	    mbedtls_md_hmac_update(&hmac_ctx, (const unsigned char *)message, message_len) ||
+	    mbedtls_md_hmac_finish(&hmac_ctx, (unsigned char *) out)) {
+		throw runtime_error("HMAC256 Error");
+	}
+	mbedtls_md_free(&hmac_ctx);
 }

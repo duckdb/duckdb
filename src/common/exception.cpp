@@ -4,6 +4,15 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
 
+#ifdef DUCKDB_CRASH_ON_ASSERT
+#include "duckdb/common/printer.hpp"
+#include <stdio.h>
+#include <stdlib.h>
+#endif
+#ifdef DUCKDB_DEBUG_STACKTRACE
+#include <execinfo.h>
+#endif
+
 namespace duckdb {
 
 Exception::Exception(const string &msg) : std::exception(), type(ExceptionType::INVALID), raw_message_(msg) {
@@ -28,6 +37,24 @@ bool Exception::UncaughtException() {
 	return std::uncaught_exceptions() > 0;
 #else
 	return std::uncaught_exception();
+#endif
+}
+
+string Exception::GetStackTrace(int max_depth) {
+#ifdef DUCKDB_DEBUG_STACKTRACE
+	string result;
+	auto callstack = unique_ptr<void *[]>(new void *[max_depth]);
+	int frames = backtrace(callstack.get(), max_depth);
+	char **strs = backtrace_symbols(callstack.get(), frames);
+	for (int i = 0; i < frames; i++) {
+		result += strs[i];
+		result += "\n";
+	}
+	free(strs);
+	return "\n" + result;
+#else
+	// Stack trace not available. Toggle DUCKDB_DEBUG_STACKTRACE in exception.cpp to enable stack traces.
+	return "";
 #endif
 }
 
@@ -158,6 +185,8 @@ void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message
 		throw ParameterNotAllowedException(message);
 	case ExceptionType::PARAMETER_NOT_RESOLVED:
 		throw ParameterNotResolvedException();
+	case ExceptionType::FATAL:
+		throw FatalException(message);
 	default:
 		throw Exception(type, message);
 	}
@@ -286,6 +315,10 @@ FatalException::FatalException(ExceptionType type, const string &msg) : Exceptio
 }
 
 InternalException::InternalException(const string &msg) : FatalException(ExceptionType::INTERNAL, msg) {
+#ifdef DUCKDB_CRASH_ON_ASSERT
+	Printer::Print("ABORT THROWN BY INTERNAL EXCEPTION: " + msg);
+	abort();
+#endif
 }
 
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {

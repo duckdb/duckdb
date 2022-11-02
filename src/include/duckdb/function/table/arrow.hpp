@@ -61,13 +61,12 @@ typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(uintptr_
 typedef void (*stream_factory_get_schema_t)(uintptr_t stream_factory_ptr, ArrowSchemaWrapper &schema);
 
 struct ArrowScanFunctionData : public PyTableFunctionData {
-	ArrowScanFunctionData(idx_t rows_per_thread_p, stream_factory_produce_t scanner_producer_p,
-	                      uintptr_t stream_factory_ptr_p)
-	    : lines_read(0), rows_per_thread(rows_per_thread_p), stream_factory_ptr(stream_factory_ptr_p),
-	      scanner_producer(scanner_producer_p), number_of_rows(0) {
+	ArrowScanFunctionData(stream_factory_produce_t scanner_producer_p, uintptr_t stream_factory_ptr_p)
+	    : lines_read(0), stream_factory_ptr(stream_factory_ptr_p), scanner_producer(scanner_producer_p) {
 	}
 	//! This holds the original list type (col_idx, [ArrowListType,size])
 	unordered_map<idx_t, unique_ptr<ArrowConvertData>> arrow_convert_data;
+	vector<LogicalType> all_types;
 	atomic<idx_t> lines_read;
 	ArrowSchemaWrapper schema_root;
 	idx_t rows_per_thread;
@@ -75,8 +74,6 @@ struct ArrowScanFunctionData : public PyTableFunctionData {
 	uintptr_t stream_factory_ptr;
 	//! Pointer to the scanner factory produce
 	stream_factory_produce_t scanner_producer;
-	//! Number of rows (Used in cardinality and progress bar)
-	int64_t number_of_rows;
 };
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
@@ -86,20 +83,31 @@ struct ArrowScanLocalState : public LocalTableFunctionState {
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	shared_ptr<ArrowArrayWrapper> chunk;
 	idx_t chunk_offset = 0;
+	idx_t batch_index = 0;
 	vector<column_t> column_ids;
 	//! Store child vectors for Arrow Dictionary Vectors (col-idx,vector)
 	unordered_map<idx_t, unique_ptr<Vector>> arrow_dictionary_vectors;
 	TableFilterSet *filters = nullptr;
+	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
+	DataChunk all_columns;
 };
 
 struct ArrowScanGlobalState : public GlobalTableFunctionState {
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	mutex main_mutex;
-	bool ready = false;
 	idx_t max_threads = 1;
+	idx_t batch_index = 0;
+	bool done = false;
+
+	vector<idx_t> projection_ids;
+	vector<LogicalType> scanned_types;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
+	}
+
+	bool CanRemoveFilterColumns() const {
+		return !projection_ids.empty();
 	}
 };
 

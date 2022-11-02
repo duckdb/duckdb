@@ -57,7 +57,7 @@ struct date_t { // NOLINT
 
 //! Type used to represent time (microseconds)
 struct dtime_t { // NOLINT
-    int64_t micros;
+	int64_t micros;
 
 	dtime_t() = default;
 	explicit inline dtime_t(int64_t micros_p) : micros(micros_p) {}
@@ -92,9 +92,11 @@ struct dtime_t { // NOLINT
 	static inline dtime_t allballs() {return dtime_t(0); } // NOLINT
 };
 
+struct dtime_tz_t : public dtime_t {};
+
 //! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
 struct timestamp_t { // NOLINT
-    int64_t value;
+	int64_t value;
 
 	timestamp_t() = default;
 	explicit inline timestamp_t(int64_t value_p) : value(value_p) {}
@@ -124,6 +126,11 @@ struct timestamp_t { // NOLINT
 	static inline timestamp_t ninfinity() {return timestamp_t(-std::numeric_limits<int64_t>::max()); } // NOLINT
 	static inline timestamp_t epoch() {return timestamp_t(0); } // NOLINT
 };
+
+struct timestamp_tz_t : public timestamp_t {};
+struct timestamp_ns_t : public timestamp_t {};
+struct timestamp_ms_t : public timestamp_t {};
+struct timestamp_sec_t : public timestamp_t {};
 
 struct interval_t {
 	int32_t months;
@@ -208,6 +215,8 @@ struct list_entry_t {
 	uint64_t offset;
 	uint64_t length;
 };
+
+using union_tag_t = uint8_t; 
 
 //===--------------------------------------------------------------------===//
 // Internal Types
@@ -382,7 +391,8 @@ enum class LogicalTypeId : uint8_t {
 	TABLE = 103,
 	ENUM = 104,
 	AGGREGATE_STATE = 105,
-	LAMBDA = 106
+	LAMBDA = 106,
+	UNION = 107
 };
 
 struct ExtraTypeInfo;
@@ -408,6 +418,10 @@ struct LogicalType {
 	inline const ExtraTypeInfo *AuxInfo() const {
 		return type_info_.get();
 	}
+	inline void CopyAuxInfo(const LogicalType& other) {
+		type_info_ = other.type_info_;
+	}
+	bool EqualTypeInfo(const LogicalType& rhs) const;
 
 	// copy assignment
 	inline LogicalType& operator=(const LogicalType &other) {
@@ -434,6 +448,16 @@ struct LogicalType {
 	//! Deserializes a blob back into an LogicalType
 	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
 
+	DUCKDB_API static bool TypeIsTimestamp(LogicalTypeId id) {
+		return (id == LogicalTypeId::TIMESTAMP ||
+				id == LogicalTypeId::TIMESTAMP_MS ||
+				id == LogicalTypeId::TIMESTAMP_NS ||
+				id == LogicalTypeId::TIMESTAMP_SEC ||
+				id == LogicalTypeId::TIMESTAMP_TZ);
+	}
+	DUCKDB_API static bool TypeIsTimestamp(const LogicalType& type) {
+		return TypeIsTimestamp(type.id());
+	}
 	DUCKDB_API string ToString() const;
 	DUCKDB_API bool IsIntegral() const;
 	DUCKDB_API bool IsNumeric() const;
@@ -505,6 +529,7 @@ public:
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
+	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType DEDUP_POINTER_ENUM(); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
@@ -536,7 +561,7 @@ struct UserType{
 
 struct EnumType{
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
-	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string& key);
+	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string_t& key);
 	DUCKDB_API static Vector &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static const string GetValue(const Value &val);
@@ -555,6 +580,14 @@ struct StructType {
 struct MapType {
 	DUCKDB_API static const LogicalType &KeyType(const LogicalType &type);
 	DUCKDB_API static const LogicalType &ValueType(const LogicalType &type);
+};
+
+struct UnionType {
+	DUCKDB_API static const idx_t MAX_UNION_MEMBERS = 256;
+	DUCKDB_API static idx_t GetMemberCount(const LogicalType &type);
+	DUCKDB_API static const LogicalType &GetMemberType(const LogicalType &type, idx_t index);
+	DUCKDB_API static const string &GetMemberName(const LogicalType &type, idx_t index);
+	DUCKDB_API static const child_list_t<LogicalType> CopyMemberTypes(const LogicalType &type);
 };
 
 struct AggregateStateType {
@@ -649,3 +682,84 @@ struct aggregate_state_t {
 };
 
 } // namespace duckdb
+
+namespace std {
+
+	//! Date
+	template <>
+	struct hash<duckdb::date_t>
+	{
+		std::size_t operator()(const duckdb::date_t& k) const
+		{
+			using std::hash;
+			return hash<int32_t>()((int32_t)k);
+		}
+	};
+
+	//! Time
+	template <>
+	struct hash<duckdb::dtime_t>
+	{
+		std::size_t operator()(const duckdb::dtime_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::dtime_tz_t>
+	{
+		std::size_t operator()(const duckdb::dtime_tz_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+
+	//! Timestamp
+	template <>
+	struct hash<duckdb::timestamp_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_ms_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_ms_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_ns_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_ns_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_sec_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_sec_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_tz_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_tz_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+}

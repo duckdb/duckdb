@@ -5,17 +5,22 @@
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/field_writer.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
@@ -28,15 +33,10 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
-#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
-#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/catalog/default/default_types.hpp"
 
-#include "duckdb/common/algorithm.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -54,7 +54,7 @@ void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk
 		}
 		auto &fk = (ForeignKeyConstraint &)*cond;
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			fk_arrays.push_back(make_unique<AlterForeignKeyInfo>(fk.info.schema, fk.info.table, entry->name,
+			fk_arrays.push_back(make_unique<AlterForeignKeyInfo>(fk.info.schema, fk.info.table, false, entry->name,
 			                                                     fk.pk_columns, fk.fk_columns, fk.info.pk_keys,
 			                                                     fk.info.fk_keys, alter_fk_type));
 		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
@@ -184,6 +184,17 @@ CatalogEntry *SchemaCatalogEntry::CreatePragmaFunction(ClientContext &context, C
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
+	if (info->on_conflict == OnCreateConflict::ALTER_ON_CONFLICT) {
+		// check if the original entry exists
+		auto &catalog_set = GetCatalogSet(info->type);
+		auto current_entry = catalog_set.GetEntry(context, info->name);
+		if (current_entry) {
+			// the current entry exists - alter it instead
+			auto alter_info = info->GetAlterInfo();
+			Alter(context, alter_info.get());
+			return nullptr;
+		}
+	}
 	unique_ptr<StandardEntry> function;
 	switch (info->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
@@ -196,7 +207,7 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		break;
 
 	case CatalogType::TABLE_MACRO_ENTRY:
-		// create a macro function
+		// create a macro table function
 		function = make_unique_base<StandardEntry, TableMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
 		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:

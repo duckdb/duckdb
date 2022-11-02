@@ -63,21 +63,21 @@ class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
 	DUCKDB_API explicit ScalarFunctionSet(string name);
 
-	DUCKDB_API ScalarFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
+	DUCKDB_API ScalarFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
 };
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
 	DUCKDB_API explicit AggregateFunctionSet(string name);
 
-	DUCKDB_API AggregateFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
+	DUCKDB_API AggregateFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
 };
 
 class TableFunctionSet : public FunctionSet<TableFunction> {
 public:
 	DUCKDB_API explicit TableFunctionSet(string name);
 
-	TableFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
+	TableFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
 };
 
 class PragmaFunctionSet : public FunctionSet<PragmaFunction> {

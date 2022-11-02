@@ -265,4 +265,13 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	memcpy(malloced_data, "hello\0", 6);
 	REQUIRE(string((char *)malloced_data) == "hello");
 	duckdb_free(malloced_data);
+
+	status = duckdb_prepare(tester.connection, "SELECT sum(i) FROM a WHERE i > ?", &stmt);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(stmt != nullptr);
+	REQUIRE(duckdb_nparams(stmt) == 1);
+	REQUIRE(duckdb_param_type(nullptr, 0) == DUCKDB_TYPE_INVALID);
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_INTEGER);
+
+	duckdb_destroy_prepare(&stmt);
 }

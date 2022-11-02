@@ -16,6 +16,7 @@ namespace duckdb {
 class RowGroup;
 struct SelectionVector;
 class Transaction;
+struct TransactionData;
 
 enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 
@@ -34,11 +35,11 @@ public:
 public:
 	//! Gets up to max_count entries from the chunk info. If the ret is 0>ret>max_count, the selection vector is filled
 	//! with the tuples
-	virtual idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) = 0;
+	virtual idx_t GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) = 0;
 	virtual idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
 	                                    SelectionVector &sel_vector, idx_t max_count) = 0;
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
-	virtual bool Fetch(Transaction &transaction, row_t row) = 0;
+	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 
 	virtual void Serialize(Serializer &serialize) = 0;
@@ -53,10 +54,10 @@ public:
 	atomic<transaction_t> delete_id;
 
 public:
-	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
+	idx_t GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
 	                            SelectionVector &sel_vector, idx_t max_count) override;
-	bool Fetch(Transaction &transaction, row_t row) override;
+	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 
 	void Serialize(Serializer &serialize) override;
@@ -84,14 +85,20 @@ public:
 public:
 	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
 	                   idx_t max_count);
-	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
+	idx_t GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
 	                            SelectionVector &sel_vector, idx_t max_count) override;
-	bool Fetch(Transaction &transaction, row_t row) override;
+	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
-	idx_t Delete(Transaction &transaction, row_t rows[], idx_t count);
+
+	//! Performs a delete in the ChunkVectorInfo - returns how many tuples were actually deleted
+	//! The number of rows that were actually deleted might be lower than the input count
+	//! In case we delete rows that were already deleted
+	//! Note that "rows" is written to to reflect the row ids that were actually deleted
+	//! i.e. after calling this function, rows will hold [0..actual_delete_count] row ids of the actually deleted tuples
+	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
 
 	void Serialize(Serializer &serialize) override;

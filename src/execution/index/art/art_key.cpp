@@ -4,25 +4,41 @@
 
 namespace duckdb {
 
-Key::Key(unique_ptr<data_t[]> data, idx_t len) : len(len), data(move(data)) {
+Key::Key() : len(0) {
 }
 
-Key::Key(idx_t len) : len(len) {
-	data = unique_ptr<data_t[]>(new data_t[len]);
+Key::Key(data_ptr_t data, idx_t len) : len(len), data(data) {
+}
+
+Key::Key(ArenaAllocator &allocator, idx_t len) : len(len) {
+	data = allocator.Allocate(len);
 }
 
 template <>
-unique_ptr<Key> Key::CreateKey(string_t value) {
+Key Key::CreateKey(ArenaAllocator &allocator, string_t value) {
 	idx_t len = value.GetSize() + 1;
-	auto data = unique_ptr<data_t[]>(new data_t[len]);
-	memcpy(data.get(), value.GetDataUnsafe(), len - 1);
+	auto data = allocator.Allocate(len);
+	memcpy(data, value.GetDataUnsafe(), len - 1);
 	data[len - 1] = '\0';
-	return make_unique<Key>(move(data), len);
+	return Key(data, len);
 }
 
 template <>
-unique_ptr<Key> Key::CreateKey(const char *value) {
-	return Key::CreateKey(string_t(value, strlen(value)));
+Key Key::CreateKey(ArenaAllocator &allocator, const char *value) {
+	return Key::CreateKey(allocator, string_t(value, strlen(value)));
+}
+
+template <>
+void Key::CreateKey(ArenaAllocator &allocator, Key &key, string_t value) {
+	key.len = value.GetSize() + 1;
+	key.data = allocator.Allocate(key.len);
+	memcpy(key.data, value.GetDataUnsafe(), key.len - 1);
+	key.data[key.len - 1] = '\0';
+}
+
+template <>
+void Key::CreateKey(ArenaAllocator &allocator, Key &key, const char *value) {
+	Key::CreateKey(allocator, key, string_t(value, strlen(value)));
 }
 
 bool Key::operator>(const Key &k) const {
@@ -68,5 +84,22 @@ bool Key::operator==(const Key &k) const {
 		}
 	}
 	return true;
+}
+
+bool Key::ByteMatches(Key &other, idx_t &depth) {
+	return data[depth] == other[depth];
+}
+
+bool Key::Empty() {
+	return len == 0;
+}
+
+void Key::ConcatenateKey(ArenaAllocator &allocator, Key &other_key) {
+
+	auto compound_data = allocator.Allocate(len + other_key.len);
+	memcpy(compound_data, data, len);
+	memcpy(compound_data + len, other_key.data, other_key.len);
+	len += other_key.len;
+	data = compound_data;
 }
 } // namespace duckdb

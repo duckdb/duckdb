@@ -174,6 +174,9 @@ void Pipeline::Ready() {
 }
 
 void Pipeline::Finalize(Event &event) {
+	if (executor.HasError()) {
+		return;
+	}
 	D_ASSERT(ready);
 	try {
 		auto sink_state = sink->Finalize(*this, event, executor.context, *sink->sink_state);

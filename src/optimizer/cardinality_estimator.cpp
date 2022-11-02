@@ -120,13 +120,13 @@ void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>
 }
 
 void CardinalityEstimator::VerifySymmetry(JoinNode *result, JoinNode *entry) {
-	if (result->GetCardinality() != entry->GetCardinality()) {
+	if (result->GetCardinality<double>() != entry->GetCardinality<double>()) {
 		// Currently it's possible that some entries are cartesian joins.
 		// When this is the case, you don't always have symmetry, but
 		// if the cost of the result is less, then just assure the cardinality
 		// is also less, then you have the same effect of symmetry.
-		D_ASSERT(ceil(result->GetCardinality()) <= ceil(entry->GetCardinality()) ||
-		         floor(result->GetCardinality()) <= floor(entry->GetCardinality()));
+		D_ASSERT(ceil(result->GetCardinality<double>()) <= ceil(entry->GetCardinality<double>()) ||
+		         floor(result->GetCardinality<double>()) <= floor(entry->GetCardinality<double>()));
 	}
 }
 
@@ -143,9 +143,9 @@ double CardinalityEstimator::ComputeCost(JoinNode *left, JoinNode *right, double
 double CardinalityEstimator::EstimateCrossProduct(const JoinNode *left, const JoinNode *right) {
 	// need to explicity use double here, otherwise auto converts it to an int, then
 	// there is an autocast in the return.
-	return left->GetCardinality() >= (NumericLimits<double>::Maximum() / right->GetCardinality())
+	return left->GetCardinality<double>() >= (NumericLimits<double>::Maximum() / right->GetCardinality<double>())
 	           ? NumericLimits<double>::Maximum()
-	           : left->GetCardinality() * right->GetCardinality();
+	           : left->GetCardinality<double>() * right->GetCardinality<double>();
 }
 
 void CardinalityEstimator::AddRelationColumnMapping(LogicalGet *get, idx_t relation_id) {
@@ -265,6 +265,8 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 		}
 	}
 	double denom = 1;
+	// TODO: It's possible cross-products were added and are not present in the filters in the relation_2_tdom
+	//       structures. When that's the case, multiply the denom structures that have no intersection
 	for (auto &match : subgraphs) {
 		// It's possible that in production, one of the D_ASSERTS above will fail and not all subgraphs
 		// were connected. When this happens, just use the largest denominator of all the subgraphs.
@@ -368,7 +370,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<struct NodeOp> *
 
 void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op) {
 	auto relation_id = node->set->relations[0];
-	relation_attributes[relation_id].cardinality = node->GetCardinality();
+	relation_attributes[relation_id].cardinality = node->GetCardinality<double>();
 	TableCatalogEntry *catalog_table = nullptr;
 	auto get = GetLogicalGet(op);
 	if (get) {
@@ -390,9 +392,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			// Get HLL stats here
 			auto actual_binding = relation_column_to_original_column[key];
 
-			// sometimes base stats is null (test_709.test) returns null for base stats while
-			// there is still a catalog table. Anybody know anything about this?
-			auto base_stats = catalog_table->storage->GetStatistics(context, actual_binding.column_index);
+			auto base_stats = catalog_table->GetStatistics(context, actual_binding.column_index);
 			if (base_stats) {
 				count = base_stats->GetDistinctCount();
 			}
@@ -402,7 +402,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			// We decrease the total domain for all columns in the equivalence set because filter pushdown
 			// will mean all columns are affected.
 			if (direct_filter) {
-				count = node->GetCardinality();
+				count = node->GetCardinality<idx_t>();
 			}
 
 			// HLL has estimation error, count can't be greater than cardinality of the table before filters
@@ -413,7 +413,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			// No HLL. So if we know there is a direct filter, reduce count to cardinality with filter
 			// otherwise assume the total domain is still the cardinality
 			if (direct_filter) {
-				count = node->GetCardinality();
+				count = node->GetCardinality<idx_t>();
 			} else {
 				count = node->GetBaseTableCardinality();
 			}

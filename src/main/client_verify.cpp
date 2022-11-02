@@ -2,6 +2,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -55,7 +57,6 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	bool any_failed = original->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
 		return RunStatementInternal(lock, q, move(s), false, false);
 	});
-
 	// Execute the verifiers
 	for (auto &verifier : statement_verifiers) {
 		bool failed = verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
@@ -73,6 +74,10 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
 			statement_verifiers.push_back(move(prepared_statement_verifier));
 		}
+	} else {
+		if (db->IsInvalidated()) {
+			return original->materialized_result->GetErrorObject();
+		}
 	}
 
 	// Restore config setting
@@ -89,6 +94,18 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 			interrupted = false;
 			return PreservedError("EXPLAIN failed but query did not (" + string(ex.what()) + ")");
 		} // LCOV_EXCL_STOP
+
+#ifdef DUCKDB_VERIFY_BOX_RENDERER
+		// this is pretty slow, so disabled by default
+		// test the box renderer on the result
+		// we mostly care that this does not crash
+		RandomEngine random;
+		BoxRendererConfig config;
+		// test with a random width
+		config.max_width = random.NextRandomInteger() % 500;
+		BoxRenderer renderer(config);
+		renderer.ToString(*this, original->materialized_result->names, original->materialized_result->Collection());
+#endif
 	}
 
 	// Restore profiler setting

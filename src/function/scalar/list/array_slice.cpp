@@ -76,7 +76,7 @@ list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64
 template <>
 string_t SliceValue(Vector &result, string_t input, int32_t begin, int32_t end) {
 	// one-based - zero has strange semantics
-	return SubstringFun::SubstringScalarFunction(result, input, begin + 1, end - begin);
+	return SubstringFun::SubstringUnicode(result, input, begin + 1, end - begin);
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
@@ -147,10 +147,13 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	Vector &b = args.data[1];
 	Vector &e = args.data[2];
 
-	s.Flatten(count);
+	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST:
 		// Share the value dictionary as we are just going to slice it
+		if (s.GetVectorType() != VectorType::FLAT_VECTOR && s.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			s.Flatten(count);
+		}
 		ListVector::ReferenceEntry(result, s);
 		ExecuteSlice<list_entry_t, int64_t>(result, s, b, e, count);
 		break;
@@ -159,14 +162,6 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
-	}
-
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-			break;
-		}
 	}
 }
 

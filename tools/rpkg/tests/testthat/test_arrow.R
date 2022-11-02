@@ -41,6 +41,7 @@ example_data <- dplyr::tibble(
 test_that("to_duckdb", {
   ds <- InMemoryDataset$create(example_data)
   con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
 
   dbExecute(con, "PRAGMA threads=1")
   expect_equal(
@@ -62,12 +63,12 @@ test_that("to_duckdb", {
       group_by(lgl) %>%
       summarise(sum_int = sum(int, na.rm = TRUE)) %>%
       collect() %>%
-      arrange(sum_int),
+      arrange(lgl, sum_int),
     example_data %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
       summarise(sum_int = sum(int, na.rm = TRUE)) %>%
-      arrange(sum_int)
+      arrange(lgl, sum_int)
   )
 
   # can group_by before the to_duckdb
@@ -78,12 +79,12 @@ test_that("to_duckdb", {
       to_duckdb(con = con) %>%
       summarise(sum_int = sum(int, na.rm = TRUE)) %>%
       collect() %>%
-      arrange(sum_int),
+      arrange(lgl, sum_int),
     example_data %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
       summarise(sum_int = sum(int, na.rm = TRUE)) %>%
-      arrange(sum_int)
+      arrange(lgl, sum_int)
   )
 })
 

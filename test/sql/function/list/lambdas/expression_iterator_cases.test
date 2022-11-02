@@ -20,7 +20,7 @@ SELECT list_filter([10], x -> sum(1) > 0)
 query I
 SELECT list_transform([NULL, DATE '1992-09-20', DATE '2021-09-20'], elem -> extract('year' FROM elem) BETWEEN 2000 AND 2022)
 ----
-[NULL, False, True]
+[NULL, false, true]
 
 query I
 SELECT list_filter([NULL, DATE '1992-09-20', DATE '2021-09-20'], elem -> extract('year' FROM elem) BETWEEN 2000 AND 2022)
@@ -56,7 +56,7 @@ SELECT list_filter([2], x -> x::DOUBLE == 2)
 query I
 SELECT list_transform([2.4, NULL, -4.7], x -> x != 10.4)
 ----
-[True, NULL, True]
+[true, NULL, true]
 
 query I
 SELECT list_filter([2.4, NULL, -4.7], x -> x != -4.7)
@@ -68,12 +68,12 @@ SELECT list_filter([2.4, NULL, -4.7], x -> x != -4.7)
 query I
 SELECT list_transform([True, False, NULL], x -> x AND true)
 ----
-[True, False, NULL]
+[true, false, NULL]
 
 query I
 SELECT list_filter([True, False, NULL], x -> x AND true)
 ----
-[True]
+[true]
 
 # BOUND_FUNCTION
 
@@ -118,14 +118,12 @@ SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], x -> list_contains_macro(x
 query I
 SELECT list_transform([1], x -> x = UNNEST([1]));
 ----
-[True]
+[true]
 
 query I
 SELECT list_filter([1], x -> x = UNNEST([1]));
 ----
 [1]
-
-require vector_size 512
 
 # BOUND_WINDOW
 

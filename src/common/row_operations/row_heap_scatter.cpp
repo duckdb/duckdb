@@ -11,7 +11,7 @@ static void ComputeStringEntrySizes(UnifiedVectorFormat &vdata, idx_t entry_size
 	auto strings = (string_t *)vdata.data;
 	for (idx_t i = 0; i < ser_count; i++) {
 		auto idx = sel.get_index(i);
-		auto str_idx = vdata.sel->get_index(idx) + offset;
+		auto str_idx = vdata.sel->get_index(idx + offset);
 		if (vdata.validity.RowIsValid(str_idx)) {
 			entry_sizes[i] += sizeof(uint32_t) + strings[str_idx].GetSize();
 		}
@@ -42,7 +42,7 @@ static void ComputeListEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t e
 	idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < ser_count; i++) {
 		auto idx = sel.get_index(i);
-		auto source_idx = vdata.sel->get_index(idx) + offset;
+		auto source_idx = vdata.sel->get_index(idx + offset);
 		if (vdata.validity.RowIsValid(source_idx)) {
 			auto list_entry = list_data[source_idx];
 
@@ -120,7 +120,7 @@ static void TemplatedHeapScatter(UnifiedVectorFormat &vdata, const SelectionVect
 	if (!validitymask_locations) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx) + offset;
+			auto source_idx = vdata.sel->get_index(idx + offset);
 
 			auto target = (T *)key_locations[i];
 			Store<T>(source[source_idx], (data_ptr_t)target);
@@ -133,7 +133,7 @@ static void TemplatedHeapScatter(UnifiedVectorFormat &vdata, const SelectionVect
 		const auto bit = ~(1UL << idx_in_entry);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx) + offset;
+			auto source_idx = vdata.sel->get_index(idx + offset);
 
 			auto target = (T *)key_locations[i];
 			Store<T>(source[source_idx], (data_ptr_t)target);
@@ -156,7 +156,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 	if (!validitymask_locations) {
 		for (idx_t i = 0; i < ser_count; i++) {
 			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx) + offset;
+			auto source_idx = vdata.sel->get_index(idx + offset);
 			if (vdata.validity.RowIsValid(source_idx)) {
 				auto &string_entry = strings[source_idx];
 				// store string size
@@ -174,7 +174,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 		const auto bit = ~(1UL << idx_in_entry);
 		for (idx_t i = 0; i < ser_count; i++) {
 			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx) + offset;
+			auto source_idx = vdata.sel->get_index(idx + offset);
 			if (vdata.validity.RowIsValid(source_idx)) {
 				auto &string_entry = strings[source_idx];
 				// store string size
@@ -252,7 +252,7 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 
 	for (idx_t i = 0; i < ser_count; i++) {
 		auto idx = sel.get_index(i);
-		auto source_idx = vdata.sel->get_index(idx) + offset;
+		auto source_idx = vdata.sel->get_index(idx + offset);
 		if (!vdata.validity.RowIsValid(source_idx)) {
 			if (validitymask_locations) {
 				// set the row validitymask for this column to invalid
@@ -289,7 +289,7 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 
 			// serialize list validity
 			for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
-				auto list_idx = list_vdata.sel->get_index(entry_idx) + entry_offset;
+				auto list_idx = list_vdata.sel->get_index(entry_idx + entry_offset);
 				if (!list_vdata.validity.RowIsValid(list_idx)) {
 					*(list_validitymask_location) &= ~(1UL << entry_offset_in_byte);
 				}

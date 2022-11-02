@@ -23,6 +23,7 @@
 namespace duckdb {
 
 namespace pyarrow {
+
 class RecordBatchReader : public py::object {
 public:
 	RecordBatchReader(const py::object &o) : py::object(o, borrowed_t {}) {
@@ -46,6 +47,10 @@ public:
 	}
 };
 } // namespace pyarrow
+
+enum class PyArrowObjectType { Invalid, Table, RecordBatchReader, Scanner, InMemoryDataset, FileSystemDataset };
+
+PyArrowObjectType GetArrowType(const py::handle &obj);
 
 class PythonTableArrowArrayStreamFactory {
 public:

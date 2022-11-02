@@ -250,11 +250,14 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	auto plan = plans.find(set);
 	// if we have already calculated an expected cardinality for this set,
 	// just re-use that cardinality
-	if (left->GetCardinality() < right->GetCardinality()) {
+	if (left->GetCardinality<double>() < right->GetCardinality<double>()) {
 		return CreateJoinTree(set, possible_connections, right, left);
 	}
 	if (plan != plans.end()) {
-		expected_cardinality = plan->second->GetCardinality();
+		if (!plan->second) {
+			throw InternalException("No plan: internal error in join order optimizer");
+		}
+		expected_cardinality = plan->second->GetCardinality<double>();
 		best_connection = possible_connections.back();
 	} else if (possible_connections.empty()) {
 		// cross product
@@ -279,7 +282,7 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 		join_nodes_in_full_plan.clear();
 	}
 	if (node->set->count < relations.size()) {
-		join_nodes_in_full_plan.insert(node);
+		join_nodes_in_full_plan.insert(node->set->ToString());
 	}
 	UpdateJoinNodesInFullPlan(node->left);
 	UpdateJoinNodesInFullPlan(node->right);
@@ -290,6 +293,9 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	// get the left and right join plans
 	auto &left_plan = plans[left];
 	auto &right_plan = plans[right];
+	if (!left_plan || !right_plan) {
+		throw InternalException("No left or right plan: internal error in join order optimizer");
+	}
 	auto new_set = set_manager.Union(left, right);
 	// create the join tree based on combining the two plans
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
@@ -303,8 +309,8 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 		if (entry != plans.end()) {
 			cardinality_estimator.VerifySymmetry(result, entry->second.get());
 		}
-
-		if (full_plan_found && join_nodes_in_full_plan.count(new_plan.get()) > 0) {
+		if (full_plan_found &&
+		    join_nodes_in_full_plan.find(new_plan->set->ToString()) != join_nodes_in_full_plan.end()) {
 			must_update_full_plan = true;
 		}
 		if (new_set->count == relations.size()) {
@@ -322,6 +328,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 			}
 		}
 
+		D_ASSERT(new_plan);
 		plans[new_set] = move(new_plan);
 		return result;
 	}
@@ -554,8 +561,8 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
 		auto connections = query_graph.GetConnections(new_set, neighbor_relation);
 		// recurse and update up the tree if the combined set produces a plan with a lower cost
 		// only recurse on neighbor relations that have plans.
-		auto &right_plan = plans[neighbor_relation];
-		if (!right_plan) {
+		auto right_plan = plans.find(neighbor_relation);
+		if (right_plan == plans.end()) {
 			continue;
 		}
 		auto updated_plan = EmitPair(new_set, neighbor_relation, connections);
@@ -615,7 +622,8 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 				auto current_plan = plans[join_relations[i]].get();
 				// check if the cardinality is smaller than the smallest two found so far
 				for (idx_t j = 0; j < 2; j++) {
-					if (!smallest_plans[j] || smallest_plans[j]->GetCardinality() > current_plan->GetCardinality()) {
+					if (!smallest_plans[j] ||
+					    smallest_plans[j]->GetCardinality<double>() > current_plan->GetCardinality<double>()) {
 						smallest_plans[j] = current_plan;
 						smallest_index[j] = i;
 						break;
@@ -750,8 +758,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 		result_relation = node->set;
 		result_operator = move(extracted_relations[node->set->relations[0]]);
 	}
-	auto max_idx_t = NumericLimits<idx_t>::Maximum() - 10000;
-	result_operator->estimated_cardinality = MinValue<idx_t>(node->GetCardinality(), max_idx_t);
+	result_operator->estimated_cardinality = node->GetCardinality<idx_t>();
 	result_operator->has_estimated_cardinality = true;
 	result_operator->estimated_props = node->estimated_props->Copy();
 	// check if we should do a pushdown on this node
@@ -972,6 +979,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	cardinality_estimator.InitCardinalityEstimatorProps(&nodes_ops, &filter_infos);
 
 	for (auto &node_op : nodes_ops) {
+		D_ASSERT(node_op.node);
 		plans[node_op.node->set] = move(node_op.node);
 	}
 	// now we perform the actual dynamic programming to compute the final result

@@ -77,6 +77,48 @@ jobs:
         cp -r benchmark duckdb/
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/${{ matrix.benchmark }}.csv --verbose --threads=2
 
+ regression-test-storage:
+  name: Storage Size Regression Test
+  runs-on: ubuntu-20.04
+  env:
+    CC: gcc-10
+    CXX: g++-10
+    GEN: ninja
+    BUILD_TPCH: 1
+    BUILD_TPCDS: 1
+
+  steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: |
+        make
+        git clone https://github.com/duckdb/duckdb.git --depth=1
+        cd duckdb
+        make
+        cd ..
+
+    - name: Regression Test
+      shell: bash
+      run: |
+        python scripts/regression_test_storage_size.py --old=duckdb/build/release/duckdb --new=build/release/duckdb
+
  regression-test-python:
   name: Regression Test (Python Client)
   runs-on: ubuntu-20.04

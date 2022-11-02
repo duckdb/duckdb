@@ -1,0 +1,73 @@
+# name: test/sql/storage/compression/chimp/chimp_compression_ratio.test_slow
+# description: Assert chimp compression ratio is within reasonable margins
+# group: [chimp]
+
+# ---------------- SETTINGS ----------------
+
+require parquet
+
+require httpfs
+
+# Use a persistent DB for this test
+load __TEST_DIR__/test_chimp.db
+
+# ---------------- SET UP ----------------
+
+# Load and store the dataset with 'chimp' and 'uncompressed',
+# Done for both 'double' and 'float'
+# stored in 'test_chimp_float|double' and 'test_uncompressed_float|double' respectively
+
+foreach compression uncompressed chimp
+
+statement ok
+PRAGMA force_compression='${compression}';
+
+foreach type double float
+
+statement ok
+CREATE TABLE test_${compression}_${type}(
+	temperature ${type}
+);
+
+statement ok
+INSERT INTO test_${compression}_${type} SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(12);
+
+#type
+endloop
+
+statement ok
+checkpoint
+
+#compression
+endloop
+
+# ---------------- TESTS ----------------
+
+# Assert that no segments are compressed with anything other than Chimp
+query I
+SELECT compression FROM pragma_storage_info('test_chimp_float') WHERE segment_type != 'VALIDITY' AND compression != 'Chimp';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test_chimp_double') WHERE segment_type != 'VALIDITY' AND compression != 'Chimp';
+----
+
+# Assert that the compression ratio for this dataset with doubles is higher than 2.5
+query I
+select (uncompressed::DOUBLE / chimped::DOUBLE) > 2.5 FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_chimp_double') where segment_type not in('VARCHAR', 'VALIDITY')) as chimped,
+        (select count(distinct block_id) from pragma_storage_info('test_uncompressed_double') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
+)
+----
+True
+
+# Assert that the compression ratio for this dataset with floats is higher than 1.3
+query I
+select (uncompressed::DOUBLE / chimped::DOUBLE) > 1.3 FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_chimp_float') where segment_type not in('VARCHAR', 'VALIDITY')) as chimped,
+        (select count(distinct block_id) from pragma_storage_info('test_uncompressed_float') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
+)
+----
+True

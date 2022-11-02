@@ -55,8 +55,8 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 	value_vector.ToUnifiedFormat(count, value_data);
 
 	// not required for a comparison of nested types
-	auto child_value = FlatVector::GetData<CHILD_TYPE>(child_vector);
-	auto values = FlatVector::GetData<CHILD_TYPE>(value_vector);
+	auto child_value = (CHILD_TYPE *)child_data.data;
+	auto values = (CHILD_TYPE *)value_data.data;
 
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
@@ -93,6 +93,10 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 				}
 			}
 		}
+	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

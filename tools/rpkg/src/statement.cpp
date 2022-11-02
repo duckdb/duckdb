@@ -10,6 +10,7 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #include "duckdb/parser/statement/relation_statement.hpp"
 
@@ -215,6 +216,7 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::INTERVAL:
 		varvalue = r_varvalue.Protect(NEW_NUMERIC(nrows));
 		break;
 	case LogicalTypeId::LIST:
@@ -240,6 +242,7 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 		varvalue = r_varvalue.Protect(cpp11::as_sexp(dest_list));
 		break;
 	}
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		auto wrapper = new DuckDBAltrepStringWrapper();
 		wrapper->length = nrows;
@@ -250,7 +253,9 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 		varvalue = r_varvalue.Protect(R_new_altrep(AltrepString::rclass, ptr, R_NilValue));
 		break;
 	}
-
+	case LogicalTypeId::UUID:
+		varvalue = r_varvalue.Protect(NEW_STRING(nrows));
+		break;
 	case LogicalTypeId::BLOB:
 		varvalue = r_varvalue.Protect(NEW_LIST(nrows));
 		break;
@@ -375,12 +380,24 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 			if (!mask.RowIsValid(row_idx)) {
 				dest_ptr[row_idx] = NA_REAL;
 			} else {
-				dtime_t n = src_data[row_idx];
-				dest_ptr[row_idx] = n.micros / Interval::MICROS_PER_SEC;
+				dest_ptr[row_idx] = src_data[row_idx].micros / Interval::MICROS_PER_SEC;
 			}
 		}
-
-		// some dress-up for R
+		SET_CLASS(dest, RStrings::get().difftime_str);
+		Rf_setAttrib(dest, RStrings::get().units_sym, RStrings::get().secs_str);
+		break;
+	}
+	case LogicalTypeId::INTERVAL: {
+		auto src_data = FlatVector::GetData<interval_t>(src_vec);
+		auto &mask = FlatVector::Validity(src_vec);
+		double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+		for (size_t row_idx = 0; row_idx < n; row_idx++) {
+			if (!mask.RowIsValid(row_idx)) {
+				dest_ptr[row_idx] = NA_REAL;
+			} else {
+				dest_ptr[row_idx] = Interval::GetMicro(src_data[row_idx]) / Interval::MICROS_PER_SEC;
+			}
+		}
 		SET_CLASS(dest, RStrings::get().difftime_str);
 		Rf_setAttrib(dest, RStrings::get().units_sym, RStrings::get().secs_str);
 		break;
@@ -449,6 +466,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 	case LogicalTypeId::DOUBLE:
 		VectorToR<double, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 		break;
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		auto wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(R_altrep_data1(dest));
 		auto src_data = FlatVector::GetData<string_t>(src_vec);
@@ -475,7 +493,8 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 			if (!FlatVector::Validity(src_vec).RowIsValid(row_idx)) {
 				SET_ELEMENT(dest, dest_offset + row_idx, R_NilValue);
 			} else {
-				child_vector.Slice(ListVector::GetEntry(src_vec), src_data[row_idx].offset);
+				const auto end = src_data[row_idx].offset + src_data[row_idx].length;
+				child_vector.Slice(ListVector::GetEntry(src_vec), src_data[row_idx].offset, end);
 
 				RProtector ele_prot;
 				// transform the list child vector to a single R SEXP
@@ -570,6 +589,20 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 
 		SET_LEVELS(dest, StringsToSexp(str_c_vec));
 		SET_CLASS(dest, RStrings::get().factor_str);
+		break;
+	}
+	case LogicalTypeId::UUID: {
+		auto src_ptr = FlatVector::GetData<hugeint_t>(src_vec);
+		auto &mask = FlatVector::Validity(src_vec);
+		for (size_t row_idx = 0; row_idx < n; row_idx++) {
+			if (!mask.RowIsValid(row_idx)) {
+				SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
+			} else {
+				char uuid_buf[UUID::STRING_SIZE];
+				UUID::ToString(src_ptr[row_idx], uuid_buf);
+				SET_STRING_ELT(dest, dest_offset + row_idx, Rf_mkCharLen(uuid_buf, UUID::STRING_SIZE));
+			}
+		}
 		break;
 	}
 	default:

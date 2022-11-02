@@ -9,6 +9,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include <thread>
 
@@ -182,8 +183,8 @@ SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, Clie
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-OperatorResultType PhysicalIEJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                           GlobalOperatorState &gstate, OperatorState &state) const {
+OperatorResultType PhysicalIEJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                   GlobalOperatorState &gstate, OperatorState &state) const {
 	return OperatorResultType::FINISHED;
 }
 
@@ -319,7 +320,7 @@ idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, S
 		executor.Execute(scanned, keys);
 
 		// Mark the rid column
-		payload.data[0].Sequence(rid, increment);
+		payload.data[0].Sequence(rid, increment, scan_count);
 		payload.SetCardinality(scan_count);
 		keys.Fuse(payload);
 		rid += increment * scan_count;
@@ -631,7 +632,7 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 	return result_count;
 }
 
-class IEJoinState : public OperatorState {
+class IEJoinState : public CachingOperatorState {
 public:
 	explicit IEJoinState(Allocator &allocator, const PhysicalIEJoin &op) : local_left(allocator, op, 0) {};
 

@@ -10729,6 +10729,7 @@ struct ShellState {
   int nIndent;           /* Size of array aiIndent[] */
   int iIndent;           /* Index of current op in aiIndent[] */
   EQPGraph sGraph;       /* Information for the graphical EXPLAIN QUERY PLAN */
+  size_t max_rows;       /* The maximum number of rows to render */
 #if defined(SQLITE_ENABLE_SESSION)
   int nSession;             /* Number of active sessions */
   OpenSession aSession[4];  /* Array of sessions.  [0] is in focus. */
@@ -10789,26 +10790,27 @@ struct ShellState {
 /*
 ** These are the allowed modes.
 */
-#define MODE_Line     0  /* One column per line.  Blank line between records */
-#define MODE_Column   1  /* One record per line in neat columns */
-#define MODE_List     2  /* One record per line with a separator */
-#define MODE_Semi     3  /* Same as MODE_List but append ";" to each line */
-#define MODE_Html     4  /* Generate an XHTML table */
-#define MODE_Insert   5  /* Generate SQL "insert" statements */
-#define MODE_Quote    6  /* Quote values as for SQL */
-#define MODE_Tcl      7  /* Generate ANSI-C or TCL quoted elements */
-#define MODE_Csv      8  /* Quote strings, numbers are plain */
-#define MODE_Explain  9  /* Like MODE_Column, but do not truncate data */
-#define MODE_Ascii   10  /* Use ASCII unit and record separators (0x1F/0x1E) */
-#define MODE_Pretty  11  /* Pretty-print schemas */
-#define MODE_EQP     12  /* Converts EXPLAIN QUERY PLAN output into a graph */
-#define MODE_Json    13  /* Output JSON */
-#define MODE_Markdown 14 /* Markdown formatting */
-#define MODE_Table   15  /* MySQL-style table formatting */
-#define MODE_Box     16  /* Unicode box-drawing characters */
-#define MODE_Latex   17  /* Latex tabular formatting */
-#define MODE_Trash   18  /* Discard output */
+#define MODE_Line     0    /* One column per line.  Blank line between records */
+#define MODE_Column   1    /* One record per line in neat columns */
+#define MODE_List     2    /* One record per line with a separator */
+#define MODE_Semi     3    /* Same as MODE_List but append ";" to each line */
+#define MODE_Html     4    /* Generate an XHTML table */
+#define MODE_Insert   5    /* Generate SQL "insert" statements */
+#define MODE_Quote    6    /* Quote values as for SQL */
+#define MODE_Tcl      7    /* Generate ANSI-C or TCL quoted elements */
+#define MODE_Csv      8    /* Quote strings, numbers are plain */
+#define MODE_Explain  9    /* Like MODE_Column, but do not truncate data */
+#define MODE_Ascii   10    /* Use ASCII unit and record separators (0x1F/0x1E) */
+#define MODE_Pretty  11    /* Pretty-print schemas */
+#define MODE_EQP     12    /* Converts EXPLAIN QUERY PLAN output into a graph */
+#define MODE_Json    13    /* Output JSON */
+#define MODE_Markdown 14   /* Markdown formatting */
+#define MODE_Table   15    /* MySQL-style table formatting */
+#define MODE_Box     16    /* Unicode box-drawing characters */
+#define MODE_Latex   17    /* Latex tabular formatting */
+#define MODE_Trash   18    /* Discard output */
 #define MODE_Jsonlines 19  /* Output JSON Lines */
+#define MODE_DuckBox 20    /* Unicode box drawing - using DuckDB's own renderer */
 
 static const char *modeDescr[] = {
   "line",
@@ -10830,7 +10832,8 @@ static const char *modeDescr[] = {
   "box",
   "latex",
   "trash",
-    "jsonlines"
+  "jsonlines",
+  "duckbox"
 };
 
 /*
@@ -12694,7 +12697,7 @@ int column_type_is_integer(const char *type) {
 /*
 ** Run a prepared statement and output the result in one of the
 ** table-oriented formats: MODE_Column, MODE_Markdown, MODE_Table,
-** or MODE_Box.
+** MODE_Box or MODE_DuckBox
 **
 ** This is different from ordinary exec_prepared_stmt() in that
 ** it has to run the entire query and gather the results into memory
@@ -12877,6 +12880,8 @@ columnar_end:
   sqlite3_free(azData);
 }
 
+extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value);
+
 /*
 ** Run a prepared statement
 */
@@ -12885,6 +12890,14 @@ static void exec_prepared_stmt(
   sqlite3_stmt *pStmt                              /* Statment to run */
 ){
   int rc;
+  if (pArg->cMode == MODE_DuckBox) {
+	  char *str = sqlite3_print_duckbox(pStmt, pArg->max_rows, pArg->nullValue);
+	  if (str) {
+		  utf8_printf(pArg->out, "%s", str);
+		  sqlite3_free(str);
+	  }
+	  return;
+  }
 
   if( pArg->cMode==MODE_Column
    || pArg->cMode==MODE_Table
@@ -13632,6 +13645,7 @@ static const char *(azHelp[]) = {
   ".load FILE ?ENTRY?       Load an extension library",
 #endif
   ".log FILE|off            Turn logging on or off.  FILE can be stderr/stdout",
+  ".maxrows COUNT           Sets the maximum number of rows for display. Only for duckbox mode.",
   ".mode MODE ?TABLE?       Set output mode",
   "   MODE is one of:",
   "     ascii     Columns/rows delimited by 0x1F and 0x1E",
@@ -14304,6 +14318,10 @@ static void open_db(ShellState *p, int openFlags){
     sqlite3_create_function(p->db, "edit", 2, SQLITE_UTF8, 0,
                             editFunc, 0, 0);
 #endif
+	if (stdout_is_console) {
+		sqlite3_exec(p->db, "PRAGMA enable_progress_bar", NULL, NULL, NULL);
+		sqlite3_exec(p->db, "PRAGMA enable_print_progress_bar", NULL, NULL, NULL);
+	}
     if( p->openMode==SHELL_OPEN_ZIPFILE ){
       char *zSql = sqlite3_mprintf(
          "CREATE VIRTUAL TABLE zip USING zipfile(%Q);", p->zDbFilename);
@@ -14384,32 +14402,40 @@ static char **readline_completion(const char *zText, int iStart, int iEnd){
 */
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc){
   int nLine = strlen30(zLine);
-  int i, iStart;
+  int copiedSuggestion = 0;
   sqlite3_stmt *pStmt = 0;
   char *zSql;
   char zBuf[1000];
 
   if( nLine>sizeof(zBuf)-30 ) return;
   if( zLine[0]=='.' || zLine[0]=='#') return;
-  for(i=nLine-1; i>=0 && (isalnum(zLine[i]) || zLine[i]=='_'); i--){}
-  if( i==nLine-1 ) return;
-  iStart = i+1;
-  memcpy(zBuf, zLine, iStart);
-  zSql = sqlite3_mprintf("SELECT DISTINCT candidate COLLATE nocase"
-                         "  FROM completion(%Q,%Q) ORDER BY 1",
-                         &zLine[iStart], zLine);
-  sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
+//  if( i==nLine-1 ) return;
+  zSql = sqlite3_mprintf("CALL sql_auto_complete(%Q)", zLine);
+  sqlite3 *localDb = NULL;
+  if (!globalDb) {
+    sqlite3_open(":memory:", &localDb);
+    sqlite3_prepare_v2(localDb, zSql, -1, &pStmt, 0);
+  } else {
+    sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
+  }
   sqlite3_free(zSql);
-  sqlite3_exec(globalDb, "PRAGMA page_count", 0, 0, 0); /* Load the schema */
   while( sqlite3_step(pStmt)==SQLITE_ROW ){
     const char *zCompletion = (const char*)sqlite3_column_text(pStmt, 0);
-    int nCompletion = sqlite3_column_bytes(pStmt, 0);
+	int nCompletion = sqlite3_column_bytes(pStmt, 0);
+	int iStart = sqlite3_column_int(pStmt, 1);
     if( iStart+nCompletion < sizeof(zBuf)-1 ){
+		if (!copiedSuggestion) {
+			memcpy(zBuf, zLine, iStart);
+			copiedSuggestion = 1;
+		}
       memcpy(zBuf+iStart, zCompletion, nCompletion+1);
       linenoiseAddCompletion(lc, zBuf);
     }
   }
   sqlite3_finalize(pStmt);
+  if (localDb) {
+	  sqlite3_close(localDb);
+  }
 }
 #endif
 
@@ -18209,7 +18235,17 @@ static int do_meta_command(char *zLine, ShellState *p){
       p->pLog = output_file_open(zFile, 0);
     }
   }else
-
+  if( c=='m' && strncmp(azArg[0], "maxrows", n)==0 ){
+	if( nArg==1 ){
+      raw_printf(p->out, "current max rows: %zu\n", p->max_rows);
+	}else
+    if( nArg!=2 ){
+		raw_printf(stderr, "Usage: .maxrows COUNT\n");
+		rc = 1;
+	}else{
+	  p->max_rows = (size_t)integerValue(azArg[1]);
+	}
+  }else
   if( c=='m' && strncmp(azArg[0], "mode", n)==0 ){
     const char *zMode = nArg>=2 ? azArg[1] : "";
     int n2 = strlen30(zMode);
@@ -18257,6 +18293,8 @@ static int do_meta_command(char *zLine, ShellState *p){
       p->mode = MODE_Table;
     }else if( c2=='b' && strncmp(azArg[1],"box",n2)==0 ){
       p->mode = MODE_Box;
+    }else if( c2=='d' && strncmp(azArg[1],"duckbox",n2)==0 ){
+      p->mode = MODE_DuckBox;
     }else if( c2=='j' && strncmp(azArg[1],"json",n2)==0 ){
       p->mode = MODE_Json;
     }else if( c2=='l' && strncmp(azArg[1],"latex",n2)==0 ){
@@ -18269,7 +18307,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       raw_printf(p->out, "current output mode: %s\n", modeDescr[p->mode]);
     }else{
       raw_printf(stderr, "Error: mode should be one of: "
-         "ascii box column csv html insert json line list markdown "
+         "ascii duckbox box column csv html insert json line list markdown "
          "quote table tabs tcl latex trash \n");
       rc = 1;
     }
@@ -18326,7 +18364,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     sqlite3_free(p->zFreeOnClose);
     p->zFreeOnClose = 0;
     p->openMode = SHELL_OPEN_UNSPEC;
-    p->openFlags = 0;
+    p->openFlags = p->openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
     p->szMax = 0;
     /* Check for command-line arguments */
     for(iName=1; iName<nArg && azArg[iName][0]=='-'; iName++){
@@ -20340,7 +20378,8 @@ static void verify_uninitialized(void){
 */
 static void main_init(ShellState *data) {
   memset(data, 0, sizeof(*data));
-  data->normalMode = data->cMode = data->mode = MODE_Box;
+  data->normalMode = data->cMode = data->mode = MODE_DuckBox;
+  data->max_rows = 20;
   data->autoExplain = 1;
   memcpy(data->colSeparator,SEP_Column, 2);
   memcpy(data->rowSeparator,SEP_Row, 2);
@@ -20619,6 +20658,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
       data.openFlags = SQLITE_OPEN_NOFOLLOW;
+    }else if( strcmp(z,"-unsigned")==0 ){
+      data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 #if !defined(SQLITE_OMIT_VIRTUALTABLE) && defined(SQLITE_HAVE_ZLIB)
     }else if( strncmp(z, "-A",2)==0 ){
       /* All remaining command-line arguments are passed to the ".archive"

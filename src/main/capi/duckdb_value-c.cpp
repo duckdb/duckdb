@@ -23,7 +23,7 @@ duckdb_value duckdb_create_int64(int64_t input) {
 
 char *duckdb_get_varchar(duckdb_value value) {
 	auto val = (duckdb::Value *)value;
-	auto str_val = val->CastAs(duckdb::LogicalType::VARCHAR);
+	auto str_val = val->DefaultCastAs(duckdb::LogicalType::VARCHAR);
 	auto &str = duckdb::StringValue::Get(str_val);
 
 	auto result = (char *)malloc(sizeof(char *) * (str.size() + 1));
@@ -34,7 +34,7 @@ char *duckdb_get_varchar(duckdb_value value) {
 
 int64_t duckdb_get_int64(duckdb_value value) {
 	auto val = (duckdb::Value *)value;
-	if (!val->TryCastAs(duckdb::LogicalType::BIGINT)) {
+	if (!val->DefaultTryCastAs(duckdb::LogicalType::BIGINT)) {
 		return 0;
 	}
 	return duckdb::BigIntValue::Get(*val);

@@ -28,13 +28,13 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),
                                                  DUCKDB_LOCAL(DebugForceExternal),
                                                  DUCKDB_LOCAL(DebugForceNoCrossProduct),
-                                                 DUCKDB_GLOBAL(DebugManyFreeListBlocks),
                                                  DUCKDB_GLOBAL(DebugWindowMode),
                                                  DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
                                                  DUCKDB_GLOBAL(DefaultOrderSetting),
                                                  DUCKDB_GLOBAL(DefaultNullOrderSetting),
                                                  DUCKDB_GLOBAL(DisabledOptimizersSetting),
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
+                                                 DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
@@ -81,6 +81,14 @@ idx_t DBConfig::GetOptionCount() {
 	return count;
 }
 
+vector<std::string> DBConfig::GetOptionNames() {
+	vector<string> names;
+	for (idx_t i = 0, option_count = DBConfig::GetOptionCount(); i < option_count; i++) {
+		names.emplace_back(DBConfig::GetOptionByIndex(i)->name);
+	}
+	return names;
+}
+
 ConfigurationOption *DBConfig::GetOptionByIndex(idx_t target_index) {
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		if (index == target_index) {
@@ -105,13 +113,17 @@ void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) 
 	if (!option.set_global) {
 		throw InternalException("Could not set option \"%s\" as a global option", option.name);
 	}
-	Value input = value.CastAs(option.parameter_type);
+	Value input = value.DefaultCastAs(option.parameter_type);
 	option.set_global(nullptr, *this, input);
 }
 
 void DBConfig::AddExtensionOption(string name, string description, LogicalType parameter,
                                   set_option_callback_t function) {
 	extension_parameters.insert(make_pair(move(name), ExtensionOption(move(description), move(parameter), function)));
+}
+
+CastFunctionSet &DBConfig::GetCastFunctions() {
+	return *cast_functions;
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
@@ -164,6 +176,19 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit);
 	}
 	return (idx_t)multiplier * limit;
+}
+
+// Right now we only really care about access mode when comparing DBConfigs
+bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
+	return other.access_mode == access_mode;
+}
+
+bool DBConfig::operator==(const DBConfig &other) {
+	return other.options == options;
+}
+
+bool DBConfig::operator!=(const DBConfig &other) {
+	return !(other.options == options);
 }
 
 } // namespace duckdb

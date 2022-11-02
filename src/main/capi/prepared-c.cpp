@@ -7,6 +7,7 @@ using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::hugeint_t;
+using duckdb::LogicalType;
 using duckdb::MaterializedQueryResult;
 using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResultType;
@@ -46,11 +47,11 @@ duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return DUCKDB_TYPE_INVALID;
 	}
-	auto entry = wrapper->statement->data->value_map.find(param_idx);
-	if (entry == wrapper->statement->data->value_map.end()) {
+	LogicalType param_type;
+	if (!wrapper->statement->data->TryGetType(param_idx, param_type)) {
 		return DUCKDB_TYPE_INVALID;
 	}
-	return ConvertCPPTypeToC(entry->second->return_type);
+	return ConvertCPPTypeToC(param_type);
 }
 
 duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement) {

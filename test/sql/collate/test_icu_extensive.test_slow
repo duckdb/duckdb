@@ -74,7 +74,7 @@ INSERT INTO strings VALUES ('լ'), ('վ'), ('եւ'), ('գ'), ('Մ'), ('Ր'), ('�
 query T
 SELECT s FROM strings ORDER BY s, rowid
 ----
-79 values hashing to 7ed69d5c625d420262f8e70cf5caa84c
+79 values hashing to 8e5e7b9665264f52bec7df02ef2251f4
 
 statement ok
 ROLLBACK

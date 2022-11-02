@@ -198,7 +198,7 @@ class TestRelation(object):
         rel1 = con.table('t1')
         rel2 = con.table('t2')
         join = rel1.join(rel2, 'i=j', 'inner').aggregate('count()')
-        assert join.explain() == 'Aggregate [count_star()]\n  Join INNER i = j\n    Scan Table [t1]\n    Scan Table [t2]'
+        assert join.explain() == 'Aggregate [count_star()]\n  Join INNER (i = j)\n    Scan Table [t1]\n    Scan Table [t2]'
 
     def test_fetchnumpy(self, duckdb_cursor):
         start, stop = -1000, 2000

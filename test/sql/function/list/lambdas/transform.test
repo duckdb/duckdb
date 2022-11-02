@@ -76,10 +76,10 @@ NULL
 query I
 SELECT list_transform(l, x -> x < 2) FROM lists
 ----
-[True]
-[True, False, False]
+[true]
+[true, false, false]
 NULL
-[True, NULL, False]
+[true, NULL, false]
 
 # test other operators and more complex/nested functions
 
@@ -155,7 +155,7 @@ select list_apply(i, x -> (6 + 2 * 12) / x) from (values (list_value(1, 2, 3))) 
 query I
 select list_apply(i, x -> x + 1 AND x + 1) from (values (list_value(1, 2, 3))) tbl(i);
 ----
-[True, True, True]
+[true, true, true]
 
 # very large lists
 
@@ -178,6 +178,33 @@ True
 True
 True
 True
+
+# test structs (issue #5005)
+
+query I
+SELECT list_transform([{'a': 1}], x -> x.a);
+----
+[1]
+
+query I
+SELECT list_transform([{'a': [1, 2, 3]}], x -> x.a[2]);
+----
+[2]
+
+query I
+SELECT list_transform([{'b' : {'a': 1}}], x -> x.b.a);
+----
+[1]
+
+query I
+SELECT list_transform([{'b' : {'a': 42, 'b': 43}}], x -> x.b.b);
+----
+[43]
+
+query I
+SELECT list_transform([{'b' : {'a': [{'c': 77}], 'b': 43}}], x -> x.b.a[1].c);
+----
+[77]
 
 # test correlated subqueries
 
@@ -239,3 +266,24 @@ SELECT list_transform([1, 2, 3], x -> x + #1) FROM range(10)
 [8, 9, 10]
 [9, 10, 11]
 [10, 11, 12]
+
+# test for issue 4855
+
+statement ok
+create table test(a int, b int);
+
+statement ok
+insert into test values (1, 2), (1, 3), (1, 4), (2, 2), (2, 3), (2, 4), (3, 2), (3, 3), (3, 4);
+
+query III
+select list_transform(bb, x->[x,b]), bb, b
+from (select list(b) over wind as bb, first(b) over wind as b
+    from test window wind as
+        (order by a asc rows between 4 preceding and current row)
+    qualify row_number() over wind >4);
+----
+[[2, 2], [3, 2], [4, 2], [2, 2], [3, 2]]	[2, 3, 4, 2, 3]	2
+[[3, 3], [4, 3], [2, 3], [3, 3], [4, 3]]	[3, 4, 2, 3, 4]	3
+[[4, 4], [2, 4], [3, 4], [4, 4], [2, 4]]	[4, 2, 3, 4, 2]	4
+[[2, 2], [3, 2], [4, 2], [2, 2], [3, 2]]	[2, 3, 4, 2, 3]	2
+[[3, 3], [4, 3], [2, 3], [3, 3], [4, 3]]	[3, 4, 2, 3, 4]	3

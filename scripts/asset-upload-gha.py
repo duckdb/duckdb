@@ -54,7 +54,6 @@ def internal_gh_api(suburl, filename='', method='GET'):
 
 	req = urllib.request.Request(url, body_data, headers)
 	req.get_method = lambda: method
-
 	print(f'GH API URL: "{url}" Filename: "{filename}" Method: "{method}"')
 	raw_resp = urllib.request.urlopen(req).read().decode()
 

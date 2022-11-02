@@ -8,22 +8,30 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
+import java.util.Properties;
 
 public class DuckDBNative {
 	static {
 		try {
 			String os_name = "";
-			String os_arch = "";
+			String os_arch;
 			String os_name_detect = System.getProperty("os.name").toLowerCase().trim();
 			String os_arch_detect = System.getProperty("os.arch").toLowerCase().trim();
-			if (os_arch_detect.equals("x86_64") || os_arch_detect.equals("amd64")) {
-				os_arch = "amd64";
+			switch (os_arch_detect) {
+				case "x86_64":
+				case "amd64":
+					os_arch = "amd64";
+					break;
+				case "aarch64":
+				case "arm64":
+					os_arch = "arm64";
+					break;
+				case "i386":
+					os_arch = "i386";
+					break;
+				default:
+					throw new IllegalStateException("Unsupported system architecture");
 			}
-			if (os_arch_detect.equals("aarch64") || os_arch_detect.equals("arm64")) {
-				os_arch = "arm64";
-			}
-			// TODO 32 bit gunk
-
 			if (os_name_detect.startsWith("windows")) {
 				os_name = "windows";
 			} else if (os_name_detect.startsWith("mac")) {
@@ -56,7 +64,7 @@ public class DuckDBNative {
 	 */
 
 	// results db_ref database reference object
-	protected static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only) throws SQLException;
+	protected static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only, Properties props) throws SQLException;
 
 	protected static native void duckdb_jdbc_shutdown(ByteBuffer db_ref);
 
@@ -74,22 +82,20 @@ public class DuckDBNative {
 	// returns stmt_ref result reference object
 	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, byte[] query) throws SQLException;
 
-	protected static native String duckdb_jdbc_prepare_type(ByteBuffer stmt_ref) throws SQLException;
-
 	protected static native void duckdb_jdbc_release(ByteBuffer stmt_ref);
 
 	protected static native DuckDBResultSetMetaData duckdb_jdbc_meta(ByteBuffer stmt_ref) throws SQLException;
 
-	
 	// returns res_ref result reference object
 	protected static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params) throws SQLException;
-
 
 	protected static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
 
 	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref) throws SQLException;
 	
 	protected static native int duckdb_jdbc_fetch_size();
+
+	protected static native long duckdb_jdbc_arrow_stream(ByteBuffer appender_ref, long batch_size);
 
 	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name) throws SQLException;
 

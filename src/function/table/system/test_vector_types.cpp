@@ -118,7 +118,7 @@ struct TestVectorSequence {
 		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
-			result.Sequence(3, 2);
+			result.Sequence(3, 2, 3);
 			return;
 		default:
 			break;

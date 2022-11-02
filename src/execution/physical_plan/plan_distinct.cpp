@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -50,8 +51,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 			auto bound = make_unique<BoundReferenceExpression>(logical_type, i);
 			vector<unique_ptr<Expression>> first_children;
 			first_children.push_back(move(bound));
-			auto first_aggregate = AggregateFunction::BindAggregateFunction(
-			    context, FirstFun::GetFunction(logical_type), move(first_children), nullptr, false);
+
+			FunctionBinder function_binder(context);
+			auto first_aggregate = function_binder.BindAggregateFunction(
+			    FirstFun::GetFunction(logical_type), move(first_children), nullptr, AggregateType::NON_DISTINCT);
 			// add the projection
 			projections.push_back(make_unique<BoundReferenceExpression>(logical_type, group_count + aggregates.size()));
 			// push it to the list of aggregates

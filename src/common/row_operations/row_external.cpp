@@ -33,7 +33,7 @@ void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t bas
 			}
 			data_ptr_t col_ptr = row_ptr + layout.GetOffsets()[col_idx];
 			if (physical_type == PhysicalType::VARCHAR) {
-				data_ptr_t string_ptr = col_ptr + sizeof(uint32_t) + string_t::PREFIX_LENGTH;
+				data_ptr_t string_ptr = col_ptr + string_t::HEADER_SIZE;
 				for (idx_t i = 0; i < next; i++) {
 					if (Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH) {
 						// Overwrite the string pointer with the within-row offset (if not inlined)
@@ -99,6 +99,9 @@ void RowOperations::UnswizzleHeapPointer(const RowLayout &layout, const data_ptr
 
 static inline void VerifyUnswizzledString(const RowLayout &layout, const idx_t &col_idx, const data_ptr_t &row_ptr) {
 #ifdef DEBUG
+	if (layout.GetTypes()[col_idx] == LogicalTypeId::BLOB) {
+		return;
+	}
 	idx_t entry_idx;
 	idx_t idx_in_entry;
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
@@ -134,7 +137,7 @@ void RowOperations::UnswizzlePointers(const RowLayout &layout, const data_ptr_t 
 			}
 			data_ptr_t col_ptr = row_ptr + layout.GetOffsets()[col_idx];
 			if (physical_type == PhysicalType::VARCHAR) {
-				data_ptr_t string_ptr = col_ptr + sizeof(uint32_t) + string_t::PREFIX_LENGTH;
+				data_ptr_t string_ptr = col_ptr + string_t::HEADER_SIZE;
 				for (idx_t i = 0; i < next; i++) {
 					if (Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH) {
 						// Overwrite the string offset with the pointer (if not inlined)

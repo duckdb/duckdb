@@ -16,7 +16,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
-#include "duckdb/storage/table_index.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 
 namespace duckdb {
 class CatalogEntry;

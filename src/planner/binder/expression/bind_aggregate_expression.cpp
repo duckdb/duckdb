@@ -2,6 +2,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
@@ -10,6 +11,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -66,7 +69,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	for (auto &child : aggr.children) {
 		aggregate_binder.BindChild(child, 0, error);
 		// We have to invert the fractions for PERCENTILE_XXXX DESC
-		if (invert_fractions) {
+		if (error.empty() && invert_fractions) {
 			InvertPercentileFractions(child);
 		}
 	}
@@ -116,6 +119,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			// we didn't bind columns, try again in children
 			return BindResult(error);
 		}
+	} else if (depth > 0 && !aggregate_binder.HasBoundColumns()) {
+		return BindResult("Aggregate with only constant parameters has to be bound in the root subquery");
 	}
 	if (!filter_error.empty()) {
 		return BindResult(filter_error);
@@ -123,8 +128,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	if (aggr.filter) {
 		auto &child = (BoundExpression &)*aggr.filter;
-		bound_filter = move(child.expr);
+		bound_filter = BoundCastExpression::AddCastToType(context, move(child.expr), LogicalType::BOOLEAN);
 	}
+
 	// all children bound successfully
 	// extract the children and types
 	vector<LogicalType> types;
@@ -149,7 +155,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 
 	// bind the aggregate
-	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error);
+	FunctionBinder function_binder(context);
+	idx_t best_function = function_binder.BindFunction(func->name, func->functions, types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw BinderException(binder.FormatError(aggr, error));
 	}
@@ -171,8 +178,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		}
 	}
 
-	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children),
-	                                                          move(bound_filter), aggr.distinct, move(order_bys));
+	auto aggregate = function_binder.BindAggregateFunction(
+	    bound_function, move(children), move(bound_filter),
+	    aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT, move(order_bys));
 	if (aggr.export_state) {
 		aggregate = ExportAggregateFunction::Bind(move(aggregate));
 	}

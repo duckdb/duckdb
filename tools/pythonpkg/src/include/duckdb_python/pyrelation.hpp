@@ -173,7 +173,7 @@ public:
 	static unique_ptr<DuckDBPyRelation> DistinctDF(const DataFrame &df,
 	                                               DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
-	DataFrame ToDF();
+	DataFrame ToDF(bool date_as_object);
 
 	py::object Fetchone();
 
@@ -205,7 +205,7 @@ public:
 	// should this return a rel with the new view?
 	unique_ptr<DuckDBPyRelation> CreateView(const string &view_name, bool replace = true);
 
-	unique_ptr<DuckDBPyResult> Query(const string &view_name, const string &sql_query);
+	unique_ptr<DuckDBPyRelation> Query(const string &view_name, const string &sql_query);
 
 	unique_ptr<DuckDBPyResult> Execute();
 

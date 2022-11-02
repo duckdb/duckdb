@@ -25,6 +25,7 @@ struct CAPIReplacementScanInfo {
 	CAPIReplacementScanData *data;
 	string function_name;
 	vector<Value> parameters;
+	string error;
 };
 
 unique_ptr<TableFunctionRef> duckdb_capi_replacement_callback(ClientContext &context, const string &table_name,
@@ -33,6 +34,9 @@ unique_ptr<TableFunctionRef> duckdb_capi_replacement_callback(ClientContext &con
 
 	CAPIReplacementScanInfo info(&scan_data);
 	scan_data.callback((duckdb_replacement_scan_info)&info, table_name.c_str(), scan_data.extra_data);
+	if (!info.error.empty()) {
+		throw BinderException("Error in replacement scan: %s\n", info.error);
+	}
 	if (info.function_name.empty()) {
 		// no function provided: bail-out
 		return nullptr;
@@ -79,4 +83,12 @@ void duckdb_replacement_scan_add_parameter(duckdb_replacement_scan_info info_p, 
 	auto info = (duckdb::CAPIReplacementScanInfo *)info_p;
 	auto val = (duckdb::Value *)parameter;
 	info->parameters.push_back(*val);
+}
+
+void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info info_p, const char *error) {
+	if (!info_p || !error) {
+		return;
+	}
+	auto info = (duckdb::CAPIReplacementScanInfo *)info_p;
+	info->error = error;
 }

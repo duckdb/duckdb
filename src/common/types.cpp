@@ -17,6 +17,7 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/common/string_map_set.hpp"
 
 #include <cmath>
 
@@ -107,6 +108,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
 	case LogicalTypeId::MAP:
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::STRUCT:
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
@@ -208,7 +210,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,     LogicalType::USMALLINT,
 	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,         LogicalTypeId::LIST,
 	    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,
-	    LogicalType::UUID,     LogicalType::JSON};
+	    LogicalTypeId::UNION,  LogicalType::UUID,      LogicalType::JSON};
 	return types;
 }
 
@@ -392,6 +394,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "LAMBDA";
 	case LogicalTypeId::INVALID:
 		return "INVALID";
+	case LogicalTypeId::UNION:
+		return "UNION";
 	case LogicalTypeId::UNKNOWN:
 		return "UNKNOWN";
 	case LogicalTypeId::ENUM:
@@ -446,6 +450,21 @@ string LogicalType::ToString() const {
 		}
 		return "MAP(" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
 		       ListType::GetChildType(child_types[1].second).ToString() + ")";
+	}
+	case LogicalTypeId::UNION: {
+		if (!type_info_) {
+			return "UNION";
+		}
+		string ret = "UNION(";
+		size_t count = UnionType::GetMemberCount(*this);
+		for (size_t i = 0; i < count; i++) {
+			ret += UnionType::GetMemberType(*this, i).ToString();
+			if (i < count - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ")";
+		return ret;
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (!type_info_) {
@@ -672,6 +691,13 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
+	// we always prefer aliased types
+	if (!left.GetAlias().empty()) {
+		return left;
+	}
+	if (!right.GetAlias().empty()) {
+		return right;
+	}
 	if (left.id() != right.id() && left.IsNumeric() && right.IsNumeric()) {
 		return CombineNumericTypes(left, right);
 	} else if (left.id() == LogicalTypeId::UNKNOWN) {
@@ -733,8 +759,19 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
 			child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
 		}
+
 		return type_id == LogicalTypeId::STRUCT ? LogicalType::STRUCT(move(child_types))
 		                                        : LogicalType::MAP(move(child_types));
+	}
+	if (type_id == LogicalTypeId::UNION) {
+		auto left_member_count = UnionType::GetMemberCount(left);
+		auto right_member_count = UnionType::GetMemberCount(right);
+		if (left_member_count != right_member_count) {
+			// return the "larger" type, with the most members
+			return left_member_count > right_member_count ? left : right;
+		}
+		// otherwise, keep left, dont try to meld the two together.
+		return left;
 	}
 	// types are equal but no extra specifier: just return the type
 	return left;
@@ -806,6 +843,7 @@ public:
 				if (!alias.empty()) {
 					return false;
 				}
+				//! We only need to compare aliases when both types have them in this case
 				return true;
 			}
 			if (alias != other_p->alias) {
@@ -819,8 +857,7 @@ public:
 		if (type != other_p->type) {
 			return false;
 		}
-		auto &other = (ExtraTypeInfo &)*other_p;
-		return alias == other.alias && EqualsInternal(other_p);
+		return alias == other_p->alias && EqualsInternal(other_p);
 	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
 	virtual void Serialize(FieldWriter &writer) const {};
@@ -1115,7 +1152,9 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 }
 
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP);
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP ||
+	         type.id() == LogicalTypeId::UNION);
+
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((StructTypeInfo &)*info).child_types;
@@ -1170,6 +1209,43 @@ const LogicalType &MapType::KeyType(const LogicalType &type) {
 const LogicalType &MapType::ValueType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
 	return ListType::GetChildType(StructType::GetChildTypes(type)[1].second);
+}
+
+//===--------------------------------------------------------------------===//
+// Union Type
+//===--------------------------------------------------------------------===//
+
+LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
+	D_ASSERT(members.size() > 0);
+	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
+	// union types always have a hidden "tag" field in front
+	members.insert(members.begin(), {"", LogicalType::TINYINT});
+	auto info = make_shared<StructTypeInfo>(move(members));
+	return LogicalType(LogicalTypeId::UNION, move(info));
+}
+
+const LogicalType &UnionType::GetMemberType(const LogicalType &type, idx_t index) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(index < child_types.size());
+	// skip the "tag" field
+	return child_types[index + 1].second;
+}
+
+const string &UnionType::GetMemberName(const LogicalType &type, idx_t index) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(index < child_types.size());
+	// skip the "tag" field
+	return child_types[index + 1].first;
+}
+
+idx_t UnionType::GetMemberCount(const LogicalType &type) {
+	// dont count the "tag" field
+	return StructType::GetChildTypes(type).size() - 1;
+}
+const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &type) {
+	auto child_types = StructType::GetChildTypes(type);
+	child_types.erase(child_types.begin());
+	return child_types;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1272,8 +1348,22 @@ template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
 	explicit EnumTypeInfoTemplated(const string &enum_name_p, Vector &values_insert_order_p, idx_t size_p)
 	    : EnumTypeInfo(enum_name_p, values_insert_order_p, size_p) {
-		for (idx_t count = 0; count < size_p; count++) {
-			values[values_insert_order_p.GetValue(count).ToString()] = count;
+		D_ASSERT(values_insert_order_p.GetType().InternalType() == PhysicalType::VARCHAR);
+
+		UnifiedVectorFormat vdata;
+		values_insert_order.ToUnifiedFormat(size_p, vdata);
+
+		auto data = (string_t *)vdata.data;
+		for (idx_t i = 0; i < size_p; i++) {
+			auto idx = vdata.sel->get_index(i);
+			if (!vdata.validity.RowIsValid(idx)) {
+				throw InternalException("Attempted to create ENUM type with NULL value");
+			}
+			if (values.count(data[idx]) > 0) {
+				throw InvalidInputException("Attempted to create ENUM type with duplicate value %s",
+				                            data[idx].GetString());
+			}
+			values[data[idx]] = i;
 		}
 	}
 
@@ -1283,7 +1373,8 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		values_insert_order.Deserialize(size, reader.GetSource());
 		return make_shared<EnumTypeInfoTemplated>(move(enum_name), values_insert_order, size);
 	}
-	unordered_map<string, T> values;
+
+	string_map_t<T> values;
 };
 
 const string &EnumType::GetTypeName(const LogicalType &type) {
@@ -1333,14 +1424,15 @@ LogicalType LogicalType::DEDUP_POINTER_ENUM() { // NOLINT
 }
 
 template <class T>
-int64_t TemplatedGetPos(unordered_map<string, T> &map, const string &key) {
+int64_t TemplatedGetPos(string_map_t<T> &map, const string_t &key) {
 	auto it = map.find(key);
 	if (it == map.end()) {
 		return -1;
 	}
 	return it->second;
 }
-int64_t EnumType::GetPos(const LogicalType &type, const string &key) {
+
+int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 	auto info = type.AuxInfo();
 	switch (type.InternalType()) {
 	case PhysicalType::UINT8:
@@ -1427,7 +1519,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 			return make_shared<ExtraTypeInfo>(type, alias);
 		}
 		return nullptr;
-	} break;
+	}
 	case ExtraTypeInfoType::GENERIC_TYPE_INFO: {
 		extra_info = make_shared<ExtraTypeInfo>(type);
 	} break;
@@ -1499,10 +1591,7 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 	return LogicalType(id, move(info));
 }
 
-bool LogicalType::operator==(const LogicalType &rhs) const {
-	if (id_ != rhs.id_) {
-		return false;
-	}
+bool LogicalType::EqualTypeInfo(const LogicalType &rhs) const {
 	if (type_info_.get() == rhs.type_info_.get()) {
 		return true;
 	}
@@ -1512,6 +1601,13 @@ bool LogicalType::operator==(const LogicalType &rhs) const {
 		D_ASSERT(rhs.type_info_);
 		return rhs.type_info_->Equals(type_info_.get());
 	}
+}
+
+bool LogicalType::operator==(const LogicalType &rhs) const {
+	if (id_ != rhs.id_) {
+		return false;
+	}
+	return EqualTypeInfo(rhs);
 }
 
 } // namespace duckdb

@@ -3,13 +3,13 @@
 #include "duckdb.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb/common/types/vector_buffer.hpp"
 
 namespace duckdb {
 
@@ -197,9 +197,8 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	auto stream_factory_ptr = input.inputs[0].GetPointer();
 	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();
 	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer();
-	auto rows_per_thread = input.inputs[3].GetValue<uint64_t>();
 
-	auto res = make_unique<ArrowScanFunctionData>(rows_per_thread, stream_factory_produce, stream_factory_ptr);
+	auto res = make_unique<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
 
 	auto &data = *res;
 	stream_factory_get_schema(stream_factory_ptr, data.schema_root);
@@ -223,6 +222,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		names.push_back(name);
 	}
 	RenameArrowColumns(names);
+	res->all_types = return_types;
 	return move(res);
 }
 
@@ -244,17 +244,17 @@ unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData
 }
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	if (bind_data.number_of_rows <= 0 || ClientConfig::GetConfig(context).verify_parallelism) {
-		return context.db->NumberOfThreads();
-	}
-	return ((bind_data.number_of_rows + bind_data.rows_per_thread - 1) / bind_data.rows_per_thread) + 1;
+	return context.db->NumberOfThreads();
 }
 
 bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p, ArrowScanLocalState &state,
                                 ArrowScanGlobalState &parallel_state) {
 	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
+	if (parallel_state.done) {
+		return false;
+	}
 	state.chunk_offset = 0;
+	state.batch_index = ++parallel_state.batch_index;
 
 	auto current_chunk = parallel_state.stream->GetNextChunk();
 	while (current_chunk->arrow_array.length == 0 && current_chunk->arrow_array.release) {
@@ -263,6 +263,7 @@ bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	state.chunk = move(current_chunk);
 	//! have we run out of chunks? we are done
 	if (!state.chunk->arrow_array.release) {
+		parallel_state.done = true;
 		return false;
 	}
 	return true;
@@ -274,6 +275,16 @@ unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(Cli
 	auto result = make_unique<ArrowScanGlobalState>();
 	result->stream = ProduceArrowScan(bind_data, input.column_ids, input.filters);
 	result->max_threads = ArrowScanMaxThreads(context, input.bind_data);
+	if (input.CanRemoveFilterColumns()) {
+		result->projection_ids = input.projection_ids;
+		for (const auto &col_idx : input.column_ids) {
+			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+			} else {
+				result->scanned_types.push_back(bind_data.all_types[col_idx]);
+			}
+		}
+	}
 	return move(result);
 }
 
@@ -285,6 +296,10 @@ unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(Execu
 	auto result = make_unique<ArrowScanLocalState>(move(current_chunk));
 	result->column_ids = input.column_ids;
 	result->filters = input.filters;
+	if (input.CanRemoveFilterColumns()) {
+		auto &asgs = (ArrowScanGlobalState &)*global_state_p;
+		result->all_columns.Initialize(context.client, asgs.scanned_types);
+	}
 	if (!ArrowScanParallelStateNext(context.client, input.bind_data, *result, global_state)) {
 		return nullptr;
 	}
@@ -307,35 +322,38 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 	}
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
-	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
+	if (global_state.CanRemoveFilterColumns()) {
+		state.all_columns.Reset();
+		state.all_columns.SetCardinality(output_size);
+		ArrowToDuckDB(state, data.arrow_convert_data, state.all_columns, data.lines_read - output_size);
+		output.ReferenceColumns(state.all_columns, global_state.projection_ids);
+	} else {
+		output.SetCardinality(output_size);
+		ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
+	}
+
 	output.Verify();
 	state.chunk_offset += output.size();
 }
 
 unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContext &context, const FunctionData *data) {
-	auto &bind_data = (ArrowScanFunctionData &)*data;
-	return make_unique<NodeStatistics>(bind_data.number_of_rows, bind_data.number_of_rows);
+	return make_unique<NodeStatistics>();
 }
 
-double ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p,
-                                         const GlobalTableFunctionState *global_state) {
-	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	if (bind_data.number_of_rows == 0) {
-		return 100;
-	}
-	auto percentage = bind_data.lines_read * 100.0 / bind_data.number_of_rows;
-	return percentage;
+idx_t ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p, LocalTableFunctionState *local_state,
+                         GlobalTableFunctionState *global_state) {
+	auto &state = (ArrowScanLocalState &)*local_state;
+	return state.batch_index;
 }
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction arrow("arrow_scan",
-	                    {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER, LogicalType::UBIGINT},
+	TableFunction arrow("arrow_scan", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
 	                    ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow.cardinality = ArrowScanCardinality;
+	arrow.get_batch_index = ArrowGetBatchIndex;
 	arrow.projection_pushdown = true;
 	arrow.filter_pushdown = true;
-	arrow.table_scan_progress = ArrowProgress;
+	arrow.filter_prune = true;
 	set.AddFunction(arrow);
 }
 

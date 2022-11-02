@@ -5,6 +5,8 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 #include "datetime.h" //from python
 
@@ -50,6 +52,42 @@ enum class PyDecimalExponentType {
 };
 
 struct PyDecimal {
+
+	struct PyDecimalScaleConverter {
+		template <typename T, typename = std::enable_if<std::numeric_limits<T>::is_integer, T>>
+		static Value Operation(bool signed_value, vector<uint8_t> &digits, uint8_t width, uint8_t scale) {
+			T value = 0;
+			for (auto it = digits.begin(); it != digits.end(); it++) {
+				value = value * 10 + *it;
+			}
+			if (signed_value) {
+				value = -value;
+			}
+			return Value::DECIMAL(value, width, scale);
+		}
+	};
+
+	struct PyDecimalPowerConverter {
+		template <typename T, typename = std::enable_if<std::numeric_limits<T>::is_integer, T>>
+		static Value Operation(bool signed_value, vector<uint8_t> &digits, uint8_t width, uint8_t scale) {
+			T value = 0;
+			for (auto &digit : digits) {
+				value = value * 10 + digit;
+			}
+			D_ASSERT(scale >= 0);
+			int64_t multiplier =
+			    NumericHelper::POWERS_OF_TEN[MinValue<uint8_t>(scale, NumericHelper::CACHED_POWERS_OF_TEN - 1)];
+			for (auto power = scale; power > NumericHelper::CACHED_POWERS_OF_TEN; power--) {
+				multiplier *= 10;
+			}
+			value *= multiplier;
+			if (signed_value) {
+				value = -value;
+			}
+			return Value::DECIMAL(value, width, scale);
+		}
+	};
+
 public:
 	PyDecimal(py::handle &obj);
 	vector<uint8_t> digits;
@@ -64,6 +102,7 @@ public:
 
 private:
 	void SetExponent(py::handle &exponent);
+	py::handle &obj;
 };
 
 struct PyTimeDelta {

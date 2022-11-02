@@ -26,6 +26,8 @@ class ColumnDataCollection {
 public:
 	//! Constructs an in-memory column data collection from an allocator
 	DUCKDB_API ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
+	//! Constructs an empty (but valid) in-memory column data collection from an allocator
+	DUCKDB_API ColumnDataCollection(Allocator &allocator);
 	//! Constructs a buffer-managed column data collection
 	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
 	//! Constructs either an in-memory or a buffer-managed column data collection
@@ -40,6 +42,7 @@ public:
 	DUCKDB_API ~ColumnDataCollection();
 
 public:
+	//! The types of columns in the ColumnDataCollection
 	DUCKDB_API vector<LogicalType> &Types() {
 		return types;
 	}
@@ -133,10 +136,10 @@ public:
 	void ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result,
 	                 idx_t chunk_index, idx_t segment_index, idx_t row_index) const;
 
-private:
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
 
+private:
 	//! Creates a new segment within the ColumnDataCollection
 	void CreateSegment();
 

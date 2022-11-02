@@ -20,6 +20,7 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -126,18 +127,31 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 	if (type.id() == LogicalTypeId::LIST) {
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, schema);
+		auto alias = type.GetAlias();
 		type = LogicalType::LIST(child_type);
+		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
 			BindLogicalType(context, child_type.second, schema);
 		}
 		// Generate new Struct/Map Type
+		auto alias = type.GetAlias();
 		if (type.id() == LogicalTypeId::STRUCT) {
 			type = LogicalType::STRUCT(child_types);
 		} else {
 			type = LogicalType::MAP(child_types);
 		}
+		type.SetAlias(alias);
+	} else if (type.id() == LogicalTypeId::UNION) {
+		auto member_types = UnionType::CopyMemberTypes(type);
+		for (auto &member_type : member_types) {
+			BindLogicalType(context, member_type.second, schema);
+		}
+		// Generate new Union Type
+		auto alias = type.GetAlias();
+		type = LogicalType::UNION(member_types);
+		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto &catalog = Catalog::GetCatalog(context);
 		type = catalog.GetType(context, schema, UserType::GetTypeName(type));
@@ -328,6 +342,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::INDEX_ENTRY: {
 		auto &base = (CreateIndexInfo &)*stmt.info;
+
 		// visit the table reference
 		auto bound_table = Bind(*base.table);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
@@ -335,6 +350,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 		auto &table_binding = (BoundBaseTableRef &)*bound_table;
 		auto table = table_binding.table;
+
 		// bind the index expressions
 		vector<unique_ptr<Expression>> expressions;
 		IndexBinder binder(*this, context);
@@ -346,17 +362,25 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
 			throw BinderException("Cannot create index on a view!");
 		}
+
 		auto &get = (LogicalGet &)*plan;
 		for (auto &column_id : get.column_ids) {
 			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot create an index on the rowid!");
 			}
 		}
-		// this gives us a logical table scan
-		// we take the required columns from here
-		// create the logical operator
-		result.plan = make_unique<LogicalCreateIndex>(*table, get.column_ids, move(expressions),
-		                                              unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)));
+
+		auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info));
+		for (auto &index : get.column_ids) {
+			create_index_info->scan_types.push_back(get.returned_types[index]);
+		}
+		create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
+		create_index_info->names = get.names;
+		create_index_info->column_ids = get.column_ids;
+
+		// the logical CREATE INDEX also needs all fields to scan the referenced table
+		result.plan = make_unique<LogicalCreateIndex>(move(get.bind_data), move(create_index_info), move(expressions),
+		                                              *table, move(get.function));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
@@ -428,7 +452,45 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
+		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
+		if (create_type_info.query) {
+			// CREATE TYPE mood AS ENUM (SELECT 'happy')
+			auto &select_stmt = (SelectStatement &)*create_type_info.query;
+			auto &query_node = *select_stmt.node;
+
+			// We always add distinct modifier implicitly
+			bool need_to_add = true;
+			if (!query_node.modifiers.empty()) {
+				if (query_node.modifiers[0]->type == ResultModifierType::DISTINCT_MODIFIER) {
+					// There are cases where the same column is grouped repeatedly
+					// CREATE TYPE mood AS ENUM (SELECT DISTINCT ON(x) x FROM test);
+					// When we push into a constant expression
+					// => CREATE TYPE mood AS ENUM (SELECT DISTINCT ON(x, x) x FROM test);
+					auto &distinct_modifier = (DistinctModifier &)*query_node.modifiers[0];
+					distinct_modifier.distinct_on_targets.push_back(make_unique<ConstantExpression>(Value::INTEGER(1)));
+					need_to_add = false;
+				}
+			}
+
+			// Add distinct modifier
+			if (need_to_add) {
+				auto distinct_modifier = make_unique<DistinctModifier>();
+				distinct_modifier->distinct_on_targets.push_back(make_unique<ConstantExpression>(Value::INTEGER(1)));
+				query_node.modifiers.emplace(query_node.modifiers.begin(), move(distinct_modifier));
+			}
+
+			auto query_obj = Bind(*create_type_info.query);
+			auto query = move(query_obj.plan);
+
+			auto &sql_types = query_obj.types;
+			if (sql_types.size() != 1 || sql_types[0].id() != LogicalType::VARCHAR) {
+				// add cast expression?
+				throw BinderException("The query must return one varchar column");
+			}
+
+			result.plan->AddChild(move(query));
+		}
 		break;
 	}
 	default:

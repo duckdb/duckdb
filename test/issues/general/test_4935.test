@@ -1,0 +1,19 @@
+# name: test/issues/general/test_4935.test
+# group: [general]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t1(a int);
+
+statement ok
+CREATE TABLE t2(x int, y int, z int, w int);
+
+statement ok
+SELECT v1.a, v2.a, v3.a, v4.a, v5.a, v6.a, v7.a, v8.a
+FROM t1 AS v1, t1 AS v2, t1 AS v3, t1 AS v4, t1 AS v5, t1 AS v6, t1 AS v7, t1 AS v8,
+     t2 AS f1, t2 as f2
+WHERE
+f1.x = v1.a AND f1.y = v3 AND f1.z = v4 AND f1.w = v5 AND
+f2.x = v2.a AND f2.y = v6 AND f2.z = v7 AND f2.w = v8;

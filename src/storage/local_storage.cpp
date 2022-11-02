@@ -6,66 +6,104 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
 
-LocalTableStorage::LocalTableStorage(DataTable &table)
-    : table(table), allocator(Allocator::Get(table.db)), collection(allocator), active_scans(0) {
-	Clear();
+//===--------------------------------------------------------------------===//
+// OptimisticDataWriter
+//===--------------------------------------------------------------------===//
+OptimisticDataWriter::OptimisticDataWriter(DataTable *table) : table(table) {
 }
 
-LocalTableStorage::~LocalTableStorage() {
+OptimisticDataWriter::OptimisticDataWriter(DataTable *table, OptimisticDataWriter &parent)
+    : table(table), partial_manager(move(parent.partial_manager)), written_blocks(move(parent.written_blocks)) {
+	if (partial_manager) {
+		partial_manager->FlushPartialBlocks();
+	}
 }
 
-void LocalTableStorage::InitializeScan(LocalScanState &state, TableFilterSet *table_filters) {
-	state.table_filters = table_filters;
-	state.chunk_index = 0;
-	if (collection.ChunkCount() == 0) {
-		// nothing to scan
-		state.max_index = 0;
-		state.last_chunk_count = 0;
+OptimisticDataWriter::~OptimisticDataWriter() {
+}
+
+void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
+	// we finished writing a complete row group
+	// check if we should pre-emptively write it to disk
+	if (table->info->IsTemporary() || StorageManager::GetStorageManager(table->db).InMemory()) {
 		return;
 	}
-	state.SetStorage(shared_from_this());
-
-	state.max_index = collection.ChunkCount() - 1;
-	state.last_chunk_count = collection.Chunks().back()->size();
+	// we should! write the second-to-last row group to disk
+	// allocate the partial block-manager if none is allocated yet
+	if (!partial_manager) {
+		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
+		partial_manager = make_unique<PartialBlockManager>(block_manager);
+	}
+	// flush second-to-last row group
+	auto row_group = row_groups.GetRowGroup(-2);
+	FlushToDisk(row_group);
 }
 
-idx_t LocalTableStorage::EstimatedSize() {
-	idx_t appended_rows = collection.Count() - deleted_rows;
-	if (appended_rows == 0) {
-		return 0;
+void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
+	// flush the specified row group
+	D_ASSERT(row_group);
+	//! The set of column compression types (if any)
+	vector<CompressionType> compression_types;
+	D_ASSERT(compression_types.empty());
+	for (auto &column : table->column_definitions) {
+		compression_types.push_back(column.CompressionType());
 	}
-	idx_t row_size = 0;
-	for (auto &type : collection.Types()) {
-		row_size += GetTypeIdSize(type.InternalType());
-	}
-	return appended_rows * row_size;
-}
+	auto row_group_pointer = row_group->WriteToDisk(*partial_manager, compression_types);
 
-LocalScanState::~LocalScanState() {
-	SetStorage(nullptr);
-}
-
-void LocalScanState::SetStorage(shared_ptr<LocalTableStorage> new_storage) {
-	if (storage) {
-		D_ASSERT(storage->active_scans > 0);
-		storage->active_scans--;
-	}
-	storage = move(new_storage);
-	if (storage) {
-		storage->active_scans++;
+	// update the set of written blocks
+	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
+		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
 	}
 }
 
-void LocalTableStorage::Clear() {
-	collection.Reset();
-	deleted_entries.clear();
-	indexes.clear();
-	deleted_rows = 0;
+void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups) {
+	if (!partial_manager) {
+		// no partial manager - nothing to flush
+		return;
+	}
+	// flush the last row group
+	FlushToDisk(row_groups.GetRowGroup(-1));
+}
+
+void OptimisticDataWriter::FinalFlush() {
+	if (!partial_manager) {
+		return;
+	}
+	// then flush the partial manager
+	partial_manager->FlushPartialBlocks();
+	partial_manager.reset();
+}
+
+void OptimisticDataWriter::Rollback() {
+	if (partial_manager) {
+		partial_manager->Clear();
+		partial_manager.reset();
+	}
+	if (!written_blocks.empty()) {
+		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
+		for (auto block_id : written_blocks) {
+			block_manager.MarkBlockAsModified(block_id);
+		}
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Local Table Storage
+//===--------------------------------------------------------------------===//
+LocalTableStorage::LocalTableStorage(DataTable &table)
+    : table(&table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(&table) {
+	auto types = table.GetTypes();
+	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
+	                                             types, MAX_ROW_ID, 0);
+	row_groups->InitializeEmpty();
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
 		auto &art = (ART &)index;
@@ -75,339 +113,124 @@ void LocalTableStorage::Clear() {
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.push_back(make_unique<ART>(art.column_ids, move(unbound_expressions), art.constraint_type, art.db));
+			indexes.AddIndex(make_unique<ART>(art.column_ids, art.table_io_manager, move(unbound_expressions),
+			                                  art.constraint_type, art.db));
 		}
 		return false;
 	});
 }
 
-void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state, TableFilterSet *table_filters) {
-	auto entry = table_storage.find(table);
-	if (entry == table_storage.end()) {
-		// no local storage for table: set scan to nullptr
-		state.SetStorage(nullptr);
+LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t changed_idx,
+                                     const LogicalType &target_type, const vector<column_t> &bound_columns,
+                                     Expression &cast_expr)
+    : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
+      optimistic_writer(table, parent.optimistic_writer) {
+	row_groups = parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr);
+	parent.row_groups.reset();
+	indexes.Move(parent.indexes);
+}
+
+LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
+    : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
+      optimistic_writer(table, parent.optimistic_writer) {
+	row_groups = parent.row_groups->RemoveColumn(drop_idx);
+	parent.row_groups.reset();
+	indexes.Move(parent.indexes);
+}
+
+LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column,
+                                     Expression *default_value)
+    : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
+      optimistic_writer(table, parent.optimistic_writer) {
+	row_groups = parent.row_groups->AddColumn(new_column, default_value);
+	parent.row_groups.reset();
+	indexes.Move(parent.indexes);
+}
+
+LocalTableStorage::~LocalTableStorage() {
+}
+
+void LocalTableStorage::InitializeScan(CollectionScanState &state, TableFilterSet *table_filters) {
+	if (row_groups->GetTotalRows() == 0) {
+		// nothing to scan
 		return;
 	}
-	auto storage = entry->second.get();
-	storage->InitializeScan(state, table_filters);
+	row_groups->InitializeScan(state, state.GetColumnIds(), table_filters);
 }
 
-void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result) {
-	auto storage = state.GetStorage();
-	if (!storage || state.chunk_index > state.max_index) {
-		// nothing left to scan
-		result.Reset();
+idx_t LocalTableStorage::EstimatedSize() {
+	idx_t appended_rows = row_groups->GetTotalRows() - deleted_rows;
+	if (appended_rows == 0) {
+		return 0;
+	}
+	idx_t row_size = 0;
+	auto &types = row_groups->GetTypes();
+	for (auto &type : types) {
+		row_size += GetTypeIdSize(type.InternalType());
+	}
+	return appended_rows * row_size;
+}
+
+void LocalTableStorage::CheckFlushToDisk() {
+	if (deleted_rows != 0) {
+		// we have deletes - we cannot merge row groups
 		return;
 	}
-	auto &chunk = storage->collection.GetChunk(state.chunk_index);
-	idx_t chunk_count = state.chunk_index == state.max_index ? state.last_chunk_count : chunk.size();
-	idx_t count = chunk_count;
-
-	// first create a selection vector from the deleted entries (if any)
-	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
-	auto entry = storage->deleted_entries.find(state.chunk_index);
-	if (entry != storage->deleted_entries.end()) {
-		// deleted entries! create a selection vector
-		auto deleted = entry->second.get();
-		idx_t new_count = 0;
-		for (idx_t i = 0; i < count; i++) {
-			if (!deleted[i]) {
-				valid_sel.set_index(new_count++, i);
-			}
-		}
-		if (new_count == 0 && count > 0) {
-			// all entries in this chunk were deleted: continue to next chunk
-			state.chunk_index++;
-			Scan(state, column_ids, result);
-			return;
-		}
-		count = new_count;
-	}
-
-	SelectionVector sel;
-	if (count != chunk_count) {
-		sel.Initialize(valid_sel);
-	} else {
-		sel.Initialize(nullptr);
-	}
-	// now scan the vectors of the chunk
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto id = column_ids[i];
-		if (id == COLUMN_IDENTIFIER_ROW_ID) {
-			// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
-			result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1);
-		} else {
-			result.data[i].Reference(chunk.data[id]);
-		}
-		idx_t approved_tuple_count = count;
-		if (state.table_filters) {
-			auto column_filters = state.table_filters->filters.find(i);
-			if (column_filters != state.table_filters->filters.end()) {
-				//! We have filters to apply here
-				auto &mask = FlatVector::Validity(result.data[i]);
-				ColumnSegment::FilterSelection(sel, result.data[i], *column_filters->second, approved_tuple_count,
-				                               mask);
-				count = approved_tuple_count;
-			}
-		}
-	}
-	if (count == 0) {
-		// all entries in this chunk were filtered:: Continue on next chunk
-		state.chunk_index++;
-		Scan(state, column_ids, result);
-		return;
-	}
-	if (count == chunk_count) {
-		result.SetCardinality(count);
-	} else {
-		result.Slice(sel, count);
-	}
-	state.chunk_index++;
+	optimistic_writer.CheckFlushToDisk(*row_groups);
 }
 
-void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
-	auto entry = table_storage.find(table);
-	LocalTableStorage *storage;
-	if (entry == table_storage.end()) {
-		auto new_storage = make_shared<LocalTableStorage>(*table);
-		storage = new_storage.get();
-		table_storage.insert(make_pair(table, move(new_storage)));
-	} else {
-		storage = entry->second.get();
-	}
-	// append to unique indices (if any)
-	if (!storage->indexes.empty()) {
-		idx_t base_id = MAX_ROW_ID + storage->collection.Count();
-
-		// first generate the vector of row identifiers
-		Vector row_ids(LogicalType::ROW_TYPE);
-		VectorOperations::GenerateSequence(row_ids, chunk.size(), base_id, 1);
-
-		// now append the entries to the indices
-		for (auto &index : storage->indexes) {
-			if (!index->Append(chunk, row_ids)) {
-				throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
-			}
-		}
-	}
-	//! Append to the chunk
-	storage->collection.Append(chunk);
-	if (storage->active_scans == 0 && storage->collection.Count() >= RowGroup::ROW_GROUP_SIZE * 2) {
-		// flush to base storage
-		Flush(*table, *storage);
-	}
+void LocalTableStorage::FlushToDisk() {
+	optimistic_writer.FlushToDisk(*row_groups);
+	optimistic_writer.FinalFlush();
 }
 
-LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
-	auto entry = table_storage.find(table);
-	D_ASSERT(entry != table_storage.end());
-	return entry->second.get();
-}
-
-idx_t LocalStorage::EstimatedSize() {
-	idx_t estimated_size = 0;
-	for (auto &storage : table_storage) {
-		estimated_size += storage.second->EstimatedSize();
-	}
-	return estimated_size;
-}
-
-static idx_t GetChunk(Vector &row_ids) {
-	auto ids = FlatVector::GetData<row_t>(row_ids);
-	auto first_id = ids[0] - MAX_ROW_ID;
-
-	return first_id / STANDARD_VECTOR_SIZE;
-}
-
-idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
-	auto storage = GetStorage(table);
-	// figure out the chunk from which these row ids came
-	idx_t chunk_idx = GetChunk(row_ids);
-	D_ASSERT(chunk_idx < storage->collection.ChunkCount());
-
-	// delete from unique indices (if any)
-	if (!storage->indexes.empty()) {
-		// Index::Delete assumes that ALL rows are being deleted, so
-		// Slice out the rows that are being deleted from the storage Chunk
-		auto &chunk = storage->collection.GetChunk(chunk_idx);
-
-		UnifiedVectorFormat row_ids_data;
-		row_ids.ToUnifiedFormat(count, row_ids_data);
-		auto row_identifiers = (const row_t *)row_ids_data.data;
-		SelectionVector sel(count);
-		for (idx_t i = 0; i < count; ++i) {
-			const auto idx = row_ids_data.sel->get_index(i);
-			sel.set_index(i, row_identifiers[idx] - MAX_ROW_ID);
-		}
-
-		DataChunk deleted;
-		deleted.InitializeEmpty(chunk.GetTypes());
-		deleted.Slice(chunk, sel, count);
-		for (auto &index : storage->indexes) {
-			index->Delete(deleted, row_ids);
-		}
-	}
-
-	// get a pointer to the deleted entries for this chunk
-	bool *deleted;
-	auto entry = storage->deleted_entries.find(chunk_idx);
-	if (entry == storage->deleted_entries.end()) {
-		// nothing deleted yet, add the deleted entries
-		auto del_entries = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
-		memset(del_entries.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
-		deleted = del_entries.get();
-		storage->deleted_entries.insert(make_pair(chunk_idx, move(del_entries)));
-	} else {
-		deleted = entry->second.get();
-	}
-
-	// now actually mark the entries as deleted in the deleted vector
-	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
-
-	idx_t deleted_count = 0;
-	auto ids = FlatVector::GetData<row_t>(row_ids);
-	for (idx_t i = 0; i < count; i++) {
-		auto id = ids[i] - base_index;
-		if (!deleted[id]) {
-			deleted_count++;
-		}
-		deleted[id] = true;
-	}
-	storage->deleted_rows += deleted_count;
-	return deleted_count;
-}
-
-template <class T>
-static void TemplatedUpdateLoop(Vector &data_vector, Vector &update_vector, Vector &row_ids, idx_t count,
-                                idx_t base_index) {
-	UnifiedVectorFormat udata;
-	update_vector.ToUnifiedFormat(count, udata);
-
-	auto target = FlatVector::GetData<T>(data_vector);
-	auto &mask = FlatVector::Validity(data_vector);
-	auto ids = FlatVector::GetData<row_t>(row_ids);
-	auto updates = (T *)udata.data;
-
-	for (idx_t i = 0; i < count; i++) {
-		auto uidx = udata.sel->get_index(i);
-
-		auto id = ids[i] - base_index;
-		target[id] = updates[uidx];
-		mask.Set(id, udata.validity.RowIsValid(uidx));
-	}
-}
-
-static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t count, idx_t base_index) {
-	D_ASSERT(data.GetType() == updates.GetType());
-	D_ASSERT(row_ids.GetType() == LogicalType::ROW_TYPE);
-
-	switch (data.GetType().InternalType()) {
-	case PhysicalType::INT8:
-		TemplatedUpdateLoop<int8_t>(data, updates, row_ids, count, base_index);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedUpdateLoop<uint8_t>(data, updates, row_ids, count, base_index);
-		break;
-	case PhysicalType::INT16:
-		TemplatedUpdateLoop<int16_t>(data, updates, row_ids, count, base_index);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedUpdateLoop<uint16_t>(data, updates, row_ids, count, base_index);
-		break;
-	case PhysicalType::INT32:
-		TemplatedUpdateLoop<int32_t>(data, updates, row_ids, count, base_index);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedUpdateLoop<uint32_t>(data, updates, row_ids, count, base_index);
-		break;
-	case PhysicalType::INT64:
-		TemplatedUpdateLoop<int64_t>(data, updates, row_ids, count, base_index);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedUpdateLoop<uint64_t>(data, updates, row_ids, count, base_index);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedUpdateLoop<float>(data, updates, row_ids, count, base_index);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedUpdateLoop<double>(data, updates, row_ids, count, base_index);
-		break;
-	case PhysicalType::VARCHAR:
-		TemplatedUpdateLoop<string_t>(data, updates, row_ids, count, base_index);
-		break;
-	default:
-		throw Exception("Unsupported type for in-place update: " + TypeIdToString(data.GetType().InternalType()));
-	}
-}
-
-void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &data) {
-	auto storage = GetStorage(table);
-	// figure out the chunk from which these row ids came
-	idx_t chunk_idx = GetChunk(row_ids);
-	D_ASSERT(chunk_idx < storage->collection.ChunkCount());
-
-	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
-
-	// now perform the actual update
-	auto &chunk = storage->collection.GetChunk(chunk_idx);
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto col_idx = column_ids[i];
-		UpdateChunk(chunk.data[col_idx], data.data[i], row_ids, data.size(), base_index);
-	}
-}
-
-template <class T>
-bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
-	vector<column_t> column_ids;
-	column_ids.reserve(table.column_definitions.size());
-	for (idx_t i = 0; i < table.column_definitions.size(); i++) {
-		column_ids.push_back(i);
-	}
-
-	DataChunk chunk;
-	chunk.Initialize(storage.allocator, table.GetTypes());
-
-	// initialize the scan
-	LocalScanState state;
-	storage.InitializeScan(state);
-
-	while (true) {
-		Scan(state, column_ids, chunk);
-		if (chunk.size() == 0) {
-			return true;
-		}
-		if (!fun(chunk)) {
-			return false;
-		}
-	}
-}
-
-void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
-	if (storage.collection.Count() <= storage.deleted_rows) {
-		return;
-	}
-	idx_t append_count = storage.collection.Count() - storage.deleted_rows;
-	TableAppendState append_state;
-	table.InitializeAppend(transaction, append_state, append_count);
-
+void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
+                                        bool append_to_table) {
 	bool constraint_violated = false;
-	ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
-		// append this chunk to the indexes of the table
-		if (!table.AppendToIndexes(append_state, chunk, append_state.current_row)) {
-			constraint_violated = true;
-			return false;
-		}
-		// append to base table
-		table.Append(transaction, chunk, append_state);
-		return true;
-	});
+	if (append_to_table) {
+		table->InitializeAppend(transaction, append_state, append_count);
+	}
+	if (append_to_table) {
+		// appending: need to scan entire
+		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
+			// append this chunk to the indexes of the table
+			if (!table->AppendToIndexes(chunk, append_state.current_row)) {
+				constraint_violated = true;
+				return false;
+			}
+			// append to base table
+			table->Append(chunk, append_state);
+			return true;
+		});
+	} else {
+		// only need to scan for index append
+		// figure out which columns we need to scan for the set of indexes
+		auto columns = table->info->indexes.GetRequiredColumns();
+		// create an empty mock chunk that contains all the correct types for the table
+		DataChunk mock_chunk;
+		mock_chunk.InitializeEmpty(table->GetTypes());
+		row_groups->Scan(transaction, columns, [&](DataChunk &chunk) -> bool {
+			// construct the mock chunk by referencing the required columns
+			for (idx_t i = 0; i < columns.size(); i++) {
+				mock_chunk.data[columns[i]].Reference(chunk.data[i]);
+			}
+			mock_chunk.SetCardinality(chunk);
+			// append this chunk to the indexes of the table
+			if (!table->AppendToIndexes(mock_chunk, append_state.current_row)) {
+				constraint_violated = true;
+				return false;
+			}
+			append_state.current_row += chunk.size();
+			return true;
+		});
+	}
 	if (constraint_violated) {
 		// need to revert the append
 		row_t current_row = append_state.row_start;
 		// remove the data from the indexes, if there are any indexes
-		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
+		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			table.RemoveFromIndexes(append_state, chunk, current_row);
+			table->RemoveFromIndexes(append_state, chunk, current_row);
 
 			current_row += chunk.size();
 			if (current_row >= append_state.current_row) {
@@ -416,106 +239,330 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 			}
 			return true;
 		});
-		table.RevertAppendInternal(append_state.row_start, append_count);
-		storage.Clear();
+		if (append_to_table) {
+			table->RevertAppendInternal(append_state.row_start, append_count);
+		}
 		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
 	}
-	storage.Clear();
+}
+
+void LocalTableStorage::Rollback() {
+	optimistic_writer.Rollback();
+}
+
+//===--------------------------------------------------------------------===//
+// LocalTableManager
+//===--------------------------------------------------------------------===//
+LocalTableStorage *LocalTableManager::GetStorage(DataTable *table) {
+	lock_guard<mutex> l(table_storage_lock);
+	auto entry = table_storage.find(table);
+	return entry == table_storage.end() ? nullptr : entry->second.get();
+}
+
+LocalTableStorage *LocalTableManager::GetOrCreateStorage(DataTable *table) {
+	lock_guard<mutex> l(table_storage_lock);
+	auto entry = table_storage.find(table);
+	if (entry == table_storage.end()) {
+		auto new_storage = make_shared<LocalTableStorage>(*table);
+		auto storage = new_storage.get();
+		table_storage.insert(make_pair(table, move(new_storage)));
+		return storage;
+	} else {
+		return entry->second.get();
+	}
+}
+
+bool LocalTableManager::IsEmpty() {
+	lock_guard<mutex> l(table_storage_lock);
+	return table_storage.empty();
+}
+
+shared_ptr<LocalTableStorage> LocalTableManager::MoveEntry(DataTable *table) {
+	lock_guard<mutex> l(table_storage_lock);
+	auto entry = table_storage.find(table);
+	if (entry == table_storage.end()) {
+		return nullptr;
+	}
+	auto storage_entry = move(entry->second);
+	table_storage.erase(table);
+	return storage_entry;
+}
+
+unordered_map<DataTable *, shared_ptr<LocalTableStorage>> LocalTableManager::MoveEntries() {
+	lock_guard<mutex> l(table_storage_lock);
+	return move(table_storage);
+}
+
+idx_t LocalTableManager::EstimatedSize() {
+	lock_guard<mutex> l(table_storage_lock);
+	idx_t estimated_size = 0;
+	for (auto &storage : table_storage) {
+		estimated_size += storage.second->EstimatedSize();
+	}
+	return estimated_size;
+}
+
+void LocalTableManager::InsertEntry(DataTable *table, shared_ptr<LocalTableStorage> entry) {
+	lock_guard<mutex> l(table_storage_lock);
+	D_ASSERT(table_storage.find(table) == table_storage.end());
+	table_storage[table] = move(entry);
+}
+
+//===--------------------------------------------------------------------===//
+// LocalStorage
+//===--------------------------------------------------------------------===//
+LocalStorage::LocalStorage(Transaction &transaction) : transaction(transaction) {
+}
+
+LocalStorage &LocalStorage::Get(Transaction &transaction) {
+	return transaction.GetLocalStorage();
+}
+
+LocalStorage &LocalStorage::Get(ClientContext &context) {
+	return Transaction::GetTransaction(context).GetLocalStorage();
+}
+
+void LocalStorage::InitializeScan(DataTable *table, CollectionScanState &state, TableFilterSet *table_filters) {
+	auto storage = table_manager.GetStorage(table);
+	if (storage == nullptr) {
+		return;
+	}
+	storage->InitializeScan(state, table_filters);
+}
+
+void LocalStorage::Scan(CollectionScanState &state, const vector<column_t> &column_ids, DataChunk &result) {
+	state.Scan(transaction, result);
+}
+
+void LocalStorage::InitializeParallelScan(DataTable *table, ParallelCollectionScanState &state) {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		state.max_row = 0;
+		state.vector_index = 0;
+		state.current_row_group = nullptr;
+	} else {
+		storage->row_groups->InitializeParallelScan(state);
+	}
+}
+
+bool LocalStorage::NextParallelScan(ClientContext &context, DataTable *table, ParallelCollectionScanState &state,
+                                    CollectionScanState &scan_state) {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		return false;
+	}
+	return storage->row_groups->NextParallelScan(context, state, scan_state);
+}
+
+void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable *table) {
+	state.storage = table_manager.GetOrCreateStorage(table);
+	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state, 0);
+}
+
+void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
+	// append to unique indices (if any)
+	auto storage = state.storage;
+	idx_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows();
+	if (!DataTable::AppendToIndexes(storage->indexes, chunk, base_id)) {
+		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+	}
+
+	//! Append the chunk to the local storage
+	auto new_row_group = storage->row_groups->Append(chunk, state.append_state);
+
+	//! Check if we should pre-emptively flush blocks to disk
+	if (new_row_group) {
+		storage->CheckFlushToDisk();
+	}
+}
+
+void LocalStorage::FinalizeAppend(LocalAppendState &state) {
+	state.storage->row_groups->FinalizeAppend(state.append_state.transaction, state.append_state);
+}
+
+void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection) {
+	auto storage = table_manager.GetOrCreateStorage(table);
+	storage->row_groups->MergeStorage(collection);
+}
+
+bool LocalStorage::ChangesMade() noexcept {
+	return !table_manager.IsEmpty();
+}
+
+bool LocalStorage::Find(DataTable *table) {
+	return table_manager.GetStorage(table) != nullptr;
+}
+
+idx_t LocalStorage::EstimatedSize() {
+	return table_manager.EstimatedSize();
+}
+
+idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
+	auto storage = table_manager.GetStorage(table);
+	D_ASSERT(storage);
+
+	// delete from unique indices (if any)
+	if (!storage->indexes.Empty()) {
+		storage->row_groups->RemoveFromIndexes(storage->indexes, row_ids, count);
+	}
+
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	idx_t delete_count = storage->row_groups->Delete(TransactionData(0, 0), table, ids, count);
+	storage->deleted_rows += delete_count;
+	return delete_count;
+}
+
+void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &updates) {
+	auto storage = table_manager.GetStorage(table);
+	D_ASSERT(storage);
+
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	storage->row_groups->Update(TransactionData(0, 0), ids, column_ids, updates);
+}
+
+void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
+	if (storage.row_groups->GetTotalRows() <= storage.deleted_rows) {
+		return;
+	}
+	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
+
+	TableAppendState append_state;
+	table.AppendLock(append_state);
+	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
+	    storage.deleted_rows == 0) {
+		// table is currently empty OR we are bulk appending: move over the storage directly
+		// first flush any out-standing storage nodes
+		storage.FlushToDisk();
+		// now append to the indexes (if there are any)
+		// FIXME: we should be able to merge the transaction-local index directly into the main table index
+		// as long we just rewrite some row-ids
+		if (!table.info->indexes.Empty()) {
+			storage.AppendToIndexes(transaction, append_state, append_count, false);
+		}
+		// finally move over the row groups
+		table.MergeStorage(*storage.row_groups, storage.indexes);
+	} else {
+		// check if we have written data
+		// if we have, we cannot merge to disk after all
+		// so we need to revert the data we have already written
+		storage.Rollback();
+		// append to the indexes and append to the base table
+		storage.AppendToIndexes(transaction, append_state, append_count, true);
+	}
 	transaction.PushAppend(&table, append_state.row_start, append_count);
 }
 
-void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log,
-                          transaction_t commit_id) {
-	// commit local storage, iterate over all entries in the table storage map
+void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &transaction) {
+	// commit local storage
+	// iterate over all entries in the table storage map and commit them
+	// after this, the local storage is no longer required and can be cleared
+	auto table_storage = table_manager.MoveEntries();
 	for (auto &entry : table_storage) {
 		auto table = entry.first;
 		auto storage = entry.second.get();
 		Flush(*table, *storage);
+
+		entry.second.reset();
 	}
-	// finished commit: clear local storage
-	table_storage.clear();
+}
+
+void LocalStorage::Rollback() {
+	// rollback local storage
+	// after this, the local storage is no longer required and can be cleared
+	auto table_storage = table_manager.MoveEntries();
+	for (auto &entry : table_storage) {
+		auto storage = entry.second.get();
+		if (!storage) {
+			continue;
+		}
+		storage->Rollback();
+
+		entry.second.reset();
+	}
+}
+
+idx_t LocalStorage::AddedRows(DataTable *table) {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		return 0;
+	}
+	return storage->row_groups->GetTotalRows() - storage->deleted_rows;
 }
 
 void LocalStorage::MoveStorage(DataTable *old_dt, DataTable *new_dt) {
 	// check if there are any pending appends for the old version of the table
-	auto entry = table_storage.find(old_dt);
-	if (entry == table_storage.end()) {
+	auto new_storage = table_manager.MoveEntry(old_dt);
+	if (!new_storage) {
 		return;
 	}
 	// take over the storage from the old entry
-	auto new_storage = move(entry->second);
-	table_storage.erase(entry);
-	table_storage[new_dt] = move(new_storage);
+	new_storage->table = new_dt;
+	table_manager.InsertEntry(new_dt, move(new_storage));
 }
+
 void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column,
                              Expression *default_value) {
 	// check if there are any pending appends for the old version of the table
-	auto entry = table_storage.find(old_dt);
-	if (entry == table_storage.end()) {
+	auto storage = table_manager.MoveEntry(old_dt);
+	if (!storage) {
 		return;
 	}
-	// take over the storage from the old entry
-	auto new_storage = move(entry->second);
+	auto new_storage = make_unique<LocalTableStorage>(*new_dt, *storage, new_column, default_value);
+	table_manager.InsertEntry(new_dt, move(new_storage));
+}
 
-	// now add the new column filled with the default value to all chunks
-	const auto &new_column_type = new_column.Type();
-	auto &allocator = Allocator::DefaultAllocator();
-	ExpressionExecutor executor(allocator);
-	DataChunk dummy_chunk;
-	if (default_value) {
-		executor.AddExpression(*default_value);
+void LocalStorage::DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t removed_column) {
+	// check if there are any pending appends for the old version of the table
+	auto storage = table_manager.MoveEntry(old_dt);
+	if (!storage) {
+		return;
 	}
-
-	new_storage->collection.Types().push_back(new_column_type);
-	for (idx_t chunk_idx = 0; chunk_idx < new_storage->collection.ChunkCount(); chunk_idx++) {
-		auto &chunk = new_storage->collection.GetChunk(chunk_idx);
-		Vector result(new_column_type);
-		if (default_value) {
-			dummy_chunk.SetCardinality(chunk.size());
-			executor.ExecuteExpression(dummy_chunk, result);
-		} else {
-			FlatVector::Validity(result).SetAllInvalid(chunk.size());
-		}
-		result.Flatten(chunk.size());
-		chunk.data.push_back(move(result));
-	}
-
-	table_storage.erase(entry);
-	table_storage[new_dt] = move(new_storage);
+	auto new_storage = make_unique<LocalTableStorage>(*new_dt, *storage, removed_column);
+	table_manager.InsertEntry(new_dt, move(new_storage));
 }
 
 void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, const LogicalType &target_type,
                               const vector<column_t> &bound_columns, Expression &cast_expr) {
 	// check if there are any pending appends for the old version of the table
-	auto entry = table_storage.find(old_dt);
-	if (entry == table_storage.end()) {
+	auto storage = table_manager.MoveEntry(old_dt);
+	if (!storage) {
 		return;
 	}
-	throw NotImplementedException("FIXME: ALTER TYPE with transaction local data not currently supported");
+	auto new_storage =
+	    make_unique<LocalTableStorage>(*new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
+	table_manager.InsertEntry(new_dt, move(new_storage));
 }
 
-void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &dst_chunk) {
-	auto storage = GetStorage(table);
-	idx_t chunk_idx = GetChunk(row_ids);
-	auto &chunk = storage->collection.GetChunk(chunk_idx);
-
-	UnifiedVectorFormat row_ids_data;
-	row_ids.ToUnifiedFormat(count, row_ids_data);
-	auto row_identifiers = (const row_t *)row_ids_data.data;
-	SelectionVector sel(count);
-	for (idx_t i = 0; i < count; ++i) {
-		const auto idx = row_ids_data.sel->get_index(i);
-		sel.set_index(i, row_identifiers[idx] - MAX_ROW_ID);
+void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &verify_chunk) {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		throw InternalException("LocalStorage::FetchChunk - local storage not found");
 	}
 
-	dst_chunk.InitializeEmpty(chunk.GetTypes());
-	dst_chunk.Slice(chunk, sel, count);
+	ColumnFetchState fetch_state;
+	vector<column_t> col_ids;
+	vector<LogicalType> types = storage->table->GetTypes();
+	for (idx_t i = 0; i < types.size(); i++) {
+		col_ids.push_back(i);
+	}
+	verify_chunk.Initialize(storage->allocator, types);
+	storage->row_groups->Fetch(transaction, verify_chunk, col_ids, row_ids, count, fetch_state);
 }
 
-vector<unique_ptr<Index>> &LocalStorage::GetIndexes(DataTable *table) {
-	auto storage = GetStorage(table);
-
+TableIndexList &LocalStorage::GetIndexes(DataTable *table) {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		throw InternalException("LocalStorage::GetIndexes - local storage not found");
+	}
 	return storage->indexes;
+}
+
+void LocalStorage::VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint) {
+	auto storage = table_manager.GetStorage(&parent);
+	if (!storage) {
+		return;
+	}
+	storage->row_groups->VerifyNewConstraint(parent, constraint);
 }
 
 } // namespace duckdb

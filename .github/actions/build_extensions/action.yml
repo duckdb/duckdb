@@ -8,7 +8,10 @@ inputs:
 
   # Deploy config
   deploy_as:
-    description: 'Binary name for deploy step'
+    description: 'Binary architecture name for deploy step'
+    default: ''
+  deploy_version:
+    description: 'Version tag or commit short hash for deploy step'
     default: ''
   s3_id:
     description: 'S3 key ID'
@@ -26,7 +29,10 @@ inputs:
     default: 0
   static_link_build:
     description: 'Links duckdb statically to the built extensions'
-    default: 0
+    default: 1
+  build_dir:
+    description: 'DuckDB source directory to run the build in'
+    default: '.'
   openssl_path:
     description: 'Directory of OpenSSL installation'
     default: '/usr/local/ssl'
@@ -69,6 +75,10 @@ inputs:
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
+  aarch64_cross_compile:
+    description: 'Enable Linux aarch64 cross-compiling'
+    default: 0
+
 runs:
   using: "composite"
   steps:
@@ -91,8 +101,11 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
+        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || '' }}
+        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || '' }}
 
       run: |
+        cd  ${{ inputs.build_dir}}
         ls -al
         pwd
         echo "$USER"
@@ -103,13 +116,17 @@ runs:
       if: ${{ inputs.out_of_tree_ext != 0 }}
       shell: bash
       run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+        cd  ${{ inputs.build_dir}}
         mkdir -p build/release/extension/out_of_tree
-        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py
+        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py ${{ inputs.aarch64_cross_compile == 1 && '--aarch64-cc' || '' }} --github-ref=$GITHUB_REF
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
       shell: bash
       run: |
+        cd  ${{ inputs.build_dir}}
         ${{ inputs.post_install }}
 
     - name: Deploy
@@ -121,8 +138,15 @@ runs:
         DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh ${{ inputs.deploy_as }}
+        cd  ${{ inputs.build_dir}}
+        if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ ! -z "${{ inputs.deploy_version }}" ]] ; then
+            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
+          elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
+            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
+          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ ]] ; then
+            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
+          fi
         fi
 
     - name: Test
@@ -133,6 +157,7 @@ runs:
         AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
+        cd  ${{ inputs.build_dir}}
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           ./scripts/extension-upload-test.sh
         else

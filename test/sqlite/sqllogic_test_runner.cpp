@@ -5,12 +5,14 @@
 #include "test_helpers.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "sqllogic_parser.hpp"
-#include "test_helpers.hpp"
+#ifdef DUCKDB_OUT_OF_TREE
+#include DUCKDB_EXTENSION_HEADER
+#endif
 #include "test_helper_extension.hpp"
 
 namespace duckdb {
 
-SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
+SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
 	config->options.load_extensions = false;
 }
@@ -35,7 +37,8 @@ void SQLLogicTestRunner::ExecuteCommand(unique_ptr<Command> command) {
 	if (InLoop()) {
 		active_loops.back()->loop_commands.push_back(move(command));
 	} else {
-		command->Execute();
+		ExecuteContext context;
+		command->Execute(context);
 	}
 }
 
@@ -44,6 +47,9 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
 		// already in a loop: add it to the currently active loop
+		if (definition.is_parallel) {
+			throw std::runtime_error("concurrent loop must be the outer-most loop!");
+		}
 		active_loops.back()->loop_commands.push_back(move(loop));
 	} else {
 		// not in a loop yet: new top-level loop
@@ -60,7 +66,8 @@ void SQLLogicTestRunner::EndLoop() {
 	active_loops.pop_back();
 	if (active_loops.empty()) {
 		// not in a loop
-		top_level_loop->Execute();
+		ExecuteContext context;
+		top_level_loop->Execute(context);
 		top_level_loop.reset();
 	}
 }
@@ -103,15 +110,14 @@ string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator
 	}
 }
 
-string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinition *> &loops) {
+string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinition> &loops) {
 	for (auto &active_loop : loops) {
-		if (active_loop->tokens.empty()) {
+		if (active_loop.tokens.empty()) {
 			// regular loop
-			text = ReplaceLoopIterator(text, active_loop->loop_iterator_name, to_string(active_loop->loop_idx));
+			text = ReplaceLoopIterator(text, active_loop.loop_iterator_name, to_string(active_loop.loop_idx));
 		} else {
 			// foreach loop
-			text =
-			    ReplaceLoopIterator(text, active_loop->loop_iterator_name, active_loop->tokens[active_loop->loop_idx]);
+			text = ReplaceLoopIterator(text, active_loop.loop_iterator_name, active_loop.tokens[active_loop.loop_idx]);
 		}
 	}
 	return text;
@@ -167,6 +173,8 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("rle");
 		result.push_back("bitpacking");
 		result.push_back("dictionary");
+		result.push_back("fsst");
+		result.push_back("chimp");
 		collection = true;
 	}
 	return collection;
@@ -195,6 +203,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	if (!success) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
+
+#ifdef DUCKDB_OUT_OF_TREE
+	db->LoadExtension<duckdb::DUCKDB_EXTENSION_CLASS>();
+#endif
 
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
@@ -255,13 +267,14 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// extract the SQL statement
 			parser.NextLine();
-			auto statement_text = parser.ExtractStatement(false);
+			auto statement_text = parser.ExtractStatement();
 			if (statement_text.empty()) {
 				parser.Fail("Unexpected empty statement text");
 			}
+			command->expected_error = parser.ExtractExpectedError(command->expect_ok);
 
 			// perform any renames in the text
-			command->sql_query = ReplaceKeywords(move(statement_text));
+			command->base_sql_query = ReplaceKeywords(move(statement_text));
 
 			if (token.parameters.size() >= 2) {
 				command->connection_name = token.parameters[1];
@@ -292,10 +305,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// extract the SQL statement
 			parser.NextLine();
-			auto statement_text = parser.ExtractStatement(true);
+			auto statement_text = parser.ExtractStatement();
 
 			// perform any renames in the text
-			command->sql_query = ReplaceKeywords(move(statement_text));
+			command->base_sql_query = ReplaceKeywords(move(statement_text));
 
 			// extract the expected result
 			command->values = parser.ExtractExpectedResult();
@@ -398,7 +411,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				parser.Fail("unrecognized set parameter: %s", token.parameters[0]);
 			}
-		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOOP) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOOP ||
+		           token.type == SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP) {
 			if (token.parameters.size() != 3) {
 				parser.Fail("Expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)");
 			}
@@ -411,8 +425,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("loop_start and loop_end must be a number");
 			}
 			def.loop_idx = def.loop_start;
+			def.is_parallel = token.type == SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP;
 			StartLoop(def);
-		} else if (token.type == SQLLogicTokenType::SQLLOGIC_FOREACH) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_FOREACH ||
+		           token.type == SQLLogicTokenType::SQLLOGIC_CONCURRENT_FOREACH) {
 			if (token.parameters.size() < 2) {
 				parser.Fail("expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer "
 				            "smallint float)");
@@ -428,6 +444,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			def.loop_idx = 0;
 			def.loop_start = 0;
 			def.loop_end = def.tokens.size();
+			def.is_parallel = token.type == SQLLogicTokenType::SQLLOGIC_CONCURRENT_FOREACH;
 			StartLoop(def);
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_ENDLOOP) {
 			EndLoop();
@@ -466,6 +483,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				if (TestForceStorage()) {
 					return;
 				}
+			} else if (param == "strinline") {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+				return;
+#endif
 			} else if (param == "vector_size") {
 				if (token.parameters.size() != 2) {
 					parser.Fail("require vector_size requires a parameter");

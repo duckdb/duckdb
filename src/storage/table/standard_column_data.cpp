@@ -4,12 +4,18 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-                                       ColumnData *parent)
-    : ColumnData(info, column_index, start_row, move(type), parent), validity(info, 0, start_row, this) {
+StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                       idx_t start_row, LogicalType type, ColumnData *parent)
+    : ColumnData(block_manager, info, column_index, start_row, move(type), parent),
+      validity(block_manager, info, 0, start_row, this) {
+}
+
+StandardColumnData::StandardColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
+    : ColumnData(original, start_row, parent), validity(((StandardColumnData &)original).validity, start_row, this) {
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -52,7 +58,8 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 	state.child_states.push_back(move(child_state));
 }
 
-idx_t StandardColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
+                               Vector &result) {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	auto scan_count = ColumnData::Scan(transaction, vector_index, state, result);
 	validity.Scan(transaction, vector_index, state.child_states[0], result);
@@ -105,13 +112,13 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 	return scan_count;
 }
 
-void StandardColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+void StandardColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                                 idx_t update_count) {
 	ColumnData::Update(transaction, column_index, update_vector, row_ids, update_count);
 	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
 }
 
-void StandardColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path,
+void StandardColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
                                       Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
 	if (depth >= column_path.size()) {
 		// update this column
@@ -135,7 +142,7 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
-void StandardColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
+void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                                   idx_t result_idx) {
 	// find the segment the row belongs to
 	if (state.child_states.empty()) {
@@ -152,8 +159,9 @@ void StandardColumnData::CommitDropColumn() {
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
-	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
-	    : ColumnCheckpointState(row_group, column_data, writer) {
+	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
+	                              PartialBlockManager &partial_block_manager)
+	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -165,21 +173,27 @@ public:
 		return move(global_stats);
 	}
 
-	void FlushToDisk() override {
-		ColumnCheckpointState::FlushToDisk();
-		validity_state->FlushToDisk();
+	void WriteDataPointers(RowGroupWriter &writer) override {
+		ColumnCheckpointState::WriteDataPointers(writer);
+		validity_state->WriteDataPointers(writer);
+	}
+
+	void GetBlockIds(unordered_set<block_id_t> &result) override {
+		ColumnCheckpointState::GetBlockIds(result);
+		validity_state->GetBlockIds(result);
 	}
 };
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowGroup &row_group,
-                                                                            TableDataWriter &writer) {
-	return make_unique<StandardColumnCheckpointState>(row_group, *this, writer);
+unique_ptr<ColumnCheckpointState>
+StandardColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager) {
+	return make_unique<StandardColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,
+                                                                 PartialBlockManager &partial_block_manager,
                                                                  ColumnCheckpointInfo &checkpoint_info) {
-	auto validity_state = validity.Checkpoint(row_group, writer, checkpoint_info);
-	auto base_state = ColumnData::Checkpoint(row_group, writer, checkpoint_info);
+	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto &checkpoint_state = (StandardColumnCheckpointState &)*base_state;
 	checkpoint_state.validity_state = move(validity_state);
 	return base_state;

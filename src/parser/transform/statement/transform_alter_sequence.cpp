@@ -1,9 +1,9 @@
-#include "duckdb/parser/transformer.hpp"
-#include "duckdb/parser/statement/alter_statement.hpp"
-#include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/common/enum_class_hash.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/statement/alter_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
@@ -60,7 +60,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 				throw InternalException("Wrong argument for %s. Expected either <schema>.<name> or <name>", opt_name);
 			}
 			auto info = make_unique<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_schema, sequence_name,
-			                                             owner_schema, owner_name);
+			                                             owner_schema, owner_name, stmt->missing_ok);
 			result->info = move(info);
 		} else {
 			throw NotImplementedException("ALTER SEQUENCE option not supported yet!");

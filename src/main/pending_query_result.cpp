@@ -20,8 +20,11 @@ PendingQueryResult::~PendingQueryResult() {
 
 unique_ptr<ClientContextLock> PendingQueryResult::LockContext() {
 	if (!context) {
-		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            GetError());
+		if (HasError()) {
+			throw InvalidInputException(
+			    "Attempting to execute an unsuccessful or closed pending query result\nError: %s", GetError());
+		}
+		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result");
 	}
 	return context->LockContext();
 }

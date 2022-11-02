@@ -15,52 +15,64 @@
 
 namespace duckdb {
 
-unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, block_id_t block_id,
-                                                                 idx_t offset, const LogicalType &type, idx_t start,
-                                                                 idx_t count, CompressionType compression_type,
+unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
+                                                                 block_id_t block_id, idx_t offset,
+                                                                 const LogicalType &type, idx_t start, idx_t count,
+                                                                 CompressionType compression_type,
                                                                  unique_ptr<BaseStatistics> statistics) {
 	auto &config = DBConfig::GetConfig(db);
 	CompressionFunction *function;
+	shared_ptr<BlockHandle> block;
 	if (block_id == INVALID_BLOCK) {
+		// constant segment, no need to allocate an actual block
 		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
 	} else {
 		function = config.GetCompressionFunction(compression_type, type.InternalType());
+		block = block_manager.RegisterBlock(block_id);
 	}
-	return make_unique<ColumnSegment>(db, type, ColumnSegmentType::PERSISTENT, start, count, function, move(statistics),
-	                                  block_id, offset);
+	auto segment_size = Storage::BLOCK_SIZE;
+	return make_unique<ColumnSegment>(db, block, type, ColumnSegmentType::PERSISTENT, start, count, function,
+	                                  move(statistics), block_id, offset, segment_size);
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
-                                                                idx_t start) {
+                                                                idx_t start, idx_t segment_size) {
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
-	return make_unique<ColumnSegment>(db, type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
-	                                  INVALID_BLOCK, 0);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	shared_ptr<BlockHandle> block;
+	// transient: allocate a buffer for the uncompressed segment
+	if (segment_size < Storage::BLOCK_SIZE) {
+		block = buffer_manager.RegisterSmallMemory(segment_size);
+	} else {
+		block = buffer_manager.RegisterMemory(segment_size, false);
+	}
+	return make_unique<ColumnSegment>(db, block, type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
+	                                  INVALID_BLOCK, 0, segment_size);
 }
 
-ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSegmentType segment_type, idx_t start,
-                             idx_t count, CompressionFunction *function_p, unique_ptr<BaseStatistics> statistics,
-                             block_id_t block_id_p, idx_t offset_p)
+unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx_t start) {
+	return make_unique<ColumnSegment>(other, start);
+}
+
+ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type_p,
+                             ColumnSegmentType segment_type, idx_t start, idx_t count, CompressionFunction *function_p,
+                             unique_ptr<BaseStatistics> statistics, block_id_t block_id_p, idx_t offset_p,
+                             idx_t segment_size_p)
     : SegmentBase(start, count), db(db), type(move(type_p)), type_size(GetTypeIdSize(type.InternalType())),
-      segment_type(segment_type), function(function_p), stats(type, move(statistics)), block_id(block_id_p),
-      offset(offset_p) {
+      segment_type(segment_type), function(function_p), stats(type, move(statistics)), block(move(block)),
+      block_id(block_id_p), offset(offset_p), segment_size(segment_size_p) {
 	D_ASSERT(function);
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	if (block_id == INVALID_BLOCK) {
-		// no block id specified
-		// there are two cases here:
-		// transient: allocate a buffer for the uncompressed segment
-		// persistent: constant segment, no need to allocate anything
-		if (segment_type == ColumnSegmentType::TRANSIENT) {
-			this->block = buffer_manager.RegisterMemory(Storage::BLOCK_SIZE, false);
-		}
-	} else {
-		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
-		this->block = buffer_manager.RegisterBlock(block_id);
-	}
 	if (function->init_segment) {
 		segment_state = function->init_segment(*this, block_id);
 	}
+}
+
+ColumnSegment::ColumnSegment(ColumnSegment &other, idx_t start)
+    : SegmentBase(start, other.count), db(other.db), type(move(other.type)), type_size(other.type_size),
+      segment_type(other.segment_type), function(other.function), stats(move(other.stats)), block(move(other.block)),
+      block_id(other.block_id), offset(other.offset), segment_size(other.segment_size),
+      segment_state(move(other.segment_state)) {
 }
 
 ColumnSegment::~ColumnSegment() {
@@ -105,27 +117,50 @@ void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 	function->fetch_row(*this, state, row_id - this->start, result, result_idx);
 }
 
-void ColumnSegment::InitializeAppend(ColumnAppendState &state) {
-	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
-}
-
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+idx_t ColumnSegment::SegmentSize() const {
+	return segment_size;
+}
+
+void ColumnSegment::Resize(idx_t new_size) {
+	D_ASSERT(new_size > this->segment_size);
+	D_ASSERT(offset == 0);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto new_block = buffer_manager.RegisterMemory(Storage::BLOCK_SIZE, false);
+	auto old_handle = buffer_manager.Pin(block);
+	auto new_handle = buffer_manager.Pin(new_block);
+	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
+	this->block_id = new_block->BlockId();
+	this->block = move(new_block);
+	this->segment_size = new_size;
+}
+
+void ColumnSegment::InitializeAppend(ColumnAppendState &state) {
+	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
+	if (!function->init_append) {
+		throw InternalException("Attempting to init append to a segment without init_append method");
+	}
+	state.append_state = function->init_append(*this);
+}
+
 idx_t ColumnSegment::Append(ColumnAppendState &state, UnifiedVectorFormat &append_data, idx_t offset, idx_t count) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (!function->append) {
 		throw InternalException("Attempting to append to a segment without append method");
 	}
-	return function->append(*this, stats, append_data, offset, count);
+	return function->append(*state.append_state, *this, stats, append_data, offset, count);
 }
 
-idx_t ColumnSegment::FinalizeAppend() {
+idx_t ColumnSegment::FinalizeAppend(ColumnAppendState &state) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (!function->finalize_append) {
 		throw InternalException("Attempting to call FinalizeAppend on a segment without a finalize_append method");
 	}
-	return function->finalize_append(*this, stats);
+	auto result_count = function->finalize_append(*this, stats);
+	state.append_state.reset();
+	return result_count;
 }
 
 void ColumnSegment::RevertAppend(idx_t start_row) {
@@ -139,23 +174,24 @@ void ColumnSegment::RevertAppend(idx_t start_row) {
 //===--------------------------------------------------------------------===//
 // Convert To Persistent
 //===--------------------------------------------------------------------===//
-void ColumnSegment::ConvertToPersistent(block_id_t block_id_p) {
+void ColumnSegment::ConvertToPersistent(BlockManager *block_manager, block_id_t block_id_p) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	segment_type = ColumnSegmentType::PERSISTENT;
+
 	block_id = block_id_p;
 	offset = 0;
 
+	D_ASSERT(stats.statistics);
 	if (block_id == INVALID_BLOCK) {
 		// constant block: reset the block buffer
+		D_ASSERT(stats.statistics->IsConstant());
 		block.reset();
 	} else {
+		D_ASSERT(!stats.statistics->IsConstant());
 		// non-constant block: write the block to disk
-		auto &buffer_manager = BufferManager::GetBufferManager(db);
-		auto &block_manager = BlockManager::GetBlockManager(db);
-
 		// the data for the block already exists in-memory of our block
 		// instead of copying the data we alter some metadata so the buffer points to an on-disk block
-		block = buffer_manager.ConvertToPersistent(block_manager, block_id, move(block));
+		block = block_manager->ConvertToPersistent(block_id, move(block));
 	}
 
 	segment_state.reset();
@@ -164,10 +200,11 @@ void ColumnSegment::ConvertToPersistent(block_id_t block_id_p) {
 	}
 }
 
-void ColumnSegment::ConvertToPersistent(shared_ptr<BlockHandle> block_p, block_id_t block_id_p, uint32_t offset_p) {
+void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t offset_p) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	segment_type = ColumnSegmentType::PERSISTENT;
-	block_id = block_id_p;
+
+	block_id = block_p->BlockId();
 	offset = offset_p;
 	block = move(block_p);
 

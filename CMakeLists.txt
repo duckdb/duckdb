@@ -141,8 +141,18 @@ elseif(${ENABLE_SANITIZER})
 endif()
 
 
-if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-  set(DISABLE_VPTR_SANITIZER TRUE)
+if (${DISABLE_VPTR_SANITIZER})
+else()
+  if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_GREATER 14.0)
+      message(
+        WARNING
+          "Not disabling vptr sanitizer on M1 Macbook - set DISABLE_VPTR_SANITIZER manually if you run into issues with false positives in the sanitizer"
+      )
+    else()
+    set(DISABLE_VPTR_SANITIZER TRUE)
+    endif()
+  endif()
 endif()
 
 if(${ENABLE_UBSAN})
@@ -186,12 +196,14 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
-execute_process(
-        COMMAND git log -1 --format=%h
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        RESULT_VARIABLE GIT_RESULT
-        OUTPUT_VARIABLE GIT_COMMIT_HASH
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
+if (NOT DEFINED GIT_COMMIT_HASH)
+  execute_process(
+          COMMAND git log -1 --format=%h
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          RESULT_VARIABLE GIT_RESULT
+          OUTPUT_VARIABLE GIT_COMMIT_HASH
+          OUTPUT_STRIP_TRAILING_WHITESPACE)
+endif()
 execute_process(
         COMMAND git describe --tags --abbrev=0
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -246,6 +258,7 @@ option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
 option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
 option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
 option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
+option(BUILD_INET_EXTENSION "Build the inet extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -257,6 +270,7 @@ option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
+option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
 option(
@@ -297,6 +311,10 @@ if(BUILD_PYTHON)
   set(BUILD_EXCEL_EXTENSION TRUE)
 endif()
 
+if (BUILD_BENCHMARKS)
+  set(BUILD_PARQUET_EXTENSION TRUE)
+endif()
+
 if(BUILD_SQLSMITH)
   set(BUILD_SQLSMITH_EXTENSION TRUE)
 endif()
@@ -305,9 +323,13 @@ if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
 endif()
 
-if(!ASSERT_EXCEPTION)
-  set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -DDUCKDB_USE_STANDARD_ASSERT")
+if(ASSERT_EXCEPTION)
+else()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_CRASH_ON_ASSERT")
+endif()
+
+if(DISABLE_STR_INLINE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_NO_INLINE")
 endif()
 
 if(FORCE_ASSERT)
@@ -375,6 +397,8 @@ set(OS_ARCH "amd64")
 string(REGEX MATCH "(arm64|aarch64)" IS_ARM "${CMAKE_SYSTEM_PROCESSOR}")
 if(IS_ARM)
   set(OS_ARCH "arm64")
+elseif(FORCE_32_BIT)
+  set(OS_ARCH "i386")
 endif()
 
 if(APPLE)
@@ -389,6 +413,7 @@ endif()
 
 
 include_directories(src/include)
+include_directories(third_party/fsst)
 include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/fastpforlib)
@@ -540,6 +565,11 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/sqlsmith/include)
     add_definitions(-DBUILD_SQLSMITH_EXTENSION=${BUILD_SQLSMITH_EXTENSION})
   endif()
+
+  if(${BUILD_INET_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/inet/include)
+    add_definitions(-DBUILD_INET_EXTENSION=${BUILD_INET_EXTENSION})
+  endif()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -581,6 +611,10 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_SQLSMITH_EXTENSION})
     add_dependencies(${LIBRARY} sqlsmith_extension)
+  endif()
+
+  if(${BUILD_INET_EXTENSION})
+    add_dependencies(${LIBRARY} inet_extension)
   endif()
 
 endfunction()
@@ -630,6 +664,10 @@ function(link_extension_libraries LIBRARY)
   if(${BUILD_SQLSMITH_EXTENSION})
     target_link_libraries(${LIBRARY} sqlsmith_extension)
   endif()
+
+  if(${BUILD_INET_EXTENSION})
+    target_link_libraries(${LIBRARY} inet_extension)
+  endif()
 endfunction()
 
 function(link_threads LIBRARY)
@@ -641,7 +679,7 @@ function(link_threads LIBRARY)
   endif()
 endfunction()
 
-function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY IGNORE_WARNINGS)
+function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   #  skip building extensions on mingw because its weird
   if(WIN32 AND NOT MSVC)
     return()
@@ -654,13 +692,19 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY IGNORE_WARNING
   list(REMOVE_AT FILES 0)
   # remove output_directory
   list(REMOVE_AT FILES 0)
+  # remove parameters
+  list(REMOVE_AT FILES 0)
+
+  # parse parameters
+  string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
+
 
   add_library(${TARGET_NAME} SHARED ${FILES})
   # this disables the -Dsome_target_EXPORTS define being added by cmake which otherwise trips clang-tidy (yay)
   set_target_properties(${TARGET_NAME} PROPERTIES DEFINE_SYMBOL "")
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
-  if(IGNORE_WARNINGS)
+  if(${IGNORE_WARNINGS} GREATER_EQUAL 0)
     disable_target_warnings(${TARGET_NAME})
   endif()
   # loadable extension binaries can be built two ways:
@@ -682,7 +726,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY IGNORE_WARNING
     elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
       set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
       # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip -Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version)
+      set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_replacement_open_*")
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
     else()
       error("EXTENSION static build is only intended for Linux and Windows on MVSC")
     endif()
@@ -727,12 +772,13 @@ endif()
 
 endfunction()
 
-function(build_loadable_extension NAME IGNORE_WARNINGS)
+function(build_loadable_extension NAME PARAMETERS)
   # all parameters after name
   set(FILES ${ARGV})
   list(REMOVE_AT FILES 0)
+  list(REMOVE_AT FILES 0)
 
-  build_loadable_extension_directory(${NAME} extension/${NAME} ${FILES} ${IGNORE_WARNINGS})
+  build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
 endfunction()
 
 if(${EXPORT_DLL_SYMBOLS})
@@ -798,8 +844,13 @@ endif()
 endif()
 
 # build out-of-tree extensions on demand
-if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
-  # the build path seems to get ignored on windows in just the right way. no idea why.
-  get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
-  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
+if(NOT "${EXTERNAL_EXTENSION_DIRECTORIES}" STREQUAL "")
+  separate_arguments(EXTERNAL_EXTENSION_DIRECTORIES)
+
+  foreach(EXTERNAL_EXTENSION_DIRECTORY IN LISTS EXTERNAL_EXTENSION_DIRECTORIES)
+
+    # the build path seems to get ignored on windows in just the right way. no idea why.
+    get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
+    add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
+  endforeach()
 endif()

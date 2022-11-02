@@ -41,6 +41,18 @@ idx_t FixedSizeFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
+struct UncompressedCompressState : public CompressionState {
+	explicit UncompressedCompressState(ColumnDataCheckpointer &checkpointer);
+
+	ColumnDataCheckpointer &checkpointer;
+	unique_ptr<ColumnSegment> current_segment;
+	ColumnAppendState append_state;
+
+	virtual void CreateEmptySegment(idx_t row_start);
+	void FlushSegment(idx_t segment_size);
+	void Finalize(idx_t segment_size);
+};
+
 UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointer &checkpointer)
     : checkpointer(checkpointer) {
 	CreateEmptySegment(checkpointer.GetRowGroup().start);
@@ -52,9 +64,10 @@ void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = (UncompressedStringSegmentState &)*compressed_segment->GetSegmentState();
-		state.overflow_writer = make_unique<WriteOverflowStringsToDisk>(db);
+		state.overflow_writer = make_unique<WriteOverflowStringsToDisk>(checkpointer.GetColumnData().block_manager);
 	}
 	current_segment = move(compressed_segment);
+	current_segment->InitializeAppend(append_state);
 }
 
 void UncompressedCompressState::FlushSegment(idx_t segment_size) {
@@ -77,17 +90,16 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 	UnifiedVectorFormat vdata;
 	data.ToUnifiedFormat(count, vdata);
 
-	ColumnAppendState append_state;
 	idx_t offset = 0;
 	while (count > 0) {
-		idx_t appended = state.current_segment->Append(append_state, vdata, offset, count);
+		idx_t appended = state.current_segment->Append(state.append_state, vdata, offset, count);
 		if (appended == count) {
 			// appended everything: finished
 			return;
 		}
 		auto next_start = state.current_segment->start + state.current_segment->count;
 		// the segment is full: flush it to disk
-		state.FlushSegment(state.current_segment->FinalizeAppend());
+		state.FlushSegment(state.current_segment->FinalizeAppend(state.append_state));
 
 		// now create a new segment and continue appending
 		state.CreateEmptySegment(next_start);
@@ -98,7 +110,7 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 
 void UncompressedFunctions::FinalizeCompress(CompressionState &state_p) {
 	auto &state = (UncompressedCompressState &)state_p;
-	state.Finalize(state.current_segment->FinalizeAppend());
+	state.Finalize(state.current_segment->FinalizeAppend(state.append_state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -168,6 +180,12 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+static unique_ptr<CompressionAppendState> FixedSizeInitAppend(ColumnSegment &segment) {
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto handle = buffer_manager.Pin(segment.block);
+	return make_unique<CompressionAppendState>(move(handle));
+}
+
 template <class T>
 static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
                        idx_t offset, idx_t count) {
@@ -210,14 +228,12 @@ void AppendLoop<list_entry_t>(SegmentStatistics &stats, data_ptr_t target, idx_t
 }
 
 template <class T>
-idx_t FixedSizeAppend(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset,
-                      idx_t count) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+idx_t FixedSizeAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
+                      UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
 
-	auto target_ptr = handle.Ptr();
-	idx_t max_tuple_count = Storage::BLOCK_SIZE / sizeof(T);
+	auto target_ptr = append_state.handle.Ptr();
+	idx_t max_tuple_count = segment.SegmentSize() / sizeof(T);
 	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
 
 	AppendLoop<T>(stats, target_ptr, segment.count, data, offset, copy_count);
@@ -239,7 +255,7 @@ CompressionFunction FixedSizeGetFunction(PhysicalType data_type) {
 	                           FixedSizeAnalyze, FixedSizeFinalAnalyze<T>, UncompressedFunctions::InitCompression,
 	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
 	                           FixedSizeInitScan, FixedSizeScan<T>, FixedSizeScanPartial<T>, FixedSizeFetchRow<T>,
-	                           UncompressedFunctions::EmptySkip, nullptr, FixedSizeAppend<T>,
+	                           UncompressedFunctions::EmptySkip, nullptr, FixedSizeInitAppend, FixedSizeAppend<T>,
 	                           FixedSizeFinalizeAppend<T>, nullptr);
 }
 

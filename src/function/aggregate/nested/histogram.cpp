@@ -164,9 +164,16 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
                                                vector<unique_ptr<Expression>> &arguments) {
 
 	D_ASSERT(arguments.size() == 1);
+
+	if (arguments[0]->return_type.id() == LogicalTypeId::LIST ||
+	    arguments[0]->return_type.id() == LogicalTypeId::STRUCT ||
+	    arguments[0]->return_type.id() == LogicalTypeId::MAP) {
+		throw NotImplementedException("Unimplemented type for histogram %s", arguments[0]->return_type.ToString());
+	}
+
 	child_list_t<LogicalType> struct_children;
-	struct_children.push_back({"bucket", LogicalType::LIST(arguments[0]->return_type)});
-	struct_children.push_back({"count", LogicalType::LIST(LogicalType::UBIGINT)});
+	struct_children.push_back({"key", LogicalType::LIST(arguments[0]->return_type)});
+	struct_children.push_back({"value", LogicalType::LIST(LogicalType::UBIGINT)});
 	auto struct_type = LogicalType::MAP(move(struct_children));
 
 	function.return_type = struct_type;
@@ -223,21 +230,21 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	case LogicalType::VARCHAR:
 		return GetMapType<HistogramStringFunctor, string, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP:
-		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, timestamp_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_TZ:
-		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, timestamp_tz_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_S:
-		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, timestamp_sec_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_MS:
-		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, timestamp_ms_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_NS:
-		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, timestamp_ns_t, IS_ORDERED>(type);
 	case LogicalType::TIME:
-		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, dtime_t, IS_ORDERED>(type);
 	case LogicalType::TIME_TZ:
-		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, dtime_tz_t, IS_ORDERED>(type);
 	case LogicalType::DATE:
-		return GetMapType<HistogramFunctor, int32_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, date_t, IS_ORDERED>(type);
 	default:
 		throw InternalException("Unimplemented histogram aggregate");
 	}

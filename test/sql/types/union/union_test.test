@@ -1,0 +1,68 @@
+# name: test/sql/types/union/union_test.test
+# description: Test union type
+# group: [union]
+
+statement ok
+CREATE TABLE tbl(u UNION(i INTEGER, f FLOAT));
+
+statement ok
+INSERT INTO tbl VALUES (1::INTEGER);
+
+query I
+SELECT * from tbl;
+----
+1
+
+statement ok
+INSERT INTO tbl VALUES (2.0::FLOAT);
+
+query I 
+SELECT * FROM tbl;
+----
+1
+2.0
+
+query I
+SELECT u.i FROM tbl;
+----
+1
+NULL
+
+
+query I
+SELECT union_tag(u) FROM tbl;
+----
+i
+f
+
+# Test range insert
+statement ok
+INSERT INTO tbl SELECT i from range(10) tbl(i);
+
+# Test union default value
+statement ok
+CREATE TABLE tbl2(k VARCHAR, u UNION(num INTEGER, str VARCHAR) DEFAULT 'not set');
+
+statement ok
+INSERT INTO tbl2(k) VALUES ('a'), ('b'), ('c');
+
+query I
+SELECT u FROM tbl2;
+----
+not set
+not set
+not set
+
+# Test nested union default value
+statement ok
+CREATE TABLE tbl3(k VARCHAR, u UNION(numeric UNION(i INTEGER, f FLOAT),  str VARCHAR) DEFAULT 13.37::FLOAT);
+
+statement ok
+INSERT INTO tbl3(k) VALUES ('a'), ('b'), ('c');
+
+query I
+SELECT u.numeric.f FROM tbl3;
+----
+13.37
+13.37
+13.37

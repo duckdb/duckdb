@@ -1,8 +1,8 @@
 channel|id|sales|returns_|profit
-NULL|NULL|26997.16|806.77|-7892.02
-catalog channel|NULL|7265.07|291.96|-663.77
-catalog channel|1|7265.07|291.96|-663.77
-store channel|NULL|15154.79|341.63|-6447.27
-store channel|1|15154.79|341.63|-6447.27
-web channel|NULL|4577.30|173.18|-780.98
-web channel|1|4577.30|173.18|-780.98
+NULL|NULL|2699723.65|80676.58|-789235.68
+catalog channel|NULL|726504.40|29196.62|-66386.61
+catalog channel|1|726504.40|29196.62|-66386.61
+store channel|NULL|1515490.25|34162.80|-644746.65
+store channel|1|1515490.25|34162.80|-644746.65
+web channel|NULL|457729.00|17317.16|-78102.42
+web channel|1|457729.00|17317.16|-78102.42

@@ -10,13 +10,23 @@ Prefix::Prefix() : size(0) {
 }
 
 Prefix::Prefix(Key &key, uint32_t depth, uint32_t size) : size(size) {
-	// Allocate new prefix
+	// allocate new prefix
 	prefix = unique_ptr<uint8_t[]>(new uint8_t[size]);
 
-	// Copy Key to Prefix
+	// copy key to prefix
 	idx_t prefix_idx = 0;
 	for (idx_t i = depth; i < size + depth; i++) {
 		prefix[prefix_idx++] = key.data[i];
+	}
+}
+
+Prefix::Prefix(Prefix &other_prefix, uint32_t size) : size(size) {
+	// allocate new prefix
+	prefix = unique_ptr<uint8_t[]>(new uint8_t[size]);
+
+	// copy key to Prefix
+	for (idx_t i = 0; i < size; i++) {
+		prefix[i] = other_prefix[i];
 	}
 }
 
@@ -26,10 +36,10 @@ uint8_t &Prefix::operator[](idx_t idx) {
 }
 
 Prefix &Prefix::operator=(const Prefix &src) {
-	// Allocate new prefix
+	// allocate new prefix
 	prefix = unique_ptr<uint8_t[]>(new uint8_t[src.size]);
 
-	// Copy
+	// copy prefix
 	for (idx_t i = 0; i < src.size; i++) {
 		prefix[i] = src.prefix[i];
 	}
@@ -43,24 +53,12 @@ Prefix &Prefix::operator=(Prefix &&other) noexcept {
 	return *this;
 }
 
-uint8_t Prefix::Reduce(uint32_t n) {
-	auto new_size = size - n - 1;
-	auto new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_size]);
-	auto key = prefix[n];
-	for (idx_t i = 0; i < new_size; i++) {
-		new_prefix[i] = prefix[i + n + 1];
-	}
-	prefix = move(new_prefix);
-	size = new_size;
-	return key;
-}
-
 void Prefix::Concatenate(uint8_t key, Prefix &other) {
 	auto new_length = size + 1 + other.size;
 	// have to allocate space in our prefix array
 	unique_ptr<uint8_t[]> new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_length]);
 	idx_t new_prefix_idx = 0;
-	// 1) Add the to-be deleted Node's prefix
+	// 1) add the to-be deleted node's prefix
 	for (uint32_t i = 0; i < other.size; i++) {
 		new_prefix[new_prefix_idx++] = other[i];
 	}
@@ -72,6 +70,18 @@ void Prefix::Concatenate(uint8_t key, Prefix &other) {
 	}
 	prefix = move(new_prefix);
 	size = new_length;
+}
+
+uint8_t Prefix::Reduce(uint32_t n) {
+	auto new_size = size - n - 1;
+	auto new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_size]);
+	auto key = prefix[n];
+	for (idx_t i = 0; i < new_size; i++) {
+		new_prefix[i] = prefix[i + n + 1];
+	}
+	prefix = move(new_prefix);
+	size = new_size;
+	return key;
 }
 
 void Prefix::Serialize(duckdb::MetaBlockWriter &writer) {
@@ -97,6 +107,16 @@ uint32_t Prefix::KeyMismatchPosition(Key &key, uint64_t depth) {
 		}
 	}
 	return pos;
+}
+
+uint32_t Prefix::MismatchPosition(Prefix &other) {
+
+	for (idx_t i = 0; i < size; i++) {
+		if (prefix[i] != other[i]) {
+			return i;
+		}
+	}
+	return size;
 }
 
 } // namespace duckdb

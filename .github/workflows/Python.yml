@@ -93,8 +93,9 @@ jobs:
     - name: Download OpenSSL 1.1.1k
       shell: bash
       run: |
-        wget https://ftp.openssl.org/source/openssl-1.1.1k.tar.gz --no-check-certificate
-        tar -xzvf openssl-1.1.1k.tar.gz
+        wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1k.tar.gz
+        tar -xzvf OpenSSL_1_1_1k.tar.gz
+        mv openssl-OpenSSL_1_1_1k openssl-1.1.1k
         cd openssl-1.1.1k
         find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
 
@@ -130,7 +131,6 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-        static_link_build: 1
         treat_warn_as_error: 0
 
     - uses: actions/upload-artifact@v2
@@ -145,7 +145,7 @@ jobs:
     strategy:
       matrix:
         arch: [i686, x86_64]
-        python_build: [cp37-*, cp38-*, cp39-*,cp310-*]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
@@ -217,7 +217,7 @@ jobs:
       runs-on: macos-latest
       strategy:
        matrix:
-        python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*]
+        python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
       needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
@@ -267,7 +267,7 @@ jobs:
       runs-on: windows-latest
       strategy:
        matrix:
-        python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*]
+        python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:

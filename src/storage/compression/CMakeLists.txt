@@ -8,7 +8,9 @@ add_library_unity(
   string_uncompressed.cpp
   uncompressed.cpp
   validity_uncompressed.cpp
-  bitpacking.cpp)
+  bitpacking.cpp
+  chimp.cpp
+  fsst.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_segment>
     PARENT_SCOPE)

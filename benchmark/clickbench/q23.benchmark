@@ -1,0 +1,8 @@
+# name: benchmark/clickbench/q23.benchmark
+# description: Run query 23 from the ClickBench benchmark
+# group: [clickbench]
+
+template benchmark/clickbench/clickbench-noresult.benchmark.in
+QUERY_NUMBER=23
+QUERY_NUMBER_PADDED=23
+RESULT_QUERY=SELECT * FROM __answer ORDER BY c DESC LIMIT 6

@@ -14,7 +14,7 @@ class TestRelationApi(object):
             pd.testing.assert_frame_equal(res3, test_df)
 
             df_sql = res.query('x', 'select CAST(i as BIGINT) i, j from x')
-            pd.testing.assert_frame_equal(df_sql.fetchdf(), test_df)
+            pd.testing.assert_frame_equal(df_sql.df(), test_df)
 
             res2 = res.aggregate('i, count(j) as cj', 'i').order('i')
             cmp_df = pd.DataFrame.from_dict({"i":[1, 2, 3], "cj":[1, 1, 1]})

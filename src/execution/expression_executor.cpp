@@ -6,6 +6,9 @@
 
 namespace duckdb {
 
+ExpressionExecutor::ExpressionExecutor(ClientContext &client) : allocator(Allocator::Get(client)) {
+}
+
 ExpressionExecutor::ExpressionExecutor(Allocator &allocator) : allocator(allocator) {
 }
 
@@ -98,6 +101,8 @@ bool ExpressionExecutor::TryEvaluateScalar(const Expression &expr, Value &result
 	try {
 		result = EvaluateScalar(expr);
 		return true;
+	} catch (InternalException &ex) {
+		throw ex;
 	} catch (...) {
 		return false;
 	}

@@ -33,6 +33,7 @@ class ParquetReader;
 using duckdb_apache::thrift::protocol::TProtocol;
 
 using duckdb_parquet::format::ColumnChunk;
+using duckdb_parquet::format::CompressionCodec;
 using duckdb_parquet::format::FieldRepetitionType;
 using duckdb_parquet::format::PageHeader;
 using duckdb_parquet::format::SchemaElement;
@@ -50,7 +51,7 @@ public:
 	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const LogicalType &type_p,
 	                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define,
 	                                             idx_t max_repeat);
-	virtual void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p);
+	virtual void InitializeRead(idx_t row_group_index, const std::vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	                   Vector &result_out);
 
@@ -70,7 +71,7 @@ public:
 	// register the range this reader will touch for prefetching
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 
-	virtual unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns);
+	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns);
 
 protected:
 	// readers that use the default Read() need to implement those
@@ -109,9 +110,10 @@ protected:
 
 private:
 	void PrepareRead(parquet_filter_t &filter);
-	void PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size);
+	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
+	void DecompressInternal(CompressionCodec::type codec, const char *src, idx_t src_size, char *dst, idx_t dst_size);
 
 	const duckdb_parquet::format::ColumnChunk *chunk = nullptr;
 

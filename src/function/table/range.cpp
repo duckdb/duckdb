@@ -101,11 +101,11 @@ static void RangeFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	if (!Hugeint::TryCast<int64_t>(current_value, current_value_i64)) {
 		return;
 	}
-	// set the result vector as a sequence vector
-	output.data[0].Sequence(current_value_i64, Hugeint::Cast<int64_t>(increment));
 	int64_t offset = increment < 0 ? 1 : -1;
 	idx_t remaining = MinValue<idx_t>(Hugeint::Cast<idx_t>((end - current_value + (increment + offset)) / increment),
 	                                  STANDARD_VECTOR_SIZE);
+	// set the result vector as a sequence vector
+	output.data[0].Sequence(current_value_i64, Hugeint::Cast<int64_t>(increment), remaining);
 	// increment the index pointer by the remaining count
 	state.current_idx += remaining;
 	output.SetCardinality(remaining);

@@ -1,14 +1,15 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/has_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 
 namespace duckdb {
 
@@ -161,7 +162,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				vector<unique_ptr<Expression>> aggr_children;
 				aggr_children.push_back(move(colref));
 				auto first_fun = make_unique<BoundAggregateExpression>(move(first_aggregate), move(aggr_children),
-				                                                       nullptr, nullptr, false);
+				                                                       nullptr, nullptr, AggregateType::NON_DISTINCT);
 				aggr.expressions.push_back(move(first_fun));
 			}
 		} else {
@@ -394,7 +395,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		unique_ptr<Expression> condition;
 		auto row_num_ref =
 		    make_unique<BoundColumnRefExpression>(rownum_alias, LogicalType::BIGINT, ColumnBinding(window_index, 0));
-		auto upper_bound = make_unique<BoundConstantExpression>(Value::BIGINT(limit.offset_val + limit.limit_val));
+
+		int64_t upper_bound_limit = NumericLimits<int64_t>::Maximum();
+		TryAddOperator::Operation(limit.offset_val, limit.limit_val, upper_bound_limit);
+		auto upper_bound = make_unique<BoundConstantExpression>(Value::BIGINT(upper_bound_limit));
 		condition = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
 		                                                   row_num_ref->Copy(), move(upper_bound));
 		// we only need to add "row_number >= offset + 1" if offset is bigger than 0
@@ -478,6 +482,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		return plan;
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		throw ParserException("Recursive CTEs not supported in correlated subquery");
+	}
 	default:
 		throw InternalException("Logical operator type \"%s\" for dependent join", LogicalOperatorToString(plan->type));
 	}

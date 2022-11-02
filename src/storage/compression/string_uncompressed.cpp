@@ -1,6 +1,7 @@
 #include "duckdb/storage/string_uncompressed.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+
 #include "duckdb/common/pair.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "miniz_wrapper.hpp"
 
 namespace duckdb {
@@ -140,6 +141,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+
 unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment,
                                                                                 block_id_t block_id) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -147,7 +149,7 @@ unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(
 		auto handle = buffer_manager.Pin(segment.block);
 		StringDictionaryContainer dictionary;
 		dictionary.size = 0;
-		dictionary.end = Storage::BLOCK_SIZE;
+		dictionary.end = segment.SegmentSize();
 		SetDictionary(segment, handle, dictionary);
 	}
 	return make_unique<UncompressedStringSegmentState>();
@@ -157,16 +159,16 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	auto dict = GetDictionary(segment, handle);
-	D_ASSERT(dict.end == Storage::BLOCK_SIZE);
+	D_ASSERT(dict.end == segment.SegmentSize());
 	// compute the total size required to store this segment
 	auto offset_size = DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t);
 	auto total_size = offset_size + dict.size;
 	if (total_size >= COMPACTION_FLUSH_LIMIT) {
 		// the block is full enough, don't bother moving around the dictionary
-		return Storage::BLOCK_SIZE;
+		return segment.SegmentSize();
 	}
 	// the block has space left: figure out how much space we can save
-	auto move_amount = Storage::BLOCK_SIZE - total_size;
+	auto move_amount = segment.SegmentSize() - total_size;
 	// move the dictionary so it lines up exactly with the offsets
 	auto dataptr = handle.Ptr();
 	memmove(dataptr + offset_size, dataptr + dict.end - dict.size, dict.size);
@@ -189,7 +191,8 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	                           UncompressedStringStorage::StringInitScan, UncompressedStringStorage::StringScan,
 	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
 	                           UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
-	                           UncompressedStringStorage::StringAppend, UncompressedStringStorage::FinalizeAppend);
+	                           UncompressedStringStorage::StringInitAppend, UncompressedStringStorage::StringAppend,
+	                           UncompressedStringStorage::FinalizeAppend);
 }
 
 //===--------------------------------------------------------------------===//
@@ -212,10 +215,10 @@ StringDictionaryContainer UncompressedStringStorage::GetDictionary(ColumnSegment
 
 idx_t UncompressedStringStorage::RemainingSpace(ColumnSegment &segment, BufferHandle &handle) {
 	auto dictionary = GetDictionary(segment, handle);
-	D_ASSERT(dictionary.end == Storage::BLOCK_SIZE);
+	D_ASSERT(dictionary.end == segment.SegmentSize());
 	idx_t used_space = dictionary.size + segment.count * sizeof(int32_t) + DICTIONARY_HEADER_SIZE;
-	D_ASSERT(Storage::BLOCK_SIZE >= used_space);
-	return Storage::BLOCK_SIZE - used_space;
+	D_ASSERT(segment.SegmentSize() >= used_space);
+	return segment.SegmentSize() - used_space;
 }
 
 void UncompressedStringStorage::WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block,
@@ -274,12 +277,13 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 	D_ASSERT(block != INVALID_BLOCK);
 	D_ASSERT(offset < Storage::BLOCK_SIZE);
 
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto &block_manager = segment.GetBlockManager();
+	auto &buffer_manager = block_manager.buffer_manager;
 	auto &state = (UncompressedStringSegmentState &)*segment.GetSegmentState();
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk
 		// pin the initial handle and read the length
-		auto block_handle = buffer_manager.RegisterBlock(block);
+		auto block_handle = block_manager.RegisterBlock(block);
 		auto handle = buffer_manager.Pin(block_handle);
 
 		// read header
@@ -309,7 +313,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 				if (remaining > 0) {
 					// read the next block
 					block_id_t next_block = Load<block_id_t>(handle.Ptr() + offset);
-					block_handle = buffer_manager.RegisterBlock(next_block);
+					block_handle = block_manager.RegisterBlock(next_block);
 					handle = buffer_manager.Pin(block_handle);
 					offset = 0;
 				}

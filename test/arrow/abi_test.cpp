@@ -90,7 +90,6 @@ TEST_CASE("Test random integers", "[arrow]") {
 				params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 				params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
 				params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::GetSchema));
-				params.push_back(duckdb::Value::UBIGINT(1000000));
 				auto result = conn.TableFunction("arrow_scan", params)->Execute();
 				REQUIRE(result->ColumnCount() == 3);
 				int32_t expected_a = start_a, expected_b = start_b, expected_c = start_c;

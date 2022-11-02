@@ -1,0 +1,32 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/storage/table_io_manager.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/common/common.hpp"
+
+namespace duckdb {
+class BlockManager;
+class DataTable;
+
+class TableIOManager {
+public:
+	virtual ~TableIOManager() {
+	}
+
+	//! Obtains a reference to the TableIOManager of a specific table
+	static TableIOManager &Get(DataTable &table);
+
+	//! The block manager used for managing index data
+	virtual BlockManager &GetIndexBlockManager() = 0;
+
+	//! The block manager used for storing row group data
+	virtual BlockManager &GetBlockManagerForRowData() = 0;
+};
+
+} // namespace duckdb

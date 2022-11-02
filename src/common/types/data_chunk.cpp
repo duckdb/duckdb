@@ -29,27 +29,41 @@ DataChunk::~DataChunk() {
 }
 
 void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
-	capacity = STANDARD_VECTOR_SIZE;
-	D_ASSERT(data.empty());   // can only be initialized once
-	D_ASSERT(!types.empty()); // empty chunk not allowed
-	for (idx_t i = 0; i < types.size(); i++) {
-		data.emplace_back(Vector(types[i], nullptr));
-	}
+	InitializeEmpty(types.begin(), types.end());
 }
 
 void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types) {
-	D_ASSERT(data.empty());   // can only be initialized once
-	D_ASSERT(!types.empty()); // empty chunk not allowed
+	Initialize(allocator, types.begin(), types.end());
+}
+
+void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types) {
+	Initialize(Allocator::Get(context), types);
+}
+
+void DataChunk::Initialize(Allocator &allocator, vector<LogicalType>::const_iterator begin,
+                           vector<LogicalType>::const_iterator end) {
+	D_ASSERT(data.empty());                   // can only be initialized once
+	D_ASSERT(std::distance(begin, end) != 0); // empty chunk not allowed
 	capacity = STANDARD_VECTOR_SIZE;
-	for (idx_t i = 0; i < types.size(); i++) {
-		VectorCache cache(allocator, types[i]);
+	for (; begin != end; begin++) {
+		VectorCache cache(allocator, *begin);
 		data.emplace_back(cache);
 		vector_caches.push_back(move(cache));
 	}
 }
 
-void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types) {
-	Initialize(Allocator::Get(context), types);
+void DataChunk::Initialize(ClientContext &context, vector<LogicalType>::const_iterator begin,
+                           vector<LogicalType>::const_iterator end) {
+	Initialize(Allocator::Get(context), begin, end);
+}
+
+void DataChunk::InitializeEmpty(vector<LogicalType>::const_iterator begin, vector<LogicalType>::const_iterator end) {
+	capacity = STANDARD_VECTOR_SIZE;
+	D_ASSERT(data.empty());                   // can only be initialized once
+	D_ASSERT(std::distance(begin, end) != 0); // empty chunk not allowed
+	for (; begin != end; begin++) {
+		data.emplace_back(Vector(*begin, nullptr));
+	}
 }
 
 void DataChunk::Reset() {
@@ -80,6 +94,15 @@ Value DataChunk::GetValue(idx_t col_idx, idx_t index) const {
 
 void DataChunk::SetValue(idx_t col_idx, idx_t index, const Value &val) {
 	data[col_idx].SetValue(index, val);
+}
+
+bool DataChunk::AllConstant() const {
+	for (auto &v : data) {
+		if (v.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			return false;
+		}
+	}
+	return true;
 }
 
 void DataChunk::Reference(DataChunk &chunk) {
@@ -150,7 +173,7 @@ void DataChunk::Fuse(DataChunk &other) {
 	other.Destroy();
 }
 
-void DataChunk::ReferenceColumns(DataChunk &other, vector<column_t> column_ids) {
+void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &column_ids) {
 	D_ASSERT(ColumnCount() == column_ids.size());
 	Reset();
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {

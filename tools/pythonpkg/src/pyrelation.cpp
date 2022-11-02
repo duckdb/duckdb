@@ -5,6 +5,11 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/vector_conversion.hpp"
 #include "duckdb_python/pandas_type.hpp"
+#include "duckdb/main/relation/query_relation.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/main/relation/view_relation.hpp"
+#include "duckdb/function/pragma/pragma_functions.hpp"
+#include "duckdb/parser/statement/pragma_statement.hpp"
 
 namespace duckdb {
 
@@ -129,8 +134,10 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows as a list of tuples")
 	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
 	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
-	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
-	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
+	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
+	         py::arg("date_as_object") = false)
+	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
+	         py::arg("date_as_object") = false)
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
 	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
@@ -488,7 +495,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const DataFrame &df, D
 	return conn->FromDF(df)->Distinct();
 }
 
-DataFrame DuckDBPyRelation::ToDF() {
+DataFrame DuckDBPyRelation::ToDF(bool date_as_object) {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
@@ -497,7 +504,7 @@ DataFrame DuckDBPyRelation::ToDF() {
 	if (res->result->HasError()) {
 		res->result->ThrowError();
 	}
-	return res->FetchDF();
+	return res->FetchDF(date_as_object);
 }
 
 py::object DuckDBPyRelation::Fetchone() {
@@ -619,16 +626,41 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
-unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
-	auto res = make_unique<DuckDBPyResult>();
-	{
-		py::gil_scoped_release release;
-		res->result = rel->Query(view_name, sql_query);
+static bool IsDescribeStatement(SQLStatement &statement) {
+	if (statement.type != StatementType::PRAGMA_STATEMENT) {
+		return false;
 	}
-	if (res->result->HasError()) {
-		res->result->ThrowError();
+	auto &pragma_statement = (PragmaStatement &)statement;
+	if (pragma_statement.info->name != "show") {
+		return false;
 	}
-	return res;
+	return true;
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
+	auto view_relation = CreateView(view_name);
+	auto all_dependencies = rel->GetAllDependencies();
+	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
+
+	Parser parser(rel->context.GetContext()->GetParserOptions());
+	parser.ParseQuery(sql_query);
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("'DuckDBPyRelation.query' only accepts a single statement");
+	}
+	auto &statement = *parser.statements[0];
+	if (statement.type == StatementType::SELECT_STATEMENT) {
+		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0]));
+		auto query_relation =
+		    make_shared<QueryRelation>(rel->context.GetContext(), move(select_statement), "query_relation");
+		return make_unique<DuckDBPyRelation>(move(query_relation));
+	} else if (IsDescribeStatement(statement)) {
+		FunctionParameters parameters;
+		parameters.values.emplace_back(view_name);
+		auto query = PragmaShow(*rel->context.GetContext(), parameters);
+		return Query(view_name, query);
+	}
+	throw InvalidInputException("'DuckDBPyRelation.query' does not accept statements of type %s",
+	                            StatementTypeToString(statement.type));
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
@@ -648,7 +680,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(const DataFrame &df, const 
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromDF(df)->Query(view_name, sql_query);
+	return conn->FromDF(df)->Query(view_name, sql_query)->Execute();
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
@@ -662,7 +694,14 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 	}
 }
 
+static bool IsAcceptedInsertRelationType(const Relation &relation) {
+	return relation.type == RelationType::TABLE_RELATION;
+}
+
 void DuckDBPyRelation::Insert(py::object params) {
+	if (!IsAcceptedInsertRelationType(*this->rel)) {
+		throw InvalidInputException("'DuckDBPyRelation.insert' can only be used on a table relation");
+	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(move(params))};
 	py::gil_scoped_release release;
 	rel->Insert(values);

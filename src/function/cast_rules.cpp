@@ -22,6 +22,7 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST:
+	case LogicalTypeId::UNION:
 		return 160;
 	default:
 		return 110;
@@ -190,16 +191,24 @@ static int64_t ImplicitCastDate(const LogicalType &to) {
 }
 
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
-	if (to.id() == LogicalTypeId::ANY) {
-		// anything can be cast to ANY type for no cost
-		return 0;
-	}
 	if (from.id() == LogicalTypeId::SQLNULL) {
 		// NULL expression can be cast to anything
 		return TargetTypeCost(to);
 	}
 	if (from.id() == LogicalTypeId::UNKNOWN) {
 		// parameter expression can be cast to anything for no cost
+		return 0;
+	}
+	if (to.id() == LogicalTypeId::ANY) {
+		// anything can be cast to ANY type for (almost no) cost
+		return 1;
+	}
+	if (from.GetAlias() != to.GetAlias()) {
+		// if aliases are different, an implicit cast is not possible
+		return -1;
+	}
+	if (from.id() == to.id()) {
+		// arguments match: do nothing
 		return 0;
 	}
 	if (from.id() == LogicalTypeId::BLOB && to.id() == LogicalTypeId::VARCHAR) {
@@ -219,6 +228,51 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// Lists can be cast if their child types can be cast
 		return ImplicitCast(ListType::GetChildType(from), ListType::GetChildType(to));
 	}
+
+	if (from.id() == LogicalTypeId::UNION && to.id() == LogicalTypeId::UNION) {
+		// Unions can be cast if the source tags are a subset of the target tags
+		// in which case the most expensive cost is used
+		int cost = -1;
+		for (idx_t from_member_idx = 0; from_member_idx < UnionType::GetMemberCount(from); from_member_idx++) {
+			auto &from_member_name = UnionType::GetMemberName(from, from_member_idx);
+
+			bool found = false;
+			for (idx_t to_member_idx = 0; to_member_idx < UnionType::GetMemberCount(to); to_member_idx++) {
+				auto &to_member_name = UnionType::GetMemberName(to, to_member_idx);
+
+				if (from_member_name == to_member_name) {
+					auto &from_member_type = UnionType::GetMemberType(from, from_member_idx);
+					auto &to_member_type = UnionType::GetMemberType(to, to_member_idx);
+
+					int child_cost = ImplicitCast(from_member_type, to_member_type);
+					if (child_cost > cost) {
+						cost = child_cost;
+					}
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				return -1;
+			}
+		}
+		return cost;
+	}
+
+	if (to.id() == LogicalTypeId::UNION) {
+		// check that the union type is fully resolved.
+		if (to.AuxInfo() == nullptr) {
+			return -1;
+		}
+		// every type can be implicitly be cast to a union if the source type is a member of the union
+		for (idx_t i = 0; i < UnionType::GetMemberCount(to); i++) {
+			auto member = UnionType::GetMemberType(to, i);
+			if (from == member) {
+				return 0;
+			}
+		}
+	}
+
 	if ((from.id() == LogicalTypeId::TIMESTAMP_SEC || from.id() == LogicalTypeId::TIMESTAMP_MS ||
 	     from.id() == LogicalTypeId::TIMESTAMP_NS) &&
 	    to.id() == LogicalTypeId::TIMESTAMP) {

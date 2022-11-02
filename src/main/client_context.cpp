@@ -217,6 +217,10 @@ Executor &ClientContext::GetExecutor() {
 	return *active_query->executor;
 }
 
+FileOpener *FileOpener::Get(ClientContext &context) {
+	return ClientData::Get(context).file_opener.get();
+}
+
 const string &ClientContext::GetCurrentQuery() {
 	D_ASSERT(active_query);
 	return active_query->query;
@@ -320,7 +324,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 #ifdef DEBUG
 	plan->Verify(*this);
 #endif
-	if (config.enable_optimizer) {
+	if (config.enable_optimizer && plan->RequireOptimizer()) {
 		profiler.StartPhase("optimizer");
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
@@ -405,6 +409,11 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			query_progress = active_query->progress_bar->GetCurrentPercentage();
 		}
 		return result;
+	} catch (FatalException &ex) {
+		// fatal exceptions invalidate the entire database
+		result.SetError(PreservedError(ex));
+		auto &db = DatabaseInstance::GetDatabase(*this);
+		db.Invalidate();
 	} catch (const Exception &ex) {
 		result.SetError(PreservedError(ex));
 	} catch (std::exception &ex) {
@@ -624,9 +633,19 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		case StatementType::INSERT_STATEMENT:
 		case StatementType::DELETE_STATEMENT:
 		case StatementType::UPDATE_STATEMENT: {
-			auto sql = statement->ToString();
 			Parser parser;
-			parser.ParseQuery(sql);
+			PreservedError error;
+			try {
+				parser.ParseQuery(statement->ToString());
+			} catch (const Exception &ex) {
+				error = PreservedError(ex);
+			} catch (std::exception &ex) {
+				error = PreservedError(ex);
+			}
+			if (error) {
+				// error in verifying query
+				return make_unique<PendingQueryResult>(error);
+			}
 			statement = move(parser.statements[0]);
 			break;
 		}
@@ -743,9 +762,8 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 	if (statements.empty()) {
 		// no statements, return empty successful result
 		StatementProperties properties;
-		vector<LogicalType> types;
 		vector<string> names;
-		auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), move(types));
+		auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator());
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(names),
 		                                            move(collection), GetClientProperties());
 	}
@@ -942,9 +960,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}
 		}
-		for (auto &chunk : collection.Chunks()) {
-			table_entry->storage->Append(*table_entry, *this, chunk);
-		}
+		table_entry->storage->LocalAppend(*table_entry, *this, collection);
 	});
 }
 

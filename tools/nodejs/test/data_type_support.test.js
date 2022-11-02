@@ -20,6 +20,33 @@ describe("data type support", function () {
       done();
     });
   });
+
+  it("supports INTEGER values", function (done) {
+    db.run("CREATE TABLE integer_table (a TINYINT, b SMALLINT, c INTEGER, d BIGINT, e UTINYINT, f USMALLINT, g UINTEGER, h UBIGINT)");
+    const stmt = db.prepare("INSERT INTO integer_table VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+
+    // Numerical limits
+    signedMinValue = (bitWidth) => Math.max(-(2**(bitWidth-1)-1)-1, Number.MIN_SAFE_INTEGER);
+    signedMaxValue = (bitWidth) => Math.min(2**(bitWidth-1)-1, Number.MAX_SAFE_INTEGER);
+    unsignedMaxValue = (bitWidth) => Math.min(2**(bitWidth)-1, Number.MAX_SAFE_INTEGER);
+    let minValues = [signedMinValue(8), signedMinValue(16), signedMinValue(32), signedMinValue(64), 0, 0, 0, 0];
+    let maxValues = [signedMinValue(8), signedMinValue(16), signedMinValue(32), signedMinValue(64), unsignedMaxValue(8), unsignedMaxValue(16), unsignedMaxValue(32), unsignedMaxValue(64)];
+
+    // Insert values
+    stmt.run(...minValues);
+    stmt.run(...maxValues);
+
+    db.prepare("SELECT * from integer_table;").all((err, res) => {
+      assert(err === null);
+      assert(res.length === 2);
+      assert(Object.entries(res[0]).length === 8);
+      assert(Object.entries(res[1]).length === 8);
+      assert.deepEqual(Object.entries(res[0]).map(v => v[1]), minValues);
+      assert.deepEqual(Object.entries(res[1]).map(v => v[1]), maxValues);
+      done();
+    });
+  });
+
   it("supports INTERVAL values", function (done) {
     db.prepare(
       `SELECT
@@ -160,5 +187,11 @@ describe("data type support", function () {
       assert(res.every((v, i) => v.d === values[i]));
       done();
     });
+  });
+  it("converts unsupported data types to strings", function(done) {
+      db.all("SELECT CAST('11:10:10' AS TIME) as time", function(err, rows) {
+          assert.equal(rows[0].time, '11:10:10');
+          done();
+      });
   });
 });

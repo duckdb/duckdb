@@ -6,11 +6,12 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -145,7 +146,10 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 
 			// jury-rigging the GroupedAggregateHashTable
 			// we need a count_star and a count to get counts with and without NULLs
-			aggr = AggregateFunction::BindAggregateFunction(context, CountStarFun::GetFunction(), {}, nullptr, false);
+
+			FunctionBinder function_binder(context);
+			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
+			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
@@ -154,7 +158,8 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
 			children.push_back(make_unique_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
-			aggr = AggregateFunction::BindAggregateFunction(context, count_fun, move(children), nullptr, false);
+			aggr =
+			    function_binder.BindAggregateFunction(count_fun, move(children), nullptr, AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
@@ -252,18 +257,17 @@ private:
 	bool parallel;
 };
 
-class HashJoinFinalizeEvent : public Event {
+class HashJoinFinalizeEvent : public BasePipelineEvent {
 public:
 	HashJoinFinalizeEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink)
-	    : Event(pipeline_p.executor), pipeline(pipeline_p), sink(sink) {
+	    : BasePipelineEvent(pipeline_p), sink(sink) {
 	}
 
-	Pipeline &pipeline;
 	HashJoinGlobalSinkState &sink;
 
 public:
 	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
+		auto &context = pipeline->GetClientContext();
 		auto parallel_construct_count =
 		    context.config.verify_parallelism ? STANDARD_VECTOR_SIZE : PARALLEL_CONSTRUCT_COUNT;
 
@@ -330,20 +334,19 @@ private:
 	JoinHashTable &local_ht;
 };
 
-class HashJoinPartitionEvent : public Event {
+class HashJoinPartitionEvent : public BasePipelineEvent {
 public:
 	HashJoinPartitionEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink,
 	                       vector<unique_ptr<JoinHashTable>> &local_hts)
-	    : Event(pipeline_p.executor), pipeline(pipeline_p), sink(sink), local_hts(local_hts) {
+	    : BasePipelineEvent(pipeline_p), sink(sink), local_hts(local_hts) {
 	}
 
-	Pipeline &pipeline;
 	HashJoinGlobalSinkState &sink;
 	vector<unique_ptr<JoinHashTable>> &local_hts;
 
 public:
 	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
+		auto &context = pipeline->GetClientContext();
 		vector<unique_ptr<Task>> partition_tasks;
 		partition_tasks.reserve(local_hts.size());
 		for (auto &local_ht : local_hts) {
@@ -356,7 +359,7 @@ public:
 	void FinishEvent() override {
 		local_hts.clear();
 		sink.hash_table->PrepareExternalFinalize();
-		sink.ScheduleFinalize(pipeline, *this);
+		sink.ScheduleFinalize(*pipeline, *this);
 	}
 };
 
@@ -402,7 +405,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-class HashJoinOperatorState : public OperatorState {
+class HashJoinOperatorState : public CachingOperatorState {
 public:
 	explicit HashJoinOperatorState(Allocator &allocator) : probe_executor(allocator), spill_collection(nullptr) {
 	}
@@ -447,8 +450,8 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	return move(state);
 }
 
-OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                             GlobalOperatorState &gstate, OperatorState &state_p) const {
+OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                     GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = (HashJoinOperatorState &)state_p;
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
 	D_ASSERT(sink.finalized);

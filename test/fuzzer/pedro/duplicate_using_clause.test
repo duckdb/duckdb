@@ -1,0 +1,47 @@
+# name: test/fuzzer/pedro/duplicate_using_clause.test
+# description: Issue #4561: Binding assertion error
+# group: [pedro]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+query I
+SELECT * FROM t1 JOIN t1 t2 USING (c0, c0)
+----
+
+query II
+SELECT * FROM (t1 JOIN t1 t2 USING (c0)), (SELECT 42)
+----
+
+query II
+SELECT * FROM (t1 JOIN t1 t2 USING (c0, c0)), (SELECT 42)
+----
+
+statement ok
+create table tbl as select 42 AS i;
+
+query I
+select * from tbl t1 join tbl t2 using (i) join tbl t3 using (i);
+----
+42
+
+query I
+select * from tbl t1 join tbl t2 using (i, i) join tbl t3 using (i, i, i);
+----
+42
+
+statement ok
+create or replace table tbl as select 42 AS i, 84 as j;
+
+query II
+select * from tbl t1 join tbl t2 using (i, j) join tbl t3 using (i, j);
+----
+42	84
+
+query II
+select * from tbl t1 join tbl t2 using (i, j, i) join tbl t3 using (i, i, i, j, i);
+----
+42	84

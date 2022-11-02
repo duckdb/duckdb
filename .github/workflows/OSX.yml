@@ -173,25 +173,21 @@ jobs:
           treat_warn_as_error: 0
           post_install: rm build/release/src/libduckdb*
           run_tests: 0
-          out_of_tree_ext: 1
-          static_link_build: 1
           osx_universal: 1
 
       - name: Deploy
         shell: bash
         run: |
-          zip -j httpfs.duckdb_extension.zip build/release/extension/httpfs/httpfs.duckdb_extension
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
-            ./scripts/extension-upload.sh osx_amd64
-            ./scripts/extension-upload.sh osx_arm64
+            ./scripts/extension-upload.sh osx_amd64 ${{ github.ref_name }}
+            ./scripts/extension-upload.sh osx_arm64 ${{ github.ref_name }}
+            ./scripts/extension-upload-test.sh
+          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+            pip install awscli
+            ./scripts/extension-upload.sh osx_amd64 `git log -1 --format=%h`
+            ./scripts/extension-upload.sh osx_arm64 `git log -1 --format=%h`
             ./scripts/extension-upload-test.sh
           else
             ./scripts/extension-upload-test.sh local
           fi
-
-      - uses: actions/upload-artifact@v2
-        with:
-          name: duckdb-binaries-osx
-          path: |
-            httpfs.duckdb_extension.zip
