@@ -2,6 +2,8 @@
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
 
+#include <climits>
+
 namespace duckdb_jemalloc {
 
 /*
@@ -45,7 +47,11 @@ namespace duckdb_jemalloc {
  * total number of bits in a pointer, e.g. on x64, for which the uppermost 16
  * bits are the same as bit 47.
  */
-#define LG_VADDR 48
+#if INTPTR_MAX == INT64_MAX
+  #define LG_VADDR 48
+#else
+  #define LG_VADDR 32
+#endif
 
 /* Defined if C11 atomics are available. */
 #define JEMALLOC_C11_ATOMICS 
@@ -379,11 +385,6 @@ namespace duckdb_jemalloc {
 
 /* sizeof(int) == 2^LG_SIZEOF_INT. */
 #define LG_SIZEOF_INT 2
-
-// Include limits, so we can try to figure out the size of a long
-} // namespace duckdb_jemalloc
-#include <climits>
-namespace duckdb_jemalloc {
 
 /* sizeof(long) == 2^LG_SIZEOF_LONG. */
 #if ULONG_MAX > UINT_MAX
