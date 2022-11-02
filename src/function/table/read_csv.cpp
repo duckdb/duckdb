@@ -33,9 +33,14 @@ void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &
 	}
 }
 
-void ReadCSVData::Finalize() {
+void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
-	single_threaded = true;
+	auto &config = DBConfig::GetConfig(context);
+	single_threaded = !config.options.experimental_parallel_csv_reader;
+	if (options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1) {
+		// not supported for parallel CSV reading
+		single_threaded = true;
+	}
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -192,7 +197,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 	result->options.names = names;
-	result->Finalize();
+	result->FinalizeRead(context);
 	return move(result);
 }
 
@@ -544,7 +549,6 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	if (bind_data.single_threaded) {
 		SingleThreadedCSVFunction(context, data_p, output);
 	} else {
-		throw InternalException("FIXME: parallel csv read");
 		ParallelReadCSVFunction(context, data_p, output);
 	}
 }

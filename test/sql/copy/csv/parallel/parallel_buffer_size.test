@@ -1,10 +1,13 @@
-# name: test/sql/copy/csv/parallel/test_parallel_tpch.test
+# name: test/sql/copy/csv/parallel/parallel_buffer_size.test
 # description: Test read CSV function
 # group: [parallel]
 
 #statement ok
 #PRAGMA enable_verification
 #
+
+statement ok
+SET experimental_parallel_csv=true;
 
 statement ok
 pragma threads=4

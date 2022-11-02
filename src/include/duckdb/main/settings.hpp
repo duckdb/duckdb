@@ -154,6 +154,14 @@ struct EnableProgressBarSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct ExperimentalParallelCSVSetting {
+	static constexpr const char *Name = "experimental_parallel_csv";
+	static constexpr const char *Description = "Whether or not to use the experimental parallel CSV reader";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ExplainOutputSetting {
 	static constexpr const char *Name = "explain_output";
 	static constexpr const char *Description = "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)";

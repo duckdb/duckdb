@@ -108,7 +108,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		// no FORCE_QUOTE specified: initialize to false
 		options.force_not_null.resize(expected_types.size(), false);
 	}
-	bind_data->Finalize();
+	bind_data->FinalizeRead(context);
 	return move(bind_data);
 }
 

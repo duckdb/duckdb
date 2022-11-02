@@ -336,6 +336,18 @@ Value EnableProgressBarSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Experimental Parallel CSV
+//===--------------------------------------------------------------------===//
+void ExperimentalParallelCSVSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.experimental_parallel_csv_reader = input.GetValue<bool>();
+}
+
+Value ExperimentalParallelCSVSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(config.options.experimental_parallel_csv_reader);
+}
+
+//===--------------------------------------------------------------------===//
 // Explain Output
 //===--------------------------------------------------------------------===//
 void ExplainOutputSetting::SetLocal(ClientContext &context, const Value &input) {

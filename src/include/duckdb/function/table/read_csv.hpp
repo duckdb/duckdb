@@ -34,7 +34,7 @@ struct BaseCSVData : public TableFunctionData {
 	idx_t filename_col_idx;
 	idx_t hive_partition_col_idx;
 
-	virtual void Finalize();
+	void Finalize();
 };
 
 struct WriteCSVData : public BaseCSVData {
@@ -66,7 +66,7 @@ struct ReadCSVData : public BaseCSVData {
 	bool single_threaded = false;
 
 	void InitializeFiles(ClientContext &context, const vector<string> &patterns);
-	void Finalize() override;
+	void FinalizeRead(ClientContext &context);
 };
 
 struct CSVCopyFunction {
