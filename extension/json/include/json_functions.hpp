@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,7 @@ public:
 	static void RegisterCastFunctions(CastFunctionSet &casts, GetCastFunctionInput input);
 
 private:
+	// Scalar functions
 	static CreateScalarFunctionInfo GetExtractFunction();
 	static CreateScalarFunctionInfo GetExtractStringFunction();
 
@@ -47,6 +49,10 @@ private:
 			functions.push_back(fun);
 		}
 	}
+
+private:
+	// Table functions
+	static CreateTableFunctionInfo GetReadJSONObjectsFunction();
 };
 
 } // namespace duckdb

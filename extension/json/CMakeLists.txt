@@ -8,6 +8,7 @@ add_subdirectory(yyjson)
 add_subdirectory(json_functions)
 
 set(JSON_EXTENSION_FILES
+    buffered_json_reader.cpp
     json-extension.cpp
     json_common.cpp
     json_functions.cpp
