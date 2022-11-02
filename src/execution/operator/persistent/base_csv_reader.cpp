@@ -29,14 +29,14 @@ static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 }
 
 BaseCSVReader::BaseCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
-                                     BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
+                             BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
     : fs(fs_p), allocator(allocator), opener(opener_p), options(move(options_p)) {
 }
 
 BaseCSVReader::BaseCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
-                                     const vector<LogicalType> &requested_types)
+                             const vector<LogicalType> &requested_types)
     : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                        move(options_p), requested_types) {
+                    move(options_p), requested_types) {
 }
 
 BaseCSVReader::~BaseCSVReader() {
@@ -154,7 +154,7 @@ bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const Log
 }
 
 void BaseCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions,
-                                 bool has_quotes) {
+                             bool has_quotes) {
 	if (length == 0 && column == 0) {
 		row_empty = true;
 	} else {

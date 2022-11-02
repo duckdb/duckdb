@@ -17,7 +17,6 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOp
 }
 
 BufferedCSVReader::~BufferedCSVReader() {
-
 }
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
@@ -1358,4 +1357,4 @@ bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_ch
 	}
 }
 
-}
+} // namespace duckdb

@@ -19,8 +19,10 @@ namespace duckdb {
 struct ReadCSVLocalState;
 
 struct CSVBufferRead {
-	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index)
-	    : buffer(move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index) {
+	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index,
+	              idx_t estimated_linenr)
+	    : buffer(move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index),
+	      estimated_linenr(estimated_linenr) {
 		if (buffer) {
 			if (buffer_end > buffer->GetBufferSize()) {
 				buffer_end = buffer->GetBufferSize();
@@ -38,6 +40,7 @@ struct CSVBufferRead {
 	idx_t buffer_start;
 	idx_t buffer_end;
 	idx_t batch_index;
+	idx_t estimated_linenr;
 
 public:
 	void Reset() {
@@ -74,6 +77,7 @@ public:
 	void SetBufferRead(const CSVBufferRead &buffer_read);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
+
 private:
 	//! Initialize Parser
 	void Initialize(const vector<LogicalType> &requested_types);

@@ -34,10 +34,10 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DA
 class BaseCSVReader {
 public:
 	BaseCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
-	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
+	              const vector<LogicalType> &requested_types = vector<LogicalType>());
 
 	BaseCSVReader(FileSystem &fs, Allocator &allocator, FileOpener *opener, BufferedCSVReaderOptions options,
-	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
+	              const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BaseCSVReader();
 
 	FileSystem &fs;
@@ -96,7 +96,6 @@ protected:
 	void Flush(DataChunk &insert_chunk);
 
 	unique_ptr<CSVFileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
-
 
 	void VerifyUTF8(idx_t col_idx);
 	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);

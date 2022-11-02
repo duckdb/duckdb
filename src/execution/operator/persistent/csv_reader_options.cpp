@@ -250,4 +250,4 @@ std::string BufferedCSVReaderOptions::ToString() const {
 	       ", IGNORE_ERRORS=" + std::to_string(ignore_errors) + ", ALL_VARCHAR=" + std::to_string(all_varchar);
 }
 
-}
+} // namespace duckdb

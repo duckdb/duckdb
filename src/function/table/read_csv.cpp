@@ -104,6 +104,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			D_ASSERT(return_types.size() == names.size());
 		}
 		options = result->options;
+		result->sql_types = initial_reader->sql_types;
 		result->initial_reader = move(initial_reader);
 	} else {
 		result->sql_types = return_types;
@@ -191,8 +192,12 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 struct ReadCSVGlobalState : public GlobalTableFunctionState {
 public:
 	ReadCSVGlobalState(unique_ptr<CSVFileHandle> file_handle_p, vector<string> &files_path_p, idx_t system_threads_p,
-	                   idx_t buffer_size_p)
+	                   idx_t buffer_size_p, idx_t rows_to_skip)
 	    : file_handle(move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p) {
+		for (idx_t i = 0; i < rows_to_skip; i++) {
+			file_handle->ReadLine();
+		}
+		estimated_linenr = rows_to_skip;
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
 		bytes_per_local_state = buffer_size / MaxThreads();
@@ -225,6 +230,8 @@ private:
 	idx_t next_byte = 0;
 	//! Size of current file
 	idx_t file_size;
+	//! The current estimated line number
+	idx_t estimated_linenr;
 
 	//! How many bytes we should execute per local state
 	idx_t bytes_per_local_state;
@@ -260,10 +267,11 @@ unique_ptr<CSVBufferRead> ReadCSVGlobalState::Next(ClientContext &context, ReadC
 		return nullptr;
 	}
 	// set up the current buffer
-	auto result =
-	    make_unique<CSVBufferRead>(current_buffer, next_byte, next_byte + bytes_per_local_state, batch_index++);
+	auto result = make_unique<CSVBufferRead>(current_buffer, next_byte, next_byte + bytes_per_local_state,
+	                                         batch_index++, estimated_linenr);
 	// move the byte index of the CSV reader to the next buffer
 	next_byte += bytes_per_local_state;
+	estimated_linenr += bytes_per_local_state / (bind_data.sql_types.size() * 5); // estimate 5 bytes per column
 	if (next_byte >= current_buffer->GetBufferSize()) {
 		// We replace the current buffer with the next buffer
 		next_byte = 0;
@@ -298,8 +306,9 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 		bind_data.options.file_path = bind_data.files[0];
 		file_handle = ReadCSV::OpenCSV(bind_data.options, context);
 	}
+	idx_t rows_to_skip = bind_data.options.skip_rows + (bind_data.options.has_header ? 1 : 0);
 	return make_unique<ReadCSVGlobalState>(move(file_handle), bind_data.files, context.db->NumberOfThreads(),
-	                                       bind_data.options.buffer_size);
+	                                       bind_data.options.buffer_size, rows_to_skip);
 }
 
 //===--------------------------------------------------------------------===//
@@ -320,8 +329,8 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 	auto next_local_buffer = global_state.Next(context.client, csv_data);
 	unique_ptr<ParallelCSVReader> csv_reader;
 	if (next_local_buffer) {
-		csv_reader = make_unique<ParallelCSVReader>(context.client, csv_data.options, *next_local_buffer,
-		                                            csv_data.sql_types);
+		csv_reader =
+		    make_unique<ParallelCSVReader>(context.client, csv_data.options, *next_local_buffer, csv_data.sql_types);
 	}
 	auto new_local_state = make_unique<ReadCSVLocalState>(move(csv_reader));
 	return move(new_local_state);

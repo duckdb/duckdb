@@ -25,11 +25,13 @@
 namespace duckdb {
 
 ParallelCSVReader::ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
-                                     const CSVBufferRead &buffer_p,
-                                     const vector<LogicalType> &requested_types)
+                                     const CSVBufferRead &buffer_p, const vector<LogicalType> &requested_types)
     : BaseCSVReader(context, move(options_p), requested_types) {
 	Initialize(requested_types);
 	SetBufferRead(buffer_p);
+	if (options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1) {
+		throw InternalException("Parallel CSV reader cannot handle CSVs with multi-byte delimiters/escapes/quotes");
+	}
 }
 
 ParallelCSVReader::~ParallelCSVReader() {
@@ -37,10 +39,6 @@ ParallelCSVReader::~ParallelCSVReader() {
 
 void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	sql_types = requested_types;
-	if (options.header || options.skip_rows > 0) {
-//		SkipRowsAndReadHeader(options.skip_rows, options.header);
-		throw InternalException("FIXME: header/skip rows");
-	}
 	InitParseChunk(sql_types.size());
 	InitInsertChunkIdx(sql_types.size());
 }
@@ -79,6 +77,8 @@ void ParallelCSVReader::SetBufferRead(const CSVBufferRead &buffer_read_p) {
 	buffer_size = buffer_read_p.buffer->GetBufferSize();
 	buffer = buffer_read_p.buffer->buffer.get();
 	buffer_read = buffer_read_p;
+	linenr = buffer_read_p.estimated_linenr;
+	linenr_estimated = true;
 	D_ASSERT(end_buffer <= buffer_size);
 }
 
@@ -257,7 +257,7 @@ unquote:
 		return false;
 	}
 handle_escape:
-	D_ASSERT(0);
+	throw InternalException("FIXME: CSV escape");
 	/* state: handle_escape */
 //	// escape should be followed by a quote or another escape character
 //	position_buffer++;
@@ -276,7 +276,7 @@ handle_escape:
 //	// escape was followed by quote or escape, go back to quoted state
 //	goto in_quotes;
 carriage_return:
-	D_ASSERT(0);
+	throw InternalException("FIXME: carriage return");
 	/* state: carriage_return */
 	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
 	if (buffer[position_buffer] == '\n') {
