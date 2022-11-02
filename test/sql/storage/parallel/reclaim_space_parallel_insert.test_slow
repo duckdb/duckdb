@@ -2,8 +2,6 @@
 # description: Test space reclamation of optimistic writing with failures
 # group: [parallel]
 
-require parquet
-
 load __TEST_DIR__/reclaim_space_parallel_insert.db
 
 statement ok
@@ -25,9 +23,6 @@ violates primary key constraint
 
 statement ok
 CREATE TABLE block_count(count int)
-
-statement ok
-insert into block_count select total_blocks from pragma_database_size();
 
 loop i 0 10
 
@@ -71,10 +66,10 @@ SELECT COUNT(*)-${i} FROM integers2
 ----
 2
 
-endloop
-
 # ensure there is a small diff between min and max block counts
 query I
 select (max(count)-min(count))<20 from block_count
 ----
 true
+
+endloop

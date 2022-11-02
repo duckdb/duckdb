@@ -7,7 +7,10 @@ require parquet
 load __TEST_DIR__/reclaim_space_batch_insert.db
 
 statement ok
-CREATE TABLE integers AS SELECT * FROM range(10000000) t(i)
+COPY (FROM range(10000000) t(i)) TO '__TEST_DIR__/integers.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 200000)
+
+statement ok
+CREATE VIEW integers AS FROM '__TEST_DIR__/integers.parquet'
 
 statement ok
 CREATE TABLE integers2(i INTEGER PRIMARY KEY)
@@ -22,9 +25,6 @@ violates primary key constraint
 
 statement ok
 CREATE TABLE block_count(count int)
-
-statement ok
-insert into block_count select total_blocks from pragma_database_size();
 
 loop i 0 10
 
@@ -68,10 +68,10 @@ SELECT COUNT(*)-${i} FROM integers2
 ----
 2
 
-endloop
-
 # ensure there is a small diff between min and max block counts
 query I
 select (max(count)-min(count))<20 from block_count
 ----
 true
+
+endloop

@@ -90,7 +90,7 @@ void OptimisticDataWriter::Rollback() {
 	if (!written_blocks.empty()) {
 		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
 		for (auto block_id : written_blocks) {
-			block_manager.MarkBlockAsModified(block_id);
+			block_manager.MarkBlockAsFree(block_id);
 		}
 	}
 }
@@ -124,7 +124,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
                                      const LogicalType &target_type, const vector<column_t> &bound_columns,
                                      Expression &cast_expr)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(table, parent.optimistic_writer) {
+      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
 	row_groups = parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -132,7 +132,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(table, parent.optimistic_writer) {
+      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
 	row_groups = parent.row_groups->RemoveColumn(drop_idx);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -141,7 +141,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column,
                                      Expression *default_value)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(table, parent.optimistic_writer) {
+      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
 	row_groups = parent.row_groups->AddColumn(new_column, default_value);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -255,8 +255,18 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 	}
 }
 
+OptimisticDataWriter *LocalTableStorage::CreateOptimisticWriter() {
+	auto writer = make_unique<OptimisticDataWriter>(table);
+	optimistic_writers.push_back(move(writer));
+	return optimistic_writers.back().get();
+}
+
 void LocalTableStorage::Rollback() {
 	optimistic_writer.Rollback();
+	for (auto &writer : optimistic_writers) {
+		writer->Rollback();
+	}
+	optimistic_writers.clear();
 }
 
 //===--------------------------------------------------------------------===//
@@ -400,6 +410,11 @@ void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection) 
 		}
 	}
 	storage->row_groups->MergeStorage(collection);
+}
+
+OptimisticDataWriter *LocalStorage::CreateOptimisticWriter(DataTable *table) {
+	auto storage = table_manager.GetOrCreateStorage(table);
+	return storage->CreateOptimisticWriter();
 }
 
 bool LocalStorage::ChangesMade() noexcept {
