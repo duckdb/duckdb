@@ -32,6 +32,8 @@ public:
 
 	static RandomEngine &Get(ClientContext &context);
 
+	mutex lock;
+
 private:
 	unique_ptr<RandomState> random_state;
 };
