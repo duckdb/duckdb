@@ -1,6 +1,7 @@
 #include "json_functions.hpp"
 
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "json_common.hpp"
 
