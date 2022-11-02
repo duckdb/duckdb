@@ -1,7 +1,6 @@
 #ifndef JEMALLOC_INTERNAL_TSD_H
 #define JEMALLOC_INTERNAL_TSD_H
 
-#include "jemalloc/internal/jemalloc_internal_decls.h"
 #include "jemalloc/internal/activity_callback.h"
 #include "jemalloc/internal/arena_types.h"
 #include "jemalloc/internal/assert.h"

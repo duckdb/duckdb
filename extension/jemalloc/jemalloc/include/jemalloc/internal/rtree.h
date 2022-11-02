@@ -7,27 +7,7 @@
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/tsd.h"
 
-#include <climits>
-
 namespace duckdb_jemalloc {
-
-// re-define this stuff here since there seems to be some confusion
-#ifdef _MSC_VER
-#ifdef _WIN64
-#define LG_SIZEOF_PTR_WIN 3
-#else
-#define LG_SIZEOF_PTR_WIN 2
-#endif
-#endif
-
-/* sizeof(void *) == 2^LG_SIZEOF_PTR. */
-#ifdef _MSC_VER
-#  define LG_SIZEOF_PTR LG_SIZEOF_PTR_WIN
-#elseif INTPTR_MAX == INT64_MAX
-#  define LG_SIZEOF_PTR 3
-#else
-#  define LG_SIZEOF_PTR 2
-#endif
 
 /*
  * This radix tree implementation is tailored to the singular purpose of
