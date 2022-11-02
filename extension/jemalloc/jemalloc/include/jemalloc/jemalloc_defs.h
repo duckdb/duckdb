@@ -1,6 +1,8 @@
 /* include/jemalloc/jemalloc_defs.h.  Generated from jemalloc_defs.h.in by configure.  */
 #pragma once
 
+#include <climits>
+
 /* Defined if __attribute__((...)) syntax is supported. */
 #define JEMALLOC_HAVE_ATTR 
 

@@ -4,7 +4,7 @@
 //#include <cstdlib>
 //#include <cstdbool>
 //#include <cstdint>
-//#include <climits>
+#include <climits>
 
 #define DLLEXPORT
 
