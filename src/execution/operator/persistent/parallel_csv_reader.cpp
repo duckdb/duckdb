@@ -223,6 +223,7 @@ in_quotes:
 			goto final_state;
 		}
 	} else {
+		position_buffer--;
 		goto in_quotes;
 	}
 

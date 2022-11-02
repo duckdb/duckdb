@@ -377,11 +377,13 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 	do {
 		if (output.size() != 0 || (csv_global_state.Finished() && csv_local_state.csv_reader->position_buffer >=
 		                                                              csv_local_state.csv_reader->end_buffer)) {
+			//			output.Print();
 			break;
 		}
 		if (csv_local_state.csv_reader->position_buffer >= csv_local_state.csv_reader->end_buffer) {
 			auto next_chunk = csv_global_state.Next(context, bind_data);
 			if (!next_chunk) {
+				//				output.Print();
 				break;
 			}
 			csv_local_state.csv_reader->SetBufferRead(*next_chunk);

@@ -2,18 +2,14 @@
 # description: Test read CSV function
 # group: [parallel]
 
-#statement ok
-#PRAGMA enable_verification
-#
-
 statement ok
 SET experimental_parallel_csv=true;
 
 statement ok
-pragma threads=1
+pragma threads=4
 
 query I
-SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='false', delim = '|', buffer_size=20)
+SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='false', delim = '|', buffer_size=5)
 ----
 111111111
 
