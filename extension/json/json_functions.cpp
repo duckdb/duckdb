@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-vector<CreateScalarFunctionInfo> JSONFunctions::GetFunctions() {
+vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
 	vector<CreateScalarFunctionInfo> functions;
 
 	// Extract functions
@@ -32,6 +32,14 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetFunctions() {
 	functions.push_back(GetContainsFunction());
 	functions.push_back(GetTypeFunction());
 	functions.push_back(GetValidFunction());
+
+	return functions;
+}
+
+vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
+	vector<CreateTableFunctionInfo> functions;
+
+	functions.push_back(GetReadJSONObjectsFunction());
 
 	return functions;
 }

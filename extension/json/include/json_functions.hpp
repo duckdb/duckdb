@@ -18,7 +18,8 @@ struct CastParameters;
 
 class JSONFunctions {
 public:
-	static vector<CreateScalarFunctionInfo> GetFunctions();
+	static vector<CreateScalarFunctionInfo> GetScalarFunctions();
+	static vector<CreateTableFunctionInfo> GetTableFunctions();
 	static void RegisterCastFunctions(CastFunctionSet &casts, GetCastFunctionInput input);
 
 private:

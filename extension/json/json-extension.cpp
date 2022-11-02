@@ -35,17 +35,22 @@ void JSONExtension::Load(DuckDB &db) {
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
 	auto json_type = JSONCommon::JSONType();
-	CreateTypeInfo info(JSONCommon::JSON_TYPE_NAME, json_type);
-	info.temporary = true;
-	info.internal = true;
-	catalog.CreateType(*con.context, &info);
+	CreateTypeInfo type_info(JSONCommon::JSON_TYPE_NAME, json_type);
+	type_info.temporary = true;
+	type_info.internal = true;
+	catalog.CreateType(*con.context, &type_info);
 
 	// JSON casts
 	JSONFunctions::RegisterCastFunctions(DBConfig::GetConfig(*con.context).GetCastFunctions(),
 	                                     GetCastFunctionInput(*con.context));
 
-	// JSON functions
-	for (auto &fun : JSONFunctions::GetFunctions()) {
+	// JSON scalar functions
+	for (auto &fun : JSONFunctions::GetScalarFunctions()) {
+		catalog.CreateFunction(*con.context, &fun);
+	}
+
+	// JSON table functions
+	for (auto &fun : JSONFunctions::GetTableFunctions()) {
 		catalog.CreateFunction(*con.context, &fun);
 	}
 

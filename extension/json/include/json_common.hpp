@@ -8,15 +8,20 @@
 
 #pragma once
 
+#include "buffered_json_reader.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
 
 namespace duckdb {
 
+struct TableFunctionBindInput;
+
+// Scalar function stuff
 struct JSONReadFunctionData : public FunctionData {
 public:
 	JSONReadFunctionData(bool constant, string path_p, idx_t len);
@@ -46,6 +51,35 @@ public:
 	const vector<size_t> lens;
 };
 
+// Table function stuff
+struct JSONScanData : public TableFunctionData {
+	//! The file path of the JSON files to read
+	vector<string> files;
+	//! The JSON reader options
+	BufferedJSONReaderOptions options;
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
+	                                     vector<LogicalType> &return_types, vector<string> &names);
+};
+
+struct JSONScanGlobalState : public GlobalTableFunctionState {
+	//! The JSON reader
+	unique_ptr<BufferedJSONReader> json_reader;
+	//! The index of the next file to read (i.e. current file + 1)
+	idx_t file_index;
+
+	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
+};
+
+struct JSONScanLocalState : public LocalTableFunctionState {
+	bool initialized;
+	AllocatedData local_buffer;
+
+	static unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
+	                                                GlobalTableFunctionState *global_state);
+};
+
+// Wrapper around yyjson(_mut)_doc for easy cleanup
 template <class YYJSON_DOC_T>
 static inline void CleanupDoc(YYJSON_DOC_T *doc) {
 	throw InternalException("Unknown yyjson document type");
