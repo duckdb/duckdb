@@ -75,8 +75,10 @@ namespace duckdb_jemalloc {
 /* sizeof(void *) == 2^LG_SIZEOF_PTR. */
 #ifdef _MSC_VER
 #  define LG_SIZEOF_PTR LG_SIZEOF_PTR_WIN
-#else
+#elseif INTPTR_MAX == INT64_MAX
 #  define LG_SIZEOF_PTR 3
+#else
+#  define LG_SIZEOF_PTR 2
 #endif
 
 /*
