@@ -291,7 +291,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::JSON:
 		return &DefaultCasts::ReinterpretCast;
 	case LogicalTypeId::LIST:
-        // the second argument allows for a secondary casting function to be passed in the CastParameters
+		// the second argument allows for a secondary casting function to be passed in the CastParameters
 		return BoundCastInfo(
 		    &StringToNestedTypeCast<VectorStringToList>,
 		    ListBoundCastData::BindListToListCast(input, LogicalType::LIST(LogicalType::VARCHAR), target));

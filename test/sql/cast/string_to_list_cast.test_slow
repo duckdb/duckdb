@@ -1,4 +1,4 @@
-# name: test/sql/cast/string_to_list_cast.test
+# name: test/sql/cast/string_to_list_cast.test_slow
 # description: cast strings into (nested) list structures
 # group: [cast]
 
