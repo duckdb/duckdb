@@ -334,7 +334,8 @@ public:
 		Store<uint32_t>(symbol_table_offset, (data_ptr_t)&header_ptr->fsst_symbol_table_offset);
 		Store<uint32_t>((uint32_t)current_width, (data_ptr_t)&header_ptr->bitpacking_width);
 
-		if (symbol_table_offset + fsst_serialized_symbol_table_size > current_dictionary.end - current_dictionary.size) {
+		if (symbol_table_offset + fsst_serialized_symbol_table_size >
+		    current_dictionary.end - current_dictionary.size) {
 			throw InternalException("FSST string compression failed due to incorrect size calculation");
 		}
 
