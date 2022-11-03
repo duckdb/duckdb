@@ -47,4 +47,3 @@ test_that("extensions can be loaded", {
     res <- dbGetQuery(con, "SELECT id, first_name, last_name FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 3;")
     expect_equal(df0, res)
 })
-

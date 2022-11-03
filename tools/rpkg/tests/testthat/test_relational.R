@@ -90,4 +90,3 @@ test_that("we can cast R strings to DuckDB strings", {
         expect_equivalent(df, df2)
     }
 })
-

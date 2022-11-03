@@ -510,5 +510,3 @@ test_that("duckdb can read arrow timestamptz", {
     duckdb_unregister_arrow(con, "timestamps")
   }
 })
-
-
