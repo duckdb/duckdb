@@ -230,7 +230,8 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	SET_NAMES(data_frame, StringsToSexp(names));
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 		cpp11::external_pointer<AltrepVectorWrapper> ptr(new AltrepVectorWrapper(relation_wrapper, col_idx));
-		auto vector_sexp = r_protector.Protect(R_new_altrep(LogicalTypeToAltrepType(rel->Columns()[col_idx].Type()), ptr, R_NilValue));
+		auto vector_sexp =
+		    r_protector.Protect(R_new_altrep(LogicalTypeToAltrepType(rel->Columns()[col_idx].Type()), ptr, R_NilValue));
 		SET_VECTOR_ELT(data_frame, col_idx, vector_sexp);
 	}
 	return data_frame;
@@ -243,13 +244,12 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	if (!altrep_data) {
 		Rf_error("Not a lazy data frame");
 	}
-	auto wrapper = (AltrepVectorWrapper*) R_ExternalPtrAddr(altrep_data);
+	auto wrapper = (AltrepVectorWrapper *)R_ExternalPtrAddr(altrep_data);
 	if (!wrapper) {
 		Rf_error("Invalid lazy data frame");
 	}
 	return wrapper->rel->res.get() != nullptr;
 }
-
 
 // exception required as long as r-lib/decor#6 remains
 // clang-format off

@@ -31,6 +31,7 @@ add_library(
   src/statement.cpp
   src/register.cpp
   src/scan.cpp
+  src/transform.cpp
   src/utils.cpp
   src/altrep.cpp
   src/reltoaltrep.cpp
