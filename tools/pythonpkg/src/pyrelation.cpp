@@ -104,7 +104,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "Compute the function of a single column or a list of columns by the optional groups on the relation",
 	         py::arg("function_name"), py::arg("function_aggr"), py::arg("group_expr") = "",
 	         py::arg("function_parameter") = "", py::arg("projected_columns") = "")
-
 	    .def("union", &DuckDBPyRelation::Union, py::arg("union_rel"),
 	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("describe", &DuckDBPyRelation::Describe,
