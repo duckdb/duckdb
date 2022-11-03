@@ -2410,7 +2410,7 @@ public class TestDuckDBJDBC {
 						stmt::executeQuery,
 						SQLException.class
 				);
-				assertEquals(message, "String value is not valid UTF8");
+				assertEquals(message, "Null-byte (\\0) detected in value construction");
 			}
 		}
 	}

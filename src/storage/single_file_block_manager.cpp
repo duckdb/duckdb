@@ -235,6 +235,14 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 	return block;
 }
 
+void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
+	lock_guard<mutex> lock(block_lock);
+	D_ASSERT(block_id >= 0);
+	D_ASSERT(free_list.find(block_id) == free_list.end());
+	multi_use_blocks.erase(block_id);
+	free_list.insert(block_id);
+}
+
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
@@ -317,10 +325,6 @@ vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {
 		// a bit from the max block size
 		auto space_in_block = Storage::BLOCK_SIZE - 4 * sizeof(block_id_t);
 		auto total_blocks = (total_size + space_in_block - 1) / space_in_block;
-		auto &config = DBConfig::GetConfig(db);
-		if (config.options.debug_many_free_list_blocks) {
-			total_blocks++;
-		}
 		D_ASSERT(total_size > 0);
 		D_ASSERT(total_blocks > 0);
 

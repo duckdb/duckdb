@@ -276,8 +276,6 @@ SELECT ts + INTERVAL (-150) millisecond FROM limits WHERE label = 'tsmin';
 
 statement error
 SELECT ts + INTERVAL (-485) microsecond FROM limits WHERE label = 'tsmin';
-----
-290309-12-22 (BC) 00:00:00.000515+00
 
 # Backward from the maximum
 # UDate loses ms accuracy when close to the upper limit,

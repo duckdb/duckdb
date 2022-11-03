@@ -27,6 +27,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/main/error_manager.hpp"
 
 #include <utility>
 #include <cmath>
@@ -63,7 +64,7 @@ Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false), str_value(move(val)) {
 	if (!Value::StringIsValid(str_value.c_str(), str_value.size())) {
-		throw Exception("String value is not valid UTF8");
+		throw Exception(ErrorManager::InvalidUnicodeError(str_value, "value construction"));
 	}
 }
 

@@ -22,6 +22,8 @@ CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 # size by a small margin as the calculation is an estimate based on reads before parsing.
 statement error
 COPY test FROM '__TEST_DIR__/test.csv';
+----
+line 2
 
 # we can override the max line size
 statement ok
