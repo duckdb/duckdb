@@ -86,6 +86,7 @@ void ProgressBar::PrintProgressInternal(int percentage) {
 		result += PROGRESS_EMPTY;
 	}
 	result += PROGRESS_END;
+	result += " ";
 
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
 }
@@ -96,7 +97,7 @@ void ProgressBar::PrintProgress(int percentage) {
 
 void ProgressBar::FinishProgressBarPrint() {
 	PrintProgressInternal(100);
-	Printer::RawPrint(OutputStream::STREAM_STDOUT, " \n");
+	Printer::RawPrint(OutputStream::STREAM_STDOUT, "\n");
 	Printer::Flush(OutputStream::STREAM_STDOUT);
 }
 
