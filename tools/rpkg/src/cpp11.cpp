@@ -215,6 +215,13 @@ extern "C" SEXP _duckdb_rapi_rel_to_altrep(SEXP rel_p) {
     return cpp11::as_sexp(rapi_rel_to_altrep(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel_p)));
   END_CPP11
 }
+// reltoaltrep.cpp
+bool rapi_df_is_materialized(SEXP df);
+extern "C" SEXP _duckdb_rapi_df_is_materialized(SEXP df) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_df_is_materialized(cpp11::as_cpp<cpp11::decay_t<SEXP>>(df)));
+  END_CPP11
+}
 // statement.cpp
 void rapi_release(duckdb::stmt_eptr_t stmt);
 extern "C" SEXP _duckdb_rapi_release(SEXP stmt) {
@@ -291,6 +298,7 @@ extern "C" {
 static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_bind",               (DL_FUNC) &_duckdb_rapi_bind,               4},
     {"_duckdb_rapi_connect",            (DL_FUNC) &_duckdb_rapi_connect,            1},
+    {"_duckdb_rapi_df_is_materialized", (DL_FUNC) &_duckdb_rapi_df_is_materialized, 1},
     {"_duckdb_rapi_disconnect",         (DL_FUNC) &_duckdb_rapi_disconnect,         1},
     {"_duckdb_rapi_execute",            (DL_FUNC) &_duckdb_rapi_execute,            3},
     {"_duckdb_rapi_execute_arrow",      (DL_FUNC) &_duckdb_rapi_execute_arrow,      2},

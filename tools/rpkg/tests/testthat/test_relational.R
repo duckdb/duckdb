@@ -91,3 +91,17 @@ test_that("we can cast R strings to DuckDB strings", {
     }
 })
 
+
+test_that("the altrep-conversion for relations works", {
+  iris$Species <- as.character(iris$Species)
+  rel <- rel_from_df(con, iris)
+  df <- rel_to_altrep(rel)
+  expect_false(df_is_materialized(df))
+  inspect_output <- capture.output(.Internal(inspect(df)))
+  expect_true(any(grepl("DUCKDB_ALTREP_REL_VECTOR", inspect_output, fixed=TRUE)))
+  expect_true(any(grepl("DUCKDB_ALTREP_REL_ROWNAMES", inspect_output, fixed=TRUE)))
+  expect_false(df_is_materialized(df))
+  dim(df)
+  expect_true(df_is_materialized(df))
+  expect_equal(iris, df)
+})

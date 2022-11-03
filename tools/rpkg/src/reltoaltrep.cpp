@@ -236,6 +236,21 @@ static R_altrep_class_t LogicalTypeToAltrepType(LogicalType &type) {
 	return data_frame;
 }
 
+[[cpp11::register]] bool rapi_df_is_materialized(SEXP df) {
+	D_ASSERT(df);
+	auto first_col = VECTOR_ELT(df, 0);
+	auto altrep_data = R_altrep_data1(first_col);
+	if (!altrep_data) {
+		Rf_error("Not a lazy data frame");
+	}
+	auto wrapper = (AltrepVectorWrapper*) R_ExternalPtrAddr(altrep_data);
+	if (!wrapper) {
+		Rf_error("Invalid lazy data frame");
+	}
+	return wrapper->rel->res.get() != nullptr;
+}
+
+
 // exception required as long as r-lib/decor#6 remains
 // clang-format off
 [[cpp11::init]] void RelToAltrep_Initialize(DllInfo* dll) {

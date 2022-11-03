@@ -116,6 +116,10 @@ rapi_rel_to_altrep <- function(rel_p) {
   .Call(`_duckdb_rapi_rel_to_altrep`, rel_p)
 }
 
+rapi_df_is_materialized <- function(df) {
+  .Call(`_duckdb_rapi_df_is_materialized`, df)
+}
+
 rapi_release <- function(stmt) {
   invisible(.Call(`_duckdb_rapi_release`, stmt))
 }

@@ -2,17 +2,18 @@
 % Please edit documentation in R/relational.R
 \name{rel_to_altrep}
 \alias{rel_to_altrep}
-\title{Set the internal alias for a DuckDB relation object}
+\title{Transforms a relation object to a lazy data frame using altrep}
 \usage{
 rel_to_altrep(rel_p)
 }
 \arguments{
 \item{rel}{the DuckDB relation object}
-
-\item{alias}{the new alias}
+}
+\value{
+a data frame
 }
 \description{
-Set the internal alias for a DuckDB relation object
+Transforms a relation object to a lazy data frame using altrep
 }
 \examples{
 con <- DBI::dbConnect(duckdb())

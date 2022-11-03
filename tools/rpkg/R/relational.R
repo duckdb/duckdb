@@ -187,11 +187,25 @@ rel_alias <- rapi_rel_alias
 #' rel_set_alias(rel, "my_new_alias")
 rel_set_alias <- rapi_rel_set_alias
 
-#' Set the internal alias for a DuckDB relation object
+#' Transforms a relation object to a lazy data frame using altrep
 #' @param rel the DuckDB relation object
-#' @param alias the new alias
+#' @return a data frame
+
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
 #' print(rel_to_altrep(rel))
 rel_to_altrep <- rapi_rel_to_altrep
+
+
+#' Checks if a lazy data frame created using rel_to_altrep has been materialized yet
+#' @param df an altrep-backed lazy data frame
+#' @return true if materialization has happened
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' rel <- rel_from_df(con, mtcars)
+#' df <- rel_to_altrep(rel)
+#' stopifnot(!df_is_materialized(df))
+#' str(df)
+#' stopifnot(df_is_materialized(df))
+df_is_materialized <- rapi_df_is_materialized
