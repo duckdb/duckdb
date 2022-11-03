@@ -88,6 +88,8 @@ head.duckdb_relation <- function(x, n=6L, ...) {
     rapi_rel_limit(x, n)
 }
 
+rel_limit <- rapi_rel_limit
+
 #' Lazily project a DuckDB relation object
 #' @param rel the DuckDB relation object
 #' @param exprs a list of DuckDB expressions to project
