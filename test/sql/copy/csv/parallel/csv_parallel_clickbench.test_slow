@@ -136,16 +136,6 @@ create table hits as select * from hits_og limit 0;
 statement ok
 copy hits from '__TEST_DIR__/hits.csv';
 
-query I
-select count(*) from (SELECT * FROM hits EXCEPT SELECT * FROM hits_og);
-----
-0
-
-query I
-select count (*) from (SELECT * FROM hits_og EXCEPT SELECT * FROM hits);
-----
-0
-
 #Q 01
 query I
 SELECT COUNT(*) FROM hits;
