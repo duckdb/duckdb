@@ -31,12 +31,11 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("aggregate", &DuckDBPyRelation::Aggregate,
 	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
 	         py::arg("group_expr") = "")
-	    .def(
-	        "sum", &DuckDBPyRelation::Sum,
-	        "Compute the aggregate sum of a single column or a list of columns  by the optional groups on the relation",
-	        py::arg("sum_aggr"), py::arg("group_expr") = "")
+	    .def("sum", &DuckDBPyRelation::Sum,
+	         "Compute the aggregate sum of a single column or a list of columns by the optional groups on the relation",
+	         py::arg("sum_aggr"), py::arg("group_expr") = "")
 	    .def("count", &DuckDBPyRelation::Count,
-	         "Compute the aggregate count of a single column or a list of columns  by the optional groups on the "
+	         "Compute the aggregate count of a single column or a list of columns by the optional groups on the "
 	         "relation",
 	         py::arg("count_aggr"), py::arg("group_expr") = "")
 	    .def("median", &DuckDBPyRelation::Median,
@@ -44,10 +43,10 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "relation",
 	         py::arg("median_aggr"), py::arg("group_expr") = "")
 	    .def("quantile", &DuckDBPyRelation::Quantile,
-	         "Compute the quantile of a single column or a list of columns  by the optional groups on the relation",
+	         "Compute the quantile of a single column or a list of columns by the optional groups on the relation",
 	         py::arg("q"), py::arg("quantile_aggr"), py::arg("group_expr") = "")
 	    .def("apply", &DuckDBPyRelation::GenericAggregator,
-	         "Compute the function of a single column or a list of columns  by the optional groups on the relation",
+	         "Compute the function of a single column or a list of columns by the optional groups on the relation",
 	         py::arg("function_name"), py::arg("function_aggr"), py::arg("group_expr") = "",
 	         py::arg("function_parameter") = "", py::arg("projected_columns") = "")
 	    .def("min", &DuckDBPyRelation::Min,
@@ -70,7 +69,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("value_counts", &DuckDBPyRelation::ValueCounts, "Count number of rows with each unique value of variable",
 	         py::arg("value_counts_aggr"), py::arg("group_expr") = "")
 	    .def("mad", &DuckDBPyRelation::MAD,
-	         "Returns the median absolute deviation for the  aggregate columns. NULL values are ignored. Temporal "
+	         "Returns the median absolute deviation for the aggregate columns. NULL values are ignored. Temporal "
 	         "types return a positive INTERVAL.",
 	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
 	    .def("mode", &DuckDBPyRelation::Mode,
@@ -727,8 +726,8 @@ string DuckDBPyRelation::Print() {
 		rel_res_string = rel->Limit(10)->Execute()->ToString();
 	}
 
-	return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
-	       rel_res_string + "\n";
+	return rel->ToString() + "\n---------------------\n-- Result Preview --\n---------------------\n" + rel_res_string +
+	       "\n";
 }
 
 string DuckDBPyRelation::Explain() {

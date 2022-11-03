@@ -342,6 +342,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	return res;
 }
 
+// TODO: unify these with an enum/flag to indicate which conversions to do
 void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
@@ -352,6 +353,7 @@ void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
 	}
 }
 
+// TODO: unify these with an enum/flag to indicate which conversions to perform
 void DuckDBPyResult::ChangeDateToDatetime(DataFrame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::DATE) {
