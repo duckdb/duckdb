@@ -54,6 +54,127 @@ SELECT 2::DOUBLE::VARCHAR, 0.5::DOUBLE::VARCHAR, (-128.5)::DOUBLE::VARCHAR
 0.5
 -128.5
 
+query IIIII
+SELECT '0xF'::INTEGER, '0x0'::INTEGER, '0xFEE'::INTEGER, '0xfee'::INTEGER, '0x00FEE'::INTEGER
+----
+15
+0
+4078
+4078
+4078
+
+# Empty hex fails
+
+statement error
+SELECT '0x'::INT
+
+statement error
+SELECT '0X'::INT
+
+# Hex with invalid characters fails
+
+statement error
+SELECT '0xHELLO'::INT
+
+# Overflow with very large numbers
+
+statement error
+SELECT '0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'::INT
+
+# Allowed upper bounds for casting from hex strings to signed integers
+query IIII
+SELECT '0x7F'::TINYINT, '0x7FFF'::SMALLINT, '0x7FFFFFFF'::INT, '0x7FFFFFFFFFFFFFFF'::BIGINT
+----
+127
+32767
+2147483647
+9223372036854775807
+
+# Allowed upper bounds for casting from hex strings to unsigned integers
+
+query IIII
+SELECT '0xFF'::UINT8, '0xFFFF'::UINT16, '0xFFFFFFFF'::UINT32, '0xFFFFFFFFFFFFFFFF'::UINT64
+----
+255
+65535
+4294967295
+18446744073709551615
+
+# Lots of zeros is safe
+
+query I
+SELECT '0x000000000000000000000000000000000000000000000000000000000000000000'::INT
+----
+0
+
+# Bounds exceeded for casting from hex strings to integers
+
+statement error
+SELECT '0x80'::TINYINT
+
+statement error
+SELECT '0x8000'::SMALLINT
+
+statement error
+SELECT '0x80000000'::INT
+
+statement error
+SELECT '0x8000000000000000'::BIGINT
+
+statement error
+SELECT '0x100'::UINT8
+
+statement error
+SELECT '0x10000'::UINT16
+
+statement error
+SELECT '0x100000000'::UINT32
+
+statement error
+SELECT '0x10000000000000000'::UINT64
+
+# Bounds exceeded for casting from hex strings to integers, TRY_CAST should be safe
+
+query I
+SELECT TRY_CAST('0x80' AS TINYINT)
+----
+NULL
+
+query I
+SELECT TRY_CAST('0x8000' AS SMALLINT)
+----
+NULL
+
+query I
+SELECT TRY_CAST('0x80000000' AS INT)
+----
+NULL
+
+query I
+SELECT TRY_CAST('0x8000000000000000' AS BIGINT)
+----
+NULL
+
+query I
+SELECT TRY_CAST('0x100' AS UINT8)
+----
+NULL
+
+query I
+SELECT TRY_CAST('0x10000' AS UINT16)
+----
+NULL
+
+query I
+SELECT TRY_CAST('0x100000000' AS UINT32)
+----
+NULL
+
+query I
+SELECT TRY_CAST('0x10000000000000000' AS UINT64)
+----
+NULL
+
 # Casting decimal strings to integral types should round to be consistent.
 foreach inttype TINYINT SMALLINT INTEGER BIGINT HUGEINT
 
@@ -66,5 +187,35 @@ query I
 SELECT '-0.5'::${inttype};
 ----
 -1
+
+endloop
+
+# Casting hex strings to integral types should round to be consistent.
+foreach inttype TINYINT SMALLINT INTEGER BIGINT
+
+query I
+SELECT '0x1e'::${inttype};
+----
+30
+
+endloop
+
+# Varied case casting should be consistent
+foreach hex 0xfade 0Xfade 0xFADE 0XFADE 0xFaDe 0xFaDE 0XFaDe 0xfAdE
+
+query I
+SELECT '${hex}'::INT;
+----
+64222
+
+endloop
+
+# Casting zeros
+foreach inttype TINYINT SMALLINT INTEGER BIGINT HUGEINT DECIMAL
+
+query I
+SELECT '0'::${inttype};
+----
+0
 
 endloop
