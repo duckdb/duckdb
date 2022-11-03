@@ -861,19 +861,66 @@ values_clause_opt_comma:
  *****************************************************************************/
 
 from_clause:
-			FROM from_list_opt_comma							{ $$ = $2; }
-			| /*EMPTY*/								{ $$ = NIL; }
+			FROM from_list_opt_comma					{ $$ = $2; }
+			| /*EMPTY*/									{ $$ = NIL; }
 		;
 
 from_list:
-			table_ref								{ $$ = list_make1($1); }
-			| from_list ',' table_ref				{ $$ = lappend($1, $3); }
+			table_ref									{ $$ = list_make1($1); }
+			| from_list ',' table_ref					{ $$ = lappend($1, $3); }
 		;
 
 from_list_opt_comma:
-			from_list								{ $$ = $1; }
-			| from_list ','							{ $$ = $1; }
+			from_list									{ $$ = $1; }
+			| from_list ','								{ $$ = $1; }
 		;
+
+path_sep:
+		'/'												{ $$ = "/"; }
+		| '\\'											{ $$ = "/"; }
+	;
+
+folder_element:
+		ICONST										{ $$ = number_to_string($1); }
+		| FCONST									{ $$ = $1; }
+		| Op										{ $$ = $1; }
+		| '+'										{ $$ = "+"; }
+		| '-'										{ $$ = "-"; }
+		| '*'										{ $$ = "*"; }
+		| '%'										{ $$ = "%"; }
+		| '^'										{ $$ = "^"; }
+		| POWER_OF									{ $$ = "**"; }
+		| '<'										{ $$ = "<"; }
+		| '>'										{ $$ = ">"; }
+		| '='										{ $$ = "="; }
+		| LESS_EQUALS								{ $$ = "<="; }
+		| GREATER_EQUALS							{ $$ = ">="; }
+		| NOT_EQUALS								{ $$ = "<>"; }
+	;
+
+folder_name:
+		ColId							{ $$ = $1; }
+		| folder_element				{ $$ = $1; }
+		| ColId folder_name				{ $$ = string_concat($1, $2); }
+		| folder_element ColId			{ $$ = string_concat($1, $2); }
+	;
+
+file_name_complete:
+		folder_name									{ $$ = $1; }
+		| folder_name '.' file_name_complete		{ $$ = string_concat(string_concat($1, "."), $3); }
+	;
+
+file_path_recursive:
+		 file_name_complete									{ $$ = $1; }
+		| folder_name path_sep file_path_recursive			{ $$ = string_concat(string_concat($1, "/"), $3); }
+	;
+
+file_path_reference:
+		path_sep file_path_recursive								{ $$ = string_concat($1, $2); }
+		| ColId path_sep file_path_recursive						{ $$ = string_concat(string_concat($1, "/"), $3); }
+		| ColId ':' path_sep file_path_recursive					{ $$ = string_concat(string_concat($1, ":/"), $4); }
+		| Op file_path_recursive									{ $$ = string_concat($1, $2); }
+	;
 
 /*
  * table_ref is where an alias clause can be attached.
@@ -935,6 +982,10 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 				{
 					$2->alias = $4;
 					$$ = (PGNode *) $2;
+				}
+			| file_path_reference
+				{
+					$$ = (PGNode *) makeRangeVar(NULL, $1, @1);
 				}
 		;
 

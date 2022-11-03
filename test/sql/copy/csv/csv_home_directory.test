@@ -59,3 +59,19 @@ query I
 SELECT COUNT(*) FROM '~/homedir_integers*.csv'
 ----
 20
+
+# also works without the quotes
+query I
+SELECT COUNT(*) FROM __TEST_DIR__/homedir_integers*.csv
+----
+20
+
+query I
+SELECT COUNT(*) FROM __WORKING_DIRECTORY__/__TEST_DIR__/homedir_integers*.csv
+----
+20
+
+query I
+SELECT COUNT(*) FROM ~/homedir_integers*.csv
+----
+20

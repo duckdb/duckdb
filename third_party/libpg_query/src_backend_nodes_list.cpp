@@ -256,6 +256,30 @@ list_concat(PGList *list1, PGList *list2)
 	return list1;
 }
 
+char *string_concat(char *str1, char *str2) {
+	if (!str1) {
+		return str2;
+	}
+	if (!str2) {
+		return str1;
+	}
+	auto len1 = strlen(str1);
+	auto len2 = strlen(str2);
+	char *new_str = (char *) palloc(len1 + len2 + 1);
+	memcpy(new_str, str1, len1);
+	memcpy(new_str + len1, str2, len2);
+	new_str[len1 + len2] = '\0';
+	return new_str;
+}
+
+char *number_to_string(int ival) {
+	auto str = std::to_string(ival);
+	char *result = (char *) palloc(str.size() + 1);
+	memcpy(result, str.c_str(), str.size());
+	result[str.size()] = '\0';
+	return result;
+}
+
 /*
  * Truncate 'list' to contain no more than 'new_size' elements. This
  * modifies the list in-place! Despite this, callers should use the

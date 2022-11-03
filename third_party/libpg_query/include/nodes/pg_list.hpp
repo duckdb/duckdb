@@ -216,6 +216,8 @@ PGList *lcons_int(int datum, PGList *list);
 PGList *lcons_oid(PGOid datum, PGList *list);
 
 PGList *list_concat(PGList *list1, PGList *list2);
+char *string_concat(char *str1, char *str2);
+char *number_to_string(int ival);
 PGList *list_truncate(PGList *list, int new_size);
 
 PGListCell *list_nth_cell(const PGList *list, int n);
