@@ -2,7 +2,7 @@
 
     Code
       as.list(dbGetQuery(con,
-        "SELECT * EXCLUDE (timestamp_tz, time_tz, map) FROM test_all_types()"))
+        "SELECT * EXCLUDE (timestamp_ns, timestamp_tz, timestamp_array, timestamptz_array, time_tz, map) FROM test_all_types()"))
     Output
       $bool
       [1] FALSE  TRUE    NA
@@ -52,10 +52,6 @@
       $timestamp_ms
       [1] "-290308-12-22 00:00:00.00000 UTC" "294247-01-10 04:00:54.77539 UTC" 
       [3] NA                                
-      
-      $timestamp_ns
-      [1] "1677-09-21 00:12:43.145223 UTC" "2262-04-11 23:47:16.854776 UTC"
-      [3] NA                              
       
       $float
       [1] -3.402823e+38  3.402823e+38            NA
@@ -148,32 +144,6 @@
       NULL
       
       
-      $timestamp_array
-      $timestamp_array[[1]]
-      POSIXct of length 0
-      
-      $timestamp_array[[2]]
-      [1] "1970-01-01 00:00:00.00000 UTC"    "294247-01-10 04:00:54.77539 UTC" 
-      [3] "-290308-12-21 19:59:05.22460 UTC" NA                                
-      [5] "2022-05-12 16:23:45.00000 UTC"   
-      
-      $timestamp_array[[3]]
-      NULL
-      
-      
-      $timestamptz_array
-      $timestamptz_array[[1]]
-      POSIXct of length 0
-      
-      $timestamptz_array[[2]]
-      [1] "1970-01-01 00:00:00.00000 UTC"    "294247-01-10 04:00:54.77539 UTC" 
-      [3] "-290308-12-21 19:59:05.22460 UTC" NA                                
-      [5] "2022-05-12 23:23:45.00000 UTC"   
-      
-      $timestamptz_array[[3]]
-      NULL
-      
-      
       $varchar_array
       $varchar_array[[1]]
       character(0)
@@ -234,6 +204,45 @@
       3 NA         <NA>
       
       $array_of_structs[[3]]
+      NULL
+      
+      
+
+# test_all_types() output for macOS
+
+    Code
+      as.list(dbGetQuery(con,
+        "SELECT timestamp_ns, timestamp_array, timestamptz_array FROM test_all_types()"))
+    Warning <simpleWarning>
+      Coercing nanoseconds to a lower resolution may result in a loss of data.
+    Output
+      $timestamp_ns
+      [1] "1677-09-21 00:12:44.145223 UTC" "2262-04-11 23:47:16.854776 UTC"
+      [3] NA                              
+      
+      $timestamp_array
+      $timestamp_array[[1]]
+      POSIXct of length 0
+      
+      $timestamp_array[[2]]
+      [1] "1970-01-01 00:00:00.00000 UTC"    "294247-01-10 04:00:54.77539 UTC" 
+      [3] "-290308-12-21 19:59:06.22460 UTC" NA                                
+      [5] "2022-05-12 16:23:45.00000 UTC"   
+      
+      $timestamp_array[[3]]
+      NULL
+      
+      
+      $timestamptz_array
+      $timestamptz_array[[1]]
+      POSIXct of length 0
+      
+      $timestamptz_array[[2]]
+      [1] "1970-01-01 00:00:00.00000 UTC"    "294247-01-10 04:00:54.77539 UTC" 
+      [3] "-290308-12-21 19:59:06.22460 UTC" NA                                
+      [5] "2022-05-12 23:23:45.00000 UTC"   
+      
+      $timestamptz_array[[3]]
       NULL
       
       
