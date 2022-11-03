@@ -188,12 +188,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
-	string columns;
-	for (auto &column_rel : rel->Columns()) {
-		columns += column_rel.Name() + ",";
+	auto &columns = rel->Columns();
+	vector<string> column_list;
+	for (auto &column_rel : columns) {
+		column_list.push_back(column_rel.Name());
 	}
-	columns.erase(columns.size() - 1, columns.size());
-	auto expr = GenerateExpressionList("stats", columns);
+	auto expr = GenerateExpressionList("stats", column_list);
 	return make_unique<DuckDBPyRelation>(rel->Project(expr)->Limit(1));
 }
 
@@ -201,6 +201,12 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, con
                                                 const string &groups, const string &function_parameter,
                                                 const string &projected_columns, const string &window_function) {
 	auto input = StringUtil::Split(aggregated_columns, ',');
+	return GenerateExpressionList(function_name, input, groups, function_parameter, projected_columns, window_function);
+}
+
+string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const vector<string> &input,
+                                                const string &groups, const string &function_parameter,
+                                                const string &projected_columns, const string &window_function) {
 	string expr;
 	if (!projected_columns.empty()) {
 		expr = projected_columns + ", ";
