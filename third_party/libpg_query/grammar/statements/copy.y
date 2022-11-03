@@ -1,4 +1,4 @@
-CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
+CopyStmt:	COPY opt_binary csv_qualified_name opt_column_list opt_oids
 			copy_from opt_program copy_file_name copy_delimiter opt_with copy_options
 				{
 					PGCopyStmt *n = makeNode(PGCopyStmt);
@@ -48,6 +48,11 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 				}
 		;
 
+
+csv_qualified_name:
+			qualified_name							{ $$ = $1; }
+			| file_path_range						{ $$ = $1; }
+		;
 
 copy_from:
 			FROM									{ $$ = true; }
@@ -205,10 +210,39 @@ copy_generic_opt_arg_list_item:
 
 
 
+/*
+ * IDENT ONLY variants of the file path (yuck)
+ */
+folder_name_io:
+		IDENT							{ $$ = $1; }
+		| folder_element				{ $$ = $1; }
+		| IDENT folder_name_io			{ $$ = string_concat($1, $2); }
+		| folder_element IDENT			{ $$ = string_concat($1, $2); }
+	;
+
+file_name_complete_io:
+		folder_name_io									{ $$ = $1; }
+		| folder_name_io '.' file_name_complete_io		{ $$ = string_concat(string_concat($1, "."), $3); }
+		| folder_name_io '.' CSV						{ $$ = string_concat(string_concat($1, "."), "csv"); }
+	;
+
+file_path_recursive_io:
+		 file_name_complete_io									{ $$ = $1; }
+		| folder_name_io path_sep file_path_recursive_io		{ $$ = string_concat(string_concat($1, "/"), $3); }
+	;
+
+file_path_reference_io:
+		path_sep file_path_recursive_io								{ $$ = string_concat($1, $2); }
+		| IDENT path_sep file_path_recursive_io						{ $$ = string_concat(string_concat($1, "/"), $3); }
+		| IDENT ':' path_sep file_path_recursive_io					{ $$ = string_concat(string_concat($1, ":/"), $4); }
+		| all_op_except_slash file_path_recursive_io				{ $$ = string_concat($1, $2); }
+	;
+
 copy_file_name:
 			Sconst									{ $$ = $1; }
 			| STDIN									{ $$ = NULL; }
 			| STDOUT								{ $$ = NULL; }
+			| file_path_reference_io					{ $$ = $1; }
 		;
 
 

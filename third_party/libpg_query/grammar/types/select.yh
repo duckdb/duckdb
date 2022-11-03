@@ -19,6 +19,7 @@
 %type <range>	qualified_name
 %type <str>		all_Op
 %type <str>		path_sep folder_element folder_name file_path_recursive file_path_reference file_name_complete all_op_except_slash
+%type <range>	file_path_range
 
 %type <conststr> MathOp
 

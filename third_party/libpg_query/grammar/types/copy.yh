@@ -13,3 +13,5 @@
 %type <node> copy_generic_opt_arg_list_item
 %type <str> copy_file_name
 %type <list> copy_generic_opt_list
+%type <range> csv_qualified_name
+%type <str>		folder_name_io file_name_complete_io file_path_recursive_io file_path_reference_io

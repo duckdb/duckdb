@@ -926,6 +926,10 @@ file_path_reference:
 		| all_op_except_slash file_path_recursive					{ $$ = string_concat($1, $2); }
 	;
 
+file_path_range:
+		file_path_reference											{ $$ = makeRangeVar(NULL, $1, @1); }
+	;
+
 /*
  * table_ref is where an alias clause can be attached.
  */
@@ -987,9 +991,9 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$2->alias = $4;
 					$$ = (PGNode *) $2;
 				}
-			| file_path_reference
+			| file_path_range
 				{
-					$$ = (PGNode *) makeRangeVar(NULL, $1, @1);
+					$$ = (PGNode *) $1;
 				}
 		;
 

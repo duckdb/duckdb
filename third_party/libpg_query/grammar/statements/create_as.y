@@ -49,7 +49,6 @@ CreateAsStmt:
 				}
 		;
 
-
 opt_with_data:
 			WITH DATA_P								{ $$ = true; }
 			| WITH NO DATA_P						{ $$ = false; }
