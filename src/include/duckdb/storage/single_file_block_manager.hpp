@@ -33,7 +33,9 @@ public:
 	block_id_t GetFreeBlockId() override;
 	//! Returns whether or not a specified block is the root block
 	bool IsRootBlock(block_id_t root) override;
-	//! Mark a block as modified
+	//! Mark a block as free (immediately re-writeable)
+	void MarkBlockAsFree(block_id_t block_id) override;
+	//! Mark a block as modified (re-writeable after a checkpoint)
 	void MarkBlockAsModified(block_id_t block_id) override;
 	//! Increase the reference count of a block. The block should hold at least one reference
 	void IncreaseBlockReferenceCount(block_id_t block_id) override;

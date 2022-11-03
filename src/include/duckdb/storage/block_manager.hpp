@@ -38,6 +38,8 @@ public:
 	virtual block_id_t GetFreeBlockId() = 0;
 	//! Returns whether or not a specified block is the root block
 	virtual bool IsRootBlock(block_id_t root) = 0;
+	//! Mark a block as "free"; free blocks are immediately added to the free list and can be immediately overwritten
+	virtual void MarkBlockAsFree(block_id_t block_id) = 0;
 	//! Mark a block as "modified"; modified blocks are added to the free list after a checkpoint (i.e. their data is
 	//! assumed to be rewritten)
 	virtual void MarkBlockAsModified(block_id_t block_id) = 0;

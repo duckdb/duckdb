@@ -1,0 +1,125 @@
+# name: test/sql/insert/parallel_insert_index.test_slow
+# description: Test that parallel data insertion correctly verifies primary/unique key constraints
+# group: [insert]
+
+statement ok
+CREATE TABLE integers AS SELECT i FROM generate_series(0,999999,1) tbl(i);
+
+loop i 0 2
+
+#######################################################
+# case 1: batch insert followed by constraint violation
+#######################################################
+statement ok
+CREATE TABLE integers2(i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO integers2 SELECT i FROM integers;
+
+statement error
+INSERT INTO integers2 VALUES (42);
+----
+violates primary key constraint
+
+query I
+SELECT * FROM integers2 WHERE i=999
+----
+999
+
+query III
+SELECT SUM(i), COUNT(*), COUNT(i) FROM integers;
+----
+499999500000	1000000	1000000
+
+query III
+SELECT SUM(i), COUNT(*), COUNT(i) FROM integers2;
+----
+499999500000	1000000	1000000
+
+statement ok
+DROP TABLE integers2;
+
+#######################################################
+# case 2: constraint violation during batch insertion
+#######################################################
+
+statement ok
+CREATE TABLE integers2(i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO integers2 VALUES (999999)
+
+statement error
+INSERT INTO integers2 SELECT i FROM integers;
+----
+violates primary key constraint
+
+query I
+SELECT COUNT(*) FROM integers2
+----
+1
+
+statement ok
+DROP TABLE integers2;
+
+#######################################################
+# case 3: batch insert followed by constraint violation in transaction local data
+#######################################################
+statement ok
+CREATE TABLE integers2(i INTEGER PRIMARY KEY);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers2 SELECT i FROM integers;
+
+statement error
+INSERT INTO integers2 VALUES (42);
+----
+PRIMARY KEY or UNIQUE constraint violated
+
+statement ok
+ROLLBACK
+
+query I
+SELECT COUNT(*) FROM integers2
+----
+0
+
+statement ok
+DROP TABLE integers2;
+
+#######################################################
+# case 4: constraint violation during batch insertion in transaction local data
+#######################################################
+statement ok
+CREATE TABLE integers2(i INTEGER PRIMARY KEY);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers2 VALUES (999999)
+
+statement error
+INSERT INTO integers2 SELECT i FROM integers;
+----
+PRIMARY KEY or UNIQUE constraint violated
+
+statement ok
+ROLLBACK
+
+query I
+SELECT COUNT(*) FROM integers2
+----
+0
+
+statement ok
+DROP TABLE integers2;
+
+# repeat for non-insertion order preserving data
+statement ok
+SET preserve_insertion_order=false
+
+endloop
