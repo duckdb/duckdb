@@ -1,4 +1,5 @@
 add_subdirectory(pyrelation)
+add_subdirectory(common)
 
 add_library(
   python_src OBJECT
@@ -9,7 +10,6 @@ add_library(
   pyrelation.cpp
   pyresult.cpp
   map.cpp
-  exceptions.cpp
   vector_conversion.cpp
   python_conversion.cpp
   python_objects.cpp

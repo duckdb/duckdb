@@ -17,11 +17,11 @@
 #include "duckdb_python/python_import_cache.hpp"
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/pyresult.hpp"
 
 namespace duckdb {
 
 struct DuckDBPyRelation;
-struct DuckDBPyResult;
 
 class RegisteredArrow : public RegisteredObject {
 
