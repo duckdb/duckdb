@@ -440,7 +440,7 @@ namespace duckdb_jemalloc {
 /*
  * Defined if strerror_r returns char * if _GNU_SOURCE is defined.
  */
-#define JEMALLOC_STRERROR_R_RETURNS_CHAR_WITH_GNU_SOURCE
+//#define JEMALLOC_STRERROR_R_RETURNS_CHAR_WITH_GNU_SOURCE
 
 /* Performs additional safety checks when defined. */
 /* #undef JEMALLOC_OPT_SAFETY_CHECKS */
