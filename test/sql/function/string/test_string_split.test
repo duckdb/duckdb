@@ -365,6 +365,14 @@ select UNNEST(string_split_regex('1,2,3,4,*,6', '(\*|,)'))
 (empty)
 6
 
+query T
+SELECT UNNEST(string_split_regex('-AA=AA+aA*', 'a+', 'i'))
+----
+-
+=
++
+*
+
 # test incorrect usage
 statement error
 select string_split()

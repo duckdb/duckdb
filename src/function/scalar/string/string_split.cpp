@@ -84,9 +84,9 @@ struct StringSplitter {
 			if (pos > input_size) {
 				break;
 			}
-			// special case: 0 length match and pos is 0
-			// move to the next character
 			if (match_size == 0 && pos == 0 && found_first_match) {
+				// special case: 0 length match and pos is 0
+				// move to the next character
 				pos = utf8proc_next_grapheme(input_data, input_size, 0);
 			}
 			D_ASSERT(input_size >= pos + match_size);
