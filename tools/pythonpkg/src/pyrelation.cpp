@@ -13,27 +13,19 @@
 
 namespace duckdb {
 
-void DuckDBPyRelation::Initialize(py::handle &m) {
-	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation", py::module_local())
-	    .def_property_readonly("type", &DuckDBPyRelation::Type, "Get the type of the relation.")
+static void InitializeReadOnlyProperties(py::class_<DuckDBPyRelation> &m) {
+	m.def_property_readonly("type", &DuckDBPyRelation::Type, "Get the type of the relation.")
 	    .def_property_readonly("columns", &DuckDBPyRelation::Columns, "Get the names of the columns of this relation.")
 	    .def_property_readonly("types", &DuckDBPyRelation::ColumnTypes, "Get the columns types of the result.")
 	    .def_property_readonly("dtypes", &DuckDBPyRelation::ColumnTypes, "Get the columns types of the result.")
 	    .def("__len__", &DuckDBPyRelation::Length, "Number of rows in relation.")
-	    .def_property_readonly("shape", &DuckDBPyRelation::Shape, " Tuple of # of rows, # of columns in relation.")
-	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
-	         py::arg("filter_expr"))
-	    .def("project", &DuckDBPyRelation::Project, "Project the relation object by the projection in project_expr",
-	         py::arg("project_expr"))
-	    .def("set_alias", &DuckDBPyRelation::SetAlias, "Rename the relation object to new alias", py::arg("alias"))
-	    .def_property_readonly("alias", &DuckDBPyRelation::GetAlias, "Get the name of the current alias")
-	    .def("order", &DuckDBPyRelation::Order, "Reorder the relation object by order_expr", py::arg("order_expr"))
-	    .def("aggregate", &DuckDBPyRelation::Aggregate,
-	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
-	         py::arg("group_expr") = "")
-	    .def("sum", &DuckDBPyRelation::Sum,
-	         "Compute the aggregate sum of a single column or a list of columns by the optional groups on the relation",
-	         py::arg("sum_aggr"), py::arg("group_expr") = "")
+	    .def_property_readonly("shape", &DuckDBPyRelation::Shape, " Tuple of # of rows, # of columns in relation.");
+}
+
+static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
+	m.def("sum", &DuckDBPyRelation::Sum,
+	      "Compute the aggregate sum of a single column or a list of columns by the optional groups on the relation",
+	      py::arg("sum_aggr"), py::arg("group_expr") = "")
 	    .def("count", &DuckDBPyRelation::Count,
 	         "Compute the aggregate count of a single column or a list of columns by the optional groups on the "
 	         "relation",
@@ -45,10 +37,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("quantile", &DuckDBPyRelation::Quantile,
 	         "Compute the quantile of a single column or a list of columns by the optional groups on the relation",
 	         py::arg("q"), py::arg("quantile_aggr"), py::arg("group_expr") = "")
-	    .def("apply", &DuckDBPyRelation::GenericAggregator,
-	         "Compute the function of a single column or a list of columns by the optional groups on the relation",
-	         py::arg("function_name"), py::arg("function_aggr"), py::arg("group_expr") = "",
-	         py::arg("function_parameter") = "", py::arg("projected_columns") = "")
 	    .def("min", &DuckDBPyRelation::Min,
 	         "Compute the aggregate min of a single column or a list of columns by the optional groups on the relation",
 	         py::arg("min_aggr"), py::arg("group_expr") = "")
@@ -86,8 +74,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("sem", &DuckDBPyRelation::SEM, "Returns the standard error of the mean of the aggregate column.",
 	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
 	    .def("unique", &DuckDBPyRelation::Unique, "Number of distinct values in a column.", py::arg("unique_aggr"))
-	    .def("union", &DuckDBPyRelation::Union, py::arg("union_rel"),
-	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("cumsum", &DuckDBPyRelation::CumSum, "Returns the cumulative sum of the aggregate column.",
 	         py::arg("aggregation_columns"))
 	    .def("cumprod", &DuckDBPyRelation::CumProd, "Returns the cumulative product of the aggregate column.",
@@ -95,7 +81,32 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("cummax", &DuckDBPyRelation::CumMax, "Returns the cumulative maximum of the aggregate column.",
 	         py::arg("aggregation_columns"))
 	    .def("cummin", &DuckDBPyRelation::CumMin, "Returns the cumulative minimum of the aggregate column.",
-	         py::arg("aggregation_columns"))
+	         py::arg("aggregation_columns"));
+}
+
+void DuckDBPyRelation::Initialize(py::handle &m) {
+	auto relation_module = py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation", py::module_local());
+	InitializeReadOnlyProperties(relation_module);
+	InitializeAggregates(relation_module);
+
+	relation_module
+	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
+	         py::arg("filter_expr"))
+	    .def("project", &DuckDBPyRelation::Project, "Project the relation object by the projection in project_expr",
+	         py::arg("project_expr"))
+	    .def("set_alias", &DuckDBPyRelation::SetAlias, "Rename the relation object to new alias", py::arg("alias"))
+	    .def_property_readonly("alias", &DuckDBPyRelation::GetAlias, "Get the name of the current alias")
+	    .def("order", &DuckDBPyRelation::Order, "Reorder the relation object by order_expr", py::arg("order_expr"))
+	    .def("aggregate", &DuckDBPyRelation::Aggregate,
+	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
+	         py::arg("group_expr") = "")
+	    .def("apply", &DuckDBPyRelation::GenericAggregator,
+	         "Compute the function of a single column or a list of columns by the optional groups on the relation",
+	         py::arg("function_name"), py::arg("function_aggr"), py::arg("group_expr") = "",
+	         py::arg("function_parameter") = "", py::arg("projected_columns") = "")
+
+	    .def("union", &DuckDBPyRelation::Union, py::arg("union_rel"),
+	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("describe", &DuckDBPyRelation::Describe,
 	         "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
 	    .def("except_", &DuckDBPyRelation::Except,
