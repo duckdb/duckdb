@@ -70,7 +70,7 @@ void ProgressBar::PrintProgressInternal(int percentage) {
 	result += " ";
 	result += PROGRESS_START;
 	idx_t i;
-	for(i = 0; i < idx_t(blocks_to_draw); i++) {
+	for (i = 0; i < idx_t(blocks_to_draw); i++) {
 		result += PROGRESS_BLOCK;
 	}
 	if (i < PROGRESS_BAR_WIDTH) {
@@ -82,7 +82,7 @@ void ProgressBar::PrintProgressInternal(int percentage) {
 		result += PROGRESS_PARTIAL[index];
 		i++;
 	}
-	for(; i < PROGRESS_BAR_WIDTH; i++) {
+	for (; i < PROGRESS_BAR_WIDTH; i++) {
 		result += PROGRESS_EMPTY;
 	}
 	result += PROGRESS_END;

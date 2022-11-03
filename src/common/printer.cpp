@@ -16,7 +16,6 @@
 
 namespace duckdb {
 
-
 void Printer::RawPrint(OutputStream stream, const string &str) {
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
