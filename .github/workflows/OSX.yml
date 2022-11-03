@@ -130,7 +130,7 @@ jobs:
   xcode-extensions:
     name: OSX Extensions Release
     runs-on: macos-latest
-#    needs: xcode-debug
+    needs: xcode-debug
     env:
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
       AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
