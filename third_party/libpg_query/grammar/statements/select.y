@@ -917,6 +917,8 @@ file_name_complete:
 file_path_recursive:
 		 file_name_complete									{ $$ = $1; }
 		| folder_name path_sep file_path_recursive			{ $$ = string_concat(string_concat($1, "/"), $3); }
+		| '.' path_sep file_path_recursive					{ $$ = string_concat("./", $3); }
+		| DOT_DOT path_sep file_path_recursive				{ $$ = string_concat("../", $3); }
 	;
 
 file_path_reference:
@@ -924,6 +926,8 @@ file_path_reference:
 		| ColId path_sep file_path_recursive						{ $$ = string_concat(string_concat($1, "/"), $3); }
 		| ColId ':' path_sep file_path_recursive					{ $$ = string_concat(string_concat($1, ":/"), $4); }
 		| all_op_except_slash file_path_recursive					{ $$ = string_concat($1, $2); }
+		| '.' path_sep file_path_recursive							{ $$ = string_concat("./", $3); }
+		| DOT_DOT path_sep file_path_recursive						{ $$ = string_concat("../", $3); }
 	;
 
 file_path_range:

@@ -229,6 +229,8 @@ file_name_complete_io:
 file_path_recursive_io:
 		 file_name_complete_io									{ $$ = $1; }
 		| folder_name_io path_sep file_path_recursive_io		{ $$ = string_concat(string_concat($1, "/"), $3); }
+		| '.' path_sep file_path_recursive_io					{ $$ = string_concat("./", $3); }
+		| DOT_DOT path_sep file_path_recursive_io				{ $$ = string_concat("../", $3); }
 	;
 
 file_path_reference_io:
@@ -236,6 +238,8 @@ file_path_reference_io:
 		| IDENT path_sep file_path_recursive_io						{ $$ = string_concat(string_concat($1, "/"), $3); }
 		| IDENT ':' path_sep file_path_recursive_io					{ $$ = string_concat(string_concat($1, ":/"), $4); }
 		| all_op_except_slash file_path_recursive_io				{ $$ = string_concat($1, $2); }
+		| '.' path_sep file_path_recursive_io						{ $$ = string_concat("./", $3); }
+		| DOT_DOT path_sep file_path_recursive_io					{ $$ = string_concat("../", $3); }
 	;
 
 copy_file_name:
