@@ -15,9 +15,14 @@ namespace duckdb {
 
 static void InitializeReadOnlyProperties(py::class_<DuckDBPyRelation> &m) {
 	m.def_property_readonly("type", &DuckDBPyRelation::Type, "Get the type of the relation.")
-	    .def_property_readonly("columns", &DuckDBPyRelation::Columns, "Get the names of the columns of this relation.")
-	    .def_property_readonly("types", &DuckDBPyRelation::ColumnTypes, "Get the columns types of the result.")
-	    .def_property_readonly("dtypes", &DuckDBPyRelation::ColumnTypes, "Get the columns types of the result.")
+	    .def_property_readonly("columns", &DuckDBPyRelation::Columns,
+	                           "Return a list containing the names of the columns of the relation.")
+	    .def_property_readonly("types", &DuckDBPyRelation::ColumnTypes,
+	                           "Return a list containing the types of the columns of the relation.");
+	.def_property_readonly("dtypes", &DuckDBPyRelation::ColumnTypes,
+	                       "Return a list containing the types of the columns of the relation.")
+	    .def_property_readonly("alias", &DuckDBPyRelation::GetAlias, "Get the name of the current alias")
+	    .def_property_readonly("description", &DuckDBPyResult::Description)
 	    .def("__len__", &DuckDBPyRelation::Length, "Number of rows in relation.")
 	    .def_property_readonly("shape", &DuckDBPyRelation::Shape, " Tuple of # of rows, # of columns in relation.");
 }
@@ -123,14 +128,6 @@ static void InitializeMetaQueries(py::class_<DuckDBPyRelation> &m) {
 	    .def("explain", &DuckDBPyRelation::Explain);
 }
 
-static void InitializeInformationFunctions(py::class_<DuckDBPyRelation> &m) {
-	m.def_property_readonly("alias", &DuckDBPyRelation::GetAlias, "Get the name of the current alias")
-	    .def_property_readonly("columns", &DuckDBPyRelation::Columns,
-	                           "Return a list containing the names of the columns of the relation.")
-	    .def_property_readonly("types", &DuckDBPyRelation::ColumnTypes,
-	                           "Return a list containing the types of the columns of the relation.");
-}
-
 void DuckDBPyRelation::Initialize(py::handle &m) {
 	auto relation_module = py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation", py::module_local());
 	InitializeReadOnlyProperties(relation_module);
@@ -138,7 +135,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	InitializeSetOperators(relation_module);
 	InitializeMetaQueries(relation_module);
 	InitializeConsumers(relation_module);
-	InitializeInformationFunctions(relation_module);
 
 	relation_module
 	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",

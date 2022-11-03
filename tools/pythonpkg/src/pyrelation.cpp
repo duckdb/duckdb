@@ -94,20 +94,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, D
 	return conn->FromSubstrait(proto);
 }
 
-void DuckDBPyRelation::InstallExtension(const string &extension, bool force_install, DuckDBPyConnection *conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->InstallExtension(extension, force_install);
-}
-
-void DuckDBPyRelation::LoadExtension(const string &extension, DuckDBPyConnection *conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->LoadExtension(extension);
-}
-
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_object, DuckDBPyConnection *conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
@@ -623,6 +609,15 @@ py::list DuckDBPyRelation::ColumnTypes() {
 		res.append(col.Type().ToString());
 	}
 	return res;
+}
+
+py::list DuckDBPyRelation::Description() {
+	if (!result) {
+		// FIXME: maybe make Description part of the relation itself, not of the result, then we can always provide this
+		// list
+		return py::list();
+	}
+	return result->Description();
 }
 
 } // namespace duckdb
