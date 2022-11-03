@@ -16,7 +16,6 @@
 #include <sstream>
 
 namespace duckdb {
-struct ReadCSVLocalState;
 
 struct CSVBufferRead {
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index,
@@ -73,8 +72,6 @@ public:
 	char *buffer;
 
 	CSVBufferRead buffer_read;
-
-	idx_t position_set;
 
 public:
 	void SetBufferRead(const CSVBufferRead &buffer_read);

@@ -44,7 +44,6 @@ void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 }
 
 bool ParallelCSVReader::SetPosition() {
-	position_set = position_buffer;
 	if (start_buffer == position_buffer && start_buffer == buffer_read.buffer->GetStart()) {
 		// Buffer always start in a new line
 		return true;
@@ -63,7 +62,6 @@ bool ParallelCSVReader::SetPosition() {
 			break;
 		}
 	}
-	position_set = position_buffer;
 	start_buffer = position_buffer;
 	bool not_read_anything = position_buffer >= end_buffer;
 	return !not_read_anything;
@@ -97,8 +95,6 @@ bool ParallelCSVReader::BufferRemainder() {
 		reached_remainder_state = true;
 		// end_buffer is allowed to go to buffer size to finish its last line
 		end_buffer = buffer_size;
-		// we can still scan stuff, return true
-		return true;
 	}
 	if (position_buffer >= end_buffer) {
 		// buffer ends, return false
