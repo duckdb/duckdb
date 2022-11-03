@@ -184,6 +184,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::ENUM:
 		return RelToAltrep::int_class;
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
@@ -229,9 +230,10 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 
 	SET_NAMES(data_frame, StringsToSexp(names));
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
+		auto &column_type = rel->Columns()[col_idx].Type();
 		cpp11::external_pointer<AltrepVectorWrapper> ptr(new AltrepVectorWrapper(relation_wrapper, col_idx));
-		auto vector_sexp =
-		    r_protector.Protect(R_new_altrep(LogicalTypeToAltrepType(rel->Columns()[col_idx].Type()), ptr, R_NilValue));
+		auto vector_sexp = r_protector.Protect(R_new_altrep(LogicalTypeToAltrepType(column_type), ptr, R_NilValue));
+		duckdb_r_decorate(column_type, vector_sexp, false);
 		SET_VECTOR_ELT(data_frame, col_idx, vector_sexp);
 	}
 	return data_frame;

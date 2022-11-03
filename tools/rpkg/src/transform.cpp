@@ -162,6 +162,7 @@ void duckdb_r_decorate(const LogicalType &type, SEXP &dest, bool integer64) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::JSON:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::LIST:
 		break; // no extra decoration required, do nothing
@@ -500,6 +501,5 @@ void duckdb_r_transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n,
 	}
 	default:
 		cpp11::stop("rapi_execute: Unknown column type for convert: %s", src_vec.GetType().ToString().c_str());
-		break;
 	}
 }

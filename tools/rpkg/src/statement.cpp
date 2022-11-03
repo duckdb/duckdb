@@ -9,7 +9,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
-#include "duckdb/main/stream_query_result.hpp"
 
 #include "duckdb/parser/statement/relation_statement.hpp"
 
@@ -33,7 +32,7 @@ using namespace cpp11::literals;
 	auto chunk = res->Fetch();
 	auto blob_string = StringValue::Get(chunk->GetValue(0, 0));
 
-	SEXP rawval = NEW_RAW(blob_string.size());
+	auto rawval = NEW_RAW(blob_string.size());
 	if (!rawval) {
 		throw std::bad_alloc();
 	}
@@ -179,12 +178,12 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 
 SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer64) {
 	// step 2: create result data frame and allocate columns
-	uint32_t ncols = result->types.size();
+	auto ncols = result->types.size();
 	if (ncols == 0) {
 		return Rf_ScalarReal(0); // no need for protection because no allocation can happen afterwards
 	}
 
-	uint64_t nrows = result->RowCount();
+	auto nrows = result->RowCount();
 
 	// Note we cannot use cpp11's data frame here as it tries to calculate the number of rows itself,
 	// but gives the wrong answer if the first column is another data frame. So we set the necessary
@@ -204,7 +203,7 @@ SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer
 	// at this point data_frame is fully allocated and the only protected SEXP
 
 	// step 3: set values from chunks
-	uint64_t dest_offset = 0;
+	idx_t dest_offset = 0;
 	for (auto &chunk : result->Collection().Chunks()) {
 		D_ASSERT(chunk.ColumnCount() == ncols);
 		D_ASSERT(chunk.ColumnCount() == (idx_t)Rf_length(data_frame));
@@ -252,7 +251,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	if (count == 0) {
 		return false;
 	}
-	string timezone_config = QueryResult::GetConfigTimezone(*result);
+	auto timezone_config = QueryResult::GetConfigTimezone(*result);
 	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	batches_list.PrepAppend();
 	batches_list.Append(cpp11::safe[Rf_eval](batch_import_from_c, arrow_namespace));
@@ -283,7 +282,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	}
 
 	SET_LENGTH(batches_list.the_list, batches_list.size);
-	string timezone_config = QueryResult::GetConfigTimezone(*result);
+	auto timezone_config = QueryResult::GetConfigTimezone(*result);
 	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	cpp11::sexp schema_arrow_obj(cpp11::safe[Rf_eval](schema_import_from_c, arrow_namespace));
 
@@ -299,7 +298,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	cpp11::function getNamespace = RStrings::get().getNamespace_sym;
 	cpp11::sexp arrow_namespace(getNamespace(RStrings::get().arrow_str));
 
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(qry_res->result), chunk_size);
+	auto result_stream = new ResultArrowArrayStreamWrapper(move(qry_res->result), chunk_size);
 	cpp11::sexp stream_ptr_sexp(
 	    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
 	cpp11::sexp record_batch_reader(Rf_lang2(RStrings::get().ImportRecordBatchReader_sym, stream_ptr_sexp));
@@ -332,7 +331,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 		return query_resultsexp;
 	} else {
 		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
-		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
+		auto result = (MaterializedQueryResult *)generic_result.get();
 		return duckdb_execute_R_impl(result, integer64);
 	}
 }
