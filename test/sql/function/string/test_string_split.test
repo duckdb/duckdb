@@ -96,23 +96,15 @@ SELECT UNNEST(string_split('', 'delim'))
 ----
 (empty)
 
-query T
+statement error
 SELECT UNNEST(string_split('aaaaa', ''))
 ----
-a
-a
-a
-a
-a
+empty separator
 
-query T
+statement error
 SELECT UNNEST(string_split('🦆🦆🦆🦆🦆', ''))
 ----
-🦆
-🦆
-🦆
-🦆
-🦆
+empty separator
 
 query T
 SELECT UNNEST(string_split('abab', 'b'))
@@ -174,14 +166,10 @@ a
 a
 a
 
-query T
+statement error
 SELECT UNNEST(string_split_regex('aaaaa', ''))
 ----
-a
-a
-a
-a
-a
+empty separator
 
 
 query T
@@ -220,14 +208,10 @@ select UNNEST(string_split('1||2|3||', '||'))
 2|3
 (empty)
 
-query T
+statement error
 select UNNEST(string_split('1|2|3', ''))
 ----
-1
-|
-2
-|
-3
+empty separator
 
 query T
 select UNNEST(string_split('', '|'))
@@ -244,19 +228,19 @@ select string_split(NULL, '|') IS NULL
 ----
 1
 
-query T
+statement error
 select UNNEST(string_split('abc', ''))
 ----
-a
-b
-c
+empty separator
 
 query T
 select UNNEST(string_split_regex('abc', '(|abc)'))
 ----
+(empty)
 a
 b
 c
+(empty)
 
 query T
 select UNNEST(string_split_regex('abc', '(abc|)'))
@@ -282,6 +266,41 @@ select UNNEST(string_split_regex('abc', '(abc|,)'))
 (empty)
 
 query T
+select UNNEST(string_split_regex('axxxc', 'z*'))
+----
+(empty)
+a
+x
+x
+x
+c
+(empty)
+
+query T
+select UNNEST(string_split(' aa', ' '))
+----
+(empty)
+aa
+
+query T
+select UNNEST(string_split(' aa ', ' '))
+----
+(empty)
+aa
+(empty)
+
+query T
+select UNNEST(string_split('aa ', ' '))
+----
+aa
+(empty)
+
+query T
+select UNNEST(string_split_regex('axxxc', 'z+'))
+----
+axxxc
+
+query T
 select UNNEST(string_split('1,2,3,4,,6', ','))
 ----
 1
@@ -294,6 +313,7 @@ select UNNEST(string_split('1,2,3,4,,6', ','))
 query T
 select UNNEST(string_split_regex('1,2,3,4,,6', '(,|)'))
 ----
+(empty)
 1
 (empty)
 2
@@ -304,11 +324,13 @@ select UNNEST(string_split_regex('1,2,3,4,,6', '(,|)'))
 (empty)
 (empty)
 6
+(empty)
 
 
 query T
 select UNNEST(string_split_regex('1,2,3,4,,6', '(|,)'))
 ----
+(empty)
 1
 ,
 2
@@ -319,6 +341,7 @@ select UNNEST(string_split_regex('1,2,3,4,,6', '(|,)'))
 ,
 ,
 6
+(empty)
 
 query T
 select UNNEST(string_split_regex('1,2,3,4,*,6', '(,|\*)'))
