@@ -25,10 +25,18 @@ public:
 	void Update(bool final);
 	//! Gets current percentage
 	double GetCurrentPercentage();
-
 private:
-	const string PROGRESS_BAR_STRING = "============================================================";
+	static constexpr const idx_t PARTIAL_BLOCK_COUNT = 8;
+	const char *PROGRESS_EMPTY = " ";
+	const char *PROGRESS_PARTIAL[PARTIAL_BLOCK_COUNT] {" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉"};
+	const char *PROGRESS_BLOCK = "█";
+	const char *PROGRESS_START = "[";
+	const char *PROGRESS_END = "]";
 	static constexpr const idx_t PROGRESS_BAR_WIDTH = 60;
+
+	void PrintProgressInternal(int percentage);
+	void PrintProgress(int percentage);
+	void FinishProgressBarPrint();
 
 private:
 	//! The executor
