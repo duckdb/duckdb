@@ -68,7 +68,7 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 		}
 		if (scale > width) {
 			// The value starts with 1 or more zeros, which are optimized out of the 'digits' array
-			// 0.001 - width=1, exponent=-3
+			// 0.001; width=1, exponent=-3
 			width = scale + 1; // DECIMAL(4,3) - add 1 for the non-decimal values
 		}
 		if (width > Decimal::MAX_WIDTH_INT128) {
