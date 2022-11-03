@@ -232,16 +232,16 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit='1MB'"));
 }
 
+static idx_t AlignPage(idx_t requested_size) {
+	return AlignValue<idx_t, Storage::SECTOR_SIZE>(requested_size);
+}
+
 TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
 	DuckDB db(storage_database, config.get());
-
-	auto align = [](idx_t requested_size) {
-		return AlignValue<idx_t, Storage::SECTOR_SIZE>(requested_size);
-	};
 
 	// 1GB limit
 	Connection con(db);
@@ -254,11 +254,11 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	idx_t requested_size = Storage::BLOCK_SIZE;
 	auto block = buffer_manager.RegisterMemory(requested_size, false);
 	auto handle = buffer_manager.Pin(block);
-	D_ASSERT(buffer_manager.GetUsedMemory() == align(requested_size + Storage::BLOCK_HEADER_SIZE));
+	D_ASSERT(buffer_manager.GetUsedMemory() == AlignPage(requested_size + Storage::BLOCK_HEADER_SIZE));
 	for (; requested_size < limit; requested_size *= 2) {
 		// increase size
 		buffer_manager.ReAllocate(block, requested_size);
-		D_ASSERT(buffer_manager.GetUsedMemory() == align(requested_size + Storage::BLOCK_HEADER_SIZE));
+		D_ASSERT(buffer_manager.GetUsedMemory() == AlignPage(requested_size + Storage::BLOCK_HEADER_SIZE));
 		// unpin and make sure it's evicted
 		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
@@ -266,13 +266,13 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		// re-pin
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 		handle = buffer_manager.Pin(block);
-		D_ASSERT(buffer_manager.GetUsedMemory() == align(requested_size + Storage::BLOCK_HEADER_SIZE));
+		D_ASSERT(buffer_manager.GetUsedMemory() == AlignPage(requested_size + Storage::BLOCK_HEADER_SIZE));
 	}
 	requested_size /= 2;
 	for (; requested_size > Storage::BLOCK_SIZE; requested_size /= 2) {
 		// decrease size
 		buffer_manager.ReAllocate(block, requested_size);
-		D_ASSERT(buffer_manager.GetUsedMemory() == align(requested_size + Storage::BLOCK_HEADER_SIZE));
+		D_ASSERT(buffer_manager.GetUsedMemory() == AlignPage(requested_size + Storage::BLOCK_HEADER_SIZE));
 		// unpin and make sure it's evicted
 		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
@@ -280,6 +280,6 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		// re-pin
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 		handle = buffer_manager.Pin(block);
-		D_ASSERT(buffer_manager.GetUsedMemory() == align(requested_size + Storage::BLOCK_HEADER_SIZE));
+		D_ASSERT(buffer_manager.GetUsedMemory() == AlignPage(requested_size + Storage::BLOCK_HEADER_SIZE));
 	}
 }
