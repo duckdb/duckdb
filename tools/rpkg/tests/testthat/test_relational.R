@@ -105,3 +105,5 @@ test_that("the altrep-conversion for relations works", {
   expect_true(df_is_materialized(df))
   expect_equal(iris, df)
 })
+
+

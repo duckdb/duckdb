@@ -80,7 +80,6 @@ struct AltrepRownamesWrapper {
 
 	AltrepRownamesWrapper(shared_ptr<AltrepRelationWrapper> rel_p) : rel(rel_p) {
 		rowlen_data[0] = NA_INTEGER;
-		rowlen_data[1] = -42;
 	}
 
 	static AltrepRownamesWrapper *Get(SEXP x) {
@@ -149,6 +148,8 @@ static SEXP install_new_attrib(SEXP vec, SEXP name, SEXP val) {
 }
 
 R_xlen_t RelToAltrep::RownamesLength(SEXP x) {
+	// row.names vector has length 2 in the "compact" case which we're using
+	// see https://stat.ethz.ch/R-manual/R-devel/library/base/html/row.names.html
 	return 2;
 }
 
@@ -174,7 +175,7 @@ SEXP RelToAltrep::VectorStringElt(SEXP x, R_xlen_t i) {
 	return STRING_ELT(AltrepVectorWrapper::Get(x)->Vector(), i);
 }
 
-static R_altrep_class_t LogicalTypeToAltrepType(LogicalType &type) {
+static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return RelToAltrep::logical_class;
@@ -204,7 +205,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(LogicalType &type) {
 	case LogicalTypeId::UUID:
 		return RelToAltrep::string_class;
 	default:
-		cpp11::stop("rel_to_altrepUnknown column type for altrep: %s", type.ToString().c_str());
+		cpp11::stop("rel_to_altrep: Unknown column type for altrep: %s", type.ToString().c_str());
 	}
 }
 
@@ -219,7 +220,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(LogicalType &type) {
 	RProtector r_protector;
 
 	cpp11::external_pointer<AltrepRownamesWrapper> ptr(new AltrepRownamesWrapper(relation_wrapper));
-	auto row_names_sexp = r_protector.Protect(R_new_altrep(RelToAltrep::rownames_class, ptr, R_NilValue));
+	auto row_names_sexp = R_new_altrep(RelToAltrep::rownames_class, ptr, R_NilValue);
 	install_new_attrib(data_frame, R_RowNamesSymbol, row_names_sexp);
 	vector<string> names;
 	for (auto &col : rel->Columns()) {
@@ -229,8 +230,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(LogicalType &type) {
 	SET_NAMES(data_frame, StringsToSexp(names));
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 		cpp11::external_pointer<AltrepVectorWrapper> ptr(new AltrepVectorWrapper(relation_wrapper, col_idx));
-		auto column_type = rel->Columns()[col_idx].Type();
-		auto vector_sexp = r_protector.Protect(R_new_altrep(LogicalTypeToAltrepType(column_type), ptr, R_NilValue));
+		auto vector_sexp = r_protector.Protect(R_new_altrep(LogicalTypeToAltrepType(rel->Columns()[col_idx].Type()), ptr, R_NilValue));
 		SET_VECTOR_ELT(data_frame, col_idx, vector_sexp);
 	}
 	return data_frame;
