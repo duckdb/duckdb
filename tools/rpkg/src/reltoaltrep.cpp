@@ -144,12 +144,11 @@ Rboolean RelToAltrep::RelInspect(SEXP x, int pre, int deep, int pvec, void (*ins
 }
 
 // this allows us to set row names on a data frame with an int argument without calling INTPTR on it
-static SEXP install_new_attrib(SEXP vec, SEXP name, SEXP val) {
+static void install_new_attrib(SEXP vec, SEXP name, SEXP val) {
 	SEXP attrib_vec = ATTRIB(vec);
 	SEXP attrib_cell = Rf_cons(val, R_NilValue);
 	SET_TAG(attrib_cell, name);
 	SETCDR(attrib_vec, attrib_cell);
-	return val;
 }
 
 R_xlen_t RelToAltrep::RownamesLength(SEXP x) {
