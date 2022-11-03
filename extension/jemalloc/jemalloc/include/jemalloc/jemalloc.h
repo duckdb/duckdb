@@ -138,7 +138,7 @@ namespace duckdb_jemalloc {
 /*
  * Bias arena index bits so that 0 encodes "use an automatically chosen arena".
  */
-#define MALLOCX_ARENA(a) ((((int)(a)) + 1) << 20)
+//#define MALLOCX_ARENA(a) ((((int)(a)) + 1) << 20)
 
 /*
  * Use as arena index in "arena.<i>.{purge,decay,dss}" and

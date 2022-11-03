@@ -23,6 +23,7 @@ namespace duckdb_jemalloc {
 #define JEMALLOC_VERSION_GID_IDENT 54eaed1d8b56b1aa528be3bdd1877e59c56fa90c
 
 #define MALLOCX_LG_ALIGN(la)	((int)(la))
+#ifndef MALLOCX_ALIGN
 #if LG_SIZEOF_PTR == 2
 #  define MALLOCX_ALIGN(a)	((int)(ffs((int)(a))-1))
 #else
@@ -30,12 +31,15 @@ namespace duckdb_jemalloc {
      ((int)(((size_t)(a) < (size_t)INT_MAX) ? ffs((int)(a))-1 :	\
      ffs((int)(((size_t)(a))>>32))+31))
 #endif
+#endif
 #define MALLOCX_ZERO	((int)0x40)
 /*
  * Bias tcache index bits so that 0 encodes "automatic tcache management", and 1
  * encodes MALLOCX_TCACHE_NONE.
  */
+#ifndef MALLOCX_TCACHE
 #define MALLOCX_TCACHE(tc)	((int)(((tc)+2) << 8))
+#endif
 #define MALLOCX_TCACHE_NONE	MALLOCX_TCACHE(-1)
 /*
  * Bias arena index bits so that 0 encodes "use an automatically chosen arena".
