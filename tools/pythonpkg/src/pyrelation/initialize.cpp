@@ -22,6 +22,28 @@ static void InitializeReadOnlyProperties(py::class_<DuckDBPyRelation> &m) {
 	    .def_property_readonly("shape", &DuckDBPyRelation::Shape, " Tuple of # of rows, # of columns in relation.");
 }
 
+static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
+	m.def("execute", &DuckDBPyRelation::Execute, "Transform the relation into a result set")
+	    .def("write_csv", &DuckDBPyRelation::WriteCsv, "Write the relation object to a CSV file in file_name",
+	         py::arg("file_name"))
+	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row as a tuple")
+	    .def("fetchmany", &DuckDBPyRelation::Fetchmany, "Execute and fetch the next set of rows as a list of tuples",
+	         py::arg("size") = 1)
+	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows as a list of tuples")
+	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
+	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
+	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
+	         py::arg("date_as_object") = false)
+	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
+	         py::arg("date_as_object") = false)
+	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
+	         py::arg("batch_size") = 1000000)
+	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
+	         py::arg("batch_size") = 1000000)
+	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
+	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000);
+}
+
 static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	m.def("sum", &DuckDBPyRelation::Sum,
 	      "Compute the aggregate sum of a single column or a list of columns by the optional groups on the relation",
@@ -84,10 +106,30 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("aggregation_columns"));
 }
 
+static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {
+	m.def("union", &DuckDBPyRelation::Union, py::arg("union_rel"),
+	      "Create the set union of this relation object with another relation object in other_rel")
+	    .def("except_", &DuckDBPyRelation::Except,
+	         "Create the set except of this relation object with another relation object in other_rel",
+	         py::arg("other_rel"))
+	    .def("intersect", &DuckDBPyRelation::Intersect,
+	         "Create the set intersection of this relation object with another relation object in other_rel",
+	         py::arg("other_rel"));
+}
+
+static void InitializeMetaQueries(py::class_<DuckDBPyRelation> &m) {
+	m.def("describe", &DuckDBPyRelation::Describe,
+	      "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
+	    .def("explain", &DuckDBPyRelation::Explain);
+}
+
 void DuckDBPyRelation::Initialize(py::handle &m) {
 	auto relation_module = py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation", py::module_local());
 	InitializeReadOnlyProperties(relation_module);
 	InitializeAggregates(relation_module);
+	InitializeSetOperators(relation_module);
+	InitializeMetaQueries(relation_module);
+	InitializeConsumers(relation_module);
 
 	relation_module
 	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
@@ -104,16 +146,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "Compute the function of a single column or a list of columns by the optional groups on the relation",
 	         py::arg("function_name"), py::arg("function_aggr"), py::arg("group_expr") = "",
 	         py::arg("function_parameter") = "", py::arg("projected_columns") = "")
-	    .def("union", &DuckDBPyRelation::Union, py::arg("union_rel"),
-	         "Create the set union of this relation object with another relation object in other_rel")
-	    .def("describe", &DuckDBPyRelation::Describe,
-	         "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
-	    .def("except_", &DuckDBPyRelation::Except,
-	         "Create the set except of this relation object with another relation object in other_rel",
-	         py::arg("other_rel"))
-	    .def("intersect", &DuckDBPyRelation::Intersect,
-	         "Create the set intersection of this relation object with another relation object in other_rel",
-	         py::arg("other_rel"))
+
 	    .def("join", &DuckDBPyRelation::Join,
 	         "Join the relation object with another relation object in other_rel using the join condition expression "
 	         "in join_condition. Types supported are 'inner' and 'left'",
@@ -122,13 +155,13 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("limit", &DuckDBPyRelation::Limit,
 	         "Only retrieve the first n rows from this relation object, starting at offset", py::arg("n"),
 	         py::arg("offset") = 0)
+
+	    // This should be deprecated in favor of a replacement scan
 	    .def("query", &DuckDBPyRelation::Query,
 	         "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation "
 	         "object",
 	         py::arg("virtual_table_name"), py::arg("sql_query"))
-	    .def("execute", &DuckDBPyRelation::Execute, "Transform the relation into a result set")
-	    .def("write_csv", &DuckDBPyRelation::WriteCsv, "Write the relation object to a CSV file in file_name",
-	         py::arg("file_name"))
+
 	    .def("insert_into", &DuckDBPyRelation::InsertInto,
 	         "Inserts the relation object into an existing table named table_name", py::arg("table_name"))
 	    .def("insert", &DuckDBPyRelation::Insert, "Inserts the given values into the relation", py::arg("values"))
@@ -137,26 +170,9 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("create_view", &DuckDBPyRelation::CreateView,
 	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
-	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row as a tuple")
-	    .def("fetchmany", &DuckDBPyRelation::Fetchmany, "Execute and fetch the next set of rows as a list of tuples",
-	         py::arg("size") = 1)
-	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows as a list of tuples")
-	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
-	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
-	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
-	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
-	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
-	         py::arg("batch_size") = 1000000)
-	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
-	         py::arg("batch_size") = 1000000)
-	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
-	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
 	    .def("__str__", &DuckDBPyRelation::Print)
-	    .def("__repr__", &DuckDBPyRelation::Print)
-	    .def("explain", &DuckDBPyRelation::Explain);
+	    .def("__repr__", &DuckDBPyRelation::Print);
 }
 
 } // namespace duckdb
