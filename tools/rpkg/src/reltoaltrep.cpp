@@ -62,6 +62,7 @@ struct AltrepRelationWrapper {
 
 	MaterializedQueryResult *GetQueryResult() {
 		if (!res) {
+			Rprintf("materializing...\n");
 			res = rel->Execute();
 			if (res->HasError()) {
 				Rf_error(res->GetError().c_str());
@@ -101,7 +102,6 @@ struct AltrepVectorWrapper {
 
 	void *Dataptr() {
 		if (transformed_vector.data() == R_NilValue) {
-			R_ShowMessage("Materializing...");
 			auto res = rel->GetQueryResult();
 			RProtector r_varvalue;
 			transformed_vector = duckdb_r_allocate(res->types[column_index], r_varvalue, res->RowCount());
