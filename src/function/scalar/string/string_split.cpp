@@ -36,6 +36,9 @@ struct RegularStringSplit {
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		match_size = delim_size;
+		if (delim_size == 0) {
+			return 0;
+		}
 		return ContainsFun::Find((const unsigned char *)input_data, input_size, (const unsigned char *)delim_data,
 		                         delim_size);
 	}
@@ -73,10 +76,6 @@ struct StringSplitter {
 		auto input_size = input.GetSize();
 		auto delim_data = delim.GetDataUnsafe();
 		auto delim_size = delim.GetSize();
-		if (delim_size == 0) {
-			throw InvalidInputException("Invalid input to string-split: empty separator");
-		}
-		bool found_first_match = false;
 		idx_t list_idx = 0;
 		while (input_size > 0) {
 			idx_t match_size;
@@ -84,10 +83,13 @@ struct StringSplitter {
 			if (pos > input_size) {
 				break;
 			}
-			if (match_size == 0 && pos == 0 && found_first_match) {
+			if (match_size == 0 && pos == 0) {
 				// special case: 0 length match and pos is 0
 				// move to the next character
 				pos = utf8proc_next_grapheme(input_data, input_size, 0);
+				if (pos == input_size) {
+					break;
+				}
 			}
 			D_ASSERT(input_size >= pos + match_size);
 			state.AddSplit(input_data, pos, list_idx);
@@ -95,7 +97,6 @@ struct StringSplitter {
 			list_idx++;
 			input_data += (pos + match_size);
 			input_size -= (pos + match_size);
-			found_first_match = true;
 		}
 		state.AddSplit(input_data, input_size, list_idx);
 		list_idx++;
