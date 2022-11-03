@@ -123,6 +123,14 @@ static void InitializeMetaQueries(py::class_<DuckDBPyRelation> &m) {
 	    .def("explain", &DuckDBPyRelation::Explain);
 }
 
+static void InitializeInformationFunctions(py::class_<DuckDBPyRelation> &m) {
+	m.def_property_readonly("alias", &DuckDBPyRelation::GetAlias, "Get the name of the current alias")
+	    .def_property_readonly("columns", &DuckDBPyRelation::Columns,
+	                           "Return a list containing the names of the columns of the relation.")
+	    .def_property_readonly("types", &DuckDBPyRelation::ColumnTypes,
+	                           "Return a list containing the types of the columns of the relation.");
+}
+
 void DuckDBPyRelation::Initialize(py::handle &m) {
 	auto relation_module = py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation", py::module_local());
 	InitializeReadOnlyProperties(relation_module);
@@ -130,6 +138,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	InitializeSetOperators(relation_module);
 	InitializeMetaQueries(relation_module);
 	InitializeConsumers(relation_module);
+	InitializeInformationFunctions(relation_module);
 
 	relation_module
 	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
@@ -137,7 +146,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("project", &DuckDBPyRelation::Project, "Project the relation object by the projection in project_expr",
 	         py::arg("project_expr"))
 	    .def("set_alias", &DuckDBPyRelation::SetAlias, "Rename the relation object to new alias", py::arg("alias"))
-	    .def_property_readonly("alias", &DuckDBPyRelation::GetAlias, "Get the name of the current alias")
 	    .def("order", &DuckDBPyRelation::Order, "Reorder the relation object by order_expr", py::arg("order_expr"))
 	    .def("aggregate", &DuckDBPyRelation::Aggregate,
 	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
@@ -155,6 +163,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("limit", &DuckDBPyRelation::Limit,
 	         "Only retrieve the first n rows from this relation object, starting at offset", py::arg("n"),
 	         py::arg("offset") = 0)
+	    .def("insert", &DuckDBPyRelation::Insert, "Inserts the given values into the relation", py::arg("values"))
 
 	    // This should be deprecated in favor of a replacement scan
 	    .def("query", &DuckDBPyRelation::Query,
@@ -162,9 +171,9 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "object",
 	         py::arg("virtual_table_name"), py::arg("sql_query"))
 
+	    // Aren't these also technically consumers?
 	    .def("insert_into", &DuckDBPyRelation::InsertInto,
 	         "Inserts the relation object into an existing table named table_name", py::arg("table_name"))
-	    .def("insert", &DuckDBPyRelation::Insert, "Inserts the given values into the relation", py::arg("values"))
 	    .def("create", &DuckDBPyRelation::Create,
 	         "Creates a new table named table_name with the contents of the relation object", py::arg("table_name"))
 	    .def("create_view", &DuckDBPyRelation::CreateView,
