@@ -62,7 +62,11 @@ struct AltrepRelationWrapper {
 
 	MaterializedQueryResult *GetQueryResult() {
 		if (!res) {
-			Rprintf("materializing...\n");
+			auto option = Rf_GetOption(RStrings::get().materialize_sym, R_BaseEnv);
+			Rf_PrintValue(option);
+			if (option != R_NilValue && !Rf_isNull(option) && LOGICAL_ELT(option, 0) == true) {
+				Rprintf("materializing:\n%s\n", rel->ToString().c_str());
+			}
 			res = rel->Execute();
 			if (res->HasError()) {
 				Rf_error(res->GetError().c_str());

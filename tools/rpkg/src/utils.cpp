@@ -77,6 +77,7 @@ RStrings::RStrings() {
 	ImportRecordBatch_sym = Rf_install("ImportRecordBatch");
 	ImportRecordBatchReader_sym = Rf_install("ImportRecordBatchReader");
 	Table__from_record_batches_sym = Rf_install("Table__from_record_batches");
+	materialize_sym = Rf_install("duckdb_materialize_message");
 }
 
 template <class SRC, class DST, class RTYPE>

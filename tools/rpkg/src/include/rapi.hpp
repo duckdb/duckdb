@@ -113,6 +113,7 @@ struct RStrings {
 	SEXP ImportSchema_sym;
 	SEXP ImportRecordBatch_sym;
 	SEXP ImportRecordBatchReader_sym;
+	SEXP materialize_sym;
 
 	static const RStrings &get() {
 		// On demand
