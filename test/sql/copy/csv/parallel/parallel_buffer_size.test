@@ -6,6 +6,9 @@ statement ok
 SET experimental_parallel_csv=true;
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 pragma threads=4
 
 query I

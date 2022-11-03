@@ -1,11 +1,8 @@
-# name: test/sql/copy/csv/parallel/csv_parallel_tpch.test
-# description: Test read CSV function on TPCH
+# name: test/sql/copy/csv/parallel/csv_parallel_tpch.test_slow
+# description: Test parallel read CSV function on TPCH
 # group: [parallel]
 
 require tpch
-
-#statement ok
-#pragma verify_external
 
 statement ok
 SET experimental_parallel_csv=true;
@@ -16,7 +13,7 @@ pragma threads=4
 statement ok
 CALL dbgen(sf=1, suffix='_og');
 
-foreach tpch_tbl customer lineitem nation orders part partsupp region supplier
+foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
 
 statement ok
 COPY ${tpch_tbl}_og TO '__TEST_DIR__/${tpch_tbl}.csv';
@@ -39,20 +36,20 @@ select count (*) from (SELECT * FROM ${tpch_tbl}_og EXCEPT SELECT * FROM ${tpch_
 
 endloop
 
-#loop i 1 9
-#
-#query I
-#PRAGMA tpch(${i})
-#----
-#<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
-#
-#endloop
-#
-#loop i 10 23
-#
-#query I
-#PRAGMA tpch(${i})
-#----
-#<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
-#
-#endloop
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

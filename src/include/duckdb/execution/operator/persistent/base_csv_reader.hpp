@@ -87,7 +87,8 @@ protected:
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 
 	//! Adds a value to the current row
-	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
+	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes,
+	              bool null_terminate = true);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
 	bool AddRow(DataChunk &insert_chunk, idx_t &column);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk

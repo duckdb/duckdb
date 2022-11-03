@@ -67,11 +67,14 @@ public:
 	//! The actual buffer size
 	idx_t buffer_size = 0;
 
-	idx_t bytes_per_thread = 0;
+	//! If this flag is set, it means we are about to try to read our last row.
+	bool reached_remainder_state = false;
 
 	char *buffer;
 
 	CSVBufferRead buffer_read;
+
+	idx_t position_set;
 
 public:
 	void SetBufferRead(const CSVBufferRead &buffer_read);
@@ -93,7 +96,7 @@ private:
 	//! Up to finding a new line. This function sets the buffer_end and marks a boolean variable
 	//! when changing the buffer end the first time.
 	//! It returns FALSE if the parser should jump to the final state of parsing or not
-	bool BufferRemainder(bool &reached_remainder_state);
+	bool BufferRemainder();
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message);
 };

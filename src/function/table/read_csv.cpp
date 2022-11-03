@@ -394,36 +394,12 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 
 	if (bind_data.options.union_by_name) {
 		throw InternalException("FIXME: union by name");
-		//		csv_global_state.csv_reader->SetNullUnionCols(output);
 	}
 	if (bind_data.options.include_file_name) {
 		throw InternalException("FIXME: output file name");
-		//		auto &col = output.data[bind_data.filename_col_idx];
-		//		col.SetValue(0, Value(csv_global_state.csv_reader->options.file_path));
-		//		col.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	if (bind_data.options.include_parsed_hive_partitions) {
 		throw InternalException("FIXME: hive partitions");
-		//		auto partitions = HivePartitioning::Parse(csv_global_state.csv_reader->options.file_path);
-		//
-		//		idx_t i = bind_data.hive_partition_col_idx;
-		//
-		//		if (partitions.size() != (bind_data.options.names.size() - bind_data.hive_partition_col_idx)) {
-		//			throw IOException("Hive partition count mismatch, expected " +
-		//			                  std::to_string(bind_data.options.names.size() - bind_data.hive_partition_col_idx)
-		//+ 			                  " hive partitions, got " + std::to_string(partitions.size()) + "\n");
-		//		}
-		//
-		//		for (auto &part : partitions) {
-		//			if (bind_data.options.names[i] != part.first) {
-		//				throw IOException("Hive partition names mismatch, expected '" + bind_data.options.names[i] +
-		//				                  "' but found '" + part.first + "' for file '" +
-		//				                  csv_global_state.csv_reader->options.file_path + "'");
-		//			}
-		//			auto &col = output.data[i++];
-		//			col.SetValue(0, Value(part.second));
-		//			col.SetVectorType(VectorType::CONSTANT_VECTOR);
-		//		}
 	}
 }
 
@@ -584,13 +560,12 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
-	//	auto &data = (const ReadCSVGlobalState &)*global_state;
-	return 100;
-	//	if (data.file_size == 0) {
-	//		return 100;
-	//	}
-	//	auto percentage = (data.bytes_read * 100.0) / data.file_size;
-	//	return percentage;
+	auto &data = (const SingleThreadedCSVState &)*global_state;
+	if (data.file_size == 0) {
+		return 100;
+	}
+	auto percentage = (data.bytes_read * 100.0) / data.file_size;
+	return percentage;
 }
 
 void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,

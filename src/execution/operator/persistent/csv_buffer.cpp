@@ -23,7 +23,7 @@ unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t set_buff
 	// Figure out the remaining part of this buffer
 	int64_t remaining_start_pos = buffer_size - 1;
 	for (; remaining_start_pos >= 0; remaining_start_pos--) {
-		if (StringUtil::CharacterIsNewline(buffer[remaining_start_pos])) {
+		if (StringUtil::CharacterIsOnlyNewline(buffer[remaining_start_pos])) {
 			break;
 		}
 	}

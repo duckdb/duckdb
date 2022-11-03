@@ -42,9 +42,9 @@ BaseCSVReader::BaseCSVReader(ClientContext &context, BufferedCSVReaderOptions op
 BaseCSVReader::~BaseCSVReader() {
 }
 
-unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(const BufferedCSVReaderOptions &options) {
-	auto file_handle = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
-	                               options.compression, this->opener);
+unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(const BufferedCSVReaderOptions &options_p) {
+	auto file_handle = fs.OpenFile(options_p.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
+	                               options_p.compression, this->opener);
 	return make_unique<CSVFileHandle>(move(file_handle));
 }
 
@@ -154,7 +154,7 @@ bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const Log
 }
 
 void BaseCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions,
-                             bool has_quotes) {
+                             bool has_quotes, bool null_terminate) {
 	if (length == 0 && column == 0) {
 		row_empty = true;
 	} else {
@@ -183,7 +183,9 @@ void BaseCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<
 	// insert the line number into the chunk
 	idx_t row_entry = parse_chunk.size();
 
-	str_val[length] = '\0';
+	if (null_terminate) {
+		str_val[length] = '\0';
+	}
 
 	// test against null string, but only if the value was not quoted
 	if ((!has_quotes || sql_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
