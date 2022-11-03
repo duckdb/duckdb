@@ -1,3 +1,5 @@
+add_subdirectory(pyrelation)
+
 add_library(
   python_src OBJECT
   array_wrapper.cpp
