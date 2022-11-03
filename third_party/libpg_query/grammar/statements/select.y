@@ -880,10 +880,8 @@ path_sep:
 		| '\\'											{ $$ = "/"; }
 	;
 
-folder_element:
-		ICONST										{ $$ = number_to_string($1); }
-		| FCONST									{ $$ = $1; }
-		| Op										{ $$ = $1; }
+all_op_except_slash:
+		Op										{ $$ = $1; }
 		| '+'										{ $$ = "+"; }
 		| '-'										{ $$ = "-"; }
 		| '*'										{ $$ = "*"; }
@@ -896,6 +894,12 @@ folder_element:
 		| LESS_EQUALS								{ $$ = "<="; }
 		| GREATER_EQUALS							{ $$ = ">="; }
 		| NOT_EQUALS								{ $$ = "<>"; }
+	;
+
+folder_element:
+		ICONST										{ $$ = number_to_string($1); }
+		| FCONST									{ $$ = $1; }
+		| all_op_except_slash						{ $$ = $1; }
 	;
 
 folder_name:
@@ -919,7 +923,7 @@ file_path_reference:
 		path_sep file_path_recursive								{ $$ = string_concat($1, $2); }
 		| ColId path_sep file_path_recursive						{ $$ = string_concat(string_concat($1, "/"), $3); }
 		| ColId ':' path_sep file_path_recursive					{ $$ = string_concat(string_concat($1, ":/"), $4); }
-		| Op file_path_recursive									{ $$ = string_concat($1, $2); }
+		| all_op_except_slash file_path_recursive					{ $$ = string_concat($1, $2); }
 	;
 
 /*
