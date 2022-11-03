@@ -1,0 +1,43 @@
+# name: test/sql/storage/compression/patas/patas_simple.test
+# description: Test storage of patas, but simple
+# group: [patas]
+
+# load the DB from disk
+load __TEST_DIR__/test_patas.db
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+# Create a table with random doubles compressed as Uncompressed
+statement ok
+create table random_double as select random()::DOUBLE as data from range(129) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('random_double') WHERE segment_type == 'double' AND compression != 'Uncompressed';
+----
+
+# Now create a duplicate of this table, compressed with Chimp instead
+statement ok
+PRAGMA force_compression='patas'
+
+statement ok
+create table random_chimp_double as select * from random_double;
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('random_chimp_double') WHERE segment_type == 'double' AND compression != 'Patas';
+----
+
+# Assert that the data was not corrupted by compressing to Chimp
+query I sort r1
+select * from random_double;
+----
+
+query I sort r1
+select * from random_chimp_double;
+----
