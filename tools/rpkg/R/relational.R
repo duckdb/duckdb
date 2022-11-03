@@ -45,6 +45,7 @@ expr_tostring <- rapi_expr_tostring
 expr_set_alias <- rapi_expr_set_alias
 
 
+#' @export
 print.duckdb_expr <- function(x, ...) {
     message("DuckDB Expression: ", expr_tostring(x))
     invisible(NULL)
@@ -64,10 +65,12 @@ rel_from_df <- function(con, df, experimental=FALSE) {
     rapi_rel_from_df(con@conn_ref, as.data.frame(df), experimental)
 }
 
+#' @export
 print.duckdb_relation <- function(x, ...) {
     message("DuckDB Relation: \n", rapi_rel_tostring(x))
 }
 
+#' @export
 as.data.frame.duckdb_relation <- function(x, row.names=NULL, optional=NULL, ...) {
     if (!missing(row.names) || !missing(optional)) {
         stop("row.names and optional parameters not supported")
@@ -75,10 +78,12 @@ as.data.frame.duckdb_relation <- function(x, row.names=NULL, optional=NULL, ...)
     rapi_rel_to_df(x)
 }
 
+#' @export
 names.duckdb_relation <- function(x) {
     rapi_rel_names(x)
 }
 
+#' @export
 head.duckdb_relation <- function(x, n=6L, ...) {
     rapi_rel_limit(x, n)
 }
