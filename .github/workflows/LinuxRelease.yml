@@ -191,7 +191,7 @@ jobs:
     name: Linux Extensions (AARCH64)
     runs-on: ubuntu-latest
     container: ubuntu:18.04 # cross compiler not available in 16
-    needs: linux-release-64
+#    needs: linux-release-64
 
     steps:
       - uses: actions/checkout@v3
