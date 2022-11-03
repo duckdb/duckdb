@@ -22,6 +22,7 @@ static DefaultCompressionMethod internal_compression_methods[] = {
     {CompressionType::COMPRESSION_DICTIONARY, DictionaryCompressionFun::GetFunction,
      DictionaryCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_CHIMP, ChimpCompressionFun::GetFunction, ChimpCompressionFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_PATAS, PatasCompressionFun::GetFunction, PatasCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_FSST, FSSTFun::GetFunction, FSSTFun::TypeIsSupported},
     {CompressionType::COMPRESSION_AUTO, nullptr, nullptr}};
 
@@ -74,6 +75,7 @@ vector<CompressionFunction *> DBConfig::GetCompressionFunctions(PhysicalType dat
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_BITPACKING, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_DICTIONARY, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_CHIMP, data_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_PATAS, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_FSST, data_type);
 	return result;
 }

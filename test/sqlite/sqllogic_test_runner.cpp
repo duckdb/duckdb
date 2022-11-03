@@ -175,6 +175,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("dictionary");
 		result.push_back("fsst");
 		result.push_back("chimp");
+		result.push_back("patas");
 		collection = true;
 	}
 	return collection;

@@ -9,7 +9,7 @@
 #' @aliases NULL
 #' @examples
 #' library(dplyr, warn.conflicts = FALSE)
-#' con <- DBI::dbConnect(duckdb::duckdb(), path = ":memory:")
+#' con <- DBI::dbConnect(duckdb(), path = ":memory:")
 #'
 #' dbiris <- copy_to(con, iris, overwrite = TRUE)
 #'

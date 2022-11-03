@@ -40,7 +40,7 @@ example_data <- dplyr::tibble(
 
 test_that("to_duckdb", {
   ds <- InMemoryDataset$create(example_data)
-  con <- dbConnect(duckdb::duckdb())
+  con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   dbExecute(con, "PRAGMA threads=1")
@@ -200,7 +200,7 @@ test_that("to_arrow roundtrip, with dataset", {
 # persistence and querying against the table without using the `tbl` itself, so
 # we need to create a connection separate from the ephemeral one that is made
 # with arrow_duck_connection()
-con <- dbConnect(duckdb::duckdb())
+con <- dbConnect(duckdb())
 dbExecute(con, "PRAGMA threads=1")
 on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
@@ -223,10 +223,10 @@ test_that("Joining, auto-cleanup enabled", {
   expect_identical(dim(res), c(9L, 14L))
 
   # clean up cleans up the tables
-  expect_true(all(c(table_one_name, table_two_name) %in% duckdb::duckdb_list_arrow(con)))
+  expect_true(all(c(table_one_name, table_two_name) %in% duckdb_list_arrow(con)))
   rm(table_one, table_two)
   gc()
-  expect_false(any(c(table_one_name,     table_two_name) %in% duckdb::duckdb_list_arrow(con)))
+  expect_false(any(c(table_one_name,     table_two_name) %in% duckdb_list_arrow(con)))
 })
 
 test_that("Joining, auto-cleanup disabled", {
@@ -236,11 +236,11 @@ test_that("Joining, auto-cleanup disabled", {
   table_three <- to_duckdb(ds, con = con, table_name = table_three_name, auto_disconnect = FALSE)
 
   # clean up does *not* clean these tables
-  expect_true(table_three_name %in% duckdb::duckdb_list_arrow(con))
+  expect_true(table_three_name %in% duckdb_list_arrow(con))
   rm(table_three)
   gc()
   # but because we aren't auto_disconnecting then we still have this table.
-  expect_true(table_three_name %in% duckdb::duckdb_list_arrow(con))
+  expect_true(table_three_name %in% duckdb_list_arrow(con))
 })
 
 test_that("to_duckdb with a table", {
@@ -266,7 +266,7 @@ test_that("to_duckdb with a table", {
 test_that("to_duckdb passing a connection", {
   ds <- InMemoryDataset$create(example_data)
 
-  con_separate <- dbConnect(duckdb::duckdb())
+  con_separate <- dbConnect(duckdb())
   # we always want to test in parallel
   dbExecute(con_separate, "PRAGMA threads=2")
   on.exit(dbDisconnect(con_separate, shutdown = TRUE), add = TRUE)

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb.h"
+
 #ifdef _MSC_VER
 #define __restrict__
 #define __BYTE_ORDER__          __ORDER_LITTLE_ENDIAN__
@@ -143,10 +145,5 @@ struct ChimpConstants {
 		LEADING_ZERO_LOAD = 3
 	};
 };
-
-constexpr uint8_t ChimpConstants::Compression::LEADING_ROUND[];
-constexpr uint8_t ChimpConstants::Compression::LEADING_REPRESENTATION[];
-
-constexpr uint8_t ChimpConstants::Decompression::LEADING_REPRESENTATION[];
 
 } // namespace duckdb

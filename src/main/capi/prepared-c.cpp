@@ -1,6 +1,7 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 using duckdb::Connection;
 using duckdb::date_t;
@@ -97,11 +98,15 @@ duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, idx
 	return duckdb_bind_value(prepared_statement, param_idx, Value::BIGINT(val));
 }
 
-duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_hugeint val) {
+static hugeint_t duckdb_internal_hugeint(duckdb_hugeint val) {
 	hugeint_t internal;
 	internal.lower = val.lower;
 	internal.upper = val.upper;
-	return duckdb_bind_value(prepared_statement, param_idx, Value::HUGEINT(internal));
+	return internal;
+}
+
+duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_hugeint val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::HUGEINT(duckdb_internal_hugeint(val)));
 }
 
 duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint8_t val) {
@@ -160,6 +165,15 @@ duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_state
 	} catch (...) {
 		return DuckDBError;
 	}
+}
+
+duckdb_state duckdb_bind_decimal(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_decimal val) {
+	auto hugeint_val = duckdb_internal_hugeint(val.value);
+	if (val.width > duckdb::Decimal::MAX_WIDTH_INT64) {
+		return duckdb_bind_value(prepared_statement, param_idx, Value::DECIMAL(hugeint_val, val.width, val.scale));
+	}
+	auto value = hugeint_val.lower;
+	return duckdb_bind_value(prepared_statement, param_idx, Value::DECIMAL((int64_t)value, val.width, val.scale));
 }
 
 duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx, const void *data,

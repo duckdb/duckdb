@@ -27,7 +27,7 @@ res <- bench_mark(
   reps = 50,
   grid = list(nrow = c(1e3, 1e5, 1e7)),
   setup = {
-    con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+    con <- dbConnect(duckdb(), dbdir = ":memory:")
     dat <- setup_data(nrow)
     arw <- InMemoryDataset$create(dat)
 

@@ -28,9 +28,6 @@ struct FlagBufferConstants {
 	static constexpr uint8_t SHIFTS[4] = {6, 4, 2, 0};
 };
 
-constexpr uint8_t FlagBufferConstants::MASKS[];
-constexpr uint8_t FlagBufferConstants::SHIFTS[];
-
 // This class is responsible for writing and reading the flag bits
 // Only the last group is potentially not 1024 (GROUP_SIZE) values in size
 // But we can determine from the count of the segment whether this is the case or not
