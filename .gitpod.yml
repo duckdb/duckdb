@@ -1,0 +1,48 @@
+# Generated with cynkrathis::use_gitpod(), do not edit.
+#
+
+image:
+  file: .gitpod.Dockerfile
+tasks:
+  - name: dependencies
+    init: |
+      # Install rig and R, most recent version
+      curl -Ls https://github.com/r-lib/rig/releases/download/latest/rig-linux-latest.tar.gz | tar xz -C /usr/local
+      rig add default
+
+      # Scriptlets, with custom Git config
+      mv ~/.gitconfig ~/.gitconfig.gitpod
+      curl -s https://raw.githubusercontent.com/krlmlr/scriptlets/master/bootstrap | sh
+      echo -e "[credential]\n\thelper = /usr/bin/gp credential-helper" >> ~/.gitconfig
+
+      # .editorconfig
+      ln -s ~/.editorconfig ..
+
+      # Set up ccache
+      ln -s /usr/lib/ccache/* ~/bin/
+
+      # Set up Makevars
+      mkdir -p ~/.R
+      echo -e "MAKEFLAGS = -j8\nCXXFLAGS = -O0 -g" > ~/.R/Makevars
+
+      # Install R packages
+      echo 'options(repos = "https://packagemanager.rstudio.com/all/__linux__/'$(cat /etc/lsb-release | sed  -n '/DISTRIB_CODENAME=/ {s///;p}')'/latest")' > ~/.Rprofile
+      mkdir -p ~/R/x86_64-pc-linux-gnu-library/$(Rscript -e 'writeLines(gsub("[.][^.]+$", "", as.character(getRversion())))')
+
+      ## Install pak in R
+      R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch))'
+
+      ## Install devtools and R dependencies
+      R -q -e 'pak::pak(c("devtools", "languageserver", "styler")); setwd("tools/rpkg"); pak::pak("deps::.", dependencies = TRUE)'
+
+      ## Work around glitch with non-systemd systems
+      ln -s $(which true) ~/bin/timedatectl
+
+      echo "DUCKDB_R_DEBUG=1" >> ~/.Renviron
+      R CMD INSTALL tools/rpkg
+
+vscode:
+  extensions:
+    - ms-vscode.cpptools-extension-pack
+    - go2sh.cmake-integration-vscode
+    - EditorConfig.EditorConfig
