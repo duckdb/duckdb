@@ -26,11 +26,11 @@ test_that("we can round-trip a data frame", {
 
 
 test_that("we can create various expressions and don't crash", {
-  ref <- expr_reference('asdf')
+  ref <- expr_reference("asdf")
   print(ref)
   expect_error(expr_reference(NA))
   #  expect_error(expr_reference(as.character(NA)))
-  expect_error(expr_reference(''))
+  expect_error(expr_reference(""))
   expect_error(expr_reference(NULL))
 
   expr_constant(TRUE)

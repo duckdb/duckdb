@@ -113,7 +113,7 @@ rel_project <- rapi_rel_project
 #' @export
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
-#' DBI::dbExecute(con, 'CREATE MACRO gt(a, b) AS a > b')
+#' DBI::dbExecute(con, "CREATE MACRO gt(a, b) AS a > b")
 #' rel <- rel_from_df(con, mtcars)
 #' rel2 <- rel_filter(rel, list(expr_function("gt", list(expr_reference("cyl"), expr_constant("6")))))
 rel_filter <- rapi_rel_filter
@@ -150,7 +150,7 @@ rel_order <- rapi_rel_order
 #' @export
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
-#' DBI::dbExecute(con, 'CREATE MACRO eq(a, b) AS a = b')
+#' DBI::dbExecute(con, "CREATE MACRO eq(a, b) AS a = b")
 #' left <- rel_from_df(con, mtcars)
 #' right <- rel_from_df(con, mtcars)
 #' cond <- list(expr_function("eq", list(expr_reference("cyl", left), expr_reference("cyl", right))))
