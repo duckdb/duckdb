@@ -9,12 +9,12 @@
 
 namespace duckdb {
 
-BufferPoolReservation::BufferPoolReservation(BufferPoolReservation &&src) {
+BufferPoolReservation::BufferPoolReservation(BufferPoolReservation &&src) noexcept {
 	size = src.size;
 	src.size = 0;
 }
 
-BufferPoolReservation &BufferPoolReservation::operator=(BufferPoolReservation &&src) {
+BufferPoolReservation &BufferPoolReservation::operator=(BufferPoolReservation &&src) noexcept {
 	size = src.size;
 	src.size = 0;
 	return *this;

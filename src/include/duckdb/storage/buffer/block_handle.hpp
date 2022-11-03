@@ -30,8 +30,8 @@ struct BufferPoolReservation {
 	BufferPoolReservation(const BufferPoolReservation &) = delete;
 	BufferPoolReservation &operator=(const BufferPoolReservation &) = delete;
 
-	BufferPoolReservation(BufferPoolReservation &&);
-	BufferPoolReservation &operator=(BufferPoolReservation &&);
+	BufferPoolReservation(BufferPoolReservation &&) noexcept;
+	BufferPoolReservation &operator=(BufferPoolReservation &&) noexcept;
 
 	~BufferPoolReservation();
 
