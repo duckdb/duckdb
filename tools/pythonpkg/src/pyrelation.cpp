@@ -164,7 +164,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, DuckDBP
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->Values(std::move(values));
+	return conn->Values(move(values));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, const string &alias,
