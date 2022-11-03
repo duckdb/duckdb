@@ -46,7 +46,7 @@ expr_set_alias <- rapi_expr_set_alias
 
 
 print.duckdb_expr <- function(x, ...) {
-    message("DuckDB Expression: ", duckdb::expr_tostring(x))
+    message("DuckDB Expression: ", expr_tostring(x))
     invisible(NULL)
 }
 
@@ -58,7 +58,7 @@ print.duckdb_expr <- function(x, ...) {
 #' @param experimental enable experimental string handling
 #' @return the `duckdb_relation` object wrapping the data.frame
 #' @examples
-#' con <- DBI::dbConnect(duckdb::duckdb())
+#' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
 rel_from_df <- function(con, df, experimental=FALSE) {
     rapi_rel_from_df(con@conn_ref, as.data.frame(df), experimental)

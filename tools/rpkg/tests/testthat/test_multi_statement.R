@@ -2,13 +2,13 @@ skip_on_cran()
 local_edition(3)
 
 test_that("empty statement gives an error", {
-  con <- DBI::dbConnect(duckdb::duckdb())
+  con <- DBI::dbConnect(duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
   expect_snapshot_error(DBI::dbGetQuery(con, "; ;   ; -- SELECT 1;"))
 })
 
 test_that("multiple statements can be used in one call", {
-  con <- DBI::dbConnect(duckdb::duckdb())
+  con <- DBI::dbConnect(duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
   query <- paste(
     "CREATE TABLE integers(i integer);",
@@ -21,7 +21,7 @@ test_that("multiple statements can be used in one call", {
 })
 
 test_that("statements can be splitted apart correctly", {
-  con <- DBI::dbConnect(duckdb::duckdb())
+  con <- DBI::dbConnect(duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
   expect_snapshot(DBI::dbGetQuery(con, a <- paste(
     "--Multistatement testing; testing",
@@ -41,7 +41,7 @@ test_that("export/import database works", {
   export_location <- file.path(tempdir(), "duckdb_test_export")
   if (!file.exists(export_location)) dir.create(export_location)
 
-  con <- DBI::dbConnect(duckdb::duckdb())
+  con <- DBI::dbConnect(duckdb())
   DBI::dbExecute(con, "CREATE TABLE integers(i integer)")
   DBI::dbExecute(con, "insert into integers select * from range(10)")
   DBI::dbExecute(con, "CREATE TABLE integers2(i INTEGER)")
@@ -49,7 +49,7 @@ test_that("export/import database works", {
   DBI::dbExecute(con, paste0("EXPORT DATABASE '", export_location, "'"))
   DBI::dbDisconnect(con, shutdown = TRUE)
 
-  con <- DBI::dbConnect(duckdb::duckdb())
+  con <- DBI::dbConnect(duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 
   DBI::dbExecute(con, paste0("IMPORT DATABASE '", export_location, "'"))
