@@ -1,5 +1,3 @@
-# these wrappers are a bit annoying, maybe there's a way around. Kirill?
-
 # expressions
 
 #' Create a column reference expression
@@ -74,9 +72,7 @@ as.data.frame.duckdb_relation <- function(x, row.names=NULL, optional=NULL, ...)
     if (!missing(row.names) || !missing(optional)) {
         stop("row.names and optional parameters not supported")
     }
-    df <- rapi_rel_to_df(x)
-    attr(df, "__duckdb_relation") <- x
-    df
+    rapi_rel_to_df(x)
 }
 
 names.duckdb_relation <- function(x) {
@@ -198,8 +194,4 @@ rel_set_alias <- rapi_rel_set_alias
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
 #' print(rel_to_altrep(rel))
-rel_to_altrep <- function(rel_p) {
-  df <- rapi_rel_to_altrep(rel_p)
-  attr(df, "__duckdb_relation") <- rel_p
-  df
-}
+rel_to_altrep <- rapi_rel_to_altrep

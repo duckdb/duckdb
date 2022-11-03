@@ -4,7 +4,6 @@
 
 using namespace duckdb;
 
-// TODO do we have to have this in the header too? do we need a header too?
 R_altrep_class_t RelToAltrep::rownames_class;
 R_altrep_class_t RelToAltrep::logical_class;
 R_altrep_class_t RelToAltrep::int_class;
@@ -140,40 +139,12 @@ Rboolean RelToAltrep::RelInspect(SEXP x, int pre, int deep, int pvec, void (*ins
 	return TRUE;
 }
 
-// TODO rewrite this, this allows us to set row names on a data frame with an int argument without
-// calling INTPTR on it
-static SEXP installAttrib(SEXP vec, SEXP name, SEXP val) {
-	SEXP t = R_NilValue; /* -Wall */
-
-	if (TYPEOF(vec) == CHARSXP)
-		Rf_error("cannot set attribute on a CHARSXP");
-	if (TYPEOF(vec) == SYMSXP)
-		Rf_error("cannot set attribute on a symbol");
-	/* this does no allocation */
-	for (SEXP s = ATTRIB(vec); s != R_NilValue; s = CDR(s)) {
-		if (TAG(s) == name) {
-			//			if (MAYBE_REFERENCED(val) && val != CAR(s))
-			//				val = R_FixupRHS(vec, val);
-			SETCAR(s, val);
-			return val;
-		}
-		t = s; // record last attribute, if any
-	}
-
-	/* The usual convention is that the caller protects,
-	   but a lot of existing code depends assume that
-	   setAttrib/installAttrib protects its arguments */
-	PROTECT(vec);
-	PROTECT(name);
-	PROTECT(val);
-	// if (MAYBE_REFERENCED(val)) ENSURE_NAMEDMAX(val);
-	SEXP s = Rf_cons(val, R_NilValue);
-	SET_TAG(s, name);
-	if (ATTRIB(vec) == R_NilValue)
-		SET_ATTRIB(vec, s);
-	else
-		SETCDR(t, s);
-	UNPROTECT(3);
+// this allows us to set row names on a data frame with an int argument without calling INTPTR on it
+static SEXP install_new_attrib(SEXP vec, SEXP name, SEXP val) {
+	SEXP attrib_vec = ATTRIB(vec);
+	SEXP attrib_cell = Rf_cons(val, R_NilValue);
+	SET_TAG(attrib_cell, name);
+	SETCDR(attrib_vec, attrib_cell);
 	return val;
 }
 
@@ -243,14 +214,13 @@ static R_altrep_class_t LogicalTypeToAltrepType(LogicalType &type) {
 	auto ncols = rel->Columns().size();
 
 	cpp11::writable::list data_frame(NEW_LIST(ncols));
-	// TODO add custom class here
 	data_frame.attr(R_ClassSymbol) = RStrings::get().dataframe_str;
 	auto relation_wrapper = make_shared<AltrepRelationWrapper>(rel);
 	RProtector r_protector;
 
 	cpp11::external_pointer<AltrepRownamesWrapper> ptr(new AltrepRownamesWrapper(relation_wrapper));
 	auto row_names_sexp = r_protector.Protect(R_new_altrep(RelToAltrep::rownames_class, ptr, R_NilValue));
-	installAttrib(data_frame, R_RowNamesSymbol, row_names_sexp);
+	install_new_attrib(data_frame, R_RowNamesSymbol, row_names_sexp);
 	vector<string> names;
 	for (auto &col : rel->Columns()) {
 		names.push_back(col.Name());
