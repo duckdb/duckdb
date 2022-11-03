@@ -212,7 +212,7 @@ jobs:
  win-extensions-64:
    name: Windows Extensions (64-bit)
    runs-on: windows-latest
-   needs: win-release-64
+#   needs: win-release-64
    steps:
      - uses: actions/checkout@v3
        with:

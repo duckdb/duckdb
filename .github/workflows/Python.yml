@@ -70,7 +70,7 @@ jobs:
     name: DuckDB Extensions (gcc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-    needs: linux-python3-9
+#    needs: linux-python3-9
 
     steps:
     - name: Install dependencies
