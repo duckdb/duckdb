@@ -1,4 +1,4 @@
-# name: test/sql/cast/string_to_list_cast.test_slow
+# name: test/sql/cast/string_to_list_cast.test
 # description: cast strings into (nested) list structures
 # group: [cast]
 
@@ -412,95 +412,6 @@ SELECT col::STRUCT(a INT, b VARCHAR)[] FROM struct_tbl2;
 [{'a': 7, 'b': Duck}, {'a': 7000, 'b': 🦆🦆🦆🦆🦆🦆}]
 
 
-#               All types:
-# ---------------------------------------------------
-
-query I
-SELECT CAST('[[True,False], [true], [FALSE], [false, true]]' AS BOOL[][]);
-----
-[[true, false], [true], [false], [false, true]]
-
-foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT 
-
-query I
-SELECT CAST('[1,2,3]' AS ${type}[]);
-----
-[1, 2, 3]
-
-endloop
-
-foreach type DOUBLE[] FLOAT[]
-
-query I
-SELECT CAST('[[1,2,3], [3.333, 2.2, 1.1], [0]]' AS ${type}[]);
-----
-[[1.0, 2.0, 3.0], [3.333, 2.2, 1.1], [0.0]]
-
-endloop
-
-statement ok
-CREATE TYPE mood AS ENUM('ok', 'sad', 'happy');
-
-query I
-SELECT '[ok,happy]'::MOOD[]
-----
-[ok, happy]
-
-statement error
-SELECT '[nothappy]'::MOOD[]
-
-query I
-SELECT CAST(LIST(date)::VARCHAR AS DATE[]) FROM test_all_types();
-----
-[5877642-06-25 (BC), 5881580-07-10, NULL]
-
-query I
-SELECT CAST(LIST(time)::VARCHAR AS TIME[]) FROM test_all_types();
-----
-[00:00:00, 23:59:59.999999, NULL]
-
-query I
-SELECT CAST(LIST(timestamp)::VARCHAR AS TIME[]) FROM test_all_types();
-----
-[00:00:00, 04:00:54.775806, NULL]
-
-query I
-SELECT CAST(LIST(timestamp_s)::VARCHAR AS TIME[]) FROM test_all_types();
-----
-[00:00:00, 04:00:54, NULL]
-
-query I
-SELECT CAST(LIST(timestamp_ms)::VARCHAR AS TIME[]) FROM test_all_types();
-----
-[00:00:00, 04:00:54.775, NULL]
-
-query I
-SELECT CAST(LIST(timestamp_ns)::VARCHAR AS TIME[]) FROM test_all_types();
-----
-[00:12:43.145225, 23:47:16.854775, NULL]
-
-query I
-SELECT CAST(LIST(blob)::VARCHAR AS BLOB[]) FROM test_all_types();
-----
-[thisisalongblob\x00withnullbytes, \x00\x00\x00a, NULL]
-
-query I
-SELECT CAST(LIST(interval)::VARCHAR AS INTERVAL[]) FROM test_all_types();
-----
-[00:00:00, 83 years 3 months 999 days 00:16:39.999999, NULL]
-
-
-#               Larger input test
-# ---------------------------------------------------
-
-statement ok
-CREATE TABLE varchars AS SELECT [i, NULL]::VARCHAR col FROM range(0, 10000) tbl(i);
-
-query I
-SELECT MAX(CAST(col AS INT[])[1]) FROM varchars;
-----
-9999
-
 #               CSV reader
 # ---------------------------------------------------
 statement ok
@@ -516,17 +427,6 @@ query I
 SELECT col FROM int_list;
 ----
 [1, 2, 3]
-
-statement ok
-COPY varchars TO '__TEST_DIR__/large_list.csv';
-
-statement ok
-COPY int_list FROM '__TEST_DIR__/large_list.csv';
-
-query I
-SELECT COUNT(col) FROM int_list;
-----
-10001
 
 statement ok
 CREATE TABLE assorted_lists(col1 INT[], col2 VARCHAR[], col3 DATE[]);

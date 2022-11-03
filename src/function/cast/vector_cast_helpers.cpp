@@ -4,11 +4,7 @@ namespace duckdb {
 
 static bool IsNull(const char *buf, idx_t start_pos, Vector &child, idx_t row_idx) {
 	if (buf[start_pos] == 'N' && buf[start_pos + 1] == 'U' && buf[start_pos + 2] == 'L' && buf[start_pos + 3] == 'L') {
-		if (child.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			ConstantVector::SetNull(child, true);
-		} else {
-			FlatVector::SetNull(child, row_idx, true);
-		}
+		FlatVector::SetNull(child, row_idx, true);
 		return true;
 	}
 	return false;

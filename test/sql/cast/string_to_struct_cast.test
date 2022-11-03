@@ -1,4 +1,4 @@
-# name: test/sql/cast/string_to_struct_cast.test_slow
+# name: test/sql/cast/string_to_struct_cast.test
 # description: cast strings into (nested) structs
 # group: [cast]
 
@@ -367,107 +367,6 @@ SELECT cast(col as STRUCT(a VARCHAR, b INT)).a FROM tbl WHERE cast(col as STRUCT
 DUCK
 
 
-#               All types:
-# ---------------------------------------------------
-
-query I
-SELECT CAST('{a: True, b: False, c:[true]}' AS STRUCT(a BOOL, b BOOL, c BOOL[], d STRUCT(a BOOL, b BOOL)));
-----
-{'a': true, 'b': false, 'c': [true], 'd': NULL}
-
-foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT
-
-query I
-SELECT CAST('{a:1, b:{a:2, b: 3}}' AS STRUCT(a ${type}, b STRUCT(a ${type}, b ${type})));
-----
-{'a': 1, 'b': {'a': 2, 'b': 3}}
-
-endloop
-
-foreach type DOUBLE FLOAT
-
-query I
-SELECT CAST('{a:1, b:{a:2}, c: 0.00002}' AS STRUCT(a ${type}, b STRUCT(a ${type}), c ${type}));
-----
-{'a': 1.0, 'b': {'a': 2.0}, 'c': 2e-05}
-
-endloop
-
-statement ok
-CREATE TYPE mood AS ENUM('ok', 'sad', 'happy');
-
-query I
-SELECT '{a: ok, b: happy}'::STRUCT(a MOOD, b MOOD)
-----
-{'a': ok, 'b': happy}
-
-statement error
-SELECT '{a: nothappy}'::STRUCT(a MOOD)
-
-query I
-SELECT CAST(struct_pack(A=>date)::VARCHAR AS STRUCT(A DATE)) FROM test_all_types();
-----
-{'A': 5877642-06-25 (BC)}
-{'A': 5881580-07-10}
-{'A': NULL}
-
-query I
-SELECT CAST(struct_pack(A=>time)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
-----
-{'A': 00:00:00}
-{'A': 23:59:59.999999}
-{'A': NULL}
-
-query I
-SELECT CAST(struct_pack(A=>timestamp)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
-----
-{'A': 00:00:00}
-{'A': 04:00:54.775806}
-{'A': NULL}
-
-query I
-SELECT CAST(struct_pack(A=>timestamp_s)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
-----
-{'A': 00:00:00}
-{'A': 04:00:54}
-{'A': NULL}
-
-query I
-SELECT CAST(struct_pack(A=>timestamp_ms)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
-----
-{'A': 00:00:00}
-{'A': 04:00:54.775}
-{'A': NULL}
-
-query I
-SELECT CAST(struct_pack(A=>timestamp_ms)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
-----
-{'A': 00:00:00}
-{'A': 04:00:54.775}
-{'A': NULL}
-
-query I
-SELECT CAST(struct_pack(A=>timestamp_ns)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
-----
-{'A': 00:12:43.145225}
-{'A': 23:47:16.854775}
-{'A': NULL}
-
-query I
-SELECT CAST(struct_pack(A=>blob)::VARCHAR AS STRUCT(A BLOB)) FROM test_all_types();
-----
-{'A': thisisalongblob\x00withnullbytes}
-{'A': \x00\x00\x00a}
-{'A': NULL}
-
-query I
-SELECT CAST(struct_pack(A=>interval)::VARCHAR AS STRUCT(A INTERVAL)) FROM test_all_types();
-----
-{'A': 00:00:00}
-{'A': 83 years 3 months 999 days 00:16:39.999999}
-{'A': NULL}
-
-
 #               CSV reader
 # ---------------------------------------------------
 statement ok
@@ -484,8 +383,7 @@ SELECT * FROM assorted_structs;
 ----
 {'a': 8, 'b': hello, DuckDB}
 
-
-#               JSON testing
+#               JSON format to Struct testing
 # ---------------------------------------------------
 
 statement ok
