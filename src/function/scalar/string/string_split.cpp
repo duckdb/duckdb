@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -184,7 +185,7 @@ void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
 	                         FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING);
 	regexp_split.AddFunction(regex_fun);
 	// regexp options
-	regex_fun.arguments.push_back(LogicalType::VARCHAR);
+	regex_fun.arguments.emplace_back(LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
 	for (auto &name : {"string_split_regex", "str_split_regex", "regexp_split_to_array"}) {
 		regexp_split.name = name;
