@@ -189,7 +189,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	return out;
 }
 
-static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrows) {
+SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrows) {
 	SEXP varvalue = NULL;
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -230,7 +230,7 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 			const auto &child_type = child.second;
 
 			RProtector child_protector;
-			auto dest_child = allocate(child_type, child_protector, nrows);
+			auto dest_child = duckdb_r_allocate(child_type, child_protector, nrows);
 			dest_list.push_back(cpp11::named_arg(name.c_str()) = std::move(dest_child));
 		}
 
@@ -323,7 +323,7 @@ void ConvertTimestampVector(Vector &src_vec, size_t count, SEXP &dest, uint64_t 
 
 std::once_flag nanosecond_coercion_warning;
 
-static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, bool integer64) {
+void duckdb_r_transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, bool integer64) {
 	switch (src_vec.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		VectorToR<int8_t, uint32_t>(src_vec, n, LOGICAL_POINTER(dest), dest_offset, NA_LOGICAL);
@@ -499,8 +499,8 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 				RProtector ele_prot;
 				// transform the list child vector to a single R SEXP
 				auto list_element =
-				    allocate(ListType::GetChildType(src_vec.GetType()), ele_prot, src_data[row_idx].length);
-				transform(child_vector, list_element, 0, src_data[row_idx].length, integer64);
+				    duckdb_r_allocate(ListType::GetChildType(src_vec.GetType()), ele_prot, src_data[row_idx].length);
+				duckdb_r_transform(child_vector, list_element, 0, src_data[row_idx].length, integer64);
 
 				// call R's own extract subset method
 				SET_ELEMENT(dest, dest_offset + row_idx, list_element);
@@ -514,7 +514,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 		for (size_t i = 0; i < children.size(); i++) {
 			const auto &struct_child = children[i];
 			SEXP child_dest = VECTOR_ELT(dest, i);
-			transform(*struct_child, child_dest, dest_offset, n, integer64);
+			duckdb_r_transform(*struct_child, child_dest, dest_offset, n, integer64);
 		}
 
 		break;
@@ -631,7 +631,7 @@ SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 		// TODO move the protector to allocate?
 		RProtector r_varvalue;
-		auto varvalue = allocate(result->types[col_idx], r_varvalue, nrows);
+		auto varvalue = duckdb_r_allocate(result->types[col_idx], r_varvalue, nrows);
 		SET_VECTOR_ELT(data_frame, col_idx, varvalue);
 	}
 
@@ -644,7 +644,7 @@ SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer
 		D_ASSERT(chunk.ColumnCount() == (idx_t)Rf_length(data_frame));
 		for (size_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
 			SEXP dest = VECTOR_ELT(data_frame, col_idx);
-			transform(chunk.data[col_idx], dest, dest_offset, chunk.size(), integer64);
+			duckdb_r_transform(chunk.data[col_idx], dest, dest_offset, chunk.size(), integer64);
 		}
 		dest_offset += chunk.size();
 	}

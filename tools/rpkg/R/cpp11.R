@@ -52,8 +52,8 @@ rapi_expr_tostring <- function(expr) {
   .Call(`_duckdb_rapi_expr_tostring`, expr)
 }
 
-rapi_rel_from_df <- function(con, df) {
-  .Call(`_duckdb_rapi_rel_from_df`, con, df)
+rapi_rel_from_df <- function(con, df, experimental) {
+  .Call(`_duckdb_rapi_rel_from_df`, con, df, experimental)
 }
 
 rapi_rel_filter <- function(rel, exprs) {
@@ -110,6 +110,10 @@ rapi_rel_sql <- function(rel, sql) {
 
 rapi_rel_names <- function(rel) {
   .Call(`_duckdb_rapi_rel_names`, rel)
+}
+
+rapi_rel_to_altrep <- function(rel_p) {
+  .Call(`_duckdb_rapi_rel_to_altrep`, rel_p)
 }
 
 rapi_release <- function(stmt) {

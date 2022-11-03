@@ -63,13 +63,14 @@ print.duckdb_expr <- function(x, ...) {
 #' Convert a R data.frame to a DuckDB relation object
 #' @param con a DuckDB DBI connection object
 #' @param df the data.frame
+#' @param experimental enable experimental string handling
 #' @return the `duckdb_relation` object wrapping the data.frame
 #' @export
 #' @examples
 #' con <- DBI::dbConnect(duckdb::duckdb())
 #' rel <- rel_from_df(con, mtcars)
-rel_from_df <- function(con, df) {
-    rapi_rel_from_df(con@conn_ref, as.data.frame(df))
+rel_from_df <- function(con, df, experimental=FALSE) {
+    rapi_rel_from_df(con@conn_ref, as.data.frame(df), experimental)
 }
 
 #' @export
@@ -82,7 +83,9 @@ as.data.frame.duckdb_relation <- function(x, row.names=NULL, optional=NULL, ...)
     if (!missing(row.names) || !missing(optional)) {
         stop("row.names and optional parameters not supported")
     }
-    rapi_rel_to_df(x)
+    df <- rapi_rel_to_df(x)
+    attr(df, "__duckdb_relation") <- x
+    df
 }
 
 #' @export
@@ -208,3 +211,17 @@ rel_alias <- rapi_rel_alias
 #' rel <- rel_from_df(con, mtcars)
 #' rel_set_alias(rel, "my_new_alias")
 rel_set_alias <- rapi_rel_set_alias
+
+#' Set the internal alias for a DuckDB relation object
+#' @param rel the DuckDB relation object
+#' @param alias the new alias
+#' @export
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' rel <- rel_from_df(con, mtcars)
+#' print(rel_to_altrep(rel))
+rel_to_altrep <- function(rel_p) {
+  df <- rapi_rel_to_altrep(rel_p)
+  attr(df, "__duckdb_relation") <- rel_p
+  df
+}

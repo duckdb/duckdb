@@ -4,12 +4,14 @@
 \alias{rel_from_df}
 \title{Convert a R data.frame to a DuckDB relation object}
 \usage{
-rel_from_df(con, df)
+rel_from_df(con, df, experimental = FALSE)
 }
 \arguments{
 \item{con}{a DuckDB DBI connection object}
 
 \item{df}{the data.frame}
+
+\item{experimental}{enable experimental string handling}
 }
 \value{
 the \code{duckdb_relation} object wrapping the data.frame
