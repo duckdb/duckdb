@@ -226,7 +226,7 @@ test_that("Joining, auto-cleanup enabled", {
   expect_true(all(c(table_one_name, table_two_name) %in% duckdb_list_arrow(con)))
   rm(table_one, table_two)
   gc()
-  expect_false(any(c(table_one_name,     table_two_name) %in% duckdb_list_arrow(con)))
+  expect_false(any(c(table_one_name, table_two_name) %in% duckdb_list_arrow(con)))
 })
 
 test_that("Joining, auto-cleanup disabled", {

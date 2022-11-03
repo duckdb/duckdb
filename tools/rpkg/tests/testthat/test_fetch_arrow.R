@@ -72,7 +72,7 @@ test_that("duckdb_fetch_arrow() record_batch_reader ", {
 
   dbExecute(con, paste0("CREATE table t as select range a from range(3000);"))
   res <- dbSendQuery(con, "SELECT * FROM t", arrow = TRUE)
-  record_batch_reader <- duckdb_fetch_record_batch(res,1024)
+  record_batch_reader <- duckdb_fetch_record_batch(res, 1024)
   cur_batch <- record_batch_reader$read_next_batch()
   expect_equal(1024, cur_batch$num_rows)
 
@@ -112,7 +112,7 @@ test_that("record_batch_reader and table error", {
   dbExecute(con, paste0("CREATE table t as select range a from range(5000);"))
   res <- dbSendQuery(con, "SELECT * FROM t", arrow = TRUE)
   expect_error(duckdb_fetch_record_batch(res, 0))
-  expect_error(duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE),0))
+  expect_error(duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow = TRUE), 0))
 
   dbDisconnect(con, shutdown = T)
 })
