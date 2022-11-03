@@ -1,13 +1,8 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
-#include "utf8proc.hpp"
-#include "utf8proc_wrapper.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
 namespace duckdb {
@@ -86,7 +81,11 @@ struct StringSplitter {
 			if (match_size == 0 && pos == 0) {
 				// special case: 0 length match and pos is 0
 				// move to the next character
-				pos = utf8proc_next_grapheme(input_data, input_size, 0);
+				for(pos++; pos < input_size; pos++) {
+					if (LengthFun::IsCharacter(input_data[pos])) {
+						break;
+					}
+				}
 				if (pos == input_size) {
 					break;
 				}
