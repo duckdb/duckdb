@@ -499,6 +499,11 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
+OptimisticDataWriter *DataTable::CreateOptimisticWriter(ClientContext &context) {
+	auto &local_storage = LocalStorage::Get(context);
+	return local_storage.CreateOptimisticWriter(this);
+}
+
 void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
 	auto &local_storage = LocalStorage::Get(context);
 	local_storage.LocalMerge(this, collection);

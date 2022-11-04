@@ -86,14 +86,12 @@ public:
 	~ArrowDatasetCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		FileSystemDataset.LoadAttribute("FileSystemDataset", cache, *this);
-		InMemoryDataset.LoadAttribute("InMemoryDataset", cache, *this);
+		Dataset.LoadAttribute("Dataset", cache, *this);
 		Scanner.LoadAttribute("Scanner", cache, *this);
 	}
 
 public:
-	PythonImportCacheItem FileSystemDataset;
-	PythonImportCacheItem InMemoryDataset;
+	PythonImportCacheItem Dataset;
 	PythonImportCacheItem Scanner;
 };
 

@@ -21,6 +21,8 @@ CompressionType CompressionTypeFromString(const string &str) {
 		return CompressionType::COMPRESSION_FSST;
 	} else if (compression == "chimp") {
 		return CompressionType::COMPRESSION_CHIMP;
+	} else if (compression == "patas") {
+		return CompressionType::COMPRESSION_PATAS;
 	} else {
 		return CompressionType::COMPRESSION_AUTO;
 	}
@@ -44,6 +46,8 @@ string CompressionTypeToString(CompressionType type) {
 		return "FSST";
 	case CompressionType::COMPRESSION_CHIMP:
 		return "Chimp";
+	case CompressionType::COMPRESSION_PATAS:
+		return "Patas";
 	default:
 		throw InternalException("Unrecognized compression type!");
 	}
