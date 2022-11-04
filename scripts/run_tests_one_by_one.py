@@ -5,14 +5,9 @@ import os
 
 # wheth
 no_exit = False
-file_contains = None
 for i in range(len(sys.argv)):
 	if sys.argv[i] == '--no-exit':
 		no_exit = True
-		del sys.argv[i]
-		i-=1
-	elif sys.argv[i].startswith('--file-contains='):
-		file_contains = sys.argv[i].replace('--file-contains=', '')
 		del sys.argv[i]
 		i-=1
 
@@ -44,16 +39,6 @@ for line in stdout.splitlines():
 	if len(line.strip()) == 0:
 		continue
 	splits = line.rsplit('\t', 1)
-	if file_contains is not None:
-		if not os.path.isfile(splits[0]):
-			continue
-		try:
-			with open(splits[0], 'r') as f:
-				text = f.read()
-		except:
-			continue
-		if file_contains not in text:
-			continue
 	test_cases.append(splits[0])
 
 test_count = len(test_cases)
