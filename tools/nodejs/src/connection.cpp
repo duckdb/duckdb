@@ -375,8 +375,8 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 	for (uint64_t ipc_idx = 0; ipc_idx < array.Length(); ipc_idx++) {
 		Napi::Value v = array[ipc_idx];
 		if (!v.IsObject()) {
-            Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
-            return env.Null();
+			Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
+			return env.Null();
 		}
 		Napi::Uint8Array arr = v.As<Napi::Uint8Array>();
 		auto raw_ptr = reinterpret_cast<uint64_t>(arr.ArrayBuffer().Data());
