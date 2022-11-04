@@ -79,8 +79,8 @@ public:
 	}
 
 	void StartNewGroup() {
-		group_idx = 0;
 		metadata_byte_size += CurrentGroupMetadataSize();
+		group_idx = 0;
 		state.chimp.Reset();
 	}
 
@@ -126,8 +126,10 @@ idx_t ChimpFinalAnalyze(AnalyzeState &state) {
 	auto &chimp = (ChimpAnalyzeState<T> &)state;
 	// Finish the last "segment"
 	chimp.StartNewSegment();
+	// Multiply the final size to factor in the extra cost of decompression time
+	const auto multiplier = 2.0;
 	const auto final_analyze_size = chimp.TotalUsedBytes();
-	return final_analyze_size;
+	return final_analyze_size * multiplier;
 }
 
 } // namespace duckdb
