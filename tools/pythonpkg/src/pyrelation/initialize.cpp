@@ -18,11 +18,11 @@ static void InitializeReadOnlyProperties(py::class_<DuckDBPyRelation> &m) {
 	    .def_property_readonly("columns", &DuckDBPyRelation::Columns,
 	                           "Return a list containing the names of the columns of the relation.")
 	    .def_property_readonly("types", &DuckDBPyRelation::ColumnTypes,
-	                           "Return a list containing the types of the columns of the relation.");
-	.def_property_readonly("dtypes", &DuckDBPyRelation::ColumnTypes,
-	                       "Return a list containing the types of the columns of the relation.")
+	                           "Return a list containing the types of the columns of the relation.")
+	    .def_property_readonly("dtypes", &DuckDBPyRelation::ColumnTypes,
+	                           "Return a list containing the types of the columns of the relation.")
 	    .def_property_readonly("alias", &DuckDBPyRelation::GetAlias, "Get the name of the current alias")
-	    .def_property_readonly("description", &DuckDBPyResult::Description)
+	    .def_property_readonly("description", &DuckDBPyRelation::Description)
 	    .def("__len__", &DuckDBPyRelation::Length, "Number of rows in relation.")
 	    .def_property_readonly("shape", &DuckDBPyRelation::Shape, " Tuple of # of rows, # of columns in relation.");
 }

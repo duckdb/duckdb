@@ -157,10 +157,18 @@ class get_numpy_include(object):
 extra_files = []
 header_files = []
 
+def list_source_files(directory):
+    sources = []
+    dir_len = len(directory) + len(os.sep)
+    for (subdir, dirs, files) in os.walk(directory):
+        subdir = subdir[dir_len::]
+        sources.extend([os.path.join('src', subdir, x) for x in files if '.cpp' in x])
+    return sources
+
 script_path = os.path.dirname(os.path.abspath(__file__))
 main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
-main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
+main_source_files = ['duckdb_python.cpp'] + list_source_files(main_source_path)
 include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
 
 if len(existing_duckdb_dir) == 0:
