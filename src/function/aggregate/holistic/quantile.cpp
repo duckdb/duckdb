@@ -14,11 +14,6 @@
 
 namespace duckdb {
 
-// Hugeint arithmetic
-hugeint_t operator*(const hugeint_t &h, const double &d) {
-	return Hugeint::Convert(Hugeint::Cast<double>(h) * d);
-}
-
 // Interval arithmetic
 interval_t operator*(const interval_t &i, const double &d) {
 	D_ASSERT(d >= 0 && d <= 1);

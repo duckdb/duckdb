@@ -347,7 +347,7 @@ Napi::Value Connection::RegisterUdf(const Napi::CallbackInfo &info) {
 Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	if (info.Length() < 2 || !info[0].IsString() || !info[1].IsObject()) {
-		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
+		Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
 		return env.Null();
 	}
 
@@ -357,7 +357,7 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 
 	if (info.Length() > 2) {
 		if (!info[2].IsBoolean()) {
-			Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
+			Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
 			return env.Null();
 		}
 		force_register = info[2].As<Napi::Boolean>().Value();
@@ -375,7 +375,8 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 	for (uint64_t ipc_idx = 0; ipc_idx < array.Length(); ipc_idx++) {
 		Napi::Value v = array[ipc_idx];
 		if (!v.IsObject()) {
-			throw std::runtime_error("Expected Object");
+            Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
+            return env.Null();
 		}
 		Napi::Uint8Array arr = v.As<Napi::Uint8Array>();
 		auto raw_ptr = reinterpret_cast<uint64_t>(arr.ArrayBuffer().Data());

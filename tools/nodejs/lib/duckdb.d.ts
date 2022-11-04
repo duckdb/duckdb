@@ -20,6 +20,7 @@ export class Connection {
   constructor(db: Database, callback?: Callback<any>);
 
   all(sql: string, ...args: [...any, Callback<TableData>] | []): void;
+  arrowIPCAll(sql: string, ...args: [...any, Callback<TableData>] | []): void;
   each(sql: string, ...args: [...any, Callback<RowData>] | []): void;
   exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
@@ -40,6 +41,7 @@ export class Connection {
   unregister_udf(name: string, callback: Callback<any>): void;
 
   stream(sql: any, ...args: any[]): QueryResult;
+  arrowIPCStream(sql: any, ...args: any[]): QueryResult;
 }
 
 export class QueryResult {
@@ -54,6 +56,7 @@ export class Database {
   connect(): Connection;
 
   all(sql: string, ...args: [...any, Callback<TableData>] | []): void;
+  arrowIPCAll(sql: string, ...args: [...any, Callback<TableData>] | []): void;
   each(sql: string, ...args: [...any, Callback<RowData>] | []): void;
   exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
@@ -66,12 +69,18 @@ export class Database {
     fun: (...args: any[]) => any
   ): void;
   unregister_udf(name: string, callback: Callback<any>): void;
+
+  stream(sql: any, ...args: any[]): QueryResult;
+  arrowIPCStream(sql: any, ...args: any[]): QueryResult;
 }
 
 export class Statement {
   constructor();
 
   all(...args: [...any, Callback<TableData>] | []): void;
+
+  arrowIPCAll(...args: [...any, Callback<TableData>] | []): void;
+
   each(...args: [...any, Callback<RowData>] | []): void;
 
   finalize(callback?: Callback<void>): void;

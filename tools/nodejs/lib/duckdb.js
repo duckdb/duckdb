@@ -549,18 +549,6 @@ Database.prototype.arrowIPCStream = function () {
 }
 
 /**
- * Convenience method for Connection#exec using a built-in default connection
- * @arg sql
- * @param {...*} params
- * @param callback
- * @return {void}
- */
-Database.prototype.arrow = function () {
-    default_connection(this).arrow.apply(this.default_connection, arguments);
-    return this;
-}
-
-/**
  * @arg sql
  * @param {...*} params
  * @param callback
