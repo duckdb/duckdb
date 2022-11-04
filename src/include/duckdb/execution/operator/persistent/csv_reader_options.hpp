@@ -9,6 +9,7 @@
 #pragma once
 
 #include "csv_buffer.hpp"
+#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 

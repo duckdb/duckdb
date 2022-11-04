@@ -23,7 +23,7 @@
 
 namespace duckdb {
 
-static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
+string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
 	return to_string(linenr + 1) + estimated;
 }

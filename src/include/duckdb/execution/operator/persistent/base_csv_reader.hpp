@@ -98,6 +98,7 @@ protected:
 
 	void VerifyUTF8(idx_t col_idx);
 	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);
+	static string GetLineNumberStr(idx_t linenr, bool linenr_estimated);
 
 protected:
 	//! Whether or not the current row's columns have overflown sql_types.size()

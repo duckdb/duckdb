@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

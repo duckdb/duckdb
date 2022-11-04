@@ -1,5 +1,26 @@
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "utf8proc_wrapper.hpp"
+#include "utf8proc.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/main/error_manager.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <fstream>
+
 namespace duckdb {
 
 BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,

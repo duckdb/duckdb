@@ -44,6 +44,7 @@ void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 }
 
 bool ParallelCSVReader::SetPosition() {
+	position_set = position_buffer;
 	if (start_buffer == position_buffer && start_buffer == buffer_read.buffer->GetStart()) {
 		// Buffer always start in a new line
 		return true;
@@ -62,6 +63,7 @@ bool ParallelCSVReader::SetPosition() {
 			break;
 		}
 	}
+	position_set = position_buffer;
 	start_buffer = position_buffer;
 	bool not_read_anything = position_buffer >= end_buffer;
 	return !not_read_anything;

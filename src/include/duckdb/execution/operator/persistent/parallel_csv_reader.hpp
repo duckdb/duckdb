@@ -73,6 +73,8 @@ public:
 
 	CSVBufferRead buffer_read;
 
+	idx_t position_set;
+
 public:
 	void SetBufferRead(const CSVBufferRead &buffer_read);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
