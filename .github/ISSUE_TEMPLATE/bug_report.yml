@@ -32,6 +32,7 @@ body:
     attributes:
       label: "OS:"
       placeholder: e.g. iOS
+      description: Please include operating system version and architecture (eg, aarch64, x86, x64, etc)
     validations:
       required: true
   - type: input
