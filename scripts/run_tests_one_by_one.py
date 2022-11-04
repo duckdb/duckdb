@@ -1,18 +1,24 @@
 import sys
 import subprocess
 import re
-
-if len(sys.argv) < 2:
-	print("Expected usage: python3 scripts/run_tests_one_by_one.py build/debug/test/unittest [--no-exit]")
-	exit(1)
+import os
 
 # wheth
 no_exit = False
+file_contains = None
 for i in range(len(sys.argv)):
 	if sys.argv[i] == '--no-exit':
 		no_exit = True
 		del sys.argv[i]
+		i-=1
+	elif sys.argv[i].startswith('--file-contains='):
+		file_contains = sys.argv[i].replace('--file-contains=', '')
+		del sys.argv[i]
+		i-=1
 
+if len(sys.argv) < 2:
+	print("Expected usage: python3 scripts/run_tests_one_by_one.py build/debug/test/unittest [--no-exit]")
+	exit(1)
 unittest_program = sys.argv[1]
 extra_args = []
 if len(sys.argv) > 2:
@@ -38,6 +44,16 @@ for line in stdout.splitlines():
 	if len(line.strip()) == 0:
 		continue
 	splits = line.rsplit('\t', 1)
+	if file_contains is not None:
+		if not os.path.isfile(splits[0]):
+			continue
+		try:
+			with open(splits[0], 'r') as f:
+				text = f.read()
+		except:
+			continue
+		if file_contains not in text:
+			continue
 	test_cases.append(splits[0])
 
 test_count = len(test_cases)
