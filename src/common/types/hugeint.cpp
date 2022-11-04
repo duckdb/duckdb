@@ -749,10 +749,6 @@ hugeint_t &hugeint_t::operator^=(const hugeint_t &rhs) {
 	return *this;
 }
 
-hugeint_t operator*(const hugeint_t &h, const double &d) {
-	return Hugeint::Convert(Hugeint::Cast<double>(h) * d);
-}
-
 string hugeint_t::ToString() const {
 	return Hugeint::ToString(*this);
 }
