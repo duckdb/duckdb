@@ -280,3 +280,22 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
 	}
 }
+
+TEST_CASE("Test buffer manager ART", "[art][.]") {
+	auto storage_database = TestCreatePath("storage_test");
+	auto config = GetTestConfig();
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	DuckDB db(storage_database, config.get());
+	Connection con(db);
+
+	idx_t current_memory = 0;
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	D_ASSERT(buffer_manager.GetUsedMemory() == current_memory);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE leaf AS SELECT 42 AS id FROM range(42);"));
+	current_memory = buffer_manager.GetUsedMemory();
+
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM leaf ORDER BY 1;"));
+	D_ASSERT(buffer_manager.GetUsedMemory() == current_memory);
+}
