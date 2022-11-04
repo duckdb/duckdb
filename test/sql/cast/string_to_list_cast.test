@@ -220,8 +220,10 @@ SELECT CAST('[    [ "   hello"]  ,["            world"        ],[ "!        "   
 #               Empty list
 # ---------------------------------------------------
 
-statement ok
-SELECT CAST('[]' AS VARCHAR[]);
+query I
+SELECT '[]'::VARCHAR[];
+----
+[]
 
 query I
 SELECT '[]'::INT[];
@@ -297,6 +299,21 @@ SELECT TRY_CAST('Hello World' AS INT[]);
 ----
 NULL
 
+statement ok
+CREATE TABLE try_cast_tbl (col1 VARCHAR);
+
+statement ok
+INSERT INTO try_cast_tbl VALUES ('[1,2,X,2]'), ('[hello DuckDB]'), ('[345,oops,44,4.0]'), ('[12345678901]'), ('[5,6,7]'), ('[3 0, 1]');
+
+query I
+SELECT TRY_CAST(col1 AS INT[]) FROM try_cast_tbl;
+----
+[1, 2, NULL, 2]
+[NULL]
+[345, NULL, 44, 4]
+[NULL]
+[5, 6, 7]
+[NULL, 1]
 
 #               Syntax error checking
 # ---------------------------------------------------
@@ -352,94 +369,48 @@ SELECT cast(col1 as int[]) FROM tbl WHERE LEN(cast(col1 as int[])) < 4;
 [5, 6, 7]
 
 
-#               All types:
-# ---------------------------------------------------
-
-query I
-SELECT CAST('[[True,False], [true], [FALSE], [false, true]]' AS BOOL[][]);
-----
-[[true, false], [true], [false], [false, true]]
-
-foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT 
-
-query I
-SELECT CAST('[1,2,3]' AS ${type}[]);
-----
-[1, 2, 3]
-
-endloop
-
-foreach type DOUBLE[] FLOAT[]
-
-query I
-SELECT CAST('[[1,2,3], [3.333, 2.2, 1.1], [0]]' AS ${type}[]);
-----
-[[1.0, 2.0, 3.0], [3.333, 2.2, 1.1], [0.0]]
-
-endloop
-
-statement ok
-CREATE TYPE mood AS ENUM('ok', 'sad', 'happy');
-
-query I
-SELECT '[ok,happy]'::MOOD[]
-----
-[ok, happy]
-
-statement error
-SELECT '[nothappy]'::MOOD[]
-
-query I
-SELECT CAST(LIST(date)::VARCHAR AS DATE[]) FROM test_all_types();
-----
-[5877642-06-25 (BC), 5881580-07-10, NULL]
-
-query I
-SELECT CAST(LIST(time)::VARCHAR AS TIME[]) FROM test_all_types();
-----
-[00:00:00, 23:59:59.999999, NULL]
-
-query I
-SELECT CAST(LIST(timestamp)::VARCHAR AS TIME[]) FROM test_all_types();
-----
-[00:00:00, 04:00:54.775806, NULL]
-
-query I
-SELECT CAST(LIST(timestamp_s)::VARCHAR AS TIME[]) FROM test_all_types();
-----
-[00:00:00, 04:00:54, NULL]
-
-query I
-SELECT CAST(LIST(timestamp_ms)::VARCHAR AS TIME[]) FROM test_all_types();
-----
-[00:00:00, 04:00:54.775, NULL]
-
-query I
-SELECT CAST(LIST(timestamp_ns)::VARCHAR AS TIME[]) FROM test_all_types();
-----
-[00:12:43.145225, 23:47:16.854775, NULL]
-
-query I
-SELECT CAST(LIST(blob)::VARCHAR AS BLOB[]) FROM test_all_types();
-----
-[thisisalongblob\x00withnullbytes, \x00\x00\x00a, NULL]
-
-query I
-SELECT CAST(LIST(interval)::VARCHAR AS INTERVAL[]) FROM test_all_types();
-----
-[00:00:00, 83 years 3 months 999 days 00:16:39.999999, NULL]
-
-
-#               Larger input test
+#               Lists of structs:
 # ---------------------------------------------------
 
 statement ok
-CREATE TABLE varchars AS SELECT [i, NULL]::VARCHAR col FROM range(0, 10000) tbl(i);
+CREATE TABLE struct_tbl1(col VARCHAR);
+
+statement ok
+INSERT INTO struct_tbl1 VALUES('[{a: "hii"}, {a: "hellooo"}]');
 
 query I
-SELECT MAX(CAST(col AS INT[])[1]) FROM varchars;
+SELECT col::STRUCT(a VARCHAR)[] FROM struct_tbl1;
 ----
-9999
+[{'a': hii}, {'a': hellooo}]
+
+query I
+SELECT CAST('[ [{a:[12,13,14], b:"🦆"}], [{a:[12,13,14], b:"🦆", c:100}] ]' AS STRUCT(a INT[], b VARCHAR, c FLOAT)[][]);
+----
+[[{'a': [12, 13, 14], 'b': 🦆, 'c': NULL}], [{'a': [12, 13, 14], 'b': 🦆, 'c': 100.0}]]
+
+query I
+SELECT CAST('[{a:[12,13,14], b:"🦆", c:{a:[[a], [b, c]], b:[123]}}]' AS STRUCT(a INT[], b VARCHAR, c STRUCT(a VARCHAR[][], b INT[]))[]);
+----
+[{'a': [12, 13, 14], 'b': 🦆, 'c': {'a': [[a], [b, c]], 'b': [123]}}]
+
+query I
+SELECT '[{a: hii}, {a: "{" }]'::STRUCT(a VARCHAR)[] FROM struct_tbl1;
+----
+[{'a': hii}, {'a': {}]
+
+
+# ---------------------------------------------------
+statement ok
+CREATE TABLE struct_tbl2(col VARCHAR);
+
+statement ok
+INSERT INTO struct_tbl2 VALUES('[{a: 7, b:"Duck"}, {a: 7000, b: "🦆🦆🦆🦆🦆🦆"}]');
+
+query I
+SELECT col::STRUCT(a INT, b VARCHAR)[] FROM struct_tbl2;
+----
+[{'a': 7, 'b': Duck}, {'a': 7000, 'b': 🦆🦆🦆🦆🦆🦆}]
+
 
 #               CSV reader
 # ---------------------------------------------------
@@ -456,17 +427,6 @@ query I
 SELECT col FROM int_list;
 ----
 [1, 2, 3]
-
-statement ok
-COPY varchars TO '__TEST_DIR__/large_list.csv';
-
-statement ok
-COPY int_list FROM '__TEST_DIR__/large_list.csv';
-
-query I
-SELECT COUNT(col) FROM int_list;
-----
-10001
 
 statement ok
 CREATE TABLE assorted_lists(col1 INT[], col2 VARCHAR[], col3 DATE[]);
