@@ -17,8 +17,6 @@ CREATE TABLE t2 (y INT, z INT);
 statement ok
 INSERT INTO t2 VALUES (2, 2), (4, 4);
 
-mode skip
-
 query III
 SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2;
 ----
@@ -83,8 +81,6 @@ NULL	4
 3	NULL
 3	NULL
 
-mode unskip
-
 ########## test limit
 
 query III
@@ -95,8 +91,6 @@ NULL	2	NULL
 NULL	3	NULL
 NULL	4	NULL
 NULL	5	NULL
-
-mode skip
 
 ########## test order by
 
@@ -147,13 +141,13 @@ NULL	1	1	NULL
 NULL	NULL	2	2
 NULL	NULL	4	4
 
-
-query IIII
+# need to sort because our hash-based union does not preserve order
+query IIII sort
 SELECT 1, 2 FROM t1 UNION SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2;
 ----
+1	1	NULL	NULL
 1	2	NULL	NULL
 3	3	NULL	NULL
-1	1	NULL	NULL
 NULL	NULL	2	2
 NULL	NULL	4	4
 
@@ -173,11 +167,12 @@ NULL	2	2
 statement error
 SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2 EXCEPT SELECT 2, 2 FROM t1;
 
-query III
+# have to sort here too because EXCEPT does not preserve order
+query III sort
 (SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2) EXCEPT SELECT NULL, 2, 2 FROM t1;
 ----
-3	3	NULL
 1	1	NULL
+3	3	NULL
 NULL	4	4
 
 
@@ -213,7 +208,8 @@ SELECT DISTINCT ON(x) x FROM (SELECT 1 as x UNION ALL BY NAME SELECT '1' as x);
 ----
 1
 
-query I
+# have to sort here too because distinct on is hash-based, does not preserve order
+query I sort
 SELECT DISTINCT ON(x) x FROM (SELECT 1 as x UNION ALL BY NAME SELECT 1.1 as x);
 ----
 1

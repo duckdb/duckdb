@@ -28,17 +28,19 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
 	}
 }
 
+BufferHandle ColumnDataAllocator::PinInternal(uint32_t block_id) {
+	auto &block_handle = blocks[block_id].handle;
+	auto result = alloc.buffer_manager->Pin(block_handle);
+	return result;
+}
+
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	if (shared) {
 		lock_guard<mutex> guard(lock);
-		auto &block_handle = blocks[block_id].handle;
-		auto result = alloc.buffer_manager->Pin(block_handle);
-		return result;
+		return PinInternal(block_id);
 	} else {
-		auto &block_handle = blocks[block_id].handle;
-		auto result = alloc.buffer_manager->Pin(block_handle);
-		return result;
+		return PinInternal(block_id);
 	}
 }
 
