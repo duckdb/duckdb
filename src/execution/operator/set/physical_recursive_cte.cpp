@@ -138,7 +138,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 				op->op_state = op->GetGlobalOperatorState(context.client);
 			}
 		}
-		pipeline->Reset();
+		pipeline->ResetSource(true);
 	}
 
 	// get the MetaPipelines in the recursive_meta_pipeline and reschedule them

@@ -165,12 +165,16 @@ void Pipeline::Reset() {
 			}
 		}
 	}
-	ResetSource();
+	ResetSource(false);
+	// we no longer reset source here because this function is no longer guaranteed to be called by the main thread
+	// source reset needs to be called by the main thread because resetting a source may call into clients like R
 	initialized = true;
 }
 
-void Pipeline::ResetSource() {
-	source_state = source->GetGlobalSourceState(GetClientContext());
+void Pipeline::ResetSource(bool force) {
+	if (force || !source_state) {
+		source_state = source->GetGlobalSourceState(GetClientContext());
+	}
 }
 
 void Pipeline::Ready() {

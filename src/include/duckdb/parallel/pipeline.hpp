@@ -63,7 +63,7 @@ public:
 	void Ready();
 	void Reset();
 	void ResetSink();
-	void ResetSource();
+	void ResetSource(bool force);
 	void Schedule(shared_ptr<Event> &event);
 
 	//! Finalize this pipeline
