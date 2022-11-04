@@ -79,7 +79,6 @@ struct BufferedCSVReaderOptions {
 	//! Buffer Size (Parallel Scan)
 	idx_t buffer_size = CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL;
 
-
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//

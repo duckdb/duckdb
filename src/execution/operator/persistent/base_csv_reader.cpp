@@ -196,7 +196,7 @@ void BaseCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<
 		auto parse_data = FlatVector::GetData<string_t>(v);
 		if (!escape_positions.empty()) {
 			// remove escape characters (if any)
-			string old_val = str_val;
+			string old_val(str_val, length);
 			string new_val = "";
 			idx_t prev_pos = 0;
 			for (idx_t i = 0; i < escape_positions.size(); i++) {
