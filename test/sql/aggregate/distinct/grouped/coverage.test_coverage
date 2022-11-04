@@ -75,7 +75,7 @@ SELECT COUNT(distinct i%5) from tbl group by j;
 ## Aggregate with multiple parameters
 
 query I
-SELECT ARG_MIN(distinct i%5, i) from tbl group by j;
+SELECT ARG_MIN(distinct i%5, i) from tbl group by j order by all;
 ----
 0
 1

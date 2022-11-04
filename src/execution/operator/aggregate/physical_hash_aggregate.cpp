@@ -423,7 +423,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 		SinkDistinct(context, state, lstate, input);
 	}
 
-	if (non_distinct_filter.empty() && !filter_indexes.empty()) {
+	if (non_distinct_filter.empty() && !distinct_filter.empty()) {
 		if (filter_indexes.empty()) {
 			// There are no filters, so we are not at risk of losing any groups by skipping the sink for now
 			return SinkResultType::NEED_MORE_INPUT;
@@ -509,7 +509,9 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 
 	CombineDistinct(context, state, lstate);
 
-	if (non_distinct_filter.empty() && filter_indexes.empty()) {
+	if (non_distinct_filter.empty() && !distinct_filter.empty() && filter_indexes.empty()) {
+		// There are no non-distinct aggregates, and the distinct aggregates have no filters
+		// So logically, these hash tables should be empty anyways
 		return;
 	}
 	for (idx_t i = 0; i < groupings.size(); i++) {
