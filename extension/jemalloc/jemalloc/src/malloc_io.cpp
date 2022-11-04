@@ -95,20 +95,8 @@ malloc_write(const char *s) {
  */
 int
 buferror(int err, char *buf, size_t buflen) {
-#ifdef _WIN32
-	FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, err, 0,
-	    (LPSTR)buf, (DWORD)buflen, NULL);
+	// duckdb: this function was not portable
 	return 0;
-#elif !_GNU_SOURCE || _POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600
-	return strerror_r(err, buf, buflen);
-#else
-	char *b = strerror_r(err, buf, buflen);
-	if (b != buf) {
-		strncpy(buf, b, buflen);
-		buf[buflen-1] = '\0';
-	}
-	return 0;
-#endif
 }
 
 uintmax_t
