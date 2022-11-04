@@ -20,6 +20,7 @@ add_library_unity(
   replace.cpp
   strip_accents.cpp
   suffix.cpp
+  translate.cpp
   trim.cpp
   left_right.cpp
   contains.cpp
