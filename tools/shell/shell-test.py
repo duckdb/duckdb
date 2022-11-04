@@ -843,6 +843,12 @@ SELECT * FROM sql_auto_complete('SELECT MyColumn FROM My') LIMIT 1;
 """, out="MyTable"
 )
 
+# duckbox renderer displays the number of rows if there are none
+test('''
+.mode duckbox
+select 42 limit 0;
+''', out='0 rows')
+
 if os.name != 'nt':
      shell_test_dir = 'shell_test_dir'
      try:
