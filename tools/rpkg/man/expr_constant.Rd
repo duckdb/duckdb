@@ -13,7 +13,7 @@ expr_constant(val)
 a constant expression
 }
 \description{
-Create a constant expression
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 const_int_expr <- expr_constant(42)

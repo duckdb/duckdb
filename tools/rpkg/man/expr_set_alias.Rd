@@ -12,7 +12,7 @@ expr_set_alias(expr, alias)
 \item{alias}{the alias}
 }
 \description{
-Set the alias for an expression
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 expr_set_alias(expr_constant(42), "my_alias")

@@ -214,27 +214,27 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	}
 }
 
-[[cpp11::register]] SEXP rapi_rel_to_altrep(duckdb::rel_extptr_t rel_p) {
-	D_ASSERT(rel_p && rel_p->rel);
-	auto rel = rel_p->rel;
-	auto ncols = rel->Columns().size();
+[[cpp11::register]] SEXP rapi_rel_to_altrep(duckdb::rel_extptr_t rel) {
+	D_ASSERT(rel && rel->rel);
+	auto drel = rel->rel;
+	auto ncols = drel->Columns().size();
 
 	cpp11::writable::list data_frame(NEW_LIST(ncols));
 	data_frame.attr(R_ClassSymbol) = RStrings::get().dataframe_str;
-	auto relation_wrapper = make_shared<AltrepRelationWrapper>(rel);
+	auto relation_wrapper = make_shared<AltrepRelationWrapper>(drel);
 	RProtector r_protector;
 
 	cpp11::external_pointer<AltrepRownamesWrapper> ptr(new AltrepRownamesWrapper(relation_wrapper));
 	auto row_names_sexp = R_new_altrep(RelToAltrep::rownames_class, ptr, R_NilValue);
 	install_new_attrib(data_frame, R_RowNamesSymbol, row_names_sexp);
 	vector<string> names;
-	for (auto &col : rel->Columns()) {
+	for (auto &col : drel->Columns()) {
 		names.push_back(col.Name());
 	}
 
 	SET_NAMES(data_frame, StringsToSexp(names));
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
-		auto &column_type = rel->Columns()[col_idx].Type();
+		auto &column_type = drel->Columns()[col_idx].Type();
 		cpp11::external_pointer<AltrepVectorWrapper> ptr(new AltrepVectorWrapper(relation_wrapper, col_idx));
 		auto vector_sexp = r_protector.Protect(R_new_altrep(LogicalTypeToAltrepType(column_type), ptr, R_NilValue));
 		duckdb_r_decorate(column_type, vector_sexp, false);
@@ -246,6 +246,9 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 [[cpp11::register]] bool rapi_df_is_materialized(SEXP df) {
 	D_ASSERT(df);
 	auto first_col = VECTOR_ELT(df, 0);
+	if (!ALTREP(first_col)) {
+		Rf_error("Not a lazy data frame");
+	}
 	auto altrep_data = R_altrep_data1(first_col);
 	if (!altrep_data) {
 		Rf_error("Not a lazy data frame");

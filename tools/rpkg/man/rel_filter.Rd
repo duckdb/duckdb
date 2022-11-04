@@ -15,7 +15,7 @@ rel_filter(rel, exprs)
 the now filtered \code{duckdb_relation} object
 }
 \description{
-Lazily filter a DuckDB relation object
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 con <- DBI::dbConnect(duckdb())

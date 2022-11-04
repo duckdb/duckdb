@@ -209,10 +209,10 @@ extern "C" SEXP _duckdb_rapi_rel_names(SEXP rel) {
   END_CPP11
 }
 // reltoaltrep.cpp
-SEXP rapi_rel_to_altrep(duckdb::rel_extptr_t rel_p);
-extern "C" SEXP _duckdb_rapi_rel_to_altrep(SEXP rel_p) {
+SEXP rapi_rel_to_altrep(duckdb::rel_extptr_t rel);
+extern "C" SEXP _duckdb_rapi_rel_to_altrep(SEXP rel) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rapi_rel_to_altrep(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel_p)));
+    return cpp11::as_sexp(rapi_rel_to_altrep(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel)));
   END_CPP11
 }
 // reltoaltrep.cpp

@@ -4,7 +4,7 @@
 \alias{rel_to_altrep}
 \title{Transforms a relation object to a lazy data frame using altrep}
 \usage{
-rel_to_altrep(rel_p)
+rel_to_altrep(rel)
 }
 \arguments{
 \item{rel}{the DuckDB relation object}
@@ -13,7 +13,7 @@ rel_to_altrep(rel_p)
 a data frame
 }
 \description{
-Transforms a relation object to a lazy data frame using altrep
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 con <- DBI::dbConnect(duckdb())

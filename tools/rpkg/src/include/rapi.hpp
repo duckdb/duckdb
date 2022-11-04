@@ -161,6 +161,7 @@ SEXP rapi_record_batch(duckdb::rqry_eptr_t, int);
 
 cpp11::r_string rapi_ptr_to_str(SEXP extptr);
 
-void duckdb_r_transform(duckdb::Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, bool integer64);
-SEXP duckdb_r_allocate(const duckdb::LogicalType &type, duckdb::RProtector &r_varvalue, idx_t nrows);
+void duckdb_r_transform(duckdb::Vector &src_vec, SEXP &dest, duckdb::idx_t dest_offset, duckdb::idx_t n,
+                        bool integer64);
+SEXP duckdb_r_allocate(const duckdb::LogicalType &type, duckdb::RProtector &r_varvalue, duckdb::idx_t nrows);
 void duckdb_r_decorate(const duckdb::LogicalType &type, SEXP &dest, bool integer64);

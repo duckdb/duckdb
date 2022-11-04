@@ -10,7 +10,7 @@ rel_explain(rel)
 \item{rel}{the DuckDB relation object}
 }
 \description{
-Print the EXPLAIN output for a DuckDB relation object
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 con <- DBI::dbConnect(duckdb())

@@ -15,7 +15,7 @@ expr_reference(name, table = "")
 a column reference expression
 }
 \description{
-Create a column reference expression
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 col_ref_expr <- expr_reference("some_column_name")

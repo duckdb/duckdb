@@ -15,7 +15,7 @@ rel_sql(rel, sql)
 the now aggregated \code{duckdb_relation} object
 }
 \description{
-Run a SQL query on a DuckDB relation object
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 con <- DBI::dbConnect(duckdb())

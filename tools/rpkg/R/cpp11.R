@@ -112,8 +112,8 @@ rapi_rel_names <- function(rel) {
   .Call(`_duckdb_rapi_rel_names`, rel)
 }
 
-rapi_rel_to_altrep <- function(rel_p) {
-  .Call(`_duckdb_rapi_rel_to_altrep`, rel_p)
+rapi_rel_to_altrep <- function(rel) {
+  .Call(`_duckdb_rapi_rel_to_altrep`, rel)
 }
 
 rapi_df_is_materialized <- function(df) {

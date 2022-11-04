@@ -13,7 +13,7 @@ expr_tostring(expr)
 a string representation of the expression
 }
 \description{
-Convert an expression to a string for debugging purposes
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 expr_str <- expr_tostring(expr_constant(42))

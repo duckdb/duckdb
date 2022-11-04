@@ -17,7 +17,7 @@ rel_from_df(con, df, experimental = FALSE)
 the \code{duckdb_relation} object wrapping the data.frame
 }
 \description{
-Convert a R data.frame to a DuckDB relation object
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 con <- DBI::dbConnect(duckdb())

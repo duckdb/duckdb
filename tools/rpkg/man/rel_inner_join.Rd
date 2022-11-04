@@ -17,7 +17,7 @@ rel_inner_join(left, right, conds)
 a new \code{duckdb_relation} object resulting from the join
 }
 \description{
-Lazily INNER join two DuckDB relation objects
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 con <- DBI::dbConnect(duckdb())

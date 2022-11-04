@@ -15,7 +15,7 @@ rel_order(rel, orders)
 the now aggregated \code{duckdb_relation} object
 }
 \description{
-Lazily reorder a DuckDB relation object
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 con <- DBI::dbConnect(duckdb())

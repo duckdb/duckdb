@@ -13,7 +13,7 @@ df_is_materialized(df)
 true if materialization has happened
 }
 \description{
-Checks if a lazy data frame created using rel_to_altrep has been materialized yet
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 con <- DBI::dbConnect(duckdb())

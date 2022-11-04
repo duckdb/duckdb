@@ -15,7 +15,7 @@ expr_function(name, args)
 a function call expression
 }
 \description{
-Create a function call expression
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 call_expr <- expr_function("ABS", list(expr_constant(-42)))

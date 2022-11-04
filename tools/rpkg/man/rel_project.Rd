@@ -15,7 +15,7 @@ rel_project(rel, exprs)
 the now projected \code{duckdb_relation} object
 }
 \description{
-Lazily project a DuckDB relation object
+NOTICE: This function is experimental and may change/disappear without warning in future versions
 }
 \examples{
 con <- DBI::dbConnect(duckdb())
