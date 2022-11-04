@@ -1704,6 +1704,15 @@ idx_t ListVector::GetListSize(const Vector &vec) {
 	return ((VectorListBuffer &)*vec.auxiliary).size;
 }
 
+idx_t ListVector::GetListCapacity(const Vector &vec) {
+	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vec);
+		return ListVector::GetListSize(child);
+	}
+	D_ASSERT(vec.auxiliary);
+	return ((VectorListBuffer &)*vec.auxiliary).capacity;
+}
+
 void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||

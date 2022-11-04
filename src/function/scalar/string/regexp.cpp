@@ -36,18 +36,7 @@ static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
 	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
 }
 
-struct RegexLocalState : public FunctionLocalState {
-	explicit RegexLocalState(RegexpBaseBindData &info)
-	    : constant_pattern(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()),
-	                       info.options) {
-		D_ASSERT(info.constant_pattern);
-	}
-
-	RE2 constant_pattern;
-};
-
-static unique_ptr<FunctionLocalState> RegexInitLocalState(const BoundFunctionExpression &expr,
-                                                          FunctionData *bind_data) {
+unique_ptr<FunctionLocalState> RegexInitLocalState(const BoundFunctionExpression &expr, FunctionData *bind_data) {
 	auto &info = (RegexpBaseBindData &)*bind_data;
 	if (info.constant_pattern) {
 		return make_unique<RegexLocalState>(info);
@@ -154,8 +143,8 @@ unique_ptr<FunctionData> RegexpMatchesBindData::Copy() const {
 	                                          range_success);
 }
 
-static unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, ScalarFunction &bound_function,
+                                           vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	RE2::Options options;
