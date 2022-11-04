@@ -76,6 +76,9 @@ public:
 
 	DUCKDB_API vector<unique_ptr<ExpressionExecutorState>> &GetStates();
 
+	static idx_t CreateSelectionVectorFromBools(const SelectionVector *sel, Vector &bools, idx_t count,
+	                                            SelectionVector *true_sel, SelectionVector *false_sel);
+
 protected:
 	void Initialize(const Expression &expr, ExpressionExecutorState &state);
 

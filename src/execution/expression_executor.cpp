@@ -253,6 +253,22 @@ static inline idx_t DefaultSelectSwitch(UnifiedVectorFormat &idata, const Select
 	}
 }
 
+idx_t ExpressionExecutor::CreateSelectionVectorFromBools(const SelectionVector *sel, Vector &bools, idx_t count,
+                                                         SelectionVector *true_sel, SelectionVector *false_sel) {
+	D_ASSERT(bools.GetType().id() == LogicalTypeId::BOOLEAN);
+
+	UnifiedVectorFormat idata;
+	bools.ToUnifiedFormat(count, idata);
+	if (!sel) {
+		sel = FlatVector::IncrementalSelectionVector();
+	}
+	if (!idata.validity.AllValid()) {
+		return DefaultSelectSwitch<false>(idata, sel, count, true_sel, false_sel);
+	} else {
+		return DefaultSelectSwitch<true>(idata, sel, count, true_sel, false_sel);
+	}
+}
+
 idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
                                         idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// generic selection of boolean expression:
@@ -262,17 +278,7 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	Vector intermediate(LogicalType::BOOLEAN, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, sel, count, intermediate);
 
-	UnifiedVectorFormat idata;
-	intermediate.ToUnifiedFormat(count, idata);
-
-	if (!sel) {
-		sel = FlatVector::IncrementalSelectionVector();
-	}
-	if (!idata.validity.AllValid()) {
-		return DefaultSelectSwitch<false>(idata, sel, count, true_sel, false_sel);
-	} else {
-		return DefaultSelectSwitch<true>(idata, sel, count, true_sel, false_sel);
-	}
+	return CreateSelectionVectorFromBools(sel, intermediate, count, true_sel, false_sel);
 }
 
 vector<unique_ptr<ExpressionExecutorState>> &ExpressionExecutor::GetStates() {

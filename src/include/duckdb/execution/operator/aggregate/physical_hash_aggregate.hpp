@@ -137,6 +137,9 @@ private:
 	//! Sink the distinct aggregates
 	void SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	                  DataChunk &input) const;
+	//! Create groups in the main ht for groups that would otherwise get filtered out completely
+	SinkResultType SinkGroupsOnly(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	                              DataChunk &input) const;
 };
 
 } // namespace duckdb

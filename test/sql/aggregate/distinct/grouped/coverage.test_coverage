@@ -64,7 +64,7 @@ SELECT COUNT(distinct i % 5) from tbl group by j;
 # Correlated subquery
 
 query I
-SELECT COUNT(distinct (SELECT i%5)) from tbl group by j;
+SELECT COUNT(distinct i%5) from tbl group by j;
 ----
 1
 1

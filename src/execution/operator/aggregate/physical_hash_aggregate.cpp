@@ -287,6 +287,13 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 
 			// Because the 'input' chunk needs to be re-used after this, we need to create
 			// a duplicate of it, that we can apply the filter to
+
+			if (non_distinct_filter.empty()) {
+				// Because we don't do the regular Sink at all
+				// We need to also sink the groups that would get filtered out otherwise
+				// Otherwise the group for those will never get initialized
+			}
+
 			DataChunk filtered_input;
 			filtered_input.InitializeEmpty(input.GetTypes());
 
@@ -318,6 +325,95 @@ void PhysicalHashAggregate::SinkDistinct(ExecutionContext &context, GlobalSinkSt
 	}
 }
 
+SinkResultType PhysicalHashAggregate::SinkGroupsOnly(ExecutionContext &context, GlobalSinkState &state,
+                                                     LocalSinkState &lstate, DataChunk &input) const {
+
+	if (!non_distinct_filter.empty()) {
+		// No need to do any of this, as all groups will get registered at least once
+		return SinkResultType::NEED_MORE_INPUT;
+	}
+
+	bool temporary_buffer[STANDARD_VECTOR_SIZE];
+	Vector filtered_out_groups(LogicalType::BOOLEAN, (data_ptr_t)temporary_buffer);
+
+	idx_t filter_index = 0;
+
+	for (idx_t i = 0; i < grouped_aggregate_data.aggregates.size(); i++) {
+		auto &aggregate = grouped_aggregate_data.aggregates[i];
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
+
+		if (!aggr.IsDistinct()) {
+			continue;
+		}
+		if (!aggr.filter) {
+			continue;
+		}
+		// We are only interested in the aggregates that have filters
+
+		auto it = filter_indexes.find(aggr.filter.get());
+		D_ASSERT(it != filter_indexes.end());
+		D_ASSERT(it->second < input.data.size());
+		auto &filter_vec = input.data[it->second];
+		UnifiedVectorFormat filter_vec_data;
+		filter_vec.ToUnifiedFormat(input.size(), filter_vec_data);
+
+		if (!filter_index) {
+			memcpy(temporary_buffer, filter_vec_data.data, sizeof(bool) * input.size());
+			filter_index++;
+			continue;
+		}
+		auto filter_data = (bool *)filter_vec_data.data;
+		for (idx_t j = 0; j < input.size(); j++) {
+			// Keep the value on true if both are true, otherwise set it to false
+			auto idx = filter_vec_data.sel->get_index(j);
+			// If one of the two are false, the result becomes false
+			if (!filter_data[idx]) {
+				temporary_buffer[j] = filter_data[idx];
+			}
+		}
+		filter_index++;
+	}
+
+	if (!filter_index) {
+		// None of the aggregates had filters, so all groups will get registered normally
+		return SinkResultType::NEED_MORE_INPUT;
+	}
+
+	SelectionVector final_sel(STANDARD_VECTOR_SIZE);
+	idx_t count = input.size() - ExpressionExecutor::CreateSelectionVectorFromBools(nullptr, filtered_out_groups,
+	                                                                                input.size(), nullptr, &final_sel);
+
+	auto &sink = (HashAggregateLocalState &)lstate;
+	auto &global_sink = (HashAggregateGlobalState &)state;
+
+	vector<idx_t> empty_filter;
+
+	// Now sink these groups that would get left out otherwise into the main ht of each grouping
+	for (idx_t i = 0; i < groupings.size(); i++) {
+		auto &grouping = groupings[i];
+		auto &radix_table = grouping.table_data;
+
+		auto &grouping_gstate = global_sink.grouping_states[i];
+		auto &grouping_lstate = sink.grouping_states[i];
+
+		DataChunk filtered_input;
+		filtered_input.InitializeEmpty(input.GetTypes());
+
+		for (idx_t group_idx = 0; group_idx < grouped_aggregate_data.groups.size(); group_idx++) {
+			auto &group = grouped_aggregate_data.groups[group_idx];
+			auto &bound_ref = (BoundReferenceExpression &)*group;
+			filtered_input.data[bound_ref.index].Reference(input.data[bound_ref.index]);
+		}
+
+		filtered_input.Slice(final_sel, count);
+		filtered_input.SetCardinality(count);
+
+		radix_table.Sink(context, *grouping_gstate.table_state, *grouping_lstate.table_state, filtered_input,
+		                 filtered_input, empty_filter);
+	}
+	return SinkResultType::NEED_MORE_INPUT;
+}
+
 SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                            DataChunk &input) const {
 	auto &llstate = (HashAggregateLocalState &)lstate;
@@ -325,6 +421,14 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 
 	if (distinct_collection_info) {
 		SinkDistinct(context, state, lstate, input);
+	}
+
+	if (non_distinct_filter.empty() && !filter_indexes.empty()) {
+		if (filter_indexes.empty()) {
+			// There are no filters, so we are not at risk of losing any groups by skipping the sink for now
+			return SinkResultType::NEED_MORE_INPUT;
+		}
+		return SinkGroupsOnly(context, state, lstate, input);
 	}
 
 	DataChunk &aggregate_input_chunk = llstate.aggregate_input_chunk;
@@ -405,6 +509,9 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 
 	CombineDistinct(context, state, lstate);
 
+	if (non_distinct_filter.empty() && filter_indexes.empty()) {
+		return;
+	}
 	for (idx_t i = 0; i < groupings.size(); i++) {
 		auto &grouping_gstate = gstate.grouping_states[i];
 		auto &grouping_lstate = llstate.grouping_states[i];
