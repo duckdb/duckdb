@@ -41,6 +41,7 @@
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/progress_bar.hpp"
 
 namespace duckdb {
 

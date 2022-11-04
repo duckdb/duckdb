@@ -13,7 +13,6 @@
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/progress_bar.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/prepared_statement.hpp"
