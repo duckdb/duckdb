@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release release_expanded test unittest allunit benchmark docs doxygen format sqlite imdb
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite imdb
 
 all: release
 opt: release
@@ -154,10 +154,10 @@ debug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
-release_expanded:
-	mkdir -p build/release_expanded && \
-	cd build/release_expanded && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+release:
+	mkdir -p build/release && \
+	cd build/release && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${OSX_BUILD_UNIVERSAL_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
 cldebug:
@@ -184,8 +184,8 @@ unittestarrow:
 	build/debug/test/unittest "[arrow]"
 
 
-allunit: release_expanded # uses release build because otherwise allunit takes forever
-	build/release_expanded/test/unittest "*"
+allunit: release # uses release build because otherwise allunit takes forever
+	build/release/test/unittest "*"
 
 docs:
 	mkdir -p build/docs && \
@@ -193,12 +193,6 @@ docs:
 
 doxygen: docs
 	open build/docs/html/index.html
-
-release:
-	mkdir -p build/release && \
-	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${OSX_BUILD_UNIVERSAL_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
 
 reldebug:
 	mkdir -p build/reldebug && \
@@ -265,9 +259,9 @@ third_party/sqllogictest:
 third_party/imdb/data:
 	wget -i "http://download.duckdb.org/imdb/list.txt" -P third_party/imdb/data
 
-sqlite: release_expanded | third_party/sqllogictest
+sqlite: releas | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
-	./build/release_expanded/test/unittest "[sqlitelogic]"
+	./build/release/test/unittest "[sqlitelogic]"
 
 sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:
