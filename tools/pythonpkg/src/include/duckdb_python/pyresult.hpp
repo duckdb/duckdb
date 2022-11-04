@@ -54,6 +54,8 @@ public:
 
 	void Close();
 
+	static py::object FromValue(const Value &val, const LogicalType &type);
+
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 

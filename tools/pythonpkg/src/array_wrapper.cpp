@@ -240,7 +240,7 @@ struct ListConvert {
 		auto &list_children = ListValue::GetChildren(val);
 		py::list list;
 		for (auto &list_elem : list_children) {
-			list.append(PythonObject::FromValue(list_elem, ListType::GetChildType(input.GetType())));
+			list.append(DuckDBPyResult::FromValue(list_elem, ListType::GetChildType(input.GetType())));
 		}
 		return list;
 	}
@@ -257,7 +257,7 @@ struct StructMapConvert {
 			auto &child_entry = child_types[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] = PythonObject::FromValue(struct_children[i], child_type);
+			py_struct[child_name.c_str()] = DuckDBPyResult::FromValue(struct_children[i], child_type);
 		}
 		return py_struct;
 	}
