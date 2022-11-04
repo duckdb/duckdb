@@ -75,9 +75,6 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
   target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_LOG)
 endif()
 
-# allocation profiling
-target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_PROF)
-
 set(JEMALLOC_OBJECT_FILES
     ${JEMALLOC_OBJECT_FILES} $<TARGET_OBJECTS:jemalloc>
     PARENT_SCOPE)

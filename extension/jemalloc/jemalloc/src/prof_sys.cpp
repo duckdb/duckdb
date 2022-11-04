@@ -306,6 +306,7 @@ prof_unwind_init() {
 
 static int
 prof_sys_thread_name_read_impl(char *buf, size_t limit) {
+#ifdef JEMALLOC_PROF
 #if defined(JEMALLOC_HAVE_PTHREAD_GETNAME_NP)
 	return pthread_getname_np(pthread_self(), buf, limit);
 #elif defined(JEMALLOC_HAVE_PTHREAD_GET_NAME_NP)
@@ -313,6 +314,7 @@ prof_sys_thread_name_read_impl(char *buf, size_t limit) {
 	return 0;
 #else
 	return ENOSYS;
+#endif
 #endif
 }
 prof_sys_thread_name_read_t *JET_MUTABLE prof_sys_thread_name_read =
