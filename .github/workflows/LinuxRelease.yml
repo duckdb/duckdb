@@ -582,7 +582,9 @@ jobs:
 
     - name: Test
       shell: bash
-      run: python3 scripts/run_tests_one_by_one.py build/release/test/unittest "--file-contains=require httpfs"
+      run: |
+        python3 scripts/get_test_list.py --file-contains "require httpfs" > test.list
+        build/release/test/unittest -f test.list
 
  amalgamation-tests:
     name: Amalgamation Tests
