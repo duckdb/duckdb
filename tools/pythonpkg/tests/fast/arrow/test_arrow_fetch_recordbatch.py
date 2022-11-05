@@ -17,9 +17,7 @@ class TestArrowFetchRecordBatch(object):
         record_batch_reader = query.fetch_record_batch(1024)
         assert record_batch_reader.schema.names == ['a']
         chunk = record_batch_reader.read_next_batch()
-        assert(len(chunk) == 1024)
-        chunk = record_batch_reader.read_next_batch()
-        assert(len(chunk) == 1024)
+        assert(len(chunk) == 2048)
         chunk = record_batch_reader.read_next_batch()
         assert(len(chunk) == 952)
         with pytest.raises(StopIteration):
@@ -64,7 +62,7 @@ class TestArrowFetchRecordBatch(object):
         query = duckdb_cursor.execute("SELECT a FROM t")
         record_batch_reader = query.fetch_record_batch(1)
         chunk = record_batch_reader.read_next_batch()
-        assert(len(chunk) == 1024)
+        assert(len(chunk) == 2048)
 
         query = duckdb_cursor.execute("SELECT a FROM t")
         record_batch_reader = query.fetch_record_batch(2000)
