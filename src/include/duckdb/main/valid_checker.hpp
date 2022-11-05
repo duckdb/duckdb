@@ -27,16 +27,16 @@ public:
 	DUCKDB_API bool IsInvalidated();
 	DUCKDB_API string InvalidatedMessage();
 
-	template<class T>
+	template <class T>
 	static bool IsInvalidated(T &o) {
 		return Get(o).IsInvalidated();
 	}
-	template<class T>
+	template <class T>
 	static void Invalidate(T &o, string error) {
 		Get(o).Invalidate(move(error));
 	}
 
-	template<class T>
+	template <class T>
 	static string InvalidatedMessage(T &o) {
 		return Get(o).InvalidatedMessage();
 	}
@@ -49,4 +49,3 @@ private:
 };
 
 } // namespace duckdb
-

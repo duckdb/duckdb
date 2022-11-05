@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-ValidChecker::ValidChecker() : is_invalidated(false) {}
+ValidChecker::ValidChecker() : is_invalidated(false) {
+}
 
 void ValidChecker::Invalidate(string error) {
 	lock_guard<mutex> l(invalidate_lock);
@@ -18,4 +19,4 @@ string ValidChecker::InvalidatedMessage() {
 	lock_guard<mutex> l(invalidate_lock);
 	return invalidated_msg;
 }
-}
+} // namespace duckdb
