@@ -3,6 +3,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
+#include "utf8proc.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <string.h>
 #include <ctype.h>
