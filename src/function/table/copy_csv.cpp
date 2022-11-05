@@ -306,6 +306,7 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 
 	// first cast the columns of the chunk to varchar
 	auto &cast_chunk = local_data.cast_chunk;
+	cast_chunk.Reset();
 	cast_chunk.SetCardinality(input);
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {

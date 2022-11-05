@@ -1,0 +1,57 @@
+# name: test/issues/general/test_5072.test
+# description: Issue 5072: CARDINALITY on NULL map results in non-deterministic result
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT CARDINALITY(CAST(NULL AS MAP(VARCHAR, INT)));
+----
+NULL
+
+query I
+WITH src AS ( VALUES (1, NULL) )
+SELECT CARDINALITY(HISTOGRAM(val)) FROM src AS t(k, val);
+----
+NULL
+
+statement ok
+CREATE TABLE t1 AS (SELECT ARRAY[(1, 'x'), (2, 'y'), (4, 's')] AS list);
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[(2, 'a'), (3,'b')]);
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[NULL, NULL]);
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[NULL, (7,'g')]);
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[NULL, NULL]);
+
+statement ok
+INSERT INTO t1 VALUES (NULL);
+
+query I
+SELECT MAP_FROM_ENTRIES(list) FROM t1;
+----
+{1=x, 2=y, 4=s}
+{2=a, 3=b}
+NULL
+{7=g}
+NULL
+NULL
+
+query I
+SELECT CARDINALITY(MAP_FROM_ENTRIES(list)) FROM t1;
+----
+3
+2
+NULL
+1
+NULL
+NULL
+
+

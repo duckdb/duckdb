@@ -1,4 +1,4 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"

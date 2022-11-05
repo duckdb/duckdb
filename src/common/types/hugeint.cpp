@@ -538,6 +538,12 @@ bool Hugeint::TryConvert(uint64_t value, hugeint_t &result) {
 }
 
 template <>
+bool Hugeint::TryConvert(hugeint_t value, hugeint_t &result) {
+	result = value;
+	return true;
+}
+
+template <>
 bool Hugeint::TryConvert(float value, hugeint_t &result) {
 	return Hugeint::TryConvert(double(value), result);
 }

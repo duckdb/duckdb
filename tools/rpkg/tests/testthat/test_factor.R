@@ -1,5 +1,5 @@
 test_that("factors can be round tripped", {
-  con <- dbConnect(duckdb::duckdb())
+  con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   df0 <- data.frame(
@@ -9,7 +9,7 @@ test_that("factors can be round tripped", {
     stringsAsFactors = FALSE
   )
 
-  duckdb::duckdb_register(con, "df0", df0)
+  duckdb_register(con, "df0", df0)
   df1 <- dbReadTable(con, "df0")
   expect_equal(df0, df1)
 
@@ -20,10 +20,10 @@ test_that("factors can be round tripped", {
 
 
 test_that("iris can be round-tripped", {
-  con <- dbConnect(duckdb::duckdb())
+  con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
-  duckdb::duckdb_register(con, "iris", iris)
+  duckdb_register(con, "iris", iris)
   df1 <- dbReadTable(con, "iris")
   expect_identical(iris, df1)
 
@@ -33,7 +33,7 @@ test_that("iris can be round-tripped", {
 })
 
 test_that("non-utf things can be read", {
-  con <- dbConnect(duckdb::duckdb())
+  con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   horrid_string <- iconv("Mühleisen", "utf8", "latin1")
@@ -43,7 +43,7 @@ test_that("non-utf things can be read", {
   df <- data.frame(a = factor(horrid_string), b = horrid_string, stringsAsFactors = FALSE)
   names(df) <- c(horrid_string, "less_horrid")
 
-  duckdb::duckdb_register(con, "df", df)
+  duckdb_register(con, "df", df)
   df1 <- dbReadTable(con, "df")
 
   dbWriteTable(con, "df2", df)
@@ -60,7 +60,7 @@ test_that("non-utf things can be read", {
 
 
 test_that("single value factors round trip correctly, issue 2627", {
-  con <- dbConnect(duckdb::duckdb())
+  con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   df1 <- data.frame(year = as.factor(rep("1998", 5)))
@@ -72,7 +72,7 @@ test_that("single value factors round trip correctly, issue 2627", {
 
 
 test_that("huge-cardinality factors do not cause strange crashes, issue 3639", {
-  con <- dbConnect(duckdb::duckdb())
+  con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   set.seed(123)

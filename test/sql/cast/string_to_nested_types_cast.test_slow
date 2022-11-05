@@ -1,0 +1,201 @@
+# name: test/sql/cast/string_to_nested_types_cast.test_slow
+# description: cast strings into (nested) types
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+# These are some slow tests in addition to the string_to_list/struct casting tests
+
+#               All types to List cast
+# ---------------------------------------------------
+
+query I
+SELECT CAST('[[True,False], [true], [FALSE], [false, true]]' AS BOOL[][]);
+----
+[[true, false], [true], [false], [false, true]]
+
+foreach type INT TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT 
+
+query I
+SELECT CAST('[1,2,3]' AS ${type}[]);
+----
+[1, 2, 3]
+
+endloop
+
+foreach type DOUBLE[] FLOAT[]
+
+query I
+SELECT CAST('[[1,2,3], [3.333, 2.2, 1.1], [0]]' AS ${type}[]);
+----
+[[1.0, 2.0, 3.0], [3.333, 2.2, 1.1], [0.0]]
+
+endloop
+
+statement ok
+CREATE TYPE mood AS ENUM('ok', 'sad', 'happy');
+
+query I
+SELECT '[ok,happy]'::MOOD[]
+----
+[ok, happy]
+
+statement error
+SELECT '[nothappy]'::MOOD[]
+
+query I
+SELECT CAST(LIST(date)::VARCHAR AS DATE[]) FROM test_all_types();
+----
+[5877642-06-25 (BC), 5881580-07-10, NULL]
+
+query I
+SELECT CAST(LIST(time)::VARCHAR AS TIME[]) FROM test_all_types();
+----
+[00:00:00, 23:59:59.999999, NULL]
+
+query I
+SELECT CAST(LIST(timestamp)::VARCHAR AS TIME[]) FROM test_all_types();
+----
+[00:00:00, 04:00:54.775806, NULL]
+
+query I
+SELECT CAST(LIST(timestamp_s)::VARCHAR AS TIME[]) FROM test_all_types();
+----
+[00:00:00, 04:00:54, NULL]
+
+query I
+SELECT CAST(LIST(timestamp_ms)::VARCHAR AS TIME[]) FROM test_all_types();
+----
+[00:00:00, 04:00:54.775, NULL]
+
+query I
+SELECT CAST(LIST(timestamp_ns)::VARCHAR AS TIME[]) FROM test_all_types();
+----
+[00:12:43.145225, 23:47:16.854775, NULL]
+
+query I
+SELECT CAST(LIST(blob)::VARCHAR AS BLOB[]) FROM test_all_types();
+----
+[thisisalongblob\x00withnullbytes, \x00\x00\x00a, NULL]
+
+query I
+SELECT CAST(LIST(interval)::VARCHAR AS INTERVAL[]) FROM test_all_types();
+----
+[00:00:00, 83 years 3 months 999 days 00:16:39.999999, NULL]
+
+
+#               Larger input to List cast
+# ---------------------------------------------------
+
+statement ok
+CREATE TABLE big_list(col INT[]);
+
+statement ok    
+COPY (SELECT [i, NULL]::VARCHAR FROM range(0, 2000) tbl(i)) TO '__TEST_DIR__/big_list.csv';
+
+statement ok
+COPY big_list FROM '__TEST_DIR__/big_list.csv';
+
+query I
+SELECT COUNT(col) FROM big_list;
+----
+2000
+
+
+#               All types to Struct cast:
+# ---------------------------------------------------
+
+query I
+SELECT CAST('{a: True, b: False, c:[true]}' AS STRUCT(a BOOL, b BOOL, c BOOL[], d STRUCT(a BOOL, b BOOL)));
+----
+{'a': true, 'b': false, 'c': [true], 'd': NULL}
+
+foreach type INT TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT
+
+query I
+SELECT CAST('{a:1, b:{a:2, b: 3}}' AS STRUCT(a ${type}, b STRUCT(a ${type}, b ${type})));
+----
+{'a': 1, 'b': {'a': 2, 'b': 3}}
+
+endloop
+
+foreach type DOUBLE FLOAT
+
+query I
+SELECT CAST('{a:1, b:{a:2}, c: 0.00002}' AS STRUCT(a ${type}, b STRUCT(a ${type}), c ${type}));
+----
+{'a': 1.0, 'b': {'a': 2.0}, 'c': 2e-05}
+
+endloop
+
+query I
+SELECT '{a: ok, b: happy}'::STRUCT(a MOOD, b MOOD)
+----
+{'a': ok, 'b': happy}
+
+statement error
+SELECT '{a: nothappy}'::STRUCT(a MOOD)
+
+query I
+SELECT CAST(struct_pack(A=>date)::VARCHAR AS STRUCT(A DATE)) FROM test_all_types();
+----
+{'A': 5877642-06-25 (BC)}
+{'A': 5881580-07-10}
+{'A': NULL}
+
+query I
+SELECT CAST(struct_pack(A=>time)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
+----
+{'A': 00:00:00}
+{'A': 23:59:59.999999}
+{'A': NULL}
+
+query I
+SELECT CAST(struct_pack(A=>timestamp)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
+----
+{'A': 00:00:00}
+{'A': 04:00:54.775806}
+{'A': NULL}
+
+query I
+SELECT CAST(struct_pack(A=>timestamp_s)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
+----
+{'A': 00:00:00}
+{'A': 04:00:54}
+{'A': NULL}
+
+query I
+SELECT CAST(struct_pack(A=>timestamp_ms)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
+----
+{'A': 00:00:00}
+{'A': 04:00:54.775}
+{'A': NULL}
+
+query I
+SELECT CAST(struct_pack(A=>timestamp_ms)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
+----
+{'A': 00:00:00}
+{'A': 04:00:54.775}
+{'A': NULL}
+
+query I
+SELECT CAST(struct_pack(A=>timestamp_ns)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
+----
+{'A': 00:12:43.145225}
+{'A': 23:47:16.854775}
+{'A': NULL}
+
+query I
+SELECT CAST(struct_pack(A=>blob)::VARCHAR AS STRUCT(A BLOB)) FROM test_all_types();
+----
+{'A': thisisalongblob\x00withnullbytes}
+{'A': \x00\x00\x00a}
+{'A': NULL}
+
+query I
+SELECT CAST(struct_pack(A=>interval)::VARCHAR AS STRUCT(A INTERVAL)) FROM test_all_types();
+----
+{'A': 00:00:00}
+{'A': 83 years 3 months 999 days 00:16:39.999999}
+{'A': NULL}
