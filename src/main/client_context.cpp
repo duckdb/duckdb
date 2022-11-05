@@ -41,6 +41,7 @@
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/progress_bar.hpp"
 
 namespace duckdb {
 
@@ -215,6 +216,10 @@ Executor &ClientContext::GetExecutor() {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->executor);
 	return *active_query->executor;
+}
+
+FileOpener *FileOpener::Get(ClientContext &context) {
+	return ClientData::Get(context).file_opener.get();
 }
 
 const string &ClientContext::GetCurrentQuery() {
@@ -956,9 +961,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}
 		}
-		for (auto &chunk : collection.Chunks()) {
-			table_entry->storage->Append(*table_entry, *this, chunk);
-		}
+		table_entry->storage->LocalAppend(*table_entry, *this, collection);
 	});
 }
 

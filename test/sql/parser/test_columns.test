@@ -1,0 +1,80 @@
+# name: test/sql/parser/test_columns.test
+# description: Test the columns expression
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT 42 i, 84 j UNION ALL SELECT 13, 14
+
+query II
+SELECT COLUMNS(*) FROM integers
+----
+42	84
+13	14
+
+query IIII
+SELECT MIN(COLUMNS(*)), MAX(COLUMNS(*)) FROM integers
+----
+13	14	42	84
+
+query II
+SELECT MIN(COLUMNS(* EXCLUDE (j))), MAX(COLUMNS(* EXCLUDE (i))) FROM integers
+----
+13	84
+
+query II
+SELECT MIN(COLUMNS(* REPLACE (i+j AS i))) FROM integers
+----
+27	14
+
+query II
+SELECT COLUMNS(*) + 1 FROM integers
+----
+43	85
+14	15
+
+# multiple COLUMNS work, as long as the star inside the columns is the same
+query II
+SELECT COLUMNS(*) + COLUMNS(*) FROM integers
+----
+84	168
+26	28
+
+# regex
+statement ok
+CREATE TABLE grouped_table AS SELECT  1 id, 42 index1, 84 index2 UNION ALL SELECT 2, 13, 14
+
+query III
+SELECT id, MIN(COLUMNS('index[0-9]')) FROM grouped_table GROUP BY all
+----
+1	42	84
+2	13	14
+
+# partial match
+query III
+SELECT id, MIN(COLUMNS('[0-9]')) FROM grouped_table GROUP BY all
+----
+1	42	84
+2	13	14
+
+# regex without matches
+statement error
+SELECT id, MIN(COLUMNS('xxx')) FROM grouped_table GROUP BY all
+
+# empty regex
+statement error
+SELECT MIN(COLUMNS('xxx')) FROM grouped_table
+
+# invalid regex
+statement error
+SELECT MIN(COLUMNS('[asdadd')) FROM grouped_table
+
+# multiple different COLUMNS statements in the same expression are not supported
+statement error
+SELECT COLUMNS(*) + COLUMNS(* EXCLUDE(j)) FROM integers
+
+# COLUMNS in subquery without FROM clause
+statement error
+SELECT (SELECT COLUMNS(*)) FROM integers

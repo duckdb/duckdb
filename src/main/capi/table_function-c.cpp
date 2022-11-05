@@ -1,4 +1,4 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"

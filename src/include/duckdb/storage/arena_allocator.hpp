@@ -32,6 +32,8 @@ public:
 	~ArenaAllocator();
 
 	data_ptr_t Allocate(idx_t size);
+	//! Resets the current head and destroys all previous arena chunks
+	void Reset();
 	void Destroy();
 	void Move(ArenaAllocator &allocator);
 

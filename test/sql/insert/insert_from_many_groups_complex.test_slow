@@ -1,0 +1,37 @@
+# name: test/sql/insert/insert_from_many_groups_complex.test_slow
+# description: Test parallel insert from many groups with complex types
+# group: [insert]
+
+# lists
+statement ok
+CREATE TABLE lists AS SELECT [i, NULL, i + 2] AS l FROM range(1000000) tbl(i);
+
+statement ok
+CREATE TABLE lists2 AS SELECT * FROM lists GROUP BY l;
+
+query IIIIIII
+SELECT SUM(l[1]), SUM(l[2]), SUM(l[3]), COUNT(*), COUNT(l), COUNT(l[1]), COUNT(l[2]) FROM lists
+----
+499999500000	NULL	500001500000	1000000	1000000	1000000	0
+
+query IIIIIII
+SELECT SUM(l[1]), SUM(l[2]), SUM(l[3]), COUNT(*), COUNT(l), COUNT(l[1]), COUNT(l[2]) FROM lists2
+----
+499999500000	NULL	500001500000	1000000	1000000	1000000	0
+
+# structs
+statement ok
+CREATE TABLE structs AS SELECT {'i': i, 'j': NULL, 'k': i + 2} AS s FROM range(1000000) tbl(i);
+
+statement ok
+CREATE TABLE structs2 AS SELECT * FROM structs GROUP BY s
+
+query IIIIIII
+SELECT SUM(s.i), SUM(s.j), SUM(s.k), COUNT(*), COUNT(s), COUNT(s.i), COUNT(s.j) FROM structs
+----
+499999500000	NULL	500001500000	1000000	1000000	1000000	0
+
+query IIIIIII
+SELECT SUM(s.i), SUM(s.j), SUM(s.k), COUNT(*), COUNT(s), COUNT(s.i), COUNT(s.j) FROM structs2
+----
+499999500000	NULL	500001500000	1000000	1000000	1000000	0

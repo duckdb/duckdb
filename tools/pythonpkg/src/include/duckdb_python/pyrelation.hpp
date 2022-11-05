@@ -173,7 +173,7 @@ public:
 	static unique_ptr<DuckDBPyRelation> DistinctDF(const DataFrame &df,
 	                                               DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
-	DataFrame ToDF();
+	DataFrame ToDF(bool date_as_object);
 
 	py::object Fetchone();
 

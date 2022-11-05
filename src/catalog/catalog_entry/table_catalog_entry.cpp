@@ -28,6 +28,15 @@
 
 namespace duckdb {
 
+bool TableCatalogEntry::HasGeneratedColumns() const {
+	for (auto &col : columns) {
+		if (col.Generated()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 const string &TableCatalogEntry::GetColumnName(column_t index) {
 	return columns[index].Name();
 }
@@ -72,13 +81,14 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 		bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].Type(), key_nr++));
 		column_ids.push_back(column.StorageOid());
 	}
-	// create an adaptive radix tree around the expressions
 	unique_ptr<ART> art;
+	// create an adaptive radix tree around the expressions
 	if (index_block) {
-		art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type, storage->db,
-		                       index_block->block_id, index_block->offset);
+		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), move(unbound_expressions), constraint_type,
+		                       storage->db, index_block->block_id, index_block->offset);
 	} else {
-		art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type, storage->db);
+		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), move(unbound_expressions), constraint_type,
+		                       storage->db);
 		if (!storage->IsRoot()) {
 			throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 		}
@@ -116,7 +126,10 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 			}
 			storage_columns.push_back(col_def.Copy());
 		}
-		storage = make_shared<DataTable>(catalog->db, schema->name, name, move(storage_columns), move(info->data));
+		storage =
+		    make_shared<DataTable>(catalog->db, StorageManager::GetStorageManager(catalog->db).GetTableIOManager(info),
+		                           schema->name, name, move(storage_columns), move(info->data));
+
 		// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
 		idx_t indexes_idx = 0;
 		for (idx_t i = 0; i < bound_constraints.size(); i++) {

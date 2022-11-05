@@ -3,13 +3,13 @@
 #include "duckdb.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb/common/types/vector_buffer.hpp"
 
 namespace duckdb {
 
@@ -222,6 +222,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		names.push_back(name);
 	}
 	RenameArrowColumns(names);
+	res->all_types = return_types;
 	return move(res);
 }
 
@@ -253,6 +254,7 @@ bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind
 		return false;
 	}
 	state.chunk_offset = 0;
+	state.batch_index = ++parallel_state.batch_index;
 
 	auto current_chunk = parallel_state.stream->GetNextChunk();
 	while (current_chunk->arrow_array.length == 0 && current_chunk->arrow_array.release) {
@@ -273,6 +275,16 @@ unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(Cli
 	auto result = make_unique<ArrowScanGlobalState>();
 	result->stream = ProduceArrowScan(bind_data, input.column_ids, input.filters);
 	result->max_threads = ArrowScanMaxThreads(context, input.bind_data);
+	if (input.CanRemoveFilterColumns()) {
+		result->projection_ids = input.projection_ids;
+		for (const auto &col_idx : input.column_ids) {
+			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+			} else {
+				result->scanned_types.push_back(bind_data.all_types[col_idx]);
+			}
+		}
+	}
 	return move(result);
 }
 
@@ -284,6 +296,10 @@ unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(Execu
 	auto result = make_unique<ArrowScanLocalState>(move(current_chunk));
 	result->column_ids = input.column_ids;
 	result->filters = input.filters;
+	if (input.CanRemoveFilterColumns()) {
+		auto &asgs = (ArrowScanGlobalState &)*global_state_p;
+		result->all_columns.Initialize(context.client, asgs.scanned_types);
+	}
 	if (!ArrowScanParallelStateNext(context.client, input.bind_data, *result, global_state)) {
 		return nullptr;
 	}
@@ -306,8 +322,16 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 	}
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
-	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
+	if (global_state.CanRemoveFilterColumns()) {
+		state.all_columns.Reset();
+		state.all_columns.SetCardinality(output_size);
+		ArrowToDuckDB(state, data.arrow_convert_data, state.all_columns, data.lines_read - output_size);
+		output.ReferenceColumns(state.all_columns, global_state.projection_ids);
+	} else {
+		output.SetCardinality(output_size);
+		ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
+	}
+
 	output.Verify();
 	state.chunk_offset += output.size();
 }
@@ -316,12 +340,20 @@ unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContex
 	return make_unique<NodeStatistics>();
 }
 
+idx_t ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p, LocalTableFunctionState *local_state,
+                         GlobalTableFunctionState *global_state) {
+	auto &state = (ArrowScanLocalState &)*local_state;
+	return state.batch_index;
+}
+
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction arrow("arrow_scan", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
 	                    ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow.cardinality = ArrowScanCardinality;
+	arrow.get_batch_index = ArrowGetBatchIndex;
 	arrow.projection_pushdown = true;
 	arrow.filter_pushdown = true;
+	arrow.filter_prune = true;
 	set.AddFunction(arrow);
 }
 

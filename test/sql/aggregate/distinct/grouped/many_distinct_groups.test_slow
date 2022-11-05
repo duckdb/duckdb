@@ -1,0 +1,53 @@
+# name: test/sql/aggregate/distinct/grouped/many_distinct_groups.test_slow
+# group: [grouped]
+
+statement ok
+pragma enable_verification
+
+statement ok
+pragma verify_parallelism
+
+# 10000 is the radix_limit
+
+# Many distinct grouping values + many distinct aggregate inputs
+
+# Create the tables
+
+statement ok
+create table all_valid as select i%81982 as value, i%20000 as groups from range(200000) tbl(i);
+
+statement ok
+create table with_nulls as select CASE WHEN i%2343=0 THEN NULL ELSE i%63423 END as value, i%20000 as groups from range(200000) tbl(i);
+
+statement ok
+create table mostly_nulls as select CASE WHEN i%7=0 THEN i ELSE NULL END as value, i%20000 as groups from range(200000) tbl(i);
+
+# Perform the checks
+
+query IIII
+select avg(distinct value), sum(distinct value), avg(value), count(distinct value) from all_valid group by groups order by groups;
+----
+<FILE>:test/sql/aggregate/distinct/grouped/results/all_valid.csv
+
+query IIII
+select avg(distinct value), sum(distinct value), avg(value), count(distinct value) from with_nulls group by groups order by groups;
+----
+<FILE>:test/sql/aggregate/distinct/grouped/results/with_nulls.csv
+
+query IIII
+select avg(distinct value), sum(distinct value), avg(value), count(distinct value) from mostly_nulls group by groups order by groups;
+----
+<FILE>:test/sql/aggregate/distinct/grouped/results/mostly_nulls.csv
+
+# Only many distinct grouping values
+
+statement ok
+create table all_distinct as select 1 as value, i as groups from range(200000) tbl(i);
+
+query I nosort q1
+select sum(distinct value), count(distinct value), avg(distinct value), sum(distinct value) from all_distinct group by groups order by groups;
+----
+
+query I nosort q1
+select sum(value), count(value), avg(value), sum(value) from all_distinct group by groups order by groups;
+----

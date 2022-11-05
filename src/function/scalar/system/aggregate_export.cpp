@@ -2,6 +2,8 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
 
@@ -324,7 +326,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 
 	return make_unique<BoundAggregateExpression>(export_function, move(child_aggregate->children),
 	                                             move(child_aggregate->filter), move(export_bind_data),
-	                                             child_aggregate->distinct);
+	                                             child_aggregate->aggr_type);
 }
 
 ScalarFunction ExportAggregateFunction::GetFinalize() {

@@ -23,15 +23,15 @@ AET	AET	10:00:00
 AGT	AGT	-03:00:00
 ART	ART	02:00:00
 AST	AST	-09:00:00
-Africa/Abidjan	Africa/Abidjan	00:00:00
-Africa/Accra	Africa/Accra	00:00:00
+Africa/Abidjan	Iceland	00:00:00
+Africa/Accra	Iceland	00:00:00
 Africa/Addis_Ababa	EAT	03:00:00
 Africa/Algiers	Africa/Algiers	01:00:00
 Africa/Asmara	EAT	03:00:00
 Africa/Asmera	EAT	03:00:00
-Africa/Bamako	Africa/Bamako	00:00:00
+Africa/Bamako	Iceland	00:00:00
 Africa/Bangui	Africa/Bangui	01:00:00
-Africa/Banjul	Africa/Banjul	00:00:00
+Africa/Banjul	Iceland	00:00:00
 Africa/Bissau	Africa/Bissau	00:00:00
 Africa/Blantyre	CAT	02:00:00
 Africa/Brazzaville	Africa/Brazzaville	01:00:00
@@ -39,13 +39,13 @@ Africa/Bujumbura	CAT	02:00:00
 Africa/Cairo	ART	02:00:00
 Africa/Casablanca	Africa/Casablanca	00:00:00
 Africa/Ceuta	Africa/Ceuta	01:00:00
-Africa/Conakry	Africa/Conakry	00:00:00
-Africa/Dakar	Africa/Dakar	00:00:00
+Africa/Conakry	Iceland	00:00:00
+Africa/Dakar	Iceland	00:00:00
 Africa/Dar_es_Salaam	EAT	03:00:00
 Africa/Djibouti	EAT	03:00:00
 Africa/Douala	Africa/Douala	01:00:00
 Africa/El_Aaiun	Africa/El_Aaiun	00:00:00
-Africa/Freetown	Africa/Freetown	00:00:00
+Africa/Freetown	Iceland	00:00:00
 Africa/Gaborone	CAT	02:00:00
 Africa/Harare	CAT	02:00:00
 Africa/Johannesburg	Africa/Johannesburg	02:00:00
@@ -56,7 +56,7 @@ Africa/Kigali	CAT	02:00:00
 Africa/Kinshasa	Africa/Kinshasa	01:00:00
 Africa/Lagos	Africa/Lagos	01:00:00
 Africa/Libreville	Africa/Libreville	01:00:00
-Africa/Lome	Africa/Lome	00:00:00
+Africa/Lome	Iceland	00:00:00
 Africa/Luanda	Africa/Luanda	01:00:00
 Africa/Lubumbashi	CAT	02:00:00
 Africa/Lusaka	CAT	02:00:00
@@ -69,11 +69,11 @@ Africa/Monrovia	Africa/Monrovia	00:00:00
 Africa/Nairobi	EAT	03:00:00
 Africa/Ndjamena	Africa/Ndjamena	01:00:00
 Africa/Niamey	Africa/Niamey	01:00:00
-Africa/Nouakchott	Africa/Nouakchott	00:00:00
-Africa/Ouagadougou	Africa/Ouagadougou	00:00:00
+Africa/Nouakchott	Iceland	00:00:00
+Africa/Ouagadougou	Iceland	00:00:00
 Africa/Porto-Novo	Africa/Porto-Novo	01:00:00
 Africa/Sao_Tome	Africa/Sao_Tome	00:00:00
-Africa/Timbuktu	Africa/Timbuktu	00:00:00
+Africa/Timbuktu	Iceland	00:00:00
 Africa/Tripoli	Libya	02:00:00
 Africa/Tunis	Africa/Tunis	01:00:00
 Africa/Windhoek	Africa/Windhoek	02:00:00
@@ -259,7 +259,7 @@ Antarctica/Vostok	Antarctica/Vostok	06:00:00
 Arctic/Longyearbyen	Arctic/Longyearbyen	01:00:00
 Asia/Aden	Asia/Aden	03:00:00
 Asia/Almaty	Asia/Almaty	06:00:00
-Asia/Amman	Asia/Amman	02:00:00
+Asia/Amman	Asia/Amman	03:00:00
 Asia/Anadyr	Asia/Anadyr	12:00:00
 Asia/Aqtau	Asia/Aqtau	05:00:00
 Asia/Aqtobe	Asia/Aqtobe	05:00:00
@@ -281,7 +281,7 @@ Asia/Chongqing	CTT	08:00:00
 Asia/Chungking	CTT	08:00:00
 Asia/Colombo	Asia/Colombo	05:30:00
 Asia/Dacca	BST	06:00:00
-Asia/Damascus	Asia/Damascus	02:00:00
+Asia/Damascus	Asia/Damascus	03:00:00
 Asia/Dhaka	BST	06:00:00
 Asia/Dili	Asia/Dili	09:00:00
 Asia/Dubai	Asia/Dubai	04:00:00
@@ -307,7 +307,7 @@ Asia/Katmandu	Asia/Katmandu	05:45:00
 Asia/Khandyga	Asia/Khandyga	09:00:00
 Asia/Kolkata	IST	05:30:00
 Asia/Krasnoyarsk	Asia/Krasnoyarsk	07:00:00
-Asia/Kuala_Lumpur	Asia/Kuala_Lumpur	08:00:00
+Asia/Kuala_Lumpur	Singapore	08:00:00
 Asia/Kuching	Asia/Kuching	08:00:00
 Asia/Kuwait	Asia/Kuwait	03:00:00
 Asia/Macao	Asia/Macao	08:00:00
@@ -366,7 +366,7 @@ Atlantic/Jan_Mayen	Atlantic/Jan_Mayen	01:00:00
 Atlantic/Madeira	Atlantic/Madeira	00:00:00
 Atlantic/Reykjavik	Iceland	00:00:00
 Atlantic/South_Georgia	Atlantic/South_Georgia	-02:00:00
-Atlantic/St_Helena	Atlantic/St_Helena	00:00:00
+Atlantic/St_Helena	Iceland	00:00:00
 Atlantic/Stanley	Atlantic/Stanley	-03:00:00
 Australia/ACT	AET	10:00:00
 Australia/Adelaide	Australia/Adelaide	09:30:00
@@ -481,6 +481,7 @@ Europe/Jersey	GB	00:00:00
 Europe/Kaliningrad	Europe/Kaliningrad	02:00:00
 Europe/Kiev	Europe/Kiev	02:00:00
 Europe/Kirov	Europe/Kirov	03:00:00
+Europe/Kyiv	Europe/Kyiv	02:00:00
 Europe/Lisbon	Portugal	00:00:00
 Europe/Ljubljana	Europe/Ljubljana	01:00:00
 Europe/London	GB	00:00:00
@@ -489,7 +490,7 @@ Europe/Madrid	Europe/Madrid	01:00:00
 Europe/Malta	Europe/Malta	01:00:00
 Europe/Mariehamn	Europe/Mariehamn	02:00:00
 Europe/Minsk	Europe/Minsk	03:00:00
-Europe/Monaco	Europe/Monaco	01:00:00
+Europe/Monaco	ECT	01:00:00
 Europe/Moscow	W-SU	03:00:00
 Europe/Nicosia	Europe/Nicosia	02:00:00
 Europe/Oslo	Europe/Oslo	01:00:00
@@ -600,8 +601,8 @@ Pacific/Noumea	Pacific/Noumea	11:00:00
 Pacific/Pago_Pago	Pacific/Pago_Pago	-11:00:00
 Pacific/Palau	Pacific/Palau	09:00:00
 Pacific/Pitcairn	Pacific/Pitcairn	-08:00:00
-Pacific/Pohnpei	Pacific/Pohnpei	11:00:00
-Pacific/Ponape	Pacific/Ponape	11:00:00
+Pacific/Pohnpei	SST	11:00:00
+Pacific/Ponape	SST	11:00:00
 Pacific/Port_Moresby	Pacific/Port_Moresby	10:00:00
 Pacific/Rarotonga	Pacific/Rarotonga	-10:00:00
 Pacific/Saipan	Pacific/Saipan	10:00:00
@@ -653,3 +654,15 @@ VST	VST	07:00:00
 W-SU	W-SU	03:00:00
 WET	WET	00:00:00
 Zulu	UCT	00:00:00
+
+# 2022e
+# Jordan and Syria are abandoning the DST regime and are changing to
+# permanent +03, so they will not fall back from +03 to +02 on
+# 2022-10-28.  
+statement ok
+SET TimeZone = 'Asia/Amman';
+
+query I
+SELECT '2022-10-29 00:00:00+00'::TIMESTAMPTZ;
+----
+2022-10-29 03:00:00 Asia/Amman

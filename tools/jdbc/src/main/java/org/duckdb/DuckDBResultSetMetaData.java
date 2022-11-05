@@ -62,6 +62,10 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	protected DuckDBColumnTypeMetaData[] column_types_meta;
 	protected final StatementReturnType return_type;
 
+	public StatementReturnType getReturnType() {
+		return return_type;
+	}
+
 	public int getColumnCount() throws SQLException {
 		return column_count;
 	}
@@ -89,15 +93,18 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.INTEGER;
 		case BIGINT:
 			return Types.BIGINT;
+		case LIST:
+			return Types.ARRAY;
+		case ENUM:
 		case HUGEINT:
-			return Types.JAVA_OBJECT;
 		case UTINYINT:
-			return Types.JAVA_OBJECT;
 		case USMALLINT:
-			return Types.JAVA_OBJECT;
+		case STRUCT:
+		case UUID:
+		case JSON:
 		case UINTEGER:
-			return Types.JAVA_OBJECT;
 		case UBIGINT:
+		case INTERVAL:
 			return Types.JAVA_OBJECT;
 		case FLOAT:
 			return Types.FLOAT;
@@ -118,13 +125,10 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.TIMESTAMP;
 		case TIMESTAMP_WITH_TIME_ZONE:
 			return Types.TIMESTAMP_WITH_TIMEZONE;
-		case INTERVAL:
-			return Types.JAVA_OBJECT;
 		case BLOB:
 			return Types.BLOB;
-
 		default:
-			throw new SQLException("Unsupported type " + type.toString());
+			throw new SQLException("Unsupported type " + type);
 		}
 	}
 
@@ -250,11 +254,11 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	}
 
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("unwrap");
 	}
 
 	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		throw new SQLFeatureNotSupportedException("isWrapperFor");
 	}
 
 	private DuckDBColumnTypeMetaData typeMetadataForColumn(int columnIndex) throws SQLException {

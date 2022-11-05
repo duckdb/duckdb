@@ -18,17 +18,25 @@
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
+class BlockManager;
 class ColumnData;
 class DatabaseInstance;
 class DataTable;
+class PartialBlockManager;
 struct DataTableInfo;
 class ExpressionExecutor;
-class TableDataWriter;
+class RowGroupWriter;
 class UpdateSegment;
 class Vector;
+struct ColumnCheckpointState;
 struct RowGroupPointer;
 struct TransactionData;
 struct VersionNode;
+
+struct RowGroupWriteData {
+	vector<unique_ptr<ColumnCheckpointState>> states;
+	vector<unique_ptr<BaseStatistics>> statistics;
+};
 
 class RowGroup : public SegmentBase {
 public:
@@ -36,18 +44,21 @@ public:
 	friend class VersionDeleteState;
 
 public:
-	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = 120;
-	static constexpr const idx_t ROW_GROUP_SIZE = STANDARD_VECTOR_SIZE * ROW_GROUP_VECTOR_COUNT;
+	static constexpr const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
+	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
 
 public:
-	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count);
-	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector<LogicalType> &types,
-	         RowGroupPointer &pointer);
+	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start, idx_t count);
+	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info,
+	         const vector<LogicalType> &types, RowGroupPointer &&pointer);
+	RowGroup(RowGroup &row_group, idx_t start);
 	~RowGroup();
 
 private:
 	//! The database instance
 	DatabaseInstance &db;
+	//! The block manager
+	BlockManager &block_manager;
 	//! The table info of this row_group
 	DataTableInfo &table_info;
 	//! The version info of the row_group (inserted and deleted tuple info)
@@ -60,6 +71,9 @@ private:
 public:
 	DatabaseInstance &GetDatabase() {
 		return db;
+	}
+	BlockManager &GetBlockManager() {
+		return block_manager;
 	}
 	DataTableInfo &GetTableInfo() {
 		return table_info;
@@ -107,7 +121,7 @@ public:
 	              row_t row_id, DataChunk &result, idx_t result_idx);
 
 	//! Append count rows to the version info
-	void AppendVersionInfo(TransactionData transaction, idx_t start, idx_t count, transaction_t commit_id);
+	void AppendVersionInfo(TransactionData transaction, idx_t count);
 	//! Commit a previous append made by RowGroup::AppendVersionInfo
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t count);
 	//! Revert a previous append made by RowGroup::AppendVersionInfo
@@ -116,11 +130,12 @@ public:
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(TransactionData transaction, DataTable *table, row_t *row_ids, idx_t count);
 
-	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
+	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
+	RowGroupPointer Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);
 
-	void InitializeAppend(TransactionData transaction, RowGroupAppendState &append_state, idx_t remaining_append_count);
+	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
 	void Update(TransactionData transaction, DataChunk &updates, row_t *ids, idx_t offset, idx_t count,
@@ -156,6 +171,8 @@ private:
 
 struct VersionNode {
 	unique_ptr<ChunkInfo> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
+
+	void SetStart(idx_t start);
 };
 
 } // namespace duckdb

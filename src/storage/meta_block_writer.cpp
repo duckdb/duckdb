@@ -4,28 +4,26 @@
 
 namespace duckdb {
 
-MetaBlockWriter::MetaBlockWriter(DatabaseInstance &db, block_id_t initial_block_id) : db(db) {
+MetaBlockWriter::MetaBlockWriter(BlockManager &block_manager, block_id_t initial_block_id)
+    : block_manager(block_manager) {
 	if (initial_block_id == INVALID_BLOCK) {
 		initial_block_id = GetNextBlockId();
 	}
-	auto &block_manager = BlockManager::GetBlockManager(db);
-	block = block_manager.CreateBlock(initial_block_id);
+	block = block_manager.CreateBlock(initial_block_id, nullptr);
 	Store<block_id_t>(-1, block->buffer);
 	offset = sizeof(block_id_t);
 }
 
 MetaBlockWriter::~MetaBlockWriter() {
-	if (Exception::UncaughtException()) {
-		return;
-	}
-	try {
-		Flush();
-	} catch (...) {
-	}
+	// If there's an exception during checkpoint, this can get destroyed without
+	// flushing the data...which is fine, because none of the unwritten data
+	// will be referenced.
+	//
+	// Otherwise, we should have explicitly flushed (and thereby nulled the block).
+	D_ASSERT(!block || Exception::UncaughtException());
 }
 
 block_id_t MetaBlockWriter::GetNextBlockId() {
-	auto &block_manager = BlockManager::GetBlockManager(db);
 	return block_manager.GetFreeBlockId();
 }
 
@@ -37,9 +35,13 @@ BlockPointer MetaBlockWriter::GetBlockPointer() {
 }
 
 void MetaBlockWriter::Flush() {
+	AdvanceBlock();
+	block = nullptr;
+}
+
+void MetaBlockWriter::AdvanceBlock() {
 	written_blocks.insert(block->id);
 	if (offset > sizeof(block_id_t)) {
-		auto &block_manager = BlockManager::GetBlockManager(db);
 		block_manager.Write(*block);
 		offset = sizeof(block_id_t);
 	}
@@ -62,8 +64,8 @@ void MetaBlockWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		// write the block id of the new block to the start of the current block
 		Store<block_id_t>(new_block_id, block->buffer);
 		// first flush the old block
-		Flush();
-		// now update the block id of the lbock
+		AdvanceBlock();
+		// now update the block id of the block
 		block->id = new_block_id;
 		Store<block_id_t>(-1, block->buffer);
 	}

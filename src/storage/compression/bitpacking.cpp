@@ -195,6 +195,8 @@ public:
 			auto state = (BitpackingCompressState<T> *)data_ptr;
 			auto total_bits_needed = (width * BITPACKING_METADATA_GROUP_SIZE);
 			D_ASSERT(total_bits_needed % 8 == 0);
+			// FIXME: we call AlignValue in FlushSegment, this could add up to 7 bytes
+			// That space is unaccounted for here, which on rare occassions might lead to a heap-buffer overflow
 			auto total_bytes_needed = total_bits_needed / 8;
 			total_bytes_needed += sizeof(bitpacking_width_t);
 			total_bytes_needed += sizeof(VALUE_TYPE);
@@ -230,9 +232,8 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
-		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
-		metadata_ptr =
-		    handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
+		data_ptr = handle.Ptr() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
+		metadata_ptr = handle.Ptr() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
@@ -263,7 +264,8 @@ public:
 		auto dataptr = handle.Ptr();
 
 		// Compact the segment by moving the metadata next to the data.
-		idx_t metadata_offset = AlignValue(data_ptr - dataptr);
+		idx_t metadata_offset = data_ptr - dataptr;
+		D_ASSERT(ValueIsAligned(metadata_offset));
 		idx_t metadata_size = dataptr + Storage::BLOCK_SIZE - metadata_ptr - 1;
 		idx_t total_segment_size = metadata_offset + metadata_size;
 		memmove(dataptr + metadata_offset, metadata_ptr + 1, metadata_size);
@@ -324,7 +326,6 @@ public:
 
 	BufferHandle handle;
 
-	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t, bool skip_sign_extension);
 	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 
 	idx_t position_in_group = 0;
@@ -342,7 +343,6 @@ public:
 		bitpacking_metadata_ptr -= sizeof(T);
 		current_frame_of_reference = Load<T>(bitpacking_metadata_ptr);
 		bitpacking_metadata_ptr -= sizeof(bitpacking_width_t);
-		LoadDecompressFunction();
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
@@ -363,10 +363,6 @@ public:
 				skip_count -= skipping;
 			}
 		}
-	}
-
-	void LoadDecompressFunction() {
-		decompress_function = &BitpackingPrimitives::UnPackBlock<T>;
 	}
 };
 
@@ -438,13 +434,13 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
 			// Decompress directly into result vector
-			scan_state.decompress_function((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
-			                               scan_state.current_width, skip_sign_extend);
+			BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
+			                                     scan_state.current_width, skip_sign_extend);
 		} else {
 			// Decompress compression algorithm to buffer
-			scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer,
-			                               decompression_group_start_pointer, scan_state.current_width,
-			                               skip_sign_extend);
+			BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer,
+			                                     decompression_group_start_pointer, scan_state.current_width,
+			                                     skip_sign_extend);
 
 			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
 			       to_scan * sizeof(T));
@@ -482,8 +478,8 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
 	bool skip_sign_extend = true;
 
-	scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
-	                               scan_state.current_width, skip_sign_extend);
+	BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
+	                                     scan_state.current_width, skip_sign_extend);
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
 	//! Apply FOR to result

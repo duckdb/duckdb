@@ -1,0 +1,8 @@
+# name: benchmark/clickbench/q32.benchmark
+# description: Run query 32 from the ClickBench benchmark
+# group: [clickbench]
+
+template benchmark/clickbench/clickbench-noresult.benchmark.in
+QUERY_NUMBER=32
+QUERY_NUMBER_PADDED=32
+RESULT_QUERY=SELECT MIN(c), MAX(c), COUNT(*) FROM __answer

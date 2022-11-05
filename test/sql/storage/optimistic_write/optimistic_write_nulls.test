@@ -1,0 +1,34 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_nulls.test
+# description: Test large appends within individual transactions
+# group: [optimistic_write]
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_nulls.db
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test SELECT case when i%3=0 then null else i end FROM range(1000000) t(i)
+
+query III
+SELECT SUM(a), COUNT(a), COUNT(*) FROM test
+----
+333332666667	666666	1000000
+
+restart
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000)
+
+query III
+SELECT SUM(a), COUNT(a), COUNT(*) FROM test
+----
+833332166667	1666666	2000000
+
+restart
+
+query III
+SELECT SUM(a), COUNT(a), COUNT(*) FROM test
+----
+833332166667	1666666	2000000

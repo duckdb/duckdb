@@ -39,31 +39,10 @@ SELECT '🦆ab'[0:0], 'abc'[0:0]
 ----
 (empty)	(empty)
 
-# test grapheme clusters
-query I
-SELECT '🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️'[2:5]
-----
- L🤦🏼‍♂️R
-
-query I
-SELECT 'S̈a'[1:2]
-----
-S̈a
-
-query I
-SELECT 'S̈a'[2:2]
-----
-a
-
 query I
 SELECT 'MotörHead'[:5]
 ----
 Motör
-
-query I
-SELECT 'Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢'[2:]
-----
-A̴̵̜̰͔ͫ͗͢
 
 # constant offset/length
 # normal slice

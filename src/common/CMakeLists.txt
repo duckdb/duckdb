@@ -19,6 +19,7 @@ add_library_unity(
   OBJECT
   allocator.cpp
   assert.cpp
+  box_renderer.cpp
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp
@@ -28,6 +29,7 @@ add_library_unity(
   field_writer.cpp
   file_buffer.cpp
   file_system.cpp
+  fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
   pipe_file_system.cpp

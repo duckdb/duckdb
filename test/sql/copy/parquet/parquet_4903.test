@@ -1,0 +1,9 @@
+# name: test/sql/copy/parquet/parquet_4903.test
+# description: Issue #4442: Parquet reader converts timestamp to i64 *sometimes*
+# group: [parquet]
+
+require parquet
+
+# file is corrupt
+statement error
+SELECT type_param_constraints FROM 'data/parquet-testing/bug4903.parquet' limit 10

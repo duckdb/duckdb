@@ -100,7 +100,7 @@ class TestCategory(object):
     def test_category_fetch_df_chunk(self, duckdb_cursor):
         con = duckdb.connect()
         categories = ['foo','bla',None,'zoo', 'foo', 'foo',None, 'bla']
-        result = categories*128
+        result = categories*256
         categories = result * 2
         df_result = pd.DataFrame({
             'x': pd.Categorical(result, ordered=True),

@@ -43,6 +43,8 @@ public:
 public:
 	explicit DuckDBPyConnection() {
 	}
+
+public:
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 
@@ -116,9 +118,9 @@ public:
 	py::list FetchAll();
 
 	py::dict FetchNumpy();
-	DataFrame FetchDF();
+	DataFrame FetchDF(bool date_as_object);
 
-	DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1) const;
+	DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false) const;
 
 	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
 
@@ -133,7 +135,8 @@ public:
 	//! Caches and provides an interface to get frequently used modules+subtypes
 	static shared_ptr<PythonImportCache> import_cache;
 
-	static bool IsAcceptedArrowObject(string &py_object_type);
+	static bool IsPandasDataframe(const py::object &object);
+	static bool IsAcceptedArrowObject(const py::object &object);
 
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();

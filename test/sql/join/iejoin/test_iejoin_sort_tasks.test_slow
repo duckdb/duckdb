@@ -18,12 +18,12 @@ FROM (
 		i AS id,
 		i AS begin,
 		i + 1 AS end
-	FROM range(1, 100000002) tbl(i)) lhs,
+	FROM range(1, 10000002) tbl(i)) lhs,
 	(SELECT
 		i - 100000000 AS id,
 		i AS begin,
 		i + 1 AS end
-	FROM range(100000001, 200000002) tbl(i)) rhs
+	FROM range(10000001, 20000002) tbl(i)) rhs
 WHERE lhs.begin < rhs.end AND rhs.begin < lhs.end
 ----
-100000001	100000001
+10000001	10000001

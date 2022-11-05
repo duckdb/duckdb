@@ -1,0 +1,81 @@
+# name: test/sql/storage/compression/string/big_strings.test
+# description: Test string compression with big strings, which are currently unsupported by the compression algorithms
+# group: [string]
+
+# load the DB from disk
+load __TEST_DIR__/test_string_compression.db
+
+foreach enable_fsst_vector true false
+
+statement ok
+SET enable_fsst_vectors='${enable_fsst_vector}'
+
+foreach compression fsst dictionary
+
+statement ok
+PRAGMA force_compression='${compression}'
+
+# Baseline, non big string, dictionary compression should work
+statement ok
+CREATE TABLE normal_string (a VARCHAR);
+
+statement ok
+INSERT INTO normal_string values (repeat('a', 3900));
+INSERT INTO normal_string values (repeat('b', 3900));
+INSERT INTO normal_string values (repeat('a', 3900));
+INSERT INTO normal_string values (repeat('b', 3900));
+
+statement ok
+checkpoint
+
+query III
+SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from normal_string
+----
+a	a	3900
+b	b	3900
+a	a	3900
+b	b	3900
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('normal_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+# Big string, should disable string compression
+statement ok
+CREATE TABLE big_string (a VARCHAR);
+
+statement ok
+INSERT INTO big_string values (repeat('a', 8000));
+INSERT INTO big_string values (repeat('b', 8000));
+INSERT INTO big_string values (repeat('a', 8000));
+INSERT INTO big_string values (repeat('b', 8000));
+
+statement ok
+checkpoint
+
+query III
+SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from big_string
+----
+a	a	8000
+b	b	8000
+a	a	8000
+b	b	8000
+
+query I
+SELECT lower(compression) FROM pragma_storage_info('big_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+uncompressed
+
+statement ok
+DROP TABLE big_string;
+
+statement ok
+DROP TABLE normal_string;
+
+endloop
+
+endloop

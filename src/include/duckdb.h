@@ -121,6 +121,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_UUID,
 	// const char*
 	DUCKDB_TYPE_JSON,
+	// union type, only useful as logical type
+	DUCKDB_TYPE_UNION,
 } duckdb_type;
 
 //! Days are stored as days since 1970-01-01
@@ -300,6 +302,13 @@ Closes the specified connection and de-allocates all memory allocated for that c
 * connection: The connection to close.
 */
 DUCKDB_API void duckdb_disconnect(duckdb_connection *connection);
+
+/*!
+Returns the version of the linked DuckDB, with a version postfix for dev versions
+
+Usually used for developing C extensions that must return this for a compatibility check.
+*/
+DUCKDB_API const char *duckdb_library_version();
 
 //===--------------------------------------------------------------------===//
 // Configuration
@@ -743,6 +752,16 @@ If the conversion fails because the double value is too big the result will be 0
 */
 DUCKDB_API duckdb_hugeint duckdb_double_to_hugeint(double val);
 
+/*!
+Converts a double value to a duckdb_decimal object.
+
+If the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.
+
+* val: The double value.
+* returns: The converted `duckdb_decimal` element.
+*/
+DUCKDB_API duckdb_decimal duckdb_double_to_decimal(double val, uint8_t width, uint8_t scale);
+
 //===--------------------------------------------------------------------===//
 // Decimal Helpers
 //===--------------------------------------------------------------------===//
@@ -856,6 +875,11 @@ Binds an duckdb_hugeint value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             duckdb_hugeint val);
+/*!
+Binds a duckdb_decimal value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_decimal(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                            duckdb_decimal val);
 
 /*!
 Binds an uint8_t value to the prepared statement at the specified index.
@@ -1776,6 +1800,14 @@ Adds a parameter to the replacement scan function.
 * parameter: The parameter to add.
 */
 DUCKDB_API void duckdb_replacement_scan_add_parameter(duckdb_replacement_scan_info info, duckdb_value parameter);
+
+/*!
+Report that an error has occurred while executing the replacement scan.
+
+* info: The info object
+* error: The error message
+*/
+DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info info, const char *error);
 
 //===--------------------------------------------------------------------===//
 // Appender

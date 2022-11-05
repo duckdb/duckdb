@@ -11,9 +11,11 @@ CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
 statement ok
 INSERT INTO strings VALUES ('hello', 1, 2), ('world', 2, 3), ('b', 1, 1), (NULL, 2, 2)
 
+foreach FUN substring substring_grapheme
+
 # test zero length
 query TT
-SELECT SUBSTRING('🦆ab', 1, 0), SUBSTRING('abc', 1, 0)
+SELECT ${FUN}('🦆ab', 1, 0), ${FUN}('abc', 1, 0)
 ----
 (empty)	(empty)
 
@@ -146,7 +148,7 @@ NULL
 
 # negative length
 query T
-SELECT substring(s, 2, -2) FROM strings
+SELECT ${FUN}(s, 2, -2) FROM strings
 ----
 h
 w
@@ -155,7 +157,7 @@ NULL
 
 # negative offset and negative length
 query T
-SELECT substring(s, -2, -2) FROM strings
+SELECT ${FUN}(s, -2, -2) FROM strings
 ----
 el
 or
@@ -164,7 +166,7 @@ NULL
 
 # length 0
 query T
-SELECT substring(s, 2, 0) FROM strings
+SELECT ${FUN}(s, 2, 0) FROM strings
 ----
 (empty)
 (empty)
@@ -173,7 +175,7 @@ NULL
 
 # no length
 query T
-SELECT substring(s, 2) FROM strings
+SELECT ${FUN}(s, 2) FROM strings
 ----
 ello
 orld
@@ -181,7 +183,7 @@ orld
 NULL
 
 query T
-SELECT substring(substring(s, 2), 2) FROM strings
+SELECT ${FUN}(${FUN}(s, 2), 2) FROM strings
 ----
 llo
 rld
@@ -190,7 +192,7 @@ NULL
 
 # very large offset and length
 query T
-SELECT substring(s, 2147483647, 2147483647) FROM strings
+SELECT ${FUN}(s, 2147483647, 2147483647) FROM strings
 ----
 (empty)
 (empty)
@@ -198,15 +200,7 @@ SELECT substring(s, 2147483647, 2147483647) FROM strings
 NULL
 
 query T
-SELECT substring(s, 2147483647, -2147483647) FROM strings
-----
-hello
-world
-b
-NULL
-
-query T
-SELECT substring(s, -2147483647, 2147483647) FROM strings
+SELECT ${FUN}(s, 2147483647, -2147483647) FROM strings
 ----
 hello
 world
@@ -214,7 +208,15 @@ b
 NULL
 
 query T
-SELECT substring(s, -2147483647, -2147483647) FROM strings
+SELECT ${FUN}(s, -2147483647, 2147483647) FROM strings
+----
+hello
+world
+b
+NULL
+
+query T
+SELECT ${FUN}(s, -2147483647, -2147483647) FROM strings
 ----
 (empty)
 (empty)
@@ -223,6 +225,8 @@ NULL
 
 # Issue #2553 - accept BIGINT arguments
 query I
-SELECT SUBSTR('abc', INSTR('abc', 'b'));
+SELECT ${FUN}('abc', INSTR('abc', 'b'));
 ----
 bc
+
+endloop

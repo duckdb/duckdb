@@ -26,7 +26,7 @@
 				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma
 				target_list			 			 indirection opt_indirection target_list_opt_comma opt_target_list_opt_comma
 			 group_clause select_limit
-				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers
+				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers opt_select
 %type <list>	group_by_list group_by_list_opt_comma
 %type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id
 %type <range>	OptTempTableName
@@ -65,6 +65,7 @@
 %type <boolean> opt_ignore_nulls
 %type <list>	func_arg_list
 %type <node>	func_arg_expr
+%type <node>	list_comprehension
 %type <list>	row qualified_row type_list colid_type_list
 %type <node>	case_expr case_arg when_clause case_default
 %type <list>	when_clause_list

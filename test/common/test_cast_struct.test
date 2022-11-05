@@ -76,3 +76,21 @@ select a::row(a integer, b string) r from (VALUES (ROW(1, 'asdf')), (ROW(4, 'fds
 
 statement error
 select struct_extract({'a': a}, a) from range(10) tbl(a);
+
+# test string to struct within struct casting
+query I
+SELECT {a:{b:'{a:3, b: "Hello World"}'}}::STRUCT(a STRUCT(b STRUCT(a INT, b VARCHAR)));
+----
+{'a': {'b': {'a': 3, 'b': Hello World}}}
+
+# test if try_cast continues after encountering error
+query I 
+SELECT TRY_CAST(struct_pack(a=>4, b=> 'Ducky', c=>'1964-06-15') AS STRUCT(a INT, b DOUBLE, c DATE));
+----
+{'a': 4, 'b': NULL, 'c': 1964-06-15}
+
+query I 
+SELECT TRY_CAST(struct_pack(a=>4, b=> 'Ducky', c=>'Tommorow', d=>{a:3.0}) AS STRUCT(a VARCHAR[], b VARCHAR, c DATE, d STRUCT(a INT)));
+----
+{'a': NULL, 'b': Ducky, 'c': NULL, 'd': {'a': 3}}
+

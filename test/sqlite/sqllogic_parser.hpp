@@ -26,6 +26,8 @@ enum class SQLLogicTokenType {
 	SQLLOGIC_SET,
 	SQLLOGIC_LOOP,
 	SQLLOGIC_FOREACH,
+	SQLLOGIC_CONCURRENT_LOOP,
+	SQLLOGIC_CONCURRENT_FOREACH,
 	SQLLOGIC_ENDLOOP,
 	SQLLOGIC_REQUIRE,
 	SQLLOGIC_REQUIRE_ENV,
@@ -71,10 +73,13 @@ public:
 	//! Extract a statement and move the current_line pointer forward
 	//! if "is_query" is false, the statement stops at the next empty line
 	//! if "is_query" is true, the statement stops at the next empty line or the next ----
-	string ExtractStatement(bool is_query);
+	string ExtractStatement();
 
 	//! Extract the expected result
 	vector<string> ExtractExpectedResult();
+
+	//! Extract the expected error (in case of statement error)
+	string ExtractExpectedError(bool expect_ok);
 
 	//! Tokenize the current line
 	SQLLogicToken Tokenize();

@@ -1,4 +1,4 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 
 using duckdb::Connection;
 using duckdb::DatabaseData;
@@ -66,4 +66,8 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	Connection *conn = (Connection *)connection;
 	auto result = conn->Query(query);
 	return duckdb_translate_result(move(result), out);
+}
+
+const char *duckdb_library_version() {
+	return DuckDB::LibraryVersion();
 }

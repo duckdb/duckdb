@@ -29,13 +29,13 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),
                                                  DUCKDB_LOCAL(DebugForceExternal),
                                                  DUCKDB_LOCAL(DebugForceNoCrossProduct),
-                                                 DUCKDB_GLOBAL(DebugManyFreeListBlocks),
                                                  DUCKDB_GLOBAL(DebugWindowMode),
                                                  DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
                                                  DUCKDB_GLOBAL(DefaultOrderSetting),
                                                  DUCKDB_GLOBAL(DefaultNullOrderSetting),
                                                  DUCKDB_GLOBAL(DisabledOptimizersSetting),
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
+                                                 DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
@@ -178,6 +178,19 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit);
 	}
 	return (idx_t)multiplier * limit;
+}
+
+// Right now we only really care about access mode when comparing DBConfigs
+bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
+	return other.access_mode == access_mode;
+}
+
+bool DBConfig::operator==(const DBConfig &other) {
+	return other.options == options;
+}
+
+bool DBConfig::operator!=(const DBConfig &other) {
+	return !(other.options == options);
 }
 
 std::string ProxyUri::ToString() const {

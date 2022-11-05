@@ -47,6 +47,7 @@ struct CastParameters {
 typedef bool (*cast_function_t)(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 struct BoundCastInfo {
+	DUCKDB_API
 	BoundCastInfo(cast_function_t function,
 	              unique_ptr<BoundCastData> cast_data = nullptr); // NOLINT: allow explicit cast from cast_function_t
 
@@ -58,11 +59,49 @@ public:
 };
 
 struct BindCastInput {
-	BindCastInput(CastFunctionSet &function_set, BindCastInfo *info) : function_set(function_set), info(info) {
-	}
+	DUCKDB_API BindCastInput(CastFunctionSet &function_set, BindCastInfo *info, ClientContext *context);
 
 	CastFunctionSet &function_set;
 	BindCastInfo *info;
+	ClientContext *context;
+
+public:
+	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);
+};
+
+struct ListBoundCastData : public BoundCastData {
+	explicit ListBoundCastData(BoundCastInfo child_cast) : child_cast_info(move(child_cast)) {
+	}
+
+	BoundCastInfo child_cast_info;
+	static unique_ptr<BoundCastData> BindListToListCast(BindCastInput &input, const LogicalType &source,
+	                                                    const LogicalType &target);
+
+public:
+	unique_ptr<BoundCastData> Copy() const override {
+		return make_unique<ListBoundCastData>(child_cast_info.Copy());
+	}
+};
+
+struct StructBoundCastData : public BoundCastData {
+	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p)
+	    : child_cast_info(move(child_casts)), target(move(target_p)) {
+	}
+
+	vector<BoundCastInfo> child_cast_info;
+	LogicalType target;
+
+	static unique_ptr<BoundCastData> BindStructToStructCast(BindCastInput &input, const LogicalType &source,
+	                                                        const LogicalType &target);
+
+public:
+	unique_ptr<BoundCastData> Copy() const override {
+		vector<BoundCastInfo> copy_info;
+		for (auto &info : child_cast_info) {
+			copy_info.push_back(info.Copy());
+		}
+		return make_unique<StructBoundCastData>(move(copy_info), target);
+	}
 };
 
 struct DefaultCasts {
@@ -97,7 +136,11 @@ private:
 	                                           const LogicalType &target);
 	static BoundCastInfo TimestampSecCastSwitch(BindCastInput &input, const LogicalType &source,
 	                                            const LogicalType &target);
+	static BoundCastInfo UnionCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo UUIDCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+
+	static BoundCastInfo ImplicitToUnionCast(BindCastInput &input, const LogicalType &source,
+	                                         const LogicalType &target);
 };
 
 } // namespace duckdb

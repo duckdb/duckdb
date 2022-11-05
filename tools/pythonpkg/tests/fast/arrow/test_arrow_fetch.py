@@ -94,5 +94,5 @@ class TestArrowFetch(object):
         relation = duckdb_cursor.table('t')
         arrow_tbl = relation.arrow()
         assert arrow_tbl['a'].num_chunks == 1
-        arrow_tbl = relation.arrow(1024)
-        assert arrow_tbl['a'].num_chunks == 3
+        arrow_tbl = relation.arrow(2048)
+        assert arrow_tbl['a'].num_chunks == 2

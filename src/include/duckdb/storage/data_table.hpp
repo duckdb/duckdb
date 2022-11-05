@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/index_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -21,48 +20,30 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 
 namespace duckdb {
 class ClientContext;
+class ColumnDataCollection;
 class ColumnDefinition;
 class DataTable;
+class OptimisticDataWriter;
 class RowGroup;
 class StorageManager;
 class TableCatalogEntry;
+class TableIOManager;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
-
-struct DataTableInfo {
-	DataTableInfo(DatabaseInstance &db, string schema, string table)
-	    : db(db), cardinality(0), schema(move(schema)), table(move(table)) {
-	}
-
-	//! The database instance of the table
-	DatabaseInstance &db;
-	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
-	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
-	atomic<idx_t> cardinality;
-	// schema of the table
-	string schema;
-	// name of the table
-	string table;
-
-	TableIndexList indexes;
-
-	bool IsTemporary() {
-		return schema == TEMP_SCHEMA;
-	}
-};
 
 //! DataTable represents a physical table on disk
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(DatabaseInstance &db, const string &schema, const string &table,
-	          vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data = nullptr);
+	DataTable(DatabaseInstance &db, shared_ptr<TableIOManager> table_io_manager, const string &schema,
+	          const string &table, vector<ColumnDefinition> column_definitions_p,
+	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
@@ -73,10 +54,10 @@ public:
 	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
 	DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint);
 
+	//! The table info
 	shared_ptr<DataTableInfo> info;
-
+	//! The set of physical columns stored by this DataTable
 	vector<ColumnDefinition> column_definitions;
-
 	//! A reference to the database instance
 	DatabaseInstance &db;
 
@@ -104,8 +85,21 @@ public:
 	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_ids,
 	           idx_t fetch_count, ColumnFetchState &state);
 
-	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
-	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	//! Initializes an append to transaction-local storage
+	void InitializeLocalAppend(LocalAppendState &state, ClientContext &context);
+	//! Append a DataChunk to the transaction-local storage of the table.
+	void LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	//! Finalizes a transaction-local append
+	void FinalizeLocalAppend(LocalAppendState &state);
+	//! Append a chunk to the transaction-local storage of this table
+	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	//! Append a column data collection to the transaction-local storage of this table
+	void LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection);
+	//! Merge a row group collection into the transaction-local storage
+	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
+	//! Creates an optimistic writer for this table - used for optimistically writing parallel appends
+	OptimisticDataWriter *CreateOptimisticWriter(ClientContext &context);
+
 	//! Delete the entries with the specified row identifier from the table
 	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
 	//! Update the entries with the specified row identifier from the table
@@ -123,10 +117,12 @@ public:
 	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
+	//! Fetches an append lock
+	void AppendLock(TableAppendState &state);
 	//! Begin appending structs to this table, obtaining necessary locks, etc
 	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
-	//! Append a chunk to the table using the AppendState obtained from BeginAppend
-	void Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state);
+	//! Append a chunk to the table using the AppendState obtained from InitializeAppend
+	void Append(DataChunk &chunk, TableAppendState &state);
 	//! Commit the append
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	//! Write a segment of the table to the WAL
@@ -137,6 +133,9 @@ public:
 	void RevertAppendInternal(idx_t start_row, idx_t count);
 
 	void ScanTableSegment(idx_t start_row, idx_t count, const std::function<void(DataChunk &chunk)> &function);
+
+	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
+	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded
@@ -176,11 +175,12 @@ public:
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
 
+	//! Verify constraints with a chunk from the Append containing all columns of the table
+	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+
 private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint);
-	//! Verify constraints with a chunk from the Append containing all columns of the table
-	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, const vector<column_t> &column_ids);
 	//! Verify constraints with a chunk from the Delete containing all columns of the table
@@ -194,8 +194,6 @@ private:
 	mutex append_lock;
 	//! The row groups of the table
 	shared_ptr<RowGroupCollection> row_groups;
-	//! Table statistics
-	TableStatistics stats;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
 	//! that can be appended to
 	atomic<bool> is_root;

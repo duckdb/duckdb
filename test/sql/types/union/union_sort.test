@@ -1,0 +1,64 @@
+# name: test/sql/types/union/union_sort.test
+# description: Test sorting of union types
+# group: [union]
+
+statement ok
+CREATE TABLE tbl (a UNION(a INT, b INT));
+
+statement ok
+INSERT INTO tbl VALUES (union_value(b := 1)), (union_value(a := 4)), (union_value(a := 1)), (union_value(b := 2)), (union_value(a := 3)), (NULL);
+
+# unions sort first by tag, then by value
+query II
+SELECT union_tag(a), a FROM tbl ORDER BY a ASC;
+----
+NULL	NULL
+a	1
+a	3
+a	4
+b	1
+b	2
+
+
+query II
+SELECT union_tag(a), a FROM tbl ORDER BY a DESC;
+----
+NULL	NULL
+b	2
+b	1
+a	4
+a	3
+a	1
+
+statement ok
+CREATE TABLE tbl5 (a UNION(lft INT, u UNION(lft VARCHAR, rght INT)));
+
+statement ok
+INSERT INTO tbl5 VALUES (union_value(lft := 1))
+
+statement ok
+CREATE TABLE tbl2 (u UNION(lft INT, u UNION(lft VARCHAR, rght INT)));
+
+statement ok
+INSERT INTO tbl2 VALUES (union_value(lft := 1));
+
+statement ok
+INSERT INTO tbl2 VALUES (NULL);
+
+statement ok
+INSERT INTO tbl2 VALUES (union_value(u := union_value(rght := 2)));
+
+statement ok
+INSERT INTO tbl2 VALUES (union_value(u := union_value(lft := '3')));
+
+statement ok
+INSERT INTO tbl2 VALUES (union_value(u := '4'));
+
+query III
+SELECT u, union_tag(u), union_tag(u.u) FROM tbl2 ORDER BY u;
+----
+NULL	NULL	NULL
+1	lft	NULL
+3	u	lft
+4	u	lft
+2	u	rght

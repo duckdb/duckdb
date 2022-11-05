@@ -30,6 +30,7 @@
 namespace duckdb {
 class CastFunctionSet;
 class ClientContext;
+class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
 
@@ -127,8 +128,6 @@ struct DBConfigOptions {
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
-	//! Debug flag that adds additional (unnecessary) free_list blocks to the storage
-	bool debug_many_free_list_blocks = false;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
@@ -137,8 +136,12 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> set_variables;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	//! Enable emitting FSST Vectors
+	bool enable_fsst_vectors = false;
 	//! HTTP CONNECT proxy
 	std::shared_ptr<ProxyUri> http_proxy;
+
+	bool operator==(const DBConfigOptions &other) const;
 };
 
 struct DBConfig {
@@ -147,6 +150,7 @@ struct DBConfig {
 
 public:
 	DUCKDB_API DBConfig();
+	DUCKDB_API DBConfig(std::unordered_map<string, string> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
@@ -168,6 +172,8 @@ public:
 	vector<ParserExtension> parser_extensions;
 	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
+	//! Error manager
+	unique_ptr<ErrorManager> error_manager;
 
 	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
 	                                   set_option_callback_t function = nullptr);
@@ -194,6 +200,9 @@ public:
 	DUCKDB_API vector<CompressionFunction *> GetCompressionFunctions(PhysicalType data_type);
 	//! Return the compression function for the specified compression type/physical type combo
 	DUCKDB_API CompressionFunction *GetCompressionFunction(CompressionType type, PhysicalType data_type);
+
+	bool operator==(const DBConfig &other);
+	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
 

@@ -44,5 +44,9 @@ public:
 	bool IsSink() const override {
 		return true;
 	}
+
+	bool IsOrderDependent() const override {
+		return true;
+	}
 };
 } // namespace duckdb

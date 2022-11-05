@@ -1,21 +1,17 @@
 #include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/transaction/transaction.hpp"
-#include "duckdb/transaction/local_storage.hpp"
-
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
-
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/main/client_config.hpp"
-
-#include "duckdb/common/mutex.hpp"
-
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
@@ -28,6 +24,8 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 struct TableScanLocalState : public LocalTableFunctionState {
 	//! The current position in the scan
 	TableScanState scan_state;
+	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
+	DataChunk all_columns;
 };
 
 static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
@@ -39,7 +37,7 @@ static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
 }
 
 struct TableScanGlobalState : public GlobalTableFunctionState {
-	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) {
+	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) : row_count(0) {
 		D_ASSERT(bind_data_p);
 		auto &bind_data = (const TableScanBindData &)*bind_data_p;
 		max_threads = bind_data.table->storage->MaxThreads(context);
@@ -48,9 +46,18 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	ParallelTableScanState state;
 	mutex lock;
 	idx_t max_threads;
+	//! How many rows we already scanned
+	atomic<idx_t> row_count;
+
+	vector<idx_t> projection_ids;
+	vector<LogicalType> scanned_types;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
+	}
+
+	bool CanRemoveFilterColumns() const {
+		return !projection_ids.empty();
 	}
 };
 
@@ -65,6 +72,10 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 	}
 	result->scan_state.Initialize(move(column_ids), input.filters);
 	TableScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
+	if (input.CanRemoveFilterColumns()) {
+		auto &tsgs = (TableScanGlobalState &)*gstate;
+		result->all_columns.Initialize(context.client, tsgs.scanned_types);
+	}
 	return move(result);
 }
 
@@ -73,16 +84,26 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	D_ASSERT(input.bind_data);
 	auto &bind_data = (const TableScanBindData &)*input.bind_data;
 	auto result = make_unique<TableScanGlobalState>(context, input.bind_data);
-
 	bind_data.table->storage->InitializeParallelScan(context, result->state);
+	if (input.CanRemoveFilterColumns()) {
+		result->projection_ids = input.projection_ids;
+		const auto &columns = bind_data.table->columns;
+		for (const auto &col_idx : input.column_ids) {
+			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+			} else {
+				result->scanned_types.push_back(columns[col_idx].Type());
+			}
+		}
+	}
 	return move(result);
 }
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
                                                       column_t column_id) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	auto &transaction = Transaction::GetTransaction(context);
-	if (transaction.storage.Find(bind_data.table->storage.get())) {
+	auto &local_storage = LocalStorage::Get(context);
+	if (local_storage.Find(bind_data.table->storage.get())) {
 		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
 	}
@@ -91,16 +112,22 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (TableScanBindData &)*data_p.bind_data;
+	auto &gstate = (TableScanGlobalState &)*data_p.global_state;
 	auto &state = (TableScanLocalState &)*data_p.local_state;
 	auto &transaction = Transaction::GetTransaction(context);
 	do {
 		if (bind_data.is_create_index) {
 			bind_data.table->storage->CreateIndexScan(
 			    state.scan_state, output, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+		} else if (gstate.CanRemoveFilterColumns()) {
+			state.all_columns.Reset();
+			bind_data.table->storage->Scan(transaction, state.all_columns, state.scan_state);
+			output.ReferenceColumns(state.all_columns, gstate.projection_ids);
 		} else {
 			bind_data.table->storage->Scan(transaction, output, state.scan_state);
 		}
 		if (output.size() > 0) {
+			gstate.row_count += output.size();
 			return;
 		}
 		if (!TableScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {
@@ -120,14 +147,15 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 }
 
 double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p,
-                         const GlobalTableFunctionState *gstate) {
+                         const GlobalTableFunctionState *gstate_p) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
+	auto &gstate = (TableScanGlobalState &)*gstate_p;
 	idx_t total_rows = bind_data.table->storage->GetTotalRows();
-	if (total_rows == 0 || total_rows < STANDARD_VECTOR_SIZE) {
+	if (total_rows == 0) {
 		//! Table is either empty or smaller than a vector size, so it is finished
 		return 100;
 	}
-	auto percentage = double(bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0) / total_rows;
+	auto percentage = 100 * (double(gstate.row_count) / total_rows);
 	if (percentage > 100) {
 		//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
 		//! It means we finished this table.
@@ -140,10 +168,10 @@ idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_da
                              LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
 	auto &state = (TableScanLocalState &)*local_state;
 	if (state.scan_state.table_state.row_group_state.row_group) {
-		return state.scan_state.table_state.row_group_state.row_group->start;
+		return state.scan_state.table_state.batch_index;
 	}
 	if (state.scan_state.local_state.row_group_state.row_group) {
-		return state.scan_state.local_state.row_group_state.row_group->start;
+		return state.scan_state.table_state.batch_index + state.scan_state.local_state.batch_index;
 	}
 	return 0;
 }
@@ -155,9 +183,9 @@ void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionD
 
 unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &local_storage = LocalStorage::Get(context);
 	idx_t estimated_cardinality =
-	    bind_data.table->storage->info->cardinality + transaction.storage.AddedRows(bind_data.table->storage.get());
+	    bind_data.table->storage->info->cardinality + local_storage.AddedRows(bind_data.table->storage.get());
 	return make_unique<NodeStatistics>(bind_data.table->storage->info->cardinality, estimated_cardinality);
 }
 
@@ -182,11 +210,11 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 		row_id_data = (data_ptr_t)&bind_data.result_ids[0];
 	}
 	auto result = make_unique<IndexScanGlobalState>(row_id_data);
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &local_storage = LocalStorage::Get(context);
 	result->column_ids = input.column_ids;
 	result->local_storage_state.Initialize(input.column_ids, input.filters);
-	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state.local_state,
-	                                   input.filters);
+	local_storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state.local_state,
+	                             input.filters);
 
 	result->finished = false;
 	return move(result);
@@ -196,13 +224,15 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 	auto &bind_data = (const TableScanBindData &)*data_p.bind_data;
 	auto &state = (IndexScanGlobalState &)*data_p.global_state;
 	auto &transaction = Transaction::GetTransaction(context);
+	auto &local_storage = LocalStorage::Get(transaction);
+
 	if (!state.finished) {
 		bind_data.table->storage->Fetch(transaction, output, state.column_ids, state.row_ids,
 		                                bind_data.result_ids.size(), state.fetch_state);
 		state.finished = true;
 	}
 	if (output.size() == 0) {
-		transaction.storage.Scan(state.local_storage_state.local_state, state.column_ids, output);
+		local_storage.Scan(state.local_storage_state.local_state, state.column_ids, output);
 	}
 }
 
@@ -368,7 +398,6 @@ string TableScanToString(const FunctionData *bind_data_p) {
 static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 
-	D_ASSERT(bind_data.chunk_count == 0);
 	writer.WriteString(bind_data.table->schema->name);
 	writer.WriteString(bind_data.table->name);
 	writer.WriteField<bool>(bind_data.is_index_scan);
@@ -428,6 +457,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_batch_index = TableScanGetBatchIndex;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
+	scan_function.filter_prune = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;

@@ -2,8 +2,6 @@
 # description: Infer COPY TO format test
 # group: [parquet]
 
-require vector_size 512
-
 require parquet
 
 statement ok

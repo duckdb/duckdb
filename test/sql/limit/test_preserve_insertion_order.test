@@ -9,7 +9,12 @@ statement ok
 SET preserve_insertion_order=false
 
 statement ok
-CREATE TABLE integers AS SELECT 1 FROM range(1000000)
+CREATE TABLE integers AS SELECT 1 AS i FROM range(1000000) t(i)
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+----
+1	1	1000000
 
 query I
 SELECT * FROM integers LIMIT 5
@@ -30,7 +35,12 @@ SELECT * FROM integers LIMIT 5 OFFSET 500000
 1
 
 statement ok
-CREATE TABLE integers2 AS SELECT * FROM range(1000000) tbl (i)
+CREATE TABLE integers2 AS SELECT * FROM range(1000000) tbl(i)
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers2
+----
+0	999999	1000000
 
 # we need a rowsort here because we don't preserve insertion order
 # note that rowsort is a string-based sort

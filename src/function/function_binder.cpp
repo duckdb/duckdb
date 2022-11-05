@@ -292,7 +292,7 @@ unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFun
 unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(AggregateFunction bound_function,
                                                                            vector<unique_ptr<Expression>> children,
                                                                            unique_ptr<Expression> filter,
-                                                                           bool is_distinct,
+                                                                           AggregateType aggr_type,
                                                                            unique_ptr<BoundOrderModifier> order_bys) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
@@ -311,7 +311,7 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 	}
 
 	return make_unique<BoundAggregateExpression>(move(bound_function), move(children), move(filter), move(bind_info),
-	                                             is_distinct);
+	                                             aggr_type);
 }
 
 } // namespace duckdb

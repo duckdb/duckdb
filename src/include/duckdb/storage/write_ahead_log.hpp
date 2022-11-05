@@ -34,16 +34,64 @@ class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
 
+class ReplayState {
+public:
+	ReplayState(DatabaseInstance &db, ClientContext &context, Deserializer &source)
+	    : db(db), context(context), source(source), current_table(nullptr), deserialize_only(false),
+	      checkpoint_id(INVALID_BLOCK) {
+	}
+
+	DatabaseInstance &db;
+	ClientContext &context;
+	Deserializer &source;
+	TableCatalogEntry *current_table;
+	bool deserialize_only;
+	block_id_t checkpoint_id;
+
+public:
+	void ReplayEntry(WALType entry_type);
+
+protected:
+	virtual void ReplayCreateTable();
+	void ReplayDropTable();
+	void ReplayAlter();
+
+	void ReplayCreateView();
+	void ReplayDropView();
+
+	void ReplayCreateSchema();
+	void ReplayDropSchema();
+
+	void ReplayCreateType();
+	void ReplayDropType();
+
+	void ReplayCreateSequence();
+	void ReplayDropSequence();
+	void ReplaySequenceValue();
+
+	void ReplayCreateMacro();
+	void ReplayDropMacro();
+
+	void ReplayCreateTableMacro();
+	void ReplayDropTableMacro();
+
+	void ReplayUseTable();
+	void ReplayInsert();
+	void ReplayDelete();
+	void ReplayUpdate();
+	void ReplayCheckpoint();
+};
+
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
 //! the database to the log, which can then be replayed upon startup in case the
 //! server crashes or is shut down.
 class WriteAheadLog {
 public:
-	explicit WriteAheadLog(DatabaseInstance &database);
+	//! Initialize the WAL in the specified directory
+	explicit WriteAheadLog(DatabaseInstance &database, const string &path);
+	virtual ~WriteAheadLog();
 
-	//! Whether or not the WAL has been initialized
-	bool initialized;
 	//! Skip writing to the WAL
 	bool skip_writing;
 
@@ -51,14 +99,12 @@ public:
 	//! Replay the WAL
 	static bool Replay(DatabaseInstance &database, string &path);
 
-	//! Initialize the WAL in the specified directory
-	void Initialize(string &path);
 	//! Returns the current size of the WAL in bytes
 	int64_t GetWALSize();
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
 
-	void WriteCreateTable(TableCatalogEntry *entry);
+	virtual void WriteCreateTable(TableCatalogEntry *entry);
 	void WriteDropTable(TableCatalogEntry *entry);
 
 	void WriteCreateSchema(SchemaCatalogEntry *entry);
@@ -104,7 +150,7 @@ public:
 
 	void WriteCheckpoint(block_id_t meta_block);
 
-private:
+protected:
 	DatabaseInstance &database;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;

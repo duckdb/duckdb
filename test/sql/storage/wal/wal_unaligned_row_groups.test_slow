@@ -1,0 +1,48 @@
+# name: test/sql/storage/wal/wal_unaligned_row_groups.test_slow
+# description: Test loading of unaligned row groups
+# group: [wal]
+
+# load the DB from disk
+load __TEST_DIR__/unaligned_row_groups.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+# create a table with a check constraint
+statement ok
+CREATE TABLE test(a VARCHAR);
+
+loop i 0 2
+
+statement ok
+INSERT INTO test SELECT concat('helloworldxxx', i) from range(150000) tbl(i);
+
+statement ok
+INSERT INTO test SELECT concat('helloworldxxx', i) from range(16534) tbl(i);
+
+statement ok
+INSERT INTO test SELECT concat('helloworldxxx', i) from range(999) tbl(i);
+
+statement ok
+INSERT INTO test SELECT concat('helloworldxxx', i) from range(31) tbl(i);
+
+statement ok
+INSERT INTO test SELECT concat('helloworldxxx', i) from range(34569) tbl(i);
+
+endloop
+
+query IIII
+SELECT MIN(a), MAX(a), COUNT(*), AVG(REPLACE(a, 'helloworldxxx', '')::INT) FROM test
+----
+helloworldxxx0	helloworldxxx99999	404266	59290.629798202174
+
+# reload the database
+restart
+
+query IIII
+SELECT MIN(a), MAX(a), COUNT(*), AVG(REPLACE(a, 'helloworldxxx', '')::INT) FROM test
+----
+helloworldxxx0	helloworldxxx99999	404266	59290.629798202174

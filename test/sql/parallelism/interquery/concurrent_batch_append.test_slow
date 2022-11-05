@@ -1,0 +1,20 @@
+# name: test/sql/parallelism/interquery/concurrent_batch_append.test_slow
+# description: Test concurrent batch appends on persistent storage
+# group: [interquery]
+
+load __TEST_DIR__/concurrent_batch_append.db
+
+statement ok
+CREATE TABLE test(a INTEGER)
+
+concurrentloop i 0 10
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000)
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(a) FROM test
+----
+10000000	4999995000000

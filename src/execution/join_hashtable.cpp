@@ -216,7 +216,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		}
 		info.correlated_payload.SetCardinality(keys);
 		info.correlated_payload.data[0].Reference(keys.data[info.correlated_types.size()]);
-		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload);
+		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload, AggregateType::NON_DISTINCT);
 	}
 
 	// prepare the keys for processing
@@ -332,6 +332,7 @@ void JoinHashTable::InitializePointerTable() {
 		// allocate the HT if not yet done
 		hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
 	}
+	D_ASSERT(hash_map.GetFileBuffer().size >= capacity * sizeof(data_ptr_t));
 
 	// initialize HT with all-zero entries
 	memset(hash_map.Ptr(), 0, capacity * sizeof(data_ptr_t));

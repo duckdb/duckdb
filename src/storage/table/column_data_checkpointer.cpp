@@ -37,7 +37,8 @@ ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
 
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
-	for (auto segment = (ColumnSegment *)owned_segment.get(); segment; segment = (ColumnSegment *)segment->next.get()) {
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto segment = (ColumnSegment *)nodes[segment_idx].node.get();
 		ColumnScanState scan_state;
 		scan_state.current = segment;
 		segment->InitializeScan(scan_state);
@@ -134,6 +135,12 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 		//! Check if the method type is the forced method (if forced is used)
 		bool forced_method_found = compression_functions[i]->type == forced_method;
 		auto score = compression_functions[i]->final_analyze(*analyze_states[i]);
+
+		//! The finalize method can return this value from final_analyze to indicate it should not be used.
+		if (score == DConstants::INVALID_INDEX) {
+			continue;
+		}
+
 		if (score < best_score || forced_method_found) {
 			compression_idx = i;
 			best_score = score;
@@ -154,8 +161,9 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// first we check the current segments
 	// if there are any persistent segments, we will mark their old block ids as modified
 	// since the segments will be rewritten their old on disk data is no longer required
-	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
-	for (auto segment = (ColumnSegment *)owned_segment.get(); segment; segment = (ColumnSegment *)segment->next.get()) {
+	auto &block_manager = col_data.block_manager;
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto segment = (ColumnSegment *)nodes[segment_idx].node.get();
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
 			auto block_id = segment->GetBlockId();
@@ -181,11 +189,12 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
 	best_function->compress_finalize(*compress_state);
 
-	owned_segment.reset();
+	nodes.clear();
 }
 
 bool ColumnDataCheckpointer::HasChanges() {
-	for (auto segment = (ColumnSegment *)owned_segment.get(); segment; segment = (ColumnSegment *)segment->next.get()) {
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto segment = (ColumnSegment *)nodes[segment_idx].node.get();
 		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
@@ -204,10 +213,8 @@ bool ColumnDataCheckpointer::HasChanges() {
 void ColumnDataCheckpointer::WritePersistentSegments() {
 	// all segments are persistent and there are no updates
 	// we only need to write the metadata
-	auto segment = (ColumnSegment *)owned_segment.get();
-	while (segment) {
-		auto next_segment = move(segment->next);
-
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto segment = (ColumnSegment *)nodes[segment_idx].node.get();
 		D_ASSERT(segment->segment_type == ColumnSegmentType::PERSISTENT);
 
 		// set up the data pointer directly using the data from the persistent segment
@@ -223,19 +230,15 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 		state.global_stats->Merge(*segment->stats.statistics);
 
 		// directly append the current segment to the new tree
-		state.new_tree.AppendSegment(move(owned_segment));
+		state.new_tree.AppendSegment(move(nodes[segment_idx].node));
 
 		state.data_pointers.push_back(move(pointer));
-
-		// move to the next segment in the list
-		owned_segment = move(next_segment);
-		segment = (ColumnSegment *)owned_segment.get();
 	}
 }
 
-void ColumnDataCheckpointer::Checkpoint(unique_ptr<SegmentBase> segment) {
-	D_ASSERT(!owned_segment);
-	this->owned_segment = move(segment);
+void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode> nodes) {
+	D_ASSERT(!nodes.empty());
+	this->nodes = move(nodes);
 	// first check if any of the segments have changes
 	if (!HasChanges()) {
 		// no changes: only need to write the metadata for this column

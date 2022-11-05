@@ -1,0 +1,7 @@
+# name: benchmark/clickbench/q01.benchmark
+# description: Run query 01 from the ClickBench benchmark
+# group: [clickbench]
+
+template benchmark/clickbench/clickbench.benchmark.in
+QUERY_NUMBER=1
+QUERY_NUMBER_PADDED=01

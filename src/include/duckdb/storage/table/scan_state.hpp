@@ -13,6 +13,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/storage/table/segment_lock.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -20,11 +21,13 @@ class LocalTableStorage;
 class CollectionScanState;
 class Index;
 class RowGroup;
+class RowGroupCollection;
 class UpdateSegment;
 class TableScanState;
 class ColumnSegment;
 class ValiditySegment;
 class TableFilterSet;
+class ColumnData;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
@@ -53,6 +56,10 @@ struct ColumnScanState {
 	bool initialized = false;
 	//! If this segment has already been checked for skipping purposes
 	bool segment_checked = false;
+	//! The version of the column data that we are scanning.
+	//! This is used to detect if the ColumnData has been changed out from under us during a scan
+	//! If this is the case, we re-initialize the scan
+	idx_t version;
 
 public:
 	//! Move the scan state forward by "count" rows (including all child states)
@@ -100,12 +107,15 @@ private:
 
 class CollectionScanState {
 public:
-	CollectionScanState(TableScanState &parent_p) : row_group_state(*this), max_row(0), parent(parent_p) {};
+	CollectionScanState(TableScanState &parent_p)
+	    : row_group_state(*this), max_row(0), batch_index(0), parent(parent_p) {};
 
 	//! The row_group scan state
 	RowGroupScanState row_group_state;
 	//! The total maximum row index
 	idx_t max_row;
+	//! The current batch index
+	idx_t batch_index;
 
 public:
 	const vector<column_t> &GetColumnIds();
@@ -144,9 +154,12 @@ private:
 };
 
 struct ParallelCollectionScanState {
+	//! The row group collection we are scanning
+	RowGroupCollection *collection;
 	RowGroup *current_row_group;
 	idx_t vector_index;
 	idx_t max_row;
+	idx_t batch_index;
 };
 
 struct ParallelTableScanState {
@@ -160,7 +173,7 @@ class CreateIndexScanState : public TableScanState {
 public:
 	vector<unique_ptr<StorageLockKey>> locks;
 	unique_lock<mutex> append_lock;
-	unique_lock<mutex> delete_lock;
+	SegmentLock segment_lock;
 };
 
 } // namespace duckdb

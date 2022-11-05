@@ -12,6 +12,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/replacement_opens.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/main/error_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -23,12 +24,30 @@ DBConfig::DBConfig() {
 	compression_functions = make_unique<CompressionFunctionSet>();
 	replacement_opens.push_back(ExtensionPrefixReplacementOpen());
 	cast_functions = make_unique<CastFunctionSet>();
+	error_manager = make_unique<ErrorManager>();
+}
+
+DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) {
+	compression_functions = make_unique<CompressionFunctionSet>();
+	if (read_only) {
+		options.access_mode = AccessMode::READ_ONLY;
+	}
+	for (auto &kv : config_dict) {
+		string key = kv.first;
+		string val = kv.second;
+		auto config_property = DBConfig::GetOptionByName(key);
+		if (!config_property) {
+			throw InvalidInputException("Unrecognized configuration property \"%s\"", key);
+		}
+		auto opt_val = Value(val);
+		DBConfig::SetOption(*config_property, opt_val);
+	}
 }
 
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() {
+DatabaseInstance::DatabaseInstance() : is_invalidated(false) {
 }
 
 DatabaseInstance::~DatabaseInstance() {
@@ -53,14 +72,6 @@ DatabaseInstance::~DatabaseInstance() {
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	return *db.GetStorageManager().buffer_manager;
-}
-
-BlockManager &BlockManager::GetBlockManager(DatabaseInstance &db) {
-	return *db.GetStorageManager().block_manager;
-}
-
-BlockManager &BlockManager::GetBlockManager(ClientContext &context) {
-	return BlockManager::GetBlockManager(DatabaseInstance::GetDatabase(context));
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
@@ -149,10 +160,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
-	//	config.create_storage_manager(config.options.database_path,
-	//	                              config.options.access_mode == AccessMode::READ_ONLY);
-	storage = make_unique<StorageManager>(*this, config.options.database_path,
-	                                      config.options.access_mode == AccessMode::READ_ONLY);
+	// TODO: Support an extension here, to generate different storage managers
+	// depending on the DB path structure/prefix.
+	const string dbPath = config.options.database_path;
+	storage = make_unique<SingleFileStorageManager>(*this, dbPath, config.options.access_mode == AccessMode::READ_ONLY);
+
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 	scheduler = make_unique<TaskScheduler>(*this);
@@ -230,17 +242,15 @@ Allocator &Allocator::Get(DatabaseInstance &db) {
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config) {
-	config.options.database_path = new_config.options.database_path;
-	config.options.access_mode = AccessMode::READ_WRITE;
-	if (new_config.options.access_mode != AccessMode::UNDEFINED) {
-		config.options.access_mode = new_config.options.access_mode;
+	config.options = new_config.options;
+	if (config.options.access_mode == AccessMode::UNDEFINED) {
+		config.options.access_mode = AccessMode::READ_WRITE;
 	}
 	if (new_config.file_system) {
 		config.file_system = move(new_config.file_system);
 	} else {
 		config.file_system = make_unique<VirtualFileSystem>();
 	}
-	config.options.maximum_memory = new_config.options.maximum_memory;
 	if (config.options.maximum_memory == (idx_t)-1) {
 		auto memory = FileSystem::GetAvailableMemory();
 		if (memory != DConstants::INVALID_INDEX) {
@@ -253,29 +263,15 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 #else
 		config.options.maximum_threads = 1;
 #endif
-	} else {
-		config.options.maximum_threads = new_config.options.maximum_threads;
 	}
-	config.options.external_threads = new_config.options.external_threads;
-	config.options.load_extensions = new_config.options.load_extensions;
-	config.options.force_compression = new_config.options.force_compression;
 	config.allocator = move(new_config.allocator);
 	if (!config.allocator) {
 		config.allocator = make_unique<Allocator>();
 	}
-	config.options.checkpoint_wal_size = new_config.options.checkpoint_wal_size;
-	config.options.use_direct_io = new_config.options.use_direct_io;
-	config.options.temporary_directory = new_config.options.temporary_directory;
-	config.options.collation = new_config.options.collation;
-	config.options.default_order_type = new_config.options.default_order_type;
-	config.options.default_null_order = new_config.options.default_null_order;
-	config.options.enable_external_access = new_config.options.enable_external_access;
-	config.options.allow_unsigned_extensions = new_config.options.allow_unsigned_extensions;
 	config.replacement_scans = move(new_config.replacement_scans);
-	config.replacement_opens = move(new_config.replacement_opens); // TODO is this okay?
-	config.options.initialize_default_database = new_config.options.initialize_default_database;
-	config.options.disabled_optimizers = move(new_config.options.disabled_optimizers);
+	config.replacement_opens = move(new_config.replacement_opens);
 	config.parser_extensions = move(new_config.parser_extensions);
+	config.error_manager = move(new_config.error_manager);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
@@ -301,8 +297,8 @@ idx_t DuckDB::NumberOfThreads() {
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->loaded_extensions.find(name) != instance->loaded_extensions.end();
 }
-void DuckDB::SetExtensionLoaded(const std::string &name) {
-	instance->loaded_extensions.insert(name);
+void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
+	loaded_extensions.insert(name);
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
