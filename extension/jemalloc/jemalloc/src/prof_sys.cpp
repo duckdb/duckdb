@@ -315,6 +315,8 @@ prof_sys_thread_name_read_impl(char *buf, size_t limit) {
 #else
 	return ENOSYS;
 #endif
+#else
+	return 0;
 #endif
 }
 prof_sys_thread_name_read_t *JET_MUTABLE prof_sys_thread_name_read =
