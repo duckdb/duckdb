@@ -205,7 +205,11 @@ namespace duckdb_jemalloc {
 /* #undef LG_QUANTUM */
 
 /* One page is 2^LG_PAGE bytes. */
+#if defined(__DARWIN__) || defined(__APPLE__)
 #define LG_PAGE 14
+#else
+#define LG_PAGE 12
+#endif
 
 /* Maximum number of regions in a slab. */
 /* #undef CONFIG_LG_SLAB_MAXREGS */
