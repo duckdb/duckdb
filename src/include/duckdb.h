@@ -255,14 +255,18 @@ typedef struct _duckdb_arrow_schema {
 typedef struct _duckdb_arrow_array {
 	void *__arra;
 } * duckdb_arrow_array;
-// typedef struct { void *__lglt; } *duckdb_logical_type;
-// typedef struct { void *__dtck; } *duckdb_data_chunk;
-// typedef struct { void *__vctr; } *duckdb_vector;
-// typedef struct { void *__val; } *duckdb_value;
-typedef void *duckdb_logical_type;
-typedef void *duckdb_data_chunk;
-typedef void *duckdb_vector;
-typedef void *duckdb_value;
+typedef struct _duckdb_logical_type {
+	void *__lglt;
+} * duckdb_logical_type;
+typedef struct _duckdb_data_chunk {
+	void *__dtck;
+} * duckdb_data_chunk;
+typedef struct _duckdb_vector {
+	void *__vctr;
+} * duckdb_vector;
+typedef struct _duckdb_value {
+	void *__val;
+} * duckdb_value;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 typedef enum {
