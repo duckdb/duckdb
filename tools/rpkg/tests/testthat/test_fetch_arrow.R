@@ -74,10 +74,7 @@ test_that("duckdb_fetch_arrow() record_batch_reader ", {
   res <- dbSendQuery(con, "SELECT * FROM t", arrow = TRUE)
   record_batch_reader <- duckdb_fetch_record_batch(res,1024)
   cur_batch <- record_batch_reader$read_next_batch()
-  expect_equal(1024, cur_batch$num_rows)
-
-  cur_batch <- record_batch_reader$read_next_batch()
-  expect_equal(1024, cur_batch$num_rows)
+  expect_equal(2048, cur_batch$num_rows)
 
   cur_batch <- record_batch_reader$read_next_batch()
   expect_equal(952, cur_batch$num_rows)
