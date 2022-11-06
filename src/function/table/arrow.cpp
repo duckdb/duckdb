@@ -13,9 +13,8 @@
 
 namespace duckdb {
 
-LogicalType GetArrowLogicalType(ArrowSchema &schema,
-                                std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-                                idx_t col_idx) {
+LogicalType ArrowTableFunction::GetArrowLogicalType(
+    ArrowSchema &schema, std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx) {
 	auto format = string(schema.format);
 	if (arrow_convert_data.find(col_idx) == arrow_convert_data.end()) {
 		arrow_convert_data[col_idx] = make_unique<ArrowConvertData>();
@@ -167,8 +166,7 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 	}
 }
 
-// Renames repeated columns and case sensitive columns
-void RenameArrowColumns(vector<string> &names) {
+void ArrowTableFunction::RenameArrowColumns(vector<string> &names) {
 	unordered_map<string, idx_t> name_map;
 	for (auto &column_name : names) {
 		// put it all lower_case
@@ -247,8 +245,8 @@ idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const Func
 	return context.db->NumberOfThreads();
 }
 
-bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p, ArrowScanLocalState &state,
-                                ArrowScanGlobalState &parallel_state) {
+bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
+                                                    ArrowScanLocalState &state, ArrowScanGlobalState &parallel_state) {
 	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
 	if (parallel_state.done) {
 		return false;
@@ -340,8 +338,9 @@ unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContex
 	return make_unique<NodeStatistics>();
 }
 
-idx_t ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p, LocalTableFunctionState *local_state,
-                         GlobalTableFunctionState *global_state) {
+idx_t ArrowTableFunction::ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+                                             LocalTableFunctionState *local_state,
+                                             GlobalTableFunctionState *global_state) {
 	auto &state = (ArrowScanLocalState &)*local_state;
 	return state.batch_index;
 }
