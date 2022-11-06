@@ -19,6 +19,8 @@ class DatabaseInstance;
 enum class ErrorType : uint16_t {
 	// error message types
 	UNSIGNED_EXTENSION = 0,
+	INVALIDATED_TRANSACTION = 1,
+	INVALIDATED_DATABASE = 2,
 
 	// this should always be the last value
 	ERROR_COUNT,
@@ -44,13 +46,18 @@ public:
 		return FormatExceptionRecursive(error_type, values, params...);
 	}
 
+	template <typename... Args>
+	static string FormatException(ClientContext &context, ErrorType error_type, Args... params) {
+		return Get(context).FormatException(error_type, params...);
+	}
+
 	DUCKDB_API static string InvalidUnicodeError(const string &input, const string &context);
 
 	//! Adds a custom error for a specific error type
 	void AddCustomError(ErrorType type, string new_error);
 
-	DUCKDB_API ErrorManager &Get(ClientContext &context);
-	DUCKDB_API ErrorManager &Get(DatabaseInstance &context);
+	DUCKDB_API static ErrorManager &Get(ClientContext &context);
+	DUCKDB_API static ErrorManager &Get(DatabaseInstance &context);
 
 private:
 	map<ErrorType, string> custom_errors;

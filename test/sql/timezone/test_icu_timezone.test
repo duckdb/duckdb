@@ -117,7 +117,7 @@ America/Catamarca	America/Catamarca	-03:00:00
 America/Cayenne	America/Cayenne	-03:00:00
 America/Cayman	America/Cayman	-05:00:00
 America/Chicago	CST	-06:00:00
-America/Chihuahua	America/Chihuahua	-07:00:00
+America/Chihuahua	America/Chihuahua	-06:00:00
 America/Coral_Harbour	America/Coral_Harbour	-05:00:00
 America/Cordoba	America/Cordoba	-03:00:00
 America/Costa_Rica	America/Costa_Rica	-06:00:00
@@ -199,7 +199,7 @@ America/North_Dakota/Beulah	America/North_Dakota/Beulah	-06:00:00
 America/North_Dakota/Center	America/North_Dakota/Center	-06:00:00
 America/North_Dakota/New_Salem	America/North_Dakota/New_Salem	-06:00:00
 America/Nuuk	America/Nuuk	-03:00:00
-America/Ojinaga	America/Ojinaga	-07:00:00
+America/Ojinaga	America/Ojinaga	-06:00:00
 America/Panama	America/Panama	-05:00:00
 America/Pangnirtung	America/Pangnirtung	-05:00:00
 America/Paramaribo	America/Paramaribo	-03:00:00
@@ -666,3 +666,13 @@ query I
 SELECT '2022-10-29 00:00:00+00'::TIMESTAMPTZ;
 ----
 2022-10-29 03:00:00 Asia/Amman
+
+# 2022f
+# Chihuahua moves to year-round -06 on 2022-10-30.  
+statement ok
+SET TimeZone = 'America/Chihuahua';
+
+query I
+SELECT '2022-11-01 00:00:00+00'::TIMESTAMPTZ;
+----
+2022-10-31 18:00:00 America/Chihuahua
