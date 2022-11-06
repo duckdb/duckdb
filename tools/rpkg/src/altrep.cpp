@@ -50,8 +50,7 @@ void *AltrepString::Dataptr(SEXP x, Rboolean writeable) {
 				SET_STRING_ELT(R_altrep_data2(x), row_idx, NA_STRING);
 			} else {
 				SET_STRING_ELT(R_altrep_data2(x), row_idx,
-				               Rf_mkCharLenCE(wrapper->string_data[row_idx].GetDataUnsafe(),
-				                              wrapper->string_data[row_idx].GetSize(), CE_UTF8));
+				               Rf_mkCharCE(wrapper->string_data[row_idx].GetDataUnsafe(), CE_UTF8));
 			}
 		}
 		wrapper->string_data.reset();
@@ -72,7 +71,7 @@ SEXP AltrepString::Elt(SEXP x, R_xlen_t i) {
 	if (!wrapper->mask_data[i]) {
 		return NA_STRING;
 	}
-	return Rf_mkCharLenCE(wrapper->string_data[i].GetDataUnsafe(), wrapper->string_data[i].GetSize(), CE_UTF8);
+	return Rf_mkCharCE(wrapper->string_data[i].GetDataUnsafe(), CE_UTF8);
 }
 
 void AltrepString::SetElt(SEXP x, R_xlen_t i, SEXP val) {
