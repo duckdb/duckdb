@@ -40,9 +40,6 @@ string ErrorManager::InvalidUnicodeError(const string &input, const string &cont
 	}
 	string base_message;
 	switch (reason) {
-	case UnicodeInvalidReason::NULL_BYTE:
-		base_message = "Null-byte (\\0)";
-		break;
 	case UnicodeInvalidReason::BYTE_MISMATCH:
 		base_message = "Invalid unicode (byte sequence mismatch)";
 		break;
