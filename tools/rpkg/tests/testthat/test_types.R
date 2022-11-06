@@ -8,6 +8,8 @@ test_that("test_all_types() output", {
   withr::local_options(digits.secs = 6)
 
   expect_snapshot({
-    as.list(dbGetQuery(con, "SELECT * EXCLUDE (timestamp_tz, time_tz, map) FROM test_all_types()"))
+    as.list(dbGetQuery(con, "SELECT * EXCLUDE (timestamp_tz, time_tz, map) REPLACE(replace(varchar, chr(0), '') AS varchar) FROM test_all_types()"))
   })
+
+  expect_error(dbGetQuery(con, "SELECT chr(0)"))
 })
