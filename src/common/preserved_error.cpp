@@ -30,7 +30,7 @@ const string &PreservedError::Message() {
 }
 
 string PreservedError::SanitizeErrorMessage(string error) {
-	return StringUtil::Replace(error, string("\0", 1), "\\0");
+	return StringUtil::Replace(move(error), string("\0", 1), "\\0");
 }
 
 void PreservedError::Throw(const string &prepended_message) const {

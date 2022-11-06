@@ -10,6 +10,4 @@ test_that("test_all_types() output", {
   expect_snapshot({
     as.list(dbGetQuery(con, "SELECT * EXCLUDE (timestamp_tz, time_tz, map) REPLACE(replace(varchar, chr(0), '') AS varchar) FROM test_all_types()"))
   })
-
-  expect_error(dbGetQuery(con, "SELECT chr(0)"))
 })
