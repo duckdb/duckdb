@@ -27,6 +27,7 @@ static string_t TranslateScalarFunction(const string_t &haystack, const string_t
 
 	// Reuse the buffer
 	result.clear();
+	result.reserve(size_haystack);
 
 	idx_t i = 0, j = 0;
 	int sz = 0, c_sz = 0;
