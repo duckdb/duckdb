@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_4903.test
+# name: test/sql/copy/parquet/parquet_5209.test
 # description: Issue #4442: Parquet reader converts timestamp to i64 *sometimes*
 # group: [parquet]
 
