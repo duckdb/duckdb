@@ -30,8 +30,7 @@ Transaction::Transaction(weak_ptr<ClientContext> context_p, transaction_t start_
                          timestamp_t start_timestamp, idx_t catalog_version)
     : context(move(context_p)), start_time(start_time), transaction_id(transaction_id), commit_id(0),
       highest_active_query(0), active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp),
-      catalog_version(catalog_version), is_invalidated(false), undo_buffer(context.lock()),
-      storage(make_unique<LocalStorage>(*this)) {
+      catalog_version(catalog_version), undo_buffer(context.lock()), storage(make_unique<LocalStorage>(*this)) {
 }
 
 Transaction::~Transaction() {
@@ -138,11 +137,8 @@ void Transaction::Cleanup() {
 	undo_buffer.Cleanup();
 }
 
-void Transaction::Invalidate() {
-	is_invalidated = true;
-}
-bool Transaction::IsInvalidated() {
-	return is_invalidated;
+ValidChecker &ValidChecker::Get(Transaction &transaction) {
+	return transaction.transaction_validity;
 }
 
 } // namespace duckdb
