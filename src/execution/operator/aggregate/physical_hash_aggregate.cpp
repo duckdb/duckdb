@@ -690,6 +690,10 @@ public:
 
 public:
 	void Schedule() override {
+		//! Now that all tables are combined, it's time to do the distinct aggregations
+		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
+		this->InsertEvent(move(new_event));
+
 		vector<unique_ptr<Task>> tasks;
 		for (idx_t i = 0; i < op.groupings.size(); i++) {
 			auto &grouping = op.groupings[i];
@@ -706,10 +710,6 @@ public:
 
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
-
-		//! Now that all tables are combined, it's time to do the distinct aggregations
-		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
-		this->InsertEvent(move(new_event));
 	}
 };
 
