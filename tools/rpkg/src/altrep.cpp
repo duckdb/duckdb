@@ -45,7 +45,7 @@ SEXP ToRString(string_t input) {
 	auto data = input.GetDataUnsafe();
 	auto len = input.GetSize();
 	idx_t has_null_byte = 0;
-	for(idx_t c = 0; c < len; c++) {
+	for (idx_t c = 0; c < len; c++) {
 		has_null_byte += data[c] == 0;
 	}
 	if (has_null_byte) {
