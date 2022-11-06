@@ -13,6 +13,9 @@ static DefaultError internal_errors[] = {
     {ErrorType::UNSIGNED_EXTENSION,
      "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned extensions "
      "are disabled by configuration (allow_unsigned_extensions)"},
+    {ErrorType::INVALIDATED_TRANSACTION, "Current transaction is aborted (please ROLLBACK)"},
+    {ErrorType::INVALIDATED_DATABASE, "Failed: database has been invalidated because of a previous fatal error. The "
+                                      "database must be restarted prior to being used again.\nOriginal error: \"%s\""},
     {ErrorType::INVALID, nullptr}};
 
 string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<ExceptionFormatValue> &values) {
