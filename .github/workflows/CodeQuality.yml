@@ -133,7 +133,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_JEMALLOC_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
           (cd tools/pythonpkg/tests/fast && python3 -m pytest)
           (cd tools/pythonpkg/tests/coverage && python3 -m pytest)
           build/coverage/test/unittest

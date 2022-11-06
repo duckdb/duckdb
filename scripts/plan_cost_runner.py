@@ -41,8 +41,8 @@ def parse_args():
 
 def init_db(cli, dbname, benchmark_dir):
     print(f"INITIALIZING {dbname} ...")
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, capture_output=True)
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, capture_output=True)
+    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
     print("INITIALIZATION DONE")
 
 
@@ -115,6 +115,10 @@ def main():
     print("RUNNING BENCHMARK QUERIES")
     for f in tqdm(files):
         query_name = f.split("/")[-1].replace(".sql", "")
+
+        if query_name == "07c":
+            continue # FIXME: heap-use-after free on low-memory systems
+
         with open(f, "r") as file:
             query = file.read()
 
