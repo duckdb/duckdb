@@ -1,0 +1,21 @@
+# name: test/sql/copy/parquet/parquet_4903.test
+# description: Issue #4442: Parquet reader converts timestamp to i64 *sometimes*
+# group: [parquet]
+
+require parquet
+
+statement ok
+create table test_5209 as from range(10000)
+
+statement ok
+COPY test_5209 TO '__TEST_DIR__/test_5209.parquet' (ROW_GROUP_SIZE 1000);
+
+
+query II
+SELECT total_compressed_size,total_uncompressed_size FROM parquet_metadata('__TEST_DIR__/test_5209.parquet')
+----
+8980	16413
+8239	16413
+8237	16413
+8237	16413
+7277	14492
