@@ -198,7 +198,7 @@ list<ColumnDataCollection> BoxRenderer::FetchRenderCollections(ClientContext &co
 }
 
 string ConvertRenderValue(const string &input) {
-	return StringUtil::Replace(input, "\n", "\\n");
+	return StringUtil::Replace(StringUtil::Replace(input, "\n", "\\n"), string("\0", 1), "\\0");
 }
 
 string BoxRenderer::GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r) {

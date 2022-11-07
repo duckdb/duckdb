@@ -1449,7 +1449,7 @@ normal:
 	} while (ReadBuffer(start));
 	goto final_state;
 add_value:
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -1462,7 +1462,7 @@ add_value:
 add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
 	offset = 0;
@@ -1600,7 +1600,7 @@ final_state:
 	}
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 	// final stage, only reached after parsing the file is finished
@@ -1660,7 +1660,7 @@ normal:
 	// file ends during normal scan: go to end state
 	goto final_state;
 add_value:
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -1673,7 +1673,7 @@ add_value:
 add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
 	offset = 0;
@@ -1784,7 +1784,7 @@ final_state:
 
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 
@@ -1885,8 +1885,8 @@ bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_ch
 	}
 }
 
-void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions,
-                                 bool has_quotes) {
+void BufferedCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes) {
+	auto length = str_val.GetSize();
 	if (length == 0 && column == 0) {
 		row_empty = true;
 	} else {
@@ -1915,18 +1915,16 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 	// insert the line number into the chunk
 	idx_t row_entry = parse_chunk.size();
 
-	str_val[length] = '\0';
-
 	// test against null string, but only if the value was not quoted
 	if ((!has_quotes || sql_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
-	    strcmp(options.null_str.c_str(), str_val) == 0) {
+	    Equals::Operation(str_val, string_t(options.null_str))) {
 		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
 	} else {
 		auto &v = parse_chunk.data[column];
 		auto parse_data = FlatVector::GetData<string_t>(v);
 		if (!escape_positions.empty()) {
 			// remove escape characters (if any)
-			string old_val = str_val;
+			string old_val = str_val.GetString();
 			string new_val = "";
 			idx_t prev_pos = 0;
 			for (idx_t i = 0; i < escape_positions.size(); i++) {
@@ -1943,7 +1941,7 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 			escape_positions.clear();
 			parse_data[row_entry] = StringVector::AddStringOrBlob(v, string_t(new_val));
 		} else {
-			parse_data[row_entry] = string_t(str_val, length);
+			parse_data[row_entry] = str_val;
 		}
 	}
 

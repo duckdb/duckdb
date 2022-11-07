@@ -259,7 +259,7 @@ private:
 	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message);
 
 	//! Adds a value to the current row
-	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
+	void AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
 	bool AddRow(DataChunk &insert_chunk, idx_t &column);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
