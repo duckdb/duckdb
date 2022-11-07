@@ -1,3 +1,6 @@
+#ifdef USE_DUCKDB_SHELL_WRAPPER
+#include "duckdb_shell_wrapper.h"
+#endif
 #include "sqlite3.h"
 #include "sql_auto_complete_extension.hpp"
 #include "udf_struct_sqlite3.h"
@@ -1040,12 +1043,6 @@ int sqlite3_complete(const char *zSql) {
 	return state == 1;
 }
 
-// checks if input ends with ;
-int sqlite3_complete_old(const char *sql) {
-	fprintf(stderr, "sqlite3_complete: unsupported. '%s'\n", sql);
-	return -1;
-}
-
 // length of varchar or blob value
 int sqlite3_column_bytes(sqlite3_stmt *pStmt, int iCol) {
 	// fprintf(stderr, "sqlite3_column_bytes: unsupported.\n");
@@ -1139,12 +1136,7 @@ const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	return NULL;
 }
 
-int sqlite3_status64(int op, sqlite3_int64 *pCurrent, sqlite3_int64 *pHighwater, int resetFlag) {
-	fprintf(stderr, "sqlite3_status64: unsupported.\n");
-	return -1;
-}
-
-int sqlite3_status64(sqlite3 *, int op, int *pCur, int *pHiwtr, int resetFlg) {
+SQLITE_API int sqlite3_status64(int op, sqlite3_int64 *pCurrent, sqlite3_int64 *pHighwater, int resetFlag) {
 	fprintf(stderr, "sqlite3_status64: unsupported.\n");
 	return -1;
 }
@@ -1663,7 +1655,6 @@ SQLITE_API int sqlite3_result_zeroblob64(sqlite3_context *, sqlite3_uint64 n) {
 	return -1;
 }
 
-// TODO complain
 const void *sqlite3_value_blob(sqlite3_value *pVal) {
 	return sqlite3_value_text(pVal);
 }
