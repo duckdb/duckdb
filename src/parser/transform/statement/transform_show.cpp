@@ -7,6 +7,21 @@
 
 namespace duckdb {
 
+static void TransformShowName(unique_ptr<PragmaStatement> &result, const string &name) {
+	auto &info = *result->info;
+
+	if (name == "tables") {
+		// show all tables
+		info.name = "show_tables";
+	} else if (name == "__show_tables_expanded") {
+		info.name = "show_tables_expanded";
+	} else {
+		// show one specific table
+		info.name = "show";
+		info.parameters.emplace_back(name);
+	}
+}
+
 unique_ptr<SQLStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *node) {
 	// we transform SHOW x into PRAGMA SHOW('x')
 
@@ -29,18 +44,8 @@ unique_ptr<SQLStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *n
 	auto result = make_unique<PragmaStatement>();
 	auto &info = *result->info;
 
-	string name = stmt->name;
-	if (name == "tables") {
-		// show all tables
-		info.name = "show_tables";
-	} else if (name == "__show_tables_expanded") {
-		info.name = "show_tables_expanded";
-	} else {
-		// show one specific table
-		info.name = "show";
-		info.parameters.emplace_back(stmt->name);
-	}
-
+	auto show_name = stmt->name;
+	TransformShowName(result, show_name);
 	return move(result);
 }
 

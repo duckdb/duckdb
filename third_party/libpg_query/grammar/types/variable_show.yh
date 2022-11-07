@@ -1,1 +1,2 @@
 %type <str> var_name
+%type <str> var_name_describe
