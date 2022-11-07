@@ -1,0 +1,39 @@
+# name: test/sql/aggregate/distinct/grouped/memory_consumption.test
+# group: [grouped]
+
+require tpch
+
+statement ok
+pragma enable_verification
+
+statement ok
+pragma verify_parallelism
+
+# This same test will fail on current master (01c074b55e), as it requires 3.2gb minimum
+statement ok
+pragma memory_limit='2.7gb'
+
+statement ok
+CALL dbgen(sf=1);
+
+query II
+select
+	l_comment,
+	count(distinct l_orderkey),
+from
+	lineitem
+group by 1
+order by all desc
+limit 10
+;
+----
+zzle? slyly final platelets sleep quickly. 	1
+zzle? blithely regular foxes upon the quick	1
+zzle? blithely ironi	1
+zzle: silently ex	1
+zzle: pending i	1
+zzle. unusual, special requests	1
+zzle. theodol	1
+zzle. special, unusua	1
+zzle. special sentiments along	1
+zzle. slyly pendi	1
