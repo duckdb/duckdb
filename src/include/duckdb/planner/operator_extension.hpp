@@ -14,9 +14,6 @@
 
 namespace duckdb {
 
-// forward declaration to break circular inclusion
-class LogicalExtensionOperator;
-
 //! The OperatorExtensionInfo holds static information relevant to the operator extension
 struct OperatorExtensionInfo {
 	DUCKDB_API virtual ~OperatorExtensionInfo() {
