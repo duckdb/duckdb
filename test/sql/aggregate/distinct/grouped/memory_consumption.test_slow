@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/distinct/grouped/memory_consumption.test
+# name: test/sql/aggregate/distinct/grouped/memory_consumption.test_slow
 # group: [grouped]
 
 require tpch

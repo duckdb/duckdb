@@ -126,6 +126,9 @@ public:
 	static void SetMultiScan(GlobalSinkState &state);
 
 private:
+	//! When we only have distinct aggregates, we can delay adding groups to the main ht
+	bool CanSkipRegularSink() const;
+
 	//! Finalize the distinct aggregates
 	SinkFinalizeType FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                  GlobalSinkState &gstate) const;
