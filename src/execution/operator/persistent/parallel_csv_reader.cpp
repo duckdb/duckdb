@@ -185,8 +185,8 @@ normal : {
 
 add_value : {
 	/* state: Add value to string vector */
-	AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions, has_quotes,
-	         false);
+	AddValue(string_t(buffer + start_buffer, position_buffer - start_buffer - offset), column, escape_positions,
+	         has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -201,8 +201,8 @@ add_row : {
 	/* state: Add Row to Parse chunk */
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position_buffer] == '\r';
-	AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions, has_quotes,
-	         false);
+	AddValue(string_t(buffer + start_buffer, position_buffer - start_buffer - offset), column, escape_positions,
+	         has_quotes);
 	if (try_add_line) {
 		bool success = column == insert_chunk.ColumnCount();
 		if (success) {
@@ -351,8 +351,8 @@ final_state : {
 		if (column > 0 || position_buffer > start_buffer) {
 			// remaining values to be added to the chunk
 			D_ASSERT(column == insert_chunk.ColumnCount() - 1);
-			AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions,
-			         has_quotes, false);
+			AddValue(string_t(buffer + start_buffer, position_buffer - start_buffer - offset), column, escape_positions,
+			         has_quotes);
 			if (try_add_line) {
 				bool success = column == sql_types.size();
 				if (success) {

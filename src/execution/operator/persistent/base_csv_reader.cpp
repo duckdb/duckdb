@@ -153,8 +153,8 @@ bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const Log
 	}
 }
 
-void BaseCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions,
-                             bool has_quotes, bool null_terminate) {
+void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes) {
+	auto length = str_val.GetSize();
 	if (length == 0 && column == 0) {
 		row_empty = true;
 	} else {
@@ -183,20 +183,16 @@ void BaseCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<
 	// insert the line number into the chunk
 	idx_t row_entry = parse_chunk.size();
 
-	if (null_terminate) {
-		str_val[length] = '\0';
-	}
-
 	// test against null string, but only if the value was not quoted
 	if ((!has_quotes || sql_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
-	    strcmp(options.null_str.c_str(), str_val) == 0) {
+	    Equals::Operation(str_val, string_t(options.null_str))) {
 		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
 	} else {
 		auto &v = parse_chunk.data[column];
 		auto parse_data = FlatVector::GetData<string_t>(v);
 		if (!escape_positions.empty()) {
 			// remove escape characters (if any)
-			string old_val(str_val, length);
+			string old_val = str_val.GetString();
 			string new_val = "";
 			idx_t prev_pos = 0;
 			for (idx_t i = 0; i < escape_positions.size(); i++) {
@@ -213,7 +209,7 @@ void BaseCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<
 			escape_positions.clear();
 			parse_data[row_entry] = StringVector::AddStringOrBlob(v, string_t(new_val));
 		} else {
-			parse_data[row_entry] = string_t(str_val, length);
+			parse_data[row_entry] = str_val;
 		}
 	}
 
