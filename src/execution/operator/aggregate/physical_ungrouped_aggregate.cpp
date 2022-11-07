@@ -460,11 +460,6 @@ public:
 	void Schedule() override {
 		auto &distinct_state = *gstate.distinct_state;
 		auto &distinct_data = *op.distinct_data;
-
-		//! Now that all tables are combined, it's time to do the distinct aggregations
-		auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
-		this->InsertEvent(move(new_event));
-
 		vector<unique_ptr<Task>> tasks;
 		for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
 			distinct_data.radix_tables[table_idx]->ScheduleTasks(pipeline->executor, shared_from_this(),
@@ -472,6 +467,12 @@ public:
 		}
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
+	}
+
+	void FinishEvent() override {
+		//! Now that all tables are combined, it's time to do the distinct aggregations
+		auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
+		this->InsertEvent(move(new_event));
 	}
 };
 

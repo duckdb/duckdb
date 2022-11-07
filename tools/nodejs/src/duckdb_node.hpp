@@ -113,8 +113,10 @@ public:
 public:
 	Napi::Value Prepare(const Napi::CallbackInfo &info);
 	Napi::Value Exec(const Napi::CallbackInfo &info);
-	Napi::Value Register(const Napi::CallbackInfo &info);
-	Napi::Value Unregister(const Napi::CallbackInfo &info);
+	Napi::Value RegisterUdf(const Napi::CallbackInfo &info);
+	Napi::Value UnregisterUdf(const Napi::CallbackInfo &info);
+	Napi::Value RegisterBuffer(const Napi::CallbackInfo &info);
+	Napi::Value UnRegisterBuffer(const Napi::CallbackInfo &info);
 
 	static bool HasInstance(Napi::Value val) {
 		Napi::Env env = val.Env();
@@ -131,6 +133,8 @@ public:
 	std::unique_ptr<duckdb::Connection> connection;
 	Database *database_ref;
 	std::unordered_map<std::string, duckdb_node_udf_function_t> udfs;
+	std::unordered_map<std::string, std::vector<std::pair<uint64_t, uint64_t>>> buffers;
+	std::unordered_map<std::string, Napi::Reference<Napi::Array>> array_references;
 };
 
 struct StatementParam;
@@ -146,6 +150,7 @@ public:
 
 public:
 	Napi::Value All(const Napi::CallbackInfo &info);
+	Napi::Value ArrowIPCAll(const Napi::CallbackInfo &info);
 	Napi::Value Each(const Napi::CallbackInfo &info);
 	Napi::Value Run(const Napi::CallbackInfo &info);
 	Napi::Value Finish(const Napi::CallbackInfo &info);
@@ -172,6 +177,8 @@ public:
 public:
 	static Napi::FunctionReference constructor;
 	Napi::Value NextChunk(const Napi::CallbackInfo &info);
+	Napi::Value NextIpcBuffer(const Napi::CallbackInfo &info);
+	duckdb::shared_ptr<ArrowSchema> cschema;
 
 private:
 	Database *database_ref;

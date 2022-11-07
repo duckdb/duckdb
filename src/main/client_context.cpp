@@ -42,6 +42,7 @@
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/progress_bar.hpp"
+#include "duckdb/main/error_manager.hpp"
 
 namespace duckdb {
 
@@ -111,7 +112,7 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 		// fatal exceptions invalidate the entire database
 		result.SetError(PreservedError(ex));
 		auto &db = DatabaseInstance::GetDatabase(*this);
-		db.Invalidate();
+		ValidChecker::Invalidate(db, ex.what());
 	} catch (const Exception &ex) {
 		result.SetError(PreservedError(ex));
 	} catch (std::exception &ex) {
@@ -127,12 +128,13 @@ void ClientContext::BeginTransactionInternal(ClientContextLock &lock, bool requi
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
 	auto &db = DatabaseInstance::GetDatabase(*this);
-	if (db.IsInvalidated()) {
-		throw FatalException("Failed: database has been invalidated!");
+	if (ValidChecker::IsInvalidated(db)) {
+		throw FatalException(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_DATABASE,
+		                                                   ValidChecker::InvalidatedMessage(db)));
 	}
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
-	    transaction.ActiveTransaction().IsInvalidated()) {
-		throw Exception("Failed: transaction has been invalidated!");
+	    ValidChecker::IsInvalidated(transaction.ActiveTransaction())) {
+		throw Exception(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
 	}
 	active_query = make_unique<ActiveQueryContext>();
 	if (transaction.IsAutoCommit()) {
@@ -175,12 +177,12 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 				}
 			} else if (invalidate_transaction) {
 				D_ASSERT(!success);
-				ActiveTransaction().Invalidate();
+				ValidChecker::Invalidate(ActiveTransaction(), "Failed to commit");
 			}
 		}
 	} catch (FatalException &ex) {
 		auto &db = DatabaseInstance::GetDatabase(*this);
-		db.Invalidate();
+		ValidChecker::Invalidate(db, ex.what());
 		error = PreservedError(ex);
 	} catch (const Exception &ex) {
 		error = PreservedError(ex);
@@ -359,8 +361,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
                                                                        PendingQueryParameters parameters) {
 	D_ASSERT(active_query);
 	auto &statement = *statement_p;
-	if (ActiveTransaction().IsInvalidated() && statement.properties.requires_valid_transaction) {
-		throw Exception("Current transaction is aborted (please ROLLBACK)");
+	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
+		throw Exception(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
 	}
 	auto &db_config = DBConfig::GetConfig(*this);
 	if (db_config.options.access_mode == AccessMode::READ_ONLY && !statement.properties.read_only) {
@@ -414,7 +416,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		// fatal exceptions invalidate the entire database
 		result.SetError(PreservedError(ex));
 		auto &db = DatabaseInstance::GetDatabase(*this);
-		db.Invalidate();
+		ValidChecker::Invalidate(db, ex.what());
 	} catch (const Exception &ex) {
 		result.SetError(PreservedError(ex));
 	} catch (std::exception &ex) {
@@ -668,7 +670,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
 		auto &db = DatabaseInstance::GetDatabase(*this);
-		db.Invalidate();
+		ValidChecker::Invalidate(db, ex.what());
 		result = make_unique<PendingQueryResult>(PreservedError(ex));
 		return result;
 	} catch (const Exception &ex) {
@@ -701,9 +703,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		invalidate_query = false;
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
-		auto &db = DatabaseInstance::GetDatabase(*this);
 		if (!config.query_verification_enabled) {
-			db.Invalidate();
+			auto &db = DatabaseInstance::GetDatabase(*this);
+			ValidChecker::Invalidate(db, ex.what());
 		}
 		result = make_unique<PendingQueryResult>(PreservedError(ex));
 	} catch (const Exception &ex) {
@@ -890,8 +892,8 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
                                                      bool requires_valid_transaction) {
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
-	    transaction.ActiveTransaction().IsInvalidated()) {
-		throw Exception("Failed: transaction has been invalidated!");
+	    ValidChecker::IsInvalidated(ActiveTransaction())) {
+		throw Exception(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
 	}
 	// check if we are on AutoCommit. In this case we should start a transaction
 	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
@@ -908,13 +910,13 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		throw;
 	} catch (FatalException &ex) {
 		auto &db = DatabaseInstance::GetDatabase(*this);
-		db.Invalidate();
+		ValidChecker::Invalidate(db, ex.what());
 		throw;
 	} catch (std::exception &ex) {
 		if (require_new_transaction) {
 			transaction.Rollback();
 		} else {
-			ActiveTransaction().Invalidate();
+			ValidChecker::Invalidate(ActiveTransaction(), ex.what());
 		}
 		throw;
 	}
