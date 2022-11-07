@@ -76,7 +76,6 @@ public:
 	AllocatedData Allocate(idx_t size) {
 		return AllocatedData(*this, AllocateData(size), size);
 	}
-
 	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
 		return (data_ptr_t)malloc(size);
 	}
