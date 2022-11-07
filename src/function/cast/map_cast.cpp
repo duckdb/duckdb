@@ -17,7 +17,7 @@ public:
 	}
 };
 
-unique_ptr<BoundCastData> BindMapToMapCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+static unique_ptr<BoundCastData> BindMapToMapCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	vector<BoundCastInfo> child_cast_info;
 	auto source_key = LogicalType::LIST(MapType::KeyType(source));
 	auto target_key = LogicalType::LIST(MapType::KeyType(target));

@@ -11,3 +11,24 @@ query I
 SELECT MAP(['a', 'b', 'c'], [1, 2, NULL])::MAP(VARCHAR, BIGINT)
 ----
 {a=1, b=2, c=NULL}
+
+
+query I
+SELECT MAP([1, 2, 3], [1, 2, NULL])::MAP(VARCHAR, BIGINT)
+----
+{1=1, 2=2, 3=NULL}
+
+query I
+SELECT MAP([[1, 2, 3], [0], [123]], [1.0, 2.1, 4.9])::MAP(VARCHAR[], TINYINT)
+----
+{[1, 2, 3]=1, [0]=2, [123]=5}
+
+query I
+SELECT MAP([1, 2, 'hi'], [1.0, 2.1, 4.9])::MAP(VARCHAR, TINYINT)
+----
+{1=1, 2=2, hi=5}
+
+query I
+SELECT MAP([1, 2, 3], ['A', 'B', 'C'])::MAP(TINYINT, VARCHAR)
+----
+{1=A, 2=B, 3=C}

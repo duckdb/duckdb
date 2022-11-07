@@ -1,0 +1,17 @@
+
+
+statement ok
+CREATE TABLE try_cast_tbl (col1 VARCHAR);
+
+statement ok
+INSERT INTO try_cast_tbl VALUES ('{1=2, XXX=2}'), ('{hello=DuckDB}'), ('{3=oops, 5=5 44=4.0}'), ('{12345678901=0}'), ('{5=6, 7=7000}'), ('{3 0, 1=1}');
+
+query I
+SELECT TRY_CAST(col1 AS MAP(INT, INT)) FROM try_cast_tbl;
+----
+{1=2, NULL}
+{NULL}
+{3=NULL, 44=4}
+{NULL=0}
+{5=6, 7=7000}
+{NULL, 1=1}
