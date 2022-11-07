@@ -150,13 +150,13 @@ describe('open/close', function() {
         });
     });
 
-    describe('closing with unfinalized statements', function(done) {
+    describe('closing with unfinalized statements', function() {
         var completed = false;
         var completedSecond = false;
         var closed = false;
 
         var db;
-        before(function() {
+        before(function(done) {
             db = new sqlite3.Database(':memory:', done);
         });
 

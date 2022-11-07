@@ -90,7 +90,7 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 			}
 			str_len++;
 			i += 3;
-		} else if (data[i] >= 32 && data[i] <= 127) {
+		} else if (data[i] <= 127) {
 			str_len++;
 		} else {
 			string error = "Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
@@ -124,7 +124,7 @@ void Blob::ToBlob(string_t str, data_ptr_t output) {
 			D_ASSERT(data[i + 1] == 'x');
 			output[blob_idx++] = (byte_a << 4) + byte_b;
 			i += 3;
-		} else if (data[i] >= 32 && data[i] <= 127) {
+		} else if (data[i] <= 127) {
 			output[blob_idx++] = data_t(data[i]);
 		} else {
 			throw ConversionException("Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
