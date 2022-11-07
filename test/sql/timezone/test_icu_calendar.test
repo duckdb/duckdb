@@ -103,3 +103,12 @@ SELECT TIMESTAMPTZ '-276069-9-30 0:0:00 America/Whitehorse';
 ----
 276070-10-01 (BC) 01:07:14-07:52
 
+# Issue #5237
+statement ok
+PRAGMA CALENDAR='japanese';
+
+query I
+SELECT strftime(TIMESTAMPTZ '-23831-1-15 2:5:17 America/La_Paz',TIMETZ '0:8:29 America/Cayman');
+----
+00:08:29+00
+
