@@ -302,13 +302,6 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 
 			// Because the 'input' chunk needs to be re-used after this, we need to create
 			// a duplicate of it, that we can apply the filter to
-
-			if (non_distinct_filter.empty()) {
-				// Because we don't do the regular Sink at all
-				// We need to also sink the groups that would get filtered out otherwise
-				// Otherwise the group for those will never get initialized
-			}
-
 			DataChunk filtered_input;
 			filtered_input.InitializeEmpty(input.GetTypes());
 
