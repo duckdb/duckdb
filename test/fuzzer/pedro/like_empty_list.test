@@ -11,6 +11,11 @@ SELECT '1' LIKE [];
 false
 
 query I
+SELECT [] LIKE 1;
+----
+false
+
+query I
 SELECT [] LIKE [];
 ----
 true
