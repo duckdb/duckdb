@@ -15,13 +15,13 @@
 namespace duckdb {
 
 // Hugeint arithmetic
-hugeint_t operator*(const hugeint_t &h, const double &d) {
+static hugeint_t operator*(const hugeint_t &h, const double &d) {
 	D_ASSERT(d >= 0 && d <= 1);
 	return Hugeint::Convert(Hugeint::Cast<double>(h) * d);
 }
 
 // Interval arithmetic
-interval_t operator*(const interval_t &i, const double &d) {
+static interval_t operator*(const interval_t &i, const double &d) {
 	D_ASSERT(d >= 0 && d <= 1);
 	return Interval::FromMicro(std::llround(Interval::GetMicro(i) * d));
 }

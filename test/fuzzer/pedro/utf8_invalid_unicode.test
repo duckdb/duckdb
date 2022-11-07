@@ -39,6 +39,12 @@ SELECT decode('\xF0\x90\x8D\x88'::BLOB)::VARCHAR ILIKE '𐍈';
 ----
 1
 
+# NULL character is supported
+query I
+SELECT upper(decode('\xF0\x9F\x98\x84\x00'::BLOB)::VARCHAR);
+----
+😄\0
+
 # invalid utf8, invalid first byte
 statement error
 SELECT upper(decode('\xE0\x9F\x98\x84'::BLOB)::VARCHAR);
@@ -50,10 +56,6 @@ SELECT upper(decode('\xF0\xDF\x98\x84'::BLOB)::VARCHAR);
 # invalid utf8, incomplete sequence
 statement error
 SELECT upper(decode('\xF0\x9F\x98'::BLOB)::VARCHAR);
-
-# NULL character not supported
-statement error
-SELECT upper(decode('\xF0\x9F\x98\x84\x00'::BLOB)::VARCHAR);
 
 # invalid utf8, UTF-16 surrogate character
 statement error

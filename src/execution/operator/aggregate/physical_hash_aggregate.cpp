@@ -735,7 +735,9 @@ public:
 
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
+	}
 
+	void FinishEvent() override {
 		//! Now that all tables are combined, it's time to do the distinct aggregations
 		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
 		this->InsertEvent(move(new_event));

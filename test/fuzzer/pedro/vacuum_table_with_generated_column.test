@@ -23,7 +23,7 @@ INSERT INTO test SELECT range % 5000 FROM range(10000);
 query T
 SELECT stats(x) FROM test LIMIT 1;
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9809]
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9435]
 
 query T
 SELECT stats(y) FROM test LIMIT 1;

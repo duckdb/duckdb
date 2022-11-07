@@ -86,6 +86,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include "duckdb_shell_wrapper.h"
 #include "sqlite3.h"
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;

@@ -62,7 +62,7 @@ query IIII
 select stats_min, stats_max, stats_min_value, stats_max_value from parquet_metadata('data/parquet-testing/varchar_stats.parquet');
 ----
 NULL	NULL	hello world	world hello
-NULL	NULL	hello\x00world	world\x00hello
+NULL	NULL	hello\0world	world\0hello
 
 query II
 select * from 'data/parquet-testing/varchar_stats.parquet';
