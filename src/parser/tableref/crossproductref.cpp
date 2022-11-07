@@ -5,7 +5,7 @@
 namespace duckdb {
 
 string CrossProductRef::ToString() const {
-	return left->ToString() + ", " + right->ToString();
+	return left->ToString() + " CROSS JOIN " + right->ToString();
 }
 
 bool CrossProductRef::Equals(const TableRef *other_p) const {
