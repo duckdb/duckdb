@@ -123,7 +123,7 @@ static vector<CatalogEntry *> GetAllTables(ClientContext &context, bool for_tabl
 	}
 
 	// check the temp schema as well
-	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
+	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 		if (!entry->internal || for_table_names) {
 			result.push_back(entry);
 		}
