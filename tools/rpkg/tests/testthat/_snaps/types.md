@@ -213,8 +213,6 @@
     Code
       as.list(dbGetQuery(con,
         "SELECT timestamp_ns, timestamp_array, timestamptz_array FROM test_all_types()"))
-    Warning <simpleWarning>
-      Coercing nanoseconds to a lower resolution may result in a loss of data.
     Output
       $timestamp_ns
       [1] "1677-09-21 00:12:43.145223 UTC" "2262-04-11 23:47:16.854776 UTC"
@@ -252,8 +250,6 @@
     Code
       as.list(dbGetQuery(con,
         "SELECT timestamp_ns, timestamp_array, timestamptz_array FROM test_all_types()"))
-    Warning <simpleWarning>
-      Coercing nanoseconds to a lower resolution may result in a loss of data.
     Output
       $timestamp_ns
       [1] "1677-09-21 00:12:44.145223 UTC" "2262-04-11 23:47:16.854776 UTC"

@@ -357,8 +357,6 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
 		ConvertTimestampVector<LogicalTypeId::TIMESTAMP_NS>(src_vec, n, dest, dest_offset);
-		std::call_once(nanosecond_coercion_warning, Rf_warning,
-		               "Coercing nanoseconds to a lower resolution may result in a loss of data.");
 		break;
 	case LogicalTypeId::DATE: {
 		auto src_data = FlatVector::GetData<date_t>(src_vec);

@@ -458,12 +458,7 @@ test_that("duckdb can read arrow timestamps", {
     tbl <- arrow::arrow_table(t = arrow::Array$create(timestamp, type = arrow::timestamp(unit)))
     duckdb_register_arrow(con, "timestamps", tbl)
 
-    if (unit == "ns") {
-      # warning when precision loss
-      expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") })
-    } else {
-      expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") }, regexp = NA)
-    }
+    expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") }, regexp = NA)
     expect_equal(res[[1]], as.POSIXct(as.character(timestamp), tz = "UTC"))
 
     res <- dbGetQuery(con, "SELECT year(t), month(t), day(t), hour(t), minute(t), second(t) FROM timestamps")
