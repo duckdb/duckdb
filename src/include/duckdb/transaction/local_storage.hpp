@@ -35,6 +35,10 @@ public:
 	void Rollback();
 
 private:
+	//! Prepare a write to disk
+	bool PrepareWrite();
+
+private:
 	//! The table
 	DataTable *table;
 	//! The partial block manager (if we created one yet)

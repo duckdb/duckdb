@@ -30,17 +30,24 @@ OptimisticDataWriter::OptimisticDataWriter(DataTable *table, OptimisticDataWrite
 OptimisticDataWriter::~OptimisticDataWriter() {
 }
 
-void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
-	// we finished writing a complete row group
-	// check if we should pre-emptively write it to disk
+bool OptimisticDataWriter::PrepareWrite() {
+	// check if we should pre-emptively write the table to disk
 	if (table->info->IsTemporary() || StorageManager::GetStorageManager(table->db).InMemory()) {
-		return;
+		return false;
 	}
 	// we should! write the second-to-last row group to disk
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
 		partial_manager = make_unique<PartialBlockManager>(block_manager);
+	}
+	return true;
+}
+
+void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
+	// we finished writing a complete row group
+	if (!PrepareWrite()) {
+		return;
 	}
 	// flush second-to-last row group
 	auto row_group = row_groups.GetRowGroup(-2);
@@ -70,8 +77,9 @@ void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool forc
 			// no partial manager - nothing to flush
 			return;
 		}
-		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
-		partial_manager = make_unique<PartialBlockManager>(block_manager);
+		if (!PrepareWrite()) {
+			return;
+		}
 	}
 	// flush the last row group
 	FlushToDisk(row_groups.GetRowGroup(-1));
