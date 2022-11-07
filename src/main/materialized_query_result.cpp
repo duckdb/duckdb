@@ -28,7 +28,7 @@ string MaterializedQueryResult::ToString() {
 					result += "\t";
 				}
 				auto val = row.GetValue(col_idx);
-				result += val.IsNull() ? "NULL" : val.ToString();
+				result += val.IsNull() ? "NULL" : StringUtil::Replace(val.ToString(), string("\0", 1), "\\0");
 			}
 			result += "\n";
 		}
