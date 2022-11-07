@@ -79,7 +79,7 @@ struct BufferedCSVReaderOptions {
 	//! Expected number of columns
 	idx_t num_cols = 0;
 	//! Number of samples to buffer
-	idx_t buffer_size = STANDARD_VECTOR_SIZE * 100;
+	idx_t buffer_size = STANDARD_VECTOR_SIZE * 50;
 	//! Specifies the string that represents a null value
 	string null_str;
 	//! Whether file is compressed or not, and if so which compression type
@@ -259,7 +259,7 @@ private:
 	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message);
 
 	//! Adds a value to the current row
-	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
+	void AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
 	bool AddRow(DataChunk &insert_chunk, idx_t &column);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk

@@ -196,24 +196,29 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
-if (NOT DEFINED GIT_COMMIT_HASH)
+find_package(Git)
+if(Git_FOUND)
+  if (NOT DEFINED GIT_COMMIT_HASH)
+    execute_process(
+            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE GIT_RESULT
+            OUTPUT_VARIABLE GIT_COMMIT_HASH
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+  endif()
   execute_process(
-          COMMAND git log -1 --format=%h
+          COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          RESULT_VARIABLE GIT_RESULT
-          OUTPUT_VARIABLE GIT_COMMIT_HASH
+          OUTPUT_VARIABLE GIT_LAST_TAG
           OUTPUT_STRIP_TRAILING_WHITESPACE)
+  execute_process(
+          COMMAND ${GIT_EXECUTABLE} describe --tags --long
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          OUTPUT_VARIABLE GIT_ITERATION
+          OUTPUT_STRIP_TRAILING_WHITESPACE)
+else()
+  message("Git NOT FOUND")
 endif()
-execute_process(
-        COMMAND git describe --tags --abbrev=0
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_LAST_TAG
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(
-        COMMAND git describe --tags --long
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_ITERATION
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 if(GIT_RESULT EQUAL "0")
   string(REGEX REPLACE "v([0-9]+).[0-9]+.[0-9]+" "\\1" DUCKDB_MAJOR_VERSION "${GIT_LAST_TAG}")
@@ -238,6 +243,8 @@ else()
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
 endif()
 
+message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}")
+
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
        FALSE)
@@ -257,6 +264,7 @@ option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
 option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
 option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
+option(BUILD_JEMALLOC_EXTENSION "Build the JEMalloc extension." FALSE)
 option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
 option(BUILD_INET_EXTENSION "Build the inet extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
@@ -411,6 +419,16 @@ if(UNIX AND NOT APPLE)
   set(OS_NAME "linux") # sorry BSD
 endif()
 
+if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
+  # always build jemalloc for linux
+  set(BUILD_JEMALLOC_EXTENSION 1)
+elseif(OS_NAME STREQUAL "windows")
+  if(BUILD_JEMALLOC_EXTENSION EQUAL 1)
+    # have to throw an error because this will crash at runtime
+    message(FATAL_ERROR "The jemalloc extension is not supported on Windows")
+  endif()
+endif()
+
 
 include_directories(src/include)
 include_directories(third_party/fsst)
@@ -556,6 +574,11 @@ function(add_extension_definitions)
     add_definitions(-DBUILD_JSON_EXTENSION=${BUILD_JSON_EXTENSION})
   endif()
 
+  if(${BUILD_JEMALLOC_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/jemalloc/include)
+    add_definitions(-DBUILD_JEMALLOC_EXTENSION=${BUILD_JEMALLOC_EXTENSION})
+  endif()
+
   if(${BUILD_EXCEL_EXTENSION})
     include_directories(${PROJECT_SOURCE_DIR}/extension/excel/include)
     add_definitions(-DBUILD_EXCEL_EXTENSION=${BUILD_EXCEL_EXTENSION})
@@ -605,6 +628,10 @@ function(add_extension_dependencies LIBRARY)
     add_dependencies(${LIBRARY} json_extension)
   endif()
 
+  if(${BUILD_JEMALLOC_EXTENSION})
+    add_dependencies(${LIBRARY} jemalloc_extension)
+  endif()
+
   if(${BUILD_EXCEL_EXTENSION})
     add_dependencies(${LIBRARY} excel_extension)
   endif()
@@ -620,6 +647,11 @@ function(add_extension_dependencies LIBRARY)
 endfunction()
 
 function(link_extension_libraries LIBRARY)
+  # special case for our static-only jemalloc extension
+  if(${BUILD_JEMALLOC_EXTENSION})
+    target_link_libraries(${LIBRARY} jemalloc_extension)
+  endif()
+
   if(${DISABLE_BUILTIN_EXTENSIONS})
     return()
   endif()

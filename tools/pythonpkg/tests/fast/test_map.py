@@ -79,7 +79,7 @@ class TestMap(object):
 
         testrel.map(return_dataframe).df().equals(pd.DataFrame({'A' : [1]}))
         
-        with pytest.raises(duckdb.InvalidInputException, match='UDF returned more than 1024 rows, which is not allowed.'):
+        with pytest.raises(duckdb.InvalidInputException, match='UDF returned more than 2048 rows, which is not allowed.'):
             testrel.map(return_big_dataframe).df()
 
         empty_rel.map(return_dataframe).df().equals(pd.DataFrame({'A' : []}))

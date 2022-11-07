@@ -95,7 +95,7 @@ describe("TypeScript declarataions", function () {
   });
 
   it("typescript: ternary int udf", function (done) {
-    db.register(
+    db.register_udf(
       "udf",
       "integer",
       (x: number, y: number, z: number) => x + y + z
@@ -107,7 +107,7 @@ describe("TypeScript declarataions", function () {
         assert.equal(rows[0].v, 42);
       }
     );
-    db.unregister("udf", done);
+    db.unregister_udf("udf", done);
   });
   it("typescript: retrieve 100,000 rows with Statement#each", function (done) {
     var total = 100000;
