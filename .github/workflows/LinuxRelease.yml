@@ -552,6 +552,8 @@ jobs:
     env:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
       S3_TEST_SERVER_AVAILABLE: 1
       GEN: ninja
 
