@@ -15,10 +15,6 @@ namespace duckdb {
 
 class CSVBuffer {
 public:
-	//! Initial buffer read size; can be extended for long lines
-	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
-	//! Larger buffer size for non disk files
-	static constexpr idx_t INITIAL_BUFFER_SIZE_LARGE = 10000000; // 10MB
 	//! Colossal buffer size for multi-threading
 	static constexpr idx_t INITIAL_BUFFER_SIZE_COLOSSAL = 32000000; // 32MB
 
@@ -52,8 +48,5 @@ private:
 	idx_t start_position = 0;
 	//! If this is the last buffer of the CSV File
 	bool last_buffer = false;
-	//	bool large_buffers = mode == ParserMode::PARSING && !file_handle->OnDiskFile() && file_handle->CanSeek();
-	//	//	idx_t buffer_read_size = large_buffers ? INITIAL_BUFFER_SIZE_LARGE : INITIAL_BUFFER_SIZE;
-	//	idx_t buffer_read_size = bytes_per_thread;
 };
 } // namespace duckdb

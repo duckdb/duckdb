@@ -224,7 +224,11 @@ public:
 		estimated_linenr = rows_to_skip;
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
-		bytes_per_local_state = buffer_size / MaxThreads();
+		if (buffer_size < file_size) {
+			bytes_per_local_state = buffer_size / MaxThreads();
+		} else {
+			bytes_per_local_state = file_size / MaxThreads();
+		}
 		current_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
 		next_buffer = current_buffer->Next(*file_handle, buffer_size);
 	}

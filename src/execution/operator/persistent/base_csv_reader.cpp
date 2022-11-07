@@ -320,9 +320,9 @@ void BaseCSVReader::VerifyUTF8(idx_t col_idx) {
 	}
 }
 
-void BaseCSVReader::Flush(DataChunk &insert_chunk) {
+bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 	if (parse_chunk.size() == 0) {
-		return;
+		return true;
 	}
 
 	bool conversion_error_ignored = false;
@@ -357,6 +357,9 @@ void BaseCSVReader::Flush(DataChunk &insert_chunk) {
 			}
 			if (success) {
 				continue;
+			}
+			if (try_add_line) {
+				return false;
 			}
 			if (options.ignore_errors) {
 				conversion_error_ignored = true;
@@ -417,5 +420,6 @@ void BaseCSVReader::Flush(DataChunk &insert_chunk) {
 		insert_chunk.Slice(succesful_rows, sel_size);
 	}
 	parse_chunk.Reset();
+	return true;
 }
 } // namespace duckdb

@@ -92,7 +92,7 @@ protected:
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
 	bool AddRow(DataChunk &insert_chunk, idx_t &column);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
-	void Flush(DataChunk &insert_chunk);
+	bool Flush(DataChunk &insert_chunk, bool try_add_line = false);
 
 	unique_ptr<CSVFileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
 

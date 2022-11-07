@@ -40,13 +40,6 @@ struct CSVBufferRead {
 	idx_t buffer_end;
 	idx_t batch_index;
 	idx_t estimated_linenr;
-
-public:
-	void Reset() {
-		buffer.reset();
-		buffer_start = 0;
-		buffer_end = NumericLimits<idx_t>::Maximum();
-	}
 };
 
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
@@ -90,14 +83,14 @@ private:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 	//! Sets Position depending on the byte_start of this thread
-	bool SetPosition();
+	bool SetPosition(DataChunk &insert_chunk);
 	//! When a buffer finishes reading its piece, it still can try to scan up to the real end of the buffer
 	//! Up to finding a new line. This function sets the buffer_end and marks a boolean variable
 	//! when changing the buffer end the first time.
 	//! It returns FALSE if the parser should jump to the final state of parsing or not
 	bool BufferRemainder();
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
-	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message);
+	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
 };
 
 } // namespace duckdb

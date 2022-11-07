@@ -10,6 +10,9 @@
 
 #include "csv_buffer.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

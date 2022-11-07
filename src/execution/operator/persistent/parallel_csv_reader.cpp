@@ -43,7 +43,7 @@ void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	InitInsertChunkIdx(sql_types.size());
 }
 
-bool ParallelCSVReader::SetPosition() {
+bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	position_set = position_buffer;
 	if (start_buffer == position_buffer && start_buffer == buffer_read.buffer->GetStart()) {
 		// Buffer always start in a new line
@@ -57,14 +57,31 @@ bool ParallelCSVReader::SetPosition() {
 		}
 	}
 	// We have to move position up to next new line
-	for (; position_buffer < end_buffer; position_buffer++) {
-		if (StringUtil::CharacterIsOnlyNewline(buffer[position_buffer])) {
-			position_buffer++;
+	bool successfully_read_first_line = false;
+	DataChunk first_line_chunk;
+	first_line_chunk.Initialize(allocator, insert_chunk.GetTypes());
+	idx_t end_buffer_real = end_buffer;
+	while (!successfully_read_first_line) {
+		for (; position_buffer < end_buffer; position_buffer++) {
+			if (StringUtil::CharacterIsOnlyNewline(buffer[position_buffer])) {
+				position_buffer++;
+				break;
+			}
+		}
+		if (position_buffer >= end_buffer) {
 			break;
 		}
+		position_set = position_buffer;
+		start_buffer = position_buffer;
+		// We check if we can add this line
+		string error_message;
+		successfully_read_first_line = TryParseSimpleCSV(first_line_chunk, error_message, true);
+
+		position_buffer = position_set;
+		start_buffer = position_set;
+		end_buffer = end_buffer_real;
 	}
 	position_set = position_buffer;
-	start_buffer = position_buffer;
 	bool not_read_anything = position_buffer >= end_buffer;
 	return !not_read_anything;
 }
@@ -106,7 +123,8 @@ bool ParallelCSVReader::BufferRemainder() {
 	return true;
 }
 
-bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message) {
+bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line) {
+
 	// used for parsing algorithm
 	D_ASSERT(end_buffer <= buffer_size);
 	bool finished_chunk = false;
@@ -114,11 +132,14 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	idx_t offset = 0;
 	bool has_quotes = false;
 	vector<idx_t> escape_positions;
-
-	if (!SetPosition()) {
-		// This means the buffer size does not contain a new line
-		return true;
+	if (start_buffer == buffer_read.buffer_start && !try_add_line) {
+		// First time reading this buffer piece
+		if (!SetPosition(insert_chunk)) {
+			// This means the buffer size does not contain a new line
+			return true;
+		}
 	}
+
 	// start parsing the first value
 	goto value_start;
 
@@ -151,7 +172,7 @@ normal : {
 			goto add_value;
 		} else if (StringUtil::CharacterIsOnlyNewline(buffer[position_buffer])) {
 			// newline: add row
-			D_ASSERT(column == insert_chunk.ColumnCount() - 1);
+			D_ASSERT(try_add_line || column == insert_chunk.ColumnCount() - 1);
 			goto add_row;
 		}
 	}
@@ -182,7 +203,19 @@ add_row : {
 	bool carriage_return = buffer[position_buffer] == '\r';
 	AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions, has_quotes,
 	         false);
-	finished_chunk = AddRow(insert_chunk, column);
+	if (try_add_line) {
+		bool success = column == insert_chunk.ColumnCount();
+		if (success) {
+			AddRow(insert_chunk, column);
+			success = Flush(insert_chunk);
+		}
+		column = 0;
+		parse_chunk.Reset();
+		reached_remainder_state = false;
+		return success;
+	} else {
+		finished_chunk = AddRow(insert_chunk, column);
+	}
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -220,6 +253,9 @@ in_quotes:
 	}
 	if (!BufferRemainder()) {
 		if (buffer_read.buffer->IsCSVFileLastBuffer()) {
+			if (try_add_line) {
+				return false;
+			}
 			// still in quoted state at the end of the file or at the end of a buffer when running multithreaded, error:
 			throw InvalidInputException("Error in file \"%s\" on line %s: unterminated quotes. (%s)", options.file_path,
 			                            GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
@@ -317,7 +353,19 @@ final_state : {
 			D_ASSERT(column == insert_chunk.ColumnCount() - 1);
 			AddValue(buffer + start_buffer, position_buffer - start_buffer - offset, column, escape_positions,
 			         has_quotes, false);
-			AddRow(insert_chunk, column);
+			if (try_add_line) {
+				bool success = column == sql_types.size();
+				if (success) {
+					AddRow(insert_chunk, column);
+					success = Flush(insert_chunk);
+				}
+				column = 0;
+				parse_chunk.Reset();
+				reached_remainder_state = false;
+				return success;
+			} else {
+				AddRow(insert_chunk, column);
+			}
 		}
 	}
 	// flush the parsed chunk and finalize parsing
