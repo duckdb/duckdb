@@ -13,6 +13,7 @@
 
 namespace duckdb {
 
+struct FileHandle;
 class FileOpener;
 class FileSystem;
 
@@ -58,7 +59,6 @@ private:
 	void OpenJSONFile();
 
 private:
-
 	//! Initial buffer capacity (4MB)
 	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 4194304;
 

@@ -17,6 +17,9 @@
 
 namespace duckdb {
 
+//! This allows us to use the & operator to check if the type is contained in the set
+enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
+
 class BoundAggregateExpression;
 
 struct AggregateInputData {

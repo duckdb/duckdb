@@ -1,5 +1,6 @@
 #include "json_common.hpp"
 #include "json_functions.hpp"
+#include "json_scan.hpp"
 
 namespace duckdb {
 
@@ -10,11 +11,6 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 	auto &bind_data = (JSONScanData &)*data_p.bind_data;
 	auto &gstate = (JSONScanGlobalState &)*data_p.global_state;
 	auto &lstate = (JSONScanLocalState &)*data_p.local_state;
-
-	if (!lstate.initialized) {
-		lstate.local_buffer = gstate.json_reader->AllocateBuffer();
-		lstate.initialized = true;
-	}
 }
 
 TableFunction GetReadJSONObjectsTableFunction(bool list_parameter) {

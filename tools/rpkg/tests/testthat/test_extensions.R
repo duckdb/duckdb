@@ -4,7 +4,7 @@ library("DBI")
 library("testthat")
 
 load_extension <- function(extension_name) {
-  con <- dbConnect(duckdb::duckdb(config=list("allow_unsigned_extensions"="true")))
+  con <- dbConnect(duckdb(config=list("allow_unsigned_extensions"="true")))
   matches <- list.files(pattern='*.duckdb_extension', recursive=FALSE, full.names=TRUE)
   matches <- c(matches, list.files(path='/tmp/duckdb_extensions', pattern='*.duckdb_extension', recursive=TRUE, full.names=TRUE))
   matches <- c(matches, list.files(path=system.file(package = 'duckdb'), pattern='*.duckdb_extension', recursive=TRUE, full.names=TRUE))

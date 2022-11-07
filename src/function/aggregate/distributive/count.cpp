@@ -81,7 +81,7 @@ AggregateFunction CountStarFun::GetFunction() {
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats,
                                                NodeStatistics *node_stats) {
-	if (!expr.distinct && child_stats[0] && !child_stats[0]->CanHaveNull()) {
+	if (!expr.IsDistinct() && child_stats[0] && !child_stats[0]->CanHaveNull()) {
 		// count on a column without null values: use count star
 		expr.function = CountStarFun::GetFunction();
 		expr.function.name = "count_star";

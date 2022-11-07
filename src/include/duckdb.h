@@ -750,6 +750,16 @@ If the conversion fails because the double value is too big the result will be 0
 */
 DUCKDB_API duckdb_hugeint duckdb_double_to_hugeint(double val);
 
+/*!
+Converts a double value to a duckdb_decimal object.
+
+If the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.
+
+* val: The double value.
+* returns: The converted `duckdb_decimal` element.
+*/
+DUCKDB_API duckdb_decimal duckdb_double_to_decimal(double val, uint8_t width, uint8_t scale);
+
 //===--------------------------------------------------------------------===//
 // Decimal Helpers
 //===--------------------------------------------------------------------===//
@@ -863,6 +873,11 @@ Binds an duckdb_hugeint value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             duckdb_hugeint val);
+/*!
+Binds a duckdb_decimal value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_decimal(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                            duckdb_decimal val);
 
 /*!
 Binds an uint8_t value to the prepared statement at the specified index.

@@ -87,8 +87,8 @@ ORDER BY tstz
 2022-03-05 13:29:17.877 America/Los_Angeles	CNT
 2022-03-05 13:59:17.877 America/Los_Angeles	America/Martinique
 2022-03-05 14:59:17.877 America/Los_Angeles	America/Louisville
-2022-03-05 15:59:17.877 America/Los_Angeles	America/Rankin_Inlet
-2022-03-05 16:59:17.877 America/Los_Angeles	America/Shiprock
+2022-03-05 15:59:17.877 America/Los_Angeles	America/Rainy_River
+2022-03-05 16:59:17.877 America/Los_Angeles	America/Whitehorse
 2022-03-05 17:59:17.877 America/Los_Angeles	Mexico/BajaNorte
 2022-03-05 18:59:17.877 America/Los_Angeles	America/Sitka
 2022-03-05 19:29:17.877 America/Los_Angeles	Pacific/Marquesas
@@ -132,8 +132,8 @@ ORDER BY tstz
 2022-03-05 13:29:17.877 America/Los_Angeles	CNT
 2022-03-05 13:59:17.877 America/Los_Angeles	PRT
 2022-03-05 14:59:17.877 America/Los_Angeles	America/Panama
-2022-03-05 15:59:17.877 America/Los_Angeles	America/Regina
-2022-03-05 16:59:17.877 America/Los_Angeles	Canada/Yukon
+2022-03-05 15:59:17.877 America/Los_Angeles	America/Rankin_Inlet
+2022-03-05 16:59:17.877 America/Los_Angeles	Etc/GMT+7
 2022-03-05 17:59:17.877 America/Los_Angeles	PST
 2022-03-05 18:59:17.877 America/Los_Angeles	America/Nome
 2022-03-05 19:29:17.877 America/Los_Angeles	Pacific/Marquesas

@@ -13,7 +13,7 @@ test_that("read_only flag and shutdown works as expected", {
 
 
   # 2nd: start two parallel read-only references
-  drv <- duckdb::duckdb(dbdir, read_only = TRUE)
+  drv <- duckdb(dbdir, read_only = TRUE)
   con <- dbConnect(drv)
 
   res <- dbReadTable(con, "iris")
