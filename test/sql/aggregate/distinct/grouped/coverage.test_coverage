@@ -64,7 +64,7 @@ SELECT COUNT(distinct i % 5) from tbl group by j;
 # Correlated subquery
 
 query I
-SELECT COUNT(distinct i%5) from tbl group by j;
+SELECT COUNT(distinct (SELECT i%5)) from tbl group by j;
 ----
 1
 1
@@ -75,7 +75,7 @@ SELECT COUNT(distinct i%5) from tbl group by j;
 ## Aggregate with multiple parameters
 
 query I
-SELECT ARG_MIN(distinct i%5, i) from tbl group by j order by all;
+SELECT ARG_MIN(distinct i%5, i) from tbl group by j;
 ----
 0
 1
