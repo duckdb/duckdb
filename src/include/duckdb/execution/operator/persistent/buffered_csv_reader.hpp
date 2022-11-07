@@ -79,7 +79,7 @@ struct BufferedCSVReaderOptions {
 	//! Expected number of columns
 	idx_t num_cols = 0;
 	//! Number of samples to buffer
-	idx_t buffer_size = STANDARD_VECTOR_SIZE * 100;
+	idx_t buffer_size = STANDARD_VECTOR_SIZE * 50;
 	//! Specifies the string that represents a null value
 	string null_str;
 	//! Whether file is compressed or not, and if so which compression type
