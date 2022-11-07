@@ -281,7 +281,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	}
 }
 
-TEST_CASE("Test buffer manager variable size allocations", "[art][.]") {
+TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 	// make sure the database does not exist
@@ -292,10 +292,9 @@ TEST_CASE("Test buffer manager variable size allocations", "[art][.]") {
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
 
-	auto requested_size = 424242;
+	idx_t requested_size = 424242;
 	auto block = buffer_manager.RegisterMemory(requested_size, false);
-	auto actual_size = buffer_manager.GetUsedMemory();
-	D_ASSERT(actual_size >= requested_size + Storage::BLOCK_HEADER_SIZE);
+	D_ASSERT(buffer_manager.GetUsedMemory() >= requested_size + Storage::BLOCK_HEADER_SIZE);
 
 	block.reset();
 	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
