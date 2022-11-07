@@ -7,6 +7,10 @@ PRAGMA enable_verification
 
 statement error
 SELECT (SELECT 1 WHERE INTERVAL '1' DAY HAVING EXISTS (SELECT 1));
+----
+ConversionError
 
 statement error
 SELECT 1 FROM (SELECT 2) t0, (SELECT 3) t1 WHERE INTERVAL '1' DAYS USING SAMPLE (1 ROWS) REPEATABLE (1);
+----
+ConversionError
