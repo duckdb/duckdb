@@ -187,14 +187,12 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
 #endif
 
 int32_t TaskScheduler::NumberOfThreads() {
-	lock_guard<mutex> t(thread_lock);
 	auto &config = DBConfig::GetConfig(db);
 	return threads.size() + config.options.external_threads + 1;
 }
 
 void TaskScheduler::SetThreads(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
-	lock_guard<mutex> t(thread_lock);
 	if (n < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
 	}
