@@ -30,21 +30,18 @@ if proc.returncode is not None and proc.returncode != 0:
 	exit(1)
 
 test_cases = []
-first_line = True
-for line in stdout.splitlines():
-	if first_line:
-		first_line = False
-		continue
-	if len(line.strip()) == 0:
+for line in stdout.splitlines()[1:]:
+	if not line.strip():
 		continue
 	splits = line.rsplit('\t', 1)
 	if file_contains is not None:
 		if not os.path.isfile(splits[0]):
 			continue
+		print(splits[0])
 		try:
 			with open(splits[0], 'r') as f:
 				text = f.read()
-		except:
+		except UnicodeDecodeError:
 			continue
 		if file_contains not in text:
 			continue
