@@ -1,5 +1,5 @@
-# name: test/sql/copy/parquet/parquet_5209.test
-# description: Issue #4442: Parquet reader converts timestamp to i64 *sometimes*
+# name: test/sql/copy/parquet/parquet_4903.test
+# description: Issue #5209: Parquet writer did not set total_uncompressed_size in column chunk statistics
 # group: [parquet]
 
 require parquet
