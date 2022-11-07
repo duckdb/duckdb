@@ -39,6 +39,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 
 	// turn the inner join into a cross product
 	auto cross_product = LogicalCrossProduct::Create(move(op->children[0]), move(op->children[1]));
+//	if (cross_product->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+//		return cross_product;
+//	}
 	// then push down cross product
 	return PushdownCrossProduct(move(cross_product));
 }
