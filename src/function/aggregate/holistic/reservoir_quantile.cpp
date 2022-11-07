@@ -339,6 +339,7 @@ static double CheckReservoirQuantile(const Value &quantile_val) {
 
 unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(arguments.size() >= 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -355,8 +356,8 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 		}
 	}
 
-	if (arguments.size() <= 2) {
-		arguments.pop_back();
+	if (arguments.size() == 2) {
+		Function::EraseArgument(function, arguments, arguments.size() - 1);
 		return make_unique<ReservoirQuantileBindData>(quantiles, 8192);
 	}
 	if (!arguments[2]->IsFoldable()) {
