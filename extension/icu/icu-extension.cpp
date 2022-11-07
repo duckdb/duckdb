@@ -207,20 +207,22 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 		output.SetValue(0, index, Value(utf8));
 
 		//	We don't have the zone tree for determining abbreviated names,
-		//	so the SHORT name is the first equivalent TZ without a slash.
-		icu::UnicodeString short_id = *long_id;
+		//	so the SHORT name is the shortest, lexicographically first equivalent TZ without a slash.
+		std::string short_id;
+		long_id->toUTF8String(short_id);
 		const auto nIDs = icu::TimeZone::countEquivalentIDs(*long_id);
 		for (int32_t idx = 0; idx < nIDs; ++idx) {
 			const auto eid = icu::TimeZone::getEquivalentID(*long_id, idx);
-			if (eid.indexOf(char16_t('/')) < 0) {
-				short_id = eid;
-				break;
+			if (eid.indexOf(char16_t('/')) >= 0) {
+				continue;
+			}
+			utf8.clear();
+			eid.toUTF8String(utf8);
+			if (utf8.size() < short_id.size() || (utf8.size() == short_id.size() && utf8 < short_id)) {
+				short_id = utf8;
 			}
 		}
-
-		utf8.clear();
-		short_id.toUTF8String(utf8);
-		output.SetValue(1, index, Value(utf8));
+		output.SetValue(1, index, Value(short_id));
 
 		std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
 		int32_t raw_offset_ms;
