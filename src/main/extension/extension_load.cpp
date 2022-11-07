@@ -37,7 +37,8 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);
 		}
-		filename = fs.JoinPath(local_path, extension + ".duckdb_extension");
+		string extension_name = ApplyExtensionAlias(extension);
+		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 	}
 
 	if (!fs.FileExists(filename)) {
