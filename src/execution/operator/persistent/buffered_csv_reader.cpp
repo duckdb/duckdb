@@ -942,7 +942,7 @@ normal:
 	} while (ReadBuffer(start));
 	goto final_state;
 add_value:
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -955,7 +955,7 @@ add_value:
 add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
 	offset = 0;
@@ -1093,7 +1093,7 @@ final_state:
 	}
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 	// final stage, only reached after parsing the file is finished
@@ -1153,7 +1153,7 @@ normal:
 	// file ends during normal scan: go to end state
 	goto final_state;
 add_value:
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -1166,7 +1166,7 @@ add_value:
 add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
 	offset = 0;
@@ -1277,7 +1277,7 @@ final_state:
 
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 

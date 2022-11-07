@@ -1,7 +1,9 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/main/capi/cast/utils.hpp"
+#include "duckdb/main/capi/cast/to_decimal.hpp"
 
 using duckdb::Hugeint;
 using duckdb::hugeint_t;
@@ -12,6 +14,26 @@ double duckdb_hugeint_to_double(duckdb_hugeint val) {
 	internal.lower = val.lower;
 	internal.upper = val.upper;
 	return Hugeint::Cast<double>(internal);
+}
+
+static duckdb_decimal to_decimal_cast(double val, uint8_t width, uint8_t scale) {
+	if (width > duckdb::Decimal::MAX_WIDTH_INT64) {
+		return duckdb::TryCastToDecimalCInternal<double, duckdb::ToCDecimalCastWrapper<hugeint_t>>(val, width, scale);
+	}
+	if (width > duckdb::Decimal::MAX_WIDTH_INT32) {
+		return duckdb::TryCastToDecimalCInternal<double, duckdb::ToCDecimalCastWrapper<int64_t>>(val, width, scale);
+	}
+	if (width > duckdb::Decimal::MAX_WIDTH_INT16) {
+		return duckdb::TryCastToDecimalCInternal<double, duckdb::ToCDecimalCastWrapper<int32_t>>(val, width, scale);
+	}
+	return duckdb::TryCastToDecimalCInternal<double, duckdb::ToCDecimalCastWrapper<int16_t>>(val, width, scale);
+}
+
+duckdb_decimal duckdb_double_to_decimal(double val, uint8_t width, uint8_t scale) {
+	if (scale > width || width > duckdb::Decimal::MAX_WIDTH_INT128) {
+		return duckdb::FetchDefaultValue::Operation<duckdb_decimal>();
+	}
+	return to_decimal_cast(val, width, scale);
 }
 
 duckdb_hugeint duckdb_double_to_hugeint(double val) {

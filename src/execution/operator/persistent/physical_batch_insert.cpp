@@ -248,7 +248,7 @@ public:
 	idx_t current_index;
 	TableAppendState current_append_state;
 	unique_ptr<RowGroupCollection> current_collection;
-	unique_ptr<OptimisticDataWriter> writer;
+	OptimisticDataWriter *writer;
 	bool written_to_disk;
 
 	void FlushToDisk() {
@@ -298,16 +298,17 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	if (!lstate.current_collection) {
+		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(table, insert_types);
-		lstate.writer = make_unique<OptimisticDataWriter>(gstate.table->storage.get());
+		lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
 	} else if (lstate.current_index != lstate.batch_index) {
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		lstate.FlushToDisk();
 
-		gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection), lstate.writer.get(),
+		gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection), lstate.writer,
 		                     &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);
 	}
@@ -377,7 +378,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	// now that we have created all of the mergers, perform the actual merging
 	vector<unique_ptr<RowGroupCollection>> final_collections;
 	final_collections.reserve(mergers.size());
-	auto writer = make_unique<OptimisticDataWriter>(&storage);
+	auto writer = storage.CreateOptimisticWriter(context);
 	for (auto &merger : mergers) {
 		final_collections.push_back(merger->Flush(*writer));
 	}

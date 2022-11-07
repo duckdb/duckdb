@@ -322,6 +322,9 @@ struct ListVector {
 	DUCKDB_API static idx_t GetListSize(const Vector &vector);
 	//! Sets the total size of the underlying child-vector of a list
 	DUCKDB_API static void SetListSize(Vector &vec, idx_t size);
+	//! Gets the total capacity of the underlying child-vector of a list
+	DUCKDB_API static idx_t GetListCapacity(const Vector &vector);
+	//! Sets the total capacity of the underlying child-vector of a list
 	DUCKDB_API static void Reserve(Vector &vec, idx_t required_capacity);
 	DUCKDB_API static void Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset = 0);
 	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,

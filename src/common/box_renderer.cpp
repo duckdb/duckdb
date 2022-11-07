@@ -198,7 +198,7 @@ list<ColumnDataCollection> BoxRenderer::FetchRenderCollections(ClientContext &co
 }
 
 string ConvertRenderValue(const string &input) {
-	return StringUtil::Replace(input, "\n", "\\n");
+	return StringUtil::Replace(StringUtil::Replace(input, "\n", "\\n"), string("\0", 1), "\\0");
 }
 
 string BoxRenderer::GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r) {
@@ -597,7 +597,7 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 
 	// for each column, figure out the width
 	// start off by figuring out the name of the header by looking at the column name and column type
-	idx_t min_width = has_hidden_rows ? minimum_row_length : 0;
+	idx_t min_width = has_hidden_rows || row_count == 0 ? minimum_row_length : 0;
 	vector<idx_t> column_map;
 	idx_t total_length;
 	auto widths = ComputeRenderWidths(names, result, collections, min_width, max_width, column_map, total_length);

@@ -73,7 +73,7 @@
             missing
         ]
     )
-    @test isequal(df.varchar, ["🦆🦆🦆🦆🦆🦆", "goose", missing])
+    @test isequal(df.varchar, ["🦆🦆🦆🦆🦆🦆", "goo\0se", missing])
     @test isequal(
         df.blob,
         [
