@@ -355,7 +355,7 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 			if (str.empty()) {
 				return "(empty)";
 			} else {
-				return str;
+				return StringUtil::Replace(str, string("\0", 1), "\\0");
 			}
 		}
 		}

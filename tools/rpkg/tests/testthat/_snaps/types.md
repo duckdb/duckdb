@@ -2,7 +2,7 @@
 
     Code
       as.list(dbGetQuery(con,
-        "SELECT * EXCLUDE (timestamp_tz, time_tz, map) FROM test_all_types()"))
+        "SELECT * EXCLUDE (timestamp_tz, time_tz, map) REPLACE(replace(varchar, chr(0), '') AS varchar) FROM test_all_types()"))
     Output
       $bool
       [1] FALSE  TRUE    NA

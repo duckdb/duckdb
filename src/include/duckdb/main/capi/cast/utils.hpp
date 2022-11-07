@@ -57,6 +57,8 @@ interval_t FetchDefaultValue::Operation();
 template <>
 char *FetchDefaultValue::Operation();
 template <>
+duckdb_string FetchDefaultValue::Operation();
+template <>
 duckdb_blob FetchDefaultValue::Operation();
 
 //===--------------------------------------------------------------------===//
@@ -80,9 +82,11 @@ struct ToCStringCastWrapper {
 		auto result_size = result_string.GetSize();
 		auto result_data = result_string.GetDataUnsafe();
 
-		result = (char *)duckdb_malloc(result_size + 1);
-		memcpy(result, result_data, result_size);
-		result[result_size] = '\0';
+		char *allocated_data = (char *)duckdb_malloc(result_size + 1);
+		memcpy(allocated_data, result_data, result_size);
+		allocated_data[result_size] = '\0';
+		result.data = allocated_data;
+		result.size = result_size;
 		return true;
 	}
 };
@@ -98,7 +102,7 @@ struct FromCBlobCastWrapper {
 };
 
 template <>
-bool FromCBlobCastWrapper::Operation(duckdb_blob input, char *&result);
+bool FromCBlobCastWrapper::Operation(duckdb_blob input, duckdb_string &result);
 
 template <class SOURCE_TYPE, class RESULT_TYPE, class OP>
 RESULT_TYPE TryCastCInternal(duckdb_result *result, idx_t col, idx_t row) {
