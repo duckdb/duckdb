@@ -101,7 +101,7 @@ SET CALENDAR='indian';
 query I
 SELECT TIMESTAMPTZ '-276069-9-30 0:0:00 America/Whitehorse';
 ----
-276070-10-01 (BC) 01:07:14-07:52
+276070-10-01 (BC) 18:19:11+09:18
 
 # Issue #5237
 statement ok
