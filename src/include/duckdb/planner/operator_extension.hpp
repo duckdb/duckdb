@@ -23,16 +23,11 @@ struct OperatorExtensionInfo {
 	}
 };
 
-typedef unique_ptr<PhysicalOperator> (*create_plan_function_t)(ClientContext &context, PhysicalPlanGenerator &generator,
-                                                               LogicalExtensionOperator &plan);
 typedef BoundStatement (*bind_function_t)(ClientContext &context, Binder &binder, OperatorExtensionInfo *info,
                                           SQLStatement &statement);
 
 class OperatorExtension {
 public:
-	//! Creates a plan for a new logical operator injected into duckdb via the OperatorExtension's bind function or
-	//  the optimizer extension
-	create_plan_function_t CreatePlan;
 	bind_function_t Bind;
 
 	//! Additional info passed to the CreatePlan & Bind functions

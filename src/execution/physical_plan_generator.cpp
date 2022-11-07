@@ -197,13 +197,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		auto &extension_op = (LogicalExtensionOperator &)op;
-		for (auto &extension : DBConfig::GetConfig(context).operator_extensions) {
-			if (extension.operator_info.get() == extension_op.operator_info) {
-				plan = extension.CreatePlan(context, *this, extension_op);
-				if (plan)
-					break;
-			}
-		}
+		plan = extension_op.CreatePlan(context, *this);
+
 		if (!plan)
 			throw InternalException("Missing PhysicalOperator for Extension Operator");
 		break;

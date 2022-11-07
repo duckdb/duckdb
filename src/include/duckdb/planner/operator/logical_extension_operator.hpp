@@ -13,14 +13,14 @@
 
 namespace duckdb {
 
-struct LogicalExtensionOperator : LogicalOperator {
-	OperatorExtensionInfo *operator_info;
+struct LogicalExtensionOperator : public LogicalOperator {
 
-	LogicalExtensionOperator(OperatorExtensionInfo *info)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR), operator_info(info) {
+	LogicalExtensionOperator() : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) {
 	}
-	LogicalExtensionOperator(OperatorExtensionInfo *info, vector<unique_ptr<Expression>> expressions)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR, move(expressions)), operator_info(info) {
+	LogicalExtensionOperator(vector<unique_ptr<Expression>> expressions)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR, move(expressions)) {
 	}
+
+	virtual unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) const = 0;
 };
 } // namespace duckdb
