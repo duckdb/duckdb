@@ -64,10 +64,14 @@ void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 	}
 }
 
-void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups) {
+void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool force) {
 	if (!partial_manager) {
-		// no partial manager - nothing to flush
-		return;
+		if (!force) {
+			// no partial manager - nothing to flush
+			return;
+		}
+		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
+		partial_manager = make_unique<PartialBlockManager>(block_manager);
 	}
 	// flush the last row group
 	FlushToDisk(row_groups.GetRowGroup(-1));
