@@ -24,8 +24,8 @@ struct BufferedJSONReaderOptions {
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Whether or not we should ignore malformed JSON (default to NULL)
 	bool ignore_errors = false;
-	//! Maximum JSON object size (defaults to 2MB)
-	idx_t maximum_object_size = 2097152;
+	//! Maximum JSON object size (defaults to 1MB)
+	idx_t maximum_object_size = 1048576;
 };
 
 struct JSONFileHandle {
@@ -59,8 +59,8 @@ private:
 	void OpenJSONFile();
 
 private:
-	//! Initial buffer capacity (4MB)
-	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 4194304;
+	//! Initial buffer capacity (1MB)
+	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 1048576;
 
 	//! The file currently being read
 	unique_ptr<JSONFileHandle> file_handle;
