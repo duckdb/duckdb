@@ -95,6 +95,13 @@ jobs:
   codecov:
     name: CodeCov
     runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        testset:
+          - 'standard'
+          - 'python'
+          - 'coverage'
     needs: tidy-check
     env:
       GEN: ninja
@@ -129,22 +136,36 @@ jobs:
           lcov --config-file .github/workflows/lcovrc --zerocounters --directory .
           lcov --config-file .github/workflows/lcovrc --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
 
-      - name: Run Tests
+      - name: Build
         shell: bash
         run: |
           mkdir -p build/coverage
           (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+
+      - name: Run Python Tests
+        if: ${{ matrix.testset == 'python' }}
+        shell: bash
+        run: |
           (cd tools/pythonpkg/tests/fast && python3 -m pytest)
           (cd tools/pythonpkg/tests/coverage && python3 -m pytest)
+
+      - name: Run Standard Tests
+        if: ${{ matrix.testset == 'standard' }}
+        shell: bash
+        run: |
           build/coverage/test/unittest
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"
-          python3 scripts/try_timeout.py --timeout=4800 --retry=3 build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[detailed_profiler]"
           build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
           python tools/shell/shell-test.py build/coverage/duckdb
 
+      - name: Run Coverage Tests
+        if: ${{ matrix.testset == 'coverage' }}
+        shell: bash
+        run: |
+          build/coverage/test/unittest "[coverage]"
 
       - name: Generate Coverage
         shell: bash
