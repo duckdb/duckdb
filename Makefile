@@ -259,7 +259,7 @@ third_party/sqllogictest:
 third_party/imdb/data:
 	wget -i "http://download.duckdb.org/imdb/list.txt" -P third_party/imdb/data
 
-sqlite: releas | third_party/sqllogictest
+sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
 	./build/release/test/unittest "[sqlitelogic]"
 
