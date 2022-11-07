@@ -25,8 +25,8 @@ static TableCatalogEntry *GetCatalogTableEntry(LogicalOperator *op) {
 	return nullptr;
 }
 
-// The filter was made on top of a logical sample, but no specific columns are referenced.
-// See issue ####.
+// The filter was made on top of a logical sample or other projection,
+// but no specific columns are referenced. See issue 4978 number 4.
 bool CardinalityEstimator::EmptyFilter(FilterInfo *filter_info) {
 	if (!filter_info->left_set && !filter_info->right_set) {
 		return true;
