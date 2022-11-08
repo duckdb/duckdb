@@ -670,7 +670,7 @@ static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunc
 	}
 
 	// Rebind to return a date if we are truncating that far
-	Value part_value = ExpressionExecutor::EvaluateScalar(*arguments[0]);
+	Value part_value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 	if (part_value.IsNull()) {
 		return nullptr;
 	}

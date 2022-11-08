@@ -120,12 +120,12 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	});
 }
 
-LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t changed_idx,
-                                     const LogicalType &target_type, const vector<column_t> &bound_columns,
-                                     Expression &cast_expr)
+LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
+                                     idx_t changed_idx, const LogicalType &target_type,
+                                     const vector<column_t> &bound_columns, Expression &cast_expr)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
       optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
-	row_groups = parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr);
+	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
 }
@@ -138,11 +138,11 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 	indexes.Move(parent.indexes);
 }
 
-LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column,
-                                     Expression *default_value)
+LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
+                                     ColumnDefinition &new_column, Expression *default_value)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
       optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
-	row_groups = parent.row_groups->AddColumn(new_column, default_value);
+	row_groups = parent.row_groups->AddColumn(context, new_column, default_value);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
 }
@@ -330,7 +330,8 @@ void LocalTableManager::InsertEntry(DataTable *table, shared_ptr<LocalTableStora
 //===--------------------------------------------------------------------===//
 // LocalStorage
 //===--------------------------------------------------------------------===//
-LocalStorage::LocalStorage(Transaction &transaction) : transaction(transaction) {
+LocalStorage::LocalStorage(ClientContext &context, Transaction &transaction)
+    : context(context), transaction(transaction) {
 }
 
 LocalStorage &LocalStorage::Get(Transaction &transaction) {
@@ -539,7 +540,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_unique<LocalTableStorage>(*new_dt, *storage, new_column, default_value);
+	auto new_storage = make_unique<LocalTableStorage>(context, *new_dt, *storage, new_column, default_value);
 	table_manager.InsertEntry(new_dt, move(new_storage));
 }
 
@@ -561,7 +562,7 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 		return;
 	}
 	auto new_storage =
-	    make_unique<LocalTableStorage>(*new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
+	    make_unique<LocalTableStorage>(context, *new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
 	table_manager.InsertEntry(new_dt, move(new_storage));
 }
 

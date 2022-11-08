@@ -35,6 +35,8 @@ struct ExpressionState {
 public:
 	void AddChild(Expression *expr);
 	void Finalize();
+	Allocator &GetAllocator();
+	ClientContext &GetContext();
 };
 
 struct ExecuteFunctionState : public ExpressionState {

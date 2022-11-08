@@ -20,14 +20,14 @@ class ExecutionContext;
 
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
 class ExpressionExecutor {
-public:
-	DUCKDB_API ExpressionExecutor(ClientContext &client);
-	DUCKDB_API ExpressionExecutor(Allocator &allocator);
-	DUCKDB_API explicit ExpressionExecutor(Allocator &allocator, const Expression *expression);
-	DUCKDB_API explicit ExpressionExecutor(Allocator &allocator, const Expression &expression);
-	DUCKDB_API explicit ExpressionExecutor(Allocator &allocator, const vector<unique_ptr<Expression>> &expressions);
+	friend class Index;
 
-	Allocator &allocator;
+public:
+	DUCKDB_API explicit ExpressionExecutor(ClientContext &context);
+	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression *expression);
+	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression &expression);
+	DUCKDB_API ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &expressions);
+
 	//! The expressions of the executor
 	vector<const Expression *> expressions;
 	//! The data chunk of the current physical operator, used to resolve
@@ -35,6 +35,9 @@ public:
 	DataChunk *chunk = nullptr;
 
 public:
+	ClientContext &GetContext();
+	Allocator &GetAllocator();
+
 	//! Add an expression to the set of to-be-executed expressions of the executor
 	DUCKDB_API void AddExpression(const Expression &expr);
 
@@ -60,9 +63,10 @@ public:
 	//! Execute the expression with index `expr_idx` and store the result in the result vector
 	DUCKDB_API void ExecuteExpression(idx_t expr_idx, Vector &result);
 	//! Evaluate a scalar expression and fold it into a single value
-	DUCKDB_API static Value EvaluateScalar(const Expression &expr, bool allow_unfoldable = false);
+	DUCKDB_API static Value EvaluateScalar(ClientContext &context, const Expression &expr,
+	                                       bool allow_unfoldable = false);
 	//! Try to evaluate a scalar expression and fold it into a single value, returns false if an exception is thrown
-	DUCKDB_API static bool TryEvaluateScalar(const Expression &expr, Value &result);
+	DUCKDB_API static bool TryEvaluateScalar(ClientContext &context, const Expression &expr, Value &result);
 
 	//! Initialize the state of a given expression
 	static unique_ptr<ExpressionState> InitializeState(const Expression &expr, ExpressionExecutorState &state);
@@ -143,7 +147,13 @@ protected:
 	void FillSwitch(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count);
 
 private:
+	//! Client context
+	ClientContext *context;
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;
+
+private:
+	// it is possible to create an expression executor without a ClientContext - but it should be avoided
+	DUCKDB_API ExpressionExecutor();
 };
 } // namespace duckdb

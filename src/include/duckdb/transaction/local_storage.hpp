@@ -48,12 +48,12 @@ public:
 	// Create a new LocalTableStorage
 	explicit LocalTableStorage(DataTable &table);
 	// Create a LocalTableStorage from an ALTER TYPE
-	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t changed_idx, const LogicalType &target_type,
-	                  const vector<column_t> &bound_columns, Expression &cast_expr);
+	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
+	                  const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
 	// Create a LocalTableStorage from a DROP COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
-	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
+	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  Expression *default_value);
 	~LocalTableStorage();
 
@@ -116,7 +116,7 @@ public:
 	};
 
 public:
-	explicit LocalStorage(Transaction &transaction);
+	explicit LocalStorage(ClientContext &context, Transaction &transaction);
 
 	static LocalStorage &Get(Transaction &transaction);
 	static LocalStorage &Get(ClientContext &context);
@@ -170,6 +170,7 @@ public:
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 private:
+	ClientContext &context;
 	Transaction &transaction;
 	LocalTableManager table_manager;
 

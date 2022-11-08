@@ -35,7 +35,7 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 			return nullptr;
 		}
 		D_ASSERT(expr->children[i]->IsFoldable());
-		auto constant_value = ExpressionExecutor::EvaluateScalar(*expr->children[i]);
+		auto constant_value = ExpressionExecutor::EvaluateScalar(rewriter.context, *expr->children[i]);
 		auto new_constant = constant_value.DefaultTryCastAs(target_type);
 		if (!new_constant) {
 			return nullptr;

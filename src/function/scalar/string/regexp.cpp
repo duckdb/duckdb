@@ -88,24 +88,24 @@ static void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &r
 	}
 }
 
-void ParseRegexOptions(Expression &expr, RE2::Options &target, bool *global_replace = nullptr) {
+void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr) {
 	if (expr.HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
 	if (!expr.IsFoldable()) {
 		throw InvalidInputException("Regex options field must be a constant");
 	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(expr);
+	Value options_str = ExpressionExecutor::EvaluateScalar(context, expr);
 	if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
 		ParseRegexOptions(StringValue::Get(options_str), target, global_replace);
 	}
 }
 
-static bool TryParseConstantPattern(Expression &expr, string &constant_string) {
+static bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string) {
 	if (!expr.IsFoldable()) {
 		return false;
 	}
-	Value pattern_str = ExpressionExecutor::EvaluateScalar(expr);
+	Value pattern_str = ExpressionExecutor::EvaluateScalar(context, expr);
 	if (!pattern_str.IsNull() && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
 		constant_string = StringValue::Get(pattern_str);
 		return true;
@@ -150,12 +150,12 @@ unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, ScalarFunctio
 	RE2::Options options;
 	options.set_log_errors(false);
 	if (arguments.size() == 3) {
-		ParseRegexOptions(*arguments[2], options);
+		ParseRegexOptions(context, *arguments[2], options);
 	}
 
 	string constant_string;
 	bool constant_pattern;
-	constant_pattern = TryParseConstantPattern(*arguments[1], constant_string);
+	constant_pattern = TryParseConstantPattern(context, *arguments[1], constant_string);
 	return make_unique<RegexpMatchesBindData>(options, move(constant_string), constant_pattern);
 }
 
@@ -221,9 +221,9 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
                                                  vector<unique_ptr<Expression>> &arguments) {
 	auto data = make_unique<RegexpReplaceBindData>();
 
-	data->constant_pattern = TryParseConstantPattern(*arguments[1], data->constant_string);
+	data->constant_pattern = TryParseConstantPattern(context, *arguments[1], data->constant_string);
 	if (arguments.size() == 4) {
-		ParseRegexOptions(*arguments[3], data->options, &data->global_replace);
+		ParseRegexOptions(context, *arguments[3], data->options, &data->global_replace);
 	}
 	data->options.set_log_errors(false);
 	return move(data);
@@ -292,7 +292,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 	duckdb_re2::RE2::Options options;
 
 	string constant_string;
-	bool constant_pattern = TryParseConstantPattern(*arguments[1], constant_string);
+	bool constant_pattern = TryParseConstantPattern(context, *arguments[1], constant_string);
 
 	string group_string = "";
 	if (arguments.size() >= 3) {
@@ -302,7 +302,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 		if (!arguments[2]->IsFoldable()) {
 			throw InvalidInputException("Group index field field must be a constant!");
 		}
-		Value group = ExpressionExecutor::EvaluateScalar(*arguments[2]);
+		Value group = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
 		if (!group.IsNull()) {
 			auto group_idx = group.GetValue<int32_t>();
 			if (group_idx < 0 || group_idx > 9) {
@@ -314,7 +314,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 		group_string = "\\0";
 	}
 	if (arguments.size() >= 4) {
-		ParseRegexOptions(*arguments[3], options);
+		ParseRegexOptions(context, *arguments[3], options);
 	}
 	return make_unique<RegexpExtractBindData>(options, move(constant_string), constant_pattern, move(group_string));
 }

@@ -568,13 +568,14 @@ vector<vector<Value>> RowGroupCollection::GetStorageInfo() {
 //===--------------------------------------------------------------------===//
 // Alter
 //===--------------------------------------------------------------------===//
-shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ColumnDefinition &new_column, Expression *default_value) {
+shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &context, ColumnDefinition &new_column,
+                                                             Expression *default_value) {
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	new_types.push_back(new_column.GetType());
 	auto result = make_shared<RowGroupCollection>(info, block_manager, move(new_types), row_start, total_rows.load());
 
-	ExpressionExecutor executor(GetAllocator());
+	ExpressionExecutor executor(context);
 	DataChunk dummy_chunk;
 	Vector default_vector(new_column.GetType());
 	if (!default_value) {
@@ -617,7 +618,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	return result;
 }
 
-shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, const LogicalType &target_type,
+shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &context, idx_t changed_idx,
+                                                             const LogicalType &target_type,
                                                              vector<column_t> bound_columns, Expression &cast_expr) {
 	D_ASSERT(changed_idx < types.size());
 	auto new_types = types;
@@ -637,7 +639,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(GetAllocator(), scan_types);
 
-	ExpressionExecutor executor(GetAllocator());
+	ExpressionExecutor executor(context);
 	executor.AddExpression(cast_expr);
 
 	TableScanState scan_state;

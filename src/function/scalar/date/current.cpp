@@ -9,30 +9,12 @@
 
 namespace duckdb {
 
-struct CurrentBindData : public FunctionData {
-	ClientContext &context;
-
-	explicit CurrentBindData(ClientContext &context) : context(context) {
-	}
-
-	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<CurrentBindData>(context);
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		return true;
-	}
-};
-
 static timestamp_t GetTransactionTimestamp(ExpressionState &state) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (CurrentBindData &)*func_expr.bind_info;
-	return info.context.ActiveTransaction().start_timestamp;
+	return state.GetContext().ActiveTransaction().start_timestamp;
 }
 
 static void CurrentTimeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 0);
-
 	auto val = Value::TIME(Timestamp::GetTime(GetTransactionTimestamp(state)));
 	result.Reference(val);
 }
@@ -51,23 +33,17 @@ static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, V
 	result.Reference(val);
 }
 
-unique_ptr<FunctionData> BindCurrentTime(ClientContext &context, ScalarFunction &bound_function,
-                                         vector<unique_ptr<Expression>> &arguments) {
-	return make_unique<CurrentBindData>(context);
-}
-
 void CurrentTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("get_current_time", {}, LogicalType::TIME, CurrentTimeFunction, BindCurrentTime));
+	set.AddFunction(ScalarFunction("get_current_time", {}, LogicalType::TIME, CurrentTimeFunction));
 }
 
 void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"today", "current_date"},
-	                ScalarFunction({}, LogicalType::DATE, CurrentDateFunction, BindCurrentTime));
+	set.AddFunction({"today", "current_date"}, ScalarFunction({}, LogicalType::DATE, CurrentDateFunction));
 }
 
 void CurrentTimestampFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"now", "get_current_timestamp", "transaction_timestamp"},
-	                ScalarFunction({}, LogicalType::TIMESTAMP_TZ, CurrentTimestampFunction, BindCurrentTime));
+	                ScalarFunction({}, LogicalType::TIMESTAMP_TZ, CurrentTimestampFunction));
 }
 
 } // namespace duckdb

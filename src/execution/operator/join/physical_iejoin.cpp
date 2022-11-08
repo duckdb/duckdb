@@ -69,8 +69,8 @@ class IEJoinLocalState : public LocalSinkState {
 public:
 	using LocalSortedTable = PhysicalRangeJoin::LocalSortedTable;
 
-	IEJoinLocalState(Allocator &allocator, const PhysicalRangeJoin &op, const idx_t child)
-	    : table(allocator, op, child) {
+	IEJoinLocalState(ClientContext &context, const PhysicalRangeJoin &op, const idx_t child)
+	    : table(context, op, child) {
 	}
 
 	//! The local sort state
@@ -130,7 +130,7 @@ unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &c
 		const auto &ie_sink = (IEJoinGlobalState &)*sink_state;
 		sink_child = ie_sink.child;
 	}
-	return make_unique<IEJoinLocalState>(Allocator::Get(context.client), *this, sink_child);
+	return make_unique<IEJoinLocalState>(context.client, *this, sink_child);
 }
 
 SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
@@ -345,7 +345,6 @@ idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, S
 IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, SortedTable &t1, const idx_t b1,
                          SortedTable &t2, const idx_t b2)
     : n(0), i(0) {
-	auto &allocator = Allocator::Get(context);
 	// input : query Q with 2 join predicates t1.X op1 t2.X' and t1.Y op2 t2.Y', tables T, T' of sizes m and n resp.
 	// output: a list of tuple pairs (ti , tj)
 	// Note that T/T' are already sorted on X/X' and contain the payload data
@@ -391,13 +390,13 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	l1 = make_unique<SortedTable>(context, orders, payload_layout);
 
 	// LHS has positive rids
-	ExpressionExecutor l_executor(allocator);
+	ExpressionExecutor l_executor(context);
 	l_executor.AddExpression(*order1.expression);
 	l_executor.AddExpression(*order2.expression);
 	AppendKey(t1, l_executor, *l1, 1, 1, b1);
 
 	// RHS has negative rids
-	ExpressionExecutor r_executor(allocator);
+	ExpressionExecutor r_executor(context);
 	r_executor.AddExpression(*op.rhs_orders[0][0].expression);
 	r_executor.AddExpression(*op.rhs_orders[1][0].expression);
 	AppendKey(t2, r_executor, *l1, -1, -1, b2);
@@ -424,7 +423,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	ref = make_unique<BoundReferenceExpression>(order2.expression->return_type, 0);
 	orders.emplace_back(BoundOrderByNode(order2.type, order2.null_order, move(ref)));
 
-	ExpressionExecutor executor(allocator);
+	ExpressionExecutor executor(context);
 	executor.AddExpression(*orders[0].expression);
 
 	l2 = make_unique<SortedTable>(context, orders, payload_layout);
@@ -632,19 +631,12 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 	return result_count;
 }
 
-class IEJoinState : public CachingOperatorState {
-public:
-	explicit IEJoinState(Allocator &allocator, const PhysicalIEJoin &op) : local_left(allocator, op, 0) {};
-
-	IEJoinLocalState local_left;
-};
-
 class IEJoinLocalSourceState : public LocalSourceState {
 public:
-	explicit IEJoinLocalSourceState(Allocator &allocator, const PhysicalIEJoin &op)
-	    : op(op), true_sel(STANDARD_VECTOR_SIZE), left_executor(allocator), right_executor(allocator),
+	explicit IEJoinLocalSourceState(ClientContext &context, const PhysicalIEJoin &op)
+	    : op(op), true_sel(STANDARD_VECTOR_SIZE), left_executor(context), right_executor(context),
 	      left_matches(nullptr), right_matches(nullptr) {
-
+		auto &allocator = Allocator::Get(context);
 		if (op.conditions.size() < 3) {
 			return;
 		}
@@ -932,7 +924,7 @@ unique_ptr<GlobalSourceState> PhysicalIEJoin::GetGlobalSourceState(ClientContext
 
 unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate) const {
-	return make_unique<IEJoinLocalSourceState>(Allocator::Get(context.client), *this);
+	return make_unique<IEJoinLocalSourceState>(context.client, *this);
 }
 
 void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,

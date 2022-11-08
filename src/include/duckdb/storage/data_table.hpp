@@ -182,7 +182,8 @@ private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
-	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, const vector<column_t> &column_ids);
+	void VerifyUpdateConstraints(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
+	                             const vector<column_t> &column_ids);
 	//! Verify constraints with a chunk from the Delete containing all columns of the table
 	void VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 

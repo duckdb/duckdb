@@ -8,6 +8,9 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
+FilterPushdown::FilterPushdown(Optimizer &optimizer) : optimizer(optimizer), combiner(optimizer.context) {
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(!combiner.HasFilters());
 	switch (op->type) {

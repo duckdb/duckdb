@@ -50,7 +50,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
-	this->row_groups = parent.row_groups->AddColumn(new_column, default_value);
+	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_value);
 
 	// also add this column to client local storage
 	auto &local_storage = LocalStorage::Get(context);
@@ -147,7 +147,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// set up the statistics for the table
 	// the column that had its type changed will have the new statistics computed during conversion
-	this->row_groups = parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr);
+	this->row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
 
 	// scan the original table, and fill the new column with the transformed value
 	auto &local_storage = LocalStorage::Get(context);
@@ -255,11 +255,11 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 }
 
 // To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
-static void VerifyGeneratedExpressionSuccess(TableCatalogEntry &table, DataChunk &chunk, Expression &expr,
-                                             column_t index) {
+static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
+                                             Expression &expr, column_t index) {
 	auto &col = table.columns[index];
 	D_ASSERT(col.Generated());
-	ExpressionExecutor executor(Allocator::DefaultAllocator(), expr);
+	ExpressionExecutor executor(context, expr);
 	Vector result(col.Type());
 	try {
 		executor.ExecuteExpression(chunk, result);
@@ -270,8 +270,9 @@ static void VerifyGeneratedExpressionSuccess(TableCatalogEntry &table, DataChunk
 	}
 }
 
-static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
-	ExpressionExecutor executor(Allocator::DefaultAllocator(), expr);
+static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &table, Expression &expr,
+                                  DataChunk &chunk) {
+	ExpressionExecutor executor(context, expr);
 	Vector result(LogicalType::INTEGER);
 	try {
 		executor.ExecuteExpression(chunk, result);
@@ -427,7 +428,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 			generated_check_binder.target_type = col.Type();
 			auto to_be_bound_expression = col.GeneratedExpression().Copy();
 			auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
-			VerifyGeneratedExpressionSuccess(table, chunk, *bound_expression, i);
+			VerifyGeneratedExpressionSuccess(context, table, chunk, *bound_expression, i);
 		}
 	}
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
@@ -443,7 +444,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		}
 		case ConstraintType::CHECK: {
 			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
-			VerifyCheckConstraint(table, *check.expression, chunk);
+			VerifyCheckConstraint(context, table, *check.expression, chunk);
 			break;
 		}
 		case ConstraintType::UNIQUE: {
@@ -818,7 +819,7 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &co
 	return true;
 }
 
-void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk,
+void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
                                         const vector<column_t> &column_ids) {
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
 		auto &base_constraint = table.constraints[i];
@@ -842,7 +843,7 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 
 			DataChunk mock_chunk;
 			if (CreateMockChunk(table, column_ids, check.bound_columns, chunk, mock_chunk)) {
-				VerifyCheckConstraint(table, *check.expression, mock_chunk);
+				VerifyCheckConstraint(context, table, *check.expression, mock_chunk);
 			}
 			break;
 		}
@@ -879,7 +880,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	}
 
 	// first verify that no constraints are violated
-	VerifyUpdateConstraints(table, updates, column_ids);
+	VerifyUpdateConstraints(context, table, updates, column_ids);
 
 	// now perform the actual update
 	auto &transaction = Transaction::GetTransaction(context);

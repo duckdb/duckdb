@@ -58,7 +58,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
 
 	auto &allocator = Allocator::Get(table.storage->db);
-	ExpressionExecutor executor(allocator, expressions);
+	ExpressionExecutor executor(context.client, expressions);
 	auto state = make_unique<CreateIndexLocalSinkState>(move(executor));
 
 	// create the local index

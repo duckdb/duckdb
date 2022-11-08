@@ -6,29 +6,40 @@
 
 namespace duckdb {
 
-ExpressionExecutor::ExpressionExecutor(ClientContext &client) : allocator(Allocator::Get(client)) {
+ExpressionExecutor::ExpressionExecutor(ClientContext &context) : context(&context) {
 }
 
-ExpressionExecutor::ExpressionExecutor(Allocator &allocator) : allocator(allocator) {
-}
-
-ExpressionExecutor::ExpressionExecutor(Allocator &allocator, const Expression *expression)
-    : ExpressionExecutor(allocator) {
+ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression *expression)
+    : ExpressionExecutor(context) {
 	D_ASSERT(expression);
 	AddExpression(*expression);
 }
 
-ExpressionExecutor::ExpressionExecutor(Allocator &allocator, const Expression &expression)
-    : ExpressionExecutor(allocator) {
+ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression &expression)
+    : ExpressionExecutor(context) {
 	AddExpression(expression);
 }
 
-ExpressionExecutor::ExpressionExecutor(Allocator &allocator, const vector<unique_ptr<Expression>> &exprs)
-    : ExpressionExecutor(allocator) {
+ExpressionExecutor::ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &exprs)
+    : ExpressionExecutor(context) {
 	D_ASSERT(exprs.size() > 0);
 	for (auto &expr : exprs) {
 		AddExpression(*expr);
 	}
+}
+
+ExpressionExecutor::ExpressionExecutor() : context(nullptr) {
+}
+
+ClientContext &ExpressionExecutor::GetContext() {
+	if (!context) {
+		throw InternalException("Calling ExpressionExecutor::GetContext on an expression executor without a context");
+	}
+	return *context;
+}
+
+Allocator &ExpressionExecutor::GetAllocator() {
+	return context ? Allocator::Get(*context) : Allocator::DefaultAllocator();
 }
 
 void ExpressionExecutor::AddExpression(const Expression &expr) {
@@ -82,11 +93,11 @@ void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	states[expr_idx]->profiler.EndSample(chunk ? chunk->size() : 0);
 }
 
-Value ExpressionExecutor::EvaluateScalar(const Expression &expr, bool allow_unfoldable) {
+Value ExpressionExecutor::EvaluateScalar(ClientContext &context, const Expression &expr, bool allow_unfoldable) {
 	D_ASSERT(allow_unfoldable || expr.IsFoldable());
 	D_ASSERT(expr.IsScalar());
 	// use an ExpressionExecutor to execute the expression
-	ExpressionExecutor executor(Allocator::DefaultAllocator(), expr);
+	ExpressionExecutor executor(context, expr);
 
 	Vector result(expr.return_type);
 	executor.ExecuteExpression(result);
@@ -97,9 +108,9 @@ Value ExpressionExecutor::EvaluateScalar(const Expression &expr, bool allow_unfo
 	return result_value;
 }
 
-bool ExpressionExecutor::TryEvaluateScalar(const Expression &expr, Value &result) {
+bool ExpressionExecutor::TryEvaluateScalar(ClientContext &context, const Expression &expr, Value &result) {
 	try {
-		result = EvaluateScalar(expr);
+		result = EvaluateScalar(context, expr);
 		return true;
 	} catch (InternalException &ex) {
 		throw ex;

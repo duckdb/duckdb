@@ -11,9 +11,18 @@ void ExpressionState::AddChild(Expression *expr) {
 
 void ExpressionState::Finalize() {
 	if (!types.empty()) {
-		intermediate_chunk.Initialize(root.executor->allocator, types);
+		intermediate_chunk.Initialize(GetAllocator(), types);
 	}
 }
+
+Allocator &ExpressionState::GetAllocator() {
+	return root.executor->GetAllocator();
+}
+
+ClientContext &ExpressionState::GetContext() {
+	return root.executor->GetContext();
+}
+
 ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState &root)
     : expr(expr), root(root), name(expr.ToString()) {
 }

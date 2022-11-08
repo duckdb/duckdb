@@ -84,9 +84,10 @@ public:
 	vector<vector<Value>> GetStorageInfo();
 	const vector<LogicalType> &GetTypes() const;
 
-	shared_ptr<RowGroupCollection> AddColumn(ColumnDefinition &new_column, Expression *default_value);
+	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
+	                                         Expression *default_value);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
-	shared_ptr<RowGroupCollection> AlterType(idx_t changed_idx, const LogicalType &target_type,
+	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<column_t> bound_columns, Expression &cast_expr);
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 

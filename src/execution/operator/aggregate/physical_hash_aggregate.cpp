@@ -206,7 +206,7 @@ public:
 			aggregate_objects.emplace_back(&aggr);
 		}
 
-		filter_set.Initialize(Allocator::Get(context.client), aggregate_objects, payload_types);
+		filter_set.Initialize(context.client, aggregate_objects, payload_types);
 	}
 
 	DataChunk aggregate_input_chunk;

@@ -61,7 +61,7 @@ class InsertLocalState : public LocalSinkState {
 public:
 	InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                 const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(Allocator::Get(context), bound_defaults) {
+	    : default_executor(context, bound_defaults) {
 		insert_chunk.Initialize(Allocator::Get(context), types);
 	}
 

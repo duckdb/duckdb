@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-static void InvertPercentileFractions(unique_ptr<ParsedExpression> &fractions) {
+static void InvertPercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions) {
 	D_ASSERT(fractions.get());
 	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = (BoundExpression &)*fractions;
@@ -25,7 +25,7 @@ static void InvertPercentileFractions(unique_ptr<ParsedExpression> &fractions) {
 		return;
 	}
 
-	Value value = ExpressionExecutor::EvaluateScalar(*bound.expr);
+	Value value = ExpressionExecutor::EvaluateScalar(context, *bound.expr);
 	if (value.type().id() == LogicalTypeId::LIST) {
 		vector<Value> values;
 		for (const auto &element_val : ListValue::GetChildren(value)) {
@@ -70,7 +70,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		aggregate_binder.BindChild(child, 0, error);
 		// We have to invert the fractions for PERCENTILE_XXXX DESC
 		if (error.empty() && invert_fractions) {
-			InvertPercentileFractions(child);
+			InvertPercentileFractions(context, child);
 		}
 	}
 

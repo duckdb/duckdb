@@ -32,7 +32,7 @@ Transaction::Transaction(ClientContext &context_p, transaction_t start_time, tra
     : context(context_p.shared_from_this()), start_time(start_time), transaction_id(transaction_id), commit_id(0),
       highest_active_query(0), active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp),
       catalog_version(catalog_version), temporary_objects(context_p.client_data->temporary_objects),
-      undo_buffer(context.lock()), storage(make_unique<LocalStorage>(*this)) {
+      undo_buffer(context.lock()), storage(make_unique<LocalStorage>(context_p, *this)) {
 }
 
 Transaction::~Transaction() {

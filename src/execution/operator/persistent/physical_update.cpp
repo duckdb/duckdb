@@ -27,10 +27,11 @@ public:
 
 class UpdateLocalState : public LocalSinkState {
 public:
-	UpdateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &expressions,
+	UpdateLocalState(ClientContext &context, const vector<unique_ptr<Expression>> &expressions,
 	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(allocator, bound_defaults) {
+	    : default_executor(context, bound_defaults) {
 		// initialize the update chunk
+		auto &allocator = Allocator::Get(context);
 		vector<LogicalType> update_types;
 		update_types.reserve(expressions.size());
 		for (auto &expr : expressions) {
@@ -125,7 +126,7 @@ unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<UpdateLocalState>(Allocator::Get(context.client), expressions, table.GetTypes(), bound_defaults);
+	return make_unique<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults);
 }
 
 void PhysicalUpdate::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {

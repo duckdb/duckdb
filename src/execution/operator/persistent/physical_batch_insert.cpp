@@ -239,7 +239,7 @@ class BatchInsertLocalState : public LocalSinkState {
 public:
 	BatchInsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                      const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(Allocator::Get(context), bound_defaults), written_to_disk(false) {
+	    : default_executor(context, bound_defaults), written_to_disk(false) {
 		insert_chunk.Initialize(Allocator::Get(context), types);
 	}
 
