@@ -110,6 +110,14 @@ const storage_t &ColumnDefinition::StorageOid() const {
 	return storage_oid;
 }
 
+LogicalIndex ColumnDefinition::Logical() const {
+	return LogicalIndex(oid);
+}
+
+PhysicalIndex ColumnDefinition::Physical() const {
+	return PhysicalIndex(storage_oid);
+}
+
 void ColumnDefinition::SetStorageOid(storage_t storage_oid) {
 	this->storage_oid = storage_oid;
 }

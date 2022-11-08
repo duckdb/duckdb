@@ -80,8 +80,12 @@ struct LogicalIndex {
 
 	idx_t index;
 
-	inline bool operator==(const LogicalIndex &rhs) const {return index == rhs.index;};
-	inline bool operator!=(const LogicalIndex &rhs) const {return index != rhs.index;};
+	inline bool operator==(const LogicalIndex &rhs) const {
+		return index == rhs.index;
+	};
+	inline bool operator!=(const LogicalIndex &rhs) const {
+		return index != rhs.index;
+	};
 };
 
 struct PhysicalIndex {
@@ -90,8 +94,12 @@ struct PhysicalIndex {
 
 	idx_t index;
 
-	inline bool operator==(const PhysicalIndex &rhs) const {return index == rhs.index;};
-	inline bool operator!=(const PhysicalIndex &rhs) const {return index != rhs.index;};
+	inline bool operator==(const PhysicalIndex &rhs) const {
+		return index == rhs.index;
+	};
+	inline bool operator!=(const PhysicalIndex &rhs) const {
+		return index != rhs.index;
+	};
 };
 
 //! The maximum row identifier used in tables

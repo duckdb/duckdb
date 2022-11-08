@@ -54,6 +54,9 @@ public:
 	const storage_t &StorageOid() const;
 	void SetStorageOid(storage_t storage_oid);
 
+	LogicalIndex Logical() const;
+	PhysicalIndex Physical() const;
+
 	//! oid
 	const column_t &Oid() const;
 	void SetOid(column_t oid);

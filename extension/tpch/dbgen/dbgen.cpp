@@ -420,7 +420,7 @@ static void CreateTPCHTable(ClientContext &context, string schema, string suffix
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
-		info->constraints.push_back(make_unique<NotNullConstraint>(i));
+		info->constraints.push_back(make_unique<NotNullConstraint>(LogicalIndex(i)));
 	}
 	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateTable(context, move(info));

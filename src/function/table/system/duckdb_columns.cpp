@@ -109,7 +109,7 @@ public:
 		for (auto &constraint : entry->constraints) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
 				auto &not_null = *reinterpret_cast<NotNullConstraint *>(constraint.get());
-				not_null_cols.insert(not_null.index);
+				not_null_cols.insert(not_null.index.index);
 			}
 		}
 	}

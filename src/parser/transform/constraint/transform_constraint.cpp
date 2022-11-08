@@ -61,7 +61,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	D_ASSERT(constraint);
 	switch (constraint->contype) {
 	case duckdb_libpgquery::PG_CONSTR_NOTNULL:
-		return make_unique<NotNullConstraint>(index);
+		return make_unique<NotNullConstraint>(LogicalIndex(index));
 	case duckdb_libpgquery::PG_CONSTR_CHECK:
 		return TransformConstraint(cell);
 	case duckdb_libpgquery::PG_CONSTR_PRIMARY:

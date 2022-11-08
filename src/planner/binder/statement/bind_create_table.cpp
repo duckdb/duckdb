@@ -14,6 +14,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/parser/expression/list.hpp"
+#include "duckdb/common/index_map.hpp"
 
 #include <algorithm>
 
@@ -49,7 +50,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;
 
 	bool has_primary_key = false;
-	unordered_set<idx_t> not_null_columns;
+	logical_index_set_t not_null_columns;
 	vector<idx_t> primary_keys;
 	for (idx_t i = 0; i < base.constraints.size(); i++) {
 		auto &cond = base.constraints[i];
@@ -130,12 +131,13 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	if (has_primary_key) {
 		// if there is a primary key index, also create a NOT NULL constraint for each of the columns
 		for (auto &column_index : primary_keys) {
-			if (not_null_columns.count(column_index)) {
+			auto logical_index = LogicalIndex(column_index);
+			if (not_null_columns.count(logical_index)) {
 				//! No need to create a NotNullConstraint, it's already present
 				continue;
 			}
-			auto &column = base.columns.GetColumn(LogicalIndex(column_index));
-			base.constraints.push_back(make_unique<NotNullConstraint>(column_index));
+			auto &column = base.columns.GetColumn(logical_index);
+			base.constraints.push_back(make_unique<NotNullConstraint>(logical_index));
 			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(PhysicalIndex(column.StorageOid())));
 		}
 	}

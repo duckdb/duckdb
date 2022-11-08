@@ -84,6 +84,7 @@ public:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
 	column_t GetColumnIndex(string &name, bool if_exists = false);
+	LogicalIndex GetColumnIndexLogical(string &column_name, bool if_exists = false);
 
 private:
 	const string &GetColumnName(column_t index);

@@ -23,6 +23,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/common/index_map.hpp"
 
 #include <sstream>
 
@@ -36,15 +37,19 @@ const string &TableCatalogEntry::GetColumnName(column_t index) {
 	return columns.GetColumn(LogicalIndex(index)).Name();
 }
 
-column_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
+LogicalIndex TableCatalogEntry::GetColumnIndexLogical(string &column_name, bool if_exists) {
 	auto entry = columns.GetColumnIndex(column_name);
 	if (entry.index == DConstants::INVALID_INDEX) {
 		if (if_exists) {
-			return entry.index;
+			return entry;
 		}
 		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
 	}
-	return entry.index;
+	return entry;
+}
+
+column_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
+	return GetColumnIndexLogical(column_name, if_exists).index;
 }
 
 void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<idx_t> &keys,
@@ -350,8 +355,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
 	}
-	vector<column_t> adjusted_indices =
-	    column_dependency_manager.RemoveColumn(removed_index, columns.LogicalColumnCount());
+	auto adjusted_indices = column_dependency_manager.RemoveColumn(removed_index, columns.LogicalColumnCount());
 	// handle constraints for the new table
 	D_ASSERT(constraints.size() == bound_constraints.size());
 	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
@@ -365,7 +369,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 				// we might need to shift the index back by one though, to account for the removed column
 				idx_t new_index = not_null_constraint.index.index;
 				new_index = adjusted_indices[new_index];
-				create_info->constraints.push_back(make_unique<NotNullConstraint>(new_index));
+				create_info->constraints.push_back(make_unique<NotNullConstraint>(LogicalIndex(new_index)));
 			}
 			break;
 		}
@@ -475,7 +479,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->columns = columns.Copy();
 
-	idx_t not_null_idx = GetColumnIndex(info.column_name);
+	auto not_null_idx = GetColumnIndexLogical(info.column_name);
 	if (columns.GetColumn(LogicalIndex(not_null_idx)).Generated()) {
 		throw BinderException("Unsupported constraint for generated column!");
 	}
@@ -504,8 +508,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 
 	// Return with new storage info. Note that we need the bound column index here.
 	auto new_storage = make_shared<DataTable>(
-	    context, *storage,
-	    make_unique<BoundNotNullConstraint>(columns.LogicalToPhysical(LogicalIndex(not_null_idx))));
+	    context, *storage, make_unique<BoundNotNullConstraint>(columns.LogicalToPhysical(LogicalIndex(not_null_idx))));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }
@@ -514,7 +517,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, 
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->columns = columns.Copy();
 
-	idx_t not_null_idx = GetColumnIndex(info.column_name);
+	auto not_null_idx = GetColumnIndexLogical(info.column_name);
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
 		// Skip/drop not_null
@@ -723,7 +726,7 @@ string TableCatalogEntry::ToSQL() {
 	ss << KeywordHelper::WriteOptionallyQuoted(name) << "(";
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
-	unordered_set<idx_t> not_null_columns;
+	logical_index_set_t not_null_columns;
 	unordered_set<idx_t> unique_columns;
 	unordered_set<idx_t> pk_columns;
 	unordered_set<string> multi_key_pks;
@@ -769,7 +772,7 @@ string TableCatalogEntry::ToSQL() {
 		}
 		ss << KeywordHelper::WriteOptionallyQuoted(column.Name()) << " ";
 		ss << column.Type().ToString();
-		bool not_null = not_null_columns.find(column.Oid()) != not_null_columns.end();
+		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();
 		bool is_single_key_pk = pk_columns.find(column.Oid()) != pk_columns.end();
 		bool is_multi_key_pk = multi_key_pks.find(column.Name()) != multi_key_pks.end();
 		bool is_unique = unique_columns.find(column.Oid()) != unique_columns.end();
