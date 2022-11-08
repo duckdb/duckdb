@@ -1,6 +1,8 @@
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
-#include "duckdb/parallel/pipeline.hpp"
+
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 
@@ -35,8 +37,9 @@ void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalColumnDataScan::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	// check if there is any additional action we need to do depending on the type
+	auto &state = meta_pipeline.GetState();
 	switch (type) {
 	case PhysicalOperatorType::DELIM_SCAN: {
 		auto entry = state.delim_join_dependencies.find(this);
@@ -53,7 +56,7 @@ void PhysicalColumnDataScan::BuildPipelines(Executor &executor, Pipeline &curren
 		return;
 	}
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
-		if (!state.recursive_cte) {
+		if (!meta_pipeline.HasRecursiveCTE()) {
 			throw InternalException("Recursive CTE scan found without recursive CTE node");
 		}
 		break;

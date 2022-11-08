@@ -2403,14 +2403,12 @@ public class TestDuckDBJDBC {
 
 	public static void test_null_bytes_in_string() throws Exception {
 		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
-			try (PreparedStatement stmt = conn.prepareStatement("select ?")) {
+			try (PreparedStatement stmt = conn.prepareStatement("select ?::varchar")) {
 				stmt.setObject(1, "bob\u0000r");
+				ResultSet rs = stmt.executeQuery();
 
-				String message = assertThrows(
-						stmt::executeQuery,
-						SQLException.class
-				);
-				assertEquals(message, "Null-byte (\\0) detected in value construction");
+				rs.next();
+				assertEquals(rs.getString(1), "bob\u0000r");
 			}
 		}
 	}
