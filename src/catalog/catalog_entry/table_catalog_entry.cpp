@@ -210,6 +210,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto rename_info = (RenameTableInfo *)table_info;
 		auto copied_table = Copy(context);
 		copied_table->name = rename_info->new_table_name;
+		storage->info->table = rename_info->new_table_name;
 		return copied_table;
 	}
 	case AlterTableType::ADD_COLUMN: {
@@ -878,6 +879,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
 
 void TableCatalogEntry::SetAsRoot() {
 	storage->SetAsRoot();
+	storage->info->table = name;
 }
 
 void TableCatalogEntry::CommitAlter(AlterInfo &info) {
