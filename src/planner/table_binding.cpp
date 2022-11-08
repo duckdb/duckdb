@@ -129,6 +129,16 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (!success) {
 		return BindResult(ColumnNotFoundError(column_name));
 	}
+	auto entry = GetStandardEntry();
+	if (entry && column_index != COLUMN_IDENTIFIER_ROW_ID) {
+		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
+		auto table_entry = (TableCatalogEntry *)entry;
+		auto &column = table_entry->columns[column_index];
+		// Either there is no table, or the columns category has to be standard
+		if (column.Category() != TableColumnType::STANDARD) {
+			throw BinderException("Binding of generated columns in this context is not supported");
+		}
+	}
 	// fetch the type of the column
 	LogicalType col_type;
 	if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
