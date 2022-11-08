@@ -54,7 +54,7 @@ expr_set_alias <- rapi_expr_set_alias
 
 #' @export
 print.duckdb_expr <- function(x, ...) {
-    message("DuckDB Expression: ", duckdb::expr_tostring(x))
+    message("DuckDB Expression: ", expr_tostring(x))
     invisible(NULL)
 }
 
@@ -66,7 +66,7 @@ print.duckdb_expr <- function(x, ...) {
 #' @return the `duckdb_relation` object wrapping the data.frame
 #' @export
 #' @examples
-#' con <- DBI::dbConnect(duckdb::duckdb())
+#' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
 rel_from_df <- function(con, df) {
     rapi_rel_from_df(con@conn_ref, as.data.frame(df))

@@ -123,6 +123,12 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 			pstate->AddSegmentToTail(&column_data, segment.get(), offset_in_block);
 		} else {
 			// Create a new block for future reuse.
+			if (segment->SegmentSize() != Storage::BLOCK_SIZE) {
+				// the segment is smaller than the block size
+				// allocate a new block and copy the data over
+				D_ASSERT(segment->SegmentSize() < Storage::BLOCK_SIZE);
+				segment->Resize(Storage::BLOCK_SIZE);
+			}
 			D_ASSERT(offset_in_block == 0);
 			allocation.partial_block = make_unique<PartialBlockForCheckpoint>(
 			    &column_data, segment.get(), *allocation.block_manager, allocation.state);

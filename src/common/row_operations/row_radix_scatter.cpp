@@ -102,6 +102,7 @@ void RadixScatterListVector(Vector &v, UnifiedVectorFormat &vdata, const Selecti
 	auto list_data = ListVector::GetData(v);
 	auto &child_vector = ListVector::GetEntry(v);
 	auto list_size = ListVector::GetListSize(v);
+	child_vector.Flatten(list_size);
 
 	// serialize null values
 	if (has_null) {

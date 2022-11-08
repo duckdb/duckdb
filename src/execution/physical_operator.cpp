@@ -2,12 +2,13 @@
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/execution_context.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -123,41 +124,21 @@ idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalOperator::AddPipeline(Executor &executor, shared_ptr<Pipeline> pipeline, PipelineBuildState &state) {
-	if (!state.recursive_cte) {
-		// regular pipeline: schedule it
-		state.AddPipeline(executor, move(pipeline));
-	} else {
-		// CTE pipeline! add it to the CTE pipelines
-		auto &cte = (PhysicalRecursiveCTE &)*state.recursive_cte;
-		cte.pipelines.push_back(move(pipeline));
-	}
-}
-
-void PhysicalOperator::BuildChildPipeline(Executor &executor, Pipeline &current, PipelineBuildState &state,
-                                          PhysicalOperator *pipeline_child) {
-	auto pipeline = make_shared<Pipeline>(executor);
-	state.SetPipelineSink(*pipeline, this);
-	// the current is dependent on this pipeline to complete
-	current.AddDependency(pipeline);
-	// recurse into the pipeline child
-	pipeline_child->BuildPipelines(executor, *pipeline, state);
-	AddPipeline(executor, move(pipeline), state);
-}
-
-void PhysicalOperator::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
+
+	auto &state = meta_pipeline.GetState();
 	if (IsSink()) {
 		// operator is a sink, build a pipeline
 		sink_state.reset();
-
-		// single operator:
-		// the operator becomes the data source of the current pipeline
-		state.SetPipelineSource(current, this);
-		// we create a new pipeline starting from the child
 		D_ASSERT(children.size() == 1);
 
-		BuildChildPipeline(executor, current, state, children[0].get());
+		// single operator: the operator becomes the data source of the current pipeline
+		state.SetPipelineSource(current, this);
+
+		// we create a new pipeline starting from the child
+		auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
+		child_meta_pipeline->Build(children[0].get());
 	} else {
 		// operator is not a sink! recurse in children
 		if (children.empty()) {
@@ -168,7 +149,7 @@ void PhysicalOperator::BuildPipelines(Executor &executor, Pipeline &current, Pip
 				throw InternalException("Operator not supported in BuildPipelines");
 			}
 			state.AddPipelineOperator(current, this);
-			children[0]->BuildPipelines(executor, current, state);
+			children[0]->BuildPipelines(current, meta_pipeline);
 		}
 	}
 }
@@ -208,7 +189,7 @@ bool PhysicalOperator::AllOperatorsPreserveOrder() const {
 		return false;
 	}
 	for (auto &child : children) {
-		if (!child->IsOrderPreserving()) {
+		if (!child->AllOperatorsPreserveOrder()) {
 			return false;
 		}
 	}
@@ -265,19 +246,24 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
 
 #if STANDARD_VECTOR_SIZE >= 128
-	if (!context.pipeline || !caching_supported) {
+	if (!state.initialized) {
+		state.initialized = true;
+		state.can_cache_chunk = true;
+		if (!context.pipeline || !caching_supported) {
+			state.can_cache_chunk = false;
+		}
+
+		if (context.pipeline->GetSink() && context.pipeline->GetSink()->RequiresBatchIndex()) {
+			state.can_cache_chunk = false;
+		}
+
+		if (context.pipeline->IsOrderDependent()) {
+			state.can_cache_chunk = false;
+		}
+	}
+	if (!state.can_cache_chunk) {
 		return child_result;
 	}
-
-	if (context.pipeline->GetSink() && context.pipeline->GetSink()->RequiresBatchIndex() &&
-	    context.pipeline->GetSource()->SupportsBatchIndex()) {
-		return child_result;
-	}
-
-	if (context.pipeline->IsOrderDependent()) {
-		return child_result;
-	}
-
 	if (chunk.size() < CACHE_THRESHOLD) {
 		// we have filtered out a significant amount of tuples
 		// add this chunk to the cache and continue

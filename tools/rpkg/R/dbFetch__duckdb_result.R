@@ -11,7 +11,7 @@ dbFetch__duckdb_result <- function(res, n = -1, ...) {
     if (n != -1) {
       stop("Cannot dbFetch() an Arrow result unless n = -1")
     }
-    return(as.data.frame(duckdb::duckdb_fetch_arrow(res)))
+    return(as.data.frame(duckdb_fetch_arrow(res)))
   }
 
   if (is.null(res@env$resultset)) {

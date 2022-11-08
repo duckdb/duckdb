@@ -1,0 +1,100 @@
+# name: test/sql/storage/compression/patas/patas_stress_test.test_slow
+# group: [patas]
+
+# load the DB from disk
+load __TEST_DIR__/patas_min_max.db
+
+foreach type DOUBLE FLOAT
+
+statement ok
+pragma force_compression='uncompressed'
+
+# Create the initial data to start with (without this Constant compression will be used at first)
+statement ok
+create table temp_table as select random()::${type} * 100 from range(5);
+
+statement ok
+checkpoint
+
+foreach compression Patas Uncompressed
+
+# Ensure the correct compression is used
+statement ok
+pragma force_compression='${compression}'
+
+# Setup
+statement ok
+create table ${compression}_tbl(
+	data ${type}
+);
+
+statement ok
+insert into ${compression}_tbl select * from temp_table;
+
+statement ok
+checkpoint
+
+# compression
+endloop
+
+statement ok
+drop table temp_table;
+
+# ---------------- MAIN LOOP ----------------
+
+loop i 0 10240
+
+# Create a temporary table containing the value we want to add to both tables
+statement ok
+create table temp_table as select random()::${type} * 100 + ${i};
+
+foreach compression Patas Uncompressed
+
+# Ensure the correct compression is used
+statement ok
+pragma force_compression='${compression}'
+
+# Insert a single value into the table
+statement ok
+insert into ${compression}_tbl select * from temp_table;
+
+# Checkpoint the table with the newly added data
+statement ok
+checkpoint
+
+# And verify that no other compression is used
+query I
+SELECT compression FROM pragma_storage_info('${compression}_tbl') WHERE segment_type == '${type}' AND compression != '${compression}';
+----
+
+# compression
+endloop
+
+statement ok
+drop table temp_table;
+
+# ---------------- VERIFY CORRECTNESS ----------------
+
+query II
+select x as x_${i}, y as y_${i} from (
+	select
+		(select data from patas_tbl except select data from uncompressed_tbl) as x,
+		(select data from uncompressed_tbl except select data from patas_tbl) as y
+);
+----
+NULL	NULL
+
+# i
+endloop
+
+# Teardown
+foreach compression patas uncompressed
+
+statement ok
+drop table ${compression}_tbl;
+
+# compression
+endloop
+
+# type
+endloop

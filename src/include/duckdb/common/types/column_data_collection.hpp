@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/column_data_collection_iterators.hpp"
 
 namespace duckdb {
@@ -138,6 +139,9 @@ public:
 
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
+
+	//! Get a vector of references to every chunk (segment, index in segment), and optionally sort by block id
+	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
 
 private:
 	//! Creates a new segment within the ColumnDataCollection

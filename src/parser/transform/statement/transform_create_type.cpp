@@ -55,9 +55,18 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 	switch (stmt->kind) {
 	case duckdb_libpgquery::PG_NEWTYPE_ENUM: {
 		info->internal = false;
-		idx_t size = 0;
-		auto ordered_array = ReadPgListToVector(stmt->vals, size);
-		info->type = LogicalType::ENUM(info->name, ordered_array, size);
+		if (stmt->query) {
+			// CREATE TYPE mood AS ENUM (SELECT ...)
+			D_ASSERT(stmt->vals == nullptr);
+			auto query = TransformSelect(stmt->query, false);
+			info->query = move(query);
+			info->type = LogicalType::INVALID;
+		} else {
+			D_ASSERT(stmt->query == nullptr);
+			idx_t size = 0;
+			auto ordered_array = ReadPgListToVector(stmt->vals, size);
+			info->type = LogicalType::ENUM(info->name, ordered_array, size);
+		}
 	} break;
 
 	case duckdb_libpgquery::PG_NEWTYPE_ALIAS: {

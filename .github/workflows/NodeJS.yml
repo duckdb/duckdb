@@ -88,10 +88,12 @@ jobs:
       run: ./scripts/node_build.sh 15
 
     - name: Node 16
+      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
       shell: bash
       run: ./scripts/node_build.sh 16
 
     - name: Node 17
+      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
       shell: bash
       run: ./scripts/node_build.sh 17
 
@@ -104,6 +106,11 @@ jobs:
       name: node.js OSX
       runs-on: macos-latest
       needs: linux-nodejs
+      strategy:
+        matrix:
+          target_arch: [x64, arm64]
+      env:
+        TARGET_ARCH: ${{ matrix.target_arch }}
       steps:
       - uses: actions/checkout@v3
         with:
@@ -172,6 +179,12 @@ jobs:
              node: 12
            - isRelease: false
              node: 14
+           - isRelease: false
+             node: 15
+           - isRelease: false
+             node: 16
+           - isRelease: false
+             node: 17
 
      steps:
        - uses: actions/setup-python@v2

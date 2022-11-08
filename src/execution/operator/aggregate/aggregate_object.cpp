@@ -4,14 +4,15 @@
 namespace duckdb {
 
 AggregateObject::AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count,
-                                 idx_t payload_size, bool distinct, PhysicalType return_type, Expression *filter)
+                                 idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
+                                 Expression *filter)
     : function(move(function)), bind_data(bind_data), child_count(child_count), payload_size(payload_size),
-      distinct(distinct), return_type(return_type), filter(filter) {
+      aggr_type(aggr_type), return_type(return_type), filter(filter) {
 }
 
 AggregateObject::AggregateObject(BoundAggregateExpression *aggr)
     : AggregateObject(aggr->function, aggr->bind_info.get(), aggr->children.size(),
-                      AlignValue(aggr->function.state_size()), aggr->distinct, aggr->return_type.InternalType(),
+                      AlignValue(aggr->function.state_size()), aggr->aggr_type, aggr->return_type.InternalType(),
                       aggr->filter.get()) {
 }
 

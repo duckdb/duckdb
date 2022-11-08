@@ -35,12 +35,16 @@ class BufferManager {
 
 public:
 	BufferManager(DatabaseInstance &db, string temp_directory, idx_t maximum_memory);
-	~BufferManager();
+	virtual ~BufferManager();
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
 	//! not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so
 	//! it can be reloaded. The resulting buffer will already be allocated, but needs to be pinned in order to be used.
 	shared_ptr<BlockHandle> RegisterMemory(idx_t block_size, bool can_destroy);
+	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed
+	//! This buffer can be small (smaller than BLOCK_SIZE)
+	//! Unpin and pin are nops on this block of memory
+	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size);
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
@@ -81,14 +85,26 @@ public:
 	//! Construct a managed buffer.
 	//! The block_id is just used for internal tracking. It doesn't map to any actual
 	//! BlockManager.
-	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source);
+	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
+	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
 	//! If the "buffer" argument is specified AND the system can find a buffer to re-use for the given allocation size
 	//! "buffer" will be made to point to the re-usable memory. Note that this is not guaranteed.
-	bool EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
+	//! Returns a pair. result.first indicates if eviction was successful. result.second contains the
+	//! reservation handle, which can be moved to the BlockHandle that will own the reservation.
+	struct EvictionResult {
+		bool success;
+		TempBufferPoolReservation reservation;
+	};
+	EvictionResult EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
+
+	//! Helper
+	template <typename... ARGS>
+	TempBufferPoolReservation EvictBlocksOrThrow(idx_t extra_memory, idx_t limit, unique_ptr<FileBuffer> *buffer,
+	                                             ARGS...);
 
 	//! Garbage collect eviction queue
 	void PurgeQueue();
@@ -132,6 +148,8 @@ private:
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
+	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
+	atomic<uint32_t> queue_insertions;
 	//! Allocator associated with the buffer manager, that passes all allocations through this buffer manager
 	Allocator buffer_allocator;
 	//! Block manager for temp data

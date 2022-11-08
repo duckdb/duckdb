@@ -7,52 +7,74 @@
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
 #include <io.h>
+#else
+#include <sys/ioctl.h>
+#include <stdio.h>
+#include <unistd.h>
 #endif
 #endif
 
 namespace duckdb {
 
-// LCOV_EXCL_START
-void Printer::Print(const string &str) {
+void Printer::RawPrint(OutputStream stream, const string &str) {
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
-	if (IsTerminal()) {
+	if (IsTerminal(stream)) {
 		// print utf8 to terminal
 		auto unicode = WindowsUtil::UTF8ToMBCS(str.c_str());
-		fprintf(stderr, "%s\n", unicode.c_str());
+		fprintf(stream == OutputStream::STREAM_STDERR ? stderr : stdout, "%s", unicode.c_str());
 		return;
 	}
 #endif
-	fprintf(stderr, "%s\n", str.c_str());
+	fprintf(stream == OutputStream::STREAM_STDERR ? stderr : stdout, "%s", str.c_str());
 #endif
 }
 
-void Printer::PrintProgress(int percentage, const char *pbstr, int pbwidth) {
+// LCOV_EXCL_START
+void Printer::Print(OutputStream stream, const string &str) {
+	Printer::RawPrint(stream, str);
+	Printer::RawPrint(stream, "\n");
+}
+void Printer::Flush(OutputStream stream) {
 #ifndef DUCKDB_DISABLE_PRINT
-	int lpad = (int)(percentage / 100.0 * pbwidth);
-	int rpad = pbwidth - lpad;
-	printf("\r%3d%% [%.*s%*s]", percentage, lpad, pbstr, rpad, "");
-	fflush(stdout);
+	fflush(stream == OutputStream::STREAM_STDERR ? stderr : stdout);
 #endif
 }
 
-void Printer::FinishProgressBarPrint(const char *pbstr, int pbwidth) {
-#ifndef DUCKDB_DISABLE_PRINT
-	PrintProgress(100, pbstr, pbwidth);
-	printf(" \n");
-	fflush(stdout);
-#endif
+void Printer::Print(const string &str) {
+	Printer::Print(OutputStream::STREAM_STDERR, str);
 }
 
-bool Printer::IsTerminal() {
+bool Printer::IsTerminal(OutputStream stream) {
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
-	return GetFileType(GetStdHandle(STD_ERROR_HANDLE)) == FILE_TYPE_CHAR;
+	auto stream_handle = stream == OutputStream::STREAM_STDERR ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE;
+	return GetFileType(GetStdHandle(stream_handle)) == FILE_TYPE_CHAR;
 #else
-	throw InternalException("IsTerminal is only implemented for Windows");
+	return isatty(stream == OutputStream::STREAM_STDERR ? 2 : 1);
 #endif
+#else
+	throw InternalException("IsTerminal called while printing is disabled");
 #endif
-	return false;
+}
+
+idx_t Printer::TerminalWidth() {
+#ifndef DUCKDB_DISABLE_PRINT
+#ifdef DUCKDB_WINDOWS
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	int columns, rows;
+
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+	rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+	return rows;
+#else
+	struct winsize w;
+	ioctl(0, TIOCGWINSZ, &w);
+	return w.ws_col;
+#endif
+#else
+	throw InternalException("TerminalWidth called while printing is disabled");
+#endif
 }
 // LCOV_EXCL_STOP
 

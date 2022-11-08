@@ -14,6 +14,7 @@
 #include "utf8proc_wrapper.hpp"
 #include "utf8proc.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/main/error_manager.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -1048,8 +1049,10 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 					// try cast from string to sql_type
 					Value dummy_val;
 					if (is_header_row) {
+						VerifyUTF8(col, 0, header_row, -int64_t(parse_chunk.size()));
 						dummy_val = header_row.GetValue(col, 0);
 					} else {
+						VerifyUTF8(col, row, parse_chunk);
 						dummy_val = parse_chunk.GetValue(col, row);
 					}
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
@@ -1446,7 +1449,7 @@ normal:
 	} while (ReadBuffer(start));
 	goto final_state;
 add_value:
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -1459,7 +1462,7 @@ add_value:
 add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
 	offset = 0;
@@ -1597,7 +1600,7 @@ final_state:
 	}
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 	// final stage, only reached after parsing the file is finished
@@ -1657,7 +1660,7 @@ normal:
 	// file ends during normal scan: go to end state
 	goto final_state;
 add_value:
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -1670,7 +1673,7 @@ add_value:
 add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
-	AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
 	offset = 0;
@@ -1781,7 +1784,7 @@ final_state:
 
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start - offset, column, escape_positions, has_quotes);
+		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 
@@ -1882,8 +1885,8 @@ bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_ch
 	}
 }
 
-void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions,
-                                 bool has_quotes) {
+void BufferedCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes) {
+	auto length = str_val.GetSize();
 	if (length == 0 && column == 0) {
 		row_empty = true;
 	} else {
@@ -1903,27 +1906,25 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 			error_column_overflow = true;
 			return;
 		} else {
-			throw InvalidInputException("Error on line %s: expected %lld values per row, but got more. (%s)",
-			                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(),
-			                            options.ToString());
+			throw InvalidInputException(
+			    "Error in file \"%s\", on line %s: expected %lld values per row, but got more. (%s)", options.file_path,
+			    GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), options.ToString());
 		}
 	}
 
 	// insert the line number into the chunk
 	idx_t row_entry = parse_chunk.size();
 
-	str_val[length] = '\0';
-
 	// test against null string, but only if the value was not quoted
 	if ((!has_quotes || sql_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
-	    strcmp(options.null_str.c_str(), str_val) == 0) {
+	    Equals::Operation(str_val, string_t(options.null_str))) {
 		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
 	} else {
 		auto &v = parse_chunk.data[column];
 		auto parse_data = FlatVector::GetData<string_t>(v);
 		if (!escape_positions.empty()) {
 			// remove escape characters (if any)
-			string old_val = str_val;
+			string old_val = str_val.GetString();
 			string new_val = "";
 			idx_t prev_pos = 0;
 			for (idx_t i = 0; i < escape_positions.size(); i++) {
@@ -1940,7 +1941,7 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 			escape_positions.clear();
 			parse_data[row_entry] = StringVector::AddStringOrBlob(v, string_t(new_val));
 		} else {
-			parse_data[row_entry] = string_t(str_val, length);
+			parse_data[row_entry] = str_val;
 		}
 	}
 
@@ -1975,9 +1976,9 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 			column = 0;
 			return false;
 		} else {
-			throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
-			                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
-			                            options.ToString());
+			throw InvalidInputException(
+			    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d. (%s)", options.file_path,
+			    GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column, options.ToString());
 		}
 	}
 
@@ -2015,6 +2016,38 @@ void BufferedCSVReader::SetNullUnionCols(DataChunk &insert_chunk) {
 	}
 }
 
+void BufferedCSVReader::VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset) {
+	D_ASSERT(col_idx < chunk.data.size());
+	D_ASSERT(row_idx < chunk.size());
+	auto &v = chunk.data[col_idx];
+	if (FlatVector::IsNull(v, row_idx)) {
+		return;
+	}
+
+	auto parse_data = FlatVector::GetData<string_t>(chunk.data[col_idx]);
+	auto s = parse_data[row_idx];
+	auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
+	if (utf_type == UnicodeType::INVALID) {
+		string col_name = to_string(col_idx);
+		if (col_idx < col_names.size()) {
+			col_name = "\"" + col_names[col_idx] + "\"";
+		}
+		int64_t error_line = linenr - (chunk.size() - row_idx) + 1 + offset;
+		D_ASSERT(error_line >= 0);
+		throw InvalidInputException("Error in file \"%s\" at line %llu in column \"%s\": "
+		                            "%s. Parser options: %s",
+		                            options.file_path, error_line, col_name,
+		                            ErrorManager::InvalidUnicodeError(s.GetString(), "CSV file"), options.ToString());
+	}
+}
+
+void BufferedCSVReader::VerifyUTF8(idx_t col_idx) {
+	D_ASSERT(col_idx < parse_chunk.data.size());
+	for (idx_t i = 0; i < parse_chunk.size(); i++) {
+		VerifyUTF8(col_idx, i, parse_chunk);
+	}
+}
+
 void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	if (parse_chunk.size() == 0) {
 		return;
@@ -2028,23 +2061,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 		if (sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
-			auto parse_data = FlatVector::GetData<string_t>(parse_chunk.data[col_idx]);
-			for (idx_t i = 0; i < parse_chunk.size(); i++) {
-				if (!FlatVector::IsNull(parse_chunk.data[col_idx], i)) {
-					auto s = parse_data[i];
-					auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
-					if (utf_type == UnicodeType::INVALID) {
-						string col_name = to_string(col_idx);
-						if (col_idx < col_names.size()) {
-							col_name = "\"" + col_names[col_idx] + "\"";
-						}
-						throw InvalidInputException("Error in file \"%s\" between line %llu and %llu in column \"%s\": "
-						                            "file is not valid UTF8. Parser options: %s",
-						                            options.file_path, linenr - parse_chunk.size(), linenr, col_name,
-						                            options.ToString());
-					}
-				}
-			}
+			VerifyUTF8(col_idx);
 			insert_chunk.data[insert_cols_idx[col_idx]].Reference(parse_chunk.data[col_idx]);
 		} else {
 			string error_message;
@@ -2078,17 +2095,27 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				col_name = "\"" + col_names[col_idx] + "\"";
 			}
 
+			// figure out the exact line number
+			idx_t row_idx;
+			for (row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
+				auto &inserted_column = insert_chunk.data[col_idx];
+				auto &parsed_column = parse_chunk.data[col_idx];
+
+				if (FlatVector::IsNull(inserted_column, row_idx) && !FlatVector::IsNull(parsed_column, row_idx)) {
+					break;
+				}
+			}
+			auto error_line = linenr - (parse_chunk.size() - row_idx) + 1;
+
 			if (options.auto_detect) {
-				throw InvalidInputException("%s in column %s, between line %llu and %llu. Parser "
+				throw InvalidInputException("%s in column %s, at line %llu. Parser "
 				                            "options: %s. Consider either increasing the sample size "
 				                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
 				                            "or skipping column conversion (ALL_VARCHAR=1)",
-				                            error_message, col_name, linenr - parse_chunk.size() + 1, linenr,
-				                            options.ToString());
+				                            error_message, col_name, error_line, options.ToString());
 			} else {
-				throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
-				                            error_message, linenr - parse_chunk.size(), linenr, col_name,
-				                            options.ToString());
+				throw InvalidInputException("%s at line %llu in column %s. Parser options: %s ", error_message,
+				                            error_line, col_name, options.ToString());
 			}
 		}
 	}

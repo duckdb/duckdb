@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_string_struct_missing_val.benchmark
+# description: Cast string values to struct, with some missing values
+# group: [cast]
+
+name Cast VARCHAR -> STRUCT
+group cast
+
+load
+CREATE TABLE structs AS SELECT {'key_C': i, 'key_A': i + 1}::VARCHAR v FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN(CAST(v AS STRUCT(key_A INT, key_B INT, key_C INT))) FROM structs;
+
+result I
+{'key_A': 1, 'key_B': NULL, 'key_C': 0}

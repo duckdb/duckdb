@@ -20,6 +20,7 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -141,6 +142,15 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		} else {
 			type = LogicalType::MAP(child_types);
 		}
+		type.SetAlias(alias);
+	} else if (type.id() == LogicalTypeId::UNION) {
+		auto member_types = UnionType::CopyMemberTypes(type);
+		for (auto &member_type : member_types) {
+			BindLogicalType(context, member_type.second, schema);
+		}
+		// Generate new Union Type
+		auto alias = type.GetAlias();
+		type = LogicalType::UNION(member_types);
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto &catalog = Catalog::GetCatalog(context);
@@ -442,7 +452,45 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
+		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
+		if (create_type_info.query) {
+			// CREATE TYPE mood AS ENUM (SELECT 'happy')
+			auto &select_stmt = (SelectStatement &)*create_type_info.query;
+			auto &query_node = *select_stmt.node;
+
+			// We always add distinct modifier implicitly
+			bool need_to_add = true;
+			if (!query_node.modifiers.empty()) {
+				if (query_node.modifiers[0]->type == ResultModifierType::DISTINCT_MODIFIER) {
+					// There are cases where the same column is grouped repeatedly
+					// CREATE TYPE mood AS ENUM (SELECT DISTINCT ON(x) x FROM test);
+					// When we push into a constant expression
+					// => CREATE TYPE mood AS ENUM (SELECT DISTINCT ON(x, x) x FROM test);
+					auto &distinct_modifier = (DistinctModifier &)*query_node.modifiers[0];
+					distinct_modifier.distinct_on_targets.push_back(make_unique<ConstantExpression>(Value::INTEGER(1)));
+					need_to_add = false;
+				}
+			}
+
+			// Add distinct modifier
+			if (need_to_add) {
+				auto distinct_modifier = make_unique<DistinctModifier>();
+				distinct_modifier->distinct_on_targets.push_back(make_unique<ConstantExpression>(Value::INTEGER(1)));
+				query_node.modifiers.emplace(query_node.modifiers.begin(), move(distinct_modifier));
+			}
+
+			auto query_obj = Bind(*create_type_info.query);
+			auto query = move(query_obj.plan);
+
+			auto &sql_types = query_obj.types;
+			if (sql_types.size() != 1 || sql_types[0].id() != LogicalType::VARCHAR) {
+				// add cast expression?
+				throw BinderException("The query must return one varchar column");
+			}
+
+			result.plan->AddChild(move(query));
+		}
 		break;
 	}
 	default:

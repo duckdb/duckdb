@@ -29,27 +29,41 @@ DataChunk::~DataChunk() {
 }
 
 void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
-	capacity = STANDARD_VECTOR_SIZE;
-	D_ASSERT(data.empty());   // can only be initialized once
-	D_ASSERT(!types.empty()); // empty chunk not allowed
-	for (idx_t i = 0; i < types.size(); i++) {
-		data.emplace_back(Vector(types[i], nullptr));
-	}
+	InitializeEmpty(types.begin(), types.end());
 }
 
-void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types) {
-	D_ASSERT(data.empty());   // can only be initialized once
-	D_ASSERT(!types.empty()); // empty chunk not allowed
-	capacity = STANDARD_VECTOR_SIZE;
-	for (idx_t i = 0; i < types.size(); i++) {
-		VectorCache cache(allocator, types[i]);
+void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity_p) {
+	Initialize(allocator, types.begin(), types.end(), capacity_p);
+}
+
+void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types, idx_t capacity_p) {
+	Initialize(Allocator::Get(context), types, capacity_p);
+}
+
+void DataChunk::Initialize(Allocator &allocator, vector<LogicalType>::const_iterator begin,
+                           vector<LogicalType>::const_iterator end, idx_t capacity_p) {
+	D_ASSERT(data.empty());                   // can only be initialized once
+	D_ASSERT(std::distance(begin, end) != 0); // empty chunk not allowed
+	capacity = capacity_p;
+	for (; begin != end; begin++) {
+		VectorCache cache(allocator, *begin, capacity);
 		data.emplace_back(cache);
 		vector_caches.push_back(move(cache));
 	}
 }
 
-void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types) {
-	Initialize(Allocator::Get(context), types);
+void DataChunk::Initialize(ClientContext &context, vector<LogicalType>::const_iterator begin,
+                           vector<LogicalType>::const_iterator end, idx_t capacity_p) {
+	Initialize(Allocator::Get(context), begin, end, capacity_p);
+}
+
+void DataChunk::InitializeEmpty(vector<LogicalType>::const_iterator begin, vector<LogicalType>::const_iterator end) {
+	capacity = STANDARD_VECTOR_SIZE;
+	D_ASSERT(data.empty());                   // can only be initialized once
+	D_ASSERT(std::distance(begin, end) != 0); // empty chunk not allowed
+	for (; begin != end; begin++) {
+		data.emplace_back(Vector(*begin, nullptr));
+	}
 }
 
 void DataChunk::Reset() {
@@ -93,8 +107,8 @@ bool DataChunk::AllConstant() const {
 
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
-	SetCardinality(chunk);
 	SetCapacity(chunk);
+	SetCardinality(chunk);
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 		data[i].Reference(chunk.data[i]);
 	}
@@ -145,8 +159,8 @@ void DataChunk::Split(DataChunk &other, idx_t split_idx) {
 		data.pop_back();
 		vector_caches.pop_back();
 	}
-	other.SetCardinality(*this);
 	other.SetCapacity(*this);
+	other.SetCardinality(*this);
 }
 
 void DataChunk::Fuse(DataChunk &other) {

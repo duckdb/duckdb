@@ -27,6 +27,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/main/error_manager.hpp"
 
 #include <utility>
 #include <cmath>
@@ -63,7 +64,7 @@ Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false), str_value(move(val)) {
 	if (!Value::StringIsValid(str_value.c_str(), str_value.size())) {
-		throw Exception("String value is not valid UTF8");
+		throw Exception(ErrorManager::InvalidUnicodeError(str_value, "value construction"));
 	}
 }
 
@@ -541,9 +542,34 @@ Value Value::MAP(Value key, Value value) {
 	return result;
 }
 
+Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) {
+	D_ASSERT(members.size() > 0);
+	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
+	D_ASSERT(members.size() > tag);
+
+	D_ASSERT(value.type() == members[tag].second);
+
+	Value result;
+	result.is_null = false;
+	// add the tag to the front of the struct
+	result.struct_value.emplace_back(Value::TINYINT(tag));
+	for (idx_t i = 0; i < members.size(); i++) {
+		if (i != tag) {
+			result.struct_value.emplace_back(members[i].second);
+		} else {
+			result.struct_value.emplace_back(nullptr);
+		}
+	}
+	result.struct_value[tag + 1] = move(value);
+
+	result.type_ = LogicalType::UNION(move(members));
+	return result;
+}
+
 Value Value::LIST(vector<Value> values) {
 	if (values.empty()) {
-		throw InternalException("Value::LIST requires a non-empty list of values. Use Value::EMPTYLIST instead.");
+		throw InternalException("Value::LIST without providing a child-type requires a non-empty list of values. Use "
+		                        "Value::LIST(child_type, list) instead.");
 	}
 #ifdef DEBUG
 	for (idx_t i = 1; i < values.size(); i++) {
@@ -1398,6 +1424,21 @@ const vector<Value> &ListValue::GetChildren(const Value &value) {
 	return value.list_value;
 }
 
+const Value &UnionValue::GetValue(const Value &value) {
+	D_ASSERT(value.type() == LogicalTypeId::UNION);
+	auto &children = StructValue::GetChildren(value);
+	auto tag = children[0].GetValueUnsafe<uint8_t>();
+	D_ASSERT(tag < children.size() - 1);
+	return children[tag + 1];
+}
+
+uint8_t UnionValue::GetTag(const Value &value) {
+	D_ASSERT(value.type() == LogicalTypeId::UNION);
+	auto children = StructValue::GetChildren(value);
+	auto tag = children[0].GetValueUnsafe<uint8_t>();
+	return tag;
+}
+
 hugeint_t IntegralValue::Get(const Value &value) {
 	switch (value.type().InternalType()) {
 	case PhysicalType::INT8:
@@ -1682,6 +1723,17 @@ bool Value::NotDistinctFrom(const Value &lvalue, const Value &rvalue) {
 	return ValueOperations::NotDistinctFrom(lvalue, rvalue);
 }
 
+static string SanitizeValue(string input) {
+	// some results might contain padding spaces, e.g. when rendering
+	// VARCHAR(10) and the string only has 6 characters, they will be padded
+	// with spaces to 10 in the rendering. We don't do that here yet as we
+	// are looking at internal structures. So just ignore any extra spaces
+	// on the right
+	StringUtil::RTrim(input);
+	// for result checking code, replace null bytes with their escaped value (\0)
+	return StringUtil::Replace(input, string("\0", 1), "\\0");
+}
+
 bool Value::ValuesAreEqual(CastFunctionSet &set, GetCastFunctionInput &get_input, const Value &result_value,
                            const Value &value) {
 	if (result_value.IsNull() != value.IsNull()) {
@@ -1706,15 +1758,8 @@ bool Value::ValuesAreEqual(CastFunctionSet &set, GetCastFunctionInput &get_input
 	}
 	case LogicalTypeId::VARCHAR: {
 		auto other = result_value.CastAs(set, get_input, LogicalType::VARCHAR);
-		// some results might contain padding spaces, e.g. when rendering
-		// VARCHAR(10) and the string only has 6 characters, they will be padded
-		// with spaces to 10 in the rendering. We don't do that here yet as we
-		// are looking at internal structures. So just ignore any extra spaces
-		// on the right
-		string left = other.str_value;
-		string right = value.str_value;
-		StringUtil::RTrim(left);
-		StringUtil::RTrim(right);
+		string left = SanitizeValue(other.str_value);
+		string right = SanitizeValue(value.str_value);
 		return left == right;
 	}
 	default:

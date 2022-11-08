@@ -42,6 +42,8 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_PARQUET: 1
+      BUILD_SUBSTRAIT_EXTENSION: 1
+      BUILD_JEMALLOC: 1
       GEN: ninja
 
     steps:
@@ -84,6 +86,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -105,7 +108,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: build/reldebug/test/unittest "*" --force-storage
+      run: build/reldebug/test/unittest --force-storage
 
  force-restart:
     name: Force Restart
@@ -124,6 +127,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -145,7 +149,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: build/reldebug/test/unittest "*" --force-reload --force-storage
+      run: build/reldebug/test/unittest --force-reload --force-storage
 
  no-string-inline:
     name: No String Inline
@@ -236,6 +240,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
       TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
 
     steps:
@@ -274,6 +279,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       DISABLE_SANITIZER: 1
+      BUILD_JEMALLOC: 1
       GEN: ninja
 
     steps:
