@@ -568,7 +568,8 @@ Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) 
 
 Value Value::LIST(vector<Value> values) {
 	if (values.empty()) {
-		throw InternalException("Value::LIST requires a non-empty list of values. Use Value::EMPTYLIST instead.");
+		throw InternalException("Value::LIST without providing a child-type requires a non-empty list of values. Use "
+		                        "Value::LIST(child_type, list) instead.");
 	}
 #ifdef DEBUG
 	for (idx_t i = 1; i < values.size(); i++) {

@@ -43,6 +43,14 @@ void Event::Finish() {
 void Event::AddDependency(Event &event) {
 	total_dependencies++;
 	event.parents.push_back(weak_ptr<Event>(shared_from_this()));
+#ifdef DEBUG
+	event.parents_raw.push_back(this);
+#endif
+}
+
+const vector<Event *> &Event::GetParentsVerification() const {
+	D_ASSERT(parents.size() == parents_raw.size());
+	return parents_raw;
 }
 
 void Event::FinishTask() {
@@ -57,6 +65,9 @@ void Event::FinishTask() {
 
 void Event::InsertEvent(shared_ptr<Event> replacement_event) {
 	replacement_event->parents = move(parents);
+#ifdef DEBUG
+	replacement_event->parents_raw = move(parents_raw);
+#endif
 	replacement_event->AddDependency(*this);
 	executor.AddEvent(move(replacement_event));
 }
