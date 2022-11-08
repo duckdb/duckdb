@@ -231,8 +231,6 @@ public:
 		}
 		current_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
 		next_buffer = current_buffer->Next(*file_handle, buffer_size);
-		all_buffers.push_back(current_buffer);
-		all_buffers.push_back(next_buffer);
 	}
 	ParallelCSVGlobalState() {
 	}
@@ -275,7 +273,7 @@ private:
 	idx_t buffer_size;
 	//! Current batch index
 	idx_t batch_index = 0;
-	vector<shared_ptr<CSVBuffer>> all_buffers;
+//	vector<shared_ptr<CSVBuffer>> all_buffers;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
@@ -312,7 +310,6 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 		if (next_buffer) {
 			// Next buffer gets the next-next buffer
 			next_buffer = next_buffer->Next(*file_handle, buffer_size);
-			all_buffers.push_back(next_buffer);
 		}
 	}
 	if (current_buffer && !next_buffer) {
