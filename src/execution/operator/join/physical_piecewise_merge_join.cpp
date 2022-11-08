@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
-#include "duckdb/execution/operator/join/outer_join_marker.hpp"
 
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -8,6 +7,7 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/operator/join/outer_join_marker.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -196,6 +196,7 @@ public:
 	RowLayout lhs_layout;
 	unique_ptr<LocalSortedTable> lhs_local_table;
 	unique_ptr<GlobalSortState> lhs_global_state;
+	unique_ptr<PayloadScanner> scanner;
 
 	// Simple scans
 	idx_t left_position;
@@ -212,7 +213,7 @@ public:
 	DataChunk rhs_keys;
 	DataChunk rhs_input;
 	ExpressionExecutor rhs_executor;
-	BufferHandle payload_heap_handle;
+	vector<BufferHandle> payload_heap_handles;
 
 public:
 	void ResolveJoinKeys(DataChunk &input) {
@@ -234,9 +235,9 @@ public:
 		// Scan the sorted payload
 		D_ASSERT(lhs_global_state->sorted_blocks.size() == 1);
 
-		PayloadScanner scanner(*lhs_global_state->sorted_blocks[0]->payload_data, *lhs_global_state);
+		scanner = make_unique<PayloadScanner>(*lhs_global_state->sorted_blocks[0]->payload_data, *lhs_global_state);
 		lhs_payload.Reset();
-		scanner.Scan(lhs_payload);
+		scanner->Scan(lhs_payload);
 
 		// Recompute the sorted keys from the sorted input
 		lhs_local_table->keys.Reset();
@@ -512,6 +513,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	auto &rsorted = *gstate.table->global_sort_state.sorted_blocks[0];
 	const auto left_cols = input.ColumnCount();
 	const auto tail_cols = conditions.size() - 1;
+
+	state.payload_heap_handles.clear();
 	do {
 		if (state.first_fetch) {
 			state.ResolveJoinKeys(input);
@@ -562,8 +565,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			for (idx_t c = 0; c < state.lhs_payload.ColumnCount(); ++c) {
 				chunk.data[c].Slice(state.lhs_payload.data[c], left_info.result, result_count);
 			}
-			state.payload_heap_handle = SliceSortedPayload(chunk, right_info.state, right_info.block_idx,
-			                                               right_info.result, result_count, left_cols);
+			state.payload_heap_handles.push_back(SliceSortedPayload(chunk, right_info.state, right_info.block_idx,
+			                                                        right_info.result, result_count, left_cols));
 			chunk.SetCardinality(result_count);
 
 			auto sel = FlatVector::IncrementalSelectionVector();

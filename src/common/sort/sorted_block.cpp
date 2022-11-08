@@ -324,7 +324,7 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, bool flush_p)
 
 PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx) {
 	auto &sorted_data = *global_sort_state.sorted_blocks[0]->payload_data;
-	auto count = sorted_data.Count();
+	auto count = sorted_data.data_blocks[block_idx]->count;
 	auto &layout = sorted_data.layout;
 
 	// Create collections to put the data into so we can use RowDataCollectionScanner
@@ -333,7 +333,7 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_i
 	rows->count = count;
 
 	heap = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
-	if (!sorted_data.layout.AllConstant()) {
+	if (!sorted_data.layout.AllConstant() && sorted_data.swizzled) {
 		heap->blocks.emplace_back(sorted_data.heap_blocks[block_idx]->Copy());
 		heap->count = count;
 	}

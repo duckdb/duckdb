@@ -125,9 +125,6 @@ public:
 
 	BufferHandle payload_data_handle;
 	BufferHandle payload_heap_handle;
-
-	// We must pin ALL blocks we are going to gather from
-	vector<BufferHandle> pinned_blocks;
 };
 
 //! Used to scan the data into DataChunks after sorting
