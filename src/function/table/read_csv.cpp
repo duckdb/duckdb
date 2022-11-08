@@ -274,7 +274,6 @@ private:
 	idx_t buffer_size;
 	//! Current batch index
 	idx_t batch_index = 0;
-//	vector<shared_ptr<CSVBuffer>> all_buffers;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {

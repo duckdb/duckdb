@@ -51,7 +51,7 @@ struct CSVBufferRead {
 	string_t GetValue(idx_t start_buffer, idx_t position_buffer, idx_t offset) {
 		idx_t length = position_buffer - start_buffer - offset;
 		// 1) It's all in the current buffer
-		if (start_buffer + length < buffer->GetBufferSize()) {
+		if (start_buffer + length <= buffer->GetBufferSize()) {
 			auto buffer_ptr = buffer->buffer.get();
 			return string_t(buffer_ptr + start_buffer, length);
 		} else if (start_buffer >= buffer->GetBufferSize()) {
