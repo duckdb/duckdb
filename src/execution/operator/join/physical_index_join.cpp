@@ -1,14 +1,16 @@
 #include "duckdb/execution/operator/join/physical_index_join.hpp"
-#include "duckdb/parallel/thread_context.hpp"
+
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
@@ -210,12 +212,12 @@ OperatorResultType PhysicalIndexJoin::ExecuteInternal(ExecutionContext &context,
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalIndexJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+void PhysicalIndexJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	// index join: we only continue into the LHS
 	// the right side is probed by the index join
 	// so we don't need to do anything in the pipeline with this child
-	state.AddPipelineOperator(current, this);
-	children[0]->BuildPipelines(executor, current, state);
+	meta_pipeline.GetState().AddPipelineOperator(current, this);
+	children[0]->BuildPipelines(current, meta_pipeline);
 }
 
 vector<const PhysicalOperator *> PhysicalIndexJoin::GetSources() const {

@@ -1,6 +1,8 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
-#include "duckdb/parallel/thread_context.hpp"
+
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -14,25 +16,32 @@ PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalUnion::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
-	if (state.recursive_cte) {
-		throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");
-	}
+void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 	sink_state.reset();
 
-	auto union_pipeline = make_shared<Pipeline>(executor);
-	auto pipeline_ptr = union_pipeline.get();
-	auto &union_pipelines = state.GetUnionPipelines(executor);
-	// for the current pipeline, continue building on the LHS
-	state.SetPipelineOperators(*union_pipeline, state.GetPipelineOperators(current));
-	children[0]->BuildPipelines(executor, current, state);
-	// insert the union pipeline as a union pipeline of the current node
-	union_pipelines[&current].push_back(move(union_pipeline));
+	// order matters if any of the downstream operators are order dependent,
+	// or if the sink preserves order, but does not support batch indices to do so
+	auto snk = meta_pipeline.GetSink();
+	bool order_matters = current.IsOrderDependent() || (snk && snk->IsOrderPreserving() && !snk->RequiresBatchIndex());
 
-	// for the union pipeline, build on the RHS
-	state.SetPipelineSink(*pipeline_ptr, state.GetPipelineSink(current));
-	children[1]->BuildPipelines(executor, *pipeline_ptr, state);
+	// create a union pipeline that is identical to 'current'
+	auto union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
+
+	// continue with the current pipeline
+	children[0]->BuildPipelines(current, meta_pipeline);
+
+	if (order_matters) {
+		// order matters, so 'union_pipeline' must come after all pipelines created by building out 'current'
+		meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
+	}
+
+	// build the union pipeline
+	children[1]->BuildPipelines(*union_pipeline, meta_pipeline);
+
+	// Assign proper batch index to the union pipeline
+	// This needs to happen after the pipelines have been built because unions can be nested
+	meta_pipeline.AssignNextBatchIndex(union_pipeline);
 }
 
 vector<const PhysicalOperator *> PhysicalUnion::GetSources() const {
