@@ -67,7 +67,9 @@ struct NextSequenceValueOperator {
 		}
 		seq->last_value = result;
 		seq->usage_count++;
-		transaction.sequence_usage[seq] = SequenceValue(seq->usage_count, seq->counter);
+		if (!seq->temporary) {
+			transaction.sequence_usage[seq] = SequenceValue(seq->usage_count, seq->counter);
+		}
 		return result;
 	}
 };

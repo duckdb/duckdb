@@ -2,6 +2,8 @@
 # description: Get current timestamp and similar functions cannot be used in indexes
 # group: [pedro]
 
+load __TEST_DIR__/index_current_timestamp.db
+
 statement ok
 CREATE TABLE t1(c0 INT, c1 VARCHAR);
 
@@ -28,3 +30,21 @@ Cannot use nextval
 
 statement ok
 DELETE FROM t1;
+
+# now with an empty table
+# we can create the index
+statement ok
+CREATE INDEX i1 ON t1((get_current_timestamp()), c1);
+
+# but attempting to insert a value borks it up
+statement error
+INSERT INTO t1 VALUES (42, 'hello')
+----
+Cannot use get_current_timestamp
+
+restart
+
+statement error
+INSERT INTO t1 VALUES (42, 'hello')
+----
+Cannot use get_current_timestamp
