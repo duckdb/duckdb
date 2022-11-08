@@ -13,20 +13,6 @@
 
 namespace duckdb {
 
-struct LogicalIndex {
-	explicit LogicalIndex(idx_t index) : index(index) {
-	}
-
-	idx_t index;
-};
-
-struct PhysicalIndex {
-	explicit PhysicalIndex(idx_t index) : index(index) {
-	}
-
-	idx_t index;
-};
-
 //! A set of column definitions
 class ColumnList {
 public:

@@ -438,7 +438,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
 			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
 			auto &col = table.columns.GetColumn(LogicalIndex(not_null.index));
-			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index], chunk.size(), col.Name());
+			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index], chunk.size(), col.Name());
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -829,7 +829,7 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
 			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
 			// check if the constraint is in the list of column_ids
 			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (column_ids[i] == bound_not_null.index) {
+				if (column_ids[i] == bound_not_null.index.index) {
 					// found the column id: check the data in
 					auto &col = table.columns.GetColumn(LogicalIndex(not_null.index));
 					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), col.Name());

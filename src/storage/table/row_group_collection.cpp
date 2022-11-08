@@ -667,14 +667,15 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 	// scan the original table, check if there's any null value
 	auto &not_null_constraint = (BoundNotNullConstraint &)constraint;
 	vector<LogicalType> scan_types;
-	D_ASSERT(not_null_constraint.index < types.size());
-	scan_types.push_back(types[not_null_constraint.index]);
+	auto physical_index = not_null_constraint.index.index;
+	D_ASSERT(physical_index < types.size());
+	scan_types.push_back(types[physical_index]);
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(GetAllocator(), scan_types);
 
 	CreateIndexScanState state;
 	vector<column_t> cids;
-	cids.push_back(not_null_constraint.index);
+	cids.push_back(physical_index);
 	// Use ScanCommitted to scan the latest committed data
 	state.Initialize(cids, nullptr);
 	InitializeScan(state.table_state, cids, nullptr);
@@ -688,7 +689,7 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 		// Check constraint
 		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
 			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
-			                          parent.column_definitions[not_null_constraint.index].GetName());
+			                          parent.column_definitions[physical_index].GetName());
 		}
 	}
 }

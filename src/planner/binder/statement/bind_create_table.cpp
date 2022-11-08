@@ -61,7 +61,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = (NotNullConstraint &)*cond;
 			auto &col = base.columns.GetColumn(LogicalIndex(not_null.index));
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(col.StorageOid()));
+			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid())));
 			not_null_columns.insert(not_null.index);
 			break;
 		}
@@ -136,7 +136,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			}
 			auto &column = base.columns.GetColumn(LogicalIndex(column_index));
 			base.constraints.push_back(make_unique<NotNullConstraint>(column_index));
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column.StorageOid()));
+			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(PhysicalIndex(column.StorageOid())));
 		}
 	}
 }

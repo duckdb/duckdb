@@ -74,6 +74,26 @@ typedef idx_t storage_t;
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 DUCKDB_API bool IsRowIdColumnId(column_t column_id);
 
+struct LogicalIndex {
+	explicit LogicalIndex(idx_t index) : index(index) {
+	}
+
+	idx_t index;
+
+	inline bool operator==(const LogicalIndex &rhs) const {return index == rhs.index;};
+	inline bool operator!=(const LogicalIndex &rhs) const {return index != rhs.index;};
+};
+
+struct PhysicalIndex {
+	explicit PhysicalIndex(idx_t index) : index(index) {
+	}
+
+	idx_t index;
+
+	inline bool operator==(const PhysicalIndex &rhs) const {return index == rhs.index;};
+	inline bool operator!=(const PhysicalIndex &rhs) const {return index != rhs.index;};
+};
+
 //! The maximum row identifier used in tables
 extern const row_t MAX_ROW_ID;
 

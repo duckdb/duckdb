@@ -252,7 +252,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 			case ConstraintType::NOT_NULL: {
 				auto &bound_not_null = (BoundNotNullConstraint &)bound_constraint;
-				column_index_list.push_back(bound_not_null.index);
+				column_index_list.push_back(bound_not_null.index.index);
 				break;
 			}
 			case ConstraintType::FOREIGN_KEY: {

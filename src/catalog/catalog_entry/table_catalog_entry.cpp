@@ -360,10 +360,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null_constraint = (BoundNotNullConstraint &)*bound_constraint;
-			if (not_null_constraint.index != removed_index) {
+			if (not_null_constraint.index.index != removed_index) {
 				// the constraint is not about this column: we need to copy it
 				// we might need to shift the index back by one though, to account for the removed column
-				idx_t new_index = not_null_constraint.index;
+				idx_t new_index = not_null_constraint.index.index;
 				new_index = adjusted_indices[new_index];
 				create_info->constraints.push_back(make_unique<NotNullConstraint>(new_index));
 			}
@@ -505,7 +505,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 	// Return with new storage info. Note that we need the bound column index here.
 	auto new_storage = make_shared<DataTable>(
 	    context, *storage,
-	    make_unique<BoundNotNullConstraint>(columns.LogicalToPhysical(LogicalIndex(not_null_idx)).index));
+	    make_unique<BoundNotNullConstraint>(columns.LogicalToPhysical(LogicalIndex(not_null_idx))));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }

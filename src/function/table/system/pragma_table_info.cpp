@@ -70,7 +70,7 @@ static void CheckConstraints(TableCatalogEntry *table, idx_t oid, bool &out_not_
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = (BoundNotNullConstraint &)*constraint;
-			if (not_null.index == oid) {
+			if (not_null.index.index == oid) {
 				out_not_null = true;
 			}
 			break;
