@@ -65,9 +65,9 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	case duckdb_libpgquery::PG_CONSTR_CHECK:
 		return TransformConstraint(cell);
 	case duckdb_libpgquery::PG_CONSTR_PRIMARY:
-		return make_unique<UniqueConstraint>(index, true);
+		return make_unique<UniqueConstraint>(LogicalIndex(index), true);
 	case duckdb_libpgquery::PG_CONSTR_UNIQUE:
-		return make_unique<UniqueConstraint>(index, false);
+		return make_unique<UniqueConstraint>(LogicalIndex(index), false);
 	case duckdb_libpgquery::PG_CONSTR_NULL:
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_GENERATED_VIRTUAL: {

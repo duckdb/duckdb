@@ -19,7 +19,7 @@ namespace duckdb {
 
 struct UniqueKeyInfo {
 	string schema, table;
-	vector<storage_t> columns;
+	vector<LogicalIndex> columns;
 
 	bool operator==(const UniqueKeyInfo &other) const {
 		return (schema == other.schema) && (table == other.table) && (columns == other.columns);
@@ -39,7 +39,7 @@ struct hash<duckdb::UniqueKeyInfo> {
 
 	size_t operator()(const duckdb::UniqueKeyInfo &j) const {
 		D_ASSERT(j.columns.size() > 0);
-		return ComputeHash(j.schema) + ComputeHash(j.table) + ComputeHash(j.columns[0]);
+		return ComputeHash(j.schema) + ComputeHash(j.table) + ComputeHash(j.columns[0].index);
 	}
 };
 
@@ -192,7 +192,11 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			case ConstraintType::FOREIGN_KEY: {
 				const auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
 				const auto &info = bound_foreign_key.info;
-				uk_info = {info.schema, info.table, info.pk_keys};
+				vector<LogicalIndex> index;
+				for(auto &key : info.pk_keys) {
+					index.push_back(LogicalIndex(key));
+				}
+				uk_info = {info.schema, info.table, index};
 				if (uk_info.schema.empty()) {
 					// FIXME: Can we somehow make use of Binder::BindSchema() here?
 					// From experiments, an omitted schema in REFERENCES ... means "main" or "temp", even if the table
@@ -246,7 +250,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			case ConstraintType::UNIQUE: {
 				auto &bound_unique = (BoundUniqueConstraint &)bound_constraint;
 				for (auto &col_idx : bound_unique.keys) {
-					column_index_list.push_back(column_t(col_idx));
+					column_index_list.push_back(col_idx.index);
 				}
 				break;
 			}

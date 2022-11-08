@@ -180,7 +180,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		found_constraint = true;
 
 		vector<string> pk_names;
-		if (unique.index != DConstants::INVALID_INDEX) {
+		if (unique.index.index != DConstants::INVALID_INDEX) {
 			pk_names.push_back(columns.GetColumn(LogicalIndex(unique.index)).Name());
 		} else {
 			pk_names = unique.columns;
@@ -308,14 +308,14 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 		case ConstraintType::UNIQUE: {
 			auto &constraint = (UniqueConstraint &)*constr;
 			auto index = constraint.index;
-			if (index == DConstants::INVALID_INDEX) {
+			if (index.index == DConstants::INVALID_INDEX) {
 				for (auto &col : constraint.columns) {
 					if (generated_columns.count(col)) {
 						return true;
 					}
 				}
 			} else {
-				if (table_info.columns.GetColumn(LogicalIndex(index)).Generated()) {
+				if (table_info.columns.GetColumn(index).Generated()) {
 					return true;
 				}
 			}

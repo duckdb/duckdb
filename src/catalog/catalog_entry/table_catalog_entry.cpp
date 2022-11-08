@@ -52,14 +52,15 @@ column_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) 
 	return GetColumnIndexLogical(column_name, if_exists).index;
 }
 
-void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<idx_t> &keys,
+void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<LogicalIndex> &keys,
                        IndexConstraintType constraint_type, BlockPointer *index_block = nullptr) {
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> unbound_expressions;
 	vector<unique_ptr<Expression>> bound_expressions;
 	idx_t key_nr = 0;
-	for (auto &key : keys) {
+	for (auto &logical_key : keys) {
+		auto key = logical_key.index;
 		D_ASSERT(key < columns.size());
 		auto &column = columns[key];
 		if (column.Generated()) {
@@ -85,6 +86,15 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 		}
 	}
 	storage->info->indexes.AddIndex(move(art));
+}
+
+void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<storage_t> &keys,
+                       IndexConstraintType constraint_type, BlockPointer *index_block = nullptr) {
+	vector<LogicalIndex> new_keys;
+	for(idx_t i = 0; i < keys.size(); i++) {
+		new_keys.push_back(LogicalIndex(keys[i]));
+	}
+	AddDataTableIndex(storage, columns, new_keys, constraint_type, index_block);
 }
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
@@ -395,13 +405,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		case ConstraintType::UNIQUE: {
 			auto copy = constraint->Copy();
 			auto &unique = (UniqueConstraint &)*copy;
-			if (unique.index != DConstants::INVALID_INDEX) {
-				if (unique.index == removed_index) {
+			if (unique.index.index != DConstants::INVALID_INDEX) {
+				if (unique.index.index == removed_index) {
 					throw CatalogException(
 					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
 					    info.removed_column);
 				}
-				unique.index = adjusted_indices[unique.index];
+				unique.index.index = adjusted_indices[unique.index.index];
 			}
 			create_info->constraints.push_back(move(copy));
 			break;
@@ -577,7 +587,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			break;
 		case ConstraintType::UNIQUE: {
 			auto &bound_unique = (BoundUniqueConstraint &)*bound_constraints[i];
-			if (bound_unique.key_set.find(change_idx) != bound_unique.key_set.end()) {
+			if (bound_unique.key_set.find(LogicalIndex(change_idx)) != bound_unique.key_set.end()) {
 				throw BinderException(
 				    "Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
 			}
@@ -727,8 +737,8 @@ string TableCatalogEntry::ToSQL() {
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
 	logical_index_set_t not_null_columns;
-	unordered_set<idx_t> unique_columns;
-	unordered_set<idx_t> pk_columns;
+	logical_index_set_t unique_columns;
+	logical_index_set_t pk_columns;
 	unordered_set<string> multi_key_pks;
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
@@ -738,7 +748,7 @@ string TableCatalogEntry::ToSQL() {
 		} else if (constraint->type == ConstraintType::UNIQUE) {
 			auto &pk = (UniqueConstraint &)*constraint;
 			vector<string> constraint_columns = pk.columns;
-			if (pk.index != DConstants::INVALID_INDEX) {
+			if (pk.index.index != DConstants::INVALID_INDEX) {
 				// no columns specified: single column constraint
 				if (pk.is_primary_key) {
 					pk_columns.insert(pk.index);
@@ -773,9 +783,9 @@ string TableCatalogEntry::ToSQL() {
 		ss << KeywordHelper::WriteOptionallyQuoted(column.Name()) << " ";
 		ss << column.Type().ToString();
 		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();
-		bool is_single_key_pk = pk_columns.find(column.Oid()) != pk_columns.end();
+		bool is_single_key_pk = pk_columns.find(column.Logical()) != pk_columns.end();
 		bool is_multi_key_pk = multi_key_pks.find(column.Name()) != multi_key_pks.end();
-		bool is_unique = unique_columns.find(column.Oid()) != unique_columns.end();
+		bool is_unique = unique_columns.find(column.Logical()) != unique_columns.end();
 		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
 			// NOT NULL but not a primary key column
 			ss << " NOT NULL";

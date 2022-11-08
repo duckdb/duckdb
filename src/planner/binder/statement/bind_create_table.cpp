@@ -51,7 +51,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 
 	bool has_primary_key = false;
 	logical_index_set_t not_null_columns;
-	vector<idx_t> primary_keys;
+	vector<LogicalIndex> primary_keys;
 	for (idx_t i = 0; i < base.constraints.size(); i++) {
 		auto &cond = base.constraints[i];
 		switch (cond->type) {
@@ -69,12 +69,12 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::UNIQUE: {
 			auto &unique = (UniqueConstraint &)*cond;
 			// have to resolve columns of the unique constraint
-			vector<idx_t> keys;
-			unordered_set<idx_t> key_set;
-			if (unique.index != DConstants::INVALID_INDEX) {
-				D_ASSERT(unique.index < base.columns.LogicalColumnCount());
+			vector<LogicalIndex> keys;
+			logical_index_set_t key_set;
+			if (unique.index.index != DConstants::INVALID_INDEX) {
+				D_ASSERT(unique.index.index < base.columns.LogicalColumnCount());
 				// unique constraint is given by single index
-				unique.columns.push_back(base.columns.GetColumn(LogicalIndex(unique.index)).Name());
+				unique.columns.push_back(base.columns.GetColumn(unique.index).Name());
 				keys.push_back(unique.index);
 				key_set.insert(unique.index);
 			} else {
@@ -86,7 +86,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
 					auto &column = base.columns.GetColumn(keyname);
-					auto column_index = column.Oid();
+					auto column_index = column.Logical();
 					if (key_set.find(column_index) != key_set.end()) {
 						throw ParserException("column \"%s\" appears twice in "
 						                      "primary key constraint",
@@ -131,14 +131,13 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	if (has_primary_key) {
 		// if there is a primary key index, also create a NOT NULL constraint for each of the columns
 		for (auto &column_index : primary_keys) {
-			auto logical_index = LogicalIndex(column_index);
-			if (not_null_columns.count(logical_index)) {
+			if (not_null_columns.count(column_index)) {
 				//! No need to create a NotNullConstraint, it's already present
 				continue;
 			}
-			auto &column = base.columns.GetColumn(logical_index);
-			base.constraints.push_back(make_unique<NotNullConstraint>(logical_index));
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(PhysicalIndex(column.StorageOid())));
+			auto physical_index = base.columns.LogicalToPhysical(column_index);
+			base.constraints.push_back(make_unique<NotNullConstraint>(column_index));
+			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(physical_index));
 		}
 	}
 }
