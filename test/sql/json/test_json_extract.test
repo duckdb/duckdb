@@ -252,7 +252,11 @@ SELECT x::JSON->'$.settings.layer2."tris.legomenon"."summary.report"' FROM t12;
 ----
 false
 
-# issue #5063
+# can't deal with force reload / force storage (#5132)
+
+require skip_reload
+
+# test issue #5063
 statement ok
 create table test5063 as select '{"a": 1, "b": 2}' js
 
