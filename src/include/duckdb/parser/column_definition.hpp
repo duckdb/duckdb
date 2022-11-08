@@ -89,9 +89,9 @@ private:
 	//! Compression Type used for this column
 	duckdb::CompressionType compression_type = duckdb::CompressionType::COMPRESSION_AUTO;
 	//! The index of the column in the storage of the table
-	storage_t storage_oid;
+	storage_t storage_oid = DConstants::INVALID_INDEX;
 	//! The index of the column in the table
-	idx_t oid;
+	idx_t oid = DConstants::INVALID_INDEX;
 	//! The category of the column
 	TableColumnType category = TableColumnType::STANDARD;
 	//! Used by Generated Columns

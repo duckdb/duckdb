@@ -229,6 +229,41 @@ static void FindMatchingPrimaryKeyColumns(const vector<ColumnDefinition> &column
 	                      fk.info.table, fk_names);
 }
 
+static void FindForeignKeyIndexes(const vector<ColumnDefinition> &columns, const vector<string> &names,
+                                  vector<idx_t> &indexes) {
+	D_ASSERT(indexes.empty());
+	D_ASSERT(!names.empty());
+	for (auto &name : names) {
+		bool found = false;
+		for (auto &col : columns) {
+			if (col.Name() == name) {
+				auto storage_oid = col.StorageOid();
+				D_ASSERT(storage_oid < columns.size());
+				indexes.push_back(storage_oid);
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			throw BinderException("column \"%s\" named in key does not exist", name);
+		}
+	}
+}
+
+static void CheckForeignKeyTypes(const vector<ColumnDefinition> &pk_columns, const vector<ColumnDefinition> &fk_columns,
+                                 ForeignKeyConstraint &fk) {
+	D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
+	for (idx_t c_idx = 0; c_idx < fk.info.pk_keys.size(); c_idx++) {
+		auto &pk_col = pk_columns[fk.info.pk_keys[c_idx]];
+		auto &fk_col = fk_columns[fk.info.fk_keys[c_idx]];
+		if (pk_col.Type() != fk_col.Type()) {
+			throw BinderException("Failed to create foreign key: incompatible types between column \"%s\" (\"%s\") and "
+			                      "column \"%s\" (\"%s\")",
+			                      pk_col.Name(), pk_col.Type().ToString(), fk_col.Name(), fk_col.Type().ToString());
+		}
+	}
+}
+
 void ExpressionContainsGeneratedColumn(const ParsedExpression &expr, const unordered_set<string> &gcols,
                                        bool &contains_gcol) {
 	if (contains_gcol) {
@@ -384,10 +419,15 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
-		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
 		auto &create_info = (CreateTableInfo &)*stmt.info;
 		auto &catalog = Catalog::GetCatalog(context);
-		// We first check if there are any user types, if yes we check to which custom types they refer.
+		idx_t storage_idx = 0;
+		for (auto &col : create_info.columns) {
+			if (!col.Generated()) {
+				col.SetStorageOid(storage_idx++);
+			}
+		}
+		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
 		unordered_set<SchemaCatalogEntry *> fk_schemas;
 		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
 			auto &cond = create_info.constraints[i];
@@ -399,24 +439,21 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				continue;
 			}
 			D_ASSERT(fk.info.pk_keys.empty());
+			D_ASSERT(fk.info.fk_keys.empty());
+			FindForeignKeyIndexes(create_info.columns, fk.fk_columns, fk.info.fk_keys);
 			if (create_info.table == fk.info.table) {
+				// self-referential foreign key constraint
 				fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
 				FindMatchingPrimaryKeyColumns(create_info.columns, create_info.constraints, fk);
+				FindForeignKeyIndexes(create_info.columns, fk.pk_columns, fk.info.pk_keys);
+				CheckForeignKeyTypes(create_info.columns, create_info.columns, fk);
 			} else {
 				// have to resolve referenced table
 				auto pk_table_entry_ptr = catalog.GetEntry<TableCatalogEntry>(context, fk.info.schema, fk.info.table);
 				fk_schemas.insert(pk_table_entry_ptr->schema);
-				D_ASSERT(fk.info.pk_keys.empty());
 				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->columns, pk_table_entry_ptr->constraints, fk);
-				for (auto &keyname : fk.pk_columns) {
-					auto entry = pk_table_entry_ptr->name_map.find(keyname);
-					if (entry == pk_table_entry_ptr->name_map.end()) {
-						throw BinderException("column \"%s\" named in key does not exist", keyname);
-					}
-					auto column_index = entry->second;
-					auto &column = pk_table_entry_ptr->columns[column_index];
-					fk.info.pk_keys.push_back(column.StorageOid());
-				}
+				FindForeignKeyIndexes(pk_table_entry_ptr->columns, fk.pk_columns, fk.info.pk_keys);
+				CheckForeignKeyTypes(pk_table_entry_ptr->columns, create_info.columns, fk);
 				auto index = pk_table_entry_ptr->storage->info->indexes.FindForeignKeyIndex(
 				    fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
 				if (!index) {
@@ -426,13 +463,15 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 					                      pk_table_entry_ptr->name, fk_column_names);
 				}
 			}
+			D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
+			D_ASSERT(fk.info.pk_keys.size() == fk.pk_columns.size());
+			D_ASSERT(fk.info.fk_keys.size() == fk.fk_columns.size());
 		}
 		if (AnyConstraintReferencesGeneratedColumn(create_info)) {
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);
-
 		for (auto &fk_schema : fk_schemas) {
 			if (fk_schema != bound_info->schema) {
 				throw BinderException("Creating foreign keys across different schemas is not supported");

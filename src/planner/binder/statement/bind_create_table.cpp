@@ -142,26 +142,6 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 			         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 			         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
-			if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE && fk.info.pk_keys.empty()) {
-				for (auto &keyname : fk.pk_columns) {
-					auto entry = info.name_map.find(keyname);
-					if (entry == info.name_map.end()) {
-						throw BinderException("column \"%s\" named in key does not exist", keyname);
-					}
-					auto column_index = entry->second;
-					fk.info.pk_keys.push_back(column_index);
-				}
-			}
-			if (fk.info.fk_keys.empty()) {
-				for (auto &keyname : fk.fk_columns) {
-					auto entry = info.name_map.find(keyname);
-					if (entry == info.name_map.end()) {
-						throw BinderException("column \"%s\" named in key does not exist", keyname);
-					}
-					auto column_index = entry->second;
-					fk.info.fk_keys.push_back(column_index);
-				}
-			}
 			unordered_set<idx_t> fk_key_set, pk_key_set;
 			for (idx_t i = 0; i < fk.info.pk_keys.size(); i++) {
 				pk_key_set.insert(fk.info.pk_keys[i]);
