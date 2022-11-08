@@ -295,7 +295,7 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 		return nullptr;
 	}
 	// set up the current buffer
-	auto result = make_unique<CSVBufferRead>(current_buffer, next_byte, next_byte + bytes_per_local_state,
+	auto result = make_unique<CSVBufferRead>(current_buffer, next_buffer, next_byte, next_byte + bytes_per_local_state,
 	                                         batch_index++, estimated_linenr);
 	// move the byte index of the CSV reader to the next buffer
 	next_byte += bytes_per_local_state;
@@ -412,7 +412,7 @@ static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *
 		return 0;
 	}
 	auto &data = (ParallelCSVLocalState &)*local_state;
-	return data.csv_reader->buffer_read.batch_index;
+	return data.csv_reader->buffer.batch_index;
 }
 
 //===--------------------------------------------------------------------===//

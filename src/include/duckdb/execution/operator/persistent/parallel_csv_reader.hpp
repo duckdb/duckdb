@@ -14,6 +14,7 @@
 #include "duckdb/execution/operator/persistent/csv_buffer.hpp"
 
 #include <sstream>
+#include <utility>
 
 namespace duckdb {
 
@@ -30,11 +31,49 @@ struct CSVBufferRead {
 			buffer_start = 0;
 			buffer_end = 0;
 		}
+		intersections = std::make_shared<vector<unique_ptr<char[]>>>();
+	}
+
+	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, shared_ptr<CSVBuffer> nxt_buffer_p, idx_t buffer_start_p,
+	              idx_t buffer_end_p, idx_t batch_index, idx_t estimated_linenr)
+	    : CSVBufferRead(std::move(buffer_p), buffer_start_p, buffer_end_p, batch_index, estimated_linenr) {
+		next_buffer = std::move(nxt_buffer_p);
 	}
 
 	CSVBufferRead() : buffer_start(0), buffer_end(NumericLimits<idx_t>::Maximum()) {};
 
+	const char &operator[](size_t i) const {
+		if (i < buffer->GetBufferSize()) {
+			return buffer->buffer[i];
+		}
+		return next_buffer->buffer[i - buffer->GetBufferSize()];
+	}
+
+	string_t GetValue(idx_t start_buffer, idx_t position_buffer, idx_t offset) {
+		idx_t length = position_buffer - start_buffer - offset;
+		// 1) It's all in the current buffer
+		if (!next_buffer || start_buffer + length < buffer->GetBufferSize()) {
+			return string_t(buffer->buffer.get() + start_buffer, length);
+		} else if (start_buffer > buffer->GetBufferSize()) {
+			return string_t(next_buffer->buffer.get() + (start_buffer - buffer->GetBufferSize()), length);
+		} else {
+			auto intersection = unique_ptr<char[]>(new char[length]);
+			idx_t cur_pos = 0;
+			for (idx_t i = start_buffer; i < buffer->GetBufferSize(); i++) {
+				intersection[cur_pos++] = buffer->buffer[i];
+			}
+			idx_t nxt_buffer_pos = 0;
+			for (; cur_pos < length; cur_pos++) {
+				intersection[cur_pos] = next_buffer->buffer[nxt_buffer_pos++];
+			}
+			intersections->emplace_back(move(intersection));
+			return string_t(intersections->back().get(), length);
+		}
+	}
+
 	shared_ptr<CSVBuffer> buffer;
+	shared_ptr<CSVBuffer> next_buffer;
+	shared_ptr<vector<unique_ptr<char[]>>> intersections;
 
 	idx_t buffer_start;
 	idx_t buffer_end;
@@ -58,13 +97,12 @@ public:
 	idx_t end_buffer = NumericLimits<idx_t>::Maximum();
 	//! The actual buffer size
 	idx_t buffer_size = 0;
+	idx_t last_row_pos = 0;
 
 	//! If this flag is set, it means we are about to try to read our last row.
 	bool reached_remainder_state = false;
 
-	char *buffer;
-
-	CSVBufferRead buffer_read;
+	CSVBufferRead buffer;
 
 	idx_t position_set;
 
