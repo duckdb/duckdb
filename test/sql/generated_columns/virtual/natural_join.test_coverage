@@ -10,7 +10,7 @@ CREATE TABLE t1(
 	c0 INT
 );
 
-statement error
+query I
 SELECT 1 FROM t1 NATURAL JOIN t1 t2 GROUP BY c1;
 
 statement ok
@@ -22,5 +22,7 @@ CREATE TABLE t2(
 statement ok
 insert into t2 VALUES(4);
 
-statement error
+query I
 select 1 from t2 NATURAL JOIN t2 AS t3 GROUP BY c1;
+----
+1

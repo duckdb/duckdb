@@ -136,7 +136,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		auto &column = table_entry->columns[column_index];
 		// Either there is no table, or the columns category has to be standard
 		if (column.Category() != TableColumnType::STANDARD) {
-			throw BinderException("Binding of generated columns in this context is not supported");
+			throw BinderException("Nope");
 		}
 	}
 	// fetch the type of the column

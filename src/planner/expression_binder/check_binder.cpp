@@ -36,7 +36,8 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 	}
 	auto result = make_unique_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
 	for (idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
-		result = CreateStructExtract(move(result), colref.column_names[i]);
+		auto parse_result = CreateStructExtract(move(result), colref.column_names[i]);
+		result = move(parse_result.expression);
 	}
 	return BindExpression(&result, 0);
 }
