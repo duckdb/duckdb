@@ -150,6 +150,8 @@ public:
 
 	//! Fill the pointer with all the addresses from the hashtable for full scan
 	idx_t FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
+	//! Pins all fixed-size blocks
+	void PinAllBlocks();
 
 	idx_t Count() const {
 		return block_collection->count;
