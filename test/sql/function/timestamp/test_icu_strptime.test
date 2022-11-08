@@ -77,8 +77,8 @@ ORDER BY tstz
 2022-03-05 05:29:17.877 America/Los_Angeles	Asia/Kabul
 2022-03-05 05:59:17.877 America/Los_Angeles	Europe/Astrakhan
 2022-03-05 06:29:17.877 America/Los_Angeles	Asia/Tehran
-2022-03-05 06:59:17.877 America/Los_Angeles	Asia/Qatar
-2022-03-05 07:59:17.877 America/Los_Angeles	Asia/Jerusalem
+2022-03-05 06:59:17.877 America/Los_Angeles	Asia/Kuwait
+2022-03-05 07:59:17.877 America/Los_Angeles	Asia/Nicosia
 2022-03-05 08:59:17.877 America/Los_Angeles	Europe/Budapest
 2022-03-05 09:59:17.877 America/Los_Angeles	Etc/GMT-0
 2022-03-05 10:59:17.877 America/Los_Angeles	Atlantic/Azores
@@ -87,8 +87,8 @@ ORDER BY tstz
 2022-03-05 13:29:17.877 America/Los_Angeles	CNT
 2022-03-05 13:59:17.877 America/Los_Angeles	America/Martinique
 2022-03-05 14:59:17.877 America/Los_Angeles	America/Louisville
-2022-03-05 15:59:17.877 America/Los_Angeles	America/Rankin_Inlet
-2022-03-05 16:59:17.877 America/Los_Angeles	America/Shiprock
+2022-03-05 15:59:17.877 America/Los_Angeles	America/Rainy_River
+2022-03-05 16:59:17.877 America/Los_Angeles	America/Whitehorse
 2022-03-05 17:59:17.877 America/Los_Angeles	Mexico/BajaNorte
 2022-03-05 18:59:17.877 America/Los_Angeles	America/Sitka
 2022-03-05 19:29:17.877 America/Los_Angeles	Pacific/Marquesas
@@ -104,7 +104,7 @@ ORDER BY tstz
 ----
 2022-03-04 19:59:17.877 America/Los_Angeles	Etc/GMT-14
 2022-03-04 20:14:17.877 America/Los_Angeles	NZ-CHAT
-2022-03-04 20:59:17.877 America/Los_Angeles	NST
+2022-03-04 20:59:17.877 America/Los_Angeles	NZ
 2022-03-04 20:59:17.877 America/Los_Angeles	Pacific/Enderbury
 2022-03-04 22:59:17.877 America/Los_Angeles	Australia/Hobart
 2022-03-04 22:59:17.877 America/Los_Angeles	Australia/LHI
@@ -112,7 +112,7 @@ ORDER BY tstz
 2022-03-04 23:29:17.877 America/Los_Angeles	Australia/Adelaide
 2022-03-05 00:59:17.877 America/Los_Angeles	Etc/GMT-9
 2022-03-05 01:14:17.877 America/Los_Angeles	Australia/Eucla
-2022-03-05 01:59:17.877 America/Los_Angeles	Australia/West
+2022-03-05 01:59:17.877 America/Los_Angeles	CTT
 2022-03-05 02:59:17.877 America/Los_Angeles	Asia/Phnom_Penh
 2022-03-05 03:29:17.877 America/Los_Angeles	Asia/Yangon
 2022-03-05 03:59:17.877 America/Los_Angeles	Asia/Thimbu
@@ -124,16 +124,16 @@ ORDER BY tstz
 2022-03-05 06:29:17.877 America/Los_Angeles	Iran
 2022-03-05 06:59:17.877 America/Los_Angeles	EAT
 2022-03-05 07:59:17.877 America/Los_Angeles	CAT
-2022-03-05 08:59:17.877 America/Los_Angeles	Europe/Brussels
-2022-03-05 09:59:17.877 America/Los_Angeles	GB
+2022-03-05 08:59:17.877 America/Los_Angeles	Europe/Bratislava
+2022-03-05 09:59:17.877 America/Los_Angeles	GMT
 2022-03-05 10:59:17.877 America/Los_Angeles	Atlantic/Azores
 2022-03-05 11:59:17.877 America/Los_Angeles	Atlantic/South_Georgia
 2022-03-05 12:59:17.877 America/Los_Angeles	America/Cordoba
 2022-03-05 13:29:17.877 America/Los_Angeles	CNT
 2022-03-05 13:59:17.877 America/Los_Angeles	PRT
 2022-03-05 14:59:17.877 America/Los_Angeles	America/Panama
-2022-03-05 15:59:17.877 America/Los_Angeles	America/Regina
-2022-03-05 16:59:17.877 America/Los_Angeles	Canada/Yukon
+2022-03-05 15:59:17.877 America/Los_Angeles	America/Rankin_Inlet
+2022-03-05 16:59:17.877 America/Los_Angeles	Etc/GMT+7
 2022-03-05 17:59:17.877 America/Los_Angeles	PST
 2022-03-05 18:59:17.877 America/Los_Angeles	America/Nome
 2022-03-05 19:29:17.877 America/Los_Angeles	Pacific/Marquesas

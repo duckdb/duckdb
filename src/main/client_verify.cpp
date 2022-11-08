@@ -3,6 +3,7 @@
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -74,7 +75,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 			statement_verifiers.push_back(move(prepared_statement_verifier));
 		}
 	} else {
-		if (db->IsInvalidated()) {
+		if (ValidChecker::IsInvalidated(*db)) {
 			return original->materialized_result->GetErrorObject();
 		}
 	}
@@ -93,6 +94,18 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 			interrupted = false;
 			return PreservedError("EXPLAIN failed but query did not (" + string(ex.what()) + ")");
 		} // LCOV_EXCL_STOP
+
+#ifdef DUCKDB_VERIFY_BOX_RENDERER
+		// this is pretty slow, so disabled by default
+		// test the box renderer on the result
+		// we mostly care that this does not crash
+		RandomEngine random;
+		BoxRendererConfig config;
+		// test with a random width
+		config.max_width = random.NextRandomInteger() % 500;
+		BoxRenderer renderer(config);
+		renderer.ToString(*this, original->materialized_result->names, original->materialized_result->Collection());
+#endif
 	}
 
 	// Restore profiler setting

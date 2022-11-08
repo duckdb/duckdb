@@ -16,7 +16,8 @@ namespace duckdb {
 class BoundAggregateExpression : public Expression {
 public:
 	BoundAggregateExpression(AggregateFunction function, vector<unique_ptr<Expression>> children,
-	                         unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info, bool distinct);
+	                         unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
+	                         AggregateType aggr_type);
 
 	//! The bound function expression
 	AggregateFunction function;
@@ -24,13 +25,16 @@ public:
 	vector<unique_ptr<Expression>> children;
 	//! The bound function data (if any)
 	unique_ptr<FunctionData> bind_info;
-	//! True to aggregate on distinct values
-	bool distinct;
+	AggregateType aggr_type;
 
 	//! Filter for this aggregate
 	unique_ptr<Expression> filter;
 
 public:
+	bool IsDistinct() const {
+		return aggr_type == AggregateType::DISTINCT;
+	}
+
 	bool IsAggregate() const override {
 		return true;
 	}

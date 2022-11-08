@@ -22,8 +22,8 @@ public:
 	DataChunk intermediate_chunk;
 
 public:
-	unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns) override;
-	void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
+	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override;
+	void InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 
 	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	           Vector &result) override;

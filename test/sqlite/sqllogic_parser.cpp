@@ -53,12 +53,12 @@ void SQLLogicParser::NextLine() {
 	current_line++;
 }
 
-string SQLLogicParser::ExtractStatement(bool is_query) {
+string SQLLogicParser::ExtractStatement() {
 	string statement;
 
 	bool first_line = true;
 	while (current_line < lines.size() && !EmptyOrComment(lines[current_line])) {
-		if (is_query && lines[current_line] == "----") {
+		if (lines[current_line] == "----") {
 			break;
 		}
 		if (!first_line) {
@@ -85,6 +85,27 @@ vector<string> SQLLogicParser::ExtractExpectedResult() {
 		current_line++;
 	}
 	return result;
+}
+
+string SQLLogicParser::ExtractExpectedError(bool expect_ok) {
+	// check if there is an expected error at all
+	if (current_line >= lines.size() || lines[current_line] != "----") {
+		return string();
+	}
+	if (expect_ok) {
+		Fail("Failed to parse statement: only statement error can have an expected error message, not statement ok");
+	}
+	current_line++;
+	string error;
+	while (current_line < lines.size() && !lines[current_line].empty()) {
+		if (error.empty()) {
+			error = lines[current_line];
+		} else {
+			Fail("Failed to parse statement error: expected single line error message");
+		}
+		current_line++;
+	}
+	return error;
 }
 
 void SQLLogicParser::FailRecursive(const string &msg, vector<ExceptionFormatValue> &values) {

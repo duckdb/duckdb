@@ -53,11 +53,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 
 	bool parallel_streaming_insert = !PreserveInsertionOrder(*plan);
 	bool use_batch_index = UseBatchIndex(*plan);
-	if (!op.table->storage->info->indexes.Empty()) {
-		// not for tables with indexes currently
-		parallel_streaming_insert = false;
-		use_batch_index = false;
-	}
 	if (op.return_chunk) {
 		// not supported for RETURNING (yet?)
 		parallel_streaming_insert = false;

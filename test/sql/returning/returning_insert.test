@@ -137,8 +137,6 @@ INSERT INTO table1 SELECT * from table1 RETURNING row_number() OVER (ORDER BY a)
 
 statement error
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING [1, 2] IN (SELECT [a, b] from table1);
-----
-1
 
 # scalar subquery (should fail since scalar is a subquery)
 statement error

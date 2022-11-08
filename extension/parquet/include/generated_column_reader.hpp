@@ -28,7 +28,7 @@ public:
 	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	           Vector &result) override;
 
-	unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns) override {
+	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override {
 		switch (type.id()) {
 		case LogicalTypeId::VARCHAR: {
 			auto string_stats = make_unique<StringStatistics>(type, StatisticsType::LOCAL_STATS);
@@ -42,7 +42,8 @@ public:
 		}
 	};
 
-	void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
+	void InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
+	                    TProtocol &protocol_p) override {
 		return;
 	};
 	void Skip(idx_t num_values) override {

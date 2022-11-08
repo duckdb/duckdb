@@ -9,12 +9,12 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
-#include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/optimizer/join_node.hpp"
 
 namespace duckdb {
 class Event;
@@ -22,6 +22,7 @@ class Executor;
 class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
+class MetaPipeline;
 
 // LCOV_EXCL_START
 class OperatorState {
@@ -106,6 +107,8 @@ public:
 	unique_ptr<GlobalSinkState> sink_state;
 	//! The global state of this operator
 	unique_ptr<GlobalOperatorState> op_state;
+	//! Lock for (re)setting any of the operator states
+	mutex lock;
 
 public:
 	virtual string GetName() const;
@@ -218,12 +221,9 @@ public:
 	// Pipeline construction
 	virtual vector<const PhysicalOperator *> GetSources() const;
 	bool AllSourcesSupportBatchIndex() const;
-	bool AllOperatorsPreserveOrder() const;
+	virtual bool AllOperatorsPreserveOrder() const;
 
-	void AddPipeline(Executor &executor, shared_ptr<Pipeline> current, PipelineBuildState &state);
-	virtual void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state);
-	void BuildChildPipeline(Executor &executor, Pipeline &current, PipelineBuildState &state,
-	                        PhysicalOperator *pipeline_child);
+	virtual void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline);
 };
 
 //! Contains state for the CachingPhysicalOperator
@@ -236,6 +236,9 @@ public:
 	}
 
 	unique_ptr<DataChunk> cached_chunk;
+	bool initialized = false;
+	//! Whether or not the chunk can be cached
+	bool can_cache_chunk = false;
 };
 
 //! Base class that caches output from child Operator class. Note that Operators inheriting from this class should also

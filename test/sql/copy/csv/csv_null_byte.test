@@ -1,0 +1,35 @@
+# name: test/sql/copy/csv/csv_null_byte.test
+# description: Read a CSV with a null byte
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+select * from 'data/csv/nullbyte.csv';
+----
+col1	col2	col3
+val1	val\02	val3
+
+query III
+select * from read_csv('data/csv/nullbyte.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR', 'col3': 'VARCHAR'}, delim='|');
+----
+col1	col2	col3
+val1	val\02	val3
+
+query II
+select * from 'data/csv/nullbyte_header.csv';
+----
+col1	col\02
+val1	val2
+
+query II
+select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=False);
+----
+col1	col\02
+val1	val2
+
+query II
+select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=True);
+----
+val1	val2

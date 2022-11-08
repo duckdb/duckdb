@@ -188,4 +188,10 @@ describe("data type support", function () {
       done();
     });
   });
+  it("converts unsupported data types to strings", function(done) {
+      db.all("SELECT CAST('11:10:10' AS TIME) as time", function(err, rows) {
+          assert.equal(rows[0].time, '11:10:10');
+          done();
+      });
+  });
 });

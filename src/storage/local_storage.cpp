@@ -30,17 +30,24 @@ OptimisticDataWriter::OptimisticDataWriter(DataTable *table, OptimisticDataWrite
 OptimisticDataWriter::~OptimisticDataWriter() {
 }
 
-void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
-	// we finished writing a complete row group
-	// check if we should pre-emptively write it to disk
+bool OptimisticDataWriter::PrepareWrite() {
+	// check if we should pre-emptively write the table to disk
 	if (table->info->IsTemporary() || StorageManager::GetStorageManager(table->db).InMemory()) {
-		return;
+		return false;
 	}
 	// we should! write the second-to-last row group to disk
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
 		partial_manager = make_unique<PartialBlockManager>(block_manager);
+	}
+	return true;
+}
+
+void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
+	// we finished writing a complete row group
+	if (!PrepareWrite()) {
+		return;
 	}
 	// flush second-to-last row group
 	auto row_group = row_groups.GetRowGroup(-2);
@@ -64,10 +71,15 @@ void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 	}
 }
 
-void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups) {
+void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool force) {
 	if (!partial_manager) {
-		// no partial manager - nothing to flush
-		return;
+		if (!force) {
+			// no partial manager - nothing to flush
+			return;
+		}
+		if (!PrepareWrite()) {
+			return;
+		}
 	}
 	// flush the last row group
 	FlushToDisk(row_groups.GetRowGroup(-1));
@@ -90,7 +102,7 @@ void OptimisticDataWriter::Rollback() {
 	if (!written_blocks.empty()) {
 		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
 		for (auto block_id : written_blocks) {
-			block_manager.MarkBlockAsModified(block_id);
+			block_manager.MarkBlockAsFree(block_id);
 		}
 	}
 }
@@ -124,7 +136,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
                                      const LogicalType &target_type, const vector<column_t> &bound_columns,
                                      Expression &cast_expr)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(table, parent.optimistic_writer) {
+      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
 	row_groups = parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -132,7 +144,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(table, parent.optimistic_writer) {
+      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
 	row_groups = parent.row_groups->RemoveColumn(drop_idx);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -141,7 +153,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column,
                                      Expression *default_value)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(table, parent.optimistic_writer) {
+      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
 	row_groups = parent.row_groups->AddColumn(new_column, default_value);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -184,6 +196,33 @@ void LocalTableStorage::FlushToDisk() {
 	optimistic_writer.FinalFlush();
 }
 
+bool LocalTableStorage::AppendToIndexes(Transaction &transaction, RowGroupCollection &source,
+                                        TableIndexList &index_list, const vector<LogicalType> &table_types,
+                                        row_t &start_row) {
+	// only need to scan for index append
+	// figure out which columns we need to scan for the set of indexes
+	auto columns = index_list.GetRequiredColumns();
+	// create an empty mock chunk that contains all the correct types for the table
+	DataChunk mock_chunk;
+	mock_chunk.InitializeEmpty(table_types);
+	bool success = true;
+	source.Scan(transaction, columns, [&](DataChunk &chunk) -> bool {
+		// construct the mock chunk by referencing the required columns
+		for (idx_t i = 0; i < columns.size(); i++) {
+			mock_chunk.data[columns[i]].Reference(chunk.data[i]);
+		}
+		mock_chunk.SetCardinality(chunk);
+		// append this chunk to the indexes of the table
+		if (!DataTable::AppendToIndexes(index_list, mock_chunk, start_row)) {
+			success = false;
+			return false;
+		}
+		start_row += chunk.size();
+		return true;
+	});
+	return success;
+}
+
 void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
                                         bool append_to_table) {
 	bool constraint_violated = false;
@@ -203,26 +242,8 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 			return true;
 		});
 	} else {
-		// only need to scan for index append
-		// figure out which columns we need to scan for the set of indexes
-		auto columns = table->info->indexes.GetRequiredColumns();
-		// create an empty mock chunk that contains all the correct types for the table
-		DataChunk mock_chunk;
-		mock_chunk.InitializeEmpty(table->GetTypes());
-		row_groups->Scan(transaction, columns, [&](DataChunk &chunk) -> bool {
-			// construct the mock chunk by referencing the required columns
-			for (idx_t i = 0; i < columns.size(); i++) {
-				mock_chunk.data[columns[i]].Reference(chunk.data[i]);
-			}
-			mock_chunk.SetCardinality(chunk);
-			// append this chunk to the indexes of the table
-			if (!table->AppendToIndexes(mock_chunk, append_state.current_row)) {
-				constraint_violated = true;
-				return false;
-			}
-			append_state.current_row += chunk.size();
-			return true;
-		});
+		constraint_violated = !AppendToIndexes(transaction, *row_groups, table->info->indexes, table->GetTypes(),
+		                                       append_state.current_row);
 	}
 	if (constraint_violated) {
 		// need to revert the append
@@ -246,8 +267,18 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 	}
 }
 
+OptimisticDataWriter *LocalTableStorage::CreateOptimisticWriter() {
+	auto writer = make_unique<OptimisticDataWriter>(table);
+	optimistic_writers.push_back(move(writer));
+	return optimistic_writers.back().get();
+}
+
 void LocalTableStorage::Rollback() {
 	optimistic_writer.Rollback();
+	for (auto &writer : optimistic_writers) {
+		writer->Rollback();
+	}
+	optimistic_writers.clear();
 }
 
 //===--------------------------------------------------------------------===//
@@ -382,7 +413,20 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 
 void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection) {
 	auto storage = table_manager.GetOrCreateStorage(table);
+	if (!storage->indexes.Empty()) {
+		// append data to indexes if required
+		row_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows();
+		bool success = storage->AppendToIndexes(transaction, collection, storage->indexes, table->GetTypes(), base_id);
+		if (!success) {
+			throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+		}
+	}
 	storage->row_groups->MergeStorage(collection);
+}
+
+OptimisticDataWriter *LocalStorage::CreateOptimisticWriter(DataTable *table) {
+	auto storage = table_manager.GetOrCreateStorage(table);
+	return storage->CreateOptimisticWriter();
 }
 
 bool LocalStorage::ChangesMade() noexcept {

@@ -69,7 +69,7 @@ public:
 	ExpressionExecutor default_executor;
 	TableAppendState local_append_state;
 	unique_ptr<RowGroupCollection> local_collection;
-	unique_ptr<OptimisticDataWriter> writer;
+	OptimisticDataWriter *writer;
 };
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
@@ -148,12 +148,14 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 		D_ASSERT(!return_chunk);
 		// parallel append
 		if (!lstate.local_collection) {
+			lock_guard<mutex> l(gstate.lock);
 			auto &table_info = table->storage->info;
 			auto &block_manager = TableIOManager::Get(*table->storage).GetBlockManagerForRowData();
-			lstate.local_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, 0);
+			lstate.local_collection =
+			    make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
-			lstate.writer = make_unique<OptimisticDataWriter>(gstate.table->storage.get());
+			lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
 		}
 		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);

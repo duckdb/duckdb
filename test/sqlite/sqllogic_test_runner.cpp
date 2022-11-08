@@ -175,6 +175,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("dictionary");
 		result.push_back("fsst");
 		result.push_back("chimp");
+		result.push_back("patas");
 		collection = true;
 	}
 	return collection;
@@ -267,10 +268,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// extract the SQL statement
 			parser.NextLine();
-			auto statement_text = parser.ExtractStatement(false);
+			auto statement_text = parser.ExtractStatement();
 			if (statement_text.empty()) {
 				parser.Fail("Unexpected empty statement text");
 			}
+			command->expected_error = parser.ExtractExpectedError(command->expect_ok);
 
 			// perform any renames in the text
 			command->base_sql_query = ReplaceKeywords(move(statement_text));
@@ -304,7 +306,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// extract the SQL statement
 			parser.NextLine();
-			auto statement_text = parser.ExtractStatement(true);
+			auto statement_text = parser.ExtractStatement();
 
 			// perform any renames in the text
 			command->base_sql_query = ReplaceKeywords(move(statement_text));

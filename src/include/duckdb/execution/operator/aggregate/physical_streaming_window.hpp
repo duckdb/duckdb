@@ -30,6 +30,10 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
+	bool IsOrderDependent() const override {
+		return true;
+	}
+
 	string ParamsToString() const override;
 };
 

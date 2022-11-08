@@ -162,7 +162,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				vector<unique_ptr<Expression>> aggr_children;
 				aggr_children.push_back(move(colref));
 				auto first_fun = make_unique<BoundAggregateExpression>(move(first_aggregate), move(aggr_children),
-				                                                       nullptr, nullptr, false);
+				                                                       nullptr, nullptr, AggregateType::NON_DISTINCT);
 				aggr.expressions.push_back(move(first_fun));
 			}
 		} else {

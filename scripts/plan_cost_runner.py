@@ -41,8 +41,8 @@ def parse_args():
 
 def init_db(cli, dbname, benchmark_dir):
     print(f"INITIALIZING {dbname} ...")
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, capture_output=True)
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, capture_output=True)
+    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
     print("INITIALIZATION DONE")
 
 
@@ -58,7 +58,19 @@ def op_inspect(op):
 
 
 def query_plan_cost(cli, dbname, query):
-    subprocess.run(f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"", shell=True, check=True, capture_output=True)
+    try:
+        subprocess.run(f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"", shell=True, check=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        print("-------------------------")
+        print("--------Failure----------")
+        print("-------------------------")
+        print(e.stderr.decode('utf8'))
+        print("-------------------------")
+        print("--------Output----------")
+        print("-------------------------")
+        print(e.output.decode('utf8'))
+        print("-------------------------")
+        raise e
     with open(PROFILE_FILENAME, 'r') as file:
         return op_inspect(json.load(file))
 
@@ -103,6 +115,10 @@ def main():
     print("RUNNING BENCHMARK QUERIES")
     for f in tqdm(files):
         query_name = f.split("/")[-1].replace(".sql", "")
+
+        if query_name == "07c":
+            continue # FIXME: heap-use-after free on low-memory systems
+
         with open(f, "r") as file:
             query = file.read()
 
