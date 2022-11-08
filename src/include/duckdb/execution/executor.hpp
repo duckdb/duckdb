@@ -9,11 +9,11 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/parallel/pipeline.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -81,7 +81,8 @@ public:
 	}
 	void AddEvent(shared_ptr<Event> event);
 
-	void ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events);
+	void AddRecursiveCTE(PhysicalOperator *rec_cte);
+	void ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
 	//! Whether or not the root of the pipeline is a result collector object
 	bool HasResultCollector();
@@ -91,17 +92,18 @@ public:
 private:
 	void InitializeInternal(PhysicalOperator *physical_plan);
 
-	void ScheduleEvents();
+	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
 	static void ScheduleEventsInternal(ScheduleEventData &event_data);
 
-	static void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data,
-	                             vector<Pipeline *> &scheduled_pipelines);
-	static void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline,
-	                                  ScheduleEventData &event_data);
-	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);
+	static void VerifyScheduledEvents(const ScheduleEventData &event_data);
+	static void VerifyScheduledEventsInternal(const idx_t i, const vector<Event *> &vertices, vector<bool> &visited,
+	                                          vector<bool> &recursion_stack);
+
+	static void SchedulePipeline(const shared_ptr<MetaPipeline> &pipeline, ScheduleEventData &event_data);
+
 	bool NextExecutor();
 
-	void AddChildPipeline(Pipeline *current);
+	shared_ptr<Pipeline> CreateChildPipeline(Pipeline *current, PhysicalOperator *op);
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
@@ -112,10 +114,12 @@ private:
 
 	mutex executor_lock;
 	mutex error_lock;
-	//! The pipelines of the current query
+	//! All pipelines of the query plan
 	vector<shared_ptr<Pipeline>> pipelines;
-	//! The root pipeline of the query
+	//! The root pipelines of the query
 	vector<shared_ptr<Pipeline>> root_pipelines;
+	//! The recursive CTE's in this query plan
+	vector<PhysicalOperator *> recursive_ctes;
 	//! The pipeline executor for the root pipeline
 	unique_ptr<PipelineExecutor> root_executor;
 	//! The current root pipeline index
@@ -135,15 +139,6 @@ private:
 	idx_t total_pipelines;
 	//! Whether or not execution is cancelled
 	bool cancelled;
-
-	//! The adjacent union pipelines of each pipeline
-	//! Union pipelines have the same sink, but can be run concurrently along with this pipeline
-	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> union_pipelines;
-	//! Child pipelines of this pipeline
-	//! Like union pipelines, child pipelines share the same sink
-	//! Unlike union pipelines, child pipelines should be run AFTER their dependencies are completed
-	//! i.e. they should be run after the dependencies are completed, but before finalize is called on the sink
-	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> child_pipelines;
 
 	//! The last pending execution result (if any)
 	PendingExecutionResult execution_result;
