@@ -2,10 +2,11 @@
 
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
 #include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
 
@@ -34,18 +35,25 @@ vector<PhysicalOperator *> PhysicalResultCollector::GetChildren() const {
 	return {plan};
 }
 
-void PhysicalResultCollector::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+bool PhysicalResultCollector::AllOperatorsPreserveOrder() const {
+	D_ASSERT(plan);
+	return plan->AllOperatorsPreserveOrder();
+}
+
+void PhysicalResultCollector::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	// operator is a sink, build a pipeline
 	sink_state.reset();
 
-	// single operator:
-	// the operator becomes the data source of the current pipeline
-	state.SetPipelineSource(current, this);
-	// we create a new pipeline starting from the child
-	D_ASSERT(children.size() == 0);
+	D_ASSERT(children.empty());
 	D_ASSERT(plan);
 
-	BuildChildPipeline(executor, current, state, plan);
+	// single operator: the operator becomes the data source of the current pipeline
+	auto &state = meta_pipeline.GetState();
+	state.SetPipelineSource(current, this);
+
+	// we create a new pipeline starting from the child
+	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
+	child_meta_pipeline->Build(plan);
 }
 
 } // namespace duckdb

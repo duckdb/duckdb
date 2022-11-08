@@ -11,11 +11,12 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 
 namespace duckdb {
+
 class Executor;
 
-class PipelineFinishEvent : public BasePipelineEvent {
+class PipelineInitializeEvent : public BasePipelineEvent {
 public:
-	explicit PipelineFinishEvent(shared_ptr<Pipeline> pipeline);
+	explicit PipelineInitializeEvent(shared_ptr<Pipeline> pipeline);
 
 public:
 	void Schedule() override;

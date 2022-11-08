@@ -65,7 +65,7 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 
 	string local_path = ExtensionDirectory(context);
 
-	auto extension_name = fs.ExtractBaseName(extension);
+	auto extension_name = ApplyExtensionAlias(fs.ExtractBaseName(extension));
 
 	string local_extension_path = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 	if (fs.FileExists(local_extension_path) && !force_install) {
@@ -136,6 +136,9 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 		vector<string> candidates;
 		for (idx_t ext_count = ExtensionHelper::DefaultExtensionCount(), i = 0; i < ext_count; i++) {
 			candidates.emplace_back(ExtensionHelper::GetDefaultExtension(i).name);
+		}
+		for (idx_t ext_count = ExtensionHelper::ExtensionAliasCount(), i = 0; i < ext_count; i++) {
+			candidates.emplace_back(ExtensionHelper::GetExtensionAlias(i).alias);
 		}
 		auto closest_extensions = StringUtil::TopNLevenshtein(candidates, extension_name);
 		auto message = StringUtil::CandidatesMessage(closest_extensions, "Candidate extensions");

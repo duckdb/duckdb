@@ -28,11 +28,15 @@ public:
 	//! Flushes a specific row group to disk
 	void FlushToDisk(RowGroup *row_group);
 	//! Flushes the final row group to disk (if any)
-	void FlushToDisk(RowGroupCollection &row_groups);
+	void FlushToDisk(RowGroupCollection &row_groups, bool force = false);
 	//! Final flush: flush the partial block manager to disk
 	void FinalFlush();
 
 	void Rollback();
+
+private:
+	//! Prepare a write to disk
+	bool PrepareWrite();
 
 private:
 	//! The table

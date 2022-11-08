@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -195,7 +196,9 @@ int64_t DateDiff::ISOYearOperator::Operation(timestamp_t startdate, timestamp_t 
 
 template <>
 int64_t DateDiff::MicrosecondsOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
-	return Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate);
+	const auto start = Timestamp::GetEpochMicroSeconds(startdate);
+	const auto end = Timestamp::GetEpochMicroSeconds(enddate);
+	return SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(end, start);
 }
 
 template <>
