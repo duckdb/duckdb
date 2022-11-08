@@ -224,6 +224,7 @@ public:
 		estimated_linenr = rows_to_skip;
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
+		bytes_read = 0;
 		if (buffer_size < file_size) {
 			bytes_per_local_state = buffer_size / MaxThreads();
 		} else {
