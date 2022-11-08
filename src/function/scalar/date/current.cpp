@@ -34,16 +34,23 @@ static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, V
 }
 
 void CurrentTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("get_current_time", {}, LogicalType::TIME, CurrentTimeFunction));
+	ScalarFunction current_time({}, LogicalType::TIME, CurrentTimeFunction);
+	;
+	current_time.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction(current_time);
 }
 
 void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"today", "current_date"}, ScalarFunction({}, LogicalType::DATE, CurrentDateFunction));
+	ScalarFunction current_date({}, LogicalType::DATE, CurrentDateFunction);
+	;
+	current_date.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction({"today", "current_date"}, current_date);
 }
 
 void CurrentTimestampFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"now", "get_current_timestamp", "transaction_timestamp"},
-	                ScalarFunction({}, LogicalType::TIMESTAMP_TZ, CurrentTimestampFunction));
+	ScalarFunction current_timestamp({}, LogicalType::TIMESTAMP_TZ, CurrentTimestampFunction);
+	current_timestamp.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction({"now", "get_current_timestamp", "transaction_timestamp"}, current_timestamp);
 }
 
 } // namespace duckdb

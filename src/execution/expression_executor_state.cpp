@@ -19,7 +19,14 @@ Allocator &ExpressionState::GetAllocator() {
 	return root.executor->GetAllocator();
 }
 
+bool ExpressionState::HasContext() {
+	return root.executor->HasContext();
+}
+
 ClientContext &ExpressionState::GetContext() {
+	if (!HasContext()) {
+		throw BinderException("Cannot use %s in this context", ((BoundFunctionExpression &)expr).function.name);
+	}
 	return root.executor->GetContext();
 }
 
@@ -29,4 +36,17 @@ ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState
 
 ExpressionExecutorState::ExpressionExecutorState(const string &name) : profiler(), name(name) {
 }
+
+void ExpressionState::Verify(ExpressionExecutorState &root_executor) {
+	D_ASSERT(&root_executor == &root);
+	for (auto &entry : child_states) {
+		entry->Verify(root_executor);
+	}
+}
+
+void ExpressionExecutorState::Verify() {
+	D_ASSERT(executor);
+	root_state->Verify(*this);
+}
+
 } // namespace duckdb

@@ -36,7 +36,10 @@ public:
 	void AddChild(Expression *expr);
 	void Finalize();
 	Allocator &GetAllocator();
+	bool HasContext();
 	ClientContext &GetContext();
+
+	void Verify(ExpressionExecutorState &root);
 };
 
 struct ExecuteFunctionState : public ExpressionState {
@@ -53,10 +56,13 @@ public:
 
 struct ExpressionExecutorState {
 	explicit ExpressionExecutorState(const string &name);
+
 	unique_ptr<ExpressionState> root_state;
-	ExpressionExecutor *executor;
+	ExpressionExecutor *executor = nullptr;
 	CycleCounter profiler;
 	string name;
+
+	void Verify();
 };
 
 } // namespace duckdb

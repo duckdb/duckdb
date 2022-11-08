@@ -28,7 +28,18 @@ ExpressionExecutor::ExpressionExecutor(ClientContext &context, const vector<uniq
 	}
 }
 
+ExpressionExecutor::ExpressionExecutor(const vector<unique_ptr<Expression>> &exprs) : context(nullptr) {
+	D_ASSERT(exprs.size() > 0);
+	for (auto &expr : exprs) {
+		AddExpression(*expr);
+	}
+}
+
 ExpressionExecutor::ExpressionExecutor() : context(nullptr) {
+}
+
+bool ExpressionExecutor::HasContext() {
+	return context;
 }
 
 ClientContext &ExpressionExecutor::GetContext() {
@@ -46,6 +57,7 @@ void ExpressionExecutor::AddExpression(const Expression &expr) {
 	expressions.push_back(&expr);
 	auto state = make_unique<ExpressionExecutorState>(expr.ToString());
 	Initialize(expr, *state);
+	state->Verify();
 	states.push_back(move(state));
 }
 
