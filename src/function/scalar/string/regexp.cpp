@@ -36,7 +36,8 @@ static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
 	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
 }
 
-unique_ptr<FunctionLocalState> RegexInitLocalState(const BoundFunctionExpression &expr, FunctionData *bind_data) {
+unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                   FunctionData *bind_data) {
 	auto &info = (RegexpBaseBindData &)*bind_data;
 	if (info.constant_pattern) {
 		return make_unique<RegexLocalState>(info);

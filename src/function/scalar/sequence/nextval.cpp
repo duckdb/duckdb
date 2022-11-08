@@ -13,16 +13,14 @@
 namespace duckdb {
 
 struct NextvalBindData : public FunctionData {
-	//! The client context for the function call
-	ClientContext &context;
-	//! The sequence to use for the nextval computation; only if
-	SequenceCatalogEntry *sequence;
-
-	NextvalBindData(ClientContext &context, SequenceCatalogEntry *sequence) : context(context), sequence(sequence) {
+	NextvalBindData(SequenceCatalogEntry *sequence) : sequence(sequence) {
 	}
 
+	//! The sequence to use for the nextval computation; only if the sequence is a constant
+	SequenceCatalogEntry *sequence;
+
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<NextvalBindData>(context, sequence);
+		return make_unique<NextvalBindData>(sequence);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -89,7 +87,8 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &info = (NextvalBindData &)*func_expr.bind_info;
 	auto &input = args.data[0];
 
-	auto &transaction = Transaction::GetTransaction(info.context);
+	auto &context = state.GetContext();
+	auto &transaction = Transaction::GetTransaction(context);
 	if (info.sequence) {
 		// sequence to use is hard coded
 		// increment the sequence
@@ -105,8 +104,8 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 		UnaryExecutor::Execute<string_t, int64_t>(input, result, args.size(), [&](string_t value) {
 			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
-			auto sequence = Catalog::GetCatalog(info.context)
-			                    .GetEntry<SequenceCatalogEntry>(info.context, qname.schema, qname.name);
+			auto sequence =
+			    Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
 			// finally get the next value from the sequence
 			return OP::Operation(transaction, sequence);
 		});
@@ -125,7 +124,7 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
 		}
 	}
-	return make_unique<NextvalBindData>(context, sequence);
+	return make_unique<NextvalBindData>(sequence);
 }
 
 static void NextValDependency(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies) {
