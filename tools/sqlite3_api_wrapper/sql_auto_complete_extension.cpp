@@ -149,7 +149,7 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 	for (auto &entry : all_entries) {
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			auto &table = (TableCatalogEntry &)*entry;
-			for (auto &col : table.columns) {
+			for (auto &col : table.columns.Logical()) {
 				suggestions.emplace_back(col.GetName(), 1);
 			}
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {

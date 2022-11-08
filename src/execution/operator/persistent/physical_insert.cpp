@@ -31,10 +31,7 @@ PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, 
 void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types,
                                    vector<unique_ptr<Expression>> &bound_defaults) {
 	auto &create_info = (CreateTableInfo &)*info.base;
-	for (auto &col : create_info.columns) {
-		if (col.Generated()) {
-			continue;
-		}
+	for (auto &col : create_info.columns.Physical()) {
 		insert_types.push_back(col.GetType());
 		bound_defaults.push_back(make_unique<BoundConstantExpression>(Value(col.GetType())));
 	}
@@ -100,20 +97,17 @@ void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 
 	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
-		for (idx_t i = 0; i < table->columns.size(); i++) {
-			auto &col = table->columns[i];
-			if (col.Generated()) {
-				continue;
-			}
+		for (auto &col : table->columns.Physical()) {
+			auto oid = col.Oid();
 			auto storage_idx = col.StorageOid();
-			if (column_index_map[i] == DConstants::INVALID_INDEX) {
+			if (column_index_map[oid] == DConstants::INVALID_INDEX) {
 				// insert default value
-				default_executor.ExecuteExpression(i, result.data[storage_idx]);
+				default_executor.ExecuteExpression(oid, result.data[storage_idx]);
 			} else {
 				// get value from child chunk
-				D_ASSERT((idx_t)column_index_map[i] < chunk.ColumnCount());
-				D_ASSERT(result.data[storage_idx].GetType() == chunk.data[column_index_map[i]].GetType());
-				result.data[storage_idx].Reference(chunk.data[column_index_map[i]]);
+				D_ASSERT((idx_t)column_index_map[oid] < chunk.ColumnCount());
+				D_ASSERT(result.data[storage_idx].GetType() == chunk.data[column_index_map[oid]].GetType());
+				result.data[storage_idx].Reference(chunk.data[column_index_map[oid]]);
 			}
 		}
 	} else {

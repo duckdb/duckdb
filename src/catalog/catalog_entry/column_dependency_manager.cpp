@@ -11,18 +11,14 @@ ColumnDependencyManager::ColumnDependencyManager() {
 ColumnDependencyManager::~ColumnDependencyManager() {
 }
 
-void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column,
-                                                 const case_insensitive_map_t<column_t> &name_map) {
+void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column, const ColumnList &list) {
 	D_ASSERT(column.Generated());
 	vector<string> referenced_columns;
 	column.GetListOfDependencies(referenced_columns);
 	vector<column_t> indices;
 	for (auto &col : referenced_columns) {
-		auto entry = name_map.find(col);
-		if (entry == name_map.end()) {
-			throw InvalidInputException("Referenced column \"%s\" was not found in the table", col);
-		}
-		indices.push_back(entry->second);
+		auto &entry = list.GetColumn(col);
+		indices.push_back(entry.Oid());
 	}
 	return AddGeneratedColumn(column.Oid(), indices);
 }
@@ -216,7 +212,7 @@ vector<column_t> ColumnDependencyManager::CleanupInternals(column_t column_amoun
 	return new_indices;
 }
 
-stack<column_t> ColumnDependencyManager::GetBindOrder(const vector<ColumnDefinition> &columns) {
+stack<column_t> ColumnDependencyManager::GetBindOrder(const ColumnList &columns) {
 	stack<column_t> bind_order;
 	queue<column_t> to_visit;
 	unordered_set<column_t> visited;
@@ -251,17 +247,16 @@ stack<column_t> ColumnDependencyManager::GetBindOrder(const vector<ColumnDefinit
 	}
 
 	// Add generated columns that have no dependencies, but still might need to have their type resolved
-	for (idx_t i = 0; i < columns.size(); i++) {
-		auto &col = columns[i];
+	for (auto &col : columns.Logical()) {
 		// Not a generated column
 		if (!col.Generated()) {
 			continue;
 		}
 		// Already added to the bind_order stack
-		if (visited.count(i)) {
+		if (visited.count(col.Oid())) {
 			continue;
 		}
-		bind_order.push(i);
+		bind_order.push(col.Oid());
 	}
 
 	return bind_order;

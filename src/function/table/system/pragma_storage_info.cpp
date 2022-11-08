@@ -97,13 +97,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 	auto &bind_data = (PragmaStorageFunctionData &)*data_p.bind_data;
 	auto &data = (PragmaStorageOperatorData &)*data_p.global_state;
 	idx_t count = 0;
-	map<storage_t, column_t> soid_to_idx;
-	for (idx_t cidx = 0; cidx < bind_data.table_entry->columns.size(); cidx++) {
-		auto &entry = bind_data.table_entry->columns[cidx];
-		if (!entry.Generated()) {
-			soid_to_idx[entry.StorageOid()] = entry.Oid();
-		}
-	}
+	auto &columns = bind_data.table_entry->columns;
 	while (data.offset < bind_data.storage_info.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.storage_info[data.offset++];
 		D_ASSERT(entry.size() + 1 == output.ColumnCount());
@@ -112,8 +106,9 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			if (col_idx == 1) {
 				// write the column name
 				auto storage_column_index = entry[col_idx].GetValue<int64_t>();
-				output.SetValue(result_idx, count,
-				                Value(bind_data.table_entry->columns[soid_to_idx[storage_column_index]].Name()));
+				auto &col = columns.GetColumn(PhysicalIndex(storage_column_index));
+
+				output.SetValue(result_idx, count, Value(col.Name()));
 				result_idx++;
 			}
 			output.SetValue(result_idx, count, entry[col_idx]);

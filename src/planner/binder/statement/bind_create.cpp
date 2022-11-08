@@ -163,8 +163,8 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 	}
 }
 
-static void FindMatchingPrimaryKeyColumns(const vector<ColumnDefinition> &columns,
-                                          const vector<unique_ptr<Constraint>> &constraints, ForeignKeyConstraint &fk) {
+static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints,
+                                          ForeignKeyConstraint &fk) {
 	// find the matching primary key constraint
 	bool found_constraint = false;
 	// if no columns are defined, we will automatically try to bind to the primary key
@@ -181,7 +181,7 @@ static void FindMatchingPrimaryKeyColumns(const vector<ColumnDefinition> &column
 
 		vector<string> pk_names;
 		if (unique.index != DConstants::INVALID_INDEX) {
-			pk_names.push_back(columns[unique.index].Name());
+			pk_names.push_back(columns.GetColumn(LogicalIndex(unique.index)).Name());
 		} else {
 			pk_names = unique.columns;
 		}
@@ -210,13 +210,7 @@ static void FindMatchingPrimaryKeyColumns(const vector<ColumnDefinition> &column
 	}
 	// check if all the columns exist
 	for (auto &name : fk.pk_columns) {
-		bool found = false;
-		for (auto &col : columns) {
-			if (col.Name() == name) {
-				found = true;
-				break;
-			}
-		}
+		bool found = columns.ColumnExists(name);
 		if (!found) {
 			throw BinderException(
 			    "Failed to create foreign key: referenced table \"%s\" does not have a column named \"%s\"",
@@ -229,33 +223,31 @@ static void FindMatchingPrimaryKeyColumns(const vector<ColumnDefinition> &column
 	                      fk.info.table, fk_names);
 }
 
-static void FindForeignKeyIndexes(const vector<ColumnDefinition> &columns, const vector<string> &names,
-                                  vector<idx_t> &indexes) {
+static void FindForeignKeyIndexes(const ColumnList &columns, const vector<string> &names, vector<idx_t> &indexes) {
 	D_ASSERT(indexes.empty());
 	D_ASSERT(!names.empty());
 	for (auto &name : names) {
-		bool found = false;
-		for (auto &col : columns) {
-			if (col.Name() == name) {
-				auto storage_oid = col.StorageOid();
-				D_ASSERT(storage_oid < columns.size());
-				indexes.push_back(storage_oid);
-				found = true;
-				break;
-			}
-		}
-		if (!found) {
+		if (!columns.ColumnExists(name)) {
 			throw BinderException("column \"%s\" named in key does not exist", name);
 		}
+		auto &column = columns.GetColumn(name);
+		if (column.Generated()) {
+			throw BinderException("Failed to create foreign key: referenced column \"%s\" is a generated column",
+			                      column.Name());
+		}
+		indexes.push_back(column.Oid());
 	}
 }
 
-static void CheckForeignKeyTypes(const vector<ColumnDefinition> &pk_columns, const vector<ColumnDefinition> &fk_columns,
-                                 ForeignKeyConstraint &fk) {
+static const ColumnDefinition &FindColumnWithStorageOid(const ColumnList &columns, idx_t storage_oid) {
+	return columns.GetColumn(PhysicalIndex(storage_oid));
+}
+
+static void CheckForeignKeyTypes(const ColumnList &pk_columns, const ColumnList &fk_columns, ForeignKeyConstraint &fk) {
 	D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
 	for (idx_t c_idx = 0; c_idx < fk.info.pk_keys.size(); c_idx++) {
-		auto &pk_col = pk_columns[fk.info.pk_keys[c_idx]];
-		auto &fk_col = fk_columns[fk.info.fk_keys[c_idx]];
+		auto &pk_col = FindColumnWithStorageOid(pk_columns, fk.info.pk_keys[c_idx]);
+		auto &fk_col = FindColumnWithStorageOid(fk_columns, fk.info.fk_keys[c_idx]);
 		if (pk_col.Type() != fk_col.Type()) {
 			throw BinderException("Failed to create foreign key: incompatible types between column \"%s\" (\"%s\") and "
 			                      "column \"%s\" (\"%s\")",
@@ -283,7 +275,7 @@ void ExpressionContainsGeneratedColumn(const ParsedExpression &expr, const unord
 
 static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
 	unordered_set<string> generated_columns;
-	for (auto &col : table_info.columns) {
+	for (auto &col : table_info.columns.Logical()) {
 		if (!col.Generated()) {
 			continue;
 		}
@@ -308,7 +300,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 		case ConstraintType::NOT_NULL: {
 			auto &constraint = (NotNullConstraint &)*constr;
 			auto index = constraint.index;
-			if (table_info.columns[index].Generated()) {
+			if (table_info.columns.GetColumn(LogicalIndex(index)).Generated()) {
 				return true;
 			}
 			break;
@@ -323,7 +315,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 					}
 				}
 			} else {
-				if (table_info.columns[index].Generated()) {
+				if (table_info.columns.GetColumn(LogicalIndex(index)).Generated()) {
 					return true;
 				}
 			}
@@ -421,12 +413,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::TABLE_ENTRY: {
 		auto &create_info = (CreateTableInfo &)*stmt.info;
 		auto &catalog = Catalog::GetCatalog(context);
-		idx_t storage_idx = 0;
-		for (auto &col : create_info.columns) {
-			if (!col.Generated()) {
-				col.SetStorageOid(storage_idx++);
-			}
-		}
 		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
 		unordered_set<SchemaCatalogEntry *> fk_schemas;
 		for (idx_t i = 0; i < create_info.constraints.size(); i++) {

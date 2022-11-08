@@ -419,7 +419,7 @@ static void CreateTPCHTable(ClientContext &context, string schema, string suffix
 	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
-		info->columns.push_back(ColumnDefinition(T::Columns[i], T::Types[i]));
+		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 		info->constraints.push_back(make_unique<NotNullConstraint>(i));
 	}
 	auto &catalog = Catalog::GetCatalog(context);
@@ -457,9 +457,9 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	set_seeds = 0;
 	updates = 0;
 
-  DBGenContext dbgen_ctx;
+	DBGenContext dbgen_ctx;
 
-  tdef* tdefs = dbgen_ctx.tdefs;
+	tdef *tdefs = dbgen_ctx.tdefs;
 	tdefs[PART].base = 200000;
 	tdefs[PSUPP].base = 200000;
 	tdefs[SUPP].base = 10000;

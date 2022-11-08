@@ -162,11 +162,11 @@ void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const
 	InnerGetListOfDependencies(*generated_expression, dependencies);
 }
 
-string ColumnDefinition::GetName() {
+string ColumnDefinition::GetName() const {
 	return name;
 }
 
-LogicalType ColumnDefinition::GetType() {
+LogicalType ColumnDefinition::GetType() const {
 	return type;
 }
 

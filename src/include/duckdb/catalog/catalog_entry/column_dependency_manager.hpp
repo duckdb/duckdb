@@ -10,7 +10,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/string.hpp"
-#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/column_list.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/stack.hpp"
 
@@ -27,12 +27,12 @@ public:
 
 public:
 	//! Get the bind order that ensures dependencies are resolved before dependents are
-	stack<column_t> GetBindOrder(const vector<ColumnDefinition> &columns);
+	stack<column_t> GetBindOrder(const ColumnList &columns);
 
 	//! Adds a connection between the dependent and its dependencies
 	void AddGeneratedColumn(column_t index, const vector<column_t> &indices, bool root = true);
 	//! Add a generated column from a column definition
-	void AddGeneratedColumn(const ColumnDefinition &column, const case_insensitive_map_t<column_t> &name_map);
+	void AddGeneratedColumn(const ColumnDefinition &column, const ColumnList &list);
 
 	//! Removes the column(s) and outputs the new column indices
 	vector<column_t> RemoveColumn(column_t index, column_t column_amount);

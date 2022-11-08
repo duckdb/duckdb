@@ -118,17 +118,18 @@ public:
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return entry->columns.size();
+		return entry->columns.LogicalColumnCount();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry->columns[col].Name();
+		return entry->columns.GetColumn(LogicalIndex(col)).Name();
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return entry->columns[col].Type();
+		return entry->columns.GetColumn(LogicalIndex(col)).Type();
 	}
 	const Value ColumnDefault(idx_t col) override {
-		if (entry->columns[col].DefaultValue()) {
-			return Value(entry->columns[col].DefaultValue()->ToString());
+		auto &column = entry->columns.GetColumn(LogicalIndex(col));
+		if (column.DefaultValue()) {
+			return Value(column.DefaultValue()->ToString());
 		}
 		return Value();
 	}

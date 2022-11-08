@@ -77,9 +77,9 @@ public:
 	void ChangeGeneratedExpressionType(const LogicalType &type);
 	void GetListOfDependencies(vector<string> &dependencies) const;
 
-	string GetName();
+	string GetName() const;
 
-	LogicalType GetType();
+	LogicalType GetType() const;
 
 private:
 	//! The name of the entry

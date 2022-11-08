@@ -16,6 +16,7 @@
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/parser/column_list.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -133,7 +134,7 @@ public:
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
 	RowGroupPointer Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
-	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);
+	static RowGroupPointer Deserialize(Deserializer &source, const ColumnList &columns);
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);

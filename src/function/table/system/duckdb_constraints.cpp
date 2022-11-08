@@ -270,7 +270,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			vector<Value> column_name_list;
 			for (auto column_index : column_index_list) {
 				index_list.push_back(Value::BIGINT(column_index));
-				column_name_list.emplace_back(table.columns[column_index].Name());
+				column_name_list.emplace_back(table.columns.GetColumn(LogicalIndex(column_index)).Name());
 			}
 
 			// constraint_column_indexes, LIST

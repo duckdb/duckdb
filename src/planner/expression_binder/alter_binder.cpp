@@ -39,8 +39,12 @@ BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
 		throw BinderException("Table does not contain column %s referenced in alter statement!",
 		                      colref.column_names[0]);
 	}
+	if (table.columns.GetColumn(LogicalIndex(idx)).Generated()) {
+		throw BinderException("Using generated columns in alter statement not supported");
+	}
 	bound_columns.push_back(idx);
-	return BindResult(make_unique<BoundReferenceExpression>(table.columns[idx].Type(), bound_columns.size() - 1));
+	return BindResult(make_unique<BoundReferenceExpression>(table.columns.GetColumn(LogicalIndex(idx)).Type(),
+	                                                        bound_columns.size() - 1));
 }
 
 } // namespace duckdb

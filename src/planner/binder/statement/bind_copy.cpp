@@ -97,15 +97,16 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
-		for (idx_t i = 0; i < table->columns.size(); i++) {
+		for (auto &col : table->columns.Logical()) {
+			auto i = col.Oid();
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
-				expected_names[bound_insert.column_index_map[i]] = table->columns[i].Name();
+				expected_names[bound_insert.column_index_map[i]] = col.Name();
 			}
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
-		for (idx_t i = 0; i < table->columns.size(); i++) {
-			expected_names.push_back(table->columns[i].Name());
+		for (auto &col : table->columns.Logical()) {
+			expected_names.push_back(col.Name());
 		}
 	}
 

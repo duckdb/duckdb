@@ -257,7 +257,7 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 // To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
 static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
                                              Expression &expr, column_t index) {
-	auto &col = table.columns[index];
+	auto &col = table.columns.GetColumn(LogicalIndex(index));
 	D_ASSERT(col.Generated());
 	ExpressionExecutor executor(context, expr);
 	Vector result(col.Type());
@@ -332,8 +332,8 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 
 	// make the data chunk to check
 	vector<LogicalType> types;
-	for (idx_t i = 0; i < table_entry_ptr->columns.size(); i++) {
-		types.emplace_back(table_entry_ptr->columns[i].Type());
+	for (auto &col : table_entry_ptr->columns.Logical()) {
+		types.emplace_back(col.Type());
 	}
 	DataChunk dst_chunk;
 	dst_chunk.InitializeEmpty(types);
@@ -419,8 +419,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		auto binder = Binder::CreateBinder(context);
 		auto bound_columns = unordered_set<column_t>();
 		CheckBinder generated_check_binder(*binder, context, table.name, table.columns, bound_columns);
-		for (idx_t i = 0; i < table.columns.size(); i++) {
-			auto &col = table.columns[i];
+		for (auto &col : table.columns.Logical()) {
 			if (!col.Generated()) {
 				continue;
 			}
@@ -428,7 +427,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 			generated_check_binder.target_type = col.Type();
 			auto to_be_bound_expression = col.GeneratedExpression().Copy();
 			auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
-			VerifyGeneratedExpressionSuccess(context, table, chunk, *bound_expression, i);
+			VerifyGeneratedExpressionSuccess(context, table, chunk, *bound_expression, col.Oid());
 		}
 	}
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
@@ -438,8 +437,8 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		case ConstraintType::NOT_NULL: {
 			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
 			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
-			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index], chunk.size(),
-			                        table.columns[not_null.index].Name());
+			auto &col = table.columns.GetColumn(LogicalIndex(not_null.index));
+			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index], chunk.size(), col.Name());
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -832,7 +831,8 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				if (column_ids[i] == bound_not_null.index) {
 					// found the column id: check the data in
-					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), table.columns[not_null.index].Name());
+					auto &col = table.columns.GetColumn(LogicalIndex(not_null.index));
+					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), col.Name());
 					break;
 				}
 			}

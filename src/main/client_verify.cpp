@@ -57,7 +57,8 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		return RunStatementInternal(lock, q, move(s), false, false);
 	});
 	if (!any_failed) {
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::PARSED, *statement_copy_for_explain));
+		statement_verifiers.emplace_back(
+		    StatementVerifier::Create(VerificationType::PARSED, *statement_copy_for_explain));
 	}
 	// Execute the verifiers
 	for (auto &verifier : statement_verifiers) {

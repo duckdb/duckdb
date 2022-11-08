@@ -10,7 +10,7 @@
 
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -43,14 +43,12 @@ public:
 	//! A reference to the underlying storage unit used for this table
 	std::shared_ptr<DataTable> storage;
 	//! A list of columns that are part of this table
-	vector<ColumnDefinition> columns;
+	ColumnList columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	ColumnDependencyManager column_dependency_manager;
-	//! A map of column name to column index
-	case_insensitive_map_t<column_t> name_map;
 
 public:
 	bool HasGeneratedColumns() const;

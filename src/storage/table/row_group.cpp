@@ -807,30 +807,23 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer) 
 	writer.Finalize();
 }
 
-RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<ColumnDefinition> &columns) {
+RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const ColumnList &columns) {
 	RowGroupPointer result;
 
 	FieldReader reader(main_source);
 	result.row_start = reader.ReadRequired<uint64_t>();
 	result.tuple_count = reader.ReadRequired<uint64_t>();
 
-	result.data_pointers.reserve(columns.size());
-	result.statistics.reserve(columns.size());
+	auto physical_columns = columns.PhysicalColumnCount();
+	result.data_pointers.reserve(physical_columns);
+	result.statistics.reserve(physical_columns);
 
 	auto &source = reader.GetSource();
-	for (idx_t i = 0; i < columns.size(); i++) {
-		auto &col = columns[i];
-		if (col.Generated()) {
-			continue;
-		}
-		auto stats = BaseStatistics::Deserialize(source, columns[i].Type());
+	for (auto &col : columns.Physical()) {
+		auto stats = BaseStatistics::Deserialize(source, col.Type());
 		result.statistics.push_back(move(stats));
 	}
-	for (idx_t i = 0; i < columns.size(); i++) {
-		auto &col = columns[i];
-		if (col.Generated()) {
-			continue;
-		}
+	for (idx_t i = 0; i < columns.PhysicalColumnCount(); i++) {
 		BlockPointer pointer;
 		pointer.block_id = source.Read<block_id_t>();
 		pointer.offset = source.Read<uint64_t>();

@@ -89,19 +89,19 @@ static void CheckConstraints(TableCatalogEntry *table, idx_t oid, bool &out_not_
 }
 
 static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry *table, DataChunk &output) {
-	if (data.offset >= table->columns.size()) {
+	if (data.offset >= table->columns.LogicalColumnCount()) {
 		// finished returning values
 		return;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table->columns.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table->columns.LogicalColumnCount());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
 		bool not_null, pk;
 		auto index = i - data.offset;
-		auto &column = table->columns[i];
+		auto &column = table->columns.GetColumn(LogicalIndex(i));
 		D_ASSERT(column.Oid() < (idx_t)NumericLimits<int32_t>::Maximum());
 		CheckConstraints(table, column.Oid(), not_null, pk);
 
