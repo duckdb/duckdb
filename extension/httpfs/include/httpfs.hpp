@@ -31,6 +31,30 @@ struct HTTPParams {
 	static HTTPParams ReadFrom(FileOpener *opener);
 };
 
+struct FileHandleCacheKey {
+	string path;
+	uint8_t flags;
+	uint64_t session_id;
+};
+
+struct FileHandleCacheValue {
+	idx_t length;
+	time_t last_modified;
+};
+
+struct FileHandleCacheEquality {
+	bool operator()(const struct FileHandleCacheKey &a, const struct FileHandleCacheKey &b) const {
+		return a.path == b.path && a.flags == b.flags && a.session_id == b.session_id;
+	}
+};
+
+struct FileHandleCacheHash {
+	std::size_t operator()(const struct FileHandleCacheKey& key) const;
+};
+
+using file_handle_map_t = unordered_map<FileHandleCacheKey, FileHandleCacheValue, FileHandleCacheHash, FileHandleCacheEquality>;
+
+
 class HTTPFileHandle : public FileHandle {
 public:
 	HTTPFileHandle(FileSystem &fs, string path, uint8_t flags, const HTTPParams &params);
@@ -114,6 +138,8 @@ public:
 	}
 
 	static void Verify();
+
+	file_handle_map_t file_handle_cache;
 
 protected:
 	virtual unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,

@@ -504,6 +504,33 @@ public:
 				// read the next file
 				string file = bind_data.files[++parallel_state.file_index];
 
+				// TODO this is an issue for httpfs: we're doing head requests + fetching metadata while locking global state.
+				// this is mega slow for metadata-heavy reads across many files
+				// The issue however is that we need the batch index depends on the metadata of previous files and you cannot know the batch index
+				// TODO: can we just use upper/lower bytes for file/rowgroup to circumvent this?
+
+				// Plan:
+
+				// We should add to the parallel_state:
+				// idx_t next_file							the file where the next call to ParquetParallelStateNext should start searching
+				// vector<enum> file_status					UNOPENED, OPENING, OPENED, COMPLETE
+				// vector<idx_t> file_next_row_group		the next row_group for this file to be scanned
+				// vector<idx_t> file_row_groups			the total row_group count of a file
+
+				// Then every call to ParquetParallelStateNext will:
+				// - linearly search file_status, starting at next_file for the first occurrence of either:
+				// 		UNOPENED:
+				// 			- set file_status[curr_file] to OPENING
+				//			- unlock global state
+				//			- when done
+				//			- lock global state
+				//			- update file_row_groups[curr_file]
+				// 			- if file_row_groups[curr_file] is 1 or 0: set file_status[curr_file] to COMPLETE & set next_file to curr_file+1
+				// 			- else: this file has more rowgroups that can be scanned in parallel, file_status[curr_file] to OPENED and next_file to curr_file
+				//
+				//		OPENED: this thread should start scanning the next available row group using file_next_row_group[next_file]
+				//			- handle as current implementation, just pick up the next row group, increment file_next_row_group[curr_file]
+
 				parallel_state.current_reader =
 				    make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
 				                               parallel_state.current_reader->parquet_options, bind_data.files[0]);

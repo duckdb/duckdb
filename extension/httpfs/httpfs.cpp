@@ -4,13 +4,19 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
 
 #include <map>
+#include <iostream>
 
 namespace duckdb {
+
+std::size_t FileHandleCacheHash::operator()(const struct FileHandleCacheKey& key) const {
+	return Hash(key.flags) ^ Hash(key.session_id) ^ Hash(key.path.c_str(), key.path.length());
+}
 
 static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
 	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
@@ -344,6 +350,24 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 	InitializeClient();
 
 	auto &hfs = (HTTPFileSystem &)file_system;
+
+	// Lookup handle in cache TODO: flags in parquet reader
+	FileHandleCacheKey cache_key {
+	    path,
+	    1,
+	    1
+	};
+	auto lookup = hfs.file_handle_cache.find(cache_key);
+	if (lookup != hfs.file_handle_cache.end()) {
+		last_modified = lookup->second.last_modified;
+		length = lookup->second.length;
+
+		std::cout << "Opening from cache, flags: " << (int64_t)flags << "path: " << path << "\n";
+		return nullptr;
+	} else {
+		std::cout << "Opening new, flags: " << (int64_t)flags << "path: " << path << "\n";
+	}
+
 	auto res = hfs.HeadRequest(*this, path, {});
 
 	if (res->code != 200) {
@@ -382,6 +406,14 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 	tm.tm_sec = result.data[5];
 	tm.tm_isdst = 0;
 	last_modified = mktime(&tm);
+
+	FileHandleCacheValue cache_value {
+		length,
+		this->last_modified
+	};
+
+	hfs.file_handle_cache[cache_key] = cache_value;
+
 	return res;
 }
 
