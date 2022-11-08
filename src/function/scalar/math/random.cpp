@@ -51,6 +51,7 @@ static unique_ptr<FunctionLocalState> RandomInitLocalState(const BoundFunctionEx
                                                            FunctionData *bind_data) {
 	auto &info = (RandomBindData &)*bind_data;
 	auto &random_engine = RandomEngine::Get(info.context);
+	lock_guard<mutex> guard(random_engine.lock);
 	return make_unique<RandomLocalState>(random_engine.NextRandomInteger());
 }
 
