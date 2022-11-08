@@ -42,7 +42,6 @@ unique_ptr<SQLStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *n
 	}
 
 	auto result = make_unique<PragmaStatement>();
-	auto &info = *result->info;
 
 	auto show_name = stmt->name;
 	TransformShowName(result, show_name);
