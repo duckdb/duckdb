@@ -1,0 +1,12 @@
+# name: test/fuzzer/pedro/local_transaction_delete_empty_tree.test
+# description: Empty segment tree error when deleting in local transaction
+# group: [pedro]
+
+statement ok
+START TRANSACTION;
+
+statement ok
+CREATE TABLE t1 AS (SELECT 1);
+
+statement ok
+DELETE FROM t1 RETURNING 1;
