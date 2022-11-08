@@ -41,6 +41,8 @@ public:
 	//! The actual buffer
 	unique_ptr<char[]> buffer;
 
+	vector<unique_ptr<char[]>> intersections;
+
 private:
 	//! The allocated size of the buffer
 	//	idx_t buffer_size;

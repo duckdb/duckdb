@@ -31,7 +31,6 @@ struct CSVBufferRead {
 			buffer_start = 0;
 			buffer_end = 0;
 		}
-		intersections = std::make_shared<vector<unique_ptr<char[]>>>();
 	}
 
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, shared_ptr<CSVBuffer> nxt_buffer_p, idx_t buffer_start_p,
@@ -52,11 +51,18 @@ struct CSVBufferRead {
 	string_t GetValue(idx_t start_buffer, idx_t position_buffer, idx_t offset) {
 		idx_t length = position_buffer - start_buffer - offset;
 		// 1) It's all in the current buffer
-		if (!next_buffer || start_buffer + length < buffer->GetBufferSize()) {
-			return string_t(buffer->buffer.get() + start_buffer, length);
-		} else if (start_buffer > buffer->GetBufferSize()) {
-			return string_t(next_buffer->buffer.get() + (start_buffer - buffer->GetBufferSize()), length);
+		if (start_buffer + length < buffer->GetBufferSize()) {
+			auto buffer_ptr = buffer->buffer.get();
+			return string_t(buffer_ptr + start_buffer, length);
+		} else if (start_buffer >= buffer->GetBufferSize()) {
+			// 2) It's all in the next buffer
+			D_ASSERT(next_buffer);
+			D_ASSERT(next_buffer->GetBufferSize() >= length + (start_buffer - buffer->GetBufferSize()));
+			auto buffer_ptr = next_buffer->buffer.get();
+			return string_t(buffer_ptr + (start_buffer - buffer->GetBufferSize()), length);
 		} else {
+			// 3) It starts in the current buffer and ends in the next buffer
+			D_ASSERT(next_buffer);
 			auto intersection = unique_ptr<char[]>(new char[length]);
 			idx_t cur_pos = 0;
 			for (idx_t i = start_buffer; i < buffer->GetBufferSize(); i++) {
@@ -66,14 +72,13 @@ struct CSVBufferRead {
 			for (; cur_pos < length; cur_pos++) {
 				intersection[cur_pos] = next_buffer->buffer[nxt_buffer_pos++];
 			}
-			intersections->emplace_back(move(intersection));
-			return string_t(intersections->back().get(), length);
+			buffer->intersections.emplace_back(move(intersection));
+			return string_t(buffer->intersections.back().get(), length);
 		}
 	}
 
 	shared_ptr<CSVBuffer> buffer;
 	shared_ptr<CSVBuffer> next_buffer;
-	shared_ptr<vector<unique_ptr<char[]>>> intersections;
 
 	idx_t buffer_start;
 	idx_t buffer_end;

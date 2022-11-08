@@ -52,13 +52,13 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	}
 
 	// We have to move position up to next new line
-	DataChunk first_line_chunk;
-	first_line_chunk.Initialize(allocator, insert_chunk.GetTypes());
 	idx_t end_buffer_real = end_buffer;
 	// Check if we already start in a valid line
 	string error_message;
 	bool successfully_read_first_line = false;
 	while (!successfully_read_first_line) {
+		DataChunk first_line_chunk;
+		first_line_chunk.Initialize(allocator, insert_chunk.GetTypes());
 		for (; position_buffer < end_buffer; position_buffer++) {
 			if (StringUtil::CharacterIsOnlyNewline(buffer[position_buffer])) {
 				position_buffer++;
@@ -205,6 +205,7 @@ add_row : {
 			success = Flush(insert_chunk);
 		}
 		reached_remainder_state = false;
+		parse_chunk.Reset();
 		return success;
 	} else {
 		finished_chunk = AddRow(insert_chunk, column);
@@ -352,6 +353,7 @@ final_state : {
 					AddRow(insert_chunk, column);
 					success = Flush(insert_chunk);
 				}
+				parse_chunk.Reset();
 				reached_remainder_state = false;
 				return success;
 			} else {

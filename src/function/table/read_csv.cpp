@@ -231,6 +231,8 @@ public:
 		}
 		current_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
 		next_buffer = current_buffer->Next(*file_handle, buffer_size);
+		all_buffers.push_back(current_buffer);
+		all_buffers.push_back(next_buffer);
 	}
 	ParallelCSVGlobalState() {
 	}
@@ -240,6 +242,10 @@ public:
 	unique_ptr<CSVBufferRead> Next(ClientContext &context, ReadCSVData &bind_data);
 	//! If we finished reading all the CSV Files
 	bool Finished();
+	//! How many bytes were read up to this point
+	atomic<idx_t> bytes_read;
+	//! Size of current file
+	idx_t file_size;
 
 private:
 	//! File Handle for current file
@@ -249,15 +255,12 @@ private:
 	shared_ptr<CSVBuffer> next_buffer;
 	//! The index of the next file to read (i.e. current file + 1)
 	idx_t file_index = 1;
-	//! How many bytes were read up to this point
-	//	atomic<idx_t> bytes_read;
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
 	//! Byte set from for last thread
 	idx_t next_byte = 0;
-	//! Size of current file
-	idx_t file_size;
+
 	//! The current estimated line number
 	idx_t estimated_linenr;
 
@@ -272,6 +275,7 @@ private:
 	idx_t buffer_size;
 	//! Current batch index
 	idx_t batch_index = 0;
+	vector<shared_ptr<CSVBuffer>> all_buffers;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
@@ -303,10 +307,12 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 	if (next_byte >= current_buffer->GetBufferSize()) {
 		// We replace the current buffer with the next buffer
 		next_byte = 0;
+		bytes_read += current_buffer->GetBufferSize();
 		current_buffer = next_buffer;
 		if (next_buffer) {
 			// Next buffer gets the next-next buffer
 			next_buffer = next_buffer->Next(*file_handle, buffer_size);
+			all_buffers.push_back(next_buffer);
 		}
 	}
 	if (current_buffer && !next_buffer) {
@@ -349,6 +355,7 @@ public:
 
 	//! The CSV reader
 	unique_ptr<ParallelCSVReader> csv_reader;
+	CSVBufferRead previous_buffer;
 };
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
@@ -388,6 +395,7 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			if (!next_chunk) {
 				break;
 			}
+			csv_local_state.previous_buffer = csv_local_state.csv_reader->buffer;
 			csv_local_state.csv_reader->SetBufferRead(*next_chunk);
 		}
 		csv_local_state.csv_reader->ParseCSV(output);
@@ -562,11 +570,21 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
-	auto &data = (const SingleThreadedCSVState &)*global_state;
-	if (data.file_size == 0) {
+	auto &bind_data = (ReadCSVData &)*bind_data_p;
+	idx_t file_size, bytes_read;
+	if (bind_data.single_threaded) {
+		auto &data = (const SingleThreadedCSVState &)*global_state;
+		file_size = data.file_size;
+		bytes_read = data.bytes_read;
+	} else {
+		auto &data = (const ParallelCSVGlobalState &)*global_state;
+		file_size = data.file_size;
+		bytes_read = data.bytes_read;
+	}
+	if (file_size == 0) {
 		return 100;
 	}
-	auto percentage = (data.bytes_read * 100.0) / data.file_size;
+	auto percentage = (bytes_read * 100.0) / file_size;
 	return percentage;
 }
 
