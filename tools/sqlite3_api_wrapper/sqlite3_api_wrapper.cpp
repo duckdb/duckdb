@@ -245,7 +245,8 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_val
 	auto properties = pStmt->prepared->GetStatementProperties();
 	if (properties.return_type == StatementReturnType::CHANGED_ROWS && materialized.RowCount() > 0) {
 		// update total changes
-		auto row_changes = materialized.Collection().GetRows().GetValue(0, 0);
+		ColumnDataScanState scan_state;
+		auto row_changes = materialized.Collection().GetRows(scan_state).GetValue(0, 0);
 		if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
 			pStmt->db->last_changes = row_changes.GetValue<int64_t>();
 			pStmt->db->total_changes += row_changes.GetValue<int64_t>();

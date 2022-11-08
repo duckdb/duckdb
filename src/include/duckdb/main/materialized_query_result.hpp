@@ -55,6 +55,8 @@ private:
 	unique_ptr<ColumnDataRowCollection> row_collection;
 	//! Scan state for Fetch calls
 	ColumnDataScanState scan_state;
+	//! Scan state for row_collection (keeps pins)
+	ColumnDataScanState row_scan_state;
 	bool scan_initialized;
 };
 

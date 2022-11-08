@@ -115,18 +115,26 @@ idx_t ColumnDataRow::RowIndex() const {
 //===--------------------------------------------------------------------===//
 // ColumnDataRowCollection
 //===--------------------------------------------------------------------===//
-ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &collection) {
+ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &collection,
+                                                 ColumnDataScanState &scan_state) {
 	if (collection.Count() == 0) {
 		return;
 	}
 	// read all the chunks
-	ColumnDataScanState scan_state;
-	collection.InitializeScan(scan_state);
+	ColumnDataScanState temp_scan_state;
+	collection.InitializeScan(temp_scan_state);
 	while (true) {
 		auto chunk = make_unique<DataChunk>();
 		collection.InitializeScanChunk(*chunk);
-		if (!collection.Scan(scan_state, *chunk)) {
+		if (!collection.Scan(temp_scan_state, *chunk)) {
 			break;
+		}
+		// we keep the BufferHandles that are needed for the materialized collection pinned in the supplied scan_state
+		auto &temp_handles = temp_scan_state.current_chunk_state.handles;
+		auto &scan_handles = scan_state.current_chunk_state.handles;
+		for (auto &temp_handle_pair : temp_handles) {
+			auto handle_copy = make_pair<uint32_t, BufferHandle>(scan_handles.size(), move(temp_handle_pair.second));
+			scan_state.current_chunk_state.handles.insert(move(handle_copy));
 		}
 		chunks.push_back(move(chunk));
 	}
@@ -712,8 +720,8 @@ bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 	return true;
 }
 
-ColumnDataRowCollection ColumnDataCollection::GetRows() const {
-	return ColumnDataRowCollection(*this);
+ColumnDataRowCollection ColumnDataCollection::GetRows(ColumnDataScanState &scan_state) const {
+	return ColumnDataRowCollection(*this, scan_state);
 }
 
 //===--------------------------------------------------------------------===//
@@ -796,8 +804,10 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 		error_message = "Row count mismatch";
 		return false;
 	}
-	auto left_rows = left.GetRows();
-	auto right_rows = right.GetRows();
+	ColumnDataScanState left_scan_state;
+	ColumnDataScanState right_scan_state;
+	auto left_rows = left.GetRows(left_scan_state);
+	auto right_rows = right.GetRows(right_scan_state);
 	for (idx_t r = 0; r < left.Count(); r++) {
 		for (idx_t c = 0; c < left.ColumnCount(); c++) {
 			auto lvalue = left_rows.GetValue(c, r);

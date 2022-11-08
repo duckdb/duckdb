@@ -67,7 +67,8 @@ idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 	auto &collection = wrapper->result->Collection();
 	idx_t row_count = collection.Count();
 	if (row_count > 0 && wrapper->result->properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
-		auto rows = collection.GetRows();
+		duckdb::ColumnDataScanState scan_state;
+		auto rows = collection.GetRows(scan_state);
 		D_ASSERT(row_count == 1);
 		D_ASSERT(rows.size() == 1);
 		rows_changed = rows[0].GetValue(0).GetValue<int64_t>();
