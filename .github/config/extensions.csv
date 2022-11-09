@@ -10,5 +10,4 @@ tpch,,,
 visualizer,,,
 sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,a560eeb15990e6e0c9dd6dffd3d892d9726c0123,
 postgres_scanner,https://github.com/duckdblabs/postgres_scanner,8c972b7766c2b309618bcc7e7e8249d44f4f010c,
-substrait,https://github.com/duckdblabs/substrait,4ee0a423f9c337bd8e3a0fa1eedf23278734bfb8,no-windows
 arrow,https://github.com/duckdblabs/arrow,a8d7641a46fcad1976f3568125f9c652e0dcc04e,no-windows
