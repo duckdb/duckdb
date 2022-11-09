@@ -10,11 +10,11 @@ PRAGMA enable_verification
 query II
 select * from parquet_scan('data/parquet-testing/nullbyte.parquet')
 ----
-42	hello
+42	hello\0world
 
 query II
 select * from parquet_scan('data/parquet-testing/nullbyte_multiple.parquet')
 ----
-1	hello
-2	this is a long
+1	hello\0world
+2	this is a long\0string
 3	this string has no null bytes

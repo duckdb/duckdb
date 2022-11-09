@@ -47,6 +47,14 @@ char *FetchDefaultValue::Operation() {
 }
 
 template <>
+duckdb_string FetchDefaultValue::Operation() {
+	duckdb_string result;
+	result.data = nullptr;
+	result.size = 0;
+	return result;
+}
+
+template <>
 duckdb_blob FetchDefaultValue::Operation() {
 	duckdb_blob result;
 	result.data = nullptr;
@@ -59,9 +67,9 @@ duckdb_blob FetchDefaultValue::Operation() {
 //===--------------------------------------------------------------------===//
 
 template <>
-bool FromCBlobCastWrapper::Operation(duckdb_blob input, char *&result) {
+bool FromCBlobCastWrapper::Operation(duckdb_blob input, duckdb_string &result) {
 	string_t input_str((const char *)input.data, input.size);
-	return ToCStringCastWrapper<duckdb::CastFromBlob>::template Operation<string_t, char *>(input_str, result);
+	return ToCStringCastWrapper<duckdb::CastFromBlob>::template Operation<string_t, duckdb_string>(input_str, result);
 }
 
 } // namespace duckdb

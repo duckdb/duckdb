@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -34,17 +34,22 @@ public:
 	void Finish();
 
 	void AddDependency(Event &event);
-	bool HasDependencies() {
+	bool HasDependencies() const {
 		return total_dependencies != 0;
 	}
+	const vector<Event *> &GetParentsVerification() const;
+
 	void CompleteDependency();
 
 	void SetTasks(vector<unique_ptr<Task>> tasks);
 
 	void InsertEvent(shared_ptr<Event> replacement_event);
 
-	bool IsFinished() {
+	bool IsFinished() const {
 		return finished;
+	}
+
+	virtual void PrintPipeline() {
 	}
 
 protected:
@@ -62,6 +67,8 @@ protected:
 
 	//! The events that depend on this event to run
 	vector<weak_ptr<Event>> parents;
+	//! Raw pointers to the parents (used for verification only)
+	vector<Event *> parents_raw;
 
 	//! Whether or not the event is finished executing
 	atomic<bool> finished;
