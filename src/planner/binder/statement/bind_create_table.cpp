@@ -199,7 +199,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 }
 
 void Binder::BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
-	for (auto &column : columns.Logical()) {
+	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
 		if (column.DefaultValue()) {
 			// we bind a copy of the DEFAULT value because binding is destructive

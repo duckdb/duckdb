@@ -42,7 +42,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
 
-	vector<idx_t> named_column_map;
+	vector<LogicalIndex> named_column_map;
 	if (!stmt.columns.empty()) {
 		// insertion statement specifies column list
 
@@ -50,11 +50,11 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		case_insensitive_map_t<idx_t> column_name_map;
 		for (idx_t i = 0; i < stmt.columns.size(); i++) {
 			column_name_map[stmt.columns[i]] = i;
-			auto column_index = table->GetColumnIndex(stmt.columns[i]);
-			if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+			auto column_index = table->GetColumnIndexLogical(stmt.columns[i]);
+			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}
-			auto &col = table->columns.GetColumn(LogicalIndex(column_index));
+			auto &col = table->columns.GetColumn(column_index);
 			if (col.Generated()) {
 				throw BinderException("Cannot insert into a generated column");
 			}
@@ -73,7 +73,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		}
 	} else {
 		for (auto &col : table->columns.Physical()) {
-			named_column_map.push_back(col.Oid());
+			named_column_map.push_back(col.Logical());
 			insert->expected_types.push_back(col.Type());
 		}
 	}
@@ -101,11 +101,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
-			idx_t table_col_idx = named_column_map[col_idx];
-			D_ASSERT(table_col_idx < table->columns.LogicalColumnCount());
+			auto table_col_idx = named_column_map[col_idx];
 
 			// set the expected types as the types for the INSERT statement
-			auto &column = table->columns.GetColumn(LogicalIndex(table_col_idx));
+			auto &column = table->columns.GetColumn(table_col_idx);
 			expr_list.expected_types[col_idx] = column.Type();
 			expr_list.expected_names[col_idx] = column.Name();
 

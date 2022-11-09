@@ -98,16 +98,16 @@ void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
 		for (auto &col : table->columns.Physical()) {
-			auto oid = col.Oid();
 			auto storage_idx = col.StorageOid();
-			if (column_index_map[oid] == DConstants::INVALID_INDEX) {
+			auto mapped_index = column_index_map[storage_idx];
+			if (mapped_index == DConstants::INVALID_INDEX) {
 				// insert default value
-				default_executor.ExecuteExpression(oid, result.data[storage_idx]);
+				default_executor.ExecuteExpression(storage_idx, result.data[storage_idx]);
 			} else {
 				// get value from child chunk
-				D_ASSERT((idx_t)column_index_map[oid] < chunk.ColumnCount());
-				D_ASSERT(result.data[storage_idx].GetType() == chunk.data[column_index_map[oid]].GetType());
-				result.data[storage_idx].Reference(chunk.data[column_index_map[oid]]);
+				D_ASSERT((idx_t)column_index_map[storage_idx] < chunk.ColumnCount());
+				D_ASSERT(result.data[storage_idx].GetType() == chunk.data[column_index_map[storage_idx]].GetType());
+				result.data[storage_idx].Reference(chunk.data[column_index_map[storage_idx]]);
 			}
 		}
 	} else {
