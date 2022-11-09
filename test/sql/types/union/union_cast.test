@@ -54,7 +54,7 @@ NULL	five	NULL
 NULL	NULL	6.0
 
 query I
-SELECT * FROM tbl2 UNION SELECT * FROM tbl1;
+SELECT * FROM tbl2 UNION ALL SELECT * FROM tbl1;
 ----
 five
 4
@@ -64,7 +64,7 @@ two
 three
 
 query I
-SELECT * FROM tbl1 UNION SELECT * FROM tbl2;
+SELECT * FROM tbl1 UNION ALL SELECT * FROM tbl2;
 ----
 1
 two
@@ -74,7 +74,7 @@ five
 6.0
 
 query III
-SELECT u.i32, u.str, u.f32 FROM tbl2 UNION SELECT u.i32, u.str, NULL FROM tbl1 ORDER BY ALL;
+SELECT u.i32, u.str, u.f32 FROM tbl2 UNION ALL SELECT u.i32, u.str, NULL FROM tbl1 ORDER BY ALL;
 ----
 NULL	NULL	6.0
 NULL	five	NULL
