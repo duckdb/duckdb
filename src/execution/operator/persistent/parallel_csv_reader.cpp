@@ -272,7 +272,6 @@ unquote:
 		offset = 1;
 		goto final_state;
 	}
-
 	if ((*buffer)[position_buffer] == options.quote[0] &&
 	    (options.escape.empty() || options.escape[0] == options.quote[0])) {
 		// escaped quote, return to quoted state and store escape position
@@ -291,10 +290,14 @@ unquote:
 		offset = 1;
 		goto final_state;
 	} else {
-		error_message = StringUtil::Format(
-		    "Error in file \"%s\" on line %s: quote should be followed by end of value, end of "
-		    "row or another quote. (%s). position_buffer:",
-		    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
+		//		error_message = StringUtil::Format(
+		//		    "Error in file \"%s\" on line %s: quote should be followed by end of value, end of "
+		//		    "row or another quote. (%s). ",
+		//		    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
+		error_message = "Position: " + to_string(position_buffer) + " Start: " + to_string(buffer->buffer_start) +
+		                " End: " + to_string(buffer->buffer_end) + " Buffer Size: " + to_string(buffer_size) +
+		                " End Buffer: " + to_string(end_buffer) +
+		                " buffer[pos]:" + to_string((*buffer)[position_buffer]);
 		return false;
 	}
 handle_escape : {
