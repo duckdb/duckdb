@@ -14,21 +14,21 @@ static const auto SUPPORTED_UPPER_BOUND = NumericLimits<int32_t>::Maximum();
 static const auto SUPPORTED_LOWER_BOUND = NumericLimits<int32_t>::Minimum();
 
 static inline void AssertInSupportedRange(idx_t input_size, int64_t offset, int64_t length) {
-	D_ASSERT(input_size >= 0); // avoid overflow
+	D_ASSERT(input_size > 0); // avoid overflow
 
-	if(input_size > (uint64_t)SUPPORTED_UPPER_BOUND) {
+	if (input_size > (uint64_t)SUPPORTED_UPPER_BOUND) {
 		throw OutOfRangeException("Substring input size is too large (> %d)", SUPPORTED_UPPER_BOUND);
 	}
-	if(offset < SUPPORTED_LOWER_BOUND) {
+	if (offset < SUPPORTED_LOWER_BOUND) {
 		throw OutOfRangeException("Substring offset outside of supported range (< %d)", SUPPORTED_LOWER_BOUND);
 	}
-	if(offset > SUPPORTED_UPPER_BOUND) {
+	if (offset > SUPPORTED_UPPER_BOUND) {
 		throw OutOfRangeException("Substring offset outside of supported range (> %d)", SUPPORTED_UPPER_BOUND);
 	}
-	if(length < SUPPORTED_LOWER_BOUND) {
+	if (length < SUPPORTED_LOWER_BOUND) {
 		throw OutOfRangeException("Substring length outside of supported range (< %d)", SUPPORTED_LOWER_BOUND);
 	}
-	if(length > SUPPORTED_UPPER_BOUND) {
+	if (length > SUPPORTED_UPPER_BOUND) {
 		throw OutOfRangeException("Substring length outside of supported range (> %d)", SUPPORTED_UPPER_BOUND);
 	}
 }
@@ -272,8 +272,8 @@ static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &r
 	} else {
 		BinaryExecutor::Execute<string_t, int64_t, string_t>(
 		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int64_t offset) {
-				// add +1 to the offset to make it 1-indexed
-				// then subtract offset, this also "extends" the total length if the offset is negative. 
+			    // add +1 to the offset to make it 1-indexed
+			    // then subtract offset, this also "extends" the total length if the offset is negative.
 			    return OP::Substring(result, input_string, offset, NumericLimits<int32_t>::Maximum());
 		    });
 	}
