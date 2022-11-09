@@ -429,7 +429,7 @@ void BufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 	auto replacement_buffer = make_unique<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                  handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
-	memset(handle->buffer->buffer, 0, handle->buffer->size);
+	memset(handle->buffer->buffer, 190, handle->buffer->size);
 	handle->buffer = move(replacement_buffer);
 #endif
 }
