@@ -161,7 +161,7 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 	return result;
 }
 
-ParseResult BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
+unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
 	string error_message;
 
 	auto binding = GetBinding(table_name, error_message);
@@ -169,10 +169,10 @@ ParseResult BindContext::ExpandGeneratedColumn(const string &table_name, const s
 	auto &table_binding = *(TableBinding *)binding;
 	auto result = table_binding.ExpandGeneratedColumn(column_name);
 	result->alias = column_name;
-	return ParseResult(move(result), true);
+	return result;
 }
 
-ParseResult BindContext::CreateColumnReference(const string &table_name, const string &column_name) {
+unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &table_name, const string &column_name) {
 	string schema_name;
 	return CreateColumnReference(schema_name, table_name, column_name);
 }
@@ -195,8 +195,8 @@ static bool ColumnIsGenerated(Binding *binding, column_t index) {
 	return table_entry->columns[index].Generated();
 }
 
-ParseResult BindContext::CreateColumnReference(const string &schema_name, const string &table_name,
-                                               const string &column_name) {
+unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &schema_name, const string &table_name,
+                                                                const string &column_name) {
 	string error_message;
 	vector<string> names;
 	if (!schema_name.empty()) {
@@ -208,7 +208,7 @@ ParseResult BindContext::CreateColumnReference(const string &schema_name, const 
 	auto result = make_unique<ColumnRefExpression>(move(names));
 	auto binding = GetBinding(table_name, error_message);
 	if (!binding) {
-		return ParseResult(move(result));
+		return move(result);
 	}
 	auto column_index = binding->GetBindingIndex(column_name);
 	if (ColumnIsGenerated(binding, column_index)) {
@@ -218,7 +218,7 @@ ParseResult BindContext::CreateColumnReference(const string &schema_name, const 
 		// as it appears in the binding itself
 		result->alias = binding->names[column_index];
 	}
-	return ParseResult(move(result));
+	return move(result);
 }
 
 Binding *BindContext::GetCTEBinding(const string &ctename) {

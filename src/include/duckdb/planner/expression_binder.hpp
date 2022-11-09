@@ -34,31 +34,6 @@ struct BoundColumnReferenceInfo {
 	idx_t query_location;
 };
 
-struct ParseResult {
-	ParseResult() {
-	}
-
-	operator bool() const {
-		return expression != nullptr;
-	}
-	explicit ParseResult(string error) : error(error) {
-	}
-	explicit ParseResult(data_ptr_t null) : expression(nullptr) {
-		D_ASSERT(null == nullptr);
-	}
-	explicit ParseResult(unique_ptr<ParsedExpression> expr, bool generated = false)
-	    : expression(move(expr)), expr_is_generated(generated) {
-	}
-
-	bool HasError() {
-		return !error.empty();
-	}
-
-	unique_ptr<ParsedExpression> expression;
-	bool expr_is_generated;
-	string error;
-};
-
 struct BindResult {
 	BindResult() {
 	}
@@ -101,12 +76,12 @@ public:
 
 	string Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
 
-	ParseResult CreateStructExtract(unique_ptr<ParsedExpression> base, string field_name);
-	ParseResult CreateStructPack(ColumnRefExpression &colref);
+	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, string field_name);
+	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &colref);
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
-	ParseResult QualifyColumnName(const string &column_name, string &error_message);
-	ParseResult QualifyColumnName(ColumnRefExpression &colref, string &error_message);
+	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, string &error_message);
+	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, string &error_message);
 
 	// Bind table names to ColumnRefExpressions
 	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr);
