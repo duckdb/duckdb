@@ -14,8 +14,6 @@
 namespace duckdb {
 
 struct FileHandle;
-class FileOpener;
-class FileSystem;
 
 struct BufferedJSONReaderOptions {
 	//! The file path of the JSON file to read
@@ -33,9 +31,11 @@ public:
 	explicit JSONFileHandle(unique_ptr<FileHandle> file_handle);
 
 	idx_t Remaining() const;
-	void Read(data_ptr_t pointer, idx_t size);
+	idx_t GetPositionAndSize(idx_t &position, idx_t requested_size);
+	void Read(data_ptr_t pointer, idx_t size, idx_t position);
 
 private:
+	//! The JSON file handle
 	unique_ptr<FileHandle> file_handle;
 
 	//! File properties
@@ -50,29 +50,15 @@ private:
 class BufferedJSONReader {
 public:
 	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options);
-
-	void Initialize();
-
-	AllocatedData AllocateBuffer();
-
-private:
 	void OpenJSONFile();
-
-private:
-	//! Initial buffer capacity (1MB)
-	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 1048576;
-
-	//! The file currently being read
-	unique_ptr<JSONFileHandle> file_handle;
-	//! The current block capacity
-	idx_t buffer_capacity;
+	JSONFileHandle &GetFileHandle();
 
 private:
 	ClientContext &context;
 	BufferedJSONReaderOptions options;
 
-	Allocator &allocator;
-	FileSystem &file_system;
+	//! The file currently being read
+	unique_ptr<JSONFileHandle> file_handle;
 };
 
 } // namespace duckdb

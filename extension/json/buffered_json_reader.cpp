@@ -9,42 +9,40 @@ JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p)
     : file_handle(move(file_handle_p)), can_seek(file_handle->CanSeek()),
       plain_file_source(file_handle->OnDiskFile() && can_seek), file_size(file_handle->GetFileSize()),
       read_position(0) {
+	if (!plain_file_source) {
+		throw NotImplementedException("Non-plain file source JSON");
+	}
 }
 
 idx_t JSONFileHandle::Remaining() const {
 	return file_size - read_position;
 }
 
-void JSONFileHandle::Read(data_ptr_t pointer, idx_t size) {
-	if (plain_file_source) {
-		D_ASSERT(size < Remaining());
-		file_handle->Read((void *)pointer, size, read_position);
-		read_position += size;
-		return;
-	}
-	throw NotImplementedException("Non-plain file source JSON");
+idx_t JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t requested_size) {
+	position = read_position;
+	auto actual_size = MinValue<idx_t>(requested_size, Remaining());
+	read_position += actual_size;
+	return actual_size;
+}
+
+void JSONFileHandle::Read(data_ptr_t pointer, idx_t size, idx_t position) {
+	file_handle->Read((void *)pointer, size, position);
 }
 
 BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options)
-    : context(context), options(move(options)), allocator(BufferAllocator::Get(context)),
-      file_system(FileSystem::GetFileSystem(context)) {
-}
-
-void BufferedJSONReader::Initialize() {
-	OpenJSONFile();
-	buffer_capacity = file_handle->Remaining() < INITIAL_BUFFER_CAPACITY
-	                      ? file_handle->Remaining()
-	                      : MaxValue<idx_t>(INITIAL_BUFFER_CAPACITY, 2 * options.maximum_object_size);
+    : context(context), options(move(options)) {
 }
 
 void BufferedJSONReader::OpenJSONFile() {
-	file_handle = make_unique<JSONFileHandle>(file_system.OpenFile(options.file_path.c_str(),
-	                                                               FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
-	                                                               options.compression, FileOpener::Get(context)));
+	auto &file_system = FileSystem::GetFileSystem(context);
+	auto file_opener = FileOpener::Get(context);
+	auto regular_file_handle = file_system.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ,
+	                                                FileLockType::NO_LOCK, options.compression, file_opener);
+	file_handle = make_unique<JSONFileHandle>(move(regular_file_handle));
 }
 
-AllocatedData BufferedJSONReader::AllocateBuffer() {
-	return allocator.Allocate(buffer_capacity);
+JSONFileHandle &BufferedJSONReader::GetFileHandle() {
+	return *file_handle;
 }
 
 } // namespace duckdb
