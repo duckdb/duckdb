@@ -59,13 +59,13 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		DataChunk first_line_chunk;
 		first_line_chunk.Initialize(allocator, insert_chunk.GetTypes());
 		for (; position_buffer < end_buffer; position_buffer++) {
-			if (StringUtil::CharacterIsOnlyNewline((*buffer)[position_buffer])) {
+			if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 				position_buffer++;
 				break;
 			}
 		}
 		D_ASSERT(position_buffer <= end_buffer);
-		if (position_buffer == end_buffer && !StringUtil::CharacterIsOnlyNewline((*buffer)[position_buffer - 1])) {
+		if (position_buffer == end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
 			break;
 		}
 		idx_t position_set = position_buffer;
@@ -167,7 +167,7 @@ normal : {
 		if ((*buffer)[position_buffer] == options.delimiter[0]) {
 			// delimiter: end the value and add it to the chunk
 			goto add_value;
-		} else if (StringUtil::CharacterIsOnlyNewline((*buffer)[position_buffer])) {
+		} else if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 			// newline: add row
 			D_ASSERT(try_add_line || column == insert_chunk.ColumnCount() - 1);
 			goto add_row;
@@ -281,7 +281,7 @@ unquote:
 		// delimiter, add value
 		offset = 1;
 		goto add_value;
-	} else if (StringUtil::CharacterIsOnlyNewline((*buffer)[position_buffer])) {
+	} else if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 		offset = 1;
 		D_ASSERT(column == insert_chunk.ColumnCount() - 1);
 		goto add_row;
@@ -290,14 +290,10 @@ unquote:
 		offset = 1;
 		goto final_state;
 	} else {
-		//		error_message = StringUtil::Format(
-		//		    "Error in file \"%s\" on line %s: quote should be followed by end of value, end of "
-		//		    "row or another quote. (%s). ",
-		//		    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
-		error_message = "Position: " + to_string(position_buffer) + " Start: " + to_string(buffer->buffer_start) +
-		                " End: " + to_string(buffer->buffer_end) + " Buffer Size: " + to_string(buffer_size) +
-		                " End Buffer: " + to_string(end_buffer) +
-		                " buffer[pos]:" + to_string((*buffer)[position_buffer]);
+		error_message = StringUtil::Format(
+		    "Error in file \"%s\" on line %s: quote should be followed by end of value, end of "
+		    "row or another quote. (%s). ",
+		    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
 		return false;
 	}
 handle_escape : {
