@@ -111,7 +111,11 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(column.Name()));
 		// "type", PhysicalType::VARCHAR
-		output.SetValue(2, index, Value(column.Type().ToString()));
+		if (column.Type().id() == LogicalTypeId::ENUM) {
+			output.SetValue(2, index, Value("ENUM")); // overwrites typename for compatibility with SQLAlchemy.See #5174
+		} else {
+			output.SetValue(2, index, Value(column.Type().ToString()));
+		}
 		// "notnull", PhysicalType::BOOL
 		output.SetValue(3, index, Value::BOOLEAN(not_null));
 		// "dflt_value", PhysicalType::VARCHAR
