@@ -252,52 +252,52 @@ abcd
 statement error
 SELECT ${FUN}(s, 9223372036854775807, -9223372036854775808) FROM strings
 ----
-Offset outside of supported range (> 2147483647)
+Out of Range Error: Substring offset outside of supported range (> 2147483647)
 
 statement error
 SELECT ${FUN}(s, -9223372036854775808, -9223372036854775808) FROM strings
 ----
-Offset outside of supported range (< -2147483648)
+Out of Range Error: Substring offset outside of supported range (< -2147483648)
 
 statement error
 SELECT ${FUN}(s, 9223372036854775807, 9223372036854775807) FROM strings
 ----
-Offset outside of supported range (> 2147483647)
+Out of Range Error: Substring offset outside of supported range (> 2147483647)
 
 statement error
 SELECT ${FUN}(s, -9223372036854775808, 9223372036854775807) FROM strings
 ----
-Offset outside of supported range (< -2147483648)
+Out of Range Error: Substring offset outside of supported range (< -2147483648)
 
 statement error
 SELECT ${FUN}(s, 0, 9223372036854775807) FROM strings
 ----
-Length outside of supported range (> 2147483647)
+Out of Range Error: Substring length outside of supported range (> 2147483647)
 
 statement error
 SELECT ${FUN}(s, 0, -9223372036854775808) FROM strings
 ----
-Length outside of supported range (< -2147483648)
+Out of Range Error: Substring length outside of supported range (< -2147483648)
 
 # int32_t limits
 statement error
 SELECT ${FUN}(s, 2147483648, 2147483647) FROM strings
 ----
-Offset outside of supported range (> 2147483647)
+Out of Range Error: Substring offset outside of supported range (> 2147483647)
 
 statement error
 SELECT ${FUN}(s, -2147483649, 2147483647) FROM strings
 ----
-Offset outside of supported range (< -2147483648)
+Out of Range Error: Substring offset outside of supported range (< -2147483648)
 
 statement error
 SELECT ${FUN}(s, 0, 2147483648) FROM strings
 ----
-Length outside of supported range (> 2147483647)
+Out of Range Error: Substring length outside of supported range (> 2147483647)
 
 statement error
 SELECT ${FUN}(s, 0, -2147483649) FROM strings
 ----
-Length outside of supported range (> -2147483648)
+Out of Range Error: Substring length outside of supported range (< -2147483648)
 
 endloop
