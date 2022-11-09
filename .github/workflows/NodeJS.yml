@@ -123,6 +123,7 @@ jobs:
 
       - name: Build extensions
         shell: bash
+        if: matrix.target_arch == 'x64'
         run: |
           brew install openssl ninja
           export OPENSSL_ROOT_DIR=`brew --prefix openssl`

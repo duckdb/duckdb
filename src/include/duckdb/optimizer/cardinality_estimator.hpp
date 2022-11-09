@@ -111,6 +111,9 @@ private:
 
 	TableFilterSet *GetTableFilters(LogicalOperator *op);
 
+	void AddRelationTdom(FilterInfo *filter_info);
+	bool EmptyFilter(FilterInfo *filter_info);
+
 	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *fil,
 	                            unique_ptr<BaseStatistics> base_stats);
 	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter *fil,
