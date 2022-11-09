@@ -14,7 +14,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
-
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 

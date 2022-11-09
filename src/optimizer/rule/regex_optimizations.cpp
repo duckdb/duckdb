@@ -33,7 +33,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		return nullptr;
 	}
 
-	auto constant_value = ExpressionExecutor::EvaluateScalar(rewriter.context, *constant_expr);
+	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), *constant_expr);
 	D_ASSERT(constant_value.type() == constant_expr->return_type);
 	auto &patt_str = StringValue::Get(constant_value);
 

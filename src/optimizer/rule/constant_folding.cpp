@@ -32,7 +32,7 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
 
 	// use an ExpressionExecutor to execute the expression
 	Value result_value;
-	if (!ExpressionExecutor::TryEvaluateScalar(rewriter.context, *root, result_value)) {
+	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *root, result_value)) {
 		return nullptr;
 	}
 	D_ASSERT(result_value.type().InternalType() == root->return_type.InternalType());
