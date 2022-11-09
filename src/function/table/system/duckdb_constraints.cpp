@@ -243,7 +243,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			case ConstraintType::CHECK: {
 				auto &bound_check = (BoundCheckConstraint &)bound_constraint;
 				for (auto &col_idx : bound_check.bound_columns) {
-					column_index_list.push_back(LogicalIndex(col_idx));
+					column_index_list.push_back(table.columns.PhysicalToLogical(col_idx));
 				}
 				break;
 			}

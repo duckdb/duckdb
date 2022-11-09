@@ -20,14 +20,14 @@
 namespace duckdb {
 
 static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
-                             unordered_set<column_t> &bound_columns) {
+                             physical_index_set_t &bound_columns) {
 	if (bound_columns.size() <= 1) {
 		return;
 	}
 	idx_t found_column_count = 0;
 	unordered_set<idx_t> found_columns;
 	for (idx_t i = 0; i < update.columns.size(); i++) {
-		if (bound_columns.find(update.columns[i]) != bound_columns.end()) {
+		if (bound_columns.find(PhysicalIndex(update.columns[i])) != bound_columns.end()) {
 			// this column is referenced in the CHECK constraint
 			found_column_count++;
 			found_columns.insert(update.columns[i]);
@@ -37,18 +37,18 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 		// columns in this CHECK constraint were referenced, but not all were part of the UPDATE
 		// add them to the scan and update set
 		for (auto &check_column_id : bound_columns) {
-			if (found_columns.find(check_column_id) != found_columns.end()) {
+			if (found_columns.find(check_column_id.index) != found_columns.end()) {
 				// column is already projected
 				continue;
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
-			auto &column = table.columns.GetColumn(LogicalIndex(check_column_id));
+			auto &column = table.columns.GetColumn(check_column_id);
 			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
-			get.column_ids.push_back(check_column_id);
-			update.columns.push_back(check_column_id);
+			get.column_ids.push_back(check_column_id.index);
+			update.columns.push_back(check_column_id.index);
 		}
 	}
 }
@@ -113,9 +113,9 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	if (update.update_is_del_and_insert || update.return_chunk) {
 		// the update updates a column required by an index or requires returning the updated rows,
 		// push projections for all columns
-		unordered_set<column_t> all_columns;
+		physical_index_set_t all_columns;
 		for (idx_t i = 0; i < table.storage->column_definitions.size(); i++) {
-			all_columns.insert(i);
+			all_columns.insert(PhysicalIndex(i));
 		}
 		BindExtraColumns(table, get, proj, update, all_columns);
 	}

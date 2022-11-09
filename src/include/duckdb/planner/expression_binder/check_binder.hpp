@@ -10,18 +10,18 @@
 
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/index_map.hpp"
 
 namespace duckdb {
 //! The CHECK binder is responsible for binding an expression within a CHECK constraint
 class CheckBinder : public ExpressionBinder {
 public:
 	CheckBinder(Binder &binder, ClientContext &context, string table, const ColumnList &columns,
-	            unordered_set<column_t> &bound_columns);
+	            physical_index_set_t &bound_columns);
 
 	string table;
 	const ColumnList &columns;
-	unordered_set<column_t> &bound_columns;
+	physical_index_set_t &bound_columns;
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,

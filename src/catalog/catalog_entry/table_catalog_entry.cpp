@@ -377,7 +377,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			// CHECK constraint
 			auto &bound_check = (BoundCheckConstraint &)*bound_constraint;
 			// check if the removed column is part of the check constraint
-			if (bound_check.bound_columns.find(removed_index.index) != bound_check.bound_columns.end()) {
+			auto physical_index = columns.LogicalToPhysical(removed_index);
+			if (bound_check.bound_columns.find(physical_index) != bound_check.bound_columns.end()) {
 				if (bound_check.bound_columns.size() > 1) {
 					// CHECK constraint that concerns mult
 					throw CatalogException(
@@ -567,7 +568,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		switch (constraint->type) {
 		case ConstraintType::CHECK: {
 			auto &bound_check = (BoundCheckConstraint &)*bound_constraints[i];
-			if (bound_check.bound_columns.find(change_idx.index) != bound_check.bound_columns.end()) {
+			auto physical_index = columns.LogicalToPhysical(change_idx);
+			if (bound_check.bound_columns.find(physical_index) != bound_check.bound_columns.end()) {
 				throw BinderException("Cannot change the type of a column that has a CHECK constraint specified");
 			}
 			break;

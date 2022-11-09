@@ -417,7 +417,7 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	if (table.HasGeneratedColumns()) {
 		auto binder = Binder::CreateBinder(context);
-		auto bound_columns = unordered_set<column_t>();
+		physical_index_set_t bound_columns;
 		CheckBinder generated_check_binder(*binder, context, table.name, table.columns, bound_columns);
 		for (auto &col : table.columns.Logical()) {
 			if (!col.Generated()) {
@@ -795,11 +795,11 @@ static void CreateMockChunk(vector<LogicalType> &types, const vector<column_t> &
 }
 
 static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &column_ids,
-                            unordered_set<column_t> &desired_column_ids, DataChunk &chunk, DataChunk &mock_chunk) {
+                            physical_index_set_t &desired_column_ids, DataChunk &chunk, DataChunk &mock_chunk) {
 	idx_t found_columns = 0;
 	// check whether the desired columns are present in the UPDATE clause
 	for (column_t i = 0; i < column_ids.size(); i++) {
-		if (desired_column_ids.find(column_ids[i]) != desired_column_ids.end()) {
+		if (desired_column_ids.find(PhysicalIndex(column_ids[i])) != desired_column_ids.end()) {
 			found_columns++;
 		}
 	}
