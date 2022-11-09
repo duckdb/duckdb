@@ -18,8 +18,8 @@ statement ok
 insert into b (id, foreign_a) VALUES (0, 0);
 
 query IIIIIIIIIIIIIIIIIIIIIIIII
-SELECT * FROM pg_catalog.pg_constraint
+SELECT * EXCLUDE OID FROM pg_catalog.pg_constraint
 ----
-866000000	PRIMARY KEY(id)								1	p	false	false	true	866	0	0	0	0	NULL	NULL	NULL	true	0	false	[0]	NULL	NULL	NULL	NULL	NULL	NULL
-866000001	NOT NULL									1	x	false	false	true	866	0	0	0	0	NULL	NULL	NULL	true	0	false	[0]	NULL	NULL	NULL	NULL	NULL	NULL
-863000000	FOREIGN KEY (foreign_a) REFERENCES a(id)	1	f	false	false	true	863	0	0	0	0	NULL	NULL	NULL	true	0	false	[1]	NULL	NULL	NULL	NULL	NULL	NULL
+PRIMARY KEY(id)								1	p	false	false	true	866	0	0	0	0	NULL	NULL	NULL	true	0	false	[0]	NULL	NULL	NULL	NULL	NULL	NULL
+NOT NULL									1	x	false	false	true	866	0	0	0	0	NULL	NULL	NULL	true	0	false	[0]	NULL	NULL	NULL	NULL	NULL	NULL
+FOREIGN KEY (foreign_a) REFERENCES a(id)	1	f	false	false	true	863	0	0	0	0	NULL	NULL	NULL	true	0	false	[1]	NULL	NULL	NULL	NULL	NULL	NULL
