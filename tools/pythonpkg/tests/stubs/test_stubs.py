@@ -1,6 +1,6 @@
 import os
 
-from mypy.stubtest import test_module, parse_options, test_stubs
+from mypy import stubtest
 
 MYPY_INI_PATH = os.path.join(os.path.dirname(__file__), 'mypy.ini')
 
@@ -9,11 +9,11 @@ def test_generated_stubs():
 	# The test has false positives on the following keywords
 	skip_stubs_errors = ['pybind11_module_local', 'git_revision', 'is inconsistent, metaclass differs']
 
-	test_stubs(parse_options(['duckdb', '--mypy-config-file', MYPY_INI_PATH]))
+	stubtest.test_stubs(stubtest.parse_options(['duckdb', '--mypy-config-file', MYPY_INI_PATH]))
 
 	broken_stubs = [
 		error
-		for error in test_module('duckdb')
+		for error in stubtest.test_module('duckdb')
 		if not any(skip in error.get_description() for skip in skip_stubs_errors)
 	]
 
