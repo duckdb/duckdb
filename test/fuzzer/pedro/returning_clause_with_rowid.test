@@ -14,6 +14,11 @@ INSERT INTO t0 VALUES (1) RETURNING c0, rowid;
 Binder Error: rowid is not supported in returning statements
 
 statement error
+INSERT INTO t0 VALUES (1) RETURNING rowid c2;
+----
+Binder Error: rowid is not supported in returning statements
+
+statement error
 UPDATE t0 SET c0 = 5 WHERE c0 = 0 RETURNING rowid;
 ----
 Binder Error: rowid is not supported in returning statements
