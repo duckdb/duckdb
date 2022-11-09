@@ -33,6 +33,43 @@ static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t r
 	}
 }
 
+static void MarkJoinNested(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[], ExpressionType comparison_type) {
+	Vector left_reference(left.GetType());
+	SelectionVector true_sel(rcount);
+	for(idx_t i = 0; i < lcount; i++) {
+		if (found_match[i]) {
+			continue;
+		}
+		ConstantVector::Reference(left_reference, left, i, rcount);
+		idx_t count;
+		switch(comparison_type) {
+		case ExpressionType::COMPARE_EQUAL:
+			count = VectorOperations::Equals(left_reference, right, nullptr, rcount, nullptr, nullptr);
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+			count = VectorOperations::NotEquals(left_reference, right, nullptr, rcount, nullptr, nullptr);
+			break;
+		case ExpressionType::COMPARE_LESSTHAN:
+			count = VectorOperations::LessThan(left_reference, right, nullptr, rcount, nullptr, nullptr);
+			break;
+		case ExpressionType::COMPARE_GREATERTHAN:
+			count = VectorOperations::GreaterThan(left_reference, right, nullptr, rcount, nullptr, nullptr);
+			break;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			count = VectorOperations::LessThanEquals(left_reference, right, nullptr, rcount, nullptr, nullptr);
+			break;
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			count = VectorOperations::GreaterThanEquals(left_reference, right, nullptr, rcount, nullptr, nullptr);
+			break;
+		default:
+			throw InternalException("Unsupported comparison type for MarkJoinNested");
+		}
+		if (count > 0) {
+			found_match[i] = true;
+		}
+	}
+}
+
 template <class OP>
 static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
 	switch (left.GetType().InternalType()) {
@@ -68,6 +105,13 @@ static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 
 static void MarkJoinComparisonSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
                                      ExpressionType comparison_type) {
+	switch (left.GetType().InternalType()) {
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST:
+		return MarkJoinNested(left, right, lcount, rcount, found_match, comparison_type);
+	default:
+		break;
+	}
 	D_ASSERT(left.GetType() == right.GetType());
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
