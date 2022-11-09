@@ -55,7 +55,7 @@ bitpacking_metadata_t decode_meta(bitpacking_metadata_encoded_t metadata);
 // - Compression ratio: VectorSize*sizeof(T)/(sizeof(T)+4) (INT64 @ VZ2048 = 1048x)
 // CONSTANT_DELTA
 // - BLOCK IS [FOR VALUE, DELTA]
-// - Compression ratio: VectorSize*sizeof(T)/(sizeof(T)*2+4) (INT64 @ VZ2048 = between 819x)
+// - Compression ratio: VectorSize*sizeof(T)/(sizeof(T)*2+4) (INT64 @ VZ2048 = 819x)
 // DELTA_FOR
 // - BLOCK IS [DELTA_VALUE, FOR VALUE, BP_WIDTH, BITPACKED_BUFFER]
 // - Compression ratio: VectorSize*sizeof(T)/(2 + 8 + ((VectorSize * bitwidth)/8)) (INT64 @ VZ2048 = between 1x and 61.59x)
@@ -117,8 +117,15 @@ public:
 
 		D_ASSERT(compression_buffer_idx >= 2);
 
-		// TODO handle NULLS here? By patching i think?
 
+		// TODO handle NULLS here?
+		// Currently we cannot handle nulls because we would need an additional step of patching for this.
+		// we could for example copy the last value on a null insert. This would help a bit, but not be optimal for large deltas
+		// since theres suddenly a zero then. Ideally we would insert a value that leads to a delta within the current domain of deltas
+		// however we dont know that domain here yet
+		if (!all_valid) {
+			return;
+		}
 		for (int64_t i = 0; i < (int64_t)compression_buffer_idx; i++) {
 			auto success = TrySubtractOperator::Operation(compression_buffer[i], compression_buffer[i-1], *(T*)&delta_buffer[i]);
 			if (!success) {
@@ -136,8 +143,8 @@ public:
 			}
 		}
 
-		// Since we can set the first value arbitrarily, we want to pick one from the current domain
-		// TODO:
+		// Since we can set the first value arbitrarily, we want to pick one from the current domain, note that
+		// we will store the original first value - this offset as the  delta_offset to be able to decode this again.
 		delta_buffer[0] = minimum_delta;
 	}
 
@@ -190,20 +197,20 @@ public:
 				return true;
 			}
 
-			// Check if delta has benefit TODO rework this
+			// Check if delta has benefit
 			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum_delta-minimum_delta);
 			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum-minimum);
 
 			if (delta_required_bitwidth < regular_required_bitwidth) {
-				auto width = BitpackingPrimitives::MinimumBitWidth<T_U>(maximum-minimum);
 				PatchNullValues(minimum_delta);
 				SubtractFrameOfReference(delta_buffer, minimum_delta);
 
-				// TODO: shouldnt this and others be T_S instead? we should guaranteed non-signed anyway i think?
-				OP::WriteDeltaFor((T*)delta_buffer, compression_buffer_validity, width, (T)minimum_delta, (T)compression_buffer[0], (T*)compression_buffer,
+				// TODO: shouldnt this and others be T_S instead? Since for Delta we currently only support values within T_S domain, all could be T_S
+				// 		 we should consider carefully if we need to add features to support compressing small ranges in [T_S < domain < T]
+				OP::WriteDeltaFor((T*)delta_buffer, compression_buffer_validity, delta_required_bitwidth, (T)minimum_delta, (T)compression_buffer[0], (T*)compression_buffer,
 				             compression_buffer_idx, data_ptr);
 
-				total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, width);
+				total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, delta_required_bitwidth);
 				total_size += sizeof(T); // FOR value
 				total_size += sizeof(T); // Delta offset value
 				total_size += AlignValue(sizeof(bitpacking_width_t)); // FOR value
@@ -322,7 +329,6 @@ public:
 
 public:
 	struct BitpackingWriter {
-		// TODO fails for all NULL?
 		static void WriteConstant(T constant, idx_t count, void* data_ptr, bool all_invalid) {
 			auto state = (BitpackingCompressState<T> *)data_ptr;
 			idx_t total_bytes_needed = AlignValue<T>(sizeof(bitpacking_metadata_t)) + sizeof(T);
@@ -408,23 +414,23 @@ public:
 				}
 			}
 
-			std::cout << "\nWriting FOR-DELTA to offset " << metadata.offset << " of " << count << " values at width " << (uint64_t)width << " with for " << (int64_t)frame_of_reference << " and offset " << (int64_t)delta_offset <<"\n[";
-			for (idx_t i = 0; i < count; i++) {
-				if (validity[i]) {
-					std::cout << (int64_t)original_values[i] << ",";
-				} else {
-					std::cout << "(null),";
-				}
-			}
-			std::cout << "]\n deltas: [";
-			for (idx_t i = 0; i < count; i++) {
-				if (validity[i]) {
-					std::cout << (int64_t)values[i] << ",";
-				} else {
-					std::cout << "(null),";
-				}
-			}
-			std::cout << "]\n";
+//			std::cout << "\nWriting FOR-DELTA to offset " << metadata.offset << " of " << count << " values at width " << (uint64_t)width << " with for " << (int64_t)frame_of_reference << " and offset " << (int64_t)delta_offset <<"\n[";
+//			for (idx_t i = 0; i < count; i++) {
+//				if (validity[i]) {
+//					std::cout << (int64_t)original_values[i] << ",";
+//				} else {
+//					std::cout << "(null),";
+//				}
+//			}
+//			std::cout << "]\n deltas: [";
+//			for (idx_t i = 0; i < count; i++) {
+//				if (validity[i]) {
+//					std::cout << (int64_t)values[i] << ",";
+//				} else {
+//					std::cout << "(null),";
+//				}
+//			}
+//			std::cout << "]\n";
 
 		}
 
@@ -559,6 +565,31 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+template <class T>
+static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
+	if (!frame_of_reference) {
+		return;
+	}
+	for (idx_t i = 0; i < size; i++) {
+		dst[i] += frame_of_reference;
+	}
+}
+
+
+// TODO there's probably some highly efficient variant for this one
+template <class T>
+static T ApplyDelta(T *dst, T previous_value, idx_t size) {
+	D_ASSERT(size >= 1);
+
+	dst[0] += previous_value;
+
+	for (idx_t i = 1; i < size; i++) {
+		dst[i] += dst[i-1];
+	}
+
+	return dst[size-1];
+}
+
 template <class T, class T_S = typename std::make_signed<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
@@ -578,7 +609,7 @@ public:
 	BufferHandle handle;
 	ColumnSegment &current_segment;
 
-	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
+	T decompression_buffer[BITPACKING_METADATA_GROUP_SIZE];
 
 	bitpacking_metadata_t current_group;
 
@@ -640,7 +671,10 @@ public:
 		// Read third meta value
 		switch (current_group.mode) {
 		case BitpackingMode::DELTA_FOR:
-			current_delta_offset = *(T*)(current_group_ptr);
+			// The reason we need to subtract the current_frame_of_referance from the current_delta_offset is
+			// that we apply FOR on top of delta decoded values. This means the first values is the
+			// TODO: handle when writing?
+			current_delta_offset = *(T*)(current_group_ptr) - current_frame_of_reference;
 			current_group_ptr += sizeof(T);
 			break;
 		case BitpackingMode::CONSTANT_DELTA:
@@ -678,8 +712,29 @@ public:
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
 		while (skip_count > 0) {
 			if (current_group_offset + skip_count < BITPACKING_METADATA_GROUP_SIZE) {
-				// We're not leaving this bitpacking group, we can perform all skips.
-				current_group_offset += skip_count;
+				// Skipping Delta FOR requires a bit of decoding to figure out the new delta
+				if(current_group.mode == BitpackingMode::DELTA_FOR) {
+					// TODO: need extensive tests targeting this case
+
+					// if current_group_offset points into the middle of a  BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE
+					// for some reason, we need to scan a few values before current_group_offset to align with the algorithm groups
+					idx_t extra_count = current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+
+					// Calculate total offset and count to bitunpack
+					idx_t base_decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(skip_count);
+					idx_t decompress_count = base_decompress_count + extra_count;
+					idx_t decompress_offset = current_group_offset - extra_count;
+					bool skip_sign_extension = true;
+
+					BitpackingPrimitives::UnPackBuffer<T>((data_ptr_t)decompression_buffer, current_group_ptr + decompress_offset, decompress_count, current_width, skip_sign_extension);
+
+					ApplyFrameOfReference<T_S>((T_S*)&decompression_buffer[extra_count], current_frame_of_reference, skip_count);
+					ApplyDelta<T_S>((T_S*)&decompression_buffer[extra_count], (T_S)current_delta_offset - current_frame_of_reference, (idx_t)skip_count);
+					current_delta_offset = decompression_buffer[extra_count + skip_count - 1];
+				} else {
+					// For all other modes skipping withing the group is trivial
+					current_group_offset += skip_count;
+				}
 				break;
 			} else {
 				auto left_in_this_group = BITPACKING_METADATA_GROUP_SIZE - current_group_offset;
@@ -707,31 +762,6 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 	return move(result);
 }
 
-template <class T>
-static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
-	if (!frame_of_reference) {
-		return;
-	}
-	for (idx_t i = 0; i < size; i++) {
-		dst[i] += frame_of_reference;
-	}
-}
-
-
-// TODO there's probably some efficient variant for this shit
-template <class T>
-static T ApplyDelta(T *dst, T previous_value, idx_t size) {
-	D_ASSERT(size >= 1);
-
-	dst[0] += previous_value;
-
-	for (idx_t i = 1; i < size; i++) {
-		dst[i] += dst[i-1];
-	}
-
-	return dst[size-1];
-}
-
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
@@ -744,12 +774,13 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	// Fast path for when no compression was used, we can do a single memcopy
-	if (scan_state.current_frame_of_reference == 0 && scan_state.current_width == sizeof(T) * 8 &&
-		scan_count <= BITPACKING_METADATA_GROUP_SIZE && scan_state.current_group_offset == 0) {
-		memcpy(result_data + result_offset, scan_state.current_group_ptr, scan_count * sizeof(T));
-		scan_state.LoadNextGroup();
-		return;
-	}
+	// TODO optimizations such as this old one that is now not working
+//	if (scan_state.current_frame_of_reference == 0 && scan_state.current_width == sizeof(T) * 8 &&
+//		scan_count <= BITPACKING_METADATA_GROUP_SIZE && scan_state.current_group_offset == 0) {
+//		memcpy(result_data + result_offset, scan_state.current_group_ptr, scan_count * sizeof(T));
+//		scan_state.LoadNextGroup();
+//		return;
+//	}
 
 	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
 	bool skip_sign_extend = true;
@@ -770,7 +801,6 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			idx_t to_scan = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
 			T* begin = result_data + result_offset + scanned;
 			T* end = begin + remaining;
-//			std::cout << "Scanning constant with constant " << (int64_t)scan_state.current_constant << " for " << to_scan << " values\n";
 			std::fill(begin, end, scan_state.current_constant);
 			scanned += to_scan;
 			scan_state.current_group_offset += to_scan;
@@ -816,33 +846,33 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			       to_scan * sizeof(T));
 		}
 
-		std::cout << "\nReading FOR to " << scan_state.current_group.offset << " of " << to_scan << " values at width " << (uint64_t)scan_state.current_width << " with for " << scan_state.current_frame_of_reference << "\n";
-		for (idx_t i = 0; i < to_scan; i++) {
-				std::cout << (int64_t)current_result_ptr[i] << ",";
-		}
-		std::cout << "]\n";
+//		std::cout << "\nReading FOR of " << (int64_t)to_scan << " values at width " << (int64_t)scan_state.current_width << " with for " << (int64_t)scan_state.current_frame_of_reference << "\n";
+//		for (idx_t i = 0; i < to_scan; i++) {
+//				std::cout << (int64_t)current_result_ptr[i] << ",";
+//		}
+//		std::cout << "]\n";
 		ApplyFrameOfReference<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_frame_of_reference, to_scan);
-		std::cout << "\nApplied FOR to " << scan_state.current_group.offset << " of " << to_scan << " values at width " << (uint64_t)scan_state.current_width << " with for " << scan_state.current_frame_of_reference << "\n";
-		for (idx_t i = 0; i < to_scan; i++) {
-			std::cout << (int64_t)current_result_ptr[i] << ",";
-		}
-		std::cout << "]\n";
+//		std::cout << "Applied:\n";
+//		for (idx_t i = 0; i < to_scan; i++) {
+//			std::cout << (int64_t)current_result_ptr[i] << ",";
+//		}
+//		std::cout << "]\n";
 
-		// TODO how to delta decode when skipping?
 		if(scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
-			// TODO: this is confusing now, as we are substracting the for again, this should however come in handy when we
-			//       add the possibility to cache the for skips.
-			ApplyDelta<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_delta_offset - scan_state.current_frame_of_reference, to_scan);
+			ApplyDelta<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_delta_offset, to_scan);
 		}
-
-		std::cout << "\nApplied DELTA to " << scan_state.current_group.offset << " of " << to_scan << " values at width " << (uint64_t)scan_state.current_width << " with for " << scan_state.current_frame_of_reference << "\n";
-		for (idx_t i = 0; i < to_scan; i++) {
-			std::cout << (int64_t)current_result_ptr[i] << ",";
-		}
-		std::cout << "]\n";
+//
+//		std::cout << "\nApplied DELTA to " << (int64_t)scan_state.current_group.offset << " of " << (int64_t)to_scan << " values at width " << (int64_t)scan_state.current_width << " with delta offset " << (int64_t)scan_state.current_delta_offset << "\n";
+//		for (idx_t i = 0; i < to_scan; i++) {
+//			std::cout << (int64_t)current_result_ptr[i] << ",";
+//		}
+//		std::cout << "]\n";
+//
+//		std::cout << "Last value is " << (int64_t)((T*)current_result_ptr)[to_scan-1] << "\n";
 
 		scanned += to_scan;
 		scan_state.current_group_offset += to_scan;
+		scan_state.current_delta_offset = ((T*)current_result_ptr)[to_scan-1];
 	}
 }
 
@@ -886,6 +916,11 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 
 	BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
 	                                     scan_state.current_width, skip_sign_extend);
+
+	if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
+		// TODO: Does this every trigger? Write tests for it!
+		throw InternalException("Not implemented yet");
+	}
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
 	*current_result_ptr += scan_state.current_frame_of_reference;
