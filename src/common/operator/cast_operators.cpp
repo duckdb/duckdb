@@ -1579,7 +1579,7 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 template <class TYPE>
 struct DecimalCastData {
 	typedef TYPE type_t;
-    TYPE result;
+	TYPE result;
 	uint8_t width;
 	uint8_t scale;
 	uint8_t digit_count;
