@@ -41,11 +41,7 @@ public:
 	//! The actual buffer
 	unique_ptr<char[]> buffer;
 
-	vector<unique_ptr<char[]>> intersections;
-
 private:
-	//! The allocated size of the buffer
-	//	idx_t buffer_size;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
 	idx_t actual_size;
 	//! We need to check for Byte Order Mark, to define the start position of this buffer

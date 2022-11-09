@@ -25,10 +25,10 @@
 namespace duckdb {
 
 ParallelCSVReader::ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
-                                     const CSVBufferRead &buffer_p, const vector<LogicalType> &requested_types)
+                                     unique_ptr<CSVBufferRead> buffer_p, const vector<LogicalType> &requested_types)
     : BaseCSVReader(context, move(options_p), requested_types) {
 	Initialize(requested_types);
-	SetBufferRead(buffer_p);
+	SetBufferRead(move(buffer_p));
 	if (options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1) {
 		throw InternalException("Parallel CSV reader cannot handle CSVs with multi-byte delimiters/escapes/quotes");
 	}
@@ -44,9 +44,8 @@ void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 }
 
 bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
-	position_set = position_buffer;
-	if (buffer.buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&
-	    start_buffer == buffer.buffer->GetStart()) {
+	if (buffer->buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&
+	    start_buffer == buffer->buffer->GetStart()) {
 		// First buffer doesn't need any setting
 		return true;
 	}
@@ -60,42 +59,44 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		DataChunk first_line_chunk;
 		first_line_chunk.Initialize(allocator, insert_chunk.GetTypes());
 		for (; position_buffer < end_buffer; position_buffer++) {
-			if (StringUtil::CharacterIsOnlyNewline(buffer[position_buffer])) {
+			if (StringUtil::CharacterIsOnlyNewline((*buffer)[position_buffer])) {
 				position_buffer++;
 				break;
 			}
 		}
-		if (position_buffer >= end_buffer) {
+		D_ASSERT(position_buffer <= end_buffer);
+		if (position_buffer == end_buffer && !StringUtil::CharacterIsOnlyNewline((*buffer)[position_buffer - 1])) {
 			break;
 		}
-		position_set = position_buffer;
+		idx_t position_set = position_buffer;
 		start_buffer = position_buffer;
 		// We check if we can add this line
 		successfully_read_first_line = TryParseSimpleCSV(first_line_chunk, error_message, true);
-
-		position_buffer = position_set;
 		start_buffer = position_set;
 		end_buffer = end_buffer_real;
+		position_buffer = position_set;
+		if (end_buffer == position_buffer) {
+			break;
+		}
 	}
-	position_set = position_buffer;
-	bool not_read_anything = position_buffer >= end_buffer;
-	return !not_read_anything;
+
+	return successfully_read_first_line;
 }
 
-void ParallelCSVReader::SetBufferRead(const CSVBufferRead &buffer_read_p) {
-	if (!buffer_read_p.buffer) {
+void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
+	if (!buffer_read_p->buffer) {
 		throw InternalException("ParallelCSVReader::SetBufferRead - CSVBufferRead does not have a buffer to read");
 	}
-	position_buffer = buffer_read_p.buffer_start;
-	start_buffer = buffer_read_p.buffer_start;
-	end_buffer = buffer_read_p.buffer_end;
-	if (buffer_read_p.next_buffer) {
-		buffer_size = buffer_read_p.buffer->GetBufferSize() + buffer_read_p.next_buffer->GetBufferSize();
+	position_buffer = buffer_read_p->buffer_start;
+	start_buffer = buffer_read_p->buffer_start;
+	end_buffer = buffer_read_p->buffer_end;
+	if (buffer_read_p->next_buffer) {
+		buffer_size = buffer_read_p->buffer->GetBufferSize() + buffer_read_p->next_buffer->GetBufferSize();
 	} else {
-		buffer_size = buffer_read_p.buffer->GetBufferSize();
+		buffer_size = buffer_read_p->buffer->GetBufferSize();
 	}
-	linenr = buffer_read_p.estimated_linenr;
-	buffer = buffer_read_p;
+	linenr = buffer_read_p->estimated_linenr;
+	buffer = move(buffer_read_p);
 
 	linenr_estimated = true;
 	reached_remainder_state = false;
@@ -128,7 +129,7 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	idx_t offset = 0;
 	bool has_quotes = false;
 	vector<idx_t> escape_positions;
-	if (start_buffer == buffer.buffer_start && !try_add_line) {
+	if (start_buffer == buffer->buffer_start && !try_add_line) {
 		// First time reading this buffer piece
 		if (!SetPosition(insert_chunk)) {
 			// This means the buffer size does not contain a new line
@@ -147,7 +148,7 @@ value_start : {
 	offset = 0;
 
 	// this state parses the first character of a value
-	if (buffer[position_buffer] == options.quote[0]) {
+	if ((*buffer)[position_buffer] == options.quote[0]) {
 		// quote: actual value starts in the next position
 		// move to in_quotes state
 		start_buffer = position_buffer + 1;
@@ -163,10 +164,10 @@ normal : {
 	/* state: normal parsing state */
 	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
 	for (; position_buffer < end_buffer; position_buffer++) {
-		if (buffer[position_buffer] == options.delimiter[0]) {
+		if ((*buffer)[position_buffer] == options.delimiter[0]) {
 			// delimiter: end the value and add it to the chunk
 			goto add_value;
-		} else if (StringUtil::CharacterIsOnlyNewline(buffer[position_buffer])) {
+		} else if (StringUtil::CharacterIsOnlyNewline((*buffer)[position_buffer])) {
 			// newline: add row
 			D_ASSERT(try_add_line || column == insert_chunk.ColumnCount() - 1);
 			goto add_row;
@@ -181,7 +182,7 @@ normal : {
 
 add_value : {
 	/* state: Add value to string vector */
-	AddValue(buffer.GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes);
+	AddValue(buffer->GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes);
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -195,9 +196,9 @@ add_value : {
 add_row : {
 	/* state: Add Row to Parse chunk */
 	// check type of newline (\r or \n)
-	bool carriage_return = buffer[position_buffer] == '\r';
+	bool carriage_return = (*buffer)[position_buffer] == '\r';
 
-	AddValue(buffer.GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes);
+	AddValue(buffer->GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes);
 	if (try_add_line) {
 		bool success = column == insert_chunk.ColumnCount();
 		if (success) {
@@ -214,7 +215,6 @@ add_row : {
 	offset = 0;
 	has_quotes = false;
 	start_buffer = ++position_buffer;
-	last_row_pos = position_buffer;
 	if (reached_remainder_state || finished_chunk) {
 		goto final_state;
 	}
@@ -237,17 +237,17 @@ in_quotes:
 	has_quotes = true;
 	position_buffer++;
 	for (; position_buffer < end_buffer; position_buffer++) {
-		if (buffer[position_buffer] == options.quote[0]) {
+		if ((*buffer)[position_buffer] == options.quote[0]) {
 			// quote: move to unquoted state
 			goto unquote;
-		} else if (buffer[position_buffer] == options.escape[0]) {
+		} else if ((*buffer)[position_buffer] == options.escape[0]) {
 			// escape: store the escaped position and move to handle_escape state
 			escape_positions.push_back(position_buffer - start_buffer);
 			goto handle_escape;
 		}
 	}
 	if (!BufferRemainder()) {
-		if (buffer.buffer->IsCSVFileLastBuffer()) {
+		if (buffer->buffer->IsCSVFileLastBuffer()) {
 			if (try_add_line) {
 				return false;
 			}
@@ -273,16 +273,16 @@ unquote:
 		goto final_state;
 	}
 
-	if (buffer[position_buffer] == options.quote[0] &&
+	if ((*buffer)[position_buffer] == options.quote[0] &&
 	    (options.escape.empty() || options.escape[0] == options.quote[0])) {
 		// escaped quote, return to quoted state and store escape position
 		escape_positions.push_back(position_buffer - start_buffer);
 		goto in_quotes;
-	} else if (buffer[position_buffer] == options.delimiter[0]) {
+	} else if ((*buffer)[position_buffer] == options.delimiter[0]) {
 		// delimiter, add value
 		offset = 1;
 		goto add_value;
-	} else if (StringUtil::CharacterIsOnlyNewline(buffer[position_buffer])) {
+	} else if (StringUtil::CharacterIsOnlyNewline((*buffer)[position_buffer])) {
 		offset = 1;
 		D_ASSERT(column == insert_chunk.ColumnCount() - 1);
 		goto add_row;
@@ -293,7 +293,7 @@ unquote:
 	} else {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: quote should be followed by end of value, end of "
-		    "row or another quote. (%s)",
+		    "row or another quote. (%s). position_buffer:",
 		    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
 		return false;
 	}
@@ -304,13 +304,13 @@ handle_escape : {
 	if (!BufferRemainder()) {
 		goto final_state;
 	}
-	if (position_buffer >= buffer_size && buffer.buffer->IsCSVFileLastBuffer()) {
+	if (position_buffer >= buffer_size && buffer->buffer->IsCSVFileLastBuffer()) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
 		return false;
 	}
-	if (buffer[position_buffer] != options.quote[0] && buffer[position_buffer] != options.escape[0]) {
+	if ((*buffer)[position_buffer] != options.quote[0] && (*buffer)[position_buffer] != options.escape[0]) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
@@ -323,7 +323,7 @@ handle_escape : {
 carriage_return : {
 	/* state: carriage_return */
 	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
-	if (buffer[position_buffer] == '\n') {
+	if ((*buffer)[position_buffer] == '\n') {
 		// newline after carriage return: skip
 		// increase position by 1 and move start to the new position
 		start_buffer = ++position_buffer;
@@ -337,16 +337,16 @@ carriage_return : {
 final_state : {
 	/* state: final_stage reached after we finished reading the end_buffer of the csv buffer */
 	// reset end buffer
-	end_buffer = buffer.buffer_end;
+	end_buffer = buffer->buffer_end;
 	if (finished_chunk) {
 		return true;
 	}
 	// If this is the last buffer, we have to read the last value
-	if (buffer.buffer->IsCSVFileLastBuffer() || (buffer.next_buffer->IsCSVFileLastBuffer())) {
+	if (buffer->buffer->IsCSVFileLastBuffer() || (buffer->next_buffer->IsCSVFileLastBuffer())) {
 		if (column > 0 || position_buffer > start_buffer) {
 			// remaining values to be added to the chunk
 			D_ASSERT(column == insert_chunk.ColumnCount() - 1);
-			AddValue(buffer.GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes);
+			AddValue(buffer->GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes);
 			if (try_add_line) {
 				bool success = column == sql_types.size();
 				if (success) {

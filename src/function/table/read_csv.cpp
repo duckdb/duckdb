@@ -365,8 +365,8 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 	auto next_local_buffer = global_state.Next(context.client, csv_data);
 	unique_ptr<ParallelCSVReader> csv_reader;
 	if (next_local_buffer) {
-		csv_reader =
-		    make_unique<ParallelCSVReader>(context.client, csv_data.options, *next_local_buffer, csv_data.sql_types);
+		csv_reader = make_unique<ParallelCSVReader>(context.client, csv_data.options, move(next_local_buffer),
+		                                            csv_data.sql_types);
 	}
 	auto new_local_state = make_unique<ParallelCSVLocalState>(move(csv_reader));
 	return move(new_local_state);
@@ -392,8 +392,8 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			if (!next_chunk) {
 				break;
 			}
-			csv_local_state.previous_buffer = csv_local_state.csv_reader->buffer;
-			csv_local_state.csv_reader->SetBufferRead(*next_chunk);
+			//			csv_local_state.previous_buffer = csv_local_state.csv_reader->buffer;
+			csv_local_state.csv_reader->SetBufferRead(move(next_chunk));
 		}
 		csv_local_state.csv_reader->ParseCSV(output);
 
@@ -417,7 +417,7 @@ static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *
 		return 0;
 	}
 	auto &data = (ParallelCSVLocalState &)*local_state;
-	return data.csv_reader->buffer.batch_index;
+	return data.csv_reader->buffer->batch_index;
 }
 
 //===--------------------------------------------------------------------===//

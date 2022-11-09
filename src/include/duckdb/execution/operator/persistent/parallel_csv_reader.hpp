@@ -72,13 +72,14 @@ struct CSVBufferRead {
 			for (; cur_pos < length; cur_pos++) {
 				intersection[cur_pos] = next_buffer->buffer[nxt_buffer_pos++];
 			}
-			buffer->intersections.emplace_back(move(intersection));
-			return string_t(buffer->intersections.back().get(), length);
+			intersections.emplace_back(move(intersection));
+			return string_t(intersections.back().get(), length);
 		}
 	}
 
 	shared_ptr<CSVBuffer> buffer;
 	shared_ptr<CSVBuffer> next_buffer;
+	vector<unique_ptr<char[]>> intersections;
 
 	idx_t buffer_start;
 	idx_t buffer_end;
@@ -89,7 +90,7 @@ struct CSVBufferRead {
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class ParallelCSVReader : public BaseCSVReader {
 public:
-	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, const CSVBufferRead &buffer,
+	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
 	                  const vector<LogicalType> &requested_types);
 	~ParallelCSVReader();
 
@@ -102,17 +103,14 @@ public:
 	idx_t end_buffer = NumericLimits<idx_t>::Maximum();
 	//! The actual buffer size
 	idx_t buffer_size = 0;
-	idx_t last_row_pos = 0;
 
 	//! If this flag is set, it means we are about to try to read our last row.
 	bool reached_remainder_state = false;
 
-	CSVBufferRead buffer;
-
-	idx_t position_set;
+	unique_ptr<CSVBufferRead> buffer;
 
 public:
-	void SetBufferRead(const CSVBufferRead &buffer_read);
+	void SetBufferRead(unique_ptr<CSVBufferRead> buffer);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
 
