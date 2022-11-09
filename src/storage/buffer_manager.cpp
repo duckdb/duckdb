@@ -57,7 +57,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, uni
       unswizzled(nullptr) {
 	buffer = move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
-	memory_usage = buffer->AllocSize();
+	memory_usage = block_size;
 	memory_charge = move(reservation);
 }
 
@@ -333,7 +333,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 	auto buffer = ConstructManagedBuffer(block_size, move(reusable_buffer));
 
 	// create a new block pointer for this block
-	return make_shared<BlockHandle>(*temp_block_manager, ++temporary_id, move(buffer), can_destroy, block_size,
+	return make_shared<BlockHandle>(*temp_block_manager, ++temporary_id, move(buffer), can_destroy, alloc_size,
 	                                move(res));
 }
 
