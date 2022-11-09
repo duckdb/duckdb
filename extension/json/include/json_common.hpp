@@ -221,7 +221,7 @@ public:
 		}
 		default:
 			auto str = "/" + string(ptr, len);
-			return GetPointerUnsafe<YYJSON_VAL_T>(root, str.c_str(), len);
+			return GetPointerUnsafe<YYJSON_VAL_T>(root, str.c_str(), len + 1);
 		}
 	}
 

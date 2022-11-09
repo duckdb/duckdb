@@ -710,7 +710,7 @@ static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunc
 			bound_function.statistics = DateTruncStats<timestamp_t, timestamp_t>(part_code);
 			break;
 		case LogicalType::DATE:
-			bound_function.statistics = DateTruncStats<timestamp_t, date_t>(part_code);
+			bound_function.statistics = DateTruncStats<date_t, timestamp_t>(part_code);
 			break;
 		default:
 			throw NotImplementedException("Temporal argument type for DATETRUNC");

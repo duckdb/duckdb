@@ -812,4 +812,8 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 	return true;
 }
 
+const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {
+	return segments;
+}
+
 } // namespace duckdb
