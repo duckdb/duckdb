@@ -252,52 +252,52 @@ abcd
 statement error
 SELECT ${FUN}(s, 9223372036854775807, -9223372036854775808) FROM strings
 ----
-Out of Range Error: Substring offset outside of supported range (> 2147483647)
+Out of Range Error: Substring offset outside of supported range (> 4294967295)
 
 statement error
 SELECT ${FUN}(s, -9223372036854775808, -9223372036854775808) FROM strings
 ----
-Out of Range Error: Substring offset outside of supported range (< -2147483648)
+Out of Range Error: Substring offset outside of supported range (< -4294967296)
 
 statement error
 SELECT ${FUN}(s, 9223372036854775807, 9223372036854775807) FROM strings
 ----
-Out of Range Error: Substring offset outside of supported range (> 2147483647)
+Out of Range Error: Substring offset outside of supported range (> 4294967295)
 
 statement error
 SELECT ${FUN}(s, -9223372036854775808, 9223372036854775807) FROM strings
 ----
-Out of Range Error: Substring offset outside of supported range (< -2147483648)
+Out of Range Error: Substring offset outside of supported range (< -4294967296)
 
 statement error
 SELECT ${FUN}(s, 0, 9223372036854775807) FROM strings
 ----
-Out of Range Error: Substring length outside of supported range (> 2147483647)
+Out of Range Error: Substring length outside of supported range (> 4294967295)
 
 statement error
 SELECT ${FUN}(s, 0, -9223372036854775808) FROM strings
 ----
-Out of Range Error: Substring length outside of supported range (< -2147483648)
+Out of Range Error: Substring length outside of supported range (< -4294967296)
 
 # int32_t limits
 statement error
-SELECT ${FUN}(s, 2147483648, 2147483647) FROM strings
+SELECT ${FUN}(s, 4294967296, 2147483647) FROM strings
 ----
-Out of Range Error: Substring offset outside of supported range (> 2147483647)
+Out of Range Error: Substring offset outside of supported range (> 4294967295)
 
 statement error
-SELECT ${FUN}(s, -2147483649, 2147483647) FROM strings
+SELECT ${FUN}(s, -4294967297, 2147483647) FROM strings
 ----
-Out of Range Error: Substring offset outside of supported range (< -2147483648)
+Out of Range Error: Substring offset outside of supported range (< -4294967296)
 
 statement error
-SELECT ${FUN}(s, 0, 2147483648) FROM strings
+SELECT ${FUN}(s, 0, 4294967296) FROM strings
 ----
-Out of Range Error: Substring length outside of supported range (> 2147483647)
+Out of Range Error: Substring length outside of supported range (> 4294967295)
 
 statement error
-SELECT ${FUN}(s, 0, -2147483649) FROM strings
+SELECT ${FUN}(s, 0, -4294967297) FROM strings
 ----
-Out of Range Error: Substring length outside of supported range (< -2147483648)
+Out of Range Error: Substring length outside of supported range (< -4294967296)
 
 endloop
