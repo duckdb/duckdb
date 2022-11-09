@@ -192,22 +192,19 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			case ConstraintType::FOREIGN_KEY: {
 				const auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
 				const auto &info = bound_foreign_key.info;
+				// find the other table
+				auto &catalog = Catalog::GetCatalog(context);
+				auto table_entry = (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info.schema,
+				                                                         info.table, true);
+				if (!table_entry) {
+					throw InternalException("dukdb_constraints: entry %s.%s referenced in foreign key not found",
+					                        info.schema, info.table);
+				}
 				vector<LogicalIndex> index;
 				for (auto &key : info.pk_keys) {
-					index.push_back(table.columns.PhysicalToLogical(key));
+					index.push_back(table_entry->columns.PhysicalToLogical(key));
 				}
-				uk_info = {info.schema, info.table, index};
-				if (uk_info.schema.empty()) {
-					// FIXME: Can we somehow make use of Binder::BindSchema() here?
-					// From experiments, an omitted schema in REFERENCES ... means "main" or "temp", even if the table
-					// resides in a different schema. Is this guaranteed to be stable?
-					if (entry->temporary) {
-						uk_info.schema = "temp";
-					} else {
-						uk_info.schema = "main";
-					}
-				}
-
+				uk_info = {table_entry->schema->name, table_entry->name, index};
 				break;
 			}
 			default:
