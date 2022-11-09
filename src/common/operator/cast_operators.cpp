@@ -1576,10 +1576,10 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Decimal String Cast
 //===--------------------------------------------------------------------===//
-template <class T>
+template <class TYPE>
 struct DecimalCastData {
-	typedef T type_t;
-	T result;
+	typedef TYPE type_t;
+    TYPE result;
 	uint8_t width;
 	uint8_t scale;
 	uint8_t digit_count;
