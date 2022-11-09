@@ -145,3 +145,15 @@ SELECT array_extract(s, -2147483647) FROM strings
 (empty)
 (empty)
 NULL
+
+
+# Issue #4978 -- Substring overflow 3
+statement error
+SELECT array_extract('1', 9223372036854775807);
+----
+Subscript outside of supported range (> 2147483647)
+
+statement error
+SELECT array_extract(0, -9223372036854775808);
+----
+Subscript outside of supported range (> 2147483647)

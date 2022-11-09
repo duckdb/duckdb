@@ -157,3 +157,25 @@ query I
 SELECT LIST_EXTRACT(LIST_VALUE('2019-11-26 09:42:00'::TIMESTAMP), 1)
 ----
 2019-11-26 09:42:00
+
+# Issue #4978 -- Substring overflow 2
+statement error
+SELECT list_extract('1', 9223372036854775807);
+----
+Subscript outside of supported range (> 2147483647)
+
+# Test limits
+query I
+SELECT list_extract('1', 0);
+----
+(empty)
+
+query I
+SELECT list_extract('1', 1);
+----
+1
+
+query I
+SELECT list_extract('1', -1);
+----
+1

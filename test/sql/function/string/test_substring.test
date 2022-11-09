@@ -200,7 +200,7 @@ SELECT ${FUN}(s, 2147483647, 2147483647) FROM strings
 NULL
 
 query T
-SELECT ${FUN}(s, 2147483647, -2147483647) FROM strings
+SELECT ${FUN}(s, 2147483647, -2147483648) FROM strings
 ----
 hello
 world
@@ -216,7 +216,7 @@ b
 NULL
 
 query T
-SELECT ${FUN}(s, -2147483647, -2147483647) FROM strings
+SELECT ${FUN}(s, -2147483648, -2147483648) FROM strings
 ----
 (empty)
 (empty)
@@ -228,5 +228,76 @@ query I
 SELECT ${FUN}('abc', INSTR('abc', 'b'));
 ----
 bc
+
+# Issue #4978 - substring integer overflow
+query I
+SELECT ${FUN}('a', -1)
+----
+a
+
+query I
+SELECT ${FUN}('abcd', -1)
+----
+d
+
+query I
+SELECT ${FUN}('abcd', -7)
+----
+abcd
+
+# Even tough we accept bigints, we don't allow offsets and lengths larger than 
+# a 32-bit integer, since we need to be able to do the internal resulting string 
+# length calculations within a 64-bit integer to avoid overflows.
+
+statement error
+SELECT ${FUN}(s, 9223372036854775807, -9223372036854775808) FROM strings
+----
+Offset outside of supported range (> 2147483647)
+
+statement error
+SELECT ${FUN}(s, -9223372036854775808, -9223372036854775808) FROM strings
+----
+Offset outside of supported range (< -2147483648)
+
+statement error
+SELECT ${FUN}(s, 9223372036854775807, 9223372036854775807) FROM strings
+----
+Offset outside of supported range (> 2147483647)
+
+statement error
+SELECT ${FUN}(s, -9223372036854775808, 9223372036854775807) FROM strings
+----
+Offset outside of supported range (< -2147483648)
+
+statement error
+SELECT ${FUN}(s, 0, 9223372036854775807) FROM strings
+----
+Length outside of supported range (> 2147483647)
+
+statement error
+SELECT ${FUN}(s, 0, -9223372036854775808) FROM strings
+----
+Length outside of supported range (< -2147483648)
+
+# int32_t limits
+statement error
+SELECT ${FUN}(s, 2147483648, 2147483647) FROM strings
+----
+Offset outside of supported range (> 2147483647)
+
+statement error
+SELECT ${FUN}(s, -2147483649, 2147483647) FROM strings
+----
+Offset outside of supported range (< -2147483648)
+
+statement error
+SELECT ${FUN}(s, 0, 2147483648) FROM strings
+----
+Length outside of supported range (> 2147483647)
+
+statement error
+SELECT ${FUN}(s, 0, -2147483649) FROM strings
+----
+Length outside of supported range (> -2147483648)
 
 endloop
