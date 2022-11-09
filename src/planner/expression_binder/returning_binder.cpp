@@ -9,6 +9,11 @@ ReturningBinder::ReturningBinder(Binder &binder, ClientContext &context) : Expre
 
 BindResult ReturningBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = **expr_ptr;
+	if (expr.GetName() == "rowid") {
+		// We don't support rowid on inserts/updates or deletes. It's possible
+		// the data still lives the transactional log and getting the true rowid is difficult.
+		return BindResult("rowid is not supported in returning statements");
+	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::SUBQUERY:
 		return BindResult("SUBQUERY is not supported in returning statements");
