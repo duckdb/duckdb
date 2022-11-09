@@ -21,21 +21,21 @@ public:
 public:
 	ColumnList(bool allow_duplicate_names = false);
 
-	void AddColumn(ColumnDefinition column);
+	DUCKDB_API void AddColumn(ColumnDefinition column);
 	void Finalize();
 
-	const ColumnDefinition &GetColumn(LogicalIndex index) const;
-	const ColumnDefinition &GetColumn(PhysicalIndex index) const;
-	const ColumnDefinition &GetColumn(const string &name) const;
-	ColumnDefinition &GetColumnMutable(LogicalIndex index);
-	ColumnDefinition &GetColumnMutable(PhysicalIndex index);
-	ColumnDefinition &GetColumnMutable(const string &name);
+	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex index) const;
+	DUCKDB_API const ColumnDefinition &GetColumn(PhysicalIndex index) const;
+	DUCKDB_API const ColumnDefinition &GetColumn(const string &name) const;
+	DUCKDB_API ColumnDefinition &GetColumnMutable(LogicalIndex index);
+	DUCKDB_API ColumnDefinition &GetColumnMutable(PhysicalIndex index);
+	DUCKDB_API ColumnDefinition &GetColumnMutable(const string &name);
 
-	bool ColumnExists(const string &name) const;
+	DUCKDB_API bool ColumnExists(const string &name) const;
 
-	LogicalIndex GetColumnIndex(string &column_name) const;
-	PhysicalIndex LogicalToPhysical(LogicalIndex index) const;
-	LogicalIndex PhysicalToLogical(PhysicalIndex index) const;
+	DUCKDB_API LogicalIndex GetColumnIndex(string &column_name) const;
+	DUCKDB_API PhysicalIndex LogicalToPhysical(LogicalIndex index) const;
+	DUCKDB_API LogicalIndex PhysicalToLogical(PhysicalIndex index) const;
 
 	idx_t LogicalColumnCount() const {
 		return columns.size();
@@ -51,8 +51,8 @@ public:
 	void Serialize(FieldWriter &writer) const;
 	static ColumnList Deserialize(FieldReader &reader);
 
-	ColumnListIterator Logical() const;
-	ColumnListIterator Physical() const;
+	DUCKDB_API ColumnListIterator Logical() const;
+	DUCKDB_API ColumnListIterator Physical() const;
 
 	void SetAllowDuplicates(bool allow_duplicates) {
 		allow_duplicate_names = allow_duplicates;
