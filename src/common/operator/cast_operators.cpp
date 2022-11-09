@@ -1590,32 +1590,6 @@ struct DecimalCastData {
 	bool positive_exponent;
 };
 
-template <typename T>
-constexpr T MaxValue() {
-	return (std::numeric_limits<T>::max)();
-}
-
-template <>
-hugeint_t MaxValue<hugeint_t>() {
-	hugeint_t huge;
-	huge.upper = MaxValue<int64_t>();
-	huge.lower = MaxValue<uint64_t>();
-	return huge;
-}
-
-template <typename T>
-constexpr T MinValue() {
-	return (std::numeric_limits<T>::min)();
-}
-
-template <>
-hugeint_t MinValue<hugeint_t>() {
-	hugeint_t huge;
-	huge.upper = MinValue<int64_t>();
-	huge.lower = MaxValue<uint64_t>();
-	return huge;
-}
-
 struct DecimalCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
@@ -1629,12 +1603,12 @@ struct DecimalCastOperation {
 		}
 		state.digit_count++;
 		if (NEGATIVE) {
-			if (state.result < (MinValue<typename T::type>() / 10)) {
+			if (state.result < (NumericLimits<typename T::type>::Minimum() / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 - digit;
 		} else {
-			if (state.result > (MaxValue<typename T::type>() / 10)) {
+			if (state.result > (NumericLimits<typename T::type>::Maximum() / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 + digit;

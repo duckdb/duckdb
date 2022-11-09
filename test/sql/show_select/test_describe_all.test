@@ -5,6 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
+
+# Describe all
 statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER, a INTEGER);
 
@@ -15,3 +17,15 @@ query IIII
 DESCRIBE
 ----
 integers	[a, i, j]	[INTEGER, INTEGER, INTEGER]	False
+
+# Describe an Enum table
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', 'grumpy');
+
+statement ok
+CREATE TABLE enums(current_mood mood)
+
+query IIIIII
+DESCRIBE enums
+----
+current_mood	ENUM	YES	NULL	NULL	NULL
