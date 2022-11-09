@@ -126,6 +126,9 @@ public:
 	static void SetMultiScan(GlobalSinkState &state);
 
 private:
+	//! When we only have distinct aggregates, we can delay adding groups to the main ht
+	bool CanSkipRegularSink() const;
+
 	//! Finalize the distinct aggregates
 	SinkFinalizeType FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                  GlobalSinkState &gstate) const;
@@ -137,6 +140,9 @@ private:
 	//! Sink the distinct aggregates
 	void SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	                  DataChunk &input) const;
+	//! Create groups in the main ht for groups that would otherwise get filtered out completely
+	SinkResultType SinkGroupsOnly(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	                              DataChunk &input) const;
 };
 
 } // namespace duckdb

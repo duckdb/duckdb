@@ -568,7 +568,8 @@ Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) 
 
 Value Value::LIST(vector<Value> values) {
 	if (values.empty()) {
-		throw InternalException("Value::LIST requires a non-empty list of values. Use Value::EMPTYLIST instead.");
+		throw InternalException("Value::LIST without providing a child-type requires a non-empty list of values. Use "
+		                        "Value::LIST(child_type, list) instead.");
 	}
 #ifdef DEBUG
 	for (idx_t i = 1; i < values.size(); i++) {
@@ -1704,6 +1705,17 @@ bool Value::NotDistinctFrom(const Value &lvalue, const Value &rvalue) {
 	return ValueOperations::NotDistinctFrom(lvalue, rvalue);
 }
 
+static string SanitizeValue(string input) {
+	// some results might contain padding spaces, e.g. when rendering
+	// VARCHAR(10) and the string only has 6 characters, they will be padded
+	// with spaces to 10 in the rendering. We don't do that here yet as we
+	// are looking at internal structures. So just ignore any extra spaces
+	// on the right
+	StringUtil::RTrim(input);
+	// for result checking code, replace null bytes with their escaped value (\0)
+	return StringUtil::Replace(input, string("\0", 1), "\\0");
+}
+
 bool Value::ValuesAreEqual(CastFunctionSet &set, GetCastFunctionInput &get_input, const Value &result_value,
                            const Value &value) {
 	if (result_value.IsNull() != value.IsNull()) {
@@ -1728,15 +1740,8 @@ bool Value::ValuesAreEqual(CastFunctionSet &set, GetCastFunctionInput &get_input
 	}
 	case LogicalTypeId::VARCHAR: {
 		auto other = result_value.CastAs(set, get_input, LogicalType::VARCHAR);
-		// some results might contain padding spaces, e.g. when rendering
-		// VARCHAR(10) and the string only has 6 characters, they will be padded
-		// with spaces to 10 in the rendering. We don't do that here yet as we
-		// are looking at internal structures. So just ignore any extra spaces
-		// on the right
-		string left = other.str_value;
-		string right = value.str_value;
-		StringUtil::RTrim(left);
-		StringUtil::RTrim(right);
+		string left = SanitizeValue(other.str_value);
+		string right = SanitizeValue(value.str_value);
 		return left == right;
 	}
 	default:

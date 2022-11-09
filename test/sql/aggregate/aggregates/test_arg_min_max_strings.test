@@ -2,8 +2,6 @@
 # description: Test arg_min/arg_max with strings
 # group: [aggregates]
 
-require strinline
-
 statement ok
 CREATE TABLE tbl(
 	"DATE" DATE,

@@ -1,7 +1,8 @@
-#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/function/table/system_functions.hpp"
+
 #include <cmath>
 #include <limits>
 
@@ -57,7 +58,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	result.emplace_back(LogicalType::INTERVAL, "interval", Value::INTERVAL(min_interval),
 	                    Value::INTERVAL(max_interval));
 	// strings/blobs
-	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
+	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"),
+	                    Value(string("goo\x00se", 6)));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
 	                    Value::BLOB("\\x00\\x00\\x00a"));
 

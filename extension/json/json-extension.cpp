@@ -60,7 +60,7 @@ void JSONExtension::Load(DuckDB &db) {
 		catalog.CreateFunction(*con.context, info.get());
 	}
 
-	// JSON table functions
+	// JSON table macro's
 	for (idx_t index = 0; table_macros[index].name != nullptr; index++) {
 		auto info = DefaultFunctionGenerator::CreateInternalTableMacroInfo(table_macros[index]);
 		catalog.CreateFunction(*con.context, info.get());
