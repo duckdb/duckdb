@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "csv_buffer.hpp"
+#include "duckdb/execution/operator/persistent/csv_buffer.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/value.hpp"
