@@ -34,7 +34,9 @@ unique_ptr<SQLStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *n
 		auto select = make_unique<SelectNode>();
 		select->select_list.push_back(make_unique<StarExpression>());
 		auto basetable = make_unique<BaseTableRef>();
-		basetable->table_name = stmt->name;
+		auto qualified_name = QualifiedName::Parse(stmt->name);
+		basetable->schema_name = qualified_name.schema;
+		basetable->table_name = qualified_name.name;
 		select->from_table = move(basetable);
 
 		info.query = move(select);
