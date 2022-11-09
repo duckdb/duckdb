@@ -25,9 +25,9 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 		return;
 	}
 	idx_t found_column_count = 0;
-	unordered_set<idx_t> found_columns;
+	physical_index_set_t found_columns;
 	for (idx_t i = 0; i < update.columns.size(); i++) {
-		if (bound_columns.find(PhysicalIndex(update.columns[i])) != bound_columns.end()) {
+		if (bound_columns.find(update.columns[i]) != bound_columns.end()) {
 			// this column is referenced in the CHECK constraint
 			found_column_count++;
 			found_columns.insert(update.columns[i]);
@@ -37,7 +37,7 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 		// columns in this CHECK constraint were referenced, but not all were part of the UPDATE
 		// add them to the scan and update set
 		for (auto &check_column_id : bound_columns) {
-			if (found_columns.find(check_column_id.index) != found_columns.end()) {
+			if (found_columns.find(check_column_id) != found_columns.end()) {
 				// column is already projected
 				continue;
 			}
@@ -48,7 +48,7 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
 			get.column_ids.push_back(check_column_id.index);
-			update.columns.push_back(check_column_id.index);
+			update.columns.push_back(check_column_id);
 		}
 	}
 }
@@ -103,7 +103,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 
 	// we also convert any updates on LIST columns into delete + insert
 	for (auto &col_index : update.columns) {
-		auto &column = table.columns.GetColumn(LogicalIndex(col_index));
+		auto &column = table.columns.GetColumn(col_index);
 		if (!TypeSupportsRegularUpdate(column.Type())) {
 			update.update_is_del_and_insert = true;
 			break;
@@ -187,10 +187,10 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
-		if (std::find(update->columns.begin(), update->columns.end(), column.StorageOid()) != update->columns.end()) {
+		if (std::find(update->columns.begin(), update->columns.end(), column.Physical()) != update->columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
-		update->columns.push_back(column.StorageOid());
+		update->columns.push_back(column.Physical());
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
 			update->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));

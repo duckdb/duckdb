@@ -430,7 +430,7 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable *table, 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const vector<column_t> &column_ids,
+void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids,
                                 DataChunk &updates) {
 	idx_t pos = 0;
 	do {
@@ -456,7 +456,7 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 		auto l = stats.GetLock();
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto column_id = column_ids[i];
-			stats.MergeStats(*l, column_id, *row_group->GetStatistics(column_id));
+			stats.MergeStats(*l, column_id.index, *row_group->GetStatistics(column_id.index));
 		}
 	} while (pos < updates.size());
 }

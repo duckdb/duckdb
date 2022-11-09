@@ -784,22 +784,22 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-static void CreateMockChunk(vector<LogicalType> &types, const vector<column_t> &column_ids, DataChunk &chunk,
+static void CreateMockChunk(vector<LogicalType> &types, const vector<PhysicalIndex> &column_ids, DataChunk &chunk,
                             DataChunk &mock_chunk) {
 	// construct a mock DataChunk
 	mock_chunk.InitializeEmpty(types);
 	for (column_t i = 0; i < column_ids.size(); i++) {
-		mock_chunk.data[column_ids[i]].Reference(chunk.data[i]);
+		mock_chunk.data[column_ids[i].index].Reference(chunk.data[i]);
 	}
 	mock_chunk.SetCardinality(chunk.size());
 }
 
-static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &column_ids,
+static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex> &column_ids,
                             physical_index_set_t &desired_column_ids, DataChunk &chunk, DataChunk &mock_chunk) {
 	idx_t found_columns = 0;
 	// check whether the desired columns are present in the UPDATE clause
 	for (column_t i = 0; i < column_ids.size(); i++) {
-		if (desired_column_ids.find(PhysicalIndex(column_ids[i])) != desired_column_ids.end()) {
+		if (desired_column_ids.find(column_ids[i]) != desired_column_ids.end()) {
 			found_columns++;
 		}
 	}
@@ -819,7 +819,7 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &co
 }
 
 void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
-                                        const vector<column_t> &column_ids) {
+                                        const vector<PhysicalIndex> &column_ids) {
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
 		auto &base_constraint = table.constraints[i];
 		auto &constraint = table.bound_constraints[i];
@@ -829,7 +829,7 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
 			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
 			// check if the constraint is in the list of column_ids
 			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (column_ids[i] == bound_not_null.index.index) {
+				if (column_ids[i] == bound_not_null.index) {
 					// found the column id: check the data in
 					auto &col = table.columns.GetColumn(LogicalIndex(not_null.index));
 					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), col.Name());
@@ -866,7 +866,7 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
 }
 
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
-                       const vector<column_t> &column_ids, DataChunk &updates) {
+                       const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 
 	auto count = updates.size();

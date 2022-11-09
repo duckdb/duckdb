@@ -626,7 +626,7 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 }
 
 void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_t *ids, idx_t offset, idx_t count,
-                      const vector<column_t> &column_ids) {
+                      const vector<PhysicalIndex> &column_ids) {
 #ifdef DEBUG
 	for (size_t i = offset; i < offset + count; i++) {
 		D_ASSERT(ids[i] >= row_t(this->start) && ids[i] < row_t(this->start + this->count));
@@ -634,16 +634,16 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 #endif
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
-		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
-		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
+		D_ASSERT(column.index != COLUMN_IDENTIFIER_ROW_ID);
+		D_ASSERT(columns[column.index]->type.id() == update_chunk.data[i].GetType().id());
 		if (offset > 0) {
 			Vector sliced_vector(update_chunk.data[i], offset, offset + count);
 			sliced_vector.Flatten(count);
-			columns[column]->Update(transaction, column, sliced_vector, ids + offset, count);
+			columns[column.index]->Update(transaction, column.index, sliced_vector, ids + offset, count);
 		} else {
-			columns[column]->Update(transaction, column, update_chunk.data[i], ids, count);
+			columns[column.index]->Update(transaction, column.index, update_chunk.data[i], ids, count);
 		}
-		MergeStatistics(column, *columns[column]->GetUpdateStatistics());
+		MergeStatistics(column.index, *columns[column.index]->GetUpdateStatistics());
 	}
 }
 

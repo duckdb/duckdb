@@ -10,6 +10,15 @@
 
 namespace duckdb {
 
+PhysicalUpdate::PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
+                               vector<PhysicalIndex> columns, vector<unique_ptr<Expression>> expressions,
+                               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
+                               bool return_chunk)
+    : PhysicalOperator(PhysicalOperatorType::UPDATE, move(types), estimated_cardinality), tableref(tableref),
+      table(table), columns(std::move(columns)), expressions(move(expressions)), bound_defaults(move(bound_defaults)),
+      return_chunk(return_chunk) {
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
@@ -65,7 +74,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 			// default expression, set to the default value of the column
-			ustate.default_executor.ExecuteExpression(columns[i], update_chunk.data[i]);
+			ustate.default_executor.ExecuteExpression(columns[i].index, update_chunk.data[i]);
 		} else {
 			D_ASSERT(expressions[i]->type == ExpressionType::BOUND_REF);
 			// index into child chunk
@@ -99,14 +108,14 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 		// for the append we need to arrange the columns in a specific manner (namely the "standard table order")
 		mock_chunk.SetCardinality(update_chunk);
 		for (idx_t i = 0; i < columns.size(); i++) {
-			mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
+			mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 		}
 		table.LocalAppend(tableref, context.client, mock_chunk);
 	} else {
 		if (return_chunk) {
 			mock_chunk.SetCardinality(update_chunk);
 			for (idx_t i = 0; i < columns.size(); i++) {
-				mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
+				mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 			}
 		}
 		table.Update(tableref, context.client, row_ids, columns, update_chunk);

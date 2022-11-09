@@ -72,7 +72,7 @@ public:
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
 	idx_t Delete(TransactionData transaction, DataTable *table, row_t *ids, idx_t count);
-	void Update(TransactionData transaction, row_t *ids, const vector<column_t> &column_ids, DataChunk &updates);
+	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
 	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
 	                  DataChunk &updates);
 

@@ -445,7 +445,8 @@ idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	return delete_count;
 }
 
-void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &updates) {
+void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<PhysicalIndex> &column_ids,
+                          DataChunk &updates) {
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 
