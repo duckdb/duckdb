@@ -10,6 +10,7 @@ CREATE TABLE integers(i INTEGER, j INTEGER, a INTEGER);
 
 statement ok
 DESCRIBE;
+
 query IIII
 DESCRIBE
 ----

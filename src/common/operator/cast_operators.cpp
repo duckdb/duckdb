@@ -1578,7 +1578,7 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 //===--------------------------------------------------------------------===//
 template <class T>
 struct DecimalCastData {
-	typedef T type;
+	typedef T type_t;
 	T result;
 	uint8_t width;
 	uint8_t scale;
@@ -1602,12 +1602,12 @@ struct DecimalCastOperation {
 		}
 		state.digit_count++;
 		if (NEGATIVE) {
-			if (state.result < (NumericLimits<typename T::type>::Minimum() / 10)) {
+			if (state.result < (NumericLimits<typename T::type_t>::Minimum() / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 - digit;
 		} else {
-			if (state.result > (NumericLimits<typename T::type>::Maximum() / 10)) {
+			if (state.result > (NumericLimits<typename T::type_t>::Maximum() / 10)) {
 				return false;
 			}
 			state.result = state.result * 10 + digit;
