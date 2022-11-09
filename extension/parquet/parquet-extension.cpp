@@ -507,7 +507,12 @@ public:
 				// TODO this is an issue for httpfs: we're doing head requests + fetching metadata while locking global state.
 				// this is mega slow for metadata-heavy reads across many files
 				// The issue however is that we need the batch index depends on the metadata of previous files and you cannot know the batch index
-				// TODO: can we just use upper/lower bytes for file/rowgroup to circumvent this?
+				// However: we don't need to know the batch index for reading the metadata, just read metadata, then go through files again for
+				// a row group to scan.
+				// So we can just:
+				// If there's a row group to be scanned, scan it
+				// Elif theres files left, setup the reader for the file, then recheck for row groups.
+				// Else, done
 
 				// Plan:
 
