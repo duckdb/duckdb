@@ -52,8 +52,6 @@ public:
 
 public:
 	bool HasGeneratedColumns() const;
-	//! For debugging purposes, count how many columns are STANDARD
-	idx_t StandardColumnCount() const;
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
 	//! Returns whether or not a column with the given name exists
 	DUCKDB_API bool ColumnExists(const string &name);
@@ -83,11 +81,9 @@ public:
 	//! If the column does not exist:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
-	column_t GetColumnIndex(string &name, bool if_exists = false);
-	LogicalIndex GetColumnIndexLogical(string &column_name, bool if_exists = false);
+	LogicalIndex GetColumnIndex(string &name, bool if_exists = false);
 
 private:
-	const string &GetColumnName(column_t index);
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);
 	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);

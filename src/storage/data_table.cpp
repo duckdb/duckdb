@@ -481,7 +481,7 @@ void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, C
 	if (chunk.size() == 0) {
 		return;
 	}
-	D_ASSERT(chunk.ColumnCount() == table.StandardColumnCount());
+	D_ASSERT(chunk.ColumnCount() == table.columns.PhysicalColumnCount());
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}

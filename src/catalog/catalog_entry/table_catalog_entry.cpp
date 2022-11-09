@@ -33,23 +33,15 @@ bool TableCatalogEntry::HasGeneratedColumns() const {
 	return columns.LogicalColumnCount() != columns.PhysicalColumnCount();
 }
 
-const string &TableCatalogEntry::GetColumnName(column_t index) {
-	return columns.GetColumn(LogicalIndex(index)).Name();
-}
-
-LogicalIndex TableCatalogEntry::GetColumnIndexLogical(string &column_name, bool if_exists) {
+LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
 	auto entry = columns.GetColumnIndex(column_name);
-	if (entry.index == DConstants::INVALID_INDEX) {
+	if (!entry.IsValid()) {
 		if (if_exists) {
 			return entry;
 		}
 		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
 	}
 	return entry;
-}
-
-column_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
-	return GetColumnIndexLogical(column_name, if_exists).index;
 }
 
 void AddDataTableIndex(DataTable *storage, const ColumnList &columns, const vector<PhysicalIndex> &keys,
@@ -147,10 +139,6 @@ bool TableCatalogEntry::ColumnExists(const string &name) {
 	return columns.ColumnExists(name);
 }
 
-idx_t TableCatalogEntry::StandardColumnCount() const {
-	return columns.PhysicalColumnCount();
-}
-
 unique_ptr<BaseStatistics> TableCatalogEntry::GetStatistics(ClientContext &context, column_t column_id) {
 	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 		return nullptr;
@@ -229,7 +217,7 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
-	auto rename_idx = GetColumnIndexLogical(info.old_name);
+	auto rename_idx = GetColumnIndex(info.old_name);
 	if (rename_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot rename rowid column");
 	}
@@ -301,7 +289,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	auto col_name = info.new_column.GetName();
 
 	// We're checking for the opposite condition (ADD COLUMN IF _NOT_ EXISTS ...).
-	if (info.if_column_not_exists && GetColumnIndex(col_name, true) != DConstants::INVALID_INDEX) {
+	if (info.if_column_not_exists && ColumnExists(col_name)) {
 		return nullptr;
 	}
 
@@ -328,8 +316,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
-	auto removed_index = GetColumnIndexLogical(info.removed_column, info.if_column_exists);
-	if (removed_index.index == DConstants::INVALID_INDEX) {
+	auto removed_index = GetColumnIndex(info.removed_column, info.if_column_exists);
+	if (!removed_index.IsValid()) {
 		if (!info.if_column_exists) {
 			throw CatalogException("Cannot drop column: rowid column cannot be dropped");
 		}
@@ -448,14 +436,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	auto default_idx = GetColumnIndex(info.column_name);
-	if (default_idx == COLUMN_IDENTIFIER_ROW_ID) {
+	if (default_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot SET DEFAULT for rowid column");
 	}
 
 	// Copy all the columns, changing the value of the one that was specified by 'column_name'
 	for (auto &col : columns.Logical()) {
 		auto copy = col.Copy();
-		if (default_idx == col.Oid()) {
+		if (default_idx == col.Logical()) {
 			// set the default value of this column
 			if (copy.Generated()) {
 				throw BinderException("Cannot SET DEFAULT for generated column \"%s\"", col.Name());
@@ -480,7 +468,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->columns = columns.Copy();
 
-	auto not_null_idx = GetColumnIndexLogical(info.column_name);
+	auto not_null_idx = GetColumnIndex(info.column_name);
 	if (columns.GetColumn(LogicalIndex(not_null_idx)).Generated()) {
 		throw BinderException("Unsupported constraint for generated column!");
 	}
@@ -518,7 +506,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, 
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->columns = columns.Copy();
 
-	auto not_null_idx = GetColumnIndexLogical(info.column_name);
+	auto not_null_idx = GetColumnIndex(info.column_name);
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
 		// Skip/drop not_null
@@ -541,7 +529,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		auto &catalog = Catalog::GetCatalog(context);
 		info.target_type = catalog.GetType(context, schema->name, UserType::GetTypeName(info.target_type));
 	}
-	auto change_idx = GetColumnIndexLogical(info.column_name);
+	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 
@@ -607,20 +595,17 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 
 	auto binder = Binder::CreateBinder(context);
 	// bind the specified expression
-	vector<column_t> bound_columns;
+	vector<LogicalIndex> bound_columns;
 	AlterBinder expr_binder(*binder, context, *this, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	vector<column_t> storage_oids;
-	if (bound_columns.empty()) {
-		storage_oids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	for (idx_t i = 0; i < bound_columns.size(); i++) {
+		storage_oids.push_back(columns.LogicalToPhysical(bound_columns[i]).index);
 	}
-	// transform to storage_oid
-	else {
-		for (idx_t i = 0; i < bound_columns.size(); i++) {
-			storage_oids.push_back(columns.LogicalToPhysical(LogicalIndex(bound_columns[i])).index);
-		}
+	if (storage_oids.empty()) {
+		storage_oids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 
 	auto new_storage =

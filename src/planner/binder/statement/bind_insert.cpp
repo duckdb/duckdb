@@ -50,7 +50,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		case_insensitive_map_t<idx_t> column_name_map;
 		for (idx_t i = 0; i < stmt.columns.size(); i++) {
 			column_name_map[stmt.columns[i]] = i;
-			auto column_index = table->GetColumnIndexLogical(stmt.columns[i]);
+			auto column_index = table->GetColumnIndex(stmt.columns[i]);
 			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}

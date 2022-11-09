@@ -74,34 +74,6 @@ typedef idx_t storage_t;
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 DUCKDB_API bool IsRowIdColumnId(column_t column_id);
 
-struct LogicalIndex {
-	explicit LogicalIndex(idx_t index) : index(index) {
-	}
-
-	idx_t index;
-
-	inline bool operator==(const LogicalIndex &rhs) const {
-		return index == rhs.index;
-	};
-	inline bool operator!=(const LogicalIndex &rhs) const {
-		return index != rhs.index;
-	};
-};
-
-struct PhysicalIndex {
-	explicit PhysicalIndex(idx_t index) : index(index) {
-	}
-
-	idx_t index;
-
-	inline bool operator==(const PhysicalIndex &rhs) const {
-		return index == rhs.index;
-	};
-	inline bool operator!=(const PhysicalIndex &rhs) const {
-		return index != rhs.index;
-	};
-};
-
 //! The maximum row identifier used in tables
 extern const row_t MAX_ROW_ID;
 
@@ -130,6 +102,40 @@ struct Storage {
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
 	//! to the page size, which is 4KB. (1 << 12)
 	constexpr static int FILE_HEADER_SIZE = 4096;
+};
+
+struct LogicalIndex {
+	explicit LogicalIndex(idx_t index) : index(index) {
+	}
+
+	idx_t index;
+
+	inline bool operator==(const LogicalIndex &rhs) const {
+		return index == rhs.index;
+	};
+	inline bool operator!=(const LogicalIndex &rhs) const {
+		return index != rhs.index;
+	};
+	bool IsValid() {
+		return index != DConstants::INVALID_INDEX;
+	}
+};
+
+struct PhysicalIndex {
+	explicit PhysicalIndex(idx_t index) : index(index) {
+	}
+
+	idx_t index;
+
+	inline bool operator==(const PhysicalIndex &rhs) const {
+		return index == rhs.index;
+	};
+	inline bool operator!=(const PhysicalIndex &rhs) const {
+		return index != rhs.index;
+	};
+	bool IsValid() {
+		return index != DConstants::INVALID_INDEX;
+	}
 };
 
 uint64_t NextPowerOfTwo(uint64_t v);
