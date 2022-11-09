@@ -13,6 +13,7 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/stack.hpp"
+#include "duckdb/common/index_map.hpp"
 
 namespace duckdb {
 
@@ -27,39 +28,39 @@ public:
 
 public:
 	//! Get the bind order that ensures dependencies are resolved before dependents are
-	stack<column_t> GetBindOrder(const ColumnList &columns);
+	stack<LogicalIndex> GetBindOrder(const ColumnList &columns);
 
 	//! Adds a connection between the dependent and its dependencies
-	void AddGeneratedColumn(column_t index, const vector<column_t> &indices, bool root = true);
+	void AddGeneratedColumn(LogicalIndex index, const vector<LogicalIndex> &indices, bool root = true);
 	//! Add a generated column from a column definition
 	void AddGeneratedColumn(const ColumnDefinition &column, const ColumnList &list);
 
 	//! Removes the column(s) and outputs the new column indices
-	vector<column_t> RemoveColumn(column_t index, column_t column_amount);
+	vector<LogicalIndex> RemoveColumn(LogicalIndex index, idx_t column_amount);
 
-	bool IsDependencyOf(column_t dependent, column_t dependency) const;
-	bool HasDependencies(column_t index) const;
-	const unordered_set<column_t> &GetDependencies(column_t index) const;
+	bool IsDependencyOf(LogicalIndex dependent, LogicalIndex dependency) const;
+	bool HasDependencies(LogicalIndex index) const;
+	const logical_index_set_t &GetDependencies(LogicalIndex index) const;
 
-	bool HasDependents(column_t index) const;
-	const unordered_set<column_t> &GetDependents(column_t index) const;
+	bool HasDependents(LogicalIndex index) const;
+	const logical_index_set_t &GetDependents(LogicalIndex index) const;
 
 private:
-	void RemoveStandardColumn(column_t index);
-	void RemoveGeneratedColumn(column_t index);
+	void RemoveStandardColumn(LogicalIndex index);
+	void RemoveGeneratedColumn(LogicalIndex index);
 
-	void AdjustSingle(column_t idx, idx_t offset);
+	void AdjustSingle(LogicalIndex idx, idx_t offset);
 	// Clean up the gaps created by a Remove operation
-	vector<column_t> CleanupInternals(column_t column_amount);
+	vector<LogicalIndex> CleanupInternals(idx_t column_amount);
 
 private:
 	//! A map of column dependency to generated column(s)
-	unordered_map<column_t, unordered_set<column_t>> dependencies_map;
+	logical_index_map_t<logical_index_set_t> dependencies_map;
 	//! A map of generated column name to (potentially generated)column dependencies
-	unordered_map<column_t, unordered_set<column_t>> dependents_map;
+	logical_index_map_t<logical_index_set_t> dependents_map;
 	//! For resolve-order purposes, keep track of the 'direct' (not inherited) dependencies of a generated column
-	unordered_map<column_t, unordered_set<column_t>> direct_dependencies;
-	set<column_t> deleted_columns;
+	logical_index_map_t<logical_index_set_t> direct_dependencies;
+	logical_index_set_t deleted_columns;
 };
 
 } // namespace duckdb

@@ -229,18 +229,18 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
-	auto rename_idx = GetColumnIndex(info.old_name);
-	if (rename_idx == COLUMN_IDENTIFIER_ROW_ID) {
+	auto rename_idx = GetColumnIndexLogical(info.old_name);
+	if (rename_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot rename rowid column");
 	}
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 	for (auto &col : columns.Logical()) {
 		auto copy = col.Copy();
-		if (rename_idx == col.Oid()) {
+		if (rename_idx == col.Logical()) {
 			copy.SetName(info.new_name);
 		}
-		if (col.Generated() && column_dependency_manager.IsDependencyOf(col.Oid(), rename_idx)) {
+		if (col.Generated() && column_dependency_manager.IsDependencyOf(col.Logical(), rename_idx)) {
 			RenameExpression(copy.GeneratedExpressionMutable(), info);
 		}
 		create_info->columns.AddColumn(move(copy));
@@ -328,8 +328,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
-	auto removed_index = GetColumnIndex(info.removed_column, info.if_column_exists);
-	if (removed_index == DConstants::INVALID_INDEX) {
+	auto removed_index = GetColumnIndexLogical(info.removed_column, info.if_column_exists);
+	if (removed_index.index == DConstants::INVALID_INDEX) {
 		if (!info.if_column_exists) {
 			throw CatalogException("Cannot drop column: rowid column cannot be dropped");
 		}
@@ -339,7 +339,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 
-	unordered_set<column_t> removed_columns;
+	logical_index_set_t removed_columns;
 	if (column_dependency_manager.HasDependents(removed_index)) {
 		removed_columns = column_dependency_manager.GetDependents(removed_index);
 	}
@@ -347,7 +347,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
 	}
 	for (auto &col : columns.Logical()) {
-		if (col.Oid() == removed_index || removed_columns.count(col.Oid())) {
+		if (col.Logical() == removed_index || removed_columns.count(col.Logical())) {
 			continue;
 		}
 		create_info->columns.AddColumn(col.Copy());
@@ -364,12 +364,12 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null_constraint = (BoundNotNullConstraint &)*bound_constraint;
-			if (not_null_constraint.index.index != removed_index) {
+			auto not_null_index = columns.PhysicalToLogical(not_null_constraint.index);
+			if (not_null_index != removed_index) {
 				// the constraint is not about this column: we need to copy it
 				// we might need to shift the index back by one though, to account for the removed column
-				idx_t new_index = not_null_constraint.index.index;
-				new_index = adjusted_indices[new_index];
-				create_info->constraints.push_back(make_unique<NotNullConstraint>(LogicalIndex(new_index)));
+				auto new_index = adjusted_indices[not_null_index.index];
+				create_info->constraints.push_back(make_unique<NotNullConstraint>(new_index));
 			}
 			break;
 		}
@@ -377,7 +377,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			// CHECK constraint
 			auto &bound_check = (BoundCheckConstraint &)*bound_constraint;
 			// check if the removed column is part of the check constraint
-			if (bound_check.bound_columns.find(removed_index) != bound_check.bound_columns.end()) {
+			if (bound_check.bound_columns.find(removed_index.index) != bound_check.bound_columns.end()) {
 				if (bound_check.bound_columns.size() > 1) {
 					// CHECK constraint that concerns mult
 					throw CatalogException(
@@ -396,12 +396,12 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			auto copy = constraint->Copy();
 			auto &unique = (UniqueConstraint &)*copy;
 			if (unique.index.index != DConstants::INVALID_INDEX) {
-				if (unique.index.index == removed_index) {
+				if (unique.index == removed_index) {
 					throw CatalogException(
 					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
 					    info.removed_column);
 				}
-				unique.index.index = adjusted_indices[unique.index.index];
+				unique.index = adjusted_indices[unique.index.index];
 			}
 			create_info->constraints.push_back(move(copy));
 			break;
@@ -554,7 +554,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			copy.SetType(info.target_type);
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does
-		if (copy.Generated() && column_dependency_manager.IsDependencyOf(col.Oid(), change_idx.index)) {
+		if (copy.Generated() && column_dependency_manager.IsDependencyOf(col.Logical(), change_idx)) {
 			throw BinderException(
 			    "This column is referenced by the generated column \"%s\", so its type can not be changed",
 			    copy.Name());

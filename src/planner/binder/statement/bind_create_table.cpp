@@ -165,12 +165,12 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	D_ASSERT(table_binding && ignore.empty());
 
 	auto bind_order = info.column_dependency_manager.GetBindOrder(base.columns);
-	unordered_set<column_t> bound_indices;
+	logical_index_set_t bound_indices;
 
 	while (!bind_order.empty()) {
 		auto i = bind_order.top();
 		bind_order.pop();
-		auto &col = base.columns.GetColumnMutable(LogicalIndex(i));
+		auto &col = base.columns.GetColumnMutable(i);
 
 		//! Already bound this previously
 		//! This can not be optimized out of the GetBindOrder function
@@ -192,7 +192,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 			// Update the type in the binding, for future expansions
 			string ignore;
-			table_binding->types[i] = col.Type();
+			table_binding->types[i.index] = col.Type();
 		}
 		bound_indices.insert(i);
 	}
