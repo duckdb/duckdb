@@ -23,7 +23,6 @@
 
 #include <cctype>
 #include <cmath>
-#include <limits>
 #include <cstdlib>
 
 namespace duckdb {
