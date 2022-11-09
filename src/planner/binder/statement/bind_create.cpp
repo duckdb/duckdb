@@ -223,7 +223,8 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 	                      fk.info.table, fk_names);
 }
 
-static void FindForeignKeyIndexes(const ColumnList &columns, const vector<string> &names, vector<idx_t> &indexes) {
+static void FindForeignKeyIndexes(const ColumnList &columns, const vector<string> &names,
+                                  vector<PhysicalIndex> &indexes) {
 	D_ASSERT(indexes.empty());
 	D_ASSERT(!names.empty());
 	for (auto &name : names) {
@@ -235,19 +236,15 @@ static void FindForeignKeyIndexes(const ColumnList &columns, const vector<string
 			throw BinderException("Failed to create foreign key: referenced column \"%s\" is a generated column",
 			                      column.Name());
 		}
-		indexes.push_back(column.Oid());
+		indexes.push_back(column.Physical());
 	}
-}
-
-static const ColumnDefinition &FindColumnWithStorageOid(const ColumnList &columns, idx_t storage_oid) {
-	return columns.GetColumn(PhysicalIndex(storage_oid));
 }
 
 static void CheckForeignKeyTypes(const ColumnList &pk_columns, const ColumnList &fk_columns, ForeignKeyConstraint &fk) {
 	D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
 	for (idx_t c_idx = 0; c_idx < fk.info.pk_keys.size(); c_idx++) {
-		auto &pk_col = FindColumnWithStorageOid(pk_columns, fk.info.pk_keys[c_idx]);
-		auto &fk_col = FindColumnWithStorageOid(fk_columns, fk.info.fk_keys[c_idx]);
+		auto &pk_col = pk_columns.GetColumn(fk.info.pk_keys[c_idx]);
+		auto &fk_col = fk_columns.GetColumn(fk.info.fk_keys[c_idx]);
 		if (pk_col.Type() != fk_col.Type()) {
 			throw BinderException("Failed to create foreign key: incompatible types between column \"%s\" (\"%s\") and "
 			                      "column \"%s\" (\"%s\")",
@@ -299,8 +296,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 		}
 		case ConstraintType::NOT_NULL: {
 			auto &constraint = (NotNullConstraint &)*constr;
-			auto index = constraint.index;
-			if (table_info.columns.GetColumn(LogicalIndex(index)).Generated()) {
+			if (table_info.columns.GetColumn(constraint.index).Generated()) {
 				return true;
 			}
 			break;

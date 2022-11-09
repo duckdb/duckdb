@@ -114,14 +114,15 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 			         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 			         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
-			unordered_set<idx_t> fk_key_set, pk_key_set;
+			physical_index_set_t fk_key_set, pk_key_set;
 			for (idx_t i = 0; i < fk.info.pk_keys.size(); i++) {
 				pk_key_set.insert(fk.info.pk_keys[i]);
 			}
 			for (idx_t i = 0; i < fk.info.fk_keys.size(); i++) {
 				fk_key_set.insert(fk.info.fk_keys[i]);
 			}
-			info.bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(fk.info, pk_key_set, fk_key_set));
+			info.bound_constraints.push_back(
+			    make_unique<BoundForeignKeyConstraint>(fk.info, move(pk_key_set), move(fk_key_set)));
 			break;
 		}
 		default:

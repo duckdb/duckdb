@@ -35,6 +35,7 @@ public:
 
 	LogicalIndex GetColumnIndex(string &column_name) const;
 	PhysicalIndex LogicalToPhysical(LogicalIndex index) const;
+	LogicalIndex PhysicalToLogical(PhysicalIndex index) const;
 
 	idx_t LogicalColumnCount() const {
 		return columns.size();

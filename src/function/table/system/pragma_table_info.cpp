@@ -61,7 +61,8 @@ unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context,
 	return make_unique<PragmaTableOperatorData>();
 }
 
-static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &column, bool &out_not_null, bool &out_pk) {
+static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &column, bool &out_not_null,
+                             bool &out_pk) {
 	out_not_null = false;
 	out_pk = false;
 	// check all constraints

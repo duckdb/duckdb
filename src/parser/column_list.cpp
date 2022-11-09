@@ -103,7 +103,12 @@ PhysicalIndex ColumnList::LogicalToPhysical(LogicalIndex logical) const {
 	if (column.Generated()) {
 		throw InternalException("Column at position %d is not a physical column", logical.index);
 	}
-	return PhysicalIndex(column.StorageOid());
+	return column.Physical();
+}
+
+LogicalIndex ColumnList::PhysicalToLogical(PhysicalIndex index) const {
+	auto &column = GetColumn(index);
+	return column.Logical();
 }
 
 LogicalIndex ColumnList::GetColumnIndex(string &column_name) const {

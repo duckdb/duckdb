@@ -293,7 +293,7 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 	}
 }
 
-bool DataTable::IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type) {
+bool DataTable::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type) {
 	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !index.IsUnique() : !index.IsForeign()) {
 		return false;
 	}
@@ -303,7 +303,7 @@ bool DataTable::IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, Fo
 	for (auto &fk_key : fk_keys) {
 		bool is_found = false;
 		for (auto &index_key : index.column_ids) {
-			if (fk_key == index_key) {
+			if (fk_key.index == index_key) {
 				is_found = true;
 				break;
 			}
@@ -317,8 +317,8 @@ bool DataTable::IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, Fo
 
 static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
                                        bool is_append) {
-	const vector<idx_t> *src_keys_ptr = &bfk.info.fk_keys;
-	const vector<idx_t> *dst_keys_ptr = &bfk.info.pk_keys;
+	const vector<PhysicalIndex> *src_keys_ptr = &bfk.info.fk_keys;
+	const vector<PhysicalIndex> *dst_keys_ptr = &bfk.info.pk_keys;
 	if (!is_append) {
 		src_keys_ptr = &bfk.info.pk_keys;
 		dst_keys_ptr = &bfk.info.fk_keys;
@@ -332,13 +332,13 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 
 	// make the data chunk to check
 	vector<LogicalType> types;
-	for (auto &col : table_entry_ptr->columns.Logical()) {
+	for (auto &col : table_entry_ptr->columns.Physical()) {
 		types.emplace_back(col.Type());
 	}
 	DataChunk dst_chunk;
 	dst_chunk.InitializeEmpty(types);
 	for (idx_t i = 0; i < src_keys_ptr->size(); i++) {
-		dst_chunk.data[(*dst_keys_ptr)[i]].Reference(chunk.data[(*src_keys_ptr)[i]]);
+		dst_chunk.data[(*dst_keys_ptr)[i].index].Reference(chunk.data[(*src_keys_ptr)[i].index]);
 	}
 	dst_chunk.SetCardinality(chunk.size());
 	auto data_table = table_entry_ptr->storage.get();

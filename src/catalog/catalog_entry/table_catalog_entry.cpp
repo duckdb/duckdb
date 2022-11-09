@@ -52,25 +52,20 @@ column_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) 
 	return GetColumnIndexLogical(column_name, if_exists).index;
 }
 
-void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<LogicalIndex> &keys,
+void AddDataTableIndex(DataTable *storage, const ColumnList &columns, const vector<PhysicalIndex> &keys,
                        IndexConstraintType constraint_type, BlockPointer *index_block = nullptr) {
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> unbound_expressions;
 	vector<unique_ptr<Expression>> bound_expressions;
 	idx_t key_nr = 0;
-	for (auto &logical_key : keys) {
-		auto key = logical_key.index;
-		D_ASSERT(key < columns.size());
-		auto &column = columns[key];
-		if (column.Generated()) {
-			throw InvalidInputException("Creating index on generated column is not supported");
-		}
+	for (auto &physical_key : keys) {
+		auto &column = columns.GetColumn(physical_key);
+		D_ASSERT(!column.Generated());
+		unbound_expressions.push_back(
+		    make_unique<BoundColumnRefExpression>(column.Name(), column.Type(), ColumnBinding(0, column_ids.size())));
 
-		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(columns[key].Name(), columns[key].Type(),
-		                                                                    ColumnBinding(0, column_ids.size())));
-
-		bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].Type(), key_nr++));
+		bound_expressions.push_back(make_unique<BoundReferenceExpression>(column.Type(), key_nr++));
 		column_ids.push_back(column.StorageOid());
 	}
 	unique_ptr<ART> art;
@@ -88,11 +83,11 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 	storage->info->indexes.AddIndex(move(art));
 }
 
-void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<storage_t> &keys,
+void AddDataTableIndex(DataTable *storage, const ColumnList &columns, vector<LogicalIndex> &keys,
                        IndexConstraintType constraint_type, BlockPointer *index_block = nullptr) {
-	vector<LogicalIndex> new_keys;
-	for(idx_t i = 0; i < keys.size(); i++) {
-		new_keys.push_back(LogicalIndex(keys[i]));
+	vector<PhysicalIndex> new_keys;
+	for (auto &logical_key : keys) {
+		new_keys.push_back(columns.LogicalToPhysical(logical_key));
 	}
 	AddDataTableIndex(storage, columns, new_keys, constraint_type, index_block);
 }
@@ -107,12 +102,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	if (!storage) {
 		// create the physical storage
 		vector<ColumnDefinition> storage_columns;
-		vector<ColumnDefinition> get_columns;
-		for (auto &col_def : columns.Logical()) {
-			get_columns.push_back(col_def.Copy());
-			if (col_def.Generated()) {
-				continue;
-			}
+		for (auto &col_def : columns.Physical()) {
 			storage_columns.push_back(col_def.Copy());
 		}
 		storage =
@@ -131,9 +121,9 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 					constraint_type = IndexConstraintType::PRIMARY;
 				}
 				if (info->indexes.empty()) {
-					AddDataTableIndex(storage.get(), get_columns, unique.keys, constraint_type);
+					AddDataTableIndex(storage.get(), columns, unique.keys, constraint_type);
 				} else {
-					AddDataTableIndex(storage.get(), get_columns, unique.keys, constraint_type,
+					AddDataTableIndex(storage.get(), columns, unique.keys, constraint_type,
 					                  &info->indexes[indexes_idx++]);
 				}
 			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
@@ -142,9 +132,9 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 				    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 					if (info->indexes.empty()) {
-						AddDataTableIndex(storage.get(), get_columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN);
+						AddDataTableIndex(storage.get(), columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN);
 					} else {
-						AddDataTableIndex(storage.get(), get_columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN,
+						AddDataTableIndex(storage.get(), columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN,
 						                  &info->indexes[indexes_idx++]);
 					}
 				}
@@ -550,22 +540,21 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		auto &catalog = Catalog::GetCatalog(context);
 		info.target_type = catalog.GetType(context, schema->name, UserType::GetTypeName(info.target_type));
 	}
-	auto change_idx = GetColumnIndex(info.column_name);
+	auto change_idx = GetColumnIndexLogical(info.column_name);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 
 	for (auto &col : columns.Logical()) {
 		auto copy = col.Copy();
-		if (change_idx == col.Oid()) {
+		if (change_idx == col.Logical()) {
 			// set the type of this column
 			if (copy.Generated()) {
 				throw NotImplementedException("Changing types of generated columns is not supported yet");
-				// copy.ChangeGeneratedExpressionType(info.target_type);
 			}
 			copy.SetType(info.target_type);
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does
-		if (copy.Generated() && column_dependency_manager.IsDependencyOf(col.Oid(), change_idx)) {
+		if (copy.Generated() && column_dependency_manager.IsDependencyOf(col.Oid(), change_idx.index)) {
 			throw BinderException(
 			    "This column is referenced by the generated column \"%s\", so its type can not be changed",
 			    copy.Name());
@@ -578,7 +567,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		switch (constraint->type) {
 		case ConstraintType::CHECK: {
 			auto &bound_check = (BoundCheckConstraint &)*bound_constraints[i];
-			if (bound_check.bound_columns.find(change_idx) != bound_check.bound_columns.end()) {
+			if (bound_check.bound_columns.find(change_idx.index) != bound_check.bound_columns.end()) {
 				throw BinderException("Cannot change the type of a column that has a CHECK constraint specified");
 			}
 			break;
@@ -587,7 +576,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			break;
 		case ConstraintType::UNIQUE: {
 			auto &bound_unique = (BoundUniqueConstraint &)*bound_constraints[i];
-			if (bound_unique.key_set.find(LogicalIndex(change_idx)) != bound_unique.key_set.end()) {
+			if (bound_unique.key_set.find(change_idx) != bound_unique.key_set.end()) {
 				throw BinderException(
 				    "Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
 			}
@@ -595,7 +584,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		}
 		case ConstraintType::FOREIGN_KEY: {
 			auto &bfk = (BoundForeignKeyConstraint &)*bound_constraints[i];
-			unordered_set<idx_t> key_set = bfk.pk_key_set;
+			auto key_set = bfk.pk_key_set;
 			if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				key_set = bfk.fk_key_set;
 			} else if (bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
@@ -603,7 +592,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 					key_set.insert(bfk.info.fk_keys[i]);
 				}
 			}
-			if (key_set.find(change_idx) != key_set.end()) {
+			if (key_set.find(columns.LogicalToPhysical(change_idx)) != key_set.end()) {
 				throw BinderException("Cannot change the type of a column that has a FOREIGN KEY constraint specified");
 			}
 			break;

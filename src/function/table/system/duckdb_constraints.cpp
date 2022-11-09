@@ -193,8 +193,8 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				const auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
 				const auto &info = bound_foreign_key.info;
 				vector<LogicalIndex> index;
-				for(auto &key : info.pk_keys) {
-					index.push_back(LogicalIndex(key));
+				for (auto &key : info.pk_keys) {
+					index.push_back(table.columns.PhysicalToLogical(key));
 				}
 				uk_info = {info.schema, info.table, index};
 				if (uk_info.schema.empty()) {
@@ -238,31 +238,31 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 			output.SetValue(7, count, expression_text);
 
-			vector<column_t> column_index_list;
+			vector<LogicalIndex> column_index_list;
 			switch (bound_constraint.type) {
 			case ConstraintType::CHECK: {
 				auto &bound_check = (BoundCheckConstraint &)bound_constraint;
 				for (auto &col_idx : bound_check.bound_columns) {
-					column_index_list.push_back(col_idx);
+					column_index_list.push_back(LogicalIndex(col_idx));
 				}
 				break;
 			}
 			case ConstraintType::UNIQUE: {
 				auto &bound_unique = (BoundUniqueConstraint &)bound_constraint;
 				for (auto &col_idx : bound_unique.keys) {
-					column_index_list.push_back(col_idx.index);
+					column_index_list.push_back(col_idx);
 				}
 				break;
 			}
 			case ConstraintType::NOT_NULL: {
 				auto &bound_not_null = (BoundNotNullConstraint &)bound_constraint;
-				column_index_list.push_back(bound_not_null.index.index);
+				column_index_list.push_back(table.columns.PhysicalToLogical(bound_not_null.index));
 				break;
 			}
 			case ConstraintType::FOREIGN_KEY: {
 				auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
 				for (auto &col_idx : bound_foreign_key.info.fk_keys) {
-					column_index_list.push_back(column_t(col_idx));
+					column_index_list.push_back(table.columns.PhysicalToLogical(col_idx));
 				}
 				break;
 			}
@@ -273,8 +273,8 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			vector<Value> index_list;
 			vector<Value> column_name_list;
 			for (auto column_index : column_index_list) {
-				index_list.push_back(Value::BIGINT(column_index));
-				column_name_list.emplace_back(table.columns.GetColumn(LogicalIndex(column_index)).Name());
+				index_list.push_back(Value::BIGINT(column_index.index));
+				column_name_list.emplace_back(table.columns.GetColumn(column_index).Name());
 			}
 
 			// constraint_column_indexes, LIST
