@@ -1,5 +1,6 @@
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

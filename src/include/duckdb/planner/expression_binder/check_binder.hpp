@@ -11,6 +11,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/index_map.hpp"
+#include "duckdb/parser/column_list.hpp"
 
 namespace duckdb {
 //! The CHECK binder is responsible for binding an expression within a CHECK constraint

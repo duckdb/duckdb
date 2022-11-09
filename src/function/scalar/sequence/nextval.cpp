@@ -13,7 +13,7 @@
 namespace duckdb {
 
 struct NextvalBindData : public FunctionData {
-	NextvalBindData(SequenceCatalogEntry *sequence) : sequence(sequence) {
+	explicit NextvalBindData(SequenceCatalogEntry *sequence) : sequence(sequence) {
 	}
 
 	//! The sequence to use for the nextval computation; only if the sequence is a constant
