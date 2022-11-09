@@ -499,6 +499,11 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
+OptimisticDataWriter *DataTable::CreateOptimisticWriter(ClientContext &context) {
+	auto &local_storage = LocalStorage::Get(context);
+	return local_storage.CreateOptimisticWriter(this);
+}
+
 void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
 	auto &local_storage = LocalStorage::Get(context);
 	local_storage.LocalMerge(this, collection);
@@ -568,14 +573,22 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 			break;
 		}
 		idx_t end_row = current_row + chunk.size();
+		// start of chunk is current_row
+		// end of chunk is end_row
 		// figure out if we need to write the entire chunk or just part of it
 		idx_t chunk_start = MaxValue<idx_t>(current_row, row_start);
 		idx_t chunk_end = MinValue<idx_t>(end_row, end);
 		D_ASSERT(chunk_start < chunk_end);
 		idx_t chunk_count = chunk_end - chunk_start;
 		if (chunk_count != chunk.size()) {
+			D_ASSERT(chunk_count <= chunk.size());
 			// need to slice the chunk before insert
-			auto start_in_chunk = chunk_start % STANDARD_VECTOR_SIZE;
+			idx_t start_in_chunk;
+			if (current_row >= row_start) {
+				start_in_chunk = 0;
+			} else {
+				start_in_chunk = row_start - current_row;
+			}
 			SelectionVector sel(start_in_chunk, chunk_count);
 			chunk.Slice(sel, chunk_count);
 			chunk.Verify();

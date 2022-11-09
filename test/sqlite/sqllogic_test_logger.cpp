@@ -260,4 +260,13 @@ void SQLLogicTestLogger::UnexpectedStatement(bool expect_ok, MaterializedQueryRe
 	result.Print();
 }
 
+void SQLLogicTestLogger::ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result) {
+	PrintErrorHeader("Query failed, but error message did not match expected error message: " + expected_error);
+	PrintLineSep();
+	PrintSQL();
+	PrintHeader("Actual result:");
+	PrintLineSep();
+	result.Print();
+}
+
 } // namespace duckdb

@@ -142,7 +142,6 @@ SELECT * FROM test LIMIT 30% OFFSET RANDOM() / 10.0;
 
 statement ok
 SELECT b FROM test LIMIT 0%
-----
 
 #Subqueries that return negative values
 statement error
@@ -228,3 +227,16 @@ SELECT * FROM integers as int LIMIT (SELECT max(integers.i) FROM integers where 
 3
 4
 5
+
+# unions are usually executed in parallel, and kept in order using batch indices
+# limit percent is not a parallel sink, and does not support batch indices
+# this tests that the order is still preserved
+loop i 0 10
+
+query T
+select 1 union all select 2 union all select 3 union all select 4 limit 50%
+----
+1
+2
+
+endloop

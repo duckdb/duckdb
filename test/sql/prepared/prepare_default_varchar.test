@@ -139,8 +139,6 @@ time: 27
 
 statement error
 EXECUTE v7('hello world', [1, 2, 3])
-----
-hello world: [1, 2, 3]
 
 # unbound parameter with lists
 statement ok

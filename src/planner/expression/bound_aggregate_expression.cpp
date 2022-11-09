@@ -11,22 +11,22 @@ namespace duckdb {
 
 BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, vector<unique_ptr<Expression>> children,
                                                    unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
-                                                   bool distinct)
+                                                   AggregateType aggr_type)
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.return_type),
-      function(move(function)), children(move(children)), bind_info(move(bind_info)), distinct(distinct),
+      function(move(function)), children(move(children)), bind_info(move(bind_info)), aggr_type(aggr_type),
       filter(move(filter)) {
 	D_ASSERT(!function.name.empty());
 }
 
 string BoundAggregateExpression::ToString() const {
 	return FunctionExpression::ToString<BoundAggregateExpression, Expression>(*this, string(), function.name, false,
-	                                                                          distinct, filter.get());
+	                                                                          IsDistinct(), filter.get());
 }
 
 hash_t BoundAggregateExpression::Hash() const {
 	hash_t result = Expression::Hash();
 	result = CombineHash(result, function.Hash());
-	result = CombineHash(result, duckdb::Hash(distinct));
+	result = CombineHash(result, duckdb::Hash(IsDistinct()));
 	return result;
 }
 
@@ -35,7 +35,7 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_p) const {
 		return false;
 	}
 	auto other = (BoundAggregateExpression *)other_p;
-	if (other->distinct != distinct) {
+	if (other->aggr_type != aggr_type) {
 		return false;
 	}
 	if (other->function != function) {
@@ -71,13 +71,13 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	auto new_bind_info = bind_info ? bind_info->Copy() : nullptr;
 	auto new_filter = filter ? filter->Copy() : nullptr;
 	auto copy = make_unique<BoundAggregateExpression>(function, move(new_children), move(new_filter),
-	                                                  move(new_bind_info), distinct);
+	                                                  move(new_bind_info), aggr_type);
 	copy->CopyProperties(*this);
 	return move(copy);
 }
 
 void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteField(distinct);
+	writer.WriteField(IsDistinct());
 	writer.WriteOptional(filter);
 	FunctionSerializer::Serialize<AggregateFunction>(writer, function, return_type, children, bind_info.get());
 }
@@ -91,7 +91,8 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeseriali
 	auto function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
 	    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
 
-	return make_unique<BoundAggregateExpression>(function, move(children), move(filter), move(bind_info), distinct);
+	return make_unique<BoundAggregateExpression>(function, move(children), move(filter), move(bind_info),
+	                                             distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 }
 
 } // namespace duckdb

@@ -44,11 +44,11 @@ statement error
 SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM integers UNION ALL SELECT MIN(i::DATE) FROM integers UNION ALL SELECT MAX(i::DATE) FROM integers;
 
 # errors are properly cleared
-query R
+query R sort
 SELECT * FROM v1 t1 JOIN v1 t2 USING (i);
 ----
-6.000000
-2.000000
 1.000000
+2.000000
 3.000000
+6.000000
 

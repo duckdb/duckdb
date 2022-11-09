@@ -2,6 +2,7 @@
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/function/replacement_open.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/error_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
@@ -36,7 +37,8 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);
 		}
-		filename = fs.JoinPath(local_path, extension + ".duckdb_extension");
+		string extension_name = ApplyExtensionAlias(extension);
+		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 	}
 
 	if (!fs.FileExists(filename)) {
@@ -69,10 +71,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 			}
 		}
 		if (!any_valid && !config.options.allow_unsigned_extensions) {
-			throw IOException(
-			    "Extension \"%s\" could not be loaded because its signature is either missing or "
-			    "invalid and unsigned extensions are disabled by configuration (allow_unsigned_extensions)",
-			    filename);
+			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
 	}
 	auto lib_hdl = dlopen(filename.c_str(), RTLD_NOW | RTLD_LOCAL);

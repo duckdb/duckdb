@@ -34,8 +34,6 @@ FROM quantiles
 
 statement error
 SELECT quantile_cont(interval (r/100) second, [0.25, 0.5, 0.75]) FROM quantiles
-----
-[00:16:39, 01:23:19, 02:29:59]
 
 # single GROUP
 query R

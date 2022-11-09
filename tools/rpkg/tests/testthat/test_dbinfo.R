@@ -1,6 +1,6 @@
 test_that("dbGetInfo returns something meaningful", {
   dbdir <- tempfile()
-  drv <- duckdb::duckdb(dbdir)
+  drv <- duckdb(dbdir)
 
   info_drv <- dbGetInfo(drv)
   expect_equal(info_drv$dbname, dbdir)

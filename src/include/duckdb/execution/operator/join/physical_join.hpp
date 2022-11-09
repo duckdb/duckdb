@@ -29,9 +29,8 @@ public:
 	                                    bool has_null);
 
 public:
-	static void BuildJoinPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state,
-	                               PhysicalOperator &op);
-	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
+	static void BuildJoinPipelines(Pipeline &current, MetaPipeline &confluent_pipelines, PhysicalOperator &op);
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	vector<const PhysicalOperator *> GetSources() const override;
 
 	bool IsOrderPreserving() const override {

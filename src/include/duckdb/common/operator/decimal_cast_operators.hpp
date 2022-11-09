@@ -353,7 +353,7 @@ bool TryCastFromDecimal::Operation(hugeint_t input, double &result, string *erro
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
-// Cast Decimal -> VARCHAR
+// Cast Decimal <-> VARCHAR
 //===--------------------------------------------------------------------===//
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(string_t input, int16_t &result, string *error_message, uint8_t width,

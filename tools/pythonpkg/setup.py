@@ -62,6 +62,9 @@ extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'e
 if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts', 'tpch', 'json', 'excel']
 
+if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
+    extensions.append('jemalloc')
+
 unity_build = 0
 if 'DUCKDB_BUILD_UNITY' in os.environ:
     unity_build = 16
@@ -102,7 +105,7 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 if os.name == 'nt':
     # windows:
-    toolchain_args = ['/wd4244', '/wd4267', '/wd4200', '/wd26451', '/wd26495', '/D_CRT_SECURE_NO_WARNINGS']
+    toolchain_args = ['/wd4244', '/wd4267', '/wd4200', '/wd26451', '/wd26495', '/D_CRT_SECURE_NO_WARNINGS', '/utf-8']
 else:
     # macos/linux
     toolchain_args = ['-std=c++11', '-g0']
