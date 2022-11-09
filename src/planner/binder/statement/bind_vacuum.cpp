@@ -37,6 +37,9 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 				throw BinderException("Vacuum the same column twice(same name in column name list)");
 			}
 			column_name_set.insert(col_name);
+			if (!ref->table->ColumnExists(col_name)) {
+				throw BinderException("Column with name \"%s\" does not exist", col_name);
+			}
 			auto &col = ref->table->GetColumn(col_name);
 			// ignore generated column
 			if (col.Generated()) {
