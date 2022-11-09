@@ -123,7 +123,7 @@ public:
 	//! Returns a materialized set of all of the rows in the column data collection
 	//! Note that usage of this is slow - avoid using this unless the amount of rows is small, or if you do not care
 	//! about performance
-	DUCKDB_API ColumnDataRowCollection GetRows(ColumnDataScanState &scan_state) const;
+	DUCKDB_API ColumnDataRowCollection GetRows() const;
 
 	//! Compare two column data collections to another. If they are equal according to result equality rules,
 	//! return true. That means null values are equal, and approx equality is used for floating point values.
@@ -167,7 +167,7 @@ private:
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
 class ColumnDataRowCollection {
 public:
-	DUCKDB_API ColumnDataRowCollection(const ColumnDataCollection &collection, ColumnDataScanState &scan_state);
+	DUCKDB_API ColumnDataRowCollection(const ColumnDataCollection &collection);
 
 public:
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
@@ -206,6 +206,7 @@ public:
 private:
 	vector<ColumnDataRow> rows;
 	vector<unique_ptr<DataChunk>> chunks;
+	ColumnDataScanState scan_state;
 };
 
 } // namespace duckdb

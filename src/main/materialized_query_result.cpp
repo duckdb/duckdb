@@ -41,7 +41,7 @@ string MaterializedQueryResult::ToString() {
 
 Value MaterializedQueryResult::GetValue(idx_t column, idx_t index) {
 	if (!row_collection) {
-		row_collection = make_unique<ColumnDataRowCollection>(collection->GetRows(row_scan_state));
+		row_collection = make_unique<ColumnDataRowCollection>(collection->GetRows());
 	}
 	return row_collection->GetValue(column, index);
 }

@@ -399,8 +399,7 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 		}
 	}
 
-	ColumnDataScanState scan_state;
-	auto rows = top_collection.GetRows(scan_state);
+	auto rows = top_collection.GetRows();
 	for (idx_t r = 0; r < top_rows; r++) {
 		for (idx_t c = 0; c < column_count; c++) {
 			auto column_idx = column_map[c];
@@ -419,8 +418,7 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 	if (bottom_rows > 0) {
 		// render the bottom rows
 		// first render the divider
-		ColumnDataScanState bottom_row_scan_state;
-		auto brows = bottom_collection.GetRows(bottom_row_scan_state);
+		auto brows = bottom_collection.GetRows();
 		for (idx_t k = 0; k < 3; k++) {
 			for (idx_t c = 0; c < column_count; c++) {
 				auto column_idx = column_map[c];
