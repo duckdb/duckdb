@@ -30,6 +30,7 @@ static void RandomFunction(DataChunk &args, ExpressionState &state, Vector &resu
 static unique_ptr<FunctionLocalState> RandomInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
                                                            FunctionData *bind_data) {
 	auto &random_engine = RandomEngine::Get(state.GetContext());
+	lock_guard<mutex> guard(random_engine.lock);
 	return make_unique<RandomLocalState>(random_engine.NextRandomInteger());
 }
 

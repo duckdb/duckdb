@@ -25,24 +25,37 @@ static TableCatalogEntry *GetCatalogTableEntry(LogicalOperator *op) {
 	return nullptr;
 }
 
-bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
-	if (filter_info->left_set && filter_info->right_set) {
-		// Both set
-		return false;
+// The filter was made on top of a logical sample or other projection,
+// but no specific columns are referenced. See issue 4978 number 4.
+bool CardinalityEstimator::EmptyFilter(FilterInfo *filter_info) {
+	if (!filter_info->left_set && !filter_info->right_set) {
+		return true;
 	}
-	// Filter on one relation, (i.e string or range filter on a column).
-	// Grab the first relation and add it to the the equivalence_relations
+	return false;
+}
+
+void CardinalityEstimator::AddRelationTdom(FilterInfo *filter_info) {
 	D_ASSERT(filter_info->set->count >= 1);
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(filter_info->left_binding) != i_set.end()) {
 			// found an equivalent filter
-			return true;
+			return;
 		}
 	}
 	auto key = ColumnBinding(filter_info->left_binding.table_index, filter_info->left_binding.column_index);
 	column_binding_set_t tmp({key});
 	relations_to_tdoms.emplace_back(RelationsToTDom(tmp));
+}
+
+bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
+	if (filter_info->left_set && filter_info->right_set) {
+		// Both set
+		return false;
+	}
+	if (EmptyFilter(filter_info)) {
+		return false;
+	}
 	return true;
 }
 
@@ -109,6 +122,11 @@ void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>
 	// the left and right relation needs to be added to.
 	for (auto &filter : *filter_infos) {
 		if (SingleColumnFilter(filter.get())) {
+			// Filter on one relation, (i.e string or range filter on a column).
+			// Grab the first relation and add it to  the equivalence_relations
+			AddRelationTdom(filter.get());
+			continue;
+		} else if (EmptyFilter(filter.get())) {
 			continue;
 		}
 		D_ASSERT(filter->left_set->count >= 1);
@@ -192,7 +210,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 	// left and right relations are in the new set, if so you can use that filter.
 	// You must also make sure that the filters all relations in the given set, so we use subgraphs
 	// that should eventually merge into one connected graph that joins all the relations
-	// TODO: Don't implement a method to cache subgraphs so you don't have to build them up every
+	// TODO: Implement a method to cache subgraphs so you don't have to build them up every
 	// time the cardinality of a new set is requested
 
 	// relations_to_tdoms has already been sorted.

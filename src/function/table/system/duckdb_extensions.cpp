@@ -16,6 +16,7 @@ struct ExtensionInformation {
 	bool installed = false;
 	string file_path;
 	string description;
+	vector<Value> aliases;
 };
 
 struct DuckDBExtensionsData : public GlobalTableFunctionState {
@@ -43,6 +44,9 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 	names.emplace_back("description");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("aliases");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
 	return nullptr;
 }
 
@@ -54,6 +58,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 
 	map<string, ExtensionInformation> installed_extensions;
 	auto extension_count = ExtensionHelper::DefaultExtensionCount();
+	auto alias_count = ExtensionHelper::ExtensionAliasCount();
 	for (idx_t i = 0; i < extension_count; i++) {
 		auto extension = ExtensionHelper::GetDefaultExtension(i);
 		ExtensionInformation info;
@@ -62,6 +67,12 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		info.loaded = false;
 		info.file_path = extension.statically_loaded ? "(BUILT-IN)" : string();
 		info.description = extension.description;
+		for (idx_t k = 0; k < alias_count; k++) {
+			auto alias = ExtensionHelper::GetExtensionAlias(k);
+			if (alias.extension == extension.name) {
+				info.aliases.emplace_back(alias.alias);
+			}
+		}
 		installed_extensions[info.name] = move(info);
 	}
 
@@ -130,6 +141,8 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		output.SetValue(3, count, Value(entry.file_path));
 		// description LogicalType::VARCHAR
 		output.SetValue(4, count, Value(entry.description));
+		// aliases     LogicalType::LIST(LogicalType::VARCHAR)
+		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
 
 		data.offset++;
 		count++;

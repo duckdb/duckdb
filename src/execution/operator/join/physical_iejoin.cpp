@@ -8,6 +8,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -1001,33 +1002,31 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalIEJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	D_ASSERT(children.size() == 2);
-	if (state.recursive_cte) {
+	if (meta_pipeline.HasRecursiveCTE()) {
 		throw NotImplementedException("IEJoins are not supported in recursive CTEs yet");
 	}
 
-	// Build the LHS
-	auto lhs_pipeline = make_shared<Pipeline>(executor);
-	state.SetPipelineSink(*lhs_pipeline, this);
-	D_ASSERT(children[0].get());
-	children[0]->BuildPipelines(executor, *lhs_pipeline, state);
+	// becomes a source after both children fully sink their data
+	meta_pipeline.GetState().SetPipelineSource(current, this);
 
-	// Build the RHS
-	auto rhs_pipeline = make_shared<Pipeline>(executor);
-	state.SetPipelineSink(*rhs_pipeline, this);
-	D_ASSERT(children[1].get());
-	children[1]->BuildPipelines(executor, *rhs_pipeline, state);
+	// Create one child meta pipeline that will hold the LHS and RHS pipelines
+	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
+	auto lhs_pipeline = child_meta_pipeline->GetBasePipeline();
+	auto rhs_pipeline = child_meta_pipeline->CreatePipeline();
 
-	// RHS => LHS => current
-	current.AddDependency(rhs_pipeline);
-	rhs_pipeline->AddDependency(lhs_pipeline);
+	// Build out LHS
+	children[0]->BuildPipelines(*lhs_pipeline, *child_meta_pipeline);
 
-	state.AddPipeline(executor, move(lhs_pipeline));
-	state.AddPipeline(executor, move(rhs_pipeline));
+	// RHS depends on everything in LHS
+	child_meta_pipeline->AddDependenciesFrom(rhs_pipeline, lhs_pipeline.get(), true);
 
-	// Now build both and scan
-	state.SetPipelineSource(current, this);
+	// Build out RHS
+	children[1]->BuildPipelines(*rhs_pipeline, *child_meta_pipeline);
+
+	// Despite having the same sink, RHS needs its own PipelineFinishEvent
+	child_meta_pipeline->AddFinishEvent(rhs_pipeline);
 }
 
 } // namespace duckdb

@@ -255,10 +255,10 @@ public:
 		if (!current_collection) {
 			return;
 		}
-		if (!written_to_disk || current_collection->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
+		if (!written_to_disk && current_collection->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
 			return;
 		}
-		writer->FlushToDisk(*current_collection);
+		writer->FlushToDisk(*current_collection, true);
 	}
 
 	void CreateNewCollection(TableCatalogEntry *table, const vector<LogicalType> &insert_types) {
@@ -307,7 +307,6 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		lstate.FlushToDisk();
-
 		gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection), lstate.writer,
 		                     &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);

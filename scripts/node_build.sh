@@ -11,7 +11,7 @@ make clean
 
 npm install --build-from-source --target_arch="$TARGET_ARCH"
 
-./node_modules/.bin/node-pre-gyp reveal
+./node_modules/.bin/node-pre-gyp reveal --target_arch="$TARGET_ARCH"
 
 if [[ "$TARGET_ARCH" != "arm64" ]] ; then
   npm test
