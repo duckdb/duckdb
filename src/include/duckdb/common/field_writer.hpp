@@ -203,15 +203,15 @@ public:
 		return source.Read<T>();
 	}
 
-	template <class T>
-	vector<T> ReadRequiredList() {
+	template <class T, class CONTAINER_TYPE = vector<T>>
+	CONTAINER_TYPE ReadRequiredList() {
 		if (field_count >= max_field_count) {
 			// field is not there, throw an exception
 			throw SerializationException("Attempting to read a required field, but field is missing");
 		}
 		AddField();
 		auto result_count = source.Read<uint32_t>();
-		vector<T> result;
+		CONTAINER_TYPE result;
 		result.reserve(result_count);
 		for (idx_t i = 0; i < result_count; i++) {
 			result.push_back(source.Read<T>());

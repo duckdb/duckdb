@@ -13,7 +13,8 @@
 
 namespace duckdb {
 
-PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
+PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table,
+                               physical_index_vector_t<idx_t> column_index_map,
                                vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
                                bool return_chunk, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
@@ -87,7 +88,8 @@ unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &c
 	return make_unique<InsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
-void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk, const vector<idx_t> &column_index_map,
+void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
+                                     const physical_index_vector_t<idx_t> &column_index_map,
                                      ExpressionExecutor &default_executor, DataChunk &result) {
 	chunk.Flatten();
 	default_executor.SetChunk(chunk);
@@ -99,15 +101,15 @@ void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 		// columns specified by the user, use column_index_map
 		for (auto &col : table->columns.Physical()) {
 			auto storage_idx = col.StorageOid();
-			auto mapped_index = column_index_map[storage_idx];
+			auto mapped_index = column_index_map[col.Physical()];
 			if (mapped_index == DConstants::INVALID_INDEX) {
 				// insert default value
 				default_executor.ExecuteExpression(storage_idx, result.data[storage_idx]);
 			} else {
 				// get value from child chunk
-				D_ASSERT((idx_t)column_index_map[storage_idx] < chunk.ColumnCount());
-				D_ASSERT(result.data[storage_idx].GetType() == chunk.data[column_index_map[storage_idx]].GetType());
-				result.data[storage_idx].Reference(chunk.data[column_index_map[storage_idx]]);
+				D_ASSERT((idx_t)mapped_index < chunk.ColumnCount());
+				D_ASSERT(result.data[storage_idx].GetType() == chunk.data[mapped_index].GetType());
+				result.data[storage_idx].Reference(chunk.data[mapped_index]);
 			}
 		}
 	} else {

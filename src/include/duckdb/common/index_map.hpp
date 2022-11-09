@@ -13,7 +13,6 @@
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
-class Expression;
 
 struct LogicalIndexHashFunction {
 	uint64_t operator()(const LogicalIndex &index) const {
