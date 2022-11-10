@@ -110,11 +110,21 @@ ConfigurationOption *DBConfig::GetOptionByName(const string &name) {
 }
 
 void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) {
+	SetOption(nullptr, option, value);
+}
+
+void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {
+	lock_guard<mutex> l(config_lock);
 	if (!option.set_global) {
 		throw InternalException("Could not set option \"%s\" as a global option", option.name);
 	}
 	Value input = value.DefaultCastAs(option.parameter_type);
-	option.set_global(nullptr, *this, input);
+	option.set_global(db, *this, input);
+}
+
+void DBConfig::SetOption(const string &name, Value value) {
+	lock_guard<mutex> l(config_lock);
+	options.set_variables[name] = move(value);
 }
 
 void DBConfig::AddExtensionOption(string name, string description, LogicalType parameter,
