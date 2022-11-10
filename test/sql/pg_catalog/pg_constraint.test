@@ -17,7 +17,7 @@ insert into a (id) values (0);
 statement ok
 insert into b (id, foreign_a) VALUES (0, 0);
 
-query IIIIIIIIIIIIIIIIIIIIIIIII
+query IIIIIIIIIIIIIIIIIIIIIIII
 SELECT * EXCLUDE OID FROM pg_catalog.pg_constraint
 ----
 PRIMARY KEY(id)								1	p	false	false	true	866	0	0	0	0	NULL	NULL	NULL	true	0	false	[0]	NULL	NULL	NULL	NULL	NULL	NULL
