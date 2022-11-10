@@ -18,7 +18,7 @@ PRAGMA enable_verification
 query I
 select strptime('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g %Z');
 ----
-2022-03-05 15:59:17.877 America/Los_Angeles
+2022-03-05 15:59:17.877-08
 
 # NULLs
 query I
@@ -57,44 +57,44 @@ SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z'
 FROM zones
 ORDER BY tstz
 ----
-2022-03-04 19:59:17.877 America/Los_Angeles	Etc/GMT-14
-2022-03-04 20:14:17.877 America/Los_Angeles	NZ-CHAT
-2022-03-04 20:59:17.877 America/Los_Angeles	Pacific/Auckland
-2022-03-04 20:59:17.877 America/Los_Angeles	Pacific/Enderbury
-2022-03-04 22:59:17.877 America/Los_Angeles	Australia/Melbourne
-2022-03-04 22:59:17.877 America/Los_Angeles	Australia/LHI
-2022-03-04 22:59:17.877 America/Los_Angeles	Pacific/Efate
-2022-03-05 00:29:17.877 America/Los_Angeles	Australia/Darwin
-2022-03-05 00:59:17.877 America/Los_Angeles	Asia/Tokyo
-2022-03-05 01:14:17.877 America/Los_Angeles	Australia/Eucla
-2022-03-05 01:59:17.877 America/Los_Angeles	Asia/Shanghai
-2022-03-05 02:59:17.877 America/Los_Angeles	Asia/Novosibirsk
-2022-03-05 03:29:17.877 America/Los_Angeles	Asia/Yangon
-2022-03-05 03:59:17.877 America/Los_Angeles	Asia/Omsk
-2022-03-05 04:14:17.877 America/Los_Angeles	Asia/Kathmandu
-2022-03-05 04:29:17.877 America/Los_Angeles	Asia/Colombo
-2022-03-05 04:59:17.877 America/Los_Angeles	Asia/Oral
-2022-03-05 05:29:17.877 America/Los_Angeles	Asia/Kabul
-2022-03-05 05:59:17.877 America/Los_Angeles	Europe/Astrakhan
-2022-03-05 06:29:17.877 America/Los_Angeles	Asia/Tehran
-2022-03-05 06:59:17.877 America/Los_Angeles	Asia/Kuwait
-2022-03-05 07:59:17.877 America/Los_Angeles	Asia/Nicosia
-2022-03-05 08:59:17.877 America/Los_Angeles	Europe/Budapest
-2022-03-05 09:59:17.877 America/Los_Angeles	Etc/GMT-0
-2022-03-05 10:59:17.877 America/Los_Angeles	Atlantic/Azores
-2022-03-05 11:59:17.877 America/Los_Angeles	Atlantic/South_Georgia
-2022-03-05 12:59:17.877 America/Los_Angeles	America/Cordoba
-2022-03-05 13:29:17.877 America/Los_Angeles	CNT
-2022-03-05 13:59:17.877 America/Los_Angeles	America/Martinique
-2022-03-05 14:59:17.877 America/Los_Angeles	America/Louisville
-2022-03-05 15:59:17.877 America/Los_Angeles	America/Rainy_River
-2022-03-05 16:59:17.877 America/Los_Angeles	America/Whitehorse
-2022-03-05 17:59:17.877 America/Los_Angeles	Mexico/BajaNorte
-2022-03-05 18:59:17.877 America/Los_Angeles	America/Sitka
-2022-03-05 19:29:17.877 America/Los_Angeles	Pacific/Marquesas
-2022-03-05 19:59:17.877 America/Los_Angeles	Pacific/Johnston
-2022-03-05 20:59:17.877 America/Los_Angeles	Pacific/Niue
-2022-03-05 21:59:17.877 America/Los_Angeles	Etc/GMT+12
+2022-03-04 19:59:17.877-08	Etc/GMT-14
+2022-03-04 20:14:17.877-08	NZ-CHAT
+2022-03-04 20:59:17.877-08	Pacific/Auckland
+2022-03-04 20:59:17.877-08	Pacific/Enderbury
+2022-03-04 22:59:17.877-08	Australia/Melbourne
+2022-03-04 22:59:17.877-08	Australia/LHI
+2022-03-04 22:59:17.877-08	Pacific/Efate
+2022-03-05 00:29:17.877-08	Australia/Darwin
+2022-03-05 00:59:17.877-08	Asia/Tokyo
+2022-03-05 01:14:17.877-08	Australia/Eucla
+2022-03-05 01:59:17.877-08	Asia/Shanghai
+2022-03-05 02:59:17.877-08	Asia/Novosibirsk
+2022-03-05 03:29:17.877-08	Asia/Yangon
+2022-03-05 03:59:17.877-08	Asia/Omsk
+2022-03-05 04:14:17.877-08	Asia/Kathmandu
+2022-03-05 04:29:17.877-08	Asia/Colombo
+2022-03-05 04:59:17.877-08	Asia/Oral
+2022-03-05 05:29:17.877-08	Asia/Kabul
+2022-03-05 05:59:17.877-08	Europe/Astrakhan
+2022-03-05 06:29:17.877-08	Asia/Tehran
+2022-03-05 06:59:17.877-08	Asia/Kuwait
+2022-03-05 07:59:17.877-08	Asia/Nicosia
+2022-03-05 08:59:17.877-08	Europe/Budapest
+2022-03-05 09:59:17.877-08	Etc/GMT-0
+2022-03-05 10:59:17.877-08	Atlantic/Azores
+2022-03-05 11:59:17.877-08	Atlantic/South_Georgia
+2022-03-05 12:59:17.877-08	America/Cordoba
+2022-03-05 13:29:17.877-08	CNT
+2022-03-05 13:59:17.877-08	America/Martinique
+2022-03-05 14:59:17.877-08	America/Louisville
+2022-03-05 15:59:17.877-08	America/Rainy_River
+2022-03-05 16:59:17.877-08	America/Whitehorse
+2022-03-05 17:59:17.877-08	Mexico/BajaNorte
+2022-03-05 18:59:17.877-08	America/Sitka
+2022-03-05 19:29:17.877-08	Pacific/Marquesas
+2022-03-05 19:59:17.877-08	Pacific/Johnston
+2022-03-05 20:59:17.877-08	Pacific/Niue
+2022-03-05 21:59:17.877-08	Etc/GMT+12
 
 # Abbreviations
 query II
@@ -102,44 +102,44 @@ SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z'
 FROM abbrevs
 ORDER BY tstz
 ----
-2022-03-04 19:59:17.877 America/Los_Angeles	Etc/GMT-14
-2022-03-04 20:14:17.877 America/Los_Angeles	NZ-CHAT
-2022-03-04 20:59:17.877 America/Los_Angeles	NZ
-2022-03-04 20:59:17.877 America/Los_Angeles	Pacific/Enderbury
-2022-03-04 22:59:17.877 America/Los_Angeles	Australia/Hobart
-2022-03-04 22:59:17.877 America/Los_Angeles	Australia/LHI
-2022-03-04 22:59:17.877 America/Los_Angeles	Pacific/Efate
-2022-03-04 23:29:17.877 America/Los_Angeles	Australia/Adelaide
-2022-03-05 00:59:17.877 America/Los_Angeles	Etc/GMT-9
-2022-03-05 01:14:17.877 America/Los_Angeles	Australia/Eucla
-2022-03-05 01:59:17.877 America/Los_Angeles	CTT
-2022-03-05 02:59:17.877 America/Los_Angeles	Asia/Phnom_Penh
-2022-03-05 03:29:17.877 America/Los_Angeles	Asia/Yangon
-2022-03-05 03:59:17.877 America/Los_Angeles	Asia/Thimbu
-2022-03-05 04:14:17.877 America/Los_Angeles	Asia/Kathmandu
-2022-03-05 04:29:17.877 America/Los_Angeles	IST
-2022-03-05 04:59:17.877 America/Los_Angeles	Asia/Qyzylorda
-2022-03-05 05:29:17.877 America/Los_Angeles	Asia/Kabul
-2022-03-05 05:59:17.877 America/Los_Angeles	Europe/Samara
-2022-03-05 06:29:17.877 America/Los_Angeles	Iran
-2022-03-05 06:59:17.877 America/Los_Angeles	EAT
-2022-03-05 07:59:17.877 America/Los_Angeles	CAT
-2022-03-05 08:59:17.877 America/Los_Angeles	Europe/Bratislava
-2022-03-05 09:59:17.877 America/Los_Angeles	GMT
-2022-03-05 10:59:17.877 America/Los_Angeles	Atlantic/Azores
-2022-03-05 11:59:17.877 America/Los_Angeles	Atlantic/South_Georgia
-2022-03-05 12:59:17.877 America/Los_Angeles	America/Cordoba
-2022-03-05 13:29:17.877 America/Los_Angeles	CNT
-2022-03-05 13:59:17.877 America/Los_Angeles	PRT
-2022-03-05 14:59:17.877 America/Los_Angeles	America/Panama
-2022-03-05 15:59:17.877 America/Los_Angeles	America/Rankin_Inlet
-2022-03-05 16:59:17.877 America/Los_Angeles	Etc/GMT+7
-2022-03-05 17:59:17.877 America/Los_Angeles	PST
-2022-03-05 18:59:17.877 America/Los_Angeles	America/Nome
-2022-03-05 19:29:17.877 America/Los_Angeles	Pacific/Marquesas
-2022-03-05 19:59:17.877 America/Los_Angeles	Pacific/Johnston
-2022-03-05 20:59:17.877 America/Los_Angeles	Pacific/Niue
-2022-03-05 21:59:17.877 America/Los_Angeles	Etc/GMT+12
+2022-03-04 19:59:17.877-08	Etc/GMT-14
+2022-03-04 20:14:17.877-08	NZ-CHAT
+2022-03-04 20:59:17.877-08	NZ
+2022-03-04 20:59:17.877-08	Pacific/Enderbury
+2022-03-04 22:59:17.877-08	Australia/Hobart
+2022-03-04 22:59:17.877-08	Australia/LHI
+2022-03-04 22:59:17.877-08	Pacific/Efate
+2022-03-04 23:29:17.877-08	Australia/Adelaide
+2022-03-05 00:59:17.877-08	Etc/GMT-9
+2022-03-05 01:14:17.877-08	Australia/Eucla
+2022-03-05 01:59:17.877-08	CTT
+2022-03-05 02:59:17.877-08	Asia/Phnom_Penh
+2022-03-05 03:29:17.877-08	Asia/Yangon
+2022-03-05 03:59:17.877-08	Asia/Thimbu
+2022-03-05 04:14:17.877-08	Asia/Kathmandu
+2022-03-05 04:29:17.877-08	IST
+2022-03-05 04:59:17.877-08	Asia/Qyzylorda
+2022-03-05 05:29:17.877-08	Asia/Kabul
+2022-03-05 05:59:17.877-08	Europe/Samara
+2022-03-05 06:29:17.877-08	Iran
+2022-03-05 06:59:17.877-08	EAT
+2022-03-05 07:59:17.877-08	CAT
+2022-03-05 08:59:17.877-08	Europe/Bratislava
+2022-03-05 09:59:17.877-08	GMT
+2022-03-05 10:59:17.877-08	Atlantic/Azores
+2022-03-05 11:59:17.877-08	Atlantic/South_Georgia
+2022-03-05 12:59:17.877-08	America/Cordoba
+2022-03-05 13:29:17.877-08	CNT
+2022-03-05 13:59:17.877-08	PRT
+2022-03-05 14:59:17.877-08	America/Panama
+2022-03-05 15:59:17.877-08	America/Rankin_Inlet
+2022-03-05 16:59:17.877-08	Etc/GMT+7
+2022-03-05 17:59:17.877-08	PST
+2022-03-05 18:59:17.877-08	America/Nome
+2022-03-05 19:29:17.877-08	Pacific/Marquesas
+2022-03-05 19:59:17.877-08	Pacific/Johnston
+2022-03-05 20:59:17.877-08	Pacific/Niue
+2022-03-05 21:59:17.877-08	Etc/GMT+12
 
 #
 # UTC Offsets
@@ -173,44 +173,44 @@ SELECT strptime('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g 
 FROM offsets
 ORDER BY tstz
 ----
-2022-03-04 19:59:17.877 America/Los_Angeles	+14
-2022-03-04 20:59:17.877 America/Los_Angeles	+13
-2022-03-04 21:14:17.877 America/Los_Angeles	+12:45
-2022-03-04 21:59:17.877 America/Los_Angeles	+12
-2022-03-04 22:59:17.877 America/Los_Angeles	+11
-2022-03-04 23:29:17.877 America/Los_Angeles	+10:30
-2022-03-04 23:59:17.877 America/Los_Angeles	+10
-2022-03-05 00:29:17.877 America/Los_Angeles	+09:30
-2022-03-05 00:59:17.877 America/Los_Angeles	+09
-2022-03-05 01:14:17.877 America/Los_Angeles	+08:45
-2022-03-05 01:59:17.877 America/Los_Angeles	+08
-2022-03-05 02:59:17.877 America/Los_Angeles	+07
-2022-03-05 03:29:17.877 America/Los_Angeles	+06:30
-2022-03-05 03:59:17.877 America/Los_Angeles	+06
-2022-03-05 04:14:17.877 America/Los_Angeles	+05:45
-2022-03-05 04:29:17.877 America/Los_Angeles	+05:30
-2022-03-05 04:59:17.877 America/Los_Angeles	+05
-2022-03-05 05:29:17.877 America/Los_Angeles	+04:30
-2022-03-05 05:59:17.877 America/Los_Angeles	+04
-2022-03-05 06:29:17.877 America/Los_Angeles	+03:30
-2022-03-05 06:59:17.877 America/Los_Angeles	+03
-2022-03-05 07:59:17.877 America/Los_Angeles	+02
-2022-03-05 08:59:17.877 America/Los_Angeles	+01
-2022-03-05 09:59:17.877 America/Los_Angeles	+00
-2022-03-05 10:59:17.877 America/Los_Angeles	-01
-2022-03-05 11:59:17.877 America/Los_Angeles	-02
-2022-03-05 12:59:17.877 America/Los_Angeles	-03
-2022-03-05 13:29:17.877 America/Los_Angeles	-03:30
-2022-03-05 13:59:17.877 America/Los_Angeles	-04
-2022-03-05 14:59:17.877 America/Los_Angeles	-05
-2022-03-05 15:59:17.877 America/Los_Angeles	-06
-2022-03-05 16:59:17.877 America/Los_Angeles	-07
-2022-03-05 17:59:17.877 America/Los_Angeles	-08
-2022-03-05 18:59:17.877 America/Los_Angeles	-09
-2022-03-05 19:29:17.877 America/Los_Angeles	-09:30
-2022-03-05 19:59:17.877 America/Los_Angeles	-10
-2022-03-05 20:59:17.877 America/Los_Angeles	-11
-2022-03-05 21:59:17.877 America/Los_Angeles	-12
+2022-03-04 19:59:17.877-08	+14
+2022-03-04 20:59:17.877-08	+13
+2022-03-04 21:14:17.877-08	+12:45
+2022-03-04 21:59:17.877-08	+12
+2022-03-04 22:59:17.877-08	+11
+2022-03-04 23:29:17.877-08	+10:30
+2022-03-04 23:59:17.877-08	+10
+2022-03-05 00:29:17.877-08	+09:30
+2022-03-05 00:59:17.877-08	+09
+2022-03-05 01:14:17.877-08	+08:45
+2022-03-05 01:59:17.877-08	+08
+2022-03-05 02:59:17.877-08	+07
+2022-03-05 03:29:17.877-08	+06:30
+2022-03-05 03:59:17.877-08	+06
+2022-03-05 04:14:17.877-08	+05:45
+2022-03-05 04:29:17.877-08	+05:30
+2022-03-05 04:59:17.877-08	+05
+2022-03-05 05:29:17.877-08	+04:30
+2022-03-05 05:59:17.877-08	+04
+2022-03-05 06:29:17.877-08	+03:30
+2022-03-05 06:59:17.877-08	+03
+2022-03-05 07:59:17.877-08	+02
+2022-03-05 08:59:17.877-08	+01
+2022-03-05 09:59:17.877-08	+00
+2022-03-05 10:59:17.877-08	-01
+2022-03-05 11:59:17.877-08	-02
+2022-03-05 12:59:17.877-08	-03
+2022-03-05 13:29:17.877-08	-03:30
+2022-03-05 13:59:17.877-08	-04
+2022-03-05 14:59:17.877-08	-05
+2022-03-05 15:59:17.877-08	-06
+2022-03-05 16:59:17.877-08	-07
+2022-03-05 17:59:17.877-08	-08
+2022-03-05 18:59:17.877-08	-09
+2022-03-05 19:29:17.877-08	-09:30
+2022-03-05 19:59:17.877-08	-10
+2022-03-05 20:59:17.877-08	-11
+2022-03-05 21:59:17.877-08	-12
 
 #
 # Errors/Coverage
@@ -251,7 +251,7 @@ NULL
 query I
 select '2022-03-05 17:59:17.123456 CST'::timestamptz;
 ----
-2022-03-05 15:59:17.123456 America/Los_Angeles
+2022-03-05 15:59:17.123456-08
 
 query I
 select 'infinity'::timestamptz;
@@ -266,5 +266,5 @@ select '-infinity'::timestamptz;
 query I
 select 'epoch'::timestamptz;
 ----
-1969-12-31 16:00:00 America/Los_Angeles
+1969-12-31 16:00:00-08
 
