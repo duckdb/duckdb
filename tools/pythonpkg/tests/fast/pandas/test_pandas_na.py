@@ -1,7 +1,7 @@
-import pandas as pd
 import numpy as np
 import datetime
 import duckdb
+import pytest
 
 def assert_nullness(items, null_indices):
     for i in range(len(items)):
@@ -12,6 +12,7 @@ def assert_nullness(items, null_indices):
 
 class TestPandasNA(object):
     def test_pandas_na(self, duckdb_cursor):
+        pd = pytest.importorskip('pandas', minversion='1.0.0', reason='Support for pandas.NA has not been added yet')
         # DataFrame containing a single pd.NA
         df = pd.DataFrame(pd.Series([pd.NA]))
         conn = duckdb.default_connection
