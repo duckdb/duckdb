@@ -49,3 +49,6 @@ statement error
 INSERT INTO t0 VALUES (1) RETURNING sum(c0) as rowid;
 ----
 Binder Error: Aggregate functions are not supported here
+
+statement ok
+select struct_pack(row_id := 42);
