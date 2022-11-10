@@ -1387,7 +1387,8 @@ bool TryCastErrorMessage::Operation(string_t input, date_t &result, string *erro
 template <>
 bool TryCast::Operation(string_t input, date_t &result, bool strict) {
 	idx_t pos;
-	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
+	bool special = false;
+	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, special, strict);
 }
 
 template <>

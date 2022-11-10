@@ -205,7 +205,8 @@ static bool TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const 
 	return true;
 }
 
-bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool strict) {
+bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool &special, bool strict) {
+	special = false;
 	pos = 0;
 	if (len == 0) {
 		return false;
@@ -245,6 +246,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 			pos++;
 		}
+		special = true;
 		return pos == len;
 	}
 	// first parse the year
@@ -335,7 +337,8 @@ string Date::ConversionError(string_t str) {
 date_t Date::FromCString(const char *buf, idx_t len, bool strict) {
 	date_t result;
 	idx_t pos;
-	if (!TryConvertDate(buf, len, pos, result, strict)) {
+	bool special = false;
+	if (!TryConvertDate(buf, len, pos, result, special, strict)) {
 		throw ConversionException(ConversionError(string(buf, len)));
 	}
 	return result;
