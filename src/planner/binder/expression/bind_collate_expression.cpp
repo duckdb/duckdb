@@ -17,6 +17,8 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	if (child.expr->return_type.id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("collations are only supported for type varchar");
 	}
+	// Validate the collation, but don't use it
+	PushCollation(context, child.expr->Copy(), expr.collation, false);
 	child.expr->return_type = LogicalType::VARCHAR_COLLATION(expr.collation);
 	return BindResult(move(child.expr));
 }

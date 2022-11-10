@@ -8,6 +8,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class DuckDBDatabase {
 
+	/** Name of the DuckDB default schema. */
+	public static final String DEFAULT_SCHEMA = "main";
+
 	protected String url;
 	protected boolean read_only;
 	private AtomicInteger connections;

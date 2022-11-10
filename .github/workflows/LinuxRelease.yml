@@ -552,6 +552,8 @@ jobs:
     env:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
       S3_TEST_SERVER_AVAILABLE: 1
       GEN: ninja
 
@@ -582,10 +584,13 @@ jobs:
       run: |
         sudo ./scripts/install_s3_test_server.sh
         ./scripts/run_s3_test_server.sh
+        sleep 60
 
     - name: Test
       shell: bash
-      run: make allunit
+      run: |
+        python3 scripts/get_test_list.py --file-contains "require httpfs" > test.list
+        build/release/test/unittest -f test.list
 
  amalgamation-tests:
     name: Amalgamation Tests
