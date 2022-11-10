@@ -22,7 +22,7 @@ SELECT 1 FROM ((SELECT 2) t0(c0) JOIN (SELECT 3) t1(c0) ON TRUE), ((SELECT 4) t2
 mode unskip
 
 query I
-SELECT CAST('1' COLLATE "as" AS INT);
+SELECT CAST('1' COLLATE "nocase" AS INT);
 ----
 1
 
