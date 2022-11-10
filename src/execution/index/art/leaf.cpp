@@ -102,11 +102,6 @@ void Leaf::Insert(row_t row_id) {
 }
 
 void Leaf::Remove(row_t row_id) {
-	if (IsInlined()) {
-		D_ASSERT(count == 1);
-		count--;
-		return;
-	}
 	idx_t entry_offset = DConstants::INVALID_INDEX;
 	row_t *row_ids = GetRowIds();
 	for (idx_t i = 0; i < count; i++) {
@@ -116,6 +111,11 @@ void Leaf::Remove(row_t row_id) {
 		}
 	}
 	if (entry_offset == DConstants::INVALID_INDEX) {
+		return;
+	}
+	if (IsInlined()) {
+		D_ASSERT(count == 1);
+		count--;
 		return;
 	}
 	count--;
