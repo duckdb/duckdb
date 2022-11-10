@@ -4,5 +4,7 @@
 statement ok
 pragma enable_verification
 
-statement ok
+query II
 SELECT -0E4, jaccard(FALSE, '351609-10-19');
+----
+-0.0	0.0
