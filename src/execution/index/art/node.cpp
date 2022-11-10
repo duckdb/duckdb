@@ -132,18 +132,6 @@ void Node::New(NodeType &type, Node *&node) {
 	}
 }
 
-template <typename T, typename... ARGS>
-T *AllocateObject(ARGS &&...args) {
-	auto data = Allocator::DefaultAllocator().AllocateData(sizeof(T));
-	return new (data) T(std::forward<ARGS>(args)...);
-}
-
-template <typename T>
-void DestroyObject(T *ptr) {
-	ptr->~T();
-	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, sizeof(T));
-}
-
 Node4 *Node4::New() {
 	return AllocateObject<Node4>();
 }
@@ -168,8 +156,8 @@ Leaf *Leaf::New(Key &value, uint32_t depth, row_t *row_ids, idx_t num_elements) 
 	return AllocateObject<Leaf>(value, depth, row_ids, num_elements);
 }
 
-Leaf *Leaf::New(unique_ptr<row_t[]> row_ids, idx_t num_elements, Prefix &prefix) {
-	return AllocateObject<Leaf>(move(row_ids), num_elements, prefix);
+Leaf *Leaf::New(row_t *row_ids, idx_t num_elements, Prefix &prefix) {
+	return AllocateObject<Leaf>(row_ids, num_elements, prefix);
 }
 
 Leaf *Leaf::New(row_t row_id, Prefix &prefix) {

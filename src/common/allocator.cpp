@@ -115,6 +115,7 @@ Allocator::~Allocator() {
 }
 
 data_ptr_t Allocator::AllocateData(idx_t size) {
+	D_ASSERT(size > 0);
 	auto result = allocate_function(private_data.get(), size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
@@ -127,6 +128,7 @@ void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 	if (!pointer) {
 		return;
 	}
+	D_ASSERT(size > 0);
 #ifdef DEBUG
 	D_ASSERT(private_data);
 	private_data->debug_info->FreeData(pointer, size);

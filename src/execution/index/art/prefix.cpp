@@ -2,16 +2,6 @@
 
 namespace duckdb {
 
-uint8_t *AllocateArray(idx_t size) {
-	D_ASSERT(size > 0);
-	return (uint8_t *)Allocator::DefaultAllocator().AllocateData(size * sizeof(uint8_t));
-}
-
-void DeleteArray(uint8_t *ptr, idx_t size) {
-	D_ASSERT(size > 0);
-	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, size * sizeof(uint8_t));
-}
-
 uint32_t Prefix::Size() const {
 	return size;
 }
@@ -37,7 +27,7 @@ uint8_t *Prefix::AllocatePrefix(uint32_t size) {
 		prefix = &value.inlined[0];
 	} else {
 		// allocate new prefix
-		value.ptr = AllocateArray(size);
+		value.ptr = AllocateArray<uint8_t>(size);
 		prefix = value.ptr;
 	}
 	return prefix;
@@ -72,7 +62,7 @@ Prefix::~Prefix() {
 
 void Prefix::Destroy() {
 	if (!IsInlined()) {
-		DeleteArray(value.ptr, size);
+		DeleteArray<uint8_t>(value.ptr, size);
 		size = 0;
 	}
 }
@@ -108,7 +98,7 @@ void Prefix::Overwrite(uint32_t new_size, uint8_t *data) {
 		for (idx_t i = 0; i < new_size; i++) {
 			prefix[i] = data[i];
 		}
-		DeleteArray(data, new_size);
+		DeleteArray<uint8_t>(data, new_size);
 	} else {
 		// new entry would not be inlined
 		// take over the data directly
@@ -121,7 +111,7 @@ void Prefix::Overwrite(uint32_t new_size, uint8_t *data) {
 void Prefix::Concatenate(uint8_t key, Prefix &other) {
 	auto new_length = size + 1 + other.size;
 	// have to allocate space in our prefix array
-	auto new_prefix = AllocateArray(new_length);
+	auto new_prefix = AllocateArray<uint8_t>(new_length);
 	idx_t new_prefix_idx = 0;
 	// 1) add the to-be deleted node's prefix
 	for (uint32_t i = 0; i < other.size; i++) {
@@ -146,7 +136,7 @@ uint8_t Prefix::Reduce(uint32_t n) {
 		size = 0;
 		return key;
 	}
-	auto new_prefix = AllocateArray(new_size);
+	auto new_prefix = AllocateArray<uint8_t>(new_size);
 	for (idx_t i = 0; i < new_size; i++) {
 		new_prefix[i] = prefix[i + n + 1];
 	}

@@ -17,7 +17,7 @@ class Leaf : public Node {
 public:
 	Leaf(Key &value, uint32_t depth, row_t row_id);
 	Leaf(Key &value, uint32_t depth, row_t *row_ids, idx_t num_elements);
-	Leaf(unique_ptr<row_t[]> row_ids, idx_t num_elements, Prefix &prefix);
+	Leaf(row_t *row_ids, idx_t num_elements, Prefix &prefix);
 	Leaf(row_t row_id, Prefix &prefix);
 	~Leaf();
 
@@ -29,7 +29,7 @@ public:
 public:
 	static Leaf *New(Key &value, uint32_t depth, row_t row_id);
 	static Leaf *New(Key &value, uint32_t depth, row_t *row_ids, idx_t num_elements);
-	static Leaf *New(unique_ptr<row_t[]> row_ids, idx_t num_elements, Prefix &prefix);
+	static Leaf *New(row_t *row_ids, idx_t num_elements, Prefix &prefix);
 	static Leaf *New(row_t row_id, Prefix &prefix);
 	//! Insert a row_id into a leaf
 	void Insert(row_t row_id);

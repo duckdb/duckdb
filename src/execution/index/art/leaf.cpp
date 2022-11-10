@@ -54,10 +54,10 @@ Leaf::Leaf(Key &value, uint32_t depth, row_t *row_ids_p, idx_t num_elements_p) :
 	prefix = Prefix(value, depth, value.len - depth);
 }
 
-Leaf::Leaf(unique_ptr<row_t[]> row_ids_p, idx_t num_elements_p, Prefix &prefix_p) : Node(NodeType::NLeaf) {
+Leaf::Leaf(row_t *row_ids_p, idx_t num_elements_p, Prefix &prefix_p) : Node(NodeType::NLeaf) {
 	D_ASSERT(num_elements_p > 1);
 	D_ASSERT(row_ids_p[0] == row_t(num_elements_p)); // first element should contain capacity
-	rowids.ptr = row_ids_p.release();
+	rowids.ptr = row_ids_p;
 	count = num_elements_p;
 	prefix = prefix_p;
 }
@@ -70,23 +70,23 @@ Leaf::Leaf(row_t row_id, Prefix &prefix_p) : Node(NodeType::NLeaf) {
 
 Leaf::~Leaf() {
 	if (!IsInlined()) {
-		delete[] rowids.ptr;
+		DeleteArray<row_t>(rowids.ptr, rowids.ptr[0] + 1);
 		count = 0;
 	}
 }
 
 row_t *Leaf::Resize(row_t *current_row_ids, uint32_t current_count, idx_t new_capacity) {
 	D_ASSERT(new_capacity >= current_count);
-	auto new_allocation = unique_ptr<row_t[]>(new row_t[new_capacity + 1]);
+	auto new_allocation = AllocateArray<row_t>(new_capacity + 1);
 	new_allocation[0] = new_capacity;
-	auto new_row_ids = new_allocation.get() + 1;
+	auto new_row_ids = new_allocation + 1;
 	memcpy(new_row_ids, current_row_ids, current_count * sizeof(row_t));
 	if (!IsInlined()) {
 		// delete the old data
-		delete[] rowids.ptr;
+		DeleteArray<row_t>(rowids.ptr, rowids.ptr[0] + 1);
 	}
 	// set up the new pointers
-	rowids.ptr = new_allocation.release();
+	rowids.ptr = new_allocation;
 	return new_row_ids;
 }
 
@@ -123,7 +123,7 @@ void Leaf::Remove(row_t row_id) {
 		// after erasing we can now inline the leaf
 		// delete the pointer and inline the remaining rowid
 		auto remaining_row_id = row_ids[0] == row_id ? row_ids[1] : row_ids[0];
-		delete[] rowids.ptr;
+		DeleteArray<row_t>(rowids.ptr, rowids.ptr[0] + 1);
 		rowids.inlined = remaining_row_id;
 		return;
 	}
@@ -131,13 +131,13 @@ void Leaf::Remove(row_t row_id) {
 	if (capacity > 2 && count < capacity / 2) {
 		// Shrink array, if less than half full
 		auto new_capacity = capacity / 2;
-		auto new_allocation = unique_ptr<row_t[]>(new row_t[new_capacity + 1]);
+		auto new_allocation = AllocateArray<row_t>(new_capacity + 1);
 		new_allocation[0] = new_capacity;
-		auto new_row_ids = new_allocation.get() + 1;
+		auto new_row_ids = new_allocation + 1;
 		memcpy(new_row_ids, row_ids, entry_offset * sizeof(row_t));
 		memcpy(new_row_ids + entry_offset, row_ids + entry_offset + 1, (count - entry_offset) * sizeof(row_t));
-		delete[] rowids.ptr;
-		rowids.ptr = new_allocation.release();
+		DeleteArray<row_t>(rowids.ptr, rowids.ptr[0] + 1);
+		rowids.ptr = new_allocation;
 	} else {
 		// Copy the rest
 		memmove(row_ids + entry_offset, row_ids + entry_offset + 1, (count - entry_offset) * sizeof(row_t));
@@ -191,12 +191,12 @@ Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
 		return Leaf::New(element, prefix);
 	} else {
 		// non-inlined
-		auto elements = unique_ptr<row_t[]>(new row_t[num_elements + 1]);
+		auto elements = AllocateArray<row_t>(num_elements + 1);
 		elements[0] = num_elements;
 		for (idx_t i = 0; i < num_elements; i++) {
 			elements[i + 1] = reader.Read<row_t>();
 		}
-		return Leaf::New(move(elements), num_elements, prefix);
+		return Leaf::New(elements, num_elements, prefix);
 	}
 }
 
