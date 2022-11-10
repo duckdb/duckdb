@@ -26,7 +26,7 @@ SET experimental_parallel_csv=true;
 statement ok
 CREATE TABLE web_page2 AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/web_page.csv');
 
-query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+query IIIIIIIIIIIIII
 (SELECT * FROM web_page EXCEPT SELECT * FROM web_page2)
 UNION ALL
 (SELECT * FROM web_page2 EXCEPT SELECT * FROM web_page)
