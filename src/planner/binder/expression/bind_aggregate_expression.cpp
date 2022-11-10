@@ -29,9 +29,15 @@ static void InvertPercentileFractions(ClientContext &context, unique_ptr<ParsedE
 	if (value.type().id() == LogicalTypeId::LIST) {
 		vector<Value> values;
 		for (const auto &element_val : ListValue::GetChildren(value)) {
-			values.push_back(Value::DOUBLE(1 - element_val.GetValue<double>()));
+			if (element_val.IsNull()) {
+				values.push_back(element_val);
+			} else {
+				values.push_back(Value::DOUBLE(1 - element_val.GetValue<double>()));
+			}
 		}
 		bound.expr = make_unique<BoundConstantExpression>(Value::LIST(values));
+	} else if (value.IsNull()) {
+		bound.expr = make_unique<BoundConstantExpression>(value);
 	} else {
 		bound.expr = make_unique<BoundConstantExpression>(Value::DOUBLE(1 - value.GetValue<double>()));
 	}
