@@ -136,6 +136,7 @@ void Leaf::Remove(row_t row_id) {
 		auto new_row_ids = new_allocation.get() + 1;
 		memcpy(new_row_ids, row_ids, entry_offset * sizeof(row_t));
 		memcpy(new_row_ids + entry_offset, row_ids + entry_offset + 1, (count - entry_offset) * sizeof(row_t));
+		delete [] rowids.ptr;
 		rowids.ptr = new_allocation.release();
 	} else {
 		// Copy the rest
