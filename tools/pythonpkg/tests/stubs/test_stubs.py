@@ -1,33 +1,23 @@
-import mypy.stubtest
-import subprocess
-import sys
-import tempfile
-import contextlib
 import os
-from typing import *
+
+from mypy import stubtest
 
 MYPY_INI_PATH = os.path.join(os.path.dirname(__file__), 'mypy.ini')
 
-def test_stubs():
-	skip_stubs_errors = ['pybind11', 'git_revision', '(checked 1 module)']
-	# just run stubtest
-	stubs = subprocess.run([
-			sys.executable, '-m', 'mypy.stubtest',
-			'duckdb',
-			'--mypy-config-file', MYPY_INI_PATH,
-		], stdout=subprocess.PIPE)
-	if (stubs.returncode != 0):
-		errors = stubs.stdout.decode('utf-8').split('Found')[0].split('error')
-		broken_stubs = []
-		for error in errors:
-			add_error = True
-			for skip in skip_stubs_errors:
-				if error == '' or skip in error:
-					add_error = False
-					break
-			if (add_error):
-				broken_stubs.append(error)
-			if len(broken_stubs) > 0:
-				print("Stubs must be updated, either add them to skip_stubs_errors or update __init__.pyi accordingly")
-				print(broken_stubs)
-				assert(0)
+
+def test_generated_stubs():
+	skip_stubs_errors = ['pybind11', 'git_revision', 'is inconsistent, metaclass differs']
+
+	stubtest.test_stubs(stubtest.parse_options(['duckdb', '--mypy-config-file', MYPY_INI_PATH]))
+
+	broken_stubs = [
+		error
+		for error in stubtest.test_module('duckdb')
+		if not any(skip in error.get_description() for skip in skip_stubs_errors)
+	]
+
+	if broken_stubs:
+		print("Stubs must be updated, either add them to skip_stubs_errors or update __init__.pyi accordingly")
+		print(broken_stubs)
+
+		assert not broken_stubs
