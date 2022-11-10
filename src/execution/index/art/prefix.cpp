@@ -3,10 +3,12 @@
 namespace duckdb {
 
 uint8_t *AllocateArray(idx_t size) {
+	D_ASSERT(size > 0);
 	return (uint8_t *)Allocator::DefaultAllocator().AllocateData(size * sizeof(uint8_t));
 }
 
 void DeleteArray(uint8_t *ptr, idx_t size) {
+	D_ASSERT(size > 0);
 	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, size * sizeof(uint8_t));
 }
 
@@ -106,6 +108,7 @@ void Prefix::Overwrite(uint32_t new_size, uint8_t *data) {
 		for (idx_t i = 0; i < new_size; i++) {
 			prefix[i] = data[i];
 		}
+		DeleteArray(data, new_size);
 	} else {
 		// new entry would not be inlined
 		// take over the data directly
@@ -136,6 +139,11 @@ void Prefix::Concatenate(uint8_t key, Prefix &other) {
 
 uint8_t Prefix::Reduce(uint32_t n) {
 	auto new_size = size - n - 1;
+	if (new_size == 0) {
+		Destroy();
+		size = 0;
+		return 0;
+	}
 	auto new_prefix = AllocateArray(new_size);
 	auto prefix = GetPrefixData();
 	auto key = prefix[n];
