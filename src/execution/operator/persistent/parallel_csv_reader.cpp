@@ -164,10 +164,11 @@ normal : {
 	/* state: normal parsing state */
 	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
 	for (; position_buffer < end_buffer; position_buffer++) {
-		if ((*buffer)[position_buffer] == options.delimiter[0]) {
+		auto c = (*buffer)[position_buffer];
+		if (c == options.delimiter[0]) {
 			// delimiter: end the value and add it to the chunk
 			goto add_value;
-		} else if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
+		} else if (StringUtil::CharacterIsNewline(c)) {
 			// newline: add row
 			D_ASSERT(try_add_line || column == insert_chunk.ColumnCount() - 1);
 			goto add_row;
@@ -237,10 +238,11 @@ in_quotes:
 	has_quotes = true;
 	position_buffer++;
 	for (; position_buffer < end_buffer; position_buffer++) {
-		if ((*buffer)[position_buffer] == options.quote[0]) {
+		auto c = (*buffer)[position_buffer];
+		if (c == options.quote[0]) {
 			// quote: move to unquoted state
 			goto unquote;
-		} else if ((*buffer)[position_buffer] == options.escape[0]) {
+		} else if (c == options.escape[0]) {
 			// escape: store the escaped position and move to handle_escape state
 			escape_positions.push_back(position_buffer - start_buffer);
 			goto handle_escape;
@@ -262,7 +264,7 @@ in_quotes:
 		goto in_quotes;
 	}
 
-unquote:
+unquote : {
 	/* state: unquote: this state handles the state directly after we unquote*/
 	//
 	// in this state we expect either another quote (entering the quoted state again, and escaping the quote)
@@ -272,16 +274,16 @@ unquote:
 		offset = 1;
 		goto final_state;
 	}
-	if ((*buffer)[position_buffer] == options.quote[0] &&
-	    (options.escape.empty() || options.escape[0] == options.quote[0])) {
+	auto c = (*buffer)[position_buffer];
+	if (c == options.quote[0] && (options.escape.empty() || options.escape[0] == options.quote[0])) {
 		// escaped quote, return to quoted state and store escape position
 		escape_positions.push_back(position_buffer - start_buffer);
 		goto in_quotes;
-	} else if ((*buffer)[position_buffer] == options.delimiter[0]) {
+	} else if (c == options.delimiter[0]) {
 		// delimiter, add value
 		offset = 1;
 		goto add_value;
-	} else if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
+	} else if (StringUtil::CharacterIsNewline(c)) {
 		offset = 1;
 		D_ASSERT(column == insert_chunk.ColumnCount() - 1);
 		goto add_row;

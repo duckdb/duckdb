@@ -112,7 +112,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		} else {
 			D_ASSERT(return_types.size() == names.size());
 		}
-		options = result->options;
+		options = initial_reader->options;
 		result->sql_types = initial_reader->sql_types;
 		result->initial_reader = move(initial_reader);
 	} else {

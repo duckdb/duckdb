@@ -109,6 +109,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		options.force_not_null.resize(expected_types.size(), false);
 	}
 	bind_data->FinalizeRead(context);
+	if (!bind_data->single_threaded && options.auto_detect) {
+		options.file_path = bind_data->files[0];
+		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
+		options = initial_reader->options;
+	}
 	return move(bind_data);
 }
 
