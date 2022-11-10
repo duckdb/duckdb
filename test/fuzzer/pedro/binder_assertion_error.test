@@ -40,3 +40,26 @@ query II
 select (select 5) a, (select 7) c where (select (select 3) b where (select a) > (select b) and (select c) > (select a));
 ----
 5	7
+
+statement ok
+INSERT INTO t0 VALUES (1), (2), (3), (4);
+
+# a3 is in the where clause is qualified to the a3 in the select
+# there are two instances of an a1 alias, which are both correctly qualified using the
+# alias binder in the first wherebinder encountered when attempting to bind correlated subqueries
+#
+# the where clause subquery resolves to a1 + c0 in (2)
+# so a1 and c0 both need to be 1
+query III
+select (select 1) a1, (select 3) as a3, c0
+        from t0 where a1 + c0 in (select c0 as a1 from t0 where a1 + 1 = a3);
+----
+1	3	1
+
+# same test as above except a negative case where nothing is returned.
+# The subquery in the where clause is not satisfied
+query III
+select (select 1) a1, (select 3) as a3, c0
+        from t0 where a1 + c0 in (select c0 as a1 from t0 where a1 + 5 = a3);
+----
+
