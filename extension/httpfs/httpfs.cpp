@@ -357,16 +357,16 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 	    1,
 	    1
 	};
-	auto lookup = hfs.file_handle_cache.find(cache_key);
-	if (lookup != hfs.file_handle_cache.end()) {
-		last_modified = lookup->second.last_modified;
-		length = lookup->second.length;
-
-		std::cout << "Opening from cache, flags: " << (int64_t)flags << "path: " << path << "\n";
-		return nullptr;
-	} else {
-		std::cout << "Opening new, flags: " << (int64_t)flags << "path: " << path << "\n";
-	}
+//	auto lookup = hfs.file_handle_cache.find(cache_key);
+//	if (lookup != hfs.file_handle_cache.end()) {
+//		last_modified = lookup->second.last_modified;
+//		length = lookup->second.length;
+//
+////		std::cout << "Opening from cache, flags: " << (int64_t)flags << "path: " << path << "\n";
+//		return nullptr;
+//	} else {
+////		std::cout << "Opening new, flags: " << (int64_t)flags << "path: " << path << "\n";
+//	}
 
 	auto res = hfs.HeadRequest(*this, path, {});
 
