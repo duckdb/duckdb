@@ -27,91 +27,91 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
-   linux-nodejs:
+  linux-nodejs:
     name: node.js Linux
     runs-on: ubuntu-20.04
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Install requirements
-      shell: bash
-      run: |
-        sudo apt-get update -y -qq
-        sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
+      - name: Install requirements
+        shell: bash
+        run: |
+          sudo apt-get update -y -qq
+          sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
 
-    - name: Install CMake
-      shell: bash
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+      - name: Install CMake
+        shell: bash
+        run: |
+          wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+          chmod +x cmake-3.21.3-linux-x86_64.sh
+          sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
-    - name: Build extensions
-      shell: bash
-      run: |
-        GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+      - name: Build extensions
+        shell: bash
+        run: |
+          GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
 
-    - name: Setup
-      shell: bash
-      run: ./scripts/node_version.sh upload
+      - name: Setup
+        shell: bash
+        run: ./scripts/node_version.sh upload
 
-    - name: Validate Docs
-      run: npx jsdoc-to-markdown --files tools/nodejs/lib/*.js >> $GITHUB_STEP_SUMMARY
-      env:
-        npm_config_yes: true
+      - name: Validate Docs
+        run: npx jsdoc-to-markdown --files tools/nodejs/lib/*.js >> $GITHUB_STEP_SUMMARY
+        env:
+          npm_config_yes: true
 
-    - name: Node 10
-      shell: bash
-      run: ./scripts/node_build.sh 10
+      - name: Node 10
+        shell: bash
+        run: ./scripts/node_build.sh 10
 
-    - name: Node 12
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-      shell: bash
-      run: ./scripts/node_build.sh 12
+      - name: Node 12
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        shell: bash
+        run: ./scripts/node_build.sh 12
 
-    - name: Node 14
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-      shell: bash
-      run: ./scripts/node_build.sh 14
+      - name: Node 14
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        shell: bash
+        run: ./scripts/node_build.sh 14
 
-    - name: Node 15
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-      shell: bash
-      run: ./scripts/node_build.sh 15
+      - name: Node 15
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        shell: bash
+        run: ./scripts/node_build.sh 15
 
-    - name: Node 16
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-      shell: bash
-      run: ./scripts/node_build.sh 16
+      - name: Node 16
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        shell: bash
+        run: ./scripts/node_build.sh 16
 
-    - name: Node 17
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-      shell: bash
-      run: ./scripts/node_build.sh 17
+      - name: Node 17
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        shell: bash
+        run: ./scripts/node_build.sh 17
 
-    - name: Node 18
-      shell: bash
-      run: ./scripts/node_build.sh 18
+      - name: Node 18
+        shell: bash
+        run: ./scripts/node_build.sh 18
 
-   osx-nodejs:
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-      name: node.js OSX
-      runs-on: macos-latest
-      needs: linux-nodejs
-      strategy:
-        matrix:
-          target_arch: [x64, arm64]
-      env:
-        TARGET_ARCH: ${{ matrix.target_arch }}
-      steps:
+  osx-nodejs:
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+    name: node.js OSX
+    runs-on: macos-latest
+    needs: linux-nodejs
+    strategy:
+      matrix:
+        target_arch: [ x64, arm64 ]
+    env:
+      TARGET_ARCH: ${{ matrix.target_arch }}
+    steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -134,22 +134,25 @@ jobs:
         shell: bash
         run: ./scripts/node_version.sh
 
+      # these older versions of NodeJS don't have M1 support
+
       - name: Node 10
+        if: matrix.target_arch != 'arm64'
         shell: bash
         run: ./scripts/node_build.sh 10
 
       - name: Node 12
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        if: matrix.target_arch != 'arm64'
         shell: bash
         run: ./scripts/node_build.sh 12
 
       - name: Node 14
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        if: matrix.target_arch != 'arm64'
         shell: bash
         run: ./scripts/node_build.sh 14
 
       - name: Node 15
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        if: matrix.target_arch != 'arm64'
         shell: bash
         run: ./scripts/node_build.sh 15
 
@@ -165,65 +168,65 @@ jobs:
         shell: bash
         run: ./scripts/node_build.sh 18
 
-   win-nodejs:
-     name: node.js Windows
-     runs-on: windows-latest
-     needs: linux-nodejs
+  win-nodejs:
+    name: node.js Windows
+    runs-on: windows-latest
+    needs: linux-nodejs
 
-     strategy:
-       matrix:
-         node: [ '10', '12', '14', '15', '16', '17', '18' ]
-         isRelease:
-            - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
-         exclude:
-           - isRelease: false
-             node: 12
-           - isRelease: false
-             node: 14
-           - isRelease: false
-             node: 15
-           - isRelease: false
-             node: 16
-           - isRelease: false
-             node: 17
+    strategy:
+      matrix:
+        node: [ '10', '12', '14', '15', '16', '17', '18' ]
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
+        exclude:
+          - isRelease: false
+            node: 12
+          - isRelease: false
+            node: 14
+          - isRelease: false
+            node: 15
+          - isRelease: false
+            node: 16
+          - isRelease: false
+            node: 17
 
-     steps:
-       - uses: actions/setup-python@v2
-         with:
-           python-version: '3.8'
+    steps:
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
 
-       - uses: actions/checkout@v3
-         with:
-           fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-       - name: Setup Node
-         uses: actions/setup-node@v2
-         with:
-           node-version: ${{ matrix.node }}
+      - name: Setup Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node }}
 
-       - name: Versions
-         shell: bash
-         run: |
-           systeminfo
-           node -v
-           npm -v
+      - name: Versions
+        shell: bash
+        run: |
+          systeminfo
+          node -v
+          npm -v
 
-       - name: Windows Build Tools
-         shell: bash
-         run: |
-           choco install python visualstudio2019-workload-vctools -y
-           npm config set msvs_version 2019
+      - name: Windows Build Tools
+        shell: bash
+        run: |
+          choco install python visualstudio2019-workload-vctools -y
+          npm config set msvs_version 2019
 
-       - name: Node Version
-         shell: bash
-         run: ./scripts/node_version.sh
+      - name: Node Version
+        shell: bash
+        run: ./scripts/node_version.sh
 
-       - name: Setup Ccache
-         uses: hendrikmuhs/ccache-action@main
-         with:
-           key: ${{ github.job }}-${{ matrix.node }}
-           variant: sccache
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.node }}
+          variant: sccache
 
-       - name: Node
-         shell: bash
-         run: ./scripts/node_build_win.sh
+      - name: Node
+        shell: bash
+        run: ./scripts/node_build_win.sh
