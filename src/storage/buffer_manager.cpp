@@ -425,7 +425,7 @@ void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 }
 
 void BufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
-#ifdef DEBUG
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	auto replacement_buffer = make_unique<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                  handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
