@@ -139,14 +139,14 @@ void Prefix::Concatenate(uint8_t key, Prefix &other) {
 
 uint8_t Prefix::Reduce(uint32_t n) {
 	auto new_size = size - n - 1;
+	auto prefix = GetPrefixData();
+	auto key = prefix[n];
 	if (new_size == 0) {
 		Destroy();
 		size = 0;
-		return 0;
+		return key;
 	}
 	auto new_prefix = AllocateArray(new_size);
-	auto prefix = GetPrefixData();
-	auto key = prefix[n];
 	for (idx_t i = 0; i < new_size; i++) {
 		new_prefix[i] = prefix[i + n + 1];
 	}
