@@ -114,22 +114,87 @@ NodeType Node::GetTypeBySize(idx_t size) {
 }
 
 void Node::New(NodeType &type, Node *&node) {
-
 	switch (type) {
 	case NodeType::N4:
-		node = new Node4();
+		node = (Node *)Node4::New();
 		return;
 	case NodeType::N16:
-		node = new Node16();
+		node = (Node *)Node16::New();
 		return;
 	case NodeType::N48:
-		node = new Node48();
+		node = (Node *)Node48::New();
 		return;
 	case NodeType::N256:
-		node = new Node256();
+		node = (Node *)Node256::New();
 		return;
 	default:
 		throw InternalException("Unrecognized type for new node creation!");
+	}
+}
+
+template <typename T, typename... Args>
+T *AllocateObject(Args &&...args) {
+	auto data = Allocator::DefaultAllocator().AllocateData(sizeof(T));
+	return new (data) T(std::forward<Args>(args)...);
+}
+
+template <typename T>
+void DestroyObject(T *ptr) {
+	ptr->~T();
+	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, sizeof(T));
+}
+
+Node4 *Node4::New() {
+	return AllocateObject<Node4>();
+}
+
+Node16 *Node16::New() {
+	return AllocateObject<Node16>();
+}
+
+Node48 *Node48::New() {
+	return AllocateObject<Node48>();
+}
+
+Node256 *Node256::New() {
+	return AllocateObject<Node256>();
+}
+
+Leaf *Leaf::New(Key &value, uint32_t depth, row_t row_id) {
+	return AllocateObject<Leaf>(value, depth, row_id);
+}
+
+Leaf *Leaf::New(Key &value, uint32_t depth, row_t *row_ids, idx_t num_elements) {
+	return AllocateObject<Leaf>(value, depth, row_ids, num_elements);
+}
+
+Leaf *Leaf::New(unique_ptr<row_t[]> row_ids, idx_t num_elements, Prefix &prefix) {
+	return AllocateObject<Leaf>(move(row_ids), num_elements, prefix);
+}
+
+Leaf *Leaf::New(row_t row_id, Prefix &prefix) {
+	return AllocateObject<Leaf>(row_id, prefix);
+}
+
+void Node::Delete(Node *ptr) {
+	switch (ptr->type) {
+	case NodeType::NLeaf:
+		DestroyObject((Leaf *)ptr);
+		break;
+	case NodeType::N4:
+		DestroyObject((Node4 *)ptr);
+		break;
+	case NodeType::N16:
+		DestroyObject((Node16 *)ptr);
+		break;
+	case NodeType::N48:
+		DestroyObject((Node48 *)ptr);
+		break;
+	case NodeType::N256:
+		DestroyObject((Node256 *)ptr);
+		break;
+	default:
+		throw InternalException("eek");
 	}
 }
 
@@ -230,19 +295,19 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	case NodeType::NLeaf:
 		return Leaf::Deserialize(reader);
 	case NodeType::N4: {
-		deserialized_node = (Node *)new Node4();
+		deserialized_node = (Node *)Node4::New();
 		break;
 	}
 	case NodeType::N16: {
-		deserialized_node = (Node *)new Node16();
+		deserialized_node = (Node *)Node16::New();
 		break;
 	}
 	case NodeType::N48: {
-		deserialized_node = (Node *)new Node48();
+		deserialized_node = (Node *)Node48::New();
 		break;
 	}
 	case NodeType::N256: {
-		deserialized_node = (Node *)new Node256();
+		deserialized_node = (Node *)Node256::New();
 		break;
 	}
 	}
@@ -251,7 +316,6 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 }
 
 void UpdateParentsOfNodes(Node *&l_node, Node *&r_node, ParentsOfNodes &parents) {
-
 	if (parents.l_parent) {
 		parents.l_parent->ReplaceChildPointer(parents.l_pos, l_node);
 	}
@@ -295,7 +359,6 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 }
 
 bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
-
 	auto &l_node = info.l_node;
 	auto &r_node = info.r_node;
 	Node *null_parent = nullptr;
@@ -348,7 +411,7 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 	// prefixes differ, create new node and insert both nodes as children
 
 	// create new node
-	Node *new_node = new Node4();
+	Node *new_node = Node4::New();
 	new_node->prefix = Prefix(l_node->prefix, mismatch_pos);
 
 	// insert l_node, break up prefix of l_node

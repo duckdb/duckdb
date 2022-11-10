@@ -187,7 +187,7 @@ Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
 	if (num_elements == 1) {
 		// inlined
 		auto element = reader.Read<row_t>();
-		return new Leaf(element, prefix);
+		return Leaf::New(element, prefix);
 	} else {
 		// non-inlined
 		auto elements = unique_ptr<row_t[]>(new row_t[num_elements + 1]);
@@ -195,7 +195,7 @@ Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
 		for (idx_t i = 0; i < num_elements; i++) {
 			elements[i + 1] = reader.Read<row_t>();
 		}
-		return new Leaf(move(elements), num_elements, prefix);
+		return Leaf::New(move(elements), num_elements, prefix);
 	}
 }
 

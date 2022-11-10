@@ -62,7 +62,7 @@ ART::~ART() {
 		estimated_art_size = 0;
 	}
 	if (tree) {
-		delete tree;
+		Node::Delete(tree);
 		tree = nullptr;
 	}
 }
@@ -273,7 +273,7 @@ void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_s
 			throw ConstraintException("New data contains duplicates on indexed column(s)");
 		}
 
-		node = new Leaf(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
+		node = Leaf::New(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
 	} else { // create a new node and recurse
 
 		// we will find at least two child entries of this node, otherwise we'd have reached a leaf
@@ -436,7 +436,7 @@ bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		node = new Leaf(key, depth, row_id);
+		node = Leaf::New(key, depth, row_id);
 		return true;
 	}
 
@@ -459,11 +459,11 @@ bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 			}
 		}
 
-		Node *new_node = new Node4();
+		Node *new_node = Node4::New();
 		new_node->prefix = Prefix(key, depth, new_prefix_length);
 		auto key_byte = node->prefix.Reduce(new_prefix_length);
 		Node4::InsertChild(new_node, key_byte, node);
-		Node *leaf_node = new Leaf(key, depth + new_prefix_length + 1, row_id);
+		Node *leaf_node = Leaf::New(key, depth + new_prefix_length + 1, row_id);
 		Node4::InsertChild(new_node, key[depth + new_prefix_length], leaf_node);
 		node = new_node;
 		return true;
@@ -474,13 +474,13 @@ bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 		uint32_t mismatch_pos = node->prefix.KeyMismatchPosition(key, depth);
 		if (mismatch_pos != node->prefix.Size()) {
 			// Prefix differs, create new node
-			Node *new_node = new Node4();
+			Node *new_node = Node4::New();
 			new_node->prefix = Prefix(key, depth, mismatch_pos);
 			// Break up prefix
 			auto key_byte = node->prefix.Reduce(mismatch_pos);
 			Node4::InsertChild(new_node, key_byte, node);
 
-			Node *leaf_node = new Leaf(key, depth + mismatch_pos + 1, row_id);
+			Node *leaf_node = Leaf::New(key, depth + mismatch_pos + 1, row_id);
 			Node4::InsertChild(new_node, key[depth + mismatch_pos], leaf_node);
 			node = new_node;
 			return true;
@@ -497,7 +497,7 @@ bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 		node->ReplaceChildPointer(pos, child);
 		return insertion_result;
 	}
-	Node *new_node = new Leaf(key, depth + 1, row_id);
+	Node *new_node = Leaf::New(key, depth + 1, row_id);
 	Node::InsertChild(node, key[depth], new_node);
 	return true;
 }
@@ -552,7 +552,7 @@ void ART::Erase(Node *&node, Key &key, idx_t depth, row_t row_id) {
 		auto leaf = static_cast<Leaf *>(node);
 		leaf->Remove(row_id);
 		if (leaf->count == 0) {
-			delete node;
+			Node::Delete(node);
 			node = nullptr;
 		}
 
