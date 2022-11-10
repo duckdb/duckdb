@@ -32,7 +32,7 @@ public:
 
 	idx_t Remaining() const;
 	idx_t GetPositionAndSize(idx_t &position, idx_t requested_size);
-	void Read(data_ptr_t pointer, idx_t size, idx_t position);
+	void Read(const char *pointer, idx_t size, idx_t position);
 
 private:
 	//! The JSON file handle

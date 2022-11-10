@@ -28,7 +28,7 @@ public:
 
 struct JSONBufferHandle {
 public:
-	JSONBufferHandle(idx_t readers, AllocatedData &&buffer);
+	explicit JSONBufferHandle(idx_t readers, AllocatedData &&buffer);
 
 public:
 	atomic<idx_t> readers;
@@ -58,13 +58,13 @@ public:
 };
 
 struct JSONLine {
-	data_ptr_t pointer;
+	const char *pointer;
 	idx_t size;
 };
 
 struct JSONScanLocalState : public LocalTableFunctionState {
 public:
-	JSONScanLocalState();
+	explicit JSONScanLocalState(JSONScanGlobalState &gstate);
 	static unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
 	                                                GlobalTableFunctionState *global_state);
 	idx_t ReadNext(JSONScanGlobalState &gstate);
@@ -78,9 +78,12 @@ private:
 	JSONBufferHandle *previous_buffer_handle;
 
 	//! Current batch read stuff
-	idx_t read_position;
-	idx_t read_size;
+	const char *ptr;
+	idx_t buffer_remaining;
 	JSONLine lines[STANDARD_VECTOR_SIZE];
+
+	//! Buffer to reconstruct first object
+	AllocatedData reconstruct_buffer;
 };
 
 } // namespace duckdb

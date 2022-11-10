@@ -25,7 +25,7 @@ idx_t JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t requested_size) 
 	return actual_size;
 }
 
-void JSONFileHandle::Read(data_ptr_t pointer, idx_t size, idx_t position) {
+void JSONFileHandle::Read(const char *pointer, idx_t size, idx_t position) {
 	file_handle->Read((void *)pointer, size, position);
 }
 
