@@ -275,6 +275,9 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (!config.error_manager) {
 		config.error_manager = make_unique<ErrorManager>();
 	}
+	if (!config.default_allocator) {
+		config.default_allocator = Allocator::DefaultAllocatorReference();
+	}
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

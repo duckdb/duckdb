@@ -94,6 +94,7 @@ public:
 	}
 
 	static Allocator &DefaultAllocator();
+	static shared_ptr<Allocator> &DefaultAllocatorReference();
 
 private:
 	allocate_function_ptr_t allocate_function;
