@@ -210,8 +210,9 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 //===--------------------------------------------------------------------===//
 struct ParallelCSVGlobalState : public GlobalTableFunctionState {
 public:
-	ParallelCSVGlobalState(unique_ptr<CSVFileHandle> file_handle_p, vector<string> &files_path_p,
-	                       idx_t system_threads_p, idx_t buffer_size_p, idx_t rows_to_skip)
+	ParallelCSVGlobalState(ClientContext &context, unique_ptr<CSVFileHandle> file_handle_p,
+	                       vector<string> &files_path_p, idx_t system_threads_p, idx_t buffer_size_p,
+	                       idx_t rows_to_skip)
 	    : file_handle(move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p) {
 		for (idx_t i = 0; i < rows_to_skip; i++) {
 			file_handle->ReadLine();
@@ -225,7 +226,7 @@ public:
 		} else {
 			bytes_per_local_state = file_size / MaxThreads();
 		}
-		current_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
+		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle);
 		next_buffer = current_buffer->Next(*file_handle, buffer_size);
 	}
 	ParallelCSVGlobalState() {
@@ -312,7 +313,7 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 		if (file_index < bind_data.files.size()) {
 			bind_data.options.file_path = bind_data.files[file_index++];
 			file_handle = ReadCSV::OpenCSV(bind_data.options, context);
-			next_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
+			next_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle);
 		}
 	}
 	return result;
@@ -333,8 +334,9 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 		file_handle = ReadCSV::OpenCSV(bind_data.options, context);
 	}
 	idx_t rows_to_skip = bind_data.options.skip_rows + (bind_data.options.has_header ? 1 : 0);
-	return make_unique<ParallelCSVGlobalState>(move(file_handle), bind_data.files, context.db->NumberOfThreads(),
-	                                           bind_data.options.buffer_size, rows_to_skip);
+	return make_unique<ParallelCSVGlobalState>(context, move(file_handle), bind_data.files,
+	                                           context.db->NumberOfThreads(), bind_data.options.buffer_size,
+	                                           rows_to_skip);
 }
 
 //===--------------------------------------------------------------------===//
