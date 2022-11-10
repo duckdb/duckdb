@@ -166,7 +166,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
-
 }
 
 } // namespace duckdb

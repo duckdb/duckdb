@@ -14,6 +14,16 @@ INSERT INTO t0 VALUES (1) RETURNING c0, rowid;
 Binder Error: rowid is not supported in returning statements
 
 statement error
+INSERT INTO t0 VALUES (1), (2), (3) RETURNING *, rowid;
+----
+Binder Error: rowid is not supported in returning statements
+
+statement error
+INSERT INTO t0 VALUES (4) RETURNING c0 + rowid;
+----
+Binder Error: rowid is not supported in returning statements
+
+statement error
 INSERT INTO t0 VALUES (1) RETURNING rowid c2;
 ----
 Binder Error: rowid is not supported in returning statements
@@ -27,3 +37,15 @@ statement error
 DELETE FROM t0 WHERE c0 = 0 RETURNING rowid;
 ----
 Binder Error: rowid is not supported in returning statements
+
+# make sure you can still return the alias rowid
+# More tests could be written, but the returning binder doesn't allow
+# any type of subqueries
+
+statement ok
+INSERT INTO t0 VALUES (1) RETURNING c0 as rowid;
+
+statement error
+INSERT INTO t0 VALUES (1) RETURNING sum(c0) as rowid;
+----
+Binder Error: Aggregate functions are not supported here
