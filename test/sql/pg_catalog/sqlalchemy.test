@@ -5,6 +5,9 @@
 # https://github.com/sqlalchemy/sqlalchemy/blob/master/lib/sqlalchemy/dialects/postgresql/base.py
 
 statement ok
+CREATE TYPE greeting AS ENUM('hi', 'bonjour', 'konnichiwa', 'howdy')
+
+statement ok
 CREATE TABLE integral_values (
     j smallint,
     k integer,
@@ -20,7 +23,8 @@ CREATE TABLE integral_values (
     s date,
     t time,
     u timestamp,
-	v date[]
+	v date[],
+	w greeting
 );
 
 # has_schema
@@ -189,6 +193,7 @@ s	date	NULL	false
 t	time without time zone	NULL	false
 u	timestamp without time zone	NULL	false
 v	list	NULL	false
+w	enum	NULL	false
 
 # get_pk_constraint
 statement ok
