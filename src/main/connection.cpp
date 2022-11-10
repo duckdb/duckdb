@@ -207,10 +207,10 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	vector<ColumnDefinition> column_list;
 	for (auto &column : columns) {
 		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
-		if (col_list.size() != 1) {
+		if (col_list.LogicalColumnCount() != 1) {
 			throw ParserException("Expected a single column definition");
 		}
-		column_list.push_back(move(col_list[0]));
+		column_list.push_back(move(col_list.GetColumnMutable(LogicalIndex(0))));
 	}
 	return make_shared<ReadCSVRelation>(context, csv_file, move(column_list));
 }

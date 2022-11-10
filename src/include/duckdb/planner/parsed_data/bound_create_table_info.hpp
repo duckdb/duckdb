@@ -30,8 +30,6 @@ struct BoundCreateTableInfo {
 	SchemaCatalogEntry *schema;
 	//! The base CreateInfo object
 	unique_ptr<CreateInfo> base;
-	//! The map of column names -> column index, used during binding
-	case_insensitive_map_t<column_t> name_map;
 	//! Column dependency manager of the table
 	ColumnDependencyManager column_dependency_manager;
 	//! List of constraints on the table

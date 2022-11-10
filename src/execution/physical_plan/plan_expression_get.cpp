@@ -30,7 +30,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExpression
 	chunk_scan->owned_collection->InitializeAppend(append_state);
 	for (idx_t expression_idx = 0; expression_idx < expr_scan->expressions.size(); expression_idx++) {
 		chunk.Reset();
-		expr_scan->EvaluateExpression(allocator, expression_idx, nullptr, chunk);
+		expr_scan->EvaluateExpression(context, expression_idx, nullptr, chunk);
 		chunk_scan->owned_collection->Append(append_state, chunk);
 	}
 	return move(chunk_scan);

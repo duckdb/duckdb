@@ -4,6 +4,8 @@
 
 require parquet
 
+require vector_size 512
+
 statement ok
 create table test_5209 as from range(10000)
 

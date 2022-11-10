@@ -32,7 +32,7 @@ static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
 	if (column_id == DConstants::INVALID_INDEX) {
 		return column_id;
 	}
-	auto &col = table.columns[column_id];
+	auto &col = table.columns.GetColumn(LogicalIndex(column_id));
 	return col.StorageOid();
 }
 
@@ -92,7 +92,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 			} else {
-				result->scanned_types.push_back(columns[col_idx].Type());
+				result->scanned_types.push_back(columns.GetColumn(LogicalIndex(col_idx)).Type());
 			}
 		}
 	}

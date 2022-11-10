@@ -16,6 +16,13 @@
 namespace duckdb {
 class BufferedSerializer;
 
+struct IndexWriteOperation {
+	template <class SRC, class DST>
+	static DST Operation(SRC input) {
+		return input.index;
+	}
+};
+
 class FieldWriter {
 public:
 	DUCKDB_API FieldWriter(Serializer &serializer);
@@ -55,6 +62,20 @@ public:
 		for (auto &element : elements) {
 			Write<T>(element);
 		}
+	}
+
+	template <class T, class SRC, class OP, class CONTAINER_TYPE = vector<SRC>>
+	void WriteGenericList(const CONTAINER_TYPE &elements) {
+		AddField();
+		Write<uint32_t>(elements.size());
+		for (auto &element : elements) {
+			Write<T>(OP::template Operation<SRC, T>(element));
+		}
+	}
+
+	template <class T>
+	void WriteIndexList(const vector<T> &elements) {
+		WriteGenericList<idx_t, T, IndexWriteOperation>(elements);
 	}
 
 	// vector<bool> yay
@@ -147,6 +168,13 @@ private:
 	idx_t remaining_data;
 };
 
+struct IndexReadOperation {
+	template <class SRC, class DST>
+	static DST Operation(SRC input) {
+		return DST(input);
+	}
+};
+
 class FieldReader {
 public:
 	DUCKDB_API FieldReader(Deserializer &source);
@@ -175,8 +203,24 @@ public:
 		return source.Read<T>();
 	}
 
-	template <class T>
-	vector<T> ReadRequiredList() {
+	template <class T, class CONTAINER_TYPE = vector<T>>
+	CONTAINER_TYPE ReadRequiredList() {
+		if (field_count >= max_field_count) {
+			// field is not there, throw an exception
+			throw SerializationException("Attempting to read a required field, but field is missing");
+		}
+		AddField();
+		auto result_count = source.Read<uint32_t>();
+		CONTAINER_TYPE result;
+		result.reserve(result_count);
+		for (idx_t i = 0; i < result_count; i++) {
+			result.push_back(source.Read<T>());
+		}
+		return result;
+	}
+
+	template <class T, class SRC, class OP>
+	vector<T> ReadRequiredGenericList() {
 		if (field_count >= max_field_count) {
 			// field is not there, throw an exception
 			throw SerializationException("Attempting to read a required field, but field is missing");
@@ -186,9 +230,14 @@ public:
 		vector<T> result;
 		result.reserve(result_count);
 		for (idx_t i = 0; i < result_count; i++) {
-			result.push_back(source.Read<T>());
+			result.push_back(OP::template Operation<SRC, T>(source.Read<SRC>()));
 		}
 		return result;
+	}
+
+	template <class T>
+	vector<T> ReadRequiredIndexList() {
+		return ReadRequiredGenericList<T, idx_t, IndexReadOperation>();
 	}
 
 	template <class T>

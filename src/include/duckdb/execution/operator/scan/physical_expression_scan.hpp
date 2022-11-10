@@ -37,7 +37,7 @@ public:
 
 public:
 	bool IsFoldable() const;
-	void EvaluateExpression(Allocator &allocator, idx_t expression_idx, DataChunk *child_chunk,
+	void EvaluateExpression(ClientContext &context, idx_t expression_idx, DataChunk *child_chunk,
 	                        DataChunk &result) const;
 };
 

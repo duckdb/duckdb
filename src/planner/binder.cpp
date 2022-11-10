@@ -411,7 +411,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 
 	vector<column_t> bound_columns;
 	idx_t column_count = 0;
-	for (auto &col : table->columns) {
+	for (auto &col : table->columns.Logical()) {
 		names.push_back(col.Name());
 		types.push_back(col.Type());
 		if (!col.Generated()) {

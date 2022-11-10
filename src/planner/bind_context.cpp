@@ -191,8 +191,7 @@ static bool ColumnIsGenerated(Binding *binding, column_t index) {
 	}
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
 	auto table_entry = (TableCatalogEntry *)catalog_entry;
-	D_ASSERT(table_entry->columns.size() >= index);
-	return table_entry->columns[index].Generated();
+	return table_entry->columns.GetColumn(LogicalIndex(index)).Generated();
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &schema_name, const string &table_name,

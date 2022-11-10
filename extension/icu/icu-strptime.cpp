@@ -117,7 +117,7 @@ struct ICUStrptime : public ICUDateFunc {
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("strptime format must be a constant");
 		}
-		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		Value options_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		StrpTimeFormat format;
 		if (!options_str.IsNull()) {
 			auto format_string = options_str.ToString();
