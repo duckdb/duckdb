@@ -132,10 +132,10 @@ void Node::New(NodeType &type, Node *&node) {
 	}
 }
 
-template <typename T, typename... Args>
-T *AllocateObject(Args &&...args) {
+template <typename T, typename... ARGS>
+T *AllocateObject(ARGS &&...args) {
 	auto data = Allocator::DefaultAllocator().AllocateData(sizeof(T));
-	return new (data) T(std::forward<Args>(args)...);
+	return new (data) T(std::forward<ARGS>(args)...);
 }
 
 template <typename T>

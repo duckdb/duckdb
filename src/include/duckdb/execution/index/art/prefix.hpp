@@ -64,7 +64,7 @@ private:
 private:
 	bool IsInlined() const;
 	uint8_t *AllocatePrefix(uint32_t size);
-	void Overwrite(uint32_t new_size, unique_ptr<uint8_t[]> data);
+	void Overwrite(uint32_t new_size, uint8_t *data);
 	void Destroy();
 };
 

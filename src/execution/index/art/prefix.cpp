@@ -2,6 +2,14 @@
 
 namespace duckdb {
 
+uint8_t *AllocateArray(idx_t size) {
+	return (uint8_t *)Allocator::DefaultAllocator().AllocateData(size * sizeof(uint8_t));
+}
+
+void DeleteArray(uint8_t *ptr, idx_t size) {
+	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, size * sizeof(uint8_t));
+}
+
 uint32_t Prefix::Size() const {
 	return size;
 }
@@ -27,7 +35,7 @@ uint8_t *Prefix::AllocatePrefix(uint32_t size) {
 		prefix = &value.inlined[0];
 	} else {
 		// allocate new prefix
-		value.ptr = new uint8_t[size];
+		value.ptr = AllocateArray(size);
 		prefix = value.ptr;
 	}
 	return prefix;
@@ -62,7 +70,7 @@ Prefix::~Prefix() {
 
 void Prefix::Destroy() {
 	if (!IsInlined()) {
-		delete[] value.ptr;
+		DeleteArray(value.ptr, size);
 		size = 0;
 	}
 }
@@ -90,7 +98,7 @@ Prefix &Prefix::operator=(Prefix &&other) noexcept {
 	return *this;
 }
 
-void Prefix::Overwrite(uint32_t new_size, unique_ptr<uint8_t[]> data) {
+void Prefix::Overwrite(uint32_t new_size, uint8_t *data) {
 	if (new_size <= PREFIX_INLINE_BYTES) {
 		// new entry would be inlined
 		// inline the data and destroy the pointer
@@ -101,15 +109,16 @@ void Prefix::Overwrite(uint32_t new_size, unique_ptr<uint8_t[]> data) {
 	} else {
 		// new entry would not be inlined
 		// take over the data directly
+		Destroy();
 		size = new_size;
-		value.ptr = data.release();
+		value.ptr = data;
 	}
 }
 
 void Prefix::Concatenate(uint8_t key, Prefix &other) {
 	auto new_length = size + 1 + other.size;
 	// have to allocate space in our prefix array
-	unique_ptr<uint8_t[]> new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_length]);
+	auto new_prefix = AllocateArray(new_length);
 	idx_t new_prefix_idx = 0;
 	// 1) add the to-be deleted node's prefix
 	for (uint32_t i = 0; i < other.size; i++) {
@@ -122,18 +131,18 @@ void Prefix::Concatenate(uint8_t key, Prefix &other) {
 	for (uint32_t i = 0; i < size; i++) {
 		new_prefix[new_prefix_idx++] = prefix[i];
 	}
-	Overwrite(new_length, move(new_prefix));
+	Overwrite(new_length, new_prefix);
 }
 
 uint8_t Prefix::Reduce(uint32_t n) {
 	auto new_size = size - n - 1;
-	auto new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_size]);
+	auto new_prefix = AllocateArray(new_size);
 	auto prefix = GetPrefixData();
 	auto key = prefix[n];
 	for (idx_t i = 0; i < new_size; i++) {
 		new_prefix[i] = prefix[i + n + 1];
 	}
-	Overwrite(new_size, move(new_prefix));
+	Overwrite(new_size, new_prefix);
 	return key;
 }
 
