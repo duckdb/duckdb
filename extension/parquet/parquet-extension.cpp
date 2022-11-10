@@ -73,6 +73,8 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	mutex lock;
 	shared_ptr<ParquetReader> current_reader;
+	vector<shared_ptr<ParquetReader>> readers;
+	vector<bool> file_opening;
 	idx_t batch_index;
 	idx_t file_index;
 	idx_t row_group_index;
@@ -386,6 +388,9 @@ public:
 
 		auto result = make_unique<ParquetReadGlobalState>();
 
+		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
+		result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
+
 		if (bind_data.initial_reader) {
 			result->current_reader = bind_data.initial_reader;
 		} else {
@@ -398,6 +403,7 @@ public:
 			}
 		}
 
+		result->readers[0] = result->current_reader;
 		result->row_group_index = 0;
 		result->file_index = 0;
 		result->batch_index = 0;
@@ -482,79 +488,84 @@ public:
 
 	static bool ParquetParallelStateNext(ClientContext &context, const ParquetReadBindData &bind_data,
 	                                     ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state) {
-		lock_guard<mutex> parallel_lock(parallel_state.lock);
+//		lock_guard<mutex> parallel_lock(parallel_state.lock); TODO WHAT IF EXCEPTION?
 
-		if (parallel_state.current_reader == nullptr) {
-			return false;
-		}
+		while(true) {
+			parallel_state.lock.lock();
 
-		if (parallel_state.row_group_index < parallel_state.current_reader->NumRowGroups()) {
-			// groups remain in the current parquet file: read the next group
-			scan_data.reader = parallel_state.current_reader;
-			vector<idx_t> group_indexes {parallel_state.row_group_index};
-			scan_data.reader->InitializeScan(scan_data.scan_state, scan_data.column_ids, group_indexes,
-			                                 scan_data.table_filters);
-			scan_data.batch_index = parallel_state.batch_index++;
-			scan_data.file_index = parallel_state.file_index;
-			parallel_state.row_group_index++;
-			return true;
-		} else {
-			// no groups remain in the current parquet file: check if there are more files to read
-			while (parallel_state.file_index + 1 < bind_data.files.size()) {
-				// read the next file
-				string file = bind_data.files[++parallel_state.file_index];
+			// TODO remove this
+			if (parallel_state.current_reader == nullptr) {
+				parallel_state.lock.unlock();
+				return false;
+			}
 
-				// TODO this is an issue for httpfs: we're doing head requests + fetching metadata while locking global state.
-				// this is mega slow for metadata-heavy reads across many files
-				// The issue however is that we need the batch index depends on the metadata of previous files and you cannot know the batch index
-				// However: we don't need to know the batch index for reading the metadata, just read metadata, then go through files again for
-				// a row group to scan.
-				// So we can just:
-				// If there's a row group to be scanned, scan it
-				// Elif theres files left, setup the reader for the file, then recheck for row groups.
-				// Else, done
+			if (parallel_state.file_index >= parallel_state.readers.size()) {
+				// All files exhausted
+				parallel_state.lock.unlock();
+				return false;
+			}
 
-				// Plan:
+			// The current reader has rowgroups left to be scanned
+			if (parallel_state.readers[parallel_state.file_index]) {
+				if (parallel_state.row_group_index < parallel_state.readers[parallel_state.file_index]->NumRowGroups()) {
 
-				// We should add to the parallel_state:
-				// idx_t next_file							the file where the next call to ParquetParallelStateNext should start searching
-				// vector<enum> file_status					UNOPENED, OPENING, OPENED, COMPLETE
-				// vector<idx_t> file_next_row_group		the next row_group for this file to be scanned
-				// vector<idx_t> file_row_groups			the total row_group count of a file
+					// TODO remove this
+					if (!parallel_state.current_reader) {
+						parallel_state.current_reader = parallel_state.readers[parallel_state.file_index];
+					}
 
-				// Then every call to ParquetParallelStateNext will:
-				// - linearly search file_status, starting at next_file for the first occurrence of either:
-				// 		UNOPENED:
-				// 			- set file_status[curr_file] to OPENING
-				//			- unlock global state
-				//			- when done
-				//			- lock global state
-				//			- update file_row_groups[curr_file]
-				// 			- if file_row_groups[curr_file] is 1 or 0: set file_status[curr_file] to COMPLETE & set next_file to curr_file+1
-				// 			- else: this file has more rowgroups that can be scanned in parallel, file_status[curr_file] to OPENED and next_file to curr_file
-				//
-				//		OPENED: this thread should start scanning the next available row group using file_next_row_group[next_file]
-				//			- handle as current implementation, just pick up the next row group, increment file_next_row_group[curr_file]
+					// groups remain in the current parquet file: read the next group
+					scan_data.reader = parallel_state.current_reader;
+					vector<idx_t> group_indexes {parallel_state.row_group_index};
+					scan_data.reader->InitializeScan(scan_data.scan_state, scan_data.column_ids, group_indexes,
+					                                 scan_data.table_filters);
+					scan_data.batch_index = parallel_state.batch_index++;
+					scan_data.file_index = parallel_state.file_index;
+//					std::cout << "Reading row group " << parallel_state.row_group_index << " from file " << bind_data.files[parallel_state.file_index] << "\n";
+					parallel_state.row_group_index++;
 
-				parallel_state.current_reader =
-				    make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
-				                               parallel_state.current_reader->parquet_options, bind_data.files[0]);
-				if (parallel_state.current_reader->NumRowGroups() == 0) {
-					// empty parquet file, move to next file
+					parallel_state.lock.unlock();
+
+					return true;
+				} else {
+					// increase the file_index and retry
+					parallel_state.file_index++;
+					parallel_state.row_group_index = 0;
+
+					parallel_state.lock.unlock();
+
+					if (parallel_state.file_index >= parallel_state.readers.size()) {
+						// All files exhausted
+						return false;
+					}
 					continue;
 				}
-				// set up the scan state to read the first group
-				scan_data.reader = parallel_state.current_reader;
-				vector<idx_t> group_indexes {0};
-				scan_data.reader->InitializeScan(scan_data.scan_state, scan_data.column_ids, group_indexes,
-				                                 scan_data.table_filters);
-				scan_data.batch_index = parallel_state.batch_index++;
-				scan_data.file_index = parallel_state.file_index;
-				parallel_state.row_group_index = 1;
-				return true;
+
 			}
+
+			// Lets look for a file that has no reader and is not yet being read
+			for (idx_t i = parallel_state.file_index; i < bind_data.files.size(); i++) {
+				if (!parallel_state.readers[i] && parallel_state.file_opening[i] == false) {
+					string file = bind_data.files[i];
+					parallel_state.file_opening[i] = true;
+					auto pq_options = parallel_state.current_reader->parquet_options;
+
+					// crux here is we make the ParquetReader without holding lock, as especially over HTTP this is slow
+					// as it involves reading the metadata
+					parallel_state.lock.unlock();
+//					std::cout << "Opening file " << bind_data.files[i] << "\n";
+					auto reader = make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
+					                                         pq_options, bind_data.files[0]);
+//					std::cout << "Done with opening file " << bind_data.files[i] << "\n";
+					parallel_state.lock.lock();
+
+				  	parallel_state.readers[i] = reader;
+					break;
+				}
+			}
+
+			parallel_state.lock.unlock();
 		}
-		return false;
 	}
 
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
