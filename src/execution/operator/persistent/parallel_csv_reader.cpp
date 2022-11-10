@@ -298,6 +298,7 @@ unquote : {
 		    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
 		return false;
 	}
+}
 handle_escape : {
 	/* state: handle_escape */
 	// escape should be followed by a quote or another escape character
