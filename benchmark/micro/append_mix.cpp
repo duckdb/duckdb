@@ -20,12 +20,8 @@ using namespace duckdb;
 		/* 5, 10, 15 */                                                                                                \
 		return 5 + 5 * random.NextRandom(0, 3);                                                                        \
 	}                                                                                                                  \
-	bool get_random_bool() {                                                                                           \
-		return random.NextRandom() > 0.5;                                                                              \
-	}                                                                                                                  \
-	int32_t get_random_active() {                                                                                      \
-		return int32_t(random.NextRandom(0, 2));                                                                       \
-	}                                                                                                                  \
+	bool get_random_bool() { return random.NextRandom() > 0.5; }                                                       \
+	int32_t get_random_active() { return int32_t(random.NextRandom(0, 2)); }                                           \
 	void get_random_area_code(char *area_code) {                                                                       \
 		uint32_t code = uint32_t(random.NextRandom(0, 999999));                                                        \
 		auto endptr = area_code + 6;                                                                                   \
@@ -60,15 +56,9 @@ using namespace duckdb;
 		state->conn.Query("DROP TABLE IF EXISTS test");                                                                \
 		Load(state);                                                                                                   \
 	}                                                                                                                  \
-	string VerifyResult(QueryResult *result) override {                                                                \
-		return string();                                                                                               \
-	}                                                                                                                  \
-	string BenchmarkInfo() override {                                                                                  \
-		return "Append 10M rows to a table using an Appender";                                                         \
-	}                                                                                                                  \
-	size_t Timeout() override {                                                                                        \
-		return 600;                                                                                                    \
-	}
+	string VerifyResult(QueryResult *result) override { return string(); }                                             \
+	string BenchmarkInfo() override { return "Append 10M rows to a table using an Appender"; }                         \
+	size_t Timeout() override { return 600; }
 
 DUCKDB_BENCHMARK(Appender10MRows, "[append_mix]")
 APPEND_MIX_BENCHMARK(false);

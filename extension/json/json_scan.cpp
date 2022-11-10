@@ -125,10 +125,9 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 			auto reconstruct_ptr = reconstruct_buffer.get();
 			memcpy(reconstruct_ptr, prev_ptr, size);
 
-
 			auto line_end = (const char *)memchr(ptr, '\n', buffer_remaining);
-			memcpy(prev_ptr + size, ptr, line_end - ptr);
-			ptr
+			memcpy((void *)(prev_ptr + size), ptr, line_end - ptr);
+			//			ptr
 
 			// TODO: maybe throw error here saying json object is too big?
 		}

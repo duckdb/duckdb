@@ -14,8 +14,7 @@
 
 #define DUCKDB_BENCHMARK(NAME, GROUP)                                                                                  \
 	class NAME##Benchmark : public DuckDBBenchmark {                                                                   \
-		NAME##Benchmark(bool register_benchmark) : DuckDBBenchmark(register_benchmark, "" #NAME, GROUP) {              \
-		}                                                                                                              \
+		NAME##Benchmark(bool register_benchmark) : DuckDBBenchmark(register_benchmark, "" #NAME, GROUP) {}             \
                                                                                                                        \
 	public:                                                                                                            \
 		static NAME##Benchmark *GetInstance() {                                                                        \

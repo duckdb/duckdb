@@ -1,5 +1,5 @@
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
@@ -16,7 +16,7 @@ void SubstringDetection(string &str_1, string &str_2, const string &name_str_1, 
 	if (str_1.empty() || str_2.empty()) {
 		return;
 	}
-	if (str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) {
+	if ((str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) && str_1 != "NULL") {
 		throw BinderException("%s must not appear in the %s specification and vice versa", name_str_1, name_str_2);
 	}
 }
@@ -91,12 +91,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->sql_types = expected_types;
 
 	string file_pattern = info.file_path;
+	vector<string> patterns {file_pattern};
 
-	auto &fs = FileSystem::GetFileSystem(context);
-	bind_data->files = fs.Glob(file_pattern, context);
-	if (bind_data->files.empty()) {
-		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
-	}
+	bind_data->InitializeFiles(context, patterns);
 
 	auto &options = bind_data->options;
 
@@ -111,7 +108,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		// no FORCE_QUOTE specified: initialize to false
 		options.force_not_null.resize(expected_types.size(), false);
 	}
-	bind_data->Finalize();
+	bind_data->FinalizeRead(context);
 	return move(bind_data);
 }
 

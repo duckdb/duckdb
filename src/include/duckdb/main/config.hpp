@@ -125,6 +125,8 @@ struct DBConfigOptions {
 	bool allow_unsigned_extensions = false;
 	//! Enable emitting FSST Vectors
 	bool enable_fsst_vectors = false;
+	//! Experimental parallel CSV reader
+	bool experimental_parallel_csv_reader = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

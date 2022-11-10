@@ -50,9 +50,9 @@ void JSONExtension::Load(DuckDB &db) {
 	}
 
 	// JSON table functions
-	for (auto &fun : JSONFunctions::GetTableFunctions()) {
-		catalog.CreateFunction(*con.context, &fun);
-	}
+	//	for (auto &fun : JSONFunctions::GetTableFunctions()) {
+	//		catalog.CreateFunction(*con.context, &fun);
+	//	}
 
 	// JSON macro's
 	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {
