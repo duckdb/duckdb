@@ -1,0 +1,32 @@
+# name: test/sql/index/art/test_art_memory_usage.test
+# description: Test ART index with many matches
+# group: [art]
+
+require skip_reload
+
+statement ok
+create table integers(i integer);
+
+statement ok
+insert into integers select * from range(1000000);
+
+statement ok
+create temporary table base_memory as select replace(memory_usage, 'MB', '')::INT AS usage from pragma_database_size();
+
+statement ok
+drop table integers
+
+statement ok
+create table integers(i integer primary key);
+
+statement ok
+insert into integers select * from range(1000000);
+
+statement ok
+create temporary table index_memory as select replace(memory_usage, 'MB', '')::INT AS usage from pragma_database_size();
+
+query I
+SELECT index_memory.usage > 2 * base_memory.usage FROM base_memory, index_memory
+----
+1
+
