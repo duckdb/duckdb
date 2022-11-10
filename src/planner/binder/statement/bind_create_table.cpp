@@ -248,17 +248,21 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults) {
 	for (idx_t i = 0; i < columns.size(); i++) {
+		auto &column = columns[i];
+		if (column.Generated()) {
+			continue;
+		}
 		unique_ptr<Expression> bound_default;
-		if (columns[i].DefaultValue()) {
+		if (column.DefaultValue()) {
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
-			auto default_copy = columns[i].DefaultValue()->Copy();
+			auto default_copy = column.DefaultValue()->Copy();
 			ConstantBinder default_binder(*this, context, "DEFAULT value");
-			default_binder.target_type = columns[i].Type();
+			default_binder.target_type = column.Type();
 			bound_default = default_binder.Bind(default_copy);
 		} else {
 			// no default value specified: push a default value of constant null
-			bound_default = make_unique<BoundConstantExpression>(Value(columns[i].Type()));
+			bound_default = make_unique<BoundConstantExpression>(Value(column.Type()));
 		}
 		bound_defaults.push_back(move(bound_default));
 	}
