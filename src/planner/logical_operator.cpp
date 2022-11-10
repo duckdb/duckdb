@@ -94,69 +94,6 @@ string LogicalOperator::ToString() const {
 	return renderer.ToString(*this);
 }
 
-#ifdef DEBUG
-static bool HashExpressionEquality(unique_ptr<Expression> &lhs, unique_ptr<Expression> &rhs) {
-	bool result = Expression::Equals(lhs.get(), rhs.get());
-	if (!result) {
-		return result;
-	}
-	// For hashing purposes, negative and positive zero can not compare equal
-	if (!lhs && !rhs) {
-		return result;
-	}
-	if (lhs->expression_class != ExpressionClass::BOUND_CONSTANT) {
-		return result;
-	}
-	auto left = lhs.get();
-	auto right = rhs.get();
-	auto &left_bound_constant = (BoundConstantExpression &)(*left);
-	auto &right_bound_constant = (BoundConstantExpression &)(*right);
-	auto value_type = left_bound_constant.value.type().id();
-	if (value_type != LogicalTypeId::DOUBLE && value_type != LogicalTypeId::FLOAT) {
-		return result;
-	}
-	if (value_type == LogicalTypeId::DOUBLE) {
-		double n_zero_raw = -0.0;
-		double p_zero_raw = 0.0;
-		auto l_value_raw = left_bound_constant.value.GetValueUnsafe<double>();
-		auto r_value_raw = right_bound_constant.value.GetValueUnsafe<double>();
-
-		uint64_t l_value = *(uint64_t *)&l_value_raw;
-		uint64_t r_value = *(uint64_t *)&r_value_raw;
-		uint64_t n_zero = *(uint64_t *)&n_zero_raw;
-		uint64_t p_zero = *(uint64_t *)&p_zero_raw;
-		if (l_value == r_value && l_value == n_zero) {
-			// Both are the same type of negative
-			return true;
-		}
-		if (l_value == r_value && l_value == p_zero) {
-			// Both are the same type of negative
-			return true;
-		}
-		return false;
-	} else {
-		float n_zero_raw = -0.0;
-		float p_zero_raw = 0.0;
-		auto l_value_raw = left_bound_constant.value.GetValueUnsafe<float>();
-		auto r_value_raw = right_bound_constant.value.GetValueUnsafe<float>();
-
-		uint32_t l_value = *(uint32_t *)&l_value_raw;
-		uint32_t r_value = *(uint32_t *)&r_value_raw;
-		uint32_t n_zero = *(uint32_t *)&n_zero_raw;
-		uint32_t p_zero = *(uint32_t *)&p_zero_raw;
-		if (l_value == r_value && l_value == n_zero) {
-			// Both are the same type of negative
-			return true;
-		}
-		if (l_value == r_value && l_value == p_zero) {
-			// Both are the same type of negative
-			return true;
-		}
-		return false;
-	}
-}
-#endif
-
 void LogicalOperator::Verify(ClientContext &context) {
 #ifdef DEBUG
 	// verify expressions
@@ -175,7 +112,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 		for (idx_t other_idx = 0; other_idx < expr_idx; other_idx++) {
 			// comparison with other expressions
 			auto other_hash = expressions[other_idx]->Hash();
-			bool expr_equal = HashExpressionEquality(expressions[expr_idx], expressions[other_idx]);
+			bool expr_equal = Expression::Equals(expressions[expr_idx].get(), expressions[other_idx].get());
 			if (original_hash != other_hash) {
 				// if the hashes are not equal the expressions should not be equal either
 				D_ASSERT(!expr_equal);
