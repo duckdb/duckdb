@@ -13,15 +13,20 @@
 
 namespace duckdb {
 class Prefix {
+	static constexpr idx_t PREFIX_INLINE_BYTES = 8;
 public:
 	Prefix();
 	// Prefix created from key starting on `depth`
 	Prefix(Key &key, uint32_t depth, uint32_t size);
 	// Prefix created from other prefix up to size
 	Prefix(Prefix &other_prefix, uint32_t size);
+	~Prefix();
 
 	// Returns the Prefix's size
 	uint32_t Size() const;
+	//! Return a pointer to the prefix data
+	uint8_t *GetPrefixData();
+	const uint8_t *GetPrefixData() const;
 
 	// Subscript operator
 	uint8_t &operator[](idx_t idx);
@@ -49,8 +54,17 @@ public:
 	uint32_t MismatchPosition(Prefix &other);
 
 private:
-	unique_ptr<uint8_t[]> prefix;
 	uint32_t size;
+	union {
+		uint8_t *ptr;
+		uint8_t inlined[8];
+	} value;
+
+private:
+	bool IsInlined() const;
+	uint8_t *AllocatePrefix(uint32_t size);
+	void Overwrite(uint32_t new_size, unique_ptr<uint8_t[]> data);
+	void Destroy();
 };
 
 } // namespace duckdb

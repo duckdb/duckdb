@@ -32,7 +32,6 @@ Leaf::Leaf(unique_ptr<row_t[]> row_ids_p, idx_t num_elements_p, Prefix &prefix_p
 }
 
 void Leaf::Insert(row_t row_id) {
-
 	// Grow array
 	if (count == capacity) {
 		auto new_row_id = unique_ptr<row_t[]>(new row_t[capacity * 2]);
