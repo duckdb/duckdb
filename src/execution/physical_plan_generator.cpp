@@ -197,8 +197,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		plan = ((LogicalExtensionOperator &)op).CreatePlan(context, *this);
 
-		if (!plan)
+		if (!plan) {
 			throw InternalException("Missing PhysicalOperator for Extension Operator");
+		}
 		break;
 	default: {
 		throw NotImplementedException("Unimplemented logical operator type!");
