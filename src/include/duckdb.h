@@ -183,6 +183,11 @@ typedef struct {
 } duckdb_decimal;
 
 typedef struct {
+	char *data;
+	idx_t size;
+} duckdb_string;
+
+typedef struct {
 	void *data;
 	idx_t size;
 } duckdb_blob;
@@ -629,18 +634,37 @@ DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t 
 DUCKDB_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-* returns: The char* value at the specified location, or nullptr if the value cannot be converted.
-The result must be freed with `duckdb_free`.
+* DEPRECATED: use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.
+* returns: The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
+converted. The result must be freed with `duckdb_free`.
 */
 DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
 
+/*!s
+* returns: The string value at the specified location.
+The result must be freed with `duckdb_free`.
+*/
+DUCKDB_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
+
 /*!
+* DEPRECATED: use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
 * returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
 
 The result must NOT be freed.
 */
 DUCKDB_API char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row);
+
+/*!
+* DEPRECATED: use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
+* returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
+If the column is NOT a VARCHAR column this function will return NULL.
+
+The result must NOT be freed.
+*/
+DUCKDB_API duckdb_string duckdb_value_string_internal(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
 * returns: The duckdb_blob value at the specified location. Returns a blob with blob.data set to nullptr if the

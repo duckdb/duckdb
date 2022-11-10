@@ -1114,7 +1114,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		D_ASSERT(!vector->auxiliary);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::JSON) {
-		// verify that there are no '\0' bytes in string values
+		// verify that the string is correct unicode
 		switch (vtype) {
 		case VectorType::FLAT_VECTOR: {
 			auto &validity = FlatVector::Validity(*vector);
@@ -1122,7 +1122,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel->get_index(i);
 				if (validity.RowIsValid(oidx)) {
-					strings[oidx].VerifyNull();
+					strings[oidx].Verify();
 				}
 			}
 			break;

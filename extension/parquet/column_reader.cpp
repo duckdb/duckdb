@@ -510,10 +510,6 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 	size_t pos;
 	auto utf_type = Utf8Proc::Analyze(str_data, str_len, &reason, &pos);
 	if (utf_type == UnicodeType::INVALID) {
-		if (reason == UnicodeInvalidReason::NULL_BYTE) {
-			// for null bytes we just truncate the string
-			return pos;
-		}
 		throw InvalidInputException("Invalid string encoding found in Parquet file: value \"" +
 		                            Blob::ToString(string_t(str_data, str_len)) + "\" is not valid UTF8!");
 	}

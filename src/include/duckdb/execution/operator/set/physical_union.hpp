@@ -17,7 +17,7 @@ public:
 	              idx_t estimated_cardinality);
 
 public:
-	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	vector<const PhysicalOperator *> GetSources() const override;
 };
 

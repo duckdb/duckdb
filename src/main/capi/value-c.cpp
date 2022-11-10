@@ -6,6 +6,8 @@
 
 #include "duckdb/main/capi/cast/generic.hpp"
 
+#include <cstring>
+
 using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::FetchDefaultValue;
@@ -118,17 +120,31 @@ duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t ro
 }
 
 char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row) {
-	return GetInternalCValue<char *, ToCStringCastWrapper<StringCast>>(result, col, row);
+	return duckdb_value_string(result, col, row).data;
+}
+
+duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row) {
+	return GetInternalCValue<duckdb_string, ToCStringCastWrapper<StringCast>>(result, col, row);
 }
 
 char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row) {
+	return duckdb_value_string_internal(result, col, row).data;
+}
+
+duckdb_string duckdb_value_string_internal(duckdb_result *result, idx_t col, idx_t row) {
 	if (!CanFetchValue(result, col, row)) {
-		return nullptr;
+		return FetchDefaultValue::Operation<duckdb_string>();
 	}
 	if (duckdb_column_type(result, col) != DUCKDB_TYPE_VARCHAR) {
-		return nullptr;
+		return FetchDefaultValue::Operation<duckdb_string>();
 	}
-	return UnsafeFetch<char *>(result, col, row);
+	// FIXME: this obviously does not work when there are null bytes in the string
+	// we need to remove the deprecated C result materialization to get that to work correctly
+	// since the deprecated C result materialization stores strings as null-terminated
+	duckdb_string res;
+	res.data = UnsafeFetch<char *>(result, col, row);
+	res.size = strlen(res.data);
+	return res;
 }
 
 duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
