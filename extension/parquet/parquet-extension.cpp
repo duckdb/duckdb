@@ -72,8 +72,12 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	mutex lock;
-	shared_ptr<ParquetReader> current_reader;
+	std::condition_variable file_read;
+
+	shared_ptr<ParquetReader> initial_reader;
 	vector<shared_ptr<ParquetReader>> readers;
+	bool error_opening_file = false;
+
 	vector<bool> file_opening;
 	idx_t batch_index;
 	idx_t file_index;
@@ -392,18 +396,19 @@ public:
 		result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
 
 		if (bind_data.initial_reader) {
-			result->current_reader = bind_data.initial_reader;
+			result->initial_reader = bind_data.initial_reader;
+			result->readers[0] = bind_data.initial_reader;
 		} else {
 			if (bind_data.files.empty()) {
-				result->current_reader = nullptr;
+				result->initial_reader = nullptr;
 			} else {
-				result->current_reader =
+				result->initial_reader =
 				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.names, bind_data.types,
 				                               input.column_ids, bind_data.parquet_options, bind_data.files[0]);
+				result->readers[0] = result->initial_reader;
 			}
 		}
 
-		result->readers[0] = result->current_reader;
 		result->row_group_index = 0;
 		result->file_index = 0;
 		result->batch_index = 0;
@@ -488,83 +493,118 @@ public:
 
 	static bool ParquetParallelStateNext(ClientContext &context, const ParquetReadBindData &bind_data,
 	                                     ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state) {
-//		lock_guard<mutex> parallel_lock(parallel_state.lock); TODO WHAT IF EXCEPTION?
-
 		while(true) {
-			parallel_state.lock.lock();
+			unique_lock<mutex> parallel_lock(parallel_state.lock);
 
-			// TODO remove this
-			if (parallel_state.current_reader == nullptr) {
-				parallel_state.lock.unlock();
+			if (parallel_state.error_opening_file) {
+				return false;
+			}
+
+			// TODO this is ugly?
+			if (parallel_state.initial_reader == nullptr) {
 				return false;
 			}
 
 			if (parallel_state.file_index >= parallel_state.readers.size()) {
 				// All files exhausted
-				parallel_state.lock.unlock();
 				return false;
 			}
 
-			// The current reader has rowgroups left to be scanned
 			if (parallel_state.readers[parallel_state.file_index]) {
 				if (parallel_state.row_group_index < parallel_state.readers[parallel_state.file_index]->NumRowGroups()) {
-
-					// TODO remove this
-					if (!parallel_state.current_reader) {
-						parallel_state.current_reader = parallel_state.readers[parallel_state.file_index];
-					}
+					// The current reader has rowgroups left to be scanned
 
 					// groups remain in the current parquet file: read the next group
-					scan_data.reader = parallel_state.current_reader;
+					scan_data.reader = parallel_state.readers[parallel_state.file_index];
 					vector<idx_t> group_indexes {parallel_state.row_group_index};
 					scan_data.reader->InitializeScan(scan_data.scan_state, scan_data.column_ids, group_indexes,
 					                                 scan_data.table_filters);
 					scan_data.batch_index = parallel_state.batch_index++;
 					scan_data.file_index = parallel_state.file_index;
-//					std::cout << "Reading row group " << parallel_state.row_group_index << " from file " << bind_data.files[parallel_state.file_index] << "\n";
+//					std::cout << "\nReading row group " << parallel_state.row_group_index << " from file " << bind_data.files[parallel_state.file_index] << "\n";
 					parallel_state.row_group_index++;
-
-					parallel_state.lock.unlock();
-
 					return true;
 				} else {
+//					std::cout << "file exhausted: " << bind_data.files[parallel_state.file_index] << "\n";
 					// increase the file_index and retry
 					parallel_state.file_index++;
 					parallel_state.row_group_index = 0;
 
-					parallel_state.lock.unlock();
+					// TODO old reader can be free?
+					parallel_state.readers[parallel_state.file_index-1] = nullptr;
 
-					if (parallel_state.file_index >= parallel_state.readers.size()) {
+					if (parallel_state.file_index >= bind_data.files.size()) {
+//						std::cout << "All files exhausted!" << "\n";
 						// All files exhausted
 						return false;
 					}
 					continue;
 				}
-
 			}
 
-			// Lets look for a file that has no reader and is not yet being read
+			// Currently we cannot read any rowgroups, check if this thread can open some file that needs to be read
 			for (idx_t i = parallel_state.file_index; i < bind_data.files.size(); i++) {
 				if (!parallel_state.readers[i] && parallel_state.file_opening[i] == false) {
 					string file = bind_data.files[i];
+//					std::cout << "Opening file " << bind_data.files[i] << "\n";
 					parallel_state.file_opening[i] = true;
-					auto pq_options = parallel_state.current_reader->parquet_options;
+					auto pq_options = parallel_state.initial_reader->parquet_options;
 
 					// crux here is we make the ParquetReader without holding lock, as especially over HTTP this is slow
 					// as it involves reading the metadata
-					parallel_state.lock.unlock();
-//					std::cout << "Opening file " << bind_data.files[i] << "\n";
-					auto reader = make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
-					                                         pq_options, bind_data.files[0]);
-//					std::cout << "Done with opening file " << bind_data.files[i] << "\n";
-					parallel_state.lock.lock();
+					try {
+						parallel_lock.unlock();
+//						std::cout << "Opening " << file << "\n";
+						auto reader = make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
+																 pq_options, bind_data.files[0]);
 
-				  	parallel_state.readers[i] = reader;
+						// Now lock the state and add the reader
+						parallel_lock.lock();
+						parallel_state.readers[i] = reader;
+						parallel_lock.unlock();
+
+//						std::cout << "Notifying all of opening " << file << "\n";
+						parallel_state.file_read.notify_all();
+						parallel_lock.lock();
+						break;
+					} catch (...) {
+
+//						std::cout << "Error reading " << file << "\n";
+						// signal to any thread waiting for this file to be opened that something went awry
+
+						parallel_lock.lock();
+						parallel_state.error_opening_file = true;
+						parallel_lock.unlock();
+
+						parallel_state.file_read.notify_all();
+//						std::cout << "Error notify sent" << file << "\n";
+						throw;
+					}
 					break;
 				}
 			}
 
-			parallel_state.lock.unlock();
+			// Since we have temporarily unlocked state, we should recheck this
+			if (parallel_state.file_index >= bind_data.files.size()) {
+				return false;
+			}
+
+			// Now there are no more files to read, so we need to wait for the thread reading the metadata of the next
+			// file to complete (or any other file open to fail)
+			if (!parallel_state.readers[parallel_state.file_index] && parallel_state.file_opening[parallel_state.file_index] ) {
+//				std::cout << "Waiting for file " << bind_data.files[parallel_state.file_index] << "\n";
+
+				parallel_state.file_read.wait(parallel_lock, [&]{
+
+					// How can this happen?
+					if (parallel_state.file_index >= parallel_state.readers.size()) {
+						return true;
+					}
+
+//					std::cout << "Ive been notified " << (bool)parallel_state.readers[parallel_state.file_index] << " - " << (bool)parallel_state.error_opening_file << "\n";
+					return parallel_state.readers[parallel_state.file_index] || parallel_state.error_opening_file || parallel_state.file_index >= bind_data.files.size();
+				});
+			}
 		}
 	}
 
