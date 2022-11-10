@@ -22,6 +22,21 @@ select (select 42) as a, (select a);
 ----
 Serialization Error: Cannot copy BoundSubqueryExpression
 
+# The last a should resolve to 1 from the (select 1) a
+# The b should resolve to 3
+query I
+select (select 1) a where (select (select 3) b where (select b) > (select a));
+----
+1
 
+# the b alias resolves to the where alias binder in the subquery
+# the a alias resolves to the where alias binder from the select clause.
+query I
+select (select 5) a where (select (select 3) b where (select b) > (select a));
+----
 
-
+# Similar to the above test case but its a positive case
+query II
+select (select 5) a, (select 7) c where (select (select 3) b where (select a) > (select b) and (select c) > (select a));
+----
+5	7
