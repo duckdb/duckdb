@@ -1,0 +1,17 @@
+# name: test/fuzzer/pedro/gcol_update_default_assertion.test
+# group: [pedro]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t1 (
+	c0 VARCHAR(10) AS ('1') VIRTUAL,
+	c1 INT
+);
+
+statement ok
+INSERT INTO t1(c1) VALUES (0);
+
+statement ok
+UPDATE t1 SET c1 = DEFAULT;
