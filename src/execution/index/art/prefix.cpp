@@ -144,8 +144,9 @@ void Prefix::Serialize(duckdb::MetaBlockWriter &writer) {
 }
 
 void Prefix::Deserialize(duckdb::MetaBlockReader &reader) {
-	size = reader.Read<uint32_t>();
-	auto prefix = AllocatePrefix(size);
+	auto prefix_size = reader.Read<uint32_t>();
+	auto prefix = AllocatePrefix(prefix_size);
+	this->size = prefix_size;
 	reader.ReadData(prefix, size);
 }
 
