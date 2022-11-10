@@ -15,7 +15,8 @@ namespace duckdb {
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
          DatabaseInstance &db, idx_t block_id, idx_t block_offset)
-    : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db) {
+    : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db),
+      estimated_art_size(0), estimated_key_size(16) {
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree = Node::Deserialize(*this, block_id, block_offset);
 	} else {
@@ -26,17 +27,28 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 		switch (types[i]) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-		case PhysicalType::INT16:
-		case PhysicalType::INT32:
-		case PhysicalType::INT64:
-		case PhysicalType::INT128:
 		case PhysicalType::UINT8:
+			estimated_key_size += sizeof(int8_t);
+			break;
+		case PhysicalType::INT16:
 		case PhysicalType::UINT16:
+			estimated_key_size += sizeof(int16_t);
+			break;
+		case PhysicalType::INT32:
 		case PhysicalType::UINT32:
-		case PhysicalType::UINT64:
 		case PhysicalType::FLOAT:
+			estimated_key_size += sizeof(int32_t);
+			break;
+		case PhysicalType::INT64:
+		case PhysicalType::UINT64:
 		case PhysicalType::DOUBLE:
+			estimated_key_size += sizeof(int64_t);
+			break;
+		case PhysicalType::INT128:
+			estimated_key_size += sizeof(hugeint_t);
+			break;
 		case PhysicalType::VARCHAR:
+			estimated_key_size += 16; // oh well
 			break;
 		default:
 			throw InvalidTypeException(logical_types[i], "Invalid type for index");
@@ -45,6 +57,10 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 }
 
 ART::~ART() {
+	if (estimated_art_size > 0) {
+		BufferManager::GetBufferManager(db).FreeReservedMemory(estimated_art_size);
+		estimated_art_size = 0;
+	}
 	if (tree) {
 		delete tree;
 		tree = nullptr;
@@ -345,6 +361,10 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	vector<Key> keys(input.size());
 	GenerateKeys(arena_allocator, input, keys);
 
+	idx_t extra_memory = estimated_key_size * input.size();
+	BufferManager::GetBufferManager(db).ReserveMemory(extra_memory);
+	estimated_art_size += extra_memory;
+
 	// now insert the elements into the index
 	row_ids.Flatten(input.size());
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
@@ -491,6 +511,10 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 
 	// first resolve the expressions
 	ExecuteExpressions(input, expression);
+
+	idx_t released_memory = MinValue<idx_t>(estimated_art_size, estimated_key_size * input.size());
+	BufferManager::GetBufferManager(db).FreeReservedMemory(released_memory);
+	estimated_art_size -= released_memory;
 
 	// then generate the keys for the given input
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
@@ -880,9 +904,9 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 // Merge ARTs
 //===--------------------------------------------------------------------===//
 bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
-
 	auto other_art = (ART *)other_index;
-
+	estimated_art_size += other_art->estimated_art_size;
+	other_art->estimated_art_size = 0;
 	if (!this->tree) {
 		this->tree = other_art->tree;
 		other_art->tree = nullptr;
