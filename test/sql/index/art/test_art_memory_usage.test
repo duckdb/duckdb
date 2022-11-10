@@ -14,6 +14,7 @@ CREATE FUNCTION memory_usage_to_bytes(x) AS CASE
     WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::INT * 1000 * 1000 * 1000 * 1000
     ELSE x::INT END
 
+# regular table
 statement ok
 create table integers(i integer);
 
@@ -32,6 +33,7 @@ SELECT memory_usage_to_bytes(current_usage.memory_usage) * 10 < base_memory.usag
 ----
 true
 
+# table with primary key
 statement ok
 create table integers(i integer primary key);
 
@@ -51,6 +53,6 @@ DROP TABLE integers
 
 # verify that the memory dropped again
 query I
-SELECT memory_usage_to_bytes(current_usage.memory_usage) * 10 < base_memory.usage FROM pragma_database_size() current_usage, base_memory;
+SELECT memory_usage_to_bytes(current_usage.memory_usage) * 10 < index_memory.usage FROM pragma_database_size() current_usage, index_memory;
 ----
 true
