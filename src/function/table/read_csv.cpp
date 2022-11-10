@@ -94,11 +94,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.include_file_name = BooleanValue::Get(kv.second);
 		} else if (loption == "hive_partitioning") {
 			options.include_parsed_hive_partitions = BooleanValue::Get(kv.second);
-		} else if (loption == "buffer_size") {
-			options.buffer_size = kv.second.GetValue<uint64_t>();
-			if (options.buffer_size == 0) {
-				throw InvalidInputException("Buffer Size option must be higher than 0");
-			}
 		} else {
 			options.SetReadOption(loption, kv.second, names);
 		}

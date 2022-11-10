@@ -16,7 +16,7 @@ void SubstringDetection(string &str_1, string &str_2, const string &name_str_1, 
 	if (str_1.empty() || str_2.empty()) {
 		return;
 	}
-	if ((str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) && str_1 != "NULL") {
+	if ((str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos)) {
 		throw BinderException("%s must not appear in the %s specification and vice versa", name_str_1, name_str_2);
 	}
 }
