@@ -249,7 +249,6 @@ void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_s
 
 	// we reached a leaf, i.e. all the bytes of start_key and end_key match
 	if (start_key.len == key_section.depth) {
-
 		// end_idx is inclusive
 		auto num_row_ids = key_section.end - key_section.start + 1;
 
@@ -258,14 +257,7 @@ void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_s
 			throw ConstraintException("New data contains duplicates on indexed column(s)");
 		}
 
-		// new row ids of this leaf
-		auto new_row_ids = unique_ptr<row_t[]>(new row_t[num_row_ids]);
-		for (idx_t i = 0; i < num_row_ids; i++) {
-			new_row_ids[i] = row_ids[key_section.start + i];
-		}
-
-		node = new Leaf(start_key, prefix_start, move(new_row_ids), num_row_ids);
-
+		node = new Leaf(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
 	} else { // create a new node and recurse
 
 		// we will find at least two child entries of this node, otherwise we'd have reached a leaf

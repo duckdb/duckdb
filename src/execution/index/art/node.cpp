@@ -173,7 +173,7 @@ BlockPointer Node::SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, 
 	// Write Node Type
 	writer.Write(type);
 	// Write count
-	writer.Write(count);
+	writer.Write<uint16_t>(count);
 	// Write Prefix
 	prefix.Serialize(writer);
 	// Write Key values

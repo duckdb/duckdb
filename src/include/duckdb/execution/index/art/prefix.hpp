@@ -14,6 +14,7 @@
 namespace duckdb {
 class Prefix {
 	static constexpr idx_t PREFIX_INLINE_BYTES = 8;
+
 public:
 	Prefix();
 	// Prefix created from key starting on `depth`

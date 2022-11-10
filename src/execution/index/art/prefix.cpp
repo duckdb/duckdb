@@ -36,7 +36,6 @@ uint8_t *Prefix::AllocatePrefix(uint32_t size) {
 Prefix::Prefix() : size(0) {
 }
 
-
 Prefix::Prefix(Key &key, uint32_t depth, uint32_t size) : size(0) {
 	auto prefix = AllocatePrefix(size);
 
@@ -63,7 +62,7 @@ Prefix::~Prefix() {
 
 void Prefix::Destroy() {
 	if (!IsInlined()) {
-		delete [] value.ptr;
+		delete[] value.ptr;
 		size = 0;
 	}
 }
@@ -96,7 +95,7 @@ void Prefix::Overwrite(uint32_t new_size, unique_ptr<uint8_t[]> data) {
 		// new entry would be inlined
 		// inline the data and destroy the pointer
 		auto prefix = AllocatePrefix(new_size);
-		for(idx_t i = 0; i < new_size; i++) {
+		for (idx_t i = 0; i < new_size; i++) {
 			prefix[i] = data[i];
 		}
 	} else {
@@ -141,17 +140,13 @@ uint8_t Prefix::Reduce(uint32_t n) {
 void Prefix::Serialize(duckdb::MetaBlockWriter &writer) {
 	writer.Write(size);
 	auto prefix = GetPrefixData();
-	for (idx_t i = 0; i < size; i++) {
-		writer.Write(prefix[i]);
-	}
+	writer.WriteData(prefix, size);
 }
 
 void Prefix::Deserialize(duckdb::MetaBlockReader &reader) {
 	size = reader.Read<uint32_t>();
 	auto prefix = AllocatePrefix(size);
-	for (idx_t i = 0; i < size; i++) {
-		prefix[i] = reader.Read<uint8_t>();
-	}
+	reader.ReadData(prefix, size);
 }
 
 uint32_t Prefix::KeyMismatchPosition(Key &key, uint64_t depth) {
