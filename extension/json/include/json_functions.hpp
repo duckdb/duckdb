@@ -43,8 +43,8 @@ private:
 	static CreateScalarFunctionInfo GetTypeFunction();
 	static CreateScalarFunctionInfo GetValidFunction();
 
-	static void AddAliases(vector<string> names, CreateScalarFunctionInfo fun,
-	                       vector<CreateScalarFunctionInfo> &functions) {
+	template <class FUNCTION_INFO>
+	static void AddAliases(vector<string> names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {
 		for (auto &name : names) {
 			fun.name = name;
 			functions.push_back(fun);

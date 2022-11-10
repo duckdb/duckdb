@@ -26,6 +26,10 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 		}
 	}
 
+	// TODO change this for the actual json_scan
+	return_types.push_back(JSONCommon::JSONType());
+	names.emplace_back("json");
+
 	return make_unique<JSONScanData>(options);
 }
 
@@ -34,7 +38,8 @@ JSONBufferHandle::JSONBufferHandle(idx_t readers_p, AllocatedData &&buffer_p)
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data)
-    : json_reader(make_unique<BufferedJSONReader>(context, bind_data.options)), batch_index(0),
+    : buffer_capacity(INITIAL_BUFFER_CAPACITY),
+      json_reader(make_unique<BufferedJSONReader>(context, bind_data.options)), batch_index(0),
       allocator(BufferManager::GetBufferManager(context).GetBufferAllocator()) {
 	json_reader->OpenJSONFile();
 }
@@ -57,6 +62,7 @@ unique_ptr<LocalTableFunctionState> JSONScanLocalState::Init(ExecutionContext &c
 
 idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 	// TODO split so this does not become a ridiculously big function
+	idx_t count = 0;
 	if (ptr == nullptr) {
 		auto &file_handle = gstate.json_reader->GetFileHandle();
 
@@ -72,6 +78,7 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 
 			// Get batch index and create an entry in the buffer map
 			batch_index = gstate.batch_index++;
+			is_last = file_handle.Remaining() == 0;
 			readers = file_handle.Remaining() == 0 ? 1 : 2;
 		}
 
@@ -114,32 +121,46 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 				break;
 			}
 
-			// TODO: reconstruct first JSON obj here!
+			// Reconstruct first JSON object that was split
+			// First we find the newline in the previous block
 			auto &prev_buffer = previous_buffer_handle->buffer;
-			auto prev_ptr = (const char *)prev_buffer.get() + prev_buffer.GetSize() - 1;
-			idx_t size = 0;
-			while (*prev_ptr != '\n') {
-				prev_ptr--;
-				size++;
+			const auto prev_ptr = (const char *)prev_buffer.get() + prev_buffer.GetSize() - 1;
+			idx_t part1_size = 0;
+			while (*(prev_ptr - part1_size) != '\n') {
+				part1_size++;
 			}
-			auto reconstruct_ptr = reconstruct_buffer.get();
-			memcpy(reconstruct_ptr, prev_ptr, size);
-
+			part1_size--;
+			// Now copy the data to our reconstruct buffer
+			const auto reconstruct_ptr = reconstruct_buffer.get();
+			memcpy(reconstruct_ptr, prev_ptr - part1_size, part1_size);
+			// Now find the newline in the current block
 			auto line_end = (const char *)memchr(ptr, '\n', buffer_remaining);
-			memcpy((void *)(prev_ptr + size), ptr, line_end - ptr);
-			//			ptr
-
-			// TODO: maybe throw error here saying json object is too big?
+			if (line_end == nullptr) {
+				throw InvalidInputException("TODO: json obj too big bla");
+			}
+			idx_t part2_size = line_end - ptr;
+			// And copy the remainder of the line to the reconstruct buffer
+			memcpy(reconstruct_ptr + part1_size, ptr, part2_size);
+			ptr = line_end + 1;
+			// Set the pointer/size
+			lines[count].pointer = (const char *)reconstruct_ptr;
+			lines[count].size = part1_size + part2_size;
+			count++;
 		}
 	}
 
 	// There is data left in the buffer, scan line-by-line
-	idx_t count;
 	auto line_start = ptr;
-	for (count = 0; count < STANDARD_VECTOR_SIZE; count++) {
+	for (; count < STANDARD_VECTOR_SIZE; count++) {
 		auto line_end = (const char *)memchr(line_start, '\n', buffer_remaining);
 		if (line_end == nullptr) {
 			// We reached the end of the buffer
+			if (is_last) {
+				// Last bit of data is valid
+				lines[count].pointer = (const char *)line_start;
+				lines[count].size = buffer_remaining;
+				count++;
+			}
 			line_start = nullptr;
 			buffer_remaining = 0;
 			break;
@@ -152,9 +173,17 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 		buffer_remaining -= lines[count].size + 1;
 	}
 	ptr = line_start;
-	// TODO maybe throw error saying json object is too big if we don't find anything?
+
+	if (count == 0) {
+		// TODO if last scan perfectly read everything, but left a tiny buffer left then this will trigger incorrectly
+		throw InvalidInputException("TODO: json obj too big bla");
+	}
 
 	return count;
+}
+
+idx_t JSONScanLocalState::GetBatchIndex() const {
+	return batch_index;
 }
 
 } // namespace duckdb

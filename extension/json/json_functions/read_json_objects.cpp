@@ -6,26 +6,43 @@ namespace duckdb {
 
 static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	D_ASSERT(output.ColumnCount() == 1);
-	D_ASSERT(output.data[0].GetType() == LogicalTypeId::VARCHAR);
-
-	auto &bind_data = (JSONScanData &)*data_p.bind_data;
+	D_ASSERT(JSONCommon::LogicalTypeIsJSON(output.data[0].GetType()));
 	auto &gstate = (JSONScanGlobalState &)*data_p.global_state;
 	auto &lstate = (JSONScanLocalState &)*data_p.local_state;
+
+	// Fetch next lines
+	const auto count = lstate.ReadNext(gstate);
+	const auto lines = lstate.lines;
+
+	// Create the strings without copying them
+	auto strings = FlatVector::GetData<string_t>(output.data[0]);
+	for (idx_t i = 0; i < count; i++) {
+		strings[i] = string_t(lines[i].pointer, lines[i].size);
+	}
+
+	output.SetCardinality(count);
 }
 
 TableFunction GetReadJSONObjectsTableFunction(bool list_parameter) {
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction function({parameter}, ReadJSONObjectsFunction, JSONScanData::Bind, JSONScanGlobalState::Init,
-	                       JSONScanLocalState::Init);
+	TableFunction table_function({parameter}, ReadJSONObjectsFunction, JSONScanData::Bind, JSONScanGlobalState::Init,
+	                             JSONScanLocalState::Init);
 
-	// TODO
-	//	function.serialize = CSVReaderSerialize;
-	//	function.deserialize = CSVReaderDeserialize;
+	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["maximum_object_size"] = LogicalType::UBIGINT;
 
-	// TODO
-	//	function.named_parameters[""] = LogicalType;
+	table_function.table_scan_progress = JSONScanProgress;
+	table_function.get_batch_index = JSONScanGetBatchIndex;
 
-	return function;
+	// TODO:
+	//	table_function.serialize = JSONScanSerialize;
+	//	table_function.deserialize = JSONScanDeserialize;
+
+	table_function.projection_pushdown = false;
+	table_function.filter_pushdown = false;
+	table_function.filter_prune = false;
+
+	return table_function;
 }
 
 CreateTableFunctionInfo JSONFunctions::GetReadJSONObjectsFunction() {

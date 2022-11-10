@@ -21,13 +21,7 @@ static DefaultMacro json_macros[] = {
     {DEFAULT_SCHEMA, "json", {"x", nullptr}, "json_extract(x, '$')"},
     {nullptr, nullptr, {nullptr}, nullptr}};
 
-static DefaultMacro table_macros[] = {
-    {DEFAULT_SCHEMA,
-     "read_json_objects",
-     {"json_file", nullptr},
-     "SELECT * FROM read_csv(json_file, columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)"},
-    {DEFAULT_SCHEMA, "read_ndjson_objects", {"json_file", nullptr}, "SELECT * FROM read_json_objects(json_file)"},
-    {nullptr, nullptr, {nullptr}, nullptr}};
+static DefaultMacro table_macros[] = {{nullptr, nullptr, {nullptr}, nullptr}};
 
 void JSONExtension::Load(DuckDB &db) {
 	Connection con(db);
@@ -50,9 +44,9 @@ void JSONExtension::Load(DuckDB &db) {
 	}
 
 	// JSON table functions
-	//	for (auto &fun : JSONFunctions::GetTableFunctions()) {
-	//		catalog.CreateFunction(*con.context, &fun);
-	//	}
+	for (auto &fun : JSONFunctions::GetTableFunctions()) {
+		catalog.CreateTableFunction(*con.context, &fun);
+	}
 
 	// JSON macro's
 	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {

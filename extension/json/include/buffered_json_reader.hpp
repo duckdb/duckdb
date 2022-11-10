@@ -30,6 +30,7 @@ struct JSONFileHandle {
 public:
 	explicit JSONFileHandle(unique_ptr<FileHandle> file_handle);
 
+	idx_t FileSize() const;
 	idx_t Remaining() const;
 	idx_t GetPositionAndSize(idx_t &position, idx_t requested_size);
 	void Read(const char *pointer, idx_t size, idx_t position);
@@ -52,6 +53,7 @@ public:
 	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options);
 	void OpenJSONFile();
 	JSONFileHandle &GetFileHandle();
+	double GetProgress();
 
 private:
 	ClientContext &context;

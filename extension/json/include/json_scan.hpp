@@ -68,6 +68,9 @@ public:
 	static unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
 	                                                GlobalTableFunctionState *global_state);
 	idx_t ReadNext(JSONScanGlobalState &gstate);
+	idx_t GetBatchIndex() const;
+
+	JSONLine lines[STANDARD_VECTOR_SIZE];
 
 private:
 	//! Batch index assigned to this thread
@@ -76,14 +79,27 @@ private:
 	JSONBufferHandle *current_buffer_handle;
 	//! Buffer handle associate with the previous batch index
 	JSONBufferHandle *previous_buffer_handle;
+	//! Whether this is the last batch of the file
+	bool is_last;
 
 	//! Current batch read stuff
 	const char *ptr;
 	idx_t buffer_remaining;
-	JSONLine lines[STANDARD_VECTOR_SIZE];
 
 	//! Buffer to reconstruct first object
 	AllocatedData reconstruct_buffer;
 };
+
+static double JSONScanProgress(ClientContext &context, const FunctionData *bind_data_p,
+                               const GlobalTableFunctionState *global_state) {
+	auto &gstate = (JSONScanGlobalState &)*global_state;
+	return gstate.json_reader->GetProgress();
+}
+
+static idx_t JSONScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+                                   LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
+	auto &lstate = (JSONScanLocalState &)*local_state;
+	return lstate.GetBatchIndex();
+}
 
 } // namespace duckdb

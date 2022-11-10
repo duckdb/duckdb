@@ -39,7 +39,7 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
 vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
 	vector<CreateTableFunctionInfo> functions;
 
-	functions.push_back(GetReadJSONObjectsFunction());
+	AddAliases({"read_json_objects", "read_ndjson_objects"}, GetReadJSONObjectsFunction(), functions);
 
 	return functions;
 }

@@ -14,6 +14,10 @@ JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p)
 	}
 }
 
+idx_t JSONFileHandle::FileSize() const {
+	return file_size;
+}
+
 idx_t JSONFileHandle::Remaining() const {
 	return file_size - read_position;
 }
@@ -43,6 +47,10 @@ void BufferedJSONReader::OpenJSONFile() {
 
 JSONFileHandle &BufferedJSONReader::GetFileHandle() {
 	return *file_handle;
+}
+
+double BufferedJSONReader::GetProgress() {
+	return 100.0 * file_handle->Remaining() / file_handle->FileSize();
 }
 
 } // namespace duckdb
