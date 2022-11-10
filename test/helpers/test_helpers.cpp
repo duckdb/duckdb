@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "pid.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 #include <cmath>
 #include <fstream>
@@ -136,7 +137,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		result.Print();
 		return false;
 	}
-	if (values.size() == 0) {
+	if (values.empty()) {
 		if (result.RowCount() != 0) {
 			result.Print();
 			return false;

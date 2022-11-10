@@ -5,6 +5,9 @@
 require icu
 
 statement ok
+SET Calendar = 'gregorian';
+
+statement ok
 SET TimeZone = 'America/Los_Angeles';
 
 query IIII
@@ -665,7 +668,7 @@ SET TimeZone = 'Asia/Amman';
 query I
 SELECT '2022-10-29 00:00:00+00'::TIMESTAMPTZ;
 ----
-2022-10-29 03:00:00 Asia/Amman
+2022-10-29 03:00:00+03
 
 # 2022f
 # Chihuahua moves to year-round -06 on 2022-10-30.  
@@ -675,4 +678,4 @@ SET TimeZone = 'America/Chihuahua';
 query I
 SELECT '2022-11-01 00:00:00+00'::TIMESTAMPTZ;
 ----
-2022-10-31 18:00:00 America/Chihuahua
+2022-10-31 18:00:00-06
