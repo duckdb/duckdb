@@ -31,6 +31,9 @@ static bool ParseBoolean(const Value &value, const string &loption) {
 }
 
 static string ParseString(const Value &value, const string &loption) {
+	if (value.IsNull()) {
+		return string();
+	}
 	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		if (children.size() != 1) {
