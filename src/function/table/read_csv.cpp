@@ -216,8 +216,9 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 struct ParallelCSVGlobalState : public GlobalTableFunctionState {
 public:
 	ParallelCSVGlobalState(unique_ptr<CSVFileHandle> file_handle_p, vector<string> &files_path_p,
-	                       idx_t system_threads_p, idx_t buffer_size_p, idx_t rows_to_skip)
-	    : file_handle(move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p) {
+	                       idx_t system_threads_p, idx_t buffer_size_p, idx_t rows_to_skip, bool force_parallelism_p)
+	    : file_handle(move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
+	      force_parallelism(force_parallelism_p) {
 		for (idx_t i = 0; i < rows_to_skip; i++) {
 			file_handle->ReadLine();
 		}
@@ -230,8 +231,9 @@ public:
 		} else {
 			bytes_per_local_state = file_size / MaxThreads();
 		}
-		current_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
-		next_buffer = current_buffer->Next(*file_handle, buffer_size);
+		current_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle, current_csv_position);
+
+		next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position);
 	}
 	ParallelCSVGlobalState() {
 	}
@@ -239,8 +241,13 @@ public:
 	idx_t MaxThreads() const override;
 	//! Returns buffer and index that caller thread should read.
 	unique_ptr<CSVBufferRead> Next(ClientContext &context, ReadCSVData &bind_data);
-	//! If we finished reading all the CSV Files
-	bool Finished();
+	//! Verify if the CSV File was read correctly
+	void Verify();
+	//! Adds +1 to our local state count
+	void AddLocalStateCount();
+
+	void UpdateVerification(VerificationPositions positions);
+
 	//! How many bytes were read up to this point
 	atomic<idx_t> bytes_read;
 	//! Size of current file
@@ -249,23 +256,19 @@ public:
 private:
 	//! File Handle for current file
 	unique_ptr<CSVFileHandle> file_handle;
-
 	shared_ptr<CSVBuffer> current_buffer;
 	shared_ptr<CSVBuffer> next_buffer;
+
 	//! The index of the next file to read (i.e. current file + 1)
 	idx_t file_index = 1;
-
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
 	//! Byte set from for last thread
 	idx_t next_byte = 0;
-
 	//! The current estimated line number
 	idx_t estimated_linenr;
-
 	//! How many bytes we should execute per local state
 	idx_t bytes_per_local_state;
-
 	//! Size of first file
 	idx_t first_file_size;
 	//! Basically max number of threads in DuckDB
@@ -274,26 +277,56 @@ private:
 	idx_t buffer_size;
 	//! Current batch index
 	idx_t batch_index = 0;
+	//! Forces parallelism for small CSV Files, should only be used for testing.
+	bool force_parallelism;
+	//! Count of local states running
+	idx_t local_state_count = 0;
+	//! Current (Global) position of CSV
+	idx_t current_csv_position = 0;
+	//! the vector stores positions where threads ended the last line they read in the CSV File, and the set stores
+	//! positions where they started reading the first line.
+	vector<idx_t> tuple_end;
+	set<idx_t> tuple_start;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
-	//	idx_t one_mb = 1000000;
-	//	idx_t threads_per_mb = first_file_size / one_mb + 1;
-	//	if (threads_per_mb < system_threads) {
-	//		return threads_per_mb;
-	//	}
+	if (force_parallelism) {
+		return system_threads;
+	}
+
+	idx_t one_mb = 1000000; // We initialize max one thread per Mb
+	idx_t threads_per_mb = first_file_size / one_mb + 1;
+	if (threads_per_mb < system_threads) {
+		return threads_per_mb;
+	}
+
 	return system_threads;
 }
 
-bool ParallelCSVGlobalState::Finished() {
+void ParallelCSVGlobalState::Verify() {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	return !current_buffer;
+	if (local_state_count == 0) {
+		// All threads are done, we run some magic sweet verification code
+		for (auto &last_pos : tuple_end) {
+			auto first_pos = tuple_start.find(last_pos);
+			if (first_pos == tuple_start.end() && last_pos != file_size) {
+				throw InternalException("Not possible to read this CSV File with multithreading. Tuple: " +
+				                        to_string(last_pos) + " does not have a match");
+			}
+		}
+	}
+}
+
+void ParallelCSVGlobalState::AddLocalStateCount() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	local_state_count++;
 }
 
 unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (!current_buffer) {
 		// We are done scanning.
+		local_state_count--;
 		return nullptr;
 	}
 	// set up the current buffer
@@ -309,7 +342,7 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 		current_buffer = next_buffer;
 		if (next_buffer) {
 			// Next buffer gets the next-next buffer
-			next_buffer = next_buffer->Next(*file_handle, buffer_size);
+			next_buffer = next_buffer->Next(*file_handle, buffer_size, current_csv_position);
 		}
 	}
 	if (current_buffer && !next_buffer) {
@@ -317,11 +350,21 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 		if (file_index < bind_data.files.size()) {
 			bind_data.options.file_path = bind_data.files[file_index++];
 			file_handle = ReadCSV::OpenCSV(bind_data.options, context);
-			next_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle);
+			current_csv_position = 0;
+			// FIXME: This will probably require some changes on the verification code
+			next_buffer = make_shared<CSVBuffer>(buffer_size, *file_handle, current_csv_position);
 		}
 	}
 	return result;
 }
+void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (positions.beginning_of_first_line != positions.end_of_last_line) {
+		tuple_start.insert(positions.beginning_of_first_line);
+		tuple_end.push_back(positions.end_of_last_line);
+	}
+}
+
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
@@ -339,7 +382,8 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	}
 	idx_t rows_to_skip = bind_data.options.skip_rows + (bind_data.options.has_header ? 1 : 0);
 	return make_unique<ParallelCSVGlobalState>(move(file_handle), bind_data.files, context.db->NumberOfThreads(),
-	                                           bind_data.options.buffer_size, rows_to_skip);
+	                                           bind_data.options.buffer_size, rows_to_skip,
+	                                           ClientConfig::GetConfig(context).verify_parallelism);
 }
 
 //===--------------------------------------------------------------------===//
@@ -368,6 +412,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 		csv_reader = make_unique<ParallelCSVReader>(context.client, csv_data.options, move(next_local_buffer),
 		                                            csv_data.sql_types);
 	}
+	global_state.AddLocalStateCount();
 	auto new_local_state = make_unique<ParallelCSVLocalState>(move(csv_reader));
 	return move(new_local_state);
 }
@@ -383,16 +428,16 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 	}
 
 	do {
-		if (output.size() != 0 || (csv_global_state.Finished() && csv_local_state.csv_reader->position_buffer >=
-		                                                              csv_local_state.csv_reader->end_buffer)) {
+		if (output.size() != 0) {
 			break;
 		}
 		if (csv_local_state.csv_reader->position_buffer >= csv_local_state.csv_reader->end_buffer) {
+			csv_global_state.UpdateVerification(csv_local_state.csv_reader->GetVerificationPositions());
 			auto next_chunk = csv_global_state.Next(context, bind_data);
 			if (!next_chunk) {
+				csv_global_state.Verify();
 				break;
 			}
-			//			csv_local_state.previous_buffer = csv_local_state.csv_reader->buffer;
 			csv_local_state.csv_reader->SetBufferRead(move(next_chunk));
 		}
 		csv_local_state.csv_reader->ParseCSV(output);

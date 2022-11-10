@@ -46,6 +46,7 @@ void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	if (buffer->buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&
 	    start_buffer == buffer->buffer->GetStart()) {
+		verification_positions.beginning_of_first_line = position_buffer;
 		// First buffer doesn't need any setting
 		return true;
 	}
@@ -79,7 +80,8 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 			break;
 		}
 	}
-
+	verification_positions.beginning_of_first_line = position_buffer;
+	verification_positions.end_of_last_line = position_buffer;
 	return successfully_read_first_line;
 }
 
@@ -100,7 +102,15 @@ void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 
 	linenr_estimated = true;
 	reached_remainder_state = false;
+	verification_positions.beginning_of_first_line = 0;
+	verification_positions.end_of_last_line = 0;
 	D_ASSERT(end_buffer <= buffer_size);
+}
+
+VerificationPositions ParallelCSVReader::GetVerificationPositions() {
+	verification_positions.beginning_of_first_line += buffer->buffer->GetCSVGlobalStart();
+	verification_positions.end_of_last_line += buffer->buffer->GetCSVGlobalStart();
+	return verification_positions;
 }
 
 // If BufferRemainder returns false, it means we are done scanning this buffer and should go to the end_state
@@ -215,6 +225,7 @@ add_row : {
 	offset = 0;
 	has_quotes = false;
 	start_buffer = ++position_buffer;
+	verification_positions.end_of_last_line = position_buffer;
 	if (reached_remainder_state || finished_chunk) {
 		goto final_state;
 	}
@@ -357,6 +368,7 @@ final_state : {
 				return success;
 			} else {
 				AddRow(insert_chunk, column);
+				verification_positions.end_of_last_line = position_buffer;
 			}
 		}
 	}

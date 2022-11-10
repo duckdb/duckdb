@@ -19,13 +19,13 @@ public:
 	static constexpr idx_t INITIAL_BUFFER_SIZE_COLOSSAL = 32000000; // 32MB
 
 	//! Constructor for Initial Buffer
-	CSVBuffer(idx_t buffer_size_p, CSVFileHandle &file_handle);
+	CSVBuffer(idx_t buffer_size_p, CSVFileHandle &file_handle, idx_t &global_csv_current_position);
 
 	//! Constructor for `Next()` Buffers
-	CSVBuffer(unique_ptr<char[]> buffer_p, idx_t buffer_size_p, idx_t actual_size_p, bool final_buffer);
+	CSVBuffer(unique_ptr<char[]> buffer_p, idx_t actual_size_p, bool final_buffer, idx_t global_csv_current_position);
 
 	//! Creates a new buffer with the next part of the CSV File
-	unique_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t set_buffer_size);
+	unique_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t &global_csv_current_position);
 
 	//! Gets the buffer actual size
 	idx_t GetBufferSize();
@@ -38,6 +38,8 @@ public:
 
 	//! If this buffer is the first buffer of the CSV File
 	bool IsCSVFileFirstBuffer();
+
+	idx_t GetCSVGlobalStart();
 	//! The actual buffer
 	unique_ptr<char[]> buffer;
 
@@ -51,5 +53,7 @@ private:
 	bool last_buffer = false;
 	//! If this is the first buffer of the CSV File
 	bool first_buffer = false;
+	//! Global position from the CSV File where this buffer starts
+	idx_t global_csv_start = 0;
 };
 } // namespace duckdb
