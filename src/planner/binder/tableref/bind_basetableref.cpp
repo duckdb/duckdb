@@ -110,7 +110,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		vector<LogicalType> return_types;
 		vector<string> return_names;
-		for (auto &col : table->columns) {
+		for (auto &col : table->columns.Logical()) {
 			table_types.push_back(col.Type());
 			table_names.push_back(col.Name());
 			return_types.push_back(col.Type());

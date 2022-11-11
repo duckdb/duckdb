@@ -52,12 +52,12 @@ public:
 	// Create a new LocalTableStorage
 	explicit LocalTableStorage(DataTable &table);
 	// Create a LocalTableStorage from an ALTER TYPE
-	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t changed_idx, const LogicalType &target_type,
-	                  const vector<column_t> &bound_columns, Expression &cast_expr);
+	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
+	                  const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
 	// Create a LocalTableStorage from a DROP COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
-	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
+	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  Expression *default_value);
 	~LocalTableStorage();
 
@@ -120,7 +120,7 @@ public:
 	};
 
 public:
-	explicit LocalStorage(Transaction &transaction);
+	explicit LocalStorage(ClientContext &context, Transaction &transaction);
 
 	static LocalStorage &Get(Transaction &transaction);
 	static LocalStorage &Get(ClientContext &context);
@@ -148,7 +148,7 @@ public:
 	//! Delete a set of rows from the local storage
 	idx_t Delete(DataTable *table, Vector &row_ids, idx_t count);
 	//! Update a set of rows in the local storage
-	void Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &data);
+	void Update(DataTable *table, Vector &row_ids, const vector<PhysicalIndex> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
 	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction);
@@ -174,6 +174,7 @@ public:
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 private:
+	ClientContext &context;
 	Transaction &transaction;
 	LocalTableManager table_manager;
 

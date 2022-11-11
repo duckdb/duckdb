@@ -34,7 +34,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	}
 	D_ASSERT(root->return_type.id() == LogicalTypeId::BOOLEAN);
 
-	auto prefix_value = ExpressionExecutor::EvaluateScalar(*prefix_expr);
+	auto prefix_value = ExpressionExecutor::EvaluateScalar(GetContext(), *prefix_expr);
 
 	if (prefix_value.IsNull()) {
 		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));

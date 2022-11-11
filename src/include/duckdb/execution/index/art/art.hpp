@@ -124,6 +124,12 @@ private:
 	                      bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
 
 	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);
+
+private:
+	//! The estimated ART memory consumption
+	idx_t estimated_art_size;
+	//! The estimated memory consumption of a single key
+	idx_t estimated_key_size;
 };
 
 } // namespace duckdb

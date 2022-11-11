@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-UniqueConstraint::UniqueConstraint(uint64_t index, bool is_primary_key)
+UniqueConstraint::UniqueConstraint(LogicalIndex index, bool is_primary_key)
     : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
 }
 UniqueConstraint::UniqueConstraint(vector<string> columns, bool is_primary_key)
@@ -26,7 +26,7 @@ string UniqueConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> UniqueConstraint::Copy() const {
-	if (index == DConstants::INVALID_INDEX) {
+	if (index.index == DConstants::INVALID_INDEX) {
 		return make_unique<UniqueConstraint>(columns, is_primary_key);
 	} else {
 		auto result = make_unique<UniqueConstraint>(index, is_primary_key);
@@ -37,7 +37,7 @@ unique_ptr<Constraint> UniqueConstraint::Copy() const {
 
 void UniqueConstraint::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(is_primary_key);
-	writer.WriteField<uint64_t>(index);
+	writer.WriteField<uint64_t>(index.index);
 	D_ASSERT(columns.size() <= NumericLimits<uint32_t>::Maximum());
 	writer.WriteList<string>(columns);
 }
@@ -49,7 +49,7 @@ unique_ptr<Constraint> UniqueConstraint::Deserialize(FieldReader &source) {
 
 	if (index != DConstants::INVALID_INDEX) {
 		// single column parsed constraint
-		auto result = make_unique<UniqueConstraint>(index, is_primary_key);
+		auto result = make_unique<UniqueConstraint>(LogicalIndex(index), is_primary_key);
 		result->columns = move(columns);
 		return move(result);
 	} else {

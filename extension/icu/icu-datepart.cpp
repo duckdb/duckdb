@@ -387,7 +387,7 @@ struct ICUDatePart : public ICUDateFunc {
 		child_list_t<LogicalType> struct_children;
 		adapters_t adapters;
 
-		Value parts_list = ExpressionExecutor::EvaluateScalar(*arguments[0]);
+		Value parts_list = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
 			auto &list_children = ListValue::GetChildren(parts_list);
 			if (list_children.empty()) {

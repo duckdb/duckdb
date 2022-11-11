@@ -98,7 +98,7 @@ def print_diffs(diffs):
 def cardinality_is_higher(card_a, card_b):
     # card_a > card_b?
     # add 20% threshold before we start caring
-    return card_a > (card_b + card_b / 5)
+    return card_a > (card_b + card_b / 5 + 5000)
 
 def main():
     old, new, benchmark_dir = parse_args()

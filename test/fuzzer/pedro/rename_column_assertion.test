@@ -1,0 +1,29 @@
+# name: test/fuzzer/pedro/rename_column_assertion.test
+# description: Assertion trigger on rename column
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 (c1 INT, c2 INT);
+
+statement ok
+CREATE INDEX i0 ON t1 (c2);
+
+statement ok
+START TRANSACTION;
+
+statement error
+ALTER TABLE t1 ALTER c2 DROP NOT NULL;
+----
+Cannot alter entry
+
+statement error
+ALTER TABLE t1 RENAME c1 TO c3;
+----
+transaction is aborted
+
+statement ok
+ROLLBACK;
+

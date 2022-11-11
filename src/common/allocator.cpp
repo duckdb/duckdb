@@ -115,6 +115,7 @@ Allocator::~Allocator() {
 }
 
 data_ptr_t Allocator::AllocateData(idx_t size) {
+	D_ASSERT(size > 0);
 	auto result = allocate_function(private_data.get(), size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
@@ -127,6 +128,7 @@ void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 	if (!pointer) {
 		return;
 	}
+	D_ASSERT(size > 0);
 #ifdef DEBUG
 	D_ASSERT(private_data);
 	private_data->debug_info->FreeData(pointer, size);
@@ -146,9 +148,13 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	return new_pointer;
 }
 
-Allocator &Allocator::DefaultAllocator() {
-	static Allocator DEFAULT_ALLOCATOR;
+shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
+	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_shared<Allocator>();
 	return DEFAULT_ALLOCATOR;
+}
+
+Allocator &Allocator::DefaultAllocator() {
+	return *DefaultAllocatorReference();
 }
 
 //===--------------------------------------------------------------------===//

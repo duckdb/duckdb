@@ -51,7 +51,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// CREATE INDEX statement, add the columns of the table with table index 0 to the binding set
 		// afterwards bind the expressions of the CREATE INDEX statement
 		auto &create_index = (LogicalCreateIndex &)op;
-		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.columns.size());
+		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.columns.LogicalColumnCount());
 		VisitOperatorExpressions(op);
 		return;
 	} else if (op.type == LogicalOperatorType::LOGICAL_GET) {

@@ -18,6 +18,7 @@
 
 namespace duckdb {
 class SequenceCatalogEntry;
+class SchemaCatalogEntry;
 
 class ColumnData;
 class ClientContext;
@@ -36,7 +37,7 @@ struct UpdateInfo;
 //! transaction
 class Transaction {
 public:
-	Transaction(weak_ptr<ClientContext> context, transaction_t start_time, transaction_t transaction_id,
+	Transaction(ClientContext &context, transaction_t start_time, transaction_t transaction_id,
 	            timestamp_t start_timestamp, idx_t catalog_version);
 	~Transaction();
 
@@ -60,6 +61,8 @@ public:
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
 	//! The validity checker of the transaction
 	ValidChecker transaction_validity;
+	//! A pointer to the temporary objects of the client context
+	shared_ptr<SchemaCatalogEntry> temporary_objects;
 
 public:
 	static Transaction &GetTransaction(ClientContext &context);

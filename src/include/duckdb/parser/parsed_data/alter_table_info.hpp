@@ -185,15 +185,15 @@ public:
 //===--------------------------------------------------------------------===//
 struct AlterForeignKeyInfo : public AlterTableInfo {
 	AlterForeignKeyInfo(string schema, string table, bool if_exists, string fk_table, vector<string> pk_columns,
-	                    vector<string> fk_columns, vector<idx_t> pk_keys, vector<idx_t> fk_keys,
+	                    vector<string> fk_columns, vector<PhysicalIndex> pk_keys, vector<PhysicalIndex> fk_keys,
 	                    AlterForeignKeyType type);
 	~AlterForeignKeyInfo() override;
 
 	string fk_table;
 	vector<string> pk_columns;
 	vector<string> fk_columns;
-	vector<idx_t> pk_keys;
-	vector<idx_t> fk_keys;
+	vector<PhysicalIndex> pk_keys;
+	vector<PhysicalIndex> fk_keys;
 	AlterForeignKeyType type;
 
 public:

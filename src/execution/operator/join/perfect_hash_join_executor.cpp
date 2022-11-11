@@ -129,8 +129,8 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 //===--------------------------------------------------------------------===//
 class PerfectHashJoinState : public OperatorState {
 public:
-	PerfectHashJoinState(Allocator &allocator, const PhysicalHashJoin &join) : probe_executor(allocator) {
-		join_keys.Initialize(allocator, join.condition_types);
+	PerfectHashJoinState(ClientContext &context, const PhysicalHashJoin &join) : probe_executor(context) {
+		join_keys.Initialize(Allocator::Get(context), join.condition_types);
 		for (auto &cond : join.conditions) {
 			probe_executor.AddExpression(*cond.left);
 		}
@@ -147,7 +147,7 @@ public:
 };
 
 unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ExecutionContext &context) {
-	auto state = make_unique<PerfectHashJoinState>(Allocator::Get(context.client), join);
+	auto state = make_unique<PerfectHashJoinState>(context.client, join);
 	return move(state);
 }
 
