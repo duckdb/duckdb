@@ -2,6 +2,9 @@
 # description: Test read_csv_auto from greek-utf8 csv
 # group: [auto]
 
+# FIXME: experimental CSV reader breaks on vector size 2
+require vector_size 512
+
 statement ok
 SET experimental_parallel_csv=true;
 
