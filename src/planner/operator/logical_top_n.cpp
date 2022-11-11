@@ -18,7 +18,7 @@ unique_ptr<LogicalOperator> LogicalTopN::Deserialize(LogicalDeserializationState
 
 idx_t LogicalTopN::EstimateCardinality(ClientContext &context) {
 	auto child_cardinality = LogicalOperator::EstimateCardinality(context);
-	if (child_cardinality < limit) {
+	if (limit >= 0 && child_cardinality < idx_t(limit)) {
 		return limit;
 	}
 	return child_cardinality;
