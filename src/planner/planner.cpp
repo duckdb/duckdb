@@ -65,7 +65,9 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			}
 		}
 
-		throw;
+		if (!this->plan) {
+			throw;
+		}
 	} catch (std::exception &ex) {
 		throw;
 	}
