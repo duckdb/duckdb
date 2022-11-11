@@ -2,6 +2,14 @@
 # description: Test optional parameters for read csv
 # group: [auto]
 
+mode skip
+
+# FIXME: this results in errors
+statement ok
+SET experimental_parallel_csv=true;
+
+mode unskip
+
 # CSV file with irregularity in first column and default sample size
 statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/test_fallback.csv');
