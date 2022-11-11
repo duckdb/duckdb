@@ -162,6 +162,8 @@ public:
 	vector<OptimizerExtension> optimizer_extensions;
 	//! Error manager
 	unique_ptr<ErrorManager> error_manager;
+	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
+	shared_ptr<Allocator> default_allocator;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

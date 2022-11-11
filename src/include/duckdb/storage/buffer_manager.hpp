@@ -88,6 +88,9 @@ public:
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 
+	DUCKDB_API void ReserveMemory(idx_t size);
+	DUCKDB_API void FreeReservedMemory(idx_t size);
+
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
