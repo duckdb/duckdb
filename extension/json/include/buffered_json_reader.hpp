@@ -32,8 +32,11 @@ public:
 
 	idx_t FileSize() const;
 	idx_t Remaining() const;
+	bool CanSeek() const;
+
 	idx_t GetPositionAndSize(idx_t &position, idx_t requested_size);
-	void Read(const char *pointer, idx_t size, idx_t position);
+	void ReadAtPosition(const char *pointer, idx_t size, idx_t position);
+	idx_t Read(const char *pointer, idx_t requested_size);
 
 private:
 	//! The JSON file handle

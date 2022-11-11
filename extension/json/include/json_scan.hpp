@@ -44,8 +44,7 @@ public:
 
 public:
 	//! Initial buffer capacity (1MB)
-	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 4096;
-	//	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 1048576;
+	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 1048576;
 	//! The current buffer capacity
 	idx_t buffer_capacity;
 
@@ -82,12 +81,9 @@ public:
 	JSONLine lines[STANDARD_VECTOR_SIZE];
 
 private:
-	//! Batch index assigned to this thread
+	//! Batch index assigned to this thread and associate buffer handle
 	idx_t batch_index;
-	//! Buffer handle associated with this batch index
 	JSONBufferHandle *current_buffer_handle;
-	//! Buffer handle associate with the previous batch index
-	JSONBufferHandle *previous_buffer_handle;
 	//! Whether this is the last batch of the file
 	bool is_last;
 
@@ -101,6 +97,8 @@ private:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read);
+	void ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &next_batch_index, idx_t &readers);
+	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &next_batch_index, idx_t &readers);
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
 };
 

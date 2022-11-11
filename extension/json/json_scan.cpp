@@ -54,7 +54,7 @@ idx_t JSONScanGlobalState::MaxThreads() const {
 }
 
 JSONScanLocalState::JSONScanLocalState(JSONScanGlobalState &gstate)
-    : current_buffer_handle(nullptr), buffer_size(0), buffer_offset(0) {
+    : batch_index(DConstants::INVALID_INDEX), current_buffer_handle(nullptr), buffer_size(0), buffer_offset(0) {
 	// TODO: maybe options.maximum_object_size
 	reconstruct_buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
 }
@@ -88,7 +88,7 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 		auto line_end = (const char *)memchr(line_start, '\n', remaining);
 		if (line_end == nullptr) {
 			// We reached the end of the buffer
-			if (!is_last) {
+			if (!is_last || remaining == 0) {
 				// Last bit of data belongs to the next batch
 				buffer_offset = buffer_size;
 				break;
@@ -120,27 +120,6 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 }
 
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read) {
-	auto &file_handle = gstate.json_reader->GetFileHandle();
-
-	idx_t readers;
-	idx_t read_position;
-	idx_t next_batch_index;
-	{
-		lock_guard<mutex> guard(gstate.lock);
-		buffer_size = file_handle.GetPositionAndSize(read_position, gstate.buffer_capacity);
-		buffer_offset = 0;
-		if (buffer_size == 0) {
-			// We reached the end of the file
-			return false;
-		}
-
-		// Get batch index and create an entry in the buffer map
-		next_batch_index = gstate.batch_index++;
-		is_last = file_handle.Remaining() == 0;
-	}
-	readers = is_last ? 1 : 2;
-	first_read = read_position == 0;
-
 	auto &buffer_map = gstate.buffer_map;
 	AllocatedData buffer;
 	if (current_buffer_handle != nullptr && --current_buffer_handle->readers == 0) {
@@ -154,8 +133,19 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 	}
 	buffer_ptr = (const char *)buffer.get();
 
-	// Now read the file lock-free!
-	file_handle.Read(buffer_ptr, buffer_size, read_position);
+	idx_t readers;
+	idx_t next_batch_index;
+
+	auto &file_handle = gstate.json_reader->GetFileHandle();
+	if (file_handle.CanSeek()) {
+		ReadNextBufferSeek(gstate, first_read, next_batch_index, readers);
+	} else {
+		ReadNextBufferNoSeek(gstate, first_read, next_batch_index, readers);
+	}
+
+	if (buffer_size == 0) {
+		return false;
+	}
 
 	// Create an entry and insert it into the map
 	batch_index = next_batch_index;
@@ -169,8 +159,46 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 	return true;
 }
 
+void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &next_batch_index,
+                                            idx_t &readers) {
+	auto &file_handle = gstate.json_reader->GetFileHandle();
+	idx_t read_position;
+	{
+		lock_guard<mutex> guard(gstate.lock);
+		buffer_size = file_handle.GetPositionAndSize(read_position, gstate.buffer_capacity);
+		buffer_offset = 0;
+		if (buffer_size == 0) {
+			// We reached the end of the file
+			return;
+		}
+
+		// Get batch index and create an entry in the buffer map
+		next_batch_index = gstate.batch_index++;
+		is_last = file_handle.Remaining() == 0;
+	}
+	readers = is_last ? 1 : 2;
+	first_read = read_position == 0;
+
+	// Now read the file lock-free!
+	file_handle.ReadAtPosition(buffer_ptr, buffer_size, read_position);
+}
+
+void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &next_batch_index,
+                                              idx_t &readers) {
+	auto &file_handle = gstate.json_reader->GetFileHandle();
+	lock_guard<mutex> guard(gstate.lock);
+	next_batch_index = gstate.batch_index++;
+	first_read = file_handle.Remaining() == file_handle.FileSize();
+	buffer_size = file_handle.Read(buffer_ptr, gstate.buffer_capacity);
+	buffer_offset = 0;
+	is_last = buffer_size < gstate.buffer_capacity;
+	readers = is_last ? 1 : 2;
+}
+
 void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	D_ASSERT(batch_index != 0);
+	JSONBufferHandle *previous_buffer_handle;
+
 	// Spinlock until the previous batch index has also read its buffer
 	auto &buffer_map = gstate.buffer_map;
 	while (true) {
@@ -184,7 +212,6 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 		break;
 	}
 
-	// Reconstruct first JSON object that was split
 	// First we find the newline in the previous block
 	auto &prev_buffer = previous_buffer_handle->buffer;
 	const auto prev_ptr = (const char *)prev_buffer.get() + prev_buffer.GetSize();
@@ -193,6 +220,7 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 		part1_size++;
 	}
 	part1_size--;
+
 	// Now copy the data to our reconstruct buffer
 	const auto reconstruct_ptr = reconstruct_buffer.get();
 	memcpy(reconstruct_ptr, prev_ptr - part1_size, part1_size);
@@ -204,16 +232,17 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 		line_end++;
 	}
 	idx_t part2_size = line_end - buffer_ptr;
+
 	// And copy the remainder of the line to the reconstruct buffer
 	memcpy(reconstruct_ptr + part1_size, buffer_ptr, part2_size);
 	buffer_offset += part2_size;
+
 	// We copied the object, so we are no longer reading the previous buffer
 	if (--previous_buffer_handle->readers == 0) {
 		lock_guard<mutex> guard(gstate.lock);
-		buffer_map.erase(batch_index);
+		buffer_map.erase(batch_index - 1);
 	}
-	previous_buffer_handle = nullptr;
-	// Set the pointer/size
+
 	lines[0].pointer = (const char *)reconstruct_ptr;
 	lines[0].size = part1_size + part2_size;
 }

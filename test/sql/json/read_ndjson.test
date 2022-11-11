@@ -8,7 +8,7 @@ statement ok
 pragma threads=1
 
 query T
-SELECT count(*) FROM read_json_objects('/Users/laurens/git/experiments/json/data/lineitem.json')
+SELECT count(*) FROM read_json_objects('/Users/laurens/git/experiments/json/data/lineitem.json.gz')
 ----
 6001215
 
