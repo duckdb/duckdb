@@ -47,6 +47,7 @@ public:
 
 	ArenaAllocator arena_allocator;
 	vector<Key> keys;
+	unique_ptr<ColumnFetchState> fetch_state;
 
 public:
 	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
@@ -126,9 +127,9 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 			return;
 		}
 		state.rhs_chunk.Reset();
-		ColumnFetchState fetch_state;
+		state.fetch_state = make_unique<ColumnFetchState>();
 		Vector row_ids(LogicalType::ROW_TYPE, (data_ptr_t)&fetch_rows[0]);
-		tbl->Fetch(transaction, state.rhs_chunk, fetch_ids, row_ids, output_sel_idx, fetch_state);
+		tbl->Fetch(transaction, state.rhs_chunk, fetch_ids, row_ids, output_sel_idx, *state.fetch_state);
 	}
 
 	//! Now we actually produce our result chunk
