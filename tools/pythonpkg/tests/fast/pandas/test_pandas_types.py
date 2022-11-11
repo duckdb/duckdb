@@ -1,6 +1,7 @@
 import duckdb
 import pandas as pd
 import numpy
+import string
 
 def round_trip(data,pandas_type):
     df_in = pd.DataFrame({
@@ -46,19 +47,19 @@ class TestPandasTypes(object):
         # c=type2
         # ..
         data = {}
-        for i, dtype in enumerate(data_types):
-            data[chr(ord("a")+i)] = base_df.a.astype(dtype)
+        for letter, dtype in zip(string.ascii_lowercase, data_types):
+            data[letter] = base_df.a.astype(dtype)
 
         df = pd.DataFrame.from_dict(data)
         out_df = duckdb.default_connection.execute('select * from df').df()
 
         # Verify that the types in the out_df are correct
         # FIXME: we don't support outputting pandas specific types (i.e UInt64)
-        for i, item in enumerate(data_types):
-            column_name = chr(ord("a")+i)
+        for letter, item in zip(string.ascii_lowercase, data_types):
+            column_name = letter
             assert(str(df[column_name].dtype) == item)
-        for i, item in enumerate(data_types):
-            column_name = chr(ord("a")+i)
+        for letter, item in zip(string.ascii_lowercase, data_types):
+            column_name = letter
             assert(str(out_df[column_name].dtype) == item.lower())
 
     def test_pandas_unsigned(self, duckdb_cursor):
