@@ -15,7 +15,8 @@ class TestPandasNA(object):
         pd = pytest.importorskip('pandas', minversion='1.0.0', reason='Support for pandas.NA has not been added yet')
         # DataFrame containing a single pd.NA
         df = pd.DataFrame(pd.Series([pd.NA]))
-        conn = duckdb.default_connection
+
+        conn = duckdb.connect()
 
         res = conn.execute("select * from df").fetchall()
         assert(res[0][0] == None)
