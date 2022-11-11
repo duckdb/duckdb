@@ -5,7 +5,7 @@ import fs from "fs";
 describe("TypeScript declarataions", function () {
   var db: duckdb.Database;
   before(function (done) {
-    db = new duckdb.Database(":memory:", done);
+    db = new duckdb.Database(":memory:", duckdb.OPEN_READWRITE, done);
   });
 
   it("typescript: Database constructor no callback", (done) => {
@@ -13,17 +13,37 @@ describe("TypeScript declarataions", function () {
     done();
   });
 
+  it("Database.create -- read only flag", (done) => {
+    const roDb = new duckdb.Database(
+      ":memory:",
+      duckdb.OPEN_READONLY,
+      (err: duckdb.DuckDbError | null, res: any) => {
+        assert.equal(err?.code, "DUCKDB_NODEJS_ERROR");
+        assert.equal(err?.errno, -1);
+        assert.match(
+          err?.message ?? "",
+          /Cannot launch in-memory database in read-only mode/
+        );
+        done();
+      }
+    );
+  });
+
   it("typescript: Database constructor path error", (done) => {
-    const tdb0 = new duckdb.Database("./bogusPath.db", (err, res) => {
-      // Issue: I'm a little surprised that specifying an invalid file path
-      // doesn't seem to immediately signal an error here, but it doesn't.
-      tdb0.all(
-        "PRAGMA show_tables",
-        (err: duckdb.DuckDbError | null, res: any) => {
-          done();
-        }
-      );
-    });
+    const tdb0 = new duckdb.Database(
+      "./bogusPath.db",
+      duckdb.OPEN_READWRITE,
+      (err, res) => {
+        // Issue: I'm a little surprised that specifying an invalid file path
+        // doesn't seem to immediately signal an error here, but it doesn't.
+        tdb0.all(
+          "PRAGMA show_tables",
+          (err: duckdb.DuckDbError | null, res: any) => {
+            done();
+          }
+        );
+      }
+    );
   });
 
   it("typescript: query with error", (done) => {
@@ -136,7 +156,7 @@ describe("TypeScript declarataions", function () {
 describe("typescript: simple prepared statement", function () {
   var db: duckdb.Database;
   before(function (done) {
-    db = new duckdb.Database(":memory:", done);
+    db = new duckdb.Database(":memory:", duckdb.OPEN_READWRITE, done);
   });
 
   it("should prepare, run and finalize the statement", function (done) {
@@ -151,7 +171,7 @@ describe("typescript: simple prepared statement", function () {
 describe("typescript: prepared statements", function () {
   var db: duckdb.Database;
   before(function (done) {
-    db = new duckdb.Database(":memory:", done);
+    db = new duckdb.Database(":memory:", duckdb.OPEN_READWRITE, done);
   });
 
   var inserted = 0;
@@ -193,7 +213,7 @@ describe("typescript: stream and QueryResult", function () {
   let db: duckdb.Database;
   let conn: duckdb.Connection;
   before((done) => {
-    db = new duckdb.Database(":memory:", () => {
+    db = new duckdb.Database(":memory:", duckdb.OPEN_READWRITE, () => {
       conn = new duckdb.Connection(db, done);
     });
   });
