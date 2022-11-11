@@ -1,0 +1,22 @@
+# name: test/fuzzer/pedro/another_binder_error.test
+# group: [pedro]
+
+# Originally an INTERNAL ERROR was thrown, which is not what we want to show users, so now we do this.
+# Having trouble figuring out where to change this error to just a simple Binder Error.
+# Within the (SELECT 0 OFFSET 0) a basic BinderError is produced, but then BindCorrelatedColumns gets called.
+# Eventually a binding is found for c0 to the alias defined in the first select term.
+# ExtractCorrelatedExpressions, should then extract the correlated column/alias but this doesn't happen.
+# The check `bound_colref.depth > 0` is false while the depth of the binders when binding the second c0 is very much 1.
+# This is because we are binding a delimiter in a subquery, and a depth of 0 is assumed
+#       See BindDelimiter in `bind_select_node.cpp` and then the line `auto expr = expr_binder.Bind(delimiter);`
+# and `return BindResult(node.select_list[index]->Copy());` is used to return a bind result.
+# However, since we are in correlated subqueries, we need to update it to 1 the proper depth.
+# by resetting it, we get a much nicer error which is that you can't set non-constant limit or offset in correlated subqueries
+
+
+statement error
+SELECT avg(0) c0, (SELECT 0 OFFSET c0);
+----
+Parser Error: Non-constant limit or offset not supported in correlated subquery
+
+
