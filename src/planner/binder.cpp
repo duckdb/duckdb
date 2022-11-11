@@ -420,7 +420,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddGenericBinding(update_table_index, table->name, names, types);
+	binder->bind_context.AddBaseTable(update_table_index, table->name, names, types, bound_columns, table);
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;
