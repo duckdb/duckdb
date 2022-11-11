@@ -94,21 +94,15 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 	}
 }
 
-static void BakeTableName(ParsedExpression &expr, const string &table_name, const string &column_name) {
+static void BakeTableName(ParsedExpression &expr, const string &table_name) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
-		if (colref.GetName() == column_name) {
-			throw BinderException("Query could not complete because generated column '%s' has been turned into a self "
-			                      "referencing expression",
-			                      column_name);
-		}
 		col_names.insert(col_names.begin(), table_name);
 	}
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-		BakeTableName((ParsedExpression &)child, table_name, column_name);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { BakeTableName((ParsedExpression &)child, table_name); });
 }
 
 unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &column_name) {
@@ -120,11 +114,10 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 
 	// Get the index of the generated column
 	auto column_index = GetBindingIndex(column_name);
-	D_ASSERT(table_entry->columns[column_index].Generated());
+	D_ASSERT(table_entry->columns.GetColumn(LogicalIndex(column_index)).Generated());
 	// Get a copy of the generated column
-	// FIXME: this does not respect query-level column aliases
-	auto expression = table_entry->columns[column_index].GeneratedExpression().Copy();
-	BakeTableName(*expression, alias, column_name);
+	auto expression = table_entry->columns.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
+	BakeTableName(*expression, alias);
 	return (expression);
 }
 
@@ -143,7 +136,8 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		auto table_entry = (TableCatalogEntry *)entry;
 		//! Either there is no table, or the columns category has to be standard
 		if (column_index != COLUMN_IDENTIFIER_ROW_ID) {
-			D_ASSERT(table_entry->columns[column_index].Category() == TableColumnType::STANDARD);
+			D_ASSERT(table_entry->columns.GetColumn(LogicalIndex(column_index)).Category() ==
+			         TableColumnType::STANDARD);
 		}
 	}
 #endif /* DEBUG */

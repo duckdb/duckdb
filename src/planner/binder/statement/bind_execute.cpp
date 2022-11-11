@@ -32,7 +32,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		ConstantBinder cbinder(*constant_binder, context, "EXECUTE statement");
 		auto bound_expr = cbinder.Bind(stmt.values[i]);
 
-		Value value = ExpressionExecutor::EvaluateScalar(*bound_expr, true);
+		Value value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 		bind_values.push_back(move(value));
 	}
 	unique_ptr<LogicalOperator> rebound_plan;

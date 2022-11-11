@@ -51,7 +51,7 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 	auto expr = expr_binder.Bind(delimiter);
 	if (expr->IsFoldable()) {
 		//! this is a constant
-		delimiter_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(context, type);
+		delimiter_value = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, type);
 		return nullptr;
 	}
 	// move any correlated columns to this binder

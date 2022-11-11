@@ -14,6 +14,7 @@
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
 enum class NodeType : uint8_t { NLeaf = 0, N4 = 1, N16 = 2, N48 = 3, N256 = 4 };
@@ -69,6 +70,7 @@ public:
 	//! Compressed path (prefix)
 	Prefix prefix;
 
+	static void Delete(Node *node);
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if not
 	//! exists
 	virtual idx_t GetChildPos(uint8_t k) {

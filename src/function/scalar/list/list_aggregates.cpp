@@ -411,7 +411,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 			throw InvalidInputException("Aggregate function name must be a constant");
 		}
 		// get the function name
-		Value function_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		Value function_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		function_name = function_value.ToString();
 	}
 

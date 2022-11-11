@@ -928,6 +928,22 @@ string BufferManager::InMemoryWarning() {
 	       "\nOr set PRAGMA temp_directory='/path/to/tmp.tmp'";
 }
 
+void BufferManager::ReserveMemory(idx_t size) {
+	if (size == 0) {
+		return;
+	}
+	auto reservation =
+	    EvictBlocksOrThrow(size, maximum_memory, nullptr, "failed to reserve memory data of size %lld%s", size);
+	reservation.size = 0;
+}
+
+void BufferManager::FreeReservedMemory(idx_t size) {
+	if (size == 0) {
+		return;
+	}
+	current_memory -= size;
+}
+
 //===--------------------------------------------------------------------===//
 // Buffer Allocator
 //===--------------------------------------------------------------------===//

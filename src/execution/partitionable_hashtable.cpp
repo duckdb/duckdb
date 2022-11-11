@@ -44,13 +44,13 @@ RadixPartitionInfo::RadixPartitionInfo(const idx_t n_partitions_upper_bound)
 	D_ASSERT(radix_bits <= 8);
 }
 
-PartitionableHashTable::PartitionableHashTable(Allocator &allocator, BufferManager &buffer_manager_p,
+PartitionableHashTable::PartitionableHashTable(ClientContext &context, Allocator &allocator,
                                                RadixPartitionInfo &partition_info_p, vector<LogicalType> group_types_p,
                                                vector<LogicalType> payload_types_p,
                                                vector<BoundAggregateExpression *> bindings_p)
-    : allocator(allocator), buffer_manager(buffer_manager_p), group_types(move(group_types_p)),
-      payload_types(move(payload_types_p)), bindings(move(bindings_p)), is_partitioned(false),
-      partition_info(partition_info_p), hashes(LogicalType::HASH), hashes_subset(LogicalType::HASH) {
+    : context(context), allocator(allocator), group_types(move(group_types_p)), payload_types(move(payload_types_p)),
+      bindings(move(bindings_p)), is_partitioned(false), partition_info(partition_info_p), hashes(LogicalType::HASH),
+      hashes_subset(LogicalType::HASH) {
 
 	sel_vectors.resize(partition_info.n_partitions);
 	sel_vector_sizes.resize(partition_info.n_partitions);
@@ -73,8 +73,8 @@ idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &group
 			// early release first part of ht and prevent adding of more data
 			list.back()->Finalize();
 		}
-		list.push_back(make_unique<GroupedAggregateHashTable>(allocator, buffer_manager, group_types, payload_types,
-		                                                      bindings, HtEntryType::HT_WIDTH_32));
+		list.push_back(make_unique<GroupedAggregateHashTable>(context, allocator, group_types, payload_types, bindings,
+		                                                      HtEntryType::HT_WIDTH_32));
 	}
 	return list.back()->AddChunk(groups, group_hashes, payload, filter);
 }
@@ -141,7 +141,7 @@ void PartitionableHashTable::Partition() {
 	for (auto &unpartitioned_ht : unpartitioned_hts) {
 		for (idx_t r = 0; r < partition_info.n_partitions; r++) {
 			radix_partitioned_hts[r].push_back(make_unique<GroupedAggregateHashTable>(
-			    allocator, buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
+			    context, allocator, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
 			partition_hts[r] = radix_partitioned_hts[r].back().get();
 		}
 		unpartitioned_ht->Partition(partition_hts, partition_info.radix_mask, partition_info.RADIX_SHIFT);

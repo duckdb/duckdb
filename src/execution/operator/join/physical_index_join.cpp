@@ -16,8 +16,9 @@ namespace duckdb {
 
 class IndexJoinOperatorState : public CachingOperatorState {
 public:
-	IndexJoinOperatorState(Allocator &allocator, const PhysicalIndexJoin &op)
-	    : probe_executor(allocator), arena_allocator(allocator), keys(STANDARD_VECTOR_SIZE) {
+	IndexJoinOperatorState(ClientContext &context, const PhysicalIndexJoin &op)
+	    : probe_executor(context), arena_allocator(Allocator::Get(context)), keys(STANDARD_VECTOR_SIZE) {
+		auto &allocator = Allocator::Get(context);
 		rhs_rows.resize(STANDARD_VECTOR_SIZE);
 		result_sizes.resize(STANDARD_VECTOR_SIZE);
 
@@ -91,7 +92,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 }
 
 unique_ptr<OperatorState> PhysicalIndexJoin::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<IndexJoinOperatorState>(Allocator::Get(context.client), *this);
+	return make_unique<IndexJoinOperatorState>(context.client, *this);
 }
 
 void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
