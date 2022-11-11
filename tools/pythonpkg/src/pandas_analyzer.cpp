@@ -254,8 +254,6 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 //! LogicalType's alone
 
 LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-
 	auto object_type = GetPythonObjectType(ele);
 
 	switch (object_type) {

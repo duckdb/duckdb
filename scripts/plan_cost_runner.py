@@ -116,9 +116,6 @@ def main():
     for f in tqdm(files):
         query_name = f.split("/")[-1].replace(".sql", "")
 
-        if query_name == "07c":
-            continue # FIXME: heap-use-after free on low-memory systems
-
         with open(f, "r") as file:
             query = file.read()
 

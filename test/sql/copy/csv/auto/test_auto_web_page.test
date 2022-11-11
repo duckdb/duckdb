@@ -19,3 +19,15 @@ SELECT * FROM web_page ORDER BY column00 LIMIT 3;
 2	AAAAAAAACAAAAAAA	1997-09-03	2000-09-02	2450814	2452580	N	NULL	http://www.foo.com	protected	1564	4	3	1
 3	AAAAAAAACAAAAAAA	2000-09-03	NULL	2450814	2452611	N	NULL	http://www.foo.com	feedback	1564	4	3	4
 
+# read with parallel reader and verify that we get the same result
+statement ok
+SET experimental_parallel_csv=true;
+
+statement ok
+CREATE TABLE web_page2 AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/web_page.csv');
+
+query IIIIIIIIIIIIII
+(SELECT * FROM web_page EXCEPT SELECT * FROM web_page2)
+UNION ALL
+(SELECT * FROM web_page2 EXCEPT SELECT * FROM web_page)
+----

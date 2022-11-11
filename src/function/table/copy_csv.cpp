@@ -16,7 +16,7 @@ void SubstringDetection(string &str_1, string &str_2, const string &name_str_1, 
 	if (str_1.empty() || str_2.empty()) {
 		return;
 	}
-	if ((str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) && str_1 != "NULL") {
+	if ((str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos)) {
 		throw BinderException("%s must not appear in the %s specification and vice versa", name_str_1, name_str_2);
 	}
 }
@@ -109,6 +109,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		options.force_not_null.resize(expected_types.size(), false);
 	}
 	bind_data->FinalizeRead(context);
+	if (!bind_data->single_threaded && options.auto_detect) {
+		options.file_path = bind_data->files[0];
+		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
+		options = initial_reader->options;
+	}
 	return move(bind_data);
 }
 
