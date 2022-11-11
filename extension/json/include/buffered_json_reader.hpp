@@ -53,7 +53,8 @@ public:
 	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options);
 	void OpenJSONFile();
 	JSONFileHandle &GetFileHandle();
-	double GetProgress();
+	double GetProgress() const;
+	idx_t MaxThreads(idx_t buffer_capacity) const;
 
 private:
 	ClientContext &context;

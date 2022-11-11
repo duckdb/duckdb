@@ -49,8 +49,12 @@ JSONFileHandle &BufferedJSONReader::GetFileHandle() {
 	return *file_handle;
 }
 
-double BufferedJSONReader::GetProgress() {
+double BufferedJSONReader::GetProgress() const {
 	return 100.0 * file_handle->Remaining() / file_handle->FileSize();
+}
+
+idx_t BufferedJSONReader::MaxThreads(idx_t buffer_capacity) const {
+	return (file_handle->FileSize() + buffer_capacity - 1) / buffer_capacity;
 }
 
 } // namespace duckdb

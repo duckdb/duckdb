@@ -40,9 +40,12 @@ public:
 	JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data);
 	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
 
+	idx_t MaxThreads() const override;
+
 public:
 	//! Initial buffer capacity (1MB)
-	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 1048576;
+	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 4096;
+	//	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 1048576;
 	//! The current buffer capacity
 	idx_t buffer_capacity;
 
@@ -52,14 +55,20 @@ public:
 	//! Next batch index
 	idx_t batch_index;
 	//! Mapping from batch index to currently held buffers
-	unordered_map<idx_t, JSONBufferHandle> buffer_map;
+	unordered_map<idx_t, unique_ptr<JSONBufferHandle>> buffer_map;
 	//! Buffer manager allocator
 	Allocator &allocator;
 };
 
 struct JSONLine {
+public:
 	const char *pointer;
 	idx_t size;
+
+public:
+	string ToString() {
+		return string(pointer, size);
+	}
 };
 
 struct JSONScanLocalState : public LocalTableFunctionState {
@@ -83,11 +92,16 @@ private:
 	bool is_last;
 
 	//! Current batch read stuff
-	const char *ptr;
-	idx_t buffer_remaining;
+	const char *buffer_ptr;
+	idx_t buffer_size;
+	idx_t buffer_offset;
 
 	//! Buffer to reconstruct first object
 	AllocatedData reconstruct_buffer;
+
+private:
+	bool ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read);
+	void ReconstructFirstObject(JSONScanGlobalState &gstate);
 };
 
 static double JSONScanProgress(ClientContext &context, const FunctionData *bind_data_p,
