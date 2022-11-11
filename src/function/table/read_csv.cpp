@@ -604,6 +604,19 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	}
 }
 
+unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = (ReadCSVData &)*bind_data_p;
+	idx_t per_file_cardinality = 0;
+	if (bind_data.initial_reader && bind_data.initial_reader->file_handle) {
+		auto estimated_row_width = (bind_data.sql_types.size() * 5);
+		per_file_cardinality = bind_data.initial_reader->file_handle->FileSize() / estimated_row_width;
+	} else {
+		// determined through the scientific method as the average amount of rows in a CSV file
+		per_file_cardinality = 42;
+	}
+	return make_unique<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
+}
+
 void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	// common options
 	writer.WriteField<bool>(has_delimiter);
@@ -698,6 +711,7 @@ TableFunction ReadCSVTableFunction::GetFunction(bool list_parameter) {
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
 	read_csv.get_batch_index = CSVReaderGetBatchIndex;
+	read_csv.cardinality = CSVReaderCardinality;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }
@@ -711,6 +725,7 @@ TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
 	read_csv_auto.serialize = CSVReaderSerialize;
 	read_csv_auto.deserialize = CSVReaderDeserialize;
 	read_csv_auto.get_batch_index = CSVReaderGetBatchIndex;
+	read_csv_auto.cardinality = CSVReaderCardinality;
 	ReadCSVAddNamedParameters(read_csv_auto);
 	return read_csv_auto;
 }

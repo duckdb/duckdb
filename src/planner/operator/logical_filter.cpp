@@ -57,4 +57,10 @@ unique_ptr<LogicalOperator> LogicalFilter::Deserialize(LogicalDeserializationSta
 	return move(result);
 }
 
+idx_t LogicalFilter::EstimateCardinality(ClientContext &context) {
+	auto child_cardinality = LogicalOperator::EstimateCardinality(context);
+	// probably
+	return child_cardinality / 5;
+}
+
 } // namespace duckdb
