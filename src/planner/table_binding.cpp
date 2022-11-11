@@ -114,9 +114,9 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 
 	// Get the index of the generated column
 	auto column_index = GetBindingIndex(column_name);
-	D_ASSERT(table_entry->columns[column_index].Generated());
+	D_ASSERT(table_entry->columns.GetColumn(LogicalIndex(column_index)).Generated());
 	// Get a copy of the generated column
-	auto expression = table_entry->columns[column_index].GeneratedExpression().Copy();
+	auto expression = table_entry->columns.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
 	BakeTableName(*expression, alias);
 	return (expression);
 }
@@ -136,7 +136,8 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		auto table_entry = (TableCatalogEntry *)entry;
 		//! Either there is no table, or the columns category has to be standard
 		if (column_index != COLUMN_IDENTIFIER_ROW_ID) {
-			D_ASSERT(table_entry->columns[column_index].Category() == TableColumnType::STANDARD);
+			D_ASSERT(table_entry->columns.GetColumn(LogicalIndex(column_index)).Category() ==
+			         TableColumnType::STANDARD);
 		}
 	}
 #endif /* DEBUG */

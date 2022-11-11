@@ -1151,7 +1151,7 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("QUANTILE can only take constant parameters");
 	}
-	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	Value quantile_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	vector<double> quantiles;
 	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckQuantile(quantile_val));

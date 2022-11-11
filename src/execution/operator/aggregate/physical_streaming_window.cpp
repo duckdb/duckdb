@@ -39,7 +39,7 @@ public:
 		}
 	}
 
-	void Initialize(Allocator &allocator, DataChunk &input, const vector<unique_ptr<Expression>> &expressions) {
+	void Initialize(ClientContext &context, DataChunk &input, const vector<unique_ptr<Expression>> &expressions) {
 		const_vectors.resize(expressions.size());
 		aggregate_states.resize(expressions.size());
 		aggregate_dtors.resize(expressions.size(), nullptr);
@@ -58,10 +58,10 @@ public:
 			}
 			case ExpressionType::WINDOW_FIRST_VALUE: {
 				// Just execute the expression once
-				ExpressionExecutor executor(allocator);
+				ExpressionExecutor executor(context);
 				executor.AddExpression(*wexpr.children[0]);
 				DataChunk result;
-				result.Initialize(allocator, {wexpr.children[0]->return_type});
+				result.Initialize(Allocator::Get(context), {wexpr.children[0]->return_type});
 				executor.Execute(input, result);
 
 				const_vectors[expr_idx] = make_unique<Vector>(result.GetValue(0, 0));
@@ -107,8 +107,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	auto &gstate = (StreamingWindowGlobalState &)gstate_p;
 	auto &state = (StreamingWindowState &)state_p;
 	if (!state.initialized) {
-		auto &allocator = Allocator::Get(context.client);
-		state.Initialize(allocator, input, select_list);
+		state.Initialize(context.client, input, select_list);
 	}
 	// Put payload columns in place
 	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
@@ -142,7 +141,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 
 			// Compute the arguments
 			auto &allocator = Allocator::Get(context.client);
-			ExpressionExecutor executor(allocator);
+			ExpressionExecutor executor(context.client);
 			vector<LogicalType> payload_types;
 			for (auto &child : wexpr.children) {
 				payload_types.push_back(child->return_type);
@@ -150,7 +149,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			}
 
 			DataChunk payload;
-			payload.Initialize(executor.allocator, payload_types);
+			payload.Initialize(allocator, payload_types);
 			executor.Execute(input, payload);
 
 			// Iterate through them using a single SV

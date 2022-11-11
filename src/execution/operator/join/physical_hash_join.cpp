@@ -102,8 +102,7 @@ public:
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
-	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context)
-	    : build_executor(Allocator::Get(context)) {
+	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : build_executor(context) {
 		auto &allocator = Allocator::Get(context);
 		if (!op.right_projection_map.empty()) {
 			build_chunk.Initialize(allocator, op.build_types);
@@ -166,8 +165,8 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			info.correlated_aggregates.push_back(move(aggr));
 
 			auto &allocator = Allocator::Get(context);
-			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
-			    allocator, BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
+			info.correlated_counts = make_unique<GroupedAggregateHashTable>(context, allocator, delim_types,
+			                                                                payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
 			info.group_chunk.Initialize(allocator, delim_types);
 			info.result_chunk.Initialize(allocator, payload_types);
@@ -412,7 +411,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class HashJoinOperatorState : public CachingOperatorState {
 public:
-	explicit HashJoinOperatorState(Allocator &allocator) : probe_executor(allocator), initialized(false) {
+	explicit HashJoinOperatorState(ClientContext &context) : probe_executor(context), initialized(false) {
 	}
 
 	DataChunk join_keys;
@@ -434,7 +433,7 @@ public:
 unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &allocator = Allocator::Get(context.client);
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
-	auto state = make_unique<HashJoinOperatorState>(allocator);
+	auto state = make_unique<HashJoinOperatorState>(context.client);
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 	} else {

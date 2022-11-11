@@ -58,8 +58,8 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 //===--------------------------------------------------------------------===//
 class MergeJoinLocalState : public LocalSinkState {
 public:
-	explicit MergeJoinLocalState(Allocator &allocator, const PhysicalRangeJoin &op, const idx_t child)
-	    : table(allocator, op, child) {
+	explicit MergeJoinLocalState(ClientContext &context, const PhysicalRangeJoin &op, const idx_t child)
+	    : table(context, op, child) {
 	}
 
 	//! The local sort state
@@ -105,7 +105,7 @@ unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(Clien
 
 unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ExecutionContext &context) const {
 	// We only sink the RHS
-	return make_unique<MergeJoinLocalState>(Allocator::Get(context.client), *this, 1);
+	return make_unique<MergeJoinLocalState>(context.client, *this, 1);
 }
 
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
@@ -159,11 +159,11 @@ class PiecewiseMergeJoinState : public CachingOperatorState {
 public:
 	using LocalSortedTable = PhysicalRangeJoin::LocalSortedTable;
 
-	explicit PiecewiseMergeJoinState(Allocator &allocator, const PhysicalPiecewiseMergeJoin &op,
-	                                 BufferManager &buffer_manager, bool force_external)
-	    : allocator(allocator), op(op), buffer_manager(buffer_manager), force_external(force_external),
+	PiecewiseMergeJoinState(ClientContext &context, const PhysicalPiecewiseMergeJoin &op, bool force_external)
+	    : context(context), allocator(Allocator::Get(context)), op(op),
+	      buffer_manager(BufferManager::GetBufferManager(context)), force_external(force_external),
 	      left_outer(IsLeftOuterJoin(op.join_type)), left_position(0), first_fetch(true), finished(true),
-	      right_position(0), right_chunk_index(0), rhs_executor(allocator) {
+	      right_position(0), right_chunk_index(0), rhs_executor(context) {
 		vector<LogicalType> condition_types;
 		for (auto &order : op.lhs_orders) {
 			condition_types.push_back(order.expression->return_type);
@@ -184,6 +184,7 @@ public:
 		rhs_keys.Initialize(allocator, condition_types);
 	}
 
+	ClientContext &context;
 	Allocator &allocator;
 	const PhysicalPiecewiseMergeJoin &op;
 	BufferManager &buffer_manager;
@@ -218,7 +219,7 @@ public:
 	void ResolveJoinKeys(DataChunk &input) {
 		// sort by join key
 		lhs_global_state = make_unique<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
-		lhs_local_table = make_unique<LocalSortedTable>(allocator, op, 0);
+		lhs_local_table = make_unique<LocalSortedTable>(context, op, 0);
 		lhs_local_table->Sink(input, *lhs_global_state);
 
 		// Set external (can be forced with the PRAGMA)
@@ -251,10 +252,8 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(ExecutionContext &context) const {
-	auto &buffer_manager = BufferManager::GetBufferManager(context.client);
 	auto &config = ClientConfig::GetConfig(context.client);
-	return make_unique<PiecewiseMergeJoinState>(Allocator::Get(context.client), *this, buffer_manager,
-	                                            config.force_external);
+	return make_unique<PiecewiseMergeJoinState>(context.client, *this, config.force_external);
 }
 
 static inline idx_t SortedBlockNotNull(const idx_t base, const idx_t count, const idx_t not_null) {

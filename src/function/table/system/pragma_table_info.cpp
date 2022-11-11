@@ -61,7 +61,8 @@ unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context,
 	return make_unique<PragmaTableOperatorData>();
 }
 
-static void CheckConstraints(TableCatalogEntry *table, idx_t oid, bool &out_not_null, bool &out_pk) {
+static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &column, bool &out_not_null,
+                             bool &out_pk) {
 	out_not_null = false;
 	out_pk = false;
 	// check all constraints
@@ -70,14 +71,14 @@ static void CheckConstraints(TableCatalogEntry *table, idx_t oid, bool &out_not_
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = (BoundNotNullConstraint &)*constraint;
-			if (not_null.index == oid) {
+			if (not_null.index == column.Physical()) {
 				out_not_null = true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
 			auto &unique = (BoundUniqueConstraint &)*constraint;
-			if (unique.is_primary_key && unique.key_set.find(oid) != unique.key_set.end()) {
+			if (unique.is_primary_key && unique.key_set.find(column.Logical()) != unique.key_set.end()) {
 				out_pk = true;
 			}
 			break;
@@ -89,21 +90,21 @@ static void CheckConstraints(TableCatalogEntry *table, idx_t oid, bool &out_not_
 }
 
 static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry *table, DataChunk &output) {
-	if (data.offset >= table->columns.size()) {
+	if (data.offset >= table->columns.LogicalColumnCount()) {
 		// finished returning values
 		return;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table->columns.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table->columns.LogicalColumnCount());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
 		bool not_null, pk;
 		auto index = i - data.offset;
-		auto &column = table->columns[i];
+		auto &column = table->columns.GetColumn(LogicalIndex(i));
 		D_ASSERT(column.Oid() < (idx_t)NumericLimits<int32_t>::Maximum());
-		CheckConstraints(table, column.Oid(), not_null, pk);
+		CheckConstraints(table, column, not_null, pk);
 
 		// return values:
 		// "cid", PhysicalType::INT32

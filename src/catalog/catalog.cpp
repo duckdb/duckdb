@@ -198,7 +198,7 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
                                        QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
 	if (schema_name == TEMP_SCHEMA) {
-		return ClientData::Get(context).temporary_objects.get();
+		return SchemaCatalogEntry::GetTemporaryObjects(context);
 	}
 	auto entry = schemas->GetEntry(context, schema_name);
 	if (!entry && !if_exists) {

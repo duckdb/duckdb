@@ -79,7 +79,7 @@ public:
 	explicit BlockwiseNLJoinState(ExecutionContext &context, ColumnDataCollection &rhs,
 	                              const PhysicalBlockwiseNLJoin &op)
 	    : cross_product(rhs), left_outer(IsLeftOuterJoin(op.join_type)), match_sel(STANDARD_VECTOR_SIZE),
-	      executor(Allocator::Get(context.client), *op.condition) {
+	      executor(context.client, *op.condition) {
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 	}
 

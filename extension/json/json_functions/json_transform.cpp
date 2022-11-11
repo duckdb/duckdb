@@ -57,7 +57,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 	} else if (!arguments[1]->IsFoldable()) {
 		throw InvalidInputException("JSON structure must be a constant!");
 	} else {
-		auto structure_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		if (!structure_val.DefaultTryCastAs(JSONCommon::JSONType())) {
 			throw InvalidInputException("cannot cast JSON structure to string");
 		}

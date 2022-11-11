@@ -29,8 +29,7 @@ public:
 
 		// convert virtual column ids to storage column ids
 		for (auto &column_id : column_ids) {
-			D_ASSERT(column_id < table.columns.size());
-			storage_ids.push_back(table.columns[column_id].StorageOid());
+			storage_ids.push_back(table.columns.LogicalToPhysical(LogicalIndex(column_id)).index);
 		}
 	}
 
