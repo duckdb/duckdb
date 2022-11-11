@@ -15,9 +15,6 @@ SELECT COUNT(*) FROM "test/sql/copy/csv/data/real/voter.tsv";
 ----
 5300
 
-mode skip
-# FIXME: this doesn't work yet
-
 # read with parallel reader and verify that we get the same result
 statement ok
 SET experimental_parallel_csv=true;
@@ -30,5 +27,3 @@ query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 UNION ALL
 (SELECT * FROM voters2 EXCEPT SELECT * FROM voters)
 ----
-
-mode unskip

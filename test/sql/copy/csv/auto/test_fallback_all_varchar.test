@@ -2,13 +2,10 @@
 # description: Test optional parameters for read csv
 # group: [auto]
 
-mode skip
-
 # FIXME: this results in errors
 statement ok
 SET experimental_parallel_csv=true;
 
-mode unskip
 
 # CSV file with irregularity in first column and default sample size
 statement ok
