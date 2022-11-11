@@ -16,6 +16,11 @@ SELECT COUNT(*) FROM "test/sql/copy/csv/data/real/voter.tsv";
 5300
 
 # read with parallel reader and verify that we get the same result
+
+# FIXME: This should run on windows
+
+require notwindows
+
 statement ok
 SET experimental_parallel_csv=true;
 
