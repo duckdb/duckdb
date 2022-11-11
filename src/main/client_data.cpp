@@ -13,7 +13,7 @@ namespace duckdb {
 ClientData::ClientData(ClientContext &context) : catalog_search_path(make_unique<CatalogSearchPath>(context)) {
 	profiler = make_shared<QueryProfiler>(context);
 	query_profiler_history = make_unique<QueryProfilerHistory>();
-	temporary_objects = make_unique<SchemaCatalogEntry>(&Catalog::GetCatalog(context), TEMP_SCHEMA, true);
+	temporary_objects = make_shared<SchemaCatalogEntry>(&Catalog::GetCatalog(context), TEMP_SCHEMA, true);
 	random_engine = make_unique<RandomEngine>();
 	file_opener = make_unique<ClientContextFileOpener>(context);
 }

@@ -55,13 +55,13 @@ SELECT * FROM integers WHERE i > 337 AND i < 340
 339
 
 # IN-clause
-query I
+query I sort
 SELECT * FROM integers WHERE i IN (337, 948247, 1779793, 4779793, 99999999999999)
 ----
-337
-948247
 1779793
+337
 4779793
+948247
 
 # more complex where clause
 query I

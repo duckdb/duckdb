@@ -1,0 +1,28 @@
+# name: test/fuzzer/pedro/rename_table_index_rollback.test
+# description: Index not correctly serialized after rename table rollback
+# group: [pedro]
+
+load __TEST_DIR__/wal_rename_table.db
+
+statement ok
+CREATE TABLE t0 (c0 INT);
+
+statement ok
+BEGIN
+
+statement ok
+ALTER TABLE t0 RENAME TO t1;
+
+statement ok
+ROLLBACK
+
+statement ok
+CREATE INDEX i0 ON t0 (c0);
+
+statement ok
+CREATE OR REPLACE VIEW t1 AS (SELECT 1);
+
+restart
+
+statement ok
+SELECT * FROM t0

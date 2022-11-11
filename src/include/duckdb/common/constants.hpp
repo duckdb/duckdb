@@ -104,6 +104,46 @@ struct Storage {
 	constexpr static int FILE_HEADER_SIZE = 4096;
 };
 
+struct LogicalIndex {
+	explicit LogicalIndex(idx_t index) : index(index) {
+	}
+
+	idx_t index;
+
+	inline bool operator==(const LogicalIndex &rhs) const {
+		return index == rhs.index;
+	};
+	inline bool operator!=(const LogicalIndex &rhs) const {
+		return index != rhs.index;
+	};
+	inline bool operator<(const LogicalIndex &rhs) const {
+		return index < rhs.index;
+	};
+	bool IsValid() {
+		return index != DConstants::INVALID_INDEX;
+	}
+};
+
+struct PhysicalIndex {
+	explicit PhysicalIndex(idx_t index) : index(index) {
+	}
+
+	idx_t index;
+
+	inline bool operator==(const PhysicalIndex &rhs) const {
+		return index == rhs.index;
+	};
+	inline bool operator!=(const PhysicalIndex &rhs) const {
+		return index != rhs.index;
+	};
+	inline bool operator<(const PhysicalIndex &rhs) const {
+		return index < rhs.index;
+	};
+	bool IsValid() {
+		return index != DConstants::INVALID_INDEX;
+	}
+};
+
 uint64_t NextPowerOfTwo(uint64_t v);
 
 } // namespace duckdb

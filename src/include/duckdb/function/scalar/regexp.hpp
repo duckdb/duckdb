@@ -70,7 +70,8 @@ struct RegexLocalState : public FunctionLocalState {
 	RE2 constant_pattern;
 };
 
-unique_ptr<FunctionLocalState> RegexInitLocalState(const BoundFunctionExpression &expr, FunctionData *bind_data);
+unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                   FunctionData *bind_data);
 unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments);
 

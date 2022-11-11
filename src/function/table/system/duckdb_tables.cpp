@@ -71,8 +71,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, Ta
 	};
 
 	// check the temp schema as well
-	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
-	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
+	    context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
@@ -132,7 +132,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// estimated_size, LogicalType::BIGINT
 		output.SetValue(7, count, Value::BIGINT(table.storage->info->cardinality.load()));
 		// column_count, LogicalType::BIGINT
-		output.SetValue(8, count, Value::BIGINT(table.columns.size()));
+		output.SetValue(8, count, Value::BIGINT(table.columns.LogicalColumnCount()));
 		// index_count, LogicalType::BIGINT
 		output.SetValue(9, count, Value::BIGINT(table.storage->info->indexes.Count()));
 		// check_constraint_count, LogicalType::BIGINT

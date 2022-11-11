@@ -642,7 +642,7 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 			column_map.insert({get.names[get.column_ids[i]], i});
 		}
 
-		HivePartitioning::ApplyFiltersToFileList(data->files, filters, column_map, get.table_index,
+		HivePartitioning::ApplyFiltersToFileList(context, data->files, filters, column_map, get.table_index,
 		                                         data->options.include_parsed_hive_partitions,
 		                                         data->options.include_file_name);
 

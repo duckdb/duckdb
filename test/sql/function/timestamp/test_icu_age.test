@@ -5,6 +5,9 @@
 require icu
 
 statement ok
+SET Calendar = 'gregorian';
+
+statement ok
 SET TimeZone = 'America/Los_Angeles';
 
 # age without second timestamp compares to NOW()
@@ -25,7 +28,7 @@ SELECT age(TIMESTAMP '2014-04-25 00:00:00-07', TIMESTAMP '2014-04-17 00:00:00-07
 query T
 SELECT age(TIMESTAMPTZ '2014-04-25', TIMESTAMPTZ '2014-01-01');
 ----
-3 months 24 days 01:00:00
+3 months 24 days
 
 query T
 SELECT age(TIMESTAMPTZ '2019-06-11', TIMESTAMPTZ '2019-06-11');
@@ -75,7 +78,7 @@ SELECT AGE(TIMESTAMPTZ '2001-04-10', t2) FROM timestamps;
 ----
 43 years 9 months 28 days
 -13 years -7 days
--12 years -8 months -21 days -23:00:00
+-12 years -8 months -22 days
 -18 years -2 months -1 days
 -18 years -2 months -1 days
 NULL
@@ -86,7 +89,7 @@ SELECT AGE(t1, t2) FROM timestamps;
 ----
 43 years 9 months 28 days
 8 days
-3 months 24 days 01:00:00
+3 months 24 days
 00:00:00
 NULL
 NULL
@@ -97,7 +100,7 @@ SELECT t1 - t2 FROM timestamps;
 ----
 16007 days
 8 days
-114 days 01:00:00
+114 days
 00:00:00
 NULL
 NULL
@@ -107,7 +110,7 @@ query T
 SELECT AGE(t1, t2) FROM timestamps WHERE t1 > '2001-12-12';
 ----
 8 days
-3 months 24 days 01:00:00
+3 months 24 days
 00:00:00
 NULL
 

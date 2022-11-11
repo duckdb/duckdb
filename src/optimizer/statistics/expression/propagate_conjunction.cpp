@@ -20,7 +20,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConjun
 		// we have a constant in a conjunction
 		// we (1) either prune the child
 		// or (2) replace the entire conjunction with a constant
-		auto constant = ExpressionExecutor::EvaluateScalar(*child);
+		auto constant = ExpressionExecutor::EvaluateScalar(context, *child);
 		if (constant.IsNull()) {
 			continue;
 		}
