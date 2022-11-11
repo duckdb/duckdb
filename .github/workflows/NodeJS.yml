@@ -98,8 +98,13 @@ jobs:
         run: ./scripts/node_build.sh 17
 
       - name: Node 18
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
         shell: bash
         run: ./scripts/node_build.sh 18
+
+      - name: Node 19
+        shell: bash
+        run: ./scripts/node_build.sh 19
 
   osx-nodejs:
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
@@ -168,6 +173,10 @@ jobs:
         shell: bash
         run: ./scripts/node_build.sh 18
 
+      - name: Node 19
+        shell: bash
+        run: ./scripts/node_build.sh 19
+
   win-nodejs:
     name: node.js Windows
     runs-on: windows-latest
@@ -175,7 +184,7 @@ jobs:
 
     strategy:
       matrix:
-        node: [ '10', '12', '14', '15', '16', '17', '18' ]
+        node: [ '10', '12', '14', '15', '16', '17', '18', '19' ]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
@@ -189,6 +198,8 @@ jobs:
             node: 16
           - isRelease: false
             node: 17
+          - isRelease: false
+            node: 18
 
     steps:
       - uses: actions/setup-python@v2
