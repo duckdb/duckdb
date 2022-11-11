@@ -231,10 +231,6 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 	}
 	// bind the expression
 	BindResult result = BindExpression(expr, depth, root_expression);
-	if (result.expression && result.expression->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-		auto &expr = (BoundColumnRefExpression&)*result.expression;
-		expr.depth = depth;
-	}
 	if (result.HasError()) {
 		return result.error;
 	}
