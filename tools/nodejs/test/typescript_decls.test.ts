@@ -20,9 +20,11 @@ describe("TypeScript declarataions", function () {
       (err: duckdb.DuckDbError | null, res: any) => {
         assert.equal(err?.code, "DUCKDB_NODEJS_ERROR");
         assert.equal(err?.errno, -1);
-        assert.match(
-          err?.message ?? "",
-          /Cannot launch in-memory database in read-only mode/
+        const errMessage: string = err?.message ?? "";
+        assert(
+          errMessage.includes(
+            "Cannot launch in-memory database in read-only mode"
+          )
         );
         done();
       }
