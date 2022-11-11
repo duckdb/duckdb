@@ -51,7 +51,8 @@ class TestPandasTypes(object):
             data[letter] = base_df.a.astype(dtype)
 
         df = pd.DataFrame.from_dict(data)
-        out_df = duckdb.default_connection.execute('select * from df').df()
+        conn = duckdb.connect()
+        out_df = conn.execute('select * from df').df()
 
         # Verify that the types in the out_df are correct
         # FIXME: we don't support outputting pandas specific types (i.e UInt64)
