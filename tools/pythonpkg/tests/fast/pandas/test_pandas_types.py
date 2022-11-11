@@ -58,9 +58,6 @@ class TestPandasTypes(object):
         # FIXME: we don't support outputting pandas specific types (i.e UInt64)
         for letter, item in zip(string.ascii_lowercase, data_types):
             column_name = letter
-            assert(str(df[column_name].dtype) == item)
-        for letter, item in zip(string.ascii_lowercase, data_types):
-            column_name = letter
             assert(str(out_df[column_name].dtype) == item.lower())
 
     def test_pandas_unsigned(self, duckdb_cursor):
