@@ -63,8 +63,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, T
 	};
 
 	// check the temp schema as well
-	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::INDEX_ENTRY,
-	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
+	    context, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 

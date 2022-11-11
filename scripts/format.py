@@ -26,7 +26,7 @@ ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen', os.path.join('too
                        os.path.join('tools', 'pythonpkg', 'build'), os.path.join('tools', 'rpkg', 'src', 'duckdb'),
                        os.path.join('tools', 'rpkg', 'inst', 'include', 'cpp11'),
                        os.path.join('extension', 'tpcds', 'dsdgen'), os.path.join('extension', 'jemalloc', 'jemalloc'),
-                       os.path.join('extension', 'json', 'yyjson')]
+                       os.path.join('extension', 'json', 'yyjson'), os.path.join('extension', 'icu', 'third_party')]
 format_all = False
 check_only = True
 confirm = True

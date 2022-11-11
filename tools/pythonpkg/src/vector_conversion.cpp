@@ -86,13 +86,24 @@ bool ValueIsNull(double value) {
 }
 
 template <class T>
-void ScanPandasFpColumn(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
-	FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
-	auto tgt_ptr = FlatVector::GetData<T>(out);
+void ScanPandasFpColumn(T *src_ptr, idx_t stride, idx_t count, idx_t offset, Vector &out) {
 	auto &mask = FlatVector::Validity(out);
-	for (idx_t i = 0; i < count; i++) {
-		if (Value::IsNan<T>(tgt_ptr[i])) {
-			mask.SetInvalid(i);
+	if (stride == sizeof(T)) {
+		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
+		// Turn NaN values into NULL
+		auto tgt_ptr = FlatVector::GetData<T>(out);
+		for (idx_t i = 0; i < count; i++) {
+			if (Value::IsNan<T>(tgt_ptr[i])) {
+				mask.SetInvalid(i);
+			}
+		}
+	} else {
+		auto tgt_ptr = FlatVector::GetData<T>(out);
+		for (idx_t i = 0; i < count; i++) {
+			tgt_ptr[i] = src_ptr[stride / sizeof(T) * (i + offset)];
+			if (Value::IsNan<T>(tgt_ptr[i])) {
+				mask.SetInvalid(i);
+			}
 		}
 	}
 }
@@ -232,10 +243,10 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		ScanPandasMasked<int64_t>(bind_data, count, offset, out);
 		break;
 	case PandasType::FLOAT_32:
-		ScanPandasFpColumn<float>((float *)numpy_col.data(), count, offset, out);
+		ScanPandasFpColumn<float>((float *)numpy_col.data(), bind_data.numpy_stride, count, offset, out);
 		break;
 	case PandasType::FLOAT_64:
-		ScanPandasFpColumn<double>((double *)numpy_col.data(), count, offset, out);
+		ScanPandasFpColumn<double>((double *)numpy_col.data(), bind_data.numpy_stride, count, offset, out);
 		break;
 	case PandasType::DATETIME:
 	case PandasType::DATETIME_TZ: {

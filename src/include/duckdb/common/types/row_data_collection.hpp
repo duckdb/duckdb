@@ -18,7 +18,8 @@ struct RowDataBlock {
 public:
 	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
-		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
+		idx_t size = MaxValue<idx_t>(Storage::BLOCK_SIZE, capacity * entry_size);
+		block = buffer_manager.RegisterMemory(size, false);
 	}
 	explicit RowDataBlock(idx_t entry_size) : entry_size(entry_size) {
 	}
@@ -106,7 +107,7 @@ public:
 	}
 
 	static inline idx_t EntriesPerBlock(idx_t width) {
-		return (Storage::BLOCK_SIZE + width * STANDARD_VECTOR_SIZE - 1) / width;
+		return Storage::BLOCK_SIZE / width;
 	}
 
 private:

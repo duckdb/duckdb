@@ -453,9 +453,17 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		setop.column_count += correlated_columns.size();
 		return plan;
 	}
-	case LogicalOperatorType::LOGICAL_DISTINCT:
-		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+	case LogicalOperatorType::LOGICAL_DISTINCT: {
+		auto &distinct = (LogicalDistinct &)*plan;
+		// push down into child
+		distinct.children[0] = PushDownDependentJoin(move(distinct.children[0]));
+		// add all correlated columns to the distinct targets
+		for (idx_t i = 0; i < correlated_columns.size(); i++) {
+			distinct.distinct_targets.push_back(make_unique<BoundColumnRefExpression>(
+			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i)));
+		}
 		return plan;
+	}
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// expression get
 		// first we flatten the dependent join in the child

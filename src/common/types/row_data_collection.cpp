@@ -6,7 +6,7 @@ RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_
                                      bool keep_pinned)
     : buffer_manager(buffer_manager), count(0), block_capacity(block_capacity), entry_size(entry_size),
       keep_pinned(keep_pinned) {
-	D_ASSERT(block_capacity * entry_size >= Storage::BLOCK_SIZE);
+	D_ASSERT(block_capacity * entry_size + entry_size > Storage::BLOCK_SIZE);
 }
 
 idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle,
