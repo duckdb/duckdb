@@ -1,0 +1,11 @@
+# name: test/fuzzer/pedro/verify_parallelism_batch_index.test
+# group: [pedro]
+
+statement ok
+PRAGMA verify_parallelism;
+
+statement ok
+CREATE TABLE t0 AS VALUES (1), (2), (3);
+
+statement ok
+SELECT 1 FROM range(1) t2, t0;

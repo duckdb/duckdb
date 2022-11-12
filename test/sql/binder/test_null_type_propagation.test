@@ -81,27 +81,29 @@ SELECT bool_and(i), bool_and(j) FROM (SELECT NULL) tbl(i), (SELECT NULL) tbl2(j)
 ----
 NULL	NULL
 
+# queries with UNION (not UNION ALL) need the 'sort' because UNION is an aggregate - no order-preserving guarantees
+
 # Issue #1049: Should a UNION with untyped NULL preserve the type?
-query III
+query III sort
 SELECT NULL as a, NULL as b, 1 as id UNION SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 2 as id
 ----
-NULL	NULL	1
 True	False	2
+NULL	NULL	1
 
-query III
+query III sort
 SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 1 as id UNION SELECT NULL as a, NULL as b, 2 as id
 ----
 True	False	1
 NULL	NULL	2
 
 # old behavior: cast NULL to integer explicitly
-query III
+query III sort
 SELECT NULL::INTEGER as a, NULL::INTEGER as b, 1 as id UNION SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 2 as id
 ----
-NULL	NULL	1
 1	0	2
+NULL	NULL	1
 
-query III
+query III sort
 SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 1 as id UNION SELECT NULL::INTEGER as a, NULL::INTEGER as b, 2 as id
 ----
 1	0	1

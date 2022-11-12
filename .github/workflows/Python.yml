@@ -153,6 +153,8 @@ jobs:
             python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
+          - isRelease: false
+            python_build: 'cp311-*'
     needs: manylinux-extensions
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
@@ -277,6 +279,8 @@ jobs:
             python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
+          - isRelease: false
+            python_build: 'cp311-*'
       needs: linux-python3-9
 
       env:

@@ -244,14 +244,13 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 	return make_unique<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
 }
 
-OrderByNullType GetNullOrder(vector<unique_ptr<Expression>> &arguments, idx_t idx) {
+OrderByNullType GetNullOrder(ClientContext &context, vector<unique_ptr<Expression>> &arguments, idx_t idx) {
 
 	if (!arguments[idx]->IsFoldable()) {
 		throw InvalidInputException("Null sorting order must be a constant");
 	}
-	Value null_order_value = ExpressionExecutor::EvaluateScalar(*arguments[idx]);
-	auto null_order_name = null_order_value.ToString();
-	std::transform(null_order_name.begin(), null_order_name.end(), null_order_name.begin(), ::toupper);
+	Value null_order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[idx]);
+	auto null_order_name = StringUtil::Upper(null_order_value.ToString());
 	if (null_order_name != "NULLS FIRST" && null_order_name != "NULLS LAST") {
 		throw InvalidInputException("Null sorting order must be either NULLS FIRST or NULLS LAST");
 	}
@@ -279,9 +278,8 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("Sorting order must be a constant");
 		}
-		Value order_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-		auto order_name = order_value.ToString();
-		std::transform(order_name.begin(), order_name.end(), order_name.begin(), ::toupper);
+		Value order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+		auto order_name = StringUtil::Upper(order_value.ToString());
 		if (order_name != "DESC" && order_name != "ASC") {
 			throw InvalidInputException("Sorting order must be either ASC or DESC");
 		}
@@ -294,7 +292,7 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 
 	// get the null sorting order
 	if (arguments.size() == 3) {
-		null_order = GetNullOrder(arguments, 2);
+		null_order = GetNullOrder(context, arguments, 2);
 	}
 
 	return ListSortBind(context, bound_function, arguments, order, null_order);
@@ -314,7 +312,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 
 	// get the null sorting order
 	if (arguments.size() == 2) {
-		null_order = GetNullOrder(arguments, 1);
+		null_order = GetNullOrder(context, arguments, 1);
 	}
 
 	return ListSortBind(context, bound_function, arguments, order, null_order);

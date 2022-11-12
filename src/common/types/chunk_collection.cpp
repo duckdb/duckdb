@@ -182,6 +182,19 @@ static int8_t TemplatedCompareValue(Vector &left_vec, Vector &right_vec, idx_t l
 	return 1;
 }
 
+template <>
+int8_t TemplatedCompareValue<Value>(Vector &left_vec, Vector &right_vec, idx_t left_idx, idx_t right_idx) {
+	auto left_val = left_vec.GetValue(left_idx);
+	auto right_val = right_vec.GetValue(right_idx);
+	if (ValueOperations::Equals(left_val, right_val)) {
+		return 0;
+	}
+	if (ValueOperations::LessThan(left_val, right_val)) {
+		return -1;
+	}
+	return 1;
+}
+
 // return type here is int32 because strcmp() on some platforms returns rather large values
 static int32_t CompareValue(Vector &left_vec, Vector &right_vec, idx_t vector_idx_left, idx_t vector_idx_right,
                             OrderByNullType null_order) {
@@ -225,7 +238,7 @@ static int32_t CompareValue(Vector &left_vec, Vector &right_vec, idx_t vector_id
 	case PhysicalType::INTERVAL:
 		return TemplatedCompareValue<interval_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	default:
-		throw NotImplementedException("Type for comparison");
+		return TemplatedCompareValue<Value>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	}
 }
 

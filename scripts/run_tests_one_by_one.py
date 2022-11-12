@@ -1,10 +1,7 @@
 import sys
 import subprocess
 import re
-
-if len(sys.argv) < 2:
-	print("Expected usage: python3 scripts/run_tests_one_by_one.py build/debug/test/unittest [--no-exit]")
-	exit(1)
+import os
 
 # wheth
 no_exit = False
@@ -12,7 +9,11 @@ for i in range(len(sys.argv)):
 	if sys.argv[i] == '--no-exit':
 		no_exit = True
 		del sys.argv[i]
+		i-=1
 
+if len(sys.argv) < 2:
+	print("Expected usage: python3 scripts/run_tests_one_by_one.py build/debug/test/unittest [--no-exit]")
+	exit(1)
 unittest_program = sys.argv[1]
 extra_args = []
 if len(sys.argv) > 2:
