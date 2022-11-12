@@ -7,10 +7,24 @@ pragma enable_verification
 statement ok
 CREATE TABLE t0 (c2 AS (c0) VIRTUAL, c0 INT);
 
+statement ok
+insert into t0 VALUES(5);
+
+foreach table_alias t0 c0 c2 order_id total_profit amount_sold price "a.b.c"
+
 query I
-SELECT 1 FROM t0 t2(c0) WHERE c0 = 0;
+SELECT 1 FROM t0 as ${table_alias}(c0) WHERE c0 = 0;
 ----
 
 query I
-select 1 from t0 as t2(c0);
+select 1 from t0 as ${table_alias}(c0);
 ----
+1
+
+query I
+select c0 from t0 as ${table_alias}(c0);
+----
+5
+
+#table_alias
+endloop
