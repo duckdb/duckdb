@@ -54,6 +54,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	} catch (const Exception &ex) {
 		auto &config = DBConfig::GetConfig(context);
 
+		this->plan = nullptr;
 		for (auto &extension_op : config.operator_extensions) {
 			auto bound_statement =
 			    extension_op.Bind(context, *this->binder, extension_op.operator_info.get(), statement);
