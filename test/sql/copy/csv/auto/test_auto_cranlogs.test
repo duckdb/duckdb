@@ -20,6 +20,9 @@ SELECT * FROM cranlogs LIMIT 5;
 2013-06-15	00:14:52	254933	3.0.1	x86_64	linux-gnu	foreign	0.8-54	HK	5
 
 
+# FIXME
+require vector_size 512
+
 # read with parallel reader and verify that we get the same result
 statement ok
 SET experimental_parallel_csv=true;
