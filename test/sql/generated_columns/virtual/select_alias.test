@@ -13,24 +13,29 @@ CREATE TABLE tbl (
 	y as (order_id + total_profit - amount_sold)
 );
 
+foreach table_alias tbl t2 y order_id total_profit amount_sold price "a.b.c"
+
 # Alias all columns
 query IIIII nosort scrambled
-select * from tbl t2(y, order_id, total_profit, amount_sold, price);
+select * from tbl ${table_alias}(y, order_id, total_profit, amount_sold, price);
 ----
 
 query IIIII nosort scrambled
-select * from tbl t2;
+select * from tbl ${table_alias};
 ----
 
 # Alias as completely different things
 query IIIII nosort scrambled
-select * from tbl t2(a, b, c, d, e);
+select * from tbl ${table_alias}(a, b, c, d, e);
 ----
 
 query II nosort swapped
-select a, b from tbl t2(e, c, b, d, a);
+select a, b from tbl ${table_alias}(e, c, b, d, a);
 ----
 
 query II nosort swapped
 select y, amount_sold from tbl;
 ----
+
+#table_alias
+endloop
