@@ -457,9 +457,9 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	set_seeds = 0;
 	updates = 0;
 
-  DBGenContext dbgen_ctx;
+	DBGenContext dbgen_ctx;
 
-  tdef* tdefs = dbgen_ctx.tdefs;
+	tdef *tdefs = dbgen_ctx.tdefs;
 	tdefs[PART].base = 200000;
 	tdefs[PSUPP].base = 200000;
 	tdefs[SUPP].base = 10000;
