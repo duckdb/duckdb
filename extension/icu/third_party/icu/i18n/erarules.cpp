@@ -54,7 +54,7 @@ static UBool isValidRuleStartDate(int32_t year, int32_t month, int32_t day) {
  * @return  an encoded date.
  */
 static int32_t encodeDate(int32_t year, int32_t month, int32_t day) {
-	return year << 16 | month << 8 | day;
+	return ((uint32_t)year) << 16 | month << 8 | day;
 }
 
 static void decodeDate(int32_t encodedDate, int32_t (&fields)[3]) {

@@ -364,22 +364,23 @@ UBool IslamicCalendar::civilLeapYear(int32_t year) {
 }
 
 /**
- * Return the day # on which the given year starts.  Days are counted
- * from the Hijri epoch, origin 0.
- */
-int32_t IslamicCalendar::yearStart(int32_t year) const {
-	if (cType == CIVIL || cType == TBLA ||
-	    (cType == UMALQURA && (year < UMALQURA_YEAR_START || year > UMALQURA_YEAR_END))) {
-		return (year - 1) * 354 + ClockMath::floorDivide((3 + 11 * year), 30);
-	} else if (cType == ASTRONOMICAL) {
-		return trueMonthStart(12 * (year - 1));
-	} else {
-		year -= UMALQURA_YEAR_START;
-		// rounded least-squares fit of the dates previously calculated from UMALQURA_MONTHLENGTH iteration
-		int32_t yrStartLinearEstimate = (int32_t)((354.36720 * (double)year) + 460322.05 + 0.5);
-		// need a slight correction to some
-		return yrStartLinearEstimate + umAlQuraYrStartEstimateFix[year];
-	}
+* Return the day # on which the given year starts.  Days are counted
+* from the Hijri epoch, origin 0.
+*/
+int32_t IslamicCalendar::yearStart(int32_t year) const{
+    if (cType == CIVIL || cType == TBLA ||
+        (cType == UMALQURA && (year < UMALQURA_YEAR_START || year > UMALQURA_YEAR_END)))
+    {
+        return (year-1)*354 + ClockMath::floorDivide((3+11*(int64_t)year),(int64_t)30);
+    } else if(cType==ASTRONOMICAL){
+        return trueMonthStart(12*(year-1));
+    } else {
+        year -= UMALQURA_YEAR_START;
+        // rounded least-squares fit of the dates previously calculated from UMALQURA_MONTHLENGTH iteration
+        int32_t yrStartLinearEstimate = (int32_t)((354.36720 * (double)year) + 460322.05 + 0.5);
+        // need a slight correction to some
+        return yrStartLinearEstimate + umAlQuraYrStartEstimateFix[year];
+    }
 }
 
 /**
@@ -390,19 +391,19 @@ int32_t IslamicCalendar::yearStart(int32_t year) const {
  * @param month The hijri month, 0-based (assumed to be in range 0..11)
  */
 int32_t IslamicCalendar::monthStart(int32_t year, int32_t month) const {
-	if (cType == CIVIL || cType == TBLA) {
-		// This does not handle months out of the range 0..11
-		return (int32_t)uprv_ceil(29.5 * month) + (year - 1) * 354 +
-		       (int32_t)ClockMath::floorDivide((3 + 11 * year), 30);
-	} else if (cType == ASTRONOMICAL) {
-		return trueMonthStart(12 * (year - 1) + month);
-	} else {
-		int32_t ms = yearStart(year);
-		for (int i = 0; i < month; i++) {
-			ms += handleGetMonthLength(year, i);
-		}
-		return ms;
-	}
+    if (cType == CIVIL || cType == TBLA) {
+        // This does not handle months out of the range 0..11
+        return (int32_t)uprv_ceil(29.5*month)
+            + (year-1)*354 + (int32_t)ClockMath::floorDivide((3+11*(int64_t)year),(int64_t)30);
+    } else if(cType==ASTRONOMICAL){
+        return trueMonthStart(12*(year-1) + month);
+    } else {
+        int32_t ms = yearStart(year);
+        for(int i=0; i< month; i++){
+            ms+= handleGetMonthLength(year, i);
+        }
+        return ms;
+    }
 }
 
 /**
@@ -427,33 +428,35 @@ int32_t IslamicCalendar::trueMonthStart(int32_t month) const {
 			goto trueMonthStartEnd;
 		}
 
-		if (age >= 0) {
-			// The month has already started
-			do {
-				origin -= kOneDay;
-				age = moonAge(origin, status);
-				if (U_FAILURE(status)) {
-					goto trueMonthStartEnd;
-				}
-			} while (age >= 0);
-		} else {
-			// Preceding month has not ended yet.
-			do {
-				origin += kOneDay;
-				age = moonAge(origin, status);
-				if (U_FAILURE(status)) {
-					goto trueMonthStartEnd;
-				}
-			} while (age < 0);
-		}
-		start = (int32_t)ClockMath::floorDivide((origin - HIJRA_MILLIS), (double)kOneDay) + 1;
-		CalendarCache::put(&gMonthCache, month, start, status);
-	}
-trueMonthStartEnd:
-	if (U_FAILURE(status)) {
-		start = 0;
-	}
-	return start;
+        if (age >= 0) {
+            // The month has already started
+            do {
+                origin -= kOneDay;
+                age = moonAge(origin, status);
+                if (U_FAILURE(status)) {
+                    goto trueMonthStartEnd;
+                }
+            } while (age >= 0);
+        }
+        else {
+            // Preceding month has not ended yet.
+            do {
+                origin += kOneDay;
+                age = moonAge(origin, status);
+                if (U_FAILURE(status)) {
+                    goto trueMonthStartEnd;
+                }
+            } while (age < 0);
+        }
+        start = (int32_t)(ClockMath::floorDivide(
+            (int64_t)((int64_t)origin - HIJRA_MILLIS), (int64_t)kOneDay) + 1);
+        CalendarCache::put(&gMonthCache, month, start, status);
+    }
+trueMonthStartEnd :
+    if(U_FAILURE(status)) {
+        start = 0;
+    }
+    return start;
 }
 
 /**
@@ -637,42 +640,43 @@ void IslamicCalendar::handleComputeFields(int32_t julianDay, UErrorCode &status)
 			months--;
 		}
 
-		year = months / 12 + 1;
-		month = months % 12;
-	} else if (cType == UMALQURA) {
-		int32_t umalquraStartdays = yearStart(UMALQURA_YEAR_START);
-		if (days < umalquraStartdays) {
-			// Use Civil calculation
-			year = (int)ClockMath::floorDivide((double)(30 * days + 10646), 10631.0);
-			month = (int32_t)uprv_ceil((days - 29 - yearStart(year)) / 29.5);
-			month = month < 11 ? month : 11;
-			startDate = monthStart(year, month);
-		} else {
-			int y = UMALQURA_YEAR_START - 1, m = 0;
-			long d = 1;
-			while (d > 0) {
-				y++;
-				d = days - yearStart(y) + 1;
-				if (d == handleGetYearLength(y)) {
-					m = 11;
-					break;
-				} else if (d < handleGetYearLength(y)) {
-					int monthLen = handleGetMonthLength(y, m);
-					m = 0;
-					while (d > monthLen) {
-						d -= monthLen;
-						m++;
-						monthLen = handleGetMonthLength(y, m);
-					}
-					break;
-				}
-			}
-			year = y;
-			month = m;
-		}
-	} else {              // invalid 'civil'
-		UPRV_UNREACHABLE; // should not get here, out of range
-	}
+        year = months >=  0 ? ((months / 12) + 1) : ((months + 1 ) / 12);
+        month = ((months % 12) + 12 ) % 12;
+    } else if(cType == UMALQURA) {
+        int32_t umalquraStartdays = yearStart(UMALQURA_YEAR_START) ;
+        if( days < umalquraStartdays){
+                //Use Civil calculation
+                year  = (int32_t)ClockMath::floorDivide(
+                    (30 * (int64_t)days + 10646) , (int64_t)10631.0 );
+                month = (int32_t)uprv_ceil((days - 29 - yearStart(year)) / 29.5 );
+                month = month<11?month:11;
+                startDate = monthStart(year, month);
+            }else{
+                int y =UMALQURA_YEAR_START-1, m =0;
+                long d = 1;
+                while(d > 0){
+                    y++;
+                    d = days - yearStart(y) +1;
+                    if(d == handleGetYearLength(y)){
+                        m=11;
+                        break;
+                    }else if(d < handleGetYearLength(y) ){
+                        int monthLen = handleGetMonthLength(y, m);
+                        m=0;
+                        while(d > monthLen){
+                            d -= monthLen;
+                            m++;
+                            monthLen = handleGetMonthLength(y, m);
+                        }
+                        break;
+                    }
+                }
+                year = y;
+                month = m;
+            }
+    } else { // invalid 'civil'
+      UPRV_UNREACHABLE; // should not get here, out of range
+    }
 
 	dayOfMonth = (days - monthStart(year, month)) + 1;
 

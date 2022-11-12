@@ -419,8 +419,8 @@ static void CreateTPCHTable(ClientContext &context, string schema, string suffix
 	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
-		info->columns.push_back(ColumnDefinition(T::Columns[i], T::Types[i]));
-		info->constraints.push_back(make_unique<NotNullConstraint>(i));
+		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
+		info->constraints.push_back(make_unique<NotNullConstraint>(LogicalIndex(i)));
 	}
 	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateTable(context, move(info));

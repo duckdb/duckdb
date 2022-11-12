@@ -63,12 +63,6 @@
                         ]
                     },
                 ],  # OS=="win"
-                [
-                    'target_arch=="arm64"',
-                    {
-                        "cflags_cc": ["-arch", "arm64"]
-                    }
-                ]
             ],  # conditions
           #  uncomment this to build against existing lib
 #             "libraries": [

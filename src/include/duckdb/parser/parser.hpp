@@ -11,7 +11,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb_libpgquery {
@@ -66,7 +66,7 @@ public:
 	static vector<vector<unique_ptr<ParsedExpression>>> ParseValuesList(const string &value_list,
 	                                                                    ParserOptions options = ParserOptions());
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
-	static vector<ColumnDefinition> ParseColumnList(const string &column_list, ParserOptions options = ParserOptions());
+	static ColumnList ParseColumnList(const string &column_list, ParserOptions options = ParserOptions());
 
 private:
 	ParserOptions options;

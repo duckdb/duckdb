@@ -10,7 +10,7 @@ number_repetitions = 5
 # the threshold at which we consider something a regression (percentage)
 regression_threshold_percentage = 0.1
 # minimal seconds diff for something to be a regression (for very fast benchmarks)
-regression_threshold_seconds = 0.01
+regression_threshold_seconds = 0.05
 
 old_runner = None
 new_runner = None

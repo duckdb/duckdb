@@ -1,0 +1,22 @@
+# name: test/fuzzer/pedro/temp_sequence_durability.test
+# description: Temp sequence durability
+# group: [pedro]
+
+load __TEST_DIR__/temp_sequence_durability.db
+
+# temp sequence
+require skip_reload
+
+statement ok
+PRAGMA DISABLE_CHECKPOINT_ON_SHUTDOWN;
+
+statement ok
+CREATE TEMP SEQUENCE s0;
+
+statement ok
+SELECT nextval('s0');
+
+restart
+
+statement error
+SELECT nextval('s0');

@@ -25,7 +25,7 @@ static void CreateTPCDSTable(ClientContext &context, string schema, string suffi
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
-		info->columns.push_back(ColumnDefinition(T::Columns[i], T::Types[i]));
+		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 	}
 	if (keys) {
 		vector<string> pk_columns;

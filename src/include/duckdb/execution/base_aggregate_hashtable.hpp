@@ -18,8 +18,8 @@ class BufferManager;
 
 class BaseAggregateHashTable {
 public:
-	BaseAggregateHashTable(Allocator &allocator, const vector<AggregateObject> &aggregates,
-	                       BufferManager &buffer_manager, vector<LogicalType> payload_types);
+	BaseAggregateHashTable(ClientContext &context, Allocator &allocator, const vector<AggregateObject> &aggregates,
+	                       vector<LogicalType> payload_types);
 	virtual ~BaseAggregateHashTable() {
 	}
 

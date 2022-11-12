@@ -130,7 +130,7 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("Separator argument to StringAgg must be a constant");
 	}
-	auto separator_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	auto separator_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	if (separator_val.IsNull()) {
 		arguments[0] = make_unique<BoundConstantExpression>(Value(LogicalType::VARCHAR));
 	}

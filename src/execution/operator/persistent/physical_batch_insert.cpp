@@ -9,8 +9,8 @@
 namespace duckdb {
 
 PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry *table,
-                                         vector<idx_t> column_index_map, vector<unique_ptr<Expression>> bound_defaults,
-                                         idx_t estimated_cardinality)
+                                         physical_index_vector_t<idx_t> column_index_map,
+                                         vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::BATCH_INSERT, move(types), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
       bound_defaults(move(bound_defaults)) {
@@ -239,7 +239,7 @@ class BatchInsertLocalState : public LocalSinkState {
 public:
 	BatchInsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                      const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(Allocator::Get(context), bound_defaults), written_to_disk(false) {
+	    : default_executor(context, bound_defaults), written_to_disk(false) {
 		insert_chunk.Initialize(Allocator::Get(context), types);
 	}
 
@@ -255,10 +255,10 @@ public:
 		if (!current_collection) {
 			return;
 		}
-		if (!written_to_disk || current_collection->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
+		if (!written_to_disk && current_collection->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
 			return;
 		}
-		writer->FlushToDisk(*current_collection);
+		writer->FlushToDisk(*current_collection, true);
 	}
 
 	void CreateNewCollection(TableCatalogEntry *table, const vector<LogicalType> &insert_types) {
@@ -307,7 +307,6 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		lstate.FlushToDisk();
-
 		gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection), lstate.writer,
 		                     &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);

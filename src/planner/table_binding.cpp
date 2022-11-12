@@ -114,9 +114,9 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 
 	// Get the index of the generated column
 	auto column_index = GetBindingIndex(column_name);
-	D_ASSERT(table_entry->columns[column_index].Generated());
+	D_ASSERT(table_entry->columns.GetColumn(LogicalIndex(column_index)).Generated());
 	// Get a copy of the generated column
-	auto expression = table_entry->columns[column_index].GeneratedExpression().Copy();
+	auto expression = table_entry->columns.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
 	BakeTableName(*expression, alias);
 	return (expression);
 }

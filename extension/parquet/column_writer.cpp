@@ -659,12 +659,18 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	SetParquetStatistics(state, column_chunk);
 
 	// write the individual pages to disk
+	idx_t total_uncompressed_size = 0;
 	for (auto &write_info : state.write_info) {
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
+		auto header_start_offset = writer.writer->GetTotalWritten();
 		write_info.page_header.write(writer.protocol.get());
+		// total uncompressed size in the column chunk includes the header size (!)
+		total_uncompressed_size += writer.writer->GetTotalWritten() - header_start_offset;
+		total_uncompressed_size += write_info.page_header.uncompressed_page_size;
 		writer.writer->WriteData(write_info.compressed_data, write_info.compressed_size);
 	}
 	column_chunk.meta_data.total_compressed_size = writer.writer->GetTotalWritten() - start_offset;
+	column_chunk.meta_data.total_uncompressed_size = total_uncompressed_size;
 }
 
 void BasicColumnWriter::FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats) {

@@ -292,8 +292,9 @@ unique_ptr<AlterInfo> DropNotNullInfo::Deserialize(FieldReader &reader, string s
 // AlterForeignKeyInfo
 //===--------------------------------------------------------------------===//
 AlterForeignKeyInfo::AlterForeignKeyInfo(string schema_p, string table_p, bool if_exists_p, string fk_table,
-                                         vector<string> pk_columns, vector<string> fk_columns, vector<idx_t> pk_keys,
-                                         vector<idx_t> fk_keys, AlterForeignKeyType type_p)
+                                         vector<string> pk_columns, vector<string> fk_columns,
+                                         vector<PhysicalIndex> pk_keys, vector<PhysicalIndex> fk_keys,
+                                         AlterForeignKeyType type_p)
     : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTRAINT, move(schema_p), move(table_p), if_exists_p),
       fk_table(move(fk_table)), pk_columns(move(pk_columns)), fk_columns(move(fk_columns)), pk_keys(move(pk_keys)),
       fk_keys(move(fk_keys)), type(type_p) {
@@ -310,8 +311,8 @@ void AlterForeignKeyInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteString(fk_table);
 	writer.WriteList<string>(pk_columns);
 	writer.WriteList<string>(fk_columns);
-	writer.WriteList<idx_t>(pk_keys);
-	writer.WriteList<idx_t>(fk_keys);
+	writer.WriteIndexList<PhysicalIndex>(pk_keys);
+	writer.WriteIndexList<PhysicalIndex>(fk_keys);
 	writer.WriteField<AlterForeignKeyType>(type);
 }
 
@@ -320,8 +321,8 @@ unique_ptr<AlterInfo> AlterForeignKeyInfo::Deserialize(FieldReader &reader, stri
 	auto fk_table = reader.ReadRequired<string>();
 	auto pk_columns = reader.ReadRequiredList<string>();
 	auto fk_columns = reader.ReadRequiredList<string>();
-	auto pk_keys = reader.ReadRequiredList<idx_t>();
-	auto fk_keys = reader.ReadRequiredList<idx_t>();
+	auto pk_keys = reader.ReadRequiredIndexList<PhysicalIndex>();
+	auto fk_keys = reader.ReadRequiredIndexList<PhysicalIndex>();
 	auto type = reader.ReadRequired<AlterForeignKeyType>();
 	return make_unique<AlterForeignKeyInfo>(move(schema), move(table), if_exists, move(fk_table), move(pk_columns),
 	                                        move(fk_columns), move(pk_keys), move(fk_keys), type);
