@@ -227,7 +227,6 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 		return BindReturning(move(stmt.returning_list), table, update_table_index, move(update_as_logicaloperator),
 		                     move(result));
-
 	}
 
 	update->table_index = 0;
