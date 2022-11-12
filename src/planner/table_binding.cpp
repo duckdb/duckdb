@@ -133,7 +133,11 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (entry && column_index != COLUMN_IDENTIFIER_ROW_ID) {
 		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
 		// Either there is no table, or the columns category has to be standard
-		D_ASSERT(((TableCatalogEntry *)entry)->columns[column_index].Category() == TableColumnType::STANDARD);
+		auto table_entry = (TableCatalogEntry *)entry;
+		auto &column_entry = table_entry->columns.GetColumn(LogicalIndex(column_index));
+		(void)table_entry;
+		(void)column_entry;
+		D_ASSERT(column_entry.Category() == TableColumnType::STANDARD);
 	}
 	// fetch the type of the column
 	LogicalType col_type;
