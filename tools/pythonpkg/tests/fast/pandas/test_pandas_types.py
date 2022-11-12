@@ -1,6 +1,7 @@
 import duckdb
 import pandas as pd
 import numpy
+import string
 
 def round_trip(data,pandas_type):
     df_in = pd.DataFrame({
@@ -13,6 +14,52 @@ def round_trip(data,pandas_type):
     assert df_out.equals(df_in)
 
 class TestPandasTypes(object):
+    def test_pandas_numeric(self):
+        base_df = pd.DataFrame(
+            {'a':range(10)}
+        )
+
+        data_types = [
+            "uint8",
+            "UInt8",
+            "uint16",
+            "UInt16",
+            "uint32",
+            "UInt32",
+            "uint64",
+            "UInt64",
+            "int8",
+            "Int8",
+            "int16",
+            "Int16",
+            "int32",
+            "Int32",
+            "int64",
+            "Int64",
+            "float32",
+            "Float32",
+            "float64",
+            "Float64"
+        ]
+
+        # Generate a dataframe with all the types, in the form of:
+        # b=type1,
+        # c=type2
+        # ..
+        data = {}
+        for letter, dtype in zip(string.ascii_lowercase, data_types):
+            data[letter] = base_df.a.astype(dtype)
+
+        df = pd.DataFrame.from_dict(data)
+        conn = duckdb.connect()
+        out_df = conn.execute('select * from df').df()
+
+        # Verify that the types in the out_df are correct
+        # FIXME: we don't support outputting pandas specific types (i.e UInt64)
+        for letter, item in zip(string.ascii_lowercase, data_types):
+            column_name = letter
+            assert(str(out_df[column_name].dtype) == item.lower())
+
     def test_pandas_unsigned(self, duckdb_cursor):
         unsigned_types = ['uint8','uint16','uint32','uint64']
         data = numpy.array([0,1,2,3])
