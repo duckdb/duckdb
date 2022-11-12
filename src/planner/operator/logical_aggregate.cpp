@@ -105,9 +105,7 @@ idx_t LogicalAggregate::EstimateCardinality(ClientContext &context) {
 		// ungrouped aggregate
 		return 1;
 	}
-	auto child_cardinality = LogicalOperator::EstimateCardinality(context);
-	// probably
-	return child_cardinality / 10;
+	return LogicalOperator::EstimateCardinality(context);
 }
 
 } // namespace duckdb
