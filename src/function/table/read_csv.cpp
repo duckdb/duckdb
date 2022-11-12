@@ -326,13 +326,10 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 		return make_unique<ParallelCSVGlobalState>();
 	}
 	unique_ptr<CSVFileHandle> file_handle;
-	if (bind_data.initial_reader) {
-		file_handle = move(bind_data.initial_reader->file_handle);
-		bind_data.initial_reader.reset();
-	} else {
-		bind_data.options.file_path = bind_data.files[0];
-		file_handle = ReadCSV::OpenCSV(bind_data.options, context);
-	}
+
+	bind_data.options.file_path = bind_data.files[0];
+	file_handle = ReadCSV::OpenCSV(bind_data.options, context);
+
 	idx_t rows_to_skip = bind_data.options.skip_rows + (bind_data.options.has_header ? 1 : 0);
 	return make_unique<ParallelCSVGlobalState>(context, move(file_handle), bind_data.files,
 	                                           context.db->NumberOfThreads(), bind_data.options.buffer_size,

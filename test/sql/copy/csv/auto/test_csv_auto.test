@@ -4,13 +4,10 @@
 
 require vector_size 512
 
-mode skip
 
-# FIXME: this results in errors
 statement ok
 SET experimental_parallel_csv=true;
 
-mode unskip
 
 # CSV file with RFC-conform dialect
 statement ok

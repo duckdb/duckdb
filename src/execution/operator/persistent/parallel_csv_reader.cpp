@@ -47,6 +47,16 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	if (buffer->buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&
 	    start_buffer == buffer->buffer->GetStart()) {
 		// First buffer doesn't need any setting
+		// Unless we have a header
+		if (options.header && options.auto_detect) {
+			for (; position_buffer < end_buffer; position_buffer++) {
+				if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
+					position_buffer++;
+					return true;
+				}
+			}
+			return false;
+		}
 		return true;
 	}
 
@@ -170,8 +180,9 @@ normal : {
 			goto add_value;
 		} else if (StringUtil::CharacterIsNewline(c)) {
 			// newline: add row
-			D_ASSERT(try_add_line || column == insert_chunk.ColumnCount() - 1);
-			goto add_row;
+			if (column > 0 || try_add_line) {
+				goto add_row;
+			}
 		}
 	}
 	if (!BufferRemainder()) {
@@ -345,9 +356,8 @@ final_state : {
 	}
 	// If this is the last buffer, we have to read the last value
 	if (buffer->buffer->IsCSVFileLastBuffer() || (buffer->next_buffer->IsCSVFileLastBuffer())) {
-		if (column > 0 || position_buffer > start_buffer) {
+		if (column > 0 || try_add_line) {
 			// remaining values to be added to the chunk
-			D_ASSERT(column == insert_chunk.ColumnCount() - 1);
 			AddValue(buffer->GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes);
 			if (try_add_line) {
 				bool success = column == sql_types.size();

@@ -23,9 +23,6 @@ SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime
 1988	AA	JFK	New York, NY	NULL
 1988	AA	JFK	New York, NY	NULL
 
-# FIXME: this one doesn't work
-mode skip
-
 # read with parallel reader and verify that we get the same result
 statement ok
 SET experimental_parallel_csv=true;
@@ -36,7 +33,7 @@ CREATE TABLE ontime2 AS SELECT * FROM ontime LIMIT 0
 statement ok
 COPY ontime2 FROM 'test/sql/copy/csv/data/real/ontime_sample.csv' (HEADER TRUE);
 
-query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 (SELECT * FROM ontime EXCEPT SELECT * FROM ontime2)
 UNION ALL
 (SELECT * FROM ontime2 EXCEPT SELECT * FROM ontime)
