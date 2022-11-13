@@ -233,7 +233,7 @@ public:
 	ParallelCSVGlobalState() {
 	}
 
-	~ParallelCSVGlobalState() {
+	~ParallelCSVGlobalState() override {
 		Verify();
 	}
 
