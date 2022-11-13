@@ -129,18 +129,16 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (!success) {
 		return BindResult(ColumnNotFoundError(column_name));
 	}
-#ifdef DEBUG
 	auto entry = GetStandardEntry();
-	if (entry) {
+	if (entry && column_index != COLUMN_IDENTIFIER_ROW_ID) {
 		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
+		// Either there is no table, or the columns category has to be standard
 		auto table_entry = (TableCatalogEntry *)entry;
-		//! Either there is no table, or the columns category has to be standard
-		if (column_index != COLUMN_IDENTIFIER_ROW_ID) {
-			D_ASSERT(table_entry->columns.GetColumn(LogicalIndex(column_index)).Category() ==
-			         TableColumnType::STANDARD);
-		}
+		auto &column_entry = table_entry->columns.GetColumn(LogicalIndex(column_index));
+		(void)table_entry;
+		(void)column_entry;
+		D_ASSERT(column_entry.Category() == TableColumnType::STANDARD);
 	}
-#endif /* DEBUG */
 	// fetch the type of the column
 	LogicalType col_type;
 	if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
