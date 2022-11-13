@@ -238,18 +238,15 @@ add_row : {
 	has_quotes = false;
 	start_buffer = ++position_buffer;
 	verification_positions.end_of_last_line = position_buffer;
-	if (reached_remainder_state || finished_chunk) {
-		goto final_state;
-	}
-	if (!BufferRemainder()) {
-		goto final_state;
-	}
 	if (carriage_return) {
 		// \r newline, go to special state that parses an optional \n afterwards
 		goto carriage_return;
 	} else {
 		// \n newline, move to value start
-		if (finished_chunk) {
+		if (reached_remainder_state || finished_chunk) {
+			goto final_state;
+		}
+		if (!BufferRemainder()) {
 			goto final_state;
 		}
 		goto value_start;
@@ -352,10 +349,12 @@ carriage_return : {
 		// increase position by 1 and move start to the new position
 		start_buffer = ++position_buffer;
 		verification_positions.end_of_last_line = position_buffer;
-		if (position_buffer >= buffer_size) {
-			// file ends right after delimiter, go to final state
-			goto final_state;
-		}
+	}
+	if (reached_remainder_state || finished_chunk) {
+		goto final_state;
+	}
+	if (!BufferRemainder()) {
+		goto final_state;
 	}
 	goto value_start;
 }
