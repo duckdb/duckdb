@@ -351,6 +351,7 @@ carriage_return : {
 		// newline after carriage return: skip
 		// increase position by 1 and move start to the new position
 		start_buffer = ++position_buffer;
+		verification_positions.end_of_last_line = position_buffer;
 		if (position_buffer >= buffer_size) {
 			// file ends right after delimiter, go to final state
 			goto final_state;
