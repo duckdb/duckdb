@@ -213,7 +213,8 @@ public:
 	ParallelCSVGlobalState(ClientContext &context, unique_ptr<CSVFileHandle> file_handle_p,
 	                       vector<string> &files_path_p, idx_t system_threads_p, idx_t buffer_size_p,
 	                       idx_t rows_to_skip, bool force_parallelism_p)
-	    : file_handle(move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),force_parallelism(force_parallelism_p) {
+	    : file_handle(move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
+	      force_parallelism(force_parallelism_p) {
 		for (idx_t i = 0; i < rows_to_skip; i++) {
 			file_handle->ReadLine();
 		}
@@ -226,8 +227,8 @@ public:
 		} else {
 			bytes_per_local_state = file_size / MaxThreads();
 		}
-		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle,current_csv_position);
-		next_buffer = current_buffer->Next(*file_handle, buffer_size,current_csv_position);
+		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
+		next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position);
 	}
 	ParallelCSVGlobalState() {
 	}
@@ -277,6 +278,7 @@ private:
 	idx_t local_state_count = 0;
 	//! Current (Global) position of CSV
 	idx_t current_csv_position = 0;
+	idx_t max_tuple_end = 0;
 	//! the vector stores positions where threads ended the last line they read in the CSV File, and the set stores
 	//! positions where they started reading the first line.
 	vector<idx_t> tuple_end;
@@ -303,7 +305,7 @@ void ParallelCSVGlobalState::Verify() {
 		// All threads are done, we run some magic sweet verification code
 		for (auto &last_pos : tuple_end) {
 			auto first_pos = tuple_start.find(last_pos);
-			if (first_pos == tuple_start.end() && last_pos != file_size) {
+			if (first_pos == tuple_start.end() && last_pos != max_tuple_end) {
 				throw InternalException("Not possible to read this CSV File with multithreading. Tuple: " +
 				                        to_string(last_pos) + " does not have a match");
 			}
@@ -346,7 +348,7 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 			file_handle = ReadCSV::OpenCSV(bind_data.options, context);
 			current_csv_position = 0;
 			// FIXME: This will probably require some changes on the verification code
-			next_buffer = make_shared<CSVBuffer>(context,buffer_size, *file_handle, current_csv_position);
+			next_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
 		}
 	}
 	return result;
@@ -354,6 +356,9 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (positions.beginning_of_first_line != positions.end_of_last_line) {
+		if (positions.end_of_last_line > max_tuple_end) {
+			max_tuple_end = positions.end_of_last_line;
+		}
 		tuple_start.insert(positions.beginning_of_first_line);
 		tuple_end.push_back(positions.end_of_last_line);
 	}
@@ -374,8 +379,7 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	idx_t rows_to_skip = bind_data.options.skip_rows + (bind_data.options.has_header ? 1 : 0);
 	return make_unique<ParallelCSVGlobalState>(context, move(file_handle), bind_data.files,
 	                                           context.db->NumberOfThreads(), bind_data.options.buffer_size,
-	                                           rows_to_skip,
-	                                           ClientConfig::GetConfig(context).verify_parallelism);
+	                                           rows_to_skip, ClientConfig::GetConfig(context).verify_parallelism);
 }
 
 //===--------------------------------------------------------------------===//

@@ -30,6 +30,9 @@ statement ok
 SET experimental_parallel_csv=true;
 
 statement ok
+PRAGMA verify_parallelism
+
+statement ok
 CREATE TABLE lineitem2 AS SELECT * FROM lineitem LIMIT 0
 
 statement ok

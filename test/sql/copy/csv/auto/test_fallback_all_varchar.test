@@ -2,9 +2,11 @@
 # description: Test optional parameters for read csv
 # group: [auto]
 
-# FIXME: this results in errors
 statement ok
 SET experimental_parallel_csv=true;
+
+statement ok
+PRAGMA verify_parallelism
 
 
 # CSV file with irregularity in first column and default sample size
