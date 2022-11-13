@@ -306,8 +306,17 @@ void ParallelCSVGlobalState::Verify() {
 		for (auto &last_pos : tuple_end) {
 			auto first_pos = tuple_start.find(last_pos);
 			if (first_pos == tuple_start.end() && last_pos != max_tuple_end) {
-				throw InternalException("Not possible to read this CSV File with multithreading. Tuple: " +
-				                        to_string(last_pos) + " does not have a match");
+				string error = "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
+				               " does not have a match\n";
+				error += "End Lines: \n";
+				for (auto &end_line : tuple_end) {
+					error += to_string(end_line) + "\n";
+				}
+				error += "Start Lines: \n";
+				for (auto &start_line : tuple_start) {
+					error += to_string(start_line) + "\n";
+				}
+				throw InternalException(error);
 			}
 		}
 	}
