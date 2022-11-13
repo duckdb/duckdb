@@ -49,7 +49,7 @@ export class QueryResult {
 }
 
 export class Database {
-  constructor(path: string, callback?: Callback<any>);
+  constructor(path: string, accessMode?: number, callback?: Callback<any>);
 
   close(callback: Callback<void>): void;
 

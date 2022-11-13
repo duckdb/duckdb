@@ -43,34 +43,38 @@ struct CSVBufferRead {
 
 	const char &operator[](size_t i) const {
 		if (i < buffer->GetBufferSize()) {
-			return buffer->buffer[i];
+			auto buffer_ptr = buffer->Ptr();
+			return buffer_ptr[i];
 		}
-		return next_buffer->buffer[i - buffer->GetBufferSize()];
+		auto next_ptr = next_buffer->Ptr();
+		return next_ptr[i - buffer->GetBufferSize()];
 	}
 
 	string_t GetValue(idx_t start_buffer, idx_t position_buffer, idx_t offset) {
 		idx_t length = position_buffer - start_buffer - offset;
 		// 1) It's all in the current buffer
 		if (start_buffer + length <= buffer->GetBufferSize()) {
-			auto buffer_ptr = buffer->buffer.get();
+			auto buffer_ptr = buffer->Ptr();
 			return string_t(buffer_ptr + start_buffer, length);
 		} else if (start_buffer >= buffer->GetBufferSize()) {
 			// 2) It's all in the next buffer
 			D_ASSERT(next_buffer);
 			D_ASSERT(next_buffer->GetBufferSize() >= length + (start_buffer - buffer->GetBufferSize()));
-			auto buffer_ptr = next_buffer->buffer.get();
+			auto buffer_ptr = next_buffer->Ptr();
 			return string_t(buffer_ptr + (start_buffer - buffer->GetBufferSize()), length);
 		} else {
 			// 3) It starts in the current buffer and ends in the next buffer
 			D_ASSERT(next_buffer);
 			auto intersection = unique_ptr<char[]>(new char[length]);
 			idx_t cur_pos = 0;
+			auto buffer_ptr = buffer->Ptr();
 			for (idx_t i = start_buffer; i < buffer->GetBufferSize(); i++) {
-				intersection[cur_pos++] = buffer->buffer[i];
+				intersection[cur_pos++] = buffer_ptr[i];
 			}
 			idx_t nxt_buffer_pos = 0;
+			auto next_buffer_ptr = next_buffer->Ptr();
 			for (; cur_pos < length; cur_pos++) {
-				intersection[cur_pos] = next_buffer->buffer[nxt_buffer_pos++];
+				intersection[cur_pos] = next_buffer_ptr[nxt_buffer_pos++];
 			}
 			intersections.emplace_back(move(intersection));
 			return string_t(intersections.back().get(), length);

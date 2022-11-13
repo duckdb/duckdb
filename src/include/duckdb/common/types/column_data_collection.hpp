@@ -206,6 +206,7 @@ public:
 private:
 	vector<ColumnDataRow> rows;
 	vector<unique_ptr<DataChunk>> chunks;
+	ColumnDataScanState scan_state;
 };
 
 } // namespace duckdb

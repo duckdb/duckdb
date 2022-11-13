@@ -17,4 +17,13 @@ unique_ptr<LogicalOperator> LogicalLimitPercent::Deserialize(LogicalDeserializat
 	auto offset = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	return make_unique<LogicalLimitPercent>(limit_percent, offset_val, move(limit), move(offset));
 }
+
+idx_t LogicalLimitPercent::EstimateCardinality(ClientContext &context) {
+	auto child_cardinality = LogicalOperator::EstimateCardinality(context);
+	if (limit_percent < 0 || limit_percent > 100) {
+		return child_cardinality;
+	}
+	return idx_t(child_cardinality * (limit_percent / 100.0));
+}
+
 } // namespace duckdb

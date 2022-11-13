@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/planner/plan_serialization.hpp"
 
 namespace duckdb {
 struct AlterInfo;
@@ -56,6 +57,7 @@ public:
 	void Serialize(Serializer &serializer) const;
 
 	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
 
 	virtual unique_ptr<CreateInfo> Copy() const = 0;
 

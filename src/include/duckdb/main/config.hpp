@@ -11,21 +11,22 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/order_type.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/winapi.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/function/replacement_open.hpp"
-#include "duckdb/common/set.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
-#include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
-#include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/set.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/replacement_open.hpp"
+#include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/planner/operator_extension.hpp"
 
 namespace duckdb {
 class CastFunctionSet;
@@ -162,6 +163,10 @@ public:
 	vector<OptimizerExtension> optimizer_extensions;
 	//! Error manager
 	unique_ptr<ErrorManager> error_manager;
+	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
+	shared_ptr<Allocator> default_allocator;
+	//! Extensions made to binder
+	vector<OperatorExtension> operator_extensions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

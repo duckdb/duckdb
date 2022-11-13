@@ -24,7 +24,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		unique_ptr<Expression> expression;
 		if (!using_binding->primary_binding.empty()) {
 			// we can! just assign the table name and re-bind
-			return make_unique<ColumnRefExpression>(column_name, using_binding->primary_binding);
+			return binder.bind_context.CreateColumnReference(using_binding->primary_binding, column_name);
 		} else {
 			// // we cannot! we need to bind this as a coalesce between all the relevant columns
 			auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);

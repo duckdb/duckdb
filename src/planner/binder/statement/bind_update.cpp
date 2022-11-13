@@ -228,15 +228,14 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 		return BindReturning(move(stmt.returning_list), table, update_table_index, move(update_as_logicaloperator),
 		                     move(result));
-
-	} else {
-		update->table_index = 0;
-		result.names = {"Count"};
-		result.types = {LogicalType::BIGINT};
-		result.plan = move(update);
-		properties.allow_stream_result = false;
-		properties.return_type = StatementReturnType::CHANGED_ROWS;
 	}
+
+	update->table_index = 0;
+	result.names = {"Count"};
+	result.types = {LogicalType::BIGINT};
+	result.plan = move(update);
+	properties.allow_stream_result = false;
+	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }
 
