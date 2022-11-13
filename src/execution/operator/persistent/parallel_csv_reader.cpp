@@ -47,6 +47,7 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	if (buffer->buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&
 	    start_buffer == buffer->buffer->GetStart()) {
 		verification_positions.beginning_of_first_line = position_buffer;
+		verification_positions.end_of_last_line = position_buffer;
 		// First buffer doesn't need any setting
 		// Unless we have a header
 		if (options.header && options.auto_detect) {

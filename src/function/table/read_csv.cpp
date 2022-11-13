@@ -233,13 +233,15 @@ public:
 	ParallelCSVGlobalState() {
 	}
 
+	~ParallelCSVGlobalState() {
+		Verify();
+	}
+
 	idx_t MaxThreads() const override;
 	//! Returns buffer and index that caller thread should read.
 	unique_ptr<CSVBufferRead> Next(ClientContext &context, ReadCSVData &bind_data);
 	//! Verify if the CSV File was read correctly
 	void Verify();
-	//! Adds +1 to our local state count
-	void AddLocalStateCount();
 
 	void UpdateVerification(VerificationPositions positions);
 
@@ -274,8 +276,6 @@ private:
 	idx_t batch_index = 0;
 	//! Forces parallelism for small CSV Files, should only be used for testing.
 	bool force_parallelism;
-	//! Count of local states running
-	idx_t local_state_count = 0;
 	//! Current (Global) position of CSV
 	idx_t current_csv_position = 0;
 	idx_t max_tuple_end = 0;
@@ -300,38 +300,29 @@ idx_t ParallelCSVGlobalState::MaxThreads() const {
 }
 
 void ParallelCSVGlobalState::Verify() {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	if (local_state_count == 0) {
-		// All threads are done, we run some magic sweet verification code
-		for (auto &last_pos : tuple_end) {
-			auto first_pos = tuple_start.find(last_pos);
-			if (first_pos == tuple_start.end() && last_pos != max_tuple_end) {
-				string error = "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
-				               " does not have a match\n";
-				error += "End Lines: \n";
-				for (auto &end_line : tuple_end) {
-					error += to_string(end_line) + "\n";
-				}
-				error += "Start Lines: \n";
-				for (auto &start_line : tuple_start) {
-					error += to_string(start_line) + "\n";
-				}
-				throw InternalException(error);
+	// All threads are done, we run some magic sweet verification code
+	for (auto &last_pos : tuple_end) {
+		auto first_pos = tuple_start.find(last_pos);
+		if (first_pos == tuple_start.end() && last_pos != max_tuple_end) {
+			string error = "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
+			               " does not have a match\n";
+			error += "End Lines: \n";
+			for (auto &end_line : tuple_end) {
+				error += to_string(end_line) + "\n";
 			}
+			error += "Start Lines: \n";
+			for (auto &start_line : tuple_start) {
+				error += to_string(start_line) + "\n";
+			}
+			throw InternalException(error);
 		}
 	}
-}
-
-void ParallelCSVGlobalState::AddLocalStateCount() {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	local_state_count++;
 }
 
 unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (!current_buffer) {
 		// We are done scanning.
-		local_state_count--;
 		return nullptr;
 	}
 	// set up the current buffer
@@ -364,7 +355,7 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 }
 void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (positions.beginning_of_first_line != positions.end_of_last_line) {
+	if (positions.beginning_of_first_line < positions.end_of_last_line) {
 		if (positions.end_of_last_line > max_tuple_end) {
 			max_tuple_end = positions.end_of_last_line;
 		}
@@ -402,6 +393,7 @@ public:
 	//! The CSV reader
 	unique_ptr<ParallelCSVReader> csv_reader;
 	CSVBufferRead previous_buffer;
+	bool done = false;
 };
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
@@ -417,9 +409,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 		csv_reader = make_unique<ParallelCSVReader>(context.client, csv_data.options, move(next_local_buffer),
 		                                            csv_data.sql_types);
 	}
-	global_state.AddLocalStateCount();
-	auto new_local_state = make_unique<ParallelCSVLocalState>(move(csv_reader));
-	return move(new_local_state);
+	return make_unique<ParallelCSVLocalState>(move(csv_reader));
 }
 
 static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -440,7 +430,6 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			csv_global_state.UpdateVerification(csv_local_state.csv_reader->GetVerificationPositions());
 			auto next_chunk = csv_global_state.Next(context, bind_data);
 			if (!next_chunk) {
-				csv_global_state.Verify();
 				break;
 			}
 			csv_local_state.csv_reader->SetBufferRead(move(next_chunk));
