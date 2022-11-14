@@ -849,6 +849,12 @@ test('''
 select 42 limit 0;
 ''', out='0 rows')
 
+# test null-byte rendering
+test('select varchar from test_all_types();', out='goo\\0se')
+
+# null byte in error message
+test('select chr(0)::int', err='INT32')
+
 if os.name != 'nt':
      shell_test_dir = 'shell_test_dir'
      try:
@@ -938,3 +944,8 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
      copy (select 42) to '/dev/stdout'
      ''',
      out='''42''')
+
+     test('''
+     select list(concat('thisisalongstring', range::VARCHAR)) i from range(10000)
+     ''',
+     out='''thisisalongstring''')

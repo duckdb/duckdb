@@ -5,7 +5,7 @@ namespace duckdb {
 
 //! DECIMAL -> VARCHAR
 template <>
-bool CastDecimalCInternal(duckdb_result *source, char *&result, idx_t col, idx_t row) {
+bool CastDecimalCInternal(duckdb_result *source, duckdb_string &result, idx_t col, idx_t row) {
 	auto result_data = (duckdb::DuckDBResultData *)source->internal_data;
 	auto &query_result = result_data->result;
 	auto &source_type = query_result->types[col];
@@ -34,9 +34,10 @@ bool CastDecimalCInternal(duckdb_result *source, char *&result, idx_t col, idx_t
 	default:
 		throw duckdb::InternalException("Unimplemented internal type for decimal");
 	}
-	result = (char *)duckdb_malloc(sizeof(char) * (result_string.GetSize() + 1));
-	memcpy(result, result_string.GetDataUnsafe(), result_string.GetSize());
-	result[result_string.GetSize()] = '\0';
+	result.data = (char *)duckdb_malloc(sizeof(char) * (result_string.GetSize() + 1));
+	memcpy(result.data, result_string.GetDataUnsafe(), result_string.GetSize());
+	result.data[result_string.GetSize()] = '\0';
+	result.size = result_string.GetSize();
 	return true;
 }
 

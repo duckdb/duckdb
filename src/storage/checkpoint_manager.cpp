@@ -374,9 +374,9 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 		// column refs
 		unbound_expressions.reserve(info->column_ids.size());
 		for (idx_t key_nr = 0; key_nr < info->column_ids.size(); key_nr++) {
-			unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    table_catalog->columns[info->column_ids[key_nr]].GetName(),
-			    table_catalog->columns[info->column_ids[key_nr]].GetType(), ColumnBinding(0, key_nr)));
+			auto &col = table_catalog->columns.GetColumn(LogicalIndex(info->column_ids[key_nr]));
+			unbound_expressions.push_back(
+			    make_unique<BoundColumnRefExpression>(col.GetName(), col.GetType(), ColumnBinding(0, key_nr)));
 		}
 	}
 

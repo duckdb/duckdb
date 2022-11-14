@@ -32,7 +32,7 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 			extension_option.set_function(context.client, scope, target_value);
 		}
 		if (scope == SetScope::GLOBAL) {
-			config.options.set_variables[name] = move(target_value);
+			config.SetOption(name, move(target_value));
 		} else {
 			auto &client_config = ClientConfig::GetConfig(context.client);
 			client_config.set_variables[name] = move(target_value);
@@ -57,7 +57,7 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 		}
 		auto &db = DatabaseInstance::GetDatabase(context.client);
 		auto &config = DBConfig::GetConfig(context.client);
-		option->set_global(&db, config, input);
+		config.SetOption(&db, *option, input);
 		break;
 	}
 	case SetScope::SESSION:

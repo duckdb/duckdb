@@ -115,14 +115,18 @@ struct ArrowTableFunction {
 public:
 	static void RegisterFunction(BuiltinFunctions &set);
 
-private:
+protected:
 	//! Binds an arrow table
 	static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names);
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanLocalState &scan_state,
 	                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-	                          DataChunk &output, idx_t start);
+	                          DataChunk &output, idx_t start, bool arrow_scan_is_projected = true);
+
+	//! Get next scan state
+	static bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
+	                                       ArrowScanLocalState &state, ArrowScanGlobalState &parallel_state);
 
 	//! Initialize Global State
 	static unique_ptr<GlobalTableFunctionState> ArrowScanInitGlobal(ClientContext &context,
@@ -139,12 +143,22 @@ private:
 	//! Defines Maximum Number of Threads
 	static idx_t ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data);
 
+	//! Allows parallel Create Table / Insertion
+	static idx_t ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+	                                LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state);
+
 	//! -----Utility Functions:-----
 	//! Gets Arrow Table's Cardinality
 	static unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context, const FunctionData *bind_data);
 	//! Gets the progress on the table scan, used for Progress Bars
 	static double ArrowProgress(ClientContext &context, const FunctionData *bind_data,
 	                            const GlobalTableFunctionState *global_state);
+	//! Renames repeated columns and case sensitive columns
+	static void RenameArrowColumns(vector<string> &names);
+	//! Helper function to get the DuckDB logical type
+	static LogicalType GetArrowLogicalType(ArrowSchema &schema,
+	                                       std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+	                                       idx_t col_idx);
 };
 
 } // namespace duckdb

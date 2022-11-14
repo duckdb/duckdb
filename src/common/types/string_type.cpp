@@ -25,10 +25,4 @@ void string_t::Verify() const {
 	}
 }
 
-void string_t::VerifyNull() const {
-	for (idx_t i = 0; i < GetSize(); i++) {
-		D_ASSERT(GetDataUnsafe()[i] != '\0');
-	}
-}
-
 } // namespace duckdb

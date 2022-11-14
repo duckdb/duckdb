@@ -42,6 +42,8 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_PARQUET: 1
+      BUILD_SUBSTRAIT_EXTENSION: 1
+      BUILD_JEMALLOC: 1
       GEN: ninja
 
     steps:
@@ -84,6 +86,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -105,7 +108,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: build/reldebug/test/unittest "*" --force-storage
+      run: build/reldebug/test/unittest --force-storage
 
  force-restart:
     name: Force Restart
@@ -124,6 +127,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -145,7 +149,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: build/reldebug/test/unittest "*" --force-reload --force-storage
+      run: build/reldebug/test/unittest --force-reload --force-storage
 
  no-string-inline:
     name: No String Inline
@@ -187,6 +191,53 @@ jobs:
     - name: Test
       shell: bash
       run: build/debug/test/unittest
+
+ destroy-unpinned-blocks:
+   name: Destroy Unpinned Blocks
+   runs-on: ubuntu-20.04
+   needs: linux-debug
+   env:
+     CC: gcc-10
+     CXX: g++-10
+     GEN: ninja
+     BUILD_ICU: 1
+     BUILD_INET: 1
+     BUILD_PARQUET: 1
+     BUILD_TPCH: 1
+     BUILD_TPCDS: 1
+     BUILD_FTS: 1
+     BUILD_VISUALIZER: 1
+     BUILD_JSON: 1
+     BUILD_EXCEL: 1
+     DESTROY_UNPINNED_BLOCKS: 1
+
+   steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - uses: actions/setup-python@v2
+       with:
+         python-version: '3.7'
+
+     - name: Install
+       shell: bash
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+
+     - name: Build
+       shell: bash
+       run: make reldebug
+
+     - name: Test
+       shell: bash
+       run: | 
+        build/reldebug/test/unittest
+        python3.7 tools/shell/shell-test.py build/reldebug/duckdb
 
  linux-arrow:
       name: Linux Debug (Arrow Tests)
@@ -236,6 +287,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
       TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
 
     steps:
@@ -274,6 +326,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       DISABLE_SANITIZER: 1
+      BUILD_JEMALLOC: 1
       GEN: ninja
 
     steps:

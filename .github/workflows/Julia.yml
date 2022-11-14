@@ -71,7 +71,7 @@ jobs:
       - name: Build DuckDB
         shell: bash
         run: |
-            BUILD_TPCH=1 make
+            BUILD_TPCH=1 BUILD_JEMALLOC=1 make
 
       - name: Run Tests
         shell: bash

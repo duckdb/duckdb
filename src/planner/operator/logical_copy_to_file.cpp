@@ -55,4 +55,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	return move(result);
 }
 
+idx_t LogicalCopyToFile::EstimateCardinality(ClientContext &context) {
+	return 1;
+}
+
 } // namespace duckdb

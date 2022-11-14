@@ -5,22 +5,31 @@
 statement ok
 PRAGMA enable_verification
 
-statement error
+query III
 select * from 'data/csv/nullbyte.csv';
 ----
-line 2
+col1	col2	col3
+val1	val\02	val3
 
-statement error
-select * from read_csv('data/csv/nullbyte.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|');
+query III
+select * from read_csv('data/csv/nullbyte.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR', 'col3': 'VARCHAR'}, delim='|');
 ----
-line 2
+col1	col2	col3
+val1	val\02	val3
 
-statement error
+query II
 select * from 'data/csv/nullbyte_header.csv';
 ----
-line 1
+col1	col\02
+val1	val2
 
-statement error
+query II
 select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=False);
 ----
-line 1
+col1	col\02
+val1	val2
+
+query II
+select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=True);
+----
+val1	val2

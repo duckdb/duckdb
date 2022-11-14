@@ -1,6 +1,6 @@
 #include "duckdb/main/connection.hpp"
 
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -15,6 +15,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
@@ -206,10 +207,10 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	vector<ColumnDefinition> column_list;
 	for (auto &column : columns) {
 		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
-		if (col_list.size() != 1) {
+		if (col_list.LogicalColumnCount() != 1) {
 			throw ParserException("Expected a single column definition");
 		}
-		column_list.push_back(move(col_list[0]));
+		column_list.push_back(move(col_list.GetColumnMutable(LogicalIndex(0))));
 	}
 	return make_shared<ReadCSVRelation>(context, csv_file, move(column_list));
 }

@@ -88,6 +88,7 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining) {
+	state.previous_states.clear();
 	if (state.version != version) {
 		InitializeScanWithOffset(state, state.row_index);
 		state.current->InitializeScan(state);
@@ -122,6 +123,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			if (!state.current->next) {
 				break;
 			}
+			state.previous_states.emplace_back(move(state.scan_state));
 			state.current = (ColumnSegment *)state.current->Next();
 			state.current->InitializeScan(state);
 			state.segment_checked = false;

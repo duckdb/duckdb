@@ -19,12 +19,16 @@ const int Blob::HEX_MAP[256] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
+bool IsRegularCharacter(data_t c) {
+	return c >= 32 && c <= 127 && c != '\\' && c != '\'' && c != '"';
+}
+
 idx_t Blob::GetStringSize(string_t blob) {
 	auto data = (const_data_ptr_t)blob.GetDataUnsafe();
 	auto len = blob.GetSize();
 	idx_t str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
-		if (data[i] >= 32 && data[i] <= 127 && data[i] != '\\') {
+		if (IsRegularCharacter(data[i])) {
 			// ascii characters are rendered as-is
 			str_len++;
 		} else {
@@ -40,7 +44,7 @@ void Blob::ToString(string_t blob, char *output) {
 	auto len = blob.GetSize();
 	idx_t str_idx = 0;
 	for (idx_t i = 0; i < len; i++) {
-		if (data[i] >= 32 && data[i] <= 127 && data[i] != '\\') {
+		if (IsRegularCharacter(data[i])) {
 			// ascii characters are rendered as-is
 			output[str_idx++] = data[i];
 		} else {
@@ -86,7 +90,7 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 			}
 			str_len++;
 			i += 3;
-		} else if (data[i] >= 32 && data[i] <= 127) {
+		} else if (data[i] <= 127) {
 			str_len++;
 		} else {
 			string error = "Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
@@ -120,7 +124,7 @@ void Blob::ToBlob(string_t str, data_ptr_t output) {
 			D_ASSERT(data[i + 1] == 'x');
 			output[blob_idx++] = (byte_a << 4) + byte_b;
 			i += 3;
-		} else if (data[i] >= 32 && data[i] <= 127) {
+		} else if (data[i] <= 127) {
 			output[blob_idx++] = data_t(data[i]);
 		} else {
 			throw ConversionException("Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "

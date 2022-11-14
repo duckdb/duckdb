@@ -27,7 +27,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 		insert_values.push_back(reader.ReadRequiredSerializableList<Expression>(state.gstate));
 	}
 
-	auto column_index_map = reader.ReadRequiredList<idx_t>();
+	auto column_index_map = reader.ReadRequiredList<idx_t, physical_index_vector_t<idx_t>>();
 	auto expected_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 	auto table_index = reader.ReadRequired<idx_t>();
@@ -52,6 +52,10 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	result->expected_types = expected_types;
 	result->bound_defaults = move(bound_defaults);
 	return move(result);
+}
+
+idx_t LogicalInsert::EstimateCardinality(ClientContext &context) {
+	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
 }
 
 } // namespace duckdb

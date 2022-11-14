@@ -338,6 +338,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_LOAD:
 		result = LogicalSimple::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
+		throw SerializationException("Invalid type for operator deserialization");
 	case LogicalOperatorType::LOGICAL_INVALID:
 		/* no default here to trigger a warning if we forget to implement deserialize for a new operator */
 		throw SerializationException("Invalid type for operator deserialization");

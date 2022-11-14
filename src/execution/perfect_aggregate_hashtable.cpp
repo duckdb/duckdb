@@ -4,12 +4,12 @@
 
 namespace duckdb {
 
-PerfectAggregateHashTable::PerfectAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager,
+PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, Allocator &allocator,
                                                      const vector<LogicalType> &group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      vector<Value> group_minima_p, vector<idx_t> required_bits_p)
-    : BaseAggregateHashTable(allocator, aggregate_objects_p, buffer_manager, move(payload_types_p)),
+    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, move(payload_types_p)),
       addresses(LogicalType::POINTER), required_bits(move(required_bits_p)), total_required_bits(0),
       group_minima(move(group_minima_p)), sel(STANDARD_VECTOR_SIZE) {
 	for (auto &group_bits : required_bits) {
