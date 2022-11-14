@@ -27,37 +27,6 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	return exports;
 }
 
-struct ConnectTask : public Task {
-	ConnectTask(Connection &connection, Napi::Function callback) : Task(connection, callback) {
-	}
-
-	void DoWork() override {
-		auto &connection = Get<Connection>();
-		if (!connection.database_ref || !connection.database_ref->database) {
-			return;
-		}
-		connection.connection = duckdb::make_unique<duckdb::Connection>(*connection.database_ref->database);
-		success = true;
-	}
-	void Callback() override {
-		auto &connection = Get<Connection>();
-		Napi::Env env = connection.Env();
-
-		std::vector<napi_value> args;
-		if (!success) {
-			args.push_back(Utils::CreateError(env, "Invalid database object"));
-		} else {
-			args.push_back(env.Null());
-		}
-
-		Napi::HandleScope scope(env);
-
-		callback.Value().MakeCallback(connection.Value(), args);
-	}
-
-	bool success = false;
-};
-
 struct NodeReplacementScanData : duckdb::ReplacementScanData {
 	NodeReplacementScanData(Connection *con_p) : connection_ref(con_p) {};
 	Connection *connection_ref;
@@ -98,6 +67,41 @@ ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, d
 	return table_function;
 }
 
+struct ConnectTask : public Task {
+	ConnectTask(Connection &connection, Napi::Function callback) : Task(connection, callback) {
+	}
+
+	void DoWork() override {
+		auto &connection = Get<Connection>();
+		if (!connection.database_ref || !connection.database_ref->database) {
+			return;
+		}
+		// Register replacement scan
+		connection.database_ref->database->instance->config.replacement_scans.emplace_back(
+		    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(&connection));
+
+		connection.connection = duckdb::make_unique<duckdb::Connection>(*connection.database_ref->database);
+		success = true;
+	}
+	void Callback() override {
+		auto &connection = Get<Connection>();
+		Napi::Env env = connection.Env();
+
+		std::vector<napi_value> args;
+		if (!success) {
+			args.push_back(Utils::CreateError(env, "Invalid database object"));
+		} else {
+			args.push_back(env.Null());
+		}
+
+		Napi::HandleScope scope(env);
+
+		callback.Value().MakeCallback(connection.Value(), args);
+	}
+
+	bool success = false;
+};
+
 Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connection>(info) {
 	Napi::Env env = info.Env();
 	int length = info.Length();
@@ -109,15 +113,6 @@ Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connec
 
 	database_ref = Napi::ObjectWrap<Database>::Unwrap(info[0].As<Napi::Object>());
 	database_ref->Ref();
-
-	if (!database_ref->database) {
-		Napi::Error::New(env, "Connection created on database that was not yet initialized")
-		    .ThrowAsJavaScriptException();
-		return;
-	}
-	// Register replacement scan
-	database_ref->database->instance->config.replacement_scans.emplace_back(
-	    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(this));
 
 	Napi::Function callback;
 	if (info.Length() > 0 && info[1].IsFunction()) {
