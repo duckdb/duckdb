@@ -93,8 +93,10 @@ BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, i
 				                      colref.column_names[0]);
 			}
 			auto result = BindResult(node.select_list[index]->Copy());
-			auto &result_expr = (BoundColumnRefExpression &)*result.expression;
-			result_expr.depth = depth;
+			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {
+				auto &result_expr = (BoundColumnRefExpression &)*result.expression;
+				result_expr.depth = depth;
+			}
 			return result;
 		}
 	}
