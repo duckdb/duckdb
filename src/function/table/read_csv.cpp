@@ -234,6 +234,9 @@ public:
 	}
 
 	~ParallelCSVGlobalState() override {
+		if (Exception::UncaughtException()) {
+			return;
+		}
 		Verify();
 	}
 
@@ -314,7 +317,7 @@ void ParallelCSVGlobalState::Verify() {
 			for (auto &start_line : tuple_start) {
 				error += to_string(start_line) + "\n";
 			}
-			throw InternalException(error);
+			D_ASSERT(false && error.c_str());
 		}
 	}
 }
