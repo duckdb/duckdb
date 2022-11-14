@@ -883,7 +883,13 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 				idx_t start_digit = pos;
 				while (pos < len) {
 					if (!StringUtil::CharacterIsDigit(buf[pos])) {
-						break;
+						if (buf[pos] != '_') {
+							break;
+						} else {
+							// skip underscore
+							pos++;
+							continue;
+						}
 					}
 					if (!OP::template HandleDecimal<T, NEGATIVE, ALLOW_EXPONENT>(result, buf[pos] - '0')) {
 						return false;
@@ -902,7 +908,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 			if (buf[pos] == '_' && pos > start_pos) {
 				// skip underscore, if it is not the first character
 				pos++;
-				if(pos >= len) {
+				if (pos >= len) {
 					// we cant end on an underscore either
 					return false;
 				}

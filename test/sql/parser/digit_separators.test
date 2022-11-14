@@ -1,3 +1,5 @@
+# name: test/sql/parser/digit_separators.test
+# group: [parser]
 
 query I
 SELECT 1__2
@@ -9,8 +11,86 @@ SELECT 1_000_000
 ----
 1000000
 
+query I
+SELECT '1_____000___000_000'::INT
+----
+1_000_000_000
+
+# Cant start with an underscore
+statement error
+SELECT _1__2 == 12
+
+# Cant end with an underscore
+statement error
+SELECT 1__2_ == 12
+
+# Decimals
+query I
+SELECT 1__2.1__2
+----
+12.12
 
 query I
-SELECT '1_____000____000_0'::INT
+SELECT 12.1__2
 ----
-1_000_0000
+12.12
+
+query I
+SELECT 1_2.12
+----
+12.12
+
+# Cant start with an underscore
+statement error
+SELECT _12.12 == 12.12
+
+statement error
+SELECT 12._12 == 12.12
+
+# Cant end with an underscore
+statement error
+SELECT 12_.12 == 12.12
+
+statement error
+SELECT 12.12_ == 12.12
+
+# Floats
+query I
+SELECT '1___2.1___2'::FLOAT
+----
+12.12
+
+query I
+SELECT '12.1___2'::FLOAT
+----
+12.12
+
+query I
+SELECT '1___2.12'::FLOAT
+----
+12.12
+
+query I
+SELECT '12.1_2e2'::FLOAT
+----
+12.12e2
+
+# Cant start with an underscore
+statement error
+SELECT '_12.12'::FLOAT == 12.12
+
+statement error
+SELECT '12._12'::FLOAT == 12.12
+
+statement error
+SELECT '12._12e2'::FLOAT == 12.12e2
+
+# Cant end with an underscore
+statement error
+SELECT '12_.12'::FLOAT == 12.12
+
+statement error
+SELECT '12.12_'::FLOAT == 12.12
+
+statement error
+SELECT '12.12_e2'::FLOAT == 12.12e2

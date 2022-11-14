@@ -518,33 +518,62 @@ parsed_number_string parse_number_string(const char *p, const char *pend, chars_
 
   uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
 
-  while ((p != pend) && is_integer(*p)) {
-    // a multiplication by 10 is cheaper than an arbitrary integer
-    // multiplication
-    i = 10 * i +
-        uint64_t(*p - '0'); // might overflow, we will handle the overflow later
-    ++p;
+  while ((p != pend)) {
+    if(is_integer(*p)) {
+      // a multiplication by 10 is cheaper than an arbitrary integer
+      // multiplication
+      i = 10 * i +
+          uint64_t(*p - '0'); // might overflow, we will handle the overflow later
+      ++p;
+    }
+    else if(*p == '_' && p != start_digits) {
+      ++p; // skip underscore if it is not the first character
+      if(p == pend || *p == '.') {
+        // can't have underscore at the end or before the decimal point
+        return answer;
+      }
+    }
+    else {
+      break;
+    }
   }
   const char *const end_of_integer_part = p;
   int64_t digit_count = int64_t(end_of_integer_part - start_digits);
   int64_t exponent = 0;
   if ((p != pend) && (*p == '.')) {
     ++p;
-  // Fast approach only tested under little endian systems
-  if ((p + 8 <= pend) && is_made_of_eight_digits_fast(p)) {
-    i = i * 100000000 + parse_eight_digits_unrolled(p); // in rare cases, this will overflow, but that's ok
-    p += 8;
+
+    // Fast approach only tested under little endian systems
     if ((p + 8 <= pend) && is_made_of_eight_digits_fast(p)) {
       i = i * 100000000 + parse_eight_digits_unrolled(p); // in rare cases, this will overflow, but that's ok
       p += 8;
+      if ((p + 8 <= pend) && is_made_of_eight_digits_fast(p)) {
+        i = i * 100000000 + parse_eight_digits_unrolled(p); // in rare cases, this will overflow, but that's ok
+        p += 8;
+      }
     }
-  }
-    while ((p != pend) && is_integer(*p)) {
-      uint8_t digit = uint8_t(*p - '0');
-      ++p;
-      i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
+
+    int64_t skipped_underscores = 0;
+    while ((p != pend)) {
+      if(is_integer(*p)) {
+        uint8_t digit = uint8_t(*p - '0');
+        ++p;
+        i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
+      }
+      else if(*p == '_' && p != end_of_integer_part + 1) {
+        skipped_underscores++;
+        ++p; // skip underscore, if it is not the first character
+
+        if(p == pend || ((fmt & chars_format::scientific) && (p != pend) && (('e' == *p) || ('E' == *p)))) {
+          // can't have underscore at the end or before the exponent
+          return answer;
+        }
+      }
+      else {
+        break;
+      }
     }
-    exponent = end_of_integer_part + 1 - p;
+    exponent = end_of_integer_part + 1 - p + skipped_underscores;
     digit_count -= exponent;
   }
   // we must have encountered at least one integer!
