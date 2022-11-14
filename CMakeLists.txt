@@ -96,6 +96,26 @@ if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")
 endif()
 
+set(OS_NAME "unknown")
+set(OS_ARCH "amd64")
+
+string(REGEX MATCH "(arm64|aarch64)" IS_ARM "${CMAKE_SYSTEM_PROCESSOR}")
+if(IS_ARM)
+  set(OS_ARCH "arm64")
+elseif(FORCE_32_BIT)
+  set(OS_ARCH "i386")
+endif()
+
+if(APPLE)
+  set(OS_NAME "osx")
+endif()
+if(WIN32)
+  set(OS_NAME "windows")
+endif()
+if(UNIX AND NOT APPLE)
+  set(OS_NAME "linux") # sorry BSD
+endif()
+
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
@@ -408,27 +428,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE
       "${DEFAULT_BUILD_TYPE}"
       CACHE STRING "Choose the type of build." FORCE)
-endif()
-
-
-set(OS_NAME "unknown")
-set(OS_ARCH "amd64")
-
-string(REGEX MATCH "(arm64|aarch64)" IS_ARM "${CMAKE_SYSTEM_PROCESSOR}")
-if(IS_ARM)
-  set(OS_ARCH "arm64")
-elseif(FORCE_32_BIT)
-  set(OS_ARCH "i386")
-endif()
-
-if(APPLE)
-  set(OS_NAME "osx")
-endif()
-if(WIN32)
-  set(OS_NAME "windows")
-endif()
-if(UNIX AND NOT APPLE)
-  set(OS_NAME "linux") # sorry BSD
 endif()
 
 if(OS_NAME STREQUAL "windows")
