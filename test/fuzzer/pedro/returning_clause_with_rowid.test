@@ -1,0 +1,54 @@
+# name: test/fuzzer/pedro/returning_clause_with_rowid.test
+# description: Issue #4978 (8): Returning clause with rowid internal error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c0 INT);
+
+statement error
+INSERT INTO t0 VALUES (1) RETURNING c0, rowid;
+----
+Binder Error: rowid is not supported in returning statements
+
+statement error
+INSERT INTO t0 VALUES (1), (2), (3) RETURNING *, rowid;
+----
+Binder Error: rowid is not supported in returning statements
+
+statement error
+INSERT INTO t0 VALUES (4) RETURNING c0 + rowid;
+----
+Binder Error: rowid is not supported in returning statements
+
+statement error
+INSERT INTO t0 VALUES (1) RETURNING rowid c2;
+----
+Binder Error: rowid is not supported in returning statements
+
+statement error
+UPDATE t0 SET c0 = 5 WHERE c0 = 0 RETURNING rowid;
+----
+Binder Error: rowid is not supported in returning statements
+
+statement error
+DELETE FROM t0 WHERE c0 = 0 RETURNING rowid;
+----
+Binder Error: rowid is not supported in returning statements
+
+# make sure you can still return the alias rowid
+# More tests could be written, but the returning binder doesn't allow
+# any type of subqueries
+
+statement ok
+INSERT INTO t0 VALUES (1) RETURNING c0 as rowid;
+
+statement error
+INSERT INTO t0 VALUES (1) RETURNING sum(c0) as rowid;
+----
+Binder Error: Aggregate functions are not supported here
+
+statement ok
+select struct_pack(row_id := 42);

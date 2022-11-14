@@ -144,13 +144,13 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 		return BindReturning(move(stmt.returning_list), table, insert_table_index, move(index_as_logicaloperator),
 		                     move(result));
-	} else {
-		D_ASSERT(result.types.size() == result.names.size());
-		result.plan = move(insert);
-		properties.allow_stream_result = false;
-		properties.return_type = StatementReturnType::CHANGED_ROWS;
-		return result;
 	}
+
+	D_ASSERT(result.types.size() == result.names.size());
+	result.plan = move(insert);
+	properties.allow_stream_result = false;
+	properties.return_type = StatementReturnType::CHANGED_ROWS;
+	return result;
 }
 
 } // namespace duckdb

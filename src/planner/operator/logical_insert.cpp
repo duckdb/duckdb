@@ -54,4 +54,8 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	return move(result);
 }
 
+idx_t LogicalInsert::EstimateCardinality(ClientContext &context) {
+	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
+}
+
 } // namespace duckdb

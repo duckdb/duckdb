@@ -891,6 +891,12 @@ idx_t JoinHashTable::FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanStat
 	return key_count;
 }
 
+void JoinHashTable::PinAllBlocks() {
+	for (auto &block : block_collection->blocks) {
+		pinned_handles.push_back(buffer_manager.Pin(block->block));
+	}
+}
+
 void JoinHashTable::SwizzleBlocks() {
 	if (block_collection->count == 0) {
 		return;

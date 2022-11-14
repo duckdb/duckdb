@@ -96,7 +96,9 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_EXPORT = 177,
 	LOGICAL_VACUUM = 178,
 	LOGICAL_SET = 179,
-	LOGICAL_LOAD = 180
+	LOGICAL_LOAD = 180,
+
+	LOGICAL_EXTENSION_OPERATOR = 255
 };
 
 DUCKDB_API string LogicalOperatorToString(LogicalOperatorType type);

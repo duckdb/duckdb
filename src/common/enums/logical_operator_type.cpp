@@ -110,6 +110,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "LOAD";
 	case LogicalOperatorType::LOGICAL_INVALID:
 		break;
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
+		return "CUSTOM_OP";
 	}
 	return "INVALID";
 }

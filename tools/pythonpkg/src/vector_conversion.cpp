@@ -302,6 +302,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
 		unique_ptr<PythonGILWrapper> gil;
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 		// Loop over every row of the arrays contents
 		for (idx_t row = 0; row < count; row++) {
@@ -313,6 +314,15 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;
+				}
+				if (import_cache.pandas.libs.NAType.IsLoaded()) {
+					// If pandas is imported, check if the type is NAType
+					auto val_type = Py_TYPE(val);
+					auto na_type = (PyTypeObject *)import_cache.pandas.libs.NAType().ptr();
+					if (val_type == na_type) {
+						out_mask.SetInvalid(row);
+						continue;
+					}
 				}
 				if (py::isinstance<py::float_>(val) && std::isnan(PyFloat_AsDouble(val))) {
 					out_mask.SetInvalid(row);
