@@ -30,15 +30,16 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
 
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
-	shared_ptr<BlockHandle> *block_handle;
 	if (shared) {
-		// need to grab handle from the vector within a lock else threadsan will complain
 		lock_guard<mutex> guard(lock);
-		block_handle = &blocks[block_id].handle;
+		return PinInternal(block_id);
 	} else {
-		block_handle = &blocks[block_id].handle;
+		return PinInternal(block_id);
 	}
-	return alloc.buffer_manager->Pin(*block_handle);
+}
+
+BufferHandle ColumnDataAllocator::PinInternal(uint32_t block_id) {
+	return alloc.buffer_manager->Pin(blocks[block_id].handle);
 }
 
 void ColumnDataAllocator::AllocateBlock() {
