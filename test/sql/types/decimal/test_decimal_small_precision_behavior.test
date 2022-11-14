@@ -1,3 +1,6 @@
+# name: test/sql/types/decimal/test_decimal_small_precision_behavior.test
+# group: [decimal]
+
 statement ok
 pragma enable_verification
 
