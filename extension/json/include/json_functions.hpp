@@ -54,6 +54,7 @@ private:
 private:
 	// Table functions
 	static CreateTableFunctionInfo GetReadJSONObjectsFunction();
+	static CreateTableFunctionInfo GetReadNDJSONObjectsFunction();
 };
 
 } // namespace duckdb

@@ -15,9 +15,20 @@ namespace duckdb {
 
 struct FileHandle;
 
+enum class JSONFormat : uint8_t {
+	//! Auto-detect during the bind (TODO)
+	AUTO_DETECT = 0,
+	//! One object after another, newlines can be anywhere
+	UNSTRUCTURED = 1,
+	//! Objects are separated by newlines, newlines do not occur within objects (NDJSON)
+	NEWLINE_DELIMITED = 2,
+};
+
 struct BufferedJSONReaderOptions {
 	//! The file path of the JSON file to read
 	string file_path;
+	//! The format of the JSON
+	JSONFormat format = JSONFormat::AUTO_DETECT;
 	//! Whether file is compressed or not, and if so which compression type
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Whether or not we should ignore malformed JSON (default to NULL)
@@ -59,9 +70,11 @@ public:
 	double GetProgress() const;
 	idx_t MaxThreads(idx_t buffer_capacity) const;
 
+public:
+	BufferedJSONReaderOptions options;
+
 private:
 	ClientContext &context;
-	BufferedJSONReaderOptions options;
 
 	//! The file currently being read
 	unique_ptr<JSONFileHandle> file_handle;

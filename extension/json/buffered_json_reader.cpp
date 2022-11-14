@@ -41,7 +41,7 @@ idx_t JSONFileHandle::Read(const char *pointer, idx_t requested_size) {
 }
 
 BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options)
-    : context(context), options(move(options)) {
+    : options(move(options)), context(context) {
 }
 
 void BufferedJSONReader::OpenJSONFile() {

@@ -26,6 +26,14 @@ public:
 	BufferedJSONReaderOptions options;
 };
 
+struct JSONScanInfo : public TableFunctionInfo {
+public:
+	explicit JSONScanInfo(JSONFormat forced_format_p) : forced_format(forced_format_p) {
+	}
+
+	JSONFormat forced_format;
+};
+
 struct JSONBufferHandle {
 public:
 	explicit JSONBufferHandle(idx_t readers, AllocatedData &&buffer);
@@ -68,6 +76,10 @@ public:
 	string ToString() {
 		return string(pointer, size);
 	}
+
+	const char &operator[](size_t i) const {
+		return pointer[i];
+	}
 };
 
 struct JSONScanLocalState : public LocalTableFunctionState {
@@ -79,6 +91,7 @@ public:
 	idx_t GetBatchIndex() const;
 
 	JSONLine lines[STANDARD_VECTOR_SIZE];
+	vector<DocPointer<yyjson_doc>> objects;
 
 private:
 	//! Batch index assigned to this thread and associate buffer handle
@@ -91,6 +104,7 @@ private:
 	const char *buffer_ptr;
 	idx_t buffer_size;
 	idx_t buffer_offset;
+	idx_t prev_buffer_offset;
 
 	//! Buffer to reconstruct first object
 	AllocatedData reconstruct_buffer;
@@ -99,7 +113,11 @@ private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read);
 	void ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &next_batch_index, idx_t &readers);
 	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &next_batch_index, idx_t &readers);
+
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
+
+	void ReadUnstructured(idx_t &count);
+	void ReadNewlineDelimited(idx_t &count);
 };
 
 static double JSONScanProgress(ClientContext &context, const FunctionData *bind_data_p,

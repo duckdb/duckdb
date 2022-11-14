@@ -23,7 +23,7 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 	output.SetCardinality(count);
 }
 
-TableFunction GetReadJSONObjectsTableFunction(bool list_parameter) {
+TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, JSONFormat json_format) {
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
 	TableFunction table_function({parameter}, ReadJSONObjectsFunction, JSONScanData::Bind, JSONScanGlobalState::Init,
 	                             JSONScanLocalState::Init);
@@ -42,13 +42,22 @@ TableFunction GetReadJSONObjectsTableFunction(bool list_parameter) {
 	table_function.filter_pushdown = false;
 	table_function.filter_prune = false;
 
+	table_function.function_info = make_shared<JSONScanInfo>(json_format);
+
 	return table_function;
 }
 
 CreateTableFunctionInfo JSONFunctions::GetReadJSONObjectsFunction() {
 	TableFunctionSet function_set("read_json_objects");
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(false));
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(true));
+	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, JSONFormat::UNSTRUCTURED));
+	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, JSONFormat::UNSTRUCTURED));
+	return CreateTableFunctionInfo(function_set);
+}
+
+CreateTableFunctionInfo JSONFunctions::GetReadNDJSONObjectsFunction() {
+	TableFunctionSet function_set("read_ndjson_objects");
+	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, JSONFormat::NEWLINE_DELIMITED));
+	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, JSONFormat::NEWLINE_DELIMITED));
 	return CreateTableFunctionInfo(function_set);
 }
 

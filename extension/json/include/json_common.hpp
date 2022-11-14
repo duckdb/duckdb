@@ -98,6 +98,10 @@ public:
 		return doc == nullptr;
 	}
 
+	inline idx_t ReadSize() const {
+		return yyjson_doc_get_read_size(doc);
+	}
+
 	~DocPointer() {
 		CleanupDoc<YYJSON_DOC_T>(doc);
 	}
@@ -120,6 +124,7 @@ public:
 private:
 	//! Read/Write flag that make sense for us
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
+	static constexpr auto READ_FROM_FILE_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 
 public:
@@ -166,6 +171,10 @@ public:
 	//! Read JSON document (returns nullptr if invalid JSON)
 	static inline DocPointer<yyjson_doc> ReadDocumentUnsafe(const string_t &input) {
 		return DocPointer<yyjson_doc>(yyjson_read(input.GetDataUnsafe(), input.GetSize(), READ_FLAG));
+	}
+	//! Read JSON document from file (returns nullptr if invalid JSON)
+	static inline DocPointer<yyjson_doc> ReadDocumentFromFileUnsafe(const char *data, idx_t length) {
+		return DocPointer<yyjson_doc>(yyjson_read(data, length, READ_FROM_FILE_FLAG));
 	}
 	//! Read JSON document (throws error if malformed JSON)
 	static inline DocPointer<yyjson_doc> ReadDocument(const string_t &input) {
