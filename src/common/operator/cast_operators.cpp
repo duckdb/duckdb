@@ -899,6 +899,15 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 					break;
 				}
 			}
+			if (buf[pos] == '_' && pos > start_pos) {
+				// skip underscore, if it is not the first character
+				pos++;
+				if(pos >= len) {
+					// we cant end on an underscore either
+					return false;
+				}
+				continue;
+			}
 			if (StringUtil::CharacterIsSpace(buf[pos])) {
 				// skip any trailing spaces
 				while (++pos < len) {
