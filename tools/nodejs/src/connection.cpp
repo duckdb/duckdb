@@ -388,6 +388,19 @@ struct ExecTask : public Task {
 	duckdb::PreservedError error;
 };
 
+struct ExecTaskWithCppCallback : public ExecTask {
+    ExecTaskWithCppCallback(Connection &connection, std::string sql, Napi::Function js_callback, std::function<void(void)> cpp_callback)
+            : ExecTask(connection, sql, js_callback), cpp_callback(cpp_callback) {
+    }
+
+    void Callback() override {
+        cpp_callback();
+        ExecTask::Callback();
+    };
+
+    std::function<void(void)> cpp_callback;
+};
+
 Napi::Value Connection::Exec(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 
@@ -428,12 +441,12 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 		force_register = info[2].As<Napi::Boolean>().Value();
 	}
 
-	array_references[name] = Napi::Persistent(array);
-
 	if (!force_register && array_references.find(name) != array_references.end()) {
 		Napi::TypeError::New(env, "Buffer with this name already exists and force_register is not enabled").ThrowAsJavaScriptException();
 		return env.Null();
 	}
+
+    array_references[name] = Napi::Persistent(array);
 
 	std::string arrow_scan_function = "scan_arrow_ipc([";
 
@@ -451,14 +464,13 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 	}
 	arrow_scan_function += "])";
 
-	std::string final_query = "CREATE TEMPORARY VIEW " + name + " AS SELECT * FROM " + arrow_scan_function;
+	std::string final_query = "CREATE OR REPLACE TEMPORARY VIEW " + name + " AS SELECT * FROM " + arrow_scan_function;
 
 	Napi::Function callback;
 	if (info.Length() > 3 && info[3].IsFunction()) {
 		callback = info[3].As<Napi::Function>();
 	}
 
-	std::cout << final_query;
 	database_ref->Schedule(info.Env(), duckdb::make_unique<ExecTask>(*this, final_query, callback));
 
 	return Value();
@@ -467,7 +479,7 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 Napi::Value Connection::UnRegisterBuffer(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 
-	if (info.Length() != 1 || !info[0].IsString()) {
+	if (info.Length() < 1 || !info[0].IsString()) {
 		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
 		return env.Null();
 	}
@@ -475,15 +487,17 @@ Napi::Value Connection::UnRegisterBuffer(const Napi::CallbackInfo &info) {
 
 	std::string final_query = "DROP VIEW " + name;
 
-	// TODO we can only erase this AFTER the query finishes
-//	array_references.erase(name);
-
 	Napi::Function callback;
 	if (info.Length() > 1 && info[1].IsFunction()) {
 		callback = info[1].As<Napi::Function>();
 	}
 
-	database_ref->Schedule(info.Env(), duckdb::make_unique<ExecTask>(*this, final_query, callback));
+    // When query succeeds we can safely delete the ref
+    std::function<void(void)> cpp_callback = [&, name](){
+        array_references.erase(name);
+    };
+
+	database_ref->Schedule(info.Env(), duckdb::make_unique<ExecTaskWithCppCallback>(*this, final_query, callback, cpp_callback));
 
 	return Value();
 }

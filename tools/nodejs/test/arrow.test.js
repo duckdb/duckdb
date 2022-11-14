@@ -1,11 +1,11 @@
-var sqlite3 = require('..');
+var duckdb = require('..');
 var assert = require('assert');
 var fs = require('fs');
 
 describe('exec', function() {
     var db;
     before(function(done) {
-        db = new sqlite3.Database(':memory:', done);
+        db = new duckdb.Database(':memory:', done);
     });
 
     // Note: arrow IPC api requires the arrow extension to be loaded. The tests for this functionality reside in:
@@ -14,7 +14,7 @@ describe('exec', function() {
         let db;
         let conn;
         before((done) => {
-            db = new sqlite3.Database(':memory:', {"allow_unsigned_extensions": "true"}, () => {
+            db = new duckdb.Database(':memory:', {"allow_unsigned_extensions": "true"}, () => {
                 done();
             });
         });
@@ -42,20 +42,11 @@ describe('exec', function() {
         });
 
         it('Register buffer should be disabled currently', function(done) {
-            try {
-                db.register_buffer();
-                assert(0);
-            } catch (error) {
-                assert(error.message.includes('Register buffer currently not implemented'))
-            }
-
-            try {
-                db.unregister_buffer();
-                assert(0);
-            } catch (error) {
-                assert(error.message.includes('Register buffer currently not implemented'))
-            }
-            done()
+            db.register_buffer("test", [new Uint8Array(new ArrayBuffer(10))], true, (err) => {
+                assert(err)
+                assert(err.includes("Function with name scan_arrow_ipc is not on the catalog, but it exists in the arrow extension. To Install and Load the extension, run: INSTALL arrow; LOAD arrow;"));
+                done()
+            });
         });
     });
 });
