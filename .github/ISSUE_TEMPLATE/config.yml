@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/duckdb/duckdb/discussions
+    about: Please ask and answer general questions here.
