@@ -279,6 +279,7 @@ setup(
         'duckdb_query_graph',
         'duckdb-stubs'
     ],
+    test_requires=['pytest-runner'],
     include_package_data=True,
     setup_requires=[
         "setuptools_scm",
