@@ -12,4 +12,14 @@ SELECT avg(0) c0, (SELECT 0 OFFSET c0 + 1);
 ----
 Parser Error: Non-constant limit or offset not supported in correlated subquery
 
+query II
+SELECT 1 c0, (SELECT 0 OFFSET c0 - 1);
+----
+1	0
+
+
+statement error
+SELECT (SELECT avg(0)) c0, (SELECT 0 OFFSET c0 + 1);
+----
+Serialization Error: Cannot copy BoundSubqueryExpression
 
