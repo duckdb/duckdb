@@ -57,6 +57,7 @@ const DUCKDB_PENDING_ERROR = 2;
     DUCKDB_TYPE_MAP
     DUCKDB_TYPE_UUID
     DUCKDB_TYPE_JSON
+	DUCKDB_TYPE_UNION
 end
 
 const DUCKDB_TYPE = DUCKDB_TYPE_
@@ -246,6 +247,8 @@ function duckdb_type_to_julia_type(x)
         end
         names_tuple = Tuple(x for x in names)
         return Union{Missing, NamedTuple{names_tuple}}
+	elseif type_id == DUCKDB_TYPE_UNION
+		child_count = get_union_member_count(x)
     end
     if !haskey(JULIA_TYPE_MAP, type_id)
         throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type: ", type_id)))
