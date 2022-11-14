@@ -1,0 +1,85 @@
+name: Feature request
+description: "Submit a feature request for something we're missing. Please search for existing issues first"
+labels: enhancement
+body:
+  - type: markdown
+    attributes:
+      value: >
+        DuckDB has several repositories for different components, please make sure you're raising your issue in the correct one:
+         * [Our docs/website](https://github.com/duckdb/duckdb-web/issues/new)
+         * [SQLite scanner](https://github.com/duckdblabs/sqlite_scanner/issues/new)
+         * [Postgres scanner](https://github.com/duckdblabs/postgres_scanner/issues/new)
+
+        If none of the above repositories are applicable, feel free to raise it in this one
+
+  - type: textarea
+    attributes:
+      label: Describe the feature
+      description: Describe the feature and the current behavior/state.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: SQL/C++ Example
+      description: What does this feature look like?
+      render: SQL
+
+  - type: checkboxes
+    attributes:
+      label: Are you willing to contribute it?
+      description: >
+        If you wish to contribute, then read the requirements for new contributions in [`CONTRIBUTING.md`](https://github.com/duckdb/duckdb/blob/master/CONTRIBUTING.md)
+      options:
+        - label: Yes, I am willing to contribute this feature
+  - type: textarea
+    attributes:
+      label: Is there a relevant academic paper? (if so, where)
+  - type: textarea
+    attributes:
+      label: Is there already an implementation in another framework? (if so, where)
+
+  - type: dropdown
+    attributes:
+      label: Which API would this fall under?
+      options:
+        - SQL
+        - Python
+        - NodeJS
+        - Java (JDBC)
+        - ODBC
+        - Julia
+        - R
+        - WASM
+        - Core
+        - Other
+
+  - type: textarea
+    attributes:
+      label: Who will benefit with this feature?
+  - type: textarea
+    attributes:
+      label: Any other info
+
+  - type: markdown
+    attributes:
+      value: "# Identity Disclosure:"
+  - type: input
+    attributes:
+      label: "Full Name:"
+      placeholder: e.g. John Doe
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: "Affiliation:"
+      placeholder: e.g. Oracle
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        If the above is not given and is not obvious from your GitHub profile page, we might close your issue without further review. Please refer to the [reasoning behind this rule](https://berthub.eu/articles/posts/anonymous-help/) if you have questions.
+
+        # Before Submitting
