@@ -94,3 +94,38 @@ SELECT '12.12_'::FLOAT == 12.12
 
 statement error
 SELECT '12.12_e2'::FLOAT == 12.12e2
+
+# Large reals > 19 digits
+query I
+SELECT 1_000_000_000_000_000_000_000::DOUBLE
+----
+1e+21
+
+query I
+SELECT .000_000_000_000_000_000_000_123::DOUBLE
+----
+123e-23
+
+query I
+SELECT 1_000_000_000_000_000_000_000.5::DOUBLE
+----
+1000000000000000000000.5
+
+query I
+SELECT 1_000_000_000.000_000_000_5::DOUBLE
+----
+1000000000.0000000005
+
+# Cant start with an underscore
+statement error
+SELECT _1_000_000_000_000_000_000_000::DOUBLE == 1e+21
+
+statement error
+SELECT ._000_000_000_000_000_000_000_123::DOUBLE == 123e-23
+
+# Cant end with an underscore
+statement error
+SELECT 1_000_000_000_000_000_000_000_::DOUBLE == 1e+21
+
+statement error
+SELECT .000_000_000_000_000_000_000_123_::DOUBLE == 123e-23

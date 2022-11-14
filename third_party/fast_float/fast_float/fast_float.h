@@ -637,20 +637,48 @@ parsed_number_string parse_number_string(const char *p, const char *pend, chars_
       i = 0;
       p = start_digits;
       const uint64_t minimal_nineteen_digit_integer{1000000000000000000};
-      while((i < minimal_nineteen_digit_integer) && (p != pend) && is_integer(*p)) {
-        i = i * 10 + uint64_t(*p - '0');
-        ++p;
+      while((i < minimal_nineteen_digit_integer) && (p != pend)) {
+        if (is_integer(*p)){ 
+          i = i * 10 + uint64_t(*p - '0');
+          ++p;
+        } else if(*p == '_' && p != start_digits) {
+          // skip underscore if it is not the first character
+          ++p;
+          if(p == pend || *p == '.') {
+            // can't have underscore at the end or before the decimal point
+            answer.valid = false;
+            return answer;
+          }
+        } else {
+          break;
+        }
       }
       if (i >= minimal_nineteen_digit_integer) { // We have a big integers
         exponent = end_of_integer_part - p + exp_number;
       } else { // We have a value with a fractional component.
           p++; // skip the '.'
           const char *first_after_period = p;
-          while((i < minimal_nineteen_digit_integer) && (p != pend) && is_integer(*p)) {
-            i = i * 10 + uint64_t(*p - '0');
-            ++p;
+          int64_t skipped_underscores = 0;
+          while((i < minimal_nineteen_digit_integer) && (p != pend)) {
+            if(is_integer(*p)) {
+              i = i * 10 + uint64_t(*p - '0');
+              ++p;
+            }
+            else if(*p == '_' && p != first_after_period) {
+              // skip underscore, if it is not the first character after period
+              ++p;
+              skipped_underscores++;
+              if(p == pend) {
+                // can't have underscore at the end
+                answer.valid = false;
+                return answer;
+              }
+            }
+            else {
+              break;
+            }
           }
-          exponent = first_after_period - p + exp_number;
+          exponent = first_after_period - p + exp_number + skipped_underscores;
       }
       // We have now corrected both exponent and i, to a truncated value
     }
