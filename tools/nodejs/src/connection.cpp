@@ -110,14 +110,10 @@ Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connec
 	database_ref = Napi::ObjectWrap<Database>::Unwrap(info[0].As<Napi::Object>());
 	database_ref->Ref();
 
-	if (!database_ref->database) {
-		Napi::Error::New(env, "Connection created on database that was not yet initialized")
-		    .ThrowAsJavaScriptException();
-		return;
-	}
 	// Register replacement scan
-	database_ref->database->instance->config.replacement_scans.emplace_back(
-	    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(this));
+	// TODO: disabled currently, either fix or remove.
+//	database_ref->database->instance->config.replacement_scans.emplace_back(
+//	    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(this));
 
 	Napi::Function callback;
 	if (info.Length() > 0 && info[1].IsFunction()) {
@@ -346,6 +342,10 @@ Napi::Value Connection::RegisterUdf(const Napi::CallbackInfo &info) {
 // Register Arrow IPC buffers for scanning from DuckDB
 Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
+
+	Napi::TypeError::New(env, "Register buffer currently not implemented").ThrowAsJavaScriptException();
+	return env.Null();
+
 	if (info.Length() < 2 || !info[0].IsString() || !info[1].IsObject()) {
 		Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
 		return env.Null();
@@ -390,6 +390,10 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 
 Napi::Value Connection::UnRegisterBuffer(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
+
+	Napi::TypeError::New(env, "Register buffer currently not implemented").ThrowAsJavaScriptException();
+	return env.Null();
+
 	if (info.Length() != 1 || !info[0].IsString()) {
 		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
 		return env.Null();
