@@ -182,6 +182,24 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	                                Value::LIST({Value("🦆🦆🦆🦆🦆🦆"), Value("goose")}));
 	result.emplace_back(map_type, "map", move(min_map_value), move(max_map_value));
 
+	// union
+	child_list_t<LogicalType> union_type_list;
+	union_type_list.push_back(make_pair("a", LogicalType::INTEGER));
+	union_type_list.push_back(make_pair("b", LogicalType::VARCHAR));
+	auto union_type = LogicalType::STRUCT(move(union_type_list));
+
+	child_list_t<Value> min_union_list;
+	min_union_list.push_back(make_pair("a", Value(LogicalType::INTEGER)));
+	min_union_list.push_back(make_pair("b", Value(LogicalType::VARCHAR)));
+	auto min_union_val = Value::STRUCT(move(min_union_list));
+
+	child_list_t<Value> max_union_list;
+	max_union_list.push_back(make_pair("a", Value::INTEGER(42)));
+	max_union_list.push_back(make_pair("b", Value("🦆🦆🦆🦆🦆🦆")));
+	auto max_union_val = Value::STRUCT(move(max_union_list));
+
+	result.emplace_back(union_type, "union", min_union_val, max_union_val);
+
 	return result;
 }
 

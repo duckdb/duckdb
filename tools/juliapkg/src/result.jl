@@ -382,7 +382,7 @@ function init_conversion_loop(logical_type::LogicalType)
     elseif type == DUCKDB_TYPE_LIST
         child_type = get_list_child_type(logical_type)
         return create_child_conversion_data(child_type)
-    elseif type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_MAP
+    elseif type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_MAP || type == DUCKDB_TYPE_UNION
         child_count = get_struct_child_count(logical_type)
         child_symbols::Vector{Symbol} = Vector()
         child_data::Vector{ListConversionData} = Vector()

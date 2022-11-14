@@ -7,6 +7,9 @@
     con = DBInterface.connect(db)
 
     df = DataFrame(DBInterface.execute(con, "SELECT * FROM test_all_types()"))
+    #println(names(df))
+    # we can also use 'propertynames()' to get the column names as symbols, that might make for a better testing approach
+    # If we add a dictionary that maps from the symbol to the expected result
 
     @test isequal(df.bool, [false, true, missing])
     @test isequal(df.tinyint, [-128, 127, missing])
@@ -162,6 +165,7 @@
         df.nested_int_array,
         [[], [[], [42, 999, missing, missing, -42], missing, [], [42, 999, missing, missing, -42]], missing]
     )
+    @test isequal(df.union, [(a = missing, b = missing), (a = 42, b = "🦆🦆🦆🦆🦆🦆"), missing])
     @test isequal(df.struct, [(a = missing, b = missing), (a = 42, b = "🦆🦆🦆🦆🦆🦆"), missing])
     @test isequal(
         df.struct_of_arrays,
