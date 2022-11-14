@@ -68,7 +68,7 @@ idx_t JSONScanGlobalState::MaxThreads() const {
 
 JSONScanLocalState::JSONScanLocalState(JSONScanGlobalState &gstate)
     : batch_index(DConstants::INVALID_INDEX), current_buffer_handle(nullptr), buffer_size(0), buffer_offset(0),
-      prev_buffer_offset(0) {
+      prev_buffer_remainder(0) {
 	// TODO: maybe options.maximum_object_size
 	reconstruct_buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
 	objects.reserve(STANDARD_VECTOR_SIZE);
@@ -81,8 +81,6 @@ unique_ptr<LocalTableFunctionState> JSONScanLocalState::Init(ExecutionContext &c
 }
 
 idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
-	objects.clear();
-
 	idx_t count = 0;
 	if (buffer_offset == buffer_size) {
 		bool first_read;
@@ -141,9 +139,14 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 	}
 	buffer_ptr = (const char *)buffer.get();
 
+	if (gstate.json_reader->options.format == JSONFormat::UNSTRUCTURED) {
+		// Copy last bit of previous buffer
+		auto reconstruct_ptr = reconstruct_buffer.get();
+		memcpy((void *)buffer_ptr, reconstruct_ptr, prev_buffer_remainder);
+	}
+
 	idx_t readers;
 	idx_t next_batch_index;
-
 	auto &file_handle = gstate.json_reader->GetFileHandle();
 	if (file_handle.CanSeek()) {
 		ReadNextBufferSeek(gstate, first_read, next_batch_index, readers);
@@ -164,9 +167,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 		buffer_map.insert(make_pair(batch_index, move(json_buffer_handle)));
 	}
 
-	if (gstate.json_reader->options.format == JSONFormat::UNSTRUCTURED) {
-	}
-
 	return true;
 }
 
@@ -178,7 +178,8 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &f
 
 	idx_t request_size = gstate.buffer_capacity;
 	if (format == JSONFormat::UNSTRUCTURED) {
-		request_size -= buffer_offset;
+		request_size -= prev_buffer_remainder;
+		request_size -= YYJSON_PADDING_SIZE;
 	}
 
 	idx_t read_position;
@@ -195,12 +196,19 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &f
 		next_batch_index = gstate.batch_index++;
 		is_last = file_handle.Remaining() == 0;
 	}
-	readers = is_last ? 1 : 2;
+
+	if (format == JSONFormat::UNSTRUCTURED) {
+		readers = 1;
+	} else {
+		readers = is_last ? 1 : 2;
+	}
 	first_read = read_position == 0;
 
 	// Now read the file lock-free!
 	if (format == JSONFormat::UNSTRUCTURED) {
-		file_handle.ReadAtPosition(buffer_ptr + prev_buffer_offset, buffer_size, read_position);
+		file_handle.ReadAtPosition(buffer_ptr + prev_buffer_remainder, buffer_size, read_position);
+		buffer_size += prev_buffer_remainder;
+		memset((void *)(buffer_ptr + buffer_size), 0, 4); // add padding for yyjson insitu
 	} else {
 		file_handle.ReadAtPosition(buffer_ptr, buffer_size, read_position);
 	}
@@ -213,21 +221,29 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool 
 	lock_guard<mutex> guard(gstate.lock);
 	idx_t request_size = gstate.buffer_capacity;
 	if (format == JSONFormat::UNSTRUCTURED) {
-		request_size -= buffer_offset;
+		request_size -= prev_buffer_remainder;
+		request_size -= YYJSON_PADDING_SIZE;
 	}
 
 	next_batch_index = gstate.batch_index++;
 	first_read = file_handle.Remaining() == file_handle.FileSize();
 
 	if (format == JSONFormat::UNSTRUCTURED) {
-		buffer_size = file_handle.Read(buffer_ptr + prev_buffer_offset, request_size);
+		buffer_size = file_handle.Read(buffer_ptr + prev_buffer_remainder, request_size);
+		buffer_size += prev_buffer_remainder;
+		memset((void *)(buffer_ptr + buffer_size), 0, 4); // add padding for yyjson insitu
 	} else {
 		buffer_size = file_handle.Read(buffer_ptr, request_size);
 	}
 
 	buffer_offset = 0;
-	is_last = buffer_size < gstate.buffer_capacity;
-	readers = is_last ? 1 : 2;
+	is_last = buffer_size < request_size;
+
+	if (format == JSONFormat::UNSTRUCTURED) {
+		readers = 1;
+	} else {
+		readers = is_last ? 1 : 2;
+	}
 }
 
 void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
@@ -283,28 +299,46 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	lines[0].size = part1_size + part2_size;
 }
 
+// static inline void ReconstructString(void *ptr, idx_t remaining) {
+//	auto next_ptr = memchr((void *)ptr, '\0', remaining);
+//	while (next_ptr) {
+//		*((char *)ptr) = '"';
+//		remaining -= (char *)next_ptr - (char *)ptr;
+//		ptr = next_ptr;
+//		next_ptr = memchr((void *)ptr, '\0', remaining);
+//	}
+//	//	for (idx_t i = 0; i < size; i++) {
+//	//		if (ptr[i] == '\0') {
+//	//			ptr[i] = '"';
+//	//		}
+//	//	}
+// }
+
 void JSONScanLocalState::ReadUnstructured(idx_t &count) {
+	objects.clear();
 	for (; count < STANDARD_VECTOR_SIZE; count++) {
 		auto line_start = buffer_ptr + buffer_offset;
 		idx_t remaining = buffer_size - buffer_offset;
 
 		// Read next JSON doc
-		objects.emplace_back(JSONCommon::ReadDocumentFromFileUnsafe(line_start, remaining));
+		objects.emplace_back(JSONCommon::ReadDocumentFromFileUnsafe((char *)line_start, remaining));
 		auto &read_doc = objects.back();
 
 		if (read_doc.IsNull()) {
+			std::replace((char *)line_start, (char *)line_start + remaining, '\0', '"');
 			objects.pop_back();
 			if (!is_last) {
 				// Copy remaining to reconstruct_buffer
 				const auto reconstruct_ptr = reconstruct_buffer.get();
-				memcpy(reconstruct_ptr, buffer_ptr + buffer_offset, remaining);
+				memcpy(reconstruct_ptr, line_start, remaining);
 			}
 
-			prev_buffer_offset = buffer_offset;
+			prev_buffer_remainder = remaining;
 			buffer_offset = buffer_size;
 			break;
 		}
 		idx_t line_size = read_doc.ReadSize();
+		std::replace((char *)line_start, (char *)line_start + line_size, '\0', '"');
 
 		lines[count].pointer = line_start;
 		lines[count].size = line_size;

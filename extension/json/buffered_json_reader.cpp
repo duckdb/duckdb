@@ -57,7 +57,7 @@ JSONFileHandle &BufferedJSONReader::GetFileHandle() {
 }
 
 double BufferedJSONReader::GetProgress() const {
-	return 100.0 * file_handle->Remaining() / file_handle->FileSize();
+	return 100.0 * double(file_handle->Remaining()) / double(file_handle->FileSize());
 }
 
 idx_t BufferedJSONReader::MaxThreads(idx_t buffer_capacity) const {

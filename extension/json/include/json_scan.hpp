@@ -104,7 +104,7 @@ private:
 	const char *buffer_ptr;
 	idx_t buffer_size;
 	idx_t buffer_offset;
-	idx_t prev_buffer_offset;
+	idx_t prev_buffer_remainder;
 
 	//! Buffer to reconstruct first object
 	AllocatedData reconstruct_buffer;
