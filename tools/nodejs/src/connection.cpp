@@ -112,8 +112,8 @@ Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connec
 
 	// Register replacement scan
 	// TODO: disabled currently, either fix or remove.
-//	database_ref->database->instance->config.replacement_scans.emplace_back(
-//	    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(this));
+	//	database_ref->database->instance->config.replacement_scans.emplace_back(
+	//	    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(this));
 
 	Napi::Function callback;
 	if (info.Length() > 0 && info[1].IsFunction()) {
