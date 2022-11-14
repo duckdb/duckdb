@@ -1,0 +1,16 @@
+# name: test/fuzzer/pedro/alter_virtual_column_segfault.test
+# description: Alter type of virtual column crashes
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1(c2 AS (1) VIRTUAL, c1 TIME WITH TIME ZONE);
+
+statement error
+ALTER TABLE t1 ALTER c1 TYPE TIME USING(c2);
+----
+generated columns
+
+

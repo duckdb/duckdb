@@ -1,0 +1,34 @@
+# name: test/fuzzer/pedro/aggregate_assertion_errors.test
+# description: Various aggregate assertion errors
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT reservoir_quantile(1, 1 ORDER BY 1);
+----
+1
+
+statement ok
+CREATE TABLE t1 (c0 INT);
+
+query I
+SELECT entropy(1 ORDER BY 1) FROM t1;
+----
+0
+
+query I
+SELECT approx_count_distinct(1 ORDER BY 1) FROM t1;
+----
+0
+
+query I
+SELECT count(c0 ORDER BY 0) FROM (SELECT 2 EXCEPT SELECT 2) c0;
+----
+0
+
+query I
+SELECT mode((c0, 0)) FROM (SELECT 1 c0), (SELECT 2);
+----
+{'c0': 1, 'v2': 0}

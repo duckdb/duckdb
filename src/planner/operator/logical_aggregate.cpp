@@ -100,4 +100,12 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(LogicalDeserialization
 	return move(result);
 }
 
+idx_t LogicalAggregate::EstimateCardinality(ClientContext &context) {
+	if (groups.empty()) {
+		// ungrouped aggregate
+		return 1;
+	}
+	return LogicalOperator::EstimateCardinality(context);
+}
+
 } // namespace duckdb

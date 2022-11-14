@@ -17,4 +17,8 @@ unique_ptr<LogicalOperator> LogicalCreate::Deserialize(LogicalDeserializationSta
 	return make_unique<LogicalCreate>(state.type, move(info), schema_catalog_entry);
 }
 
+idx_t LogicalCreate::EstimateCardinality(ClientContext &context) {
+	return 1;
+}
+
 } // namespace duckdb

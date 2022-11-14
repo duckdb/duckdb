@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -19,10 +20,10 @@ public:
 	static constexpr idx_t INITIAL_BUFFER_SIZE_COLOSSAL = 32000000; // 32MB
 
 	//! Constructor for Initial Buffer
-	CSVBuffer(idx_t buffer_size_p, CSVFileHandle &file_handle);
+	CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle);
 
 	//! Constructor for `Next()` Buffers
-	CSVBuffer(unique_ptr<char[]> buffer_p, idx_t buffer_size_p, idx_t actual_size_p, bool final_buffer);
+	CSVBuffer(ClientContext &context, BufferHandle handle, idx_t buffer_size_p, idx_t actual_size_p, bool final_buffer);
 
 	//! Creates a new buffer with the next part of the CSV File
 	unique_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t set_buffer_size);
@@ -38,10 +39,17 @@ public:
 
 	//! If this buffer is the first buffer of the CSV File
 	bool IsCSVFileFirstBuffer();
-	//! The actual buffer
-	unique_ptr<char[]> buffer;
+
+	BufferHandle AllocateBuffer(idx_t buffer_size);
+
+	char *Ptr() {
+		return (char *)handle.Ptr();
+	}
 
 private:
+	ClientContext &context;
+
+	BufferHandle handle;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
 	idx_t actual_size;
 	//! We need to check for Byte Order Mark, to define the start position of this buffer

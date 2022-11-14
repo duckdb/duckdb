@@ -13,7 +13,8 @@
 
 namespace duckdb {
 
-PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
+PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table,
+                               physical_index_vector_t<idx_t> column_index_map,
                                vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
                                bool return_chunk, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
@@ -31,10 +32,7 @@ PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, 
 void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types,
                                    vector<unique_ptr<Expression>> &bound_defaults) {
 	auto &create_info = (CreateTableInfo &)*info.base;
-	for (auto &col : create_info.columns) {
-		if (col.Generated()) {
-			continue;
-		}
+	for (auto &col : create_info.columns.Physical()) {
 		insert_types.push_back(col.GetType());
 		bound_defaults.push_back(make_unique<BoundConstantExpression>(Value(col.GetType())));
 	}
@@ -61,7 +59,7 @@ class InsertLocalState : public LocalSinkState {
 public:
 	InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                 const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(Allocator::Get(context), bound_defaults) {
+	    : default_executor(context, bound_defaults) {
 		insert_chunk.Initialize(Allocator::Get(context), types);
 	}
 
@@ -90,7 +88,8 @@ unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &c
 	return make_unique<InsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
-void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk, const vector<idx_t> &column_index_map,
+void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
+                                     const physical_index_vector_t<idx_t> &column_index_map,
                                      ExpressionExecutor &default_executor, DataChunk &result) {
 	chunk.Flatten();
 	default_executor.SetChunk(chunk);
@@ -100,20 +99,17 @@ void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 
 	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
-		for (idx_t i = 0; i < table->columns.size(); i++) {
-			auto &col = table->columns[i];
-			if (col.Generated()) {
-				continue;
-			}
+		for (auto &col : table->columns.Physical()) {
 			auto storage_idx = col.StorageOid();
-			if (column_index_map[i] == DConstants::INVALID_INDEX) {
+			auto mapped_index = column_index_map[col.Physical()];
+			if (mapped_index == DConstants::INVALID_INDEX) {
 				// insert default value
-				default_executor.ExecuteExpression(i, result.data[storage_idx]);
+				default_executor.ExecuteExpression(storage_idx, result.data[storage_idx]);
 			} else {
 				// get value from child chunk
-				D_ASSERT((idx_t)column_index_map[i] < chunk.ColumnCount());
-				D_ASSERT(result.data[storage_idx].GetType() == chunk.data[column_index_map[i]].GetType());
-				result.data[storage_idx].Reference(chunk.data[column_index_map[i]]);
+				D_ASSERT((idx_t)mapped_index < chunk.ColumnCount());
+				D_ASSERT(result.data[storage_idx].GetType() == chunk.data[mapped_index].GetType());
+				result.data[storage_idx].Reference(chunk.data[mapped_index]);
 			}
 		}
 	} else {

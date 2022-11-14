@@ -944,3 +944,8 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
      copy (select 42) to '/dev/stdout'
      ''',
      out='''42''')
+
+     test('''
+     select list(concat('thisisalongstring', range::VARCHAR)) i from range(10000)
+     ''',
+     out='''thisisalongstring''')

@@ -57,7 +57,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBTypesInit(ClientContext &context, Tab
 	};
 
 	// check the temp schema as well
-	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) {
+	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) {
 		result->entries.push_back((TypeCatalogEntry *)entry);
 	});
 	return move(result);
