@@ -15,38 +15,6 @@ struct TestAllTypesData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-static void AddIntegerUnion(vector<TestType> &result, child_list_t<LogicalType> type_list, LogicalType &union_type) {
-	auto min_union_val = Value::UNION(type_list, 0, Value(LogicalType::INTEGER));
-	auto max_union_val = Value::UNION(type_list, 0, Value::INTEGER(42));
-	result.emplace_back(union_type, "integer_union", min_union_val, max_union_val);
-}
-
-static void AddVarcharUnion(vector<TestType> &result, child_list_t<LogicalType> type_list, LogicalType &union_type) {
-	auto min_union_val = Value::UNION(type_list, 1, Value(LogicalType::VARCHAR));
-	auto max_union_val = Value::UNION(type_list, 1, Value("🦆🦆🦆🦆🦆🦆"));
-	result.emplace_back(union_type, "varchar_union", min_union_val, max_union_val);
-}
-
-// static void AddNullUnion(vector<TestType>& result, child_list_t<LogicalType> type_list, LogicalType& union_type) {
-//	auto min_union_val = Value::UNION(type_list, 1, Value(LogicalType::VARCHAR));
-//	auto max_union_val = Value::UNION(type_list, 1, Value("🦆🦆🦆🦆🦆🦆"));
-//	min_union_val.SetNull();
-//	max_union_val.SetNull();
-//	result.emplace_back(union_type, "null_union", min_union_val, max_union_val);
-// }
-
-static void AddUnionTest(vector<TestType> &result) {
-	// union schema
-	child_list_t<LogicalType> union_type_list;
-	union_type_list.push_back(make_pair("a", LogicalType::INTEGER));
-	union_type_list.push_back(make_pair("b", LogicalType::VARCHAR));
-	auto union_type = LogicalType::UNION(union_type_list);
-
-	AddIntegerUnion(result, union_type_list, union_type);
-	AddVarcharUnion(result, union_type_list, union_type);
-	// AddNullUnion(result, union_type_list, union_type);
-}
-
 vector<TestType> TestAllTypesFun::GetTestTypes() {
 	vector<TestType> result;
 	// scalar types/numerics
@@ -213,8 +181,6 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	auto max_map_value = Value::MAP(Value::LIST({Value("key1"), Value("key2")}),
 	                                Value::LIST({Value("🦆🦆🦆🦆🦆🦆"), Value("goose")}));
 	result.emplace_back(map_type, "map", move(min_map_value), move(max_map_value));
-
-	AddUnionTest(result);
 
 	return result;
 }
