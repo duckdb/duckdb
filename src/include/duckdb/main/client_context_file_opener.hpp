@@ -14,7 +14,7 @@ namespace duckdb {
 
 class ClientContext;
 
-//! ClientContext-specific FileOpener implemenation.
+//! ClientContext-specific FileOpener implementation.
 //! This object is owned by ClientContext and never outlives it.
 class ClientContextFileOpener : public FileOpener {
 public:
