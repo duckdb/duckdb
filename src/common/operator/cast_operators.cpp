@@ -1033,31 +1033,11 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	if (len == 0) {
 		return false;
 	}
-	int negative = *buf == '-';
-
-	// If it starts with 0x or 0X, we parse it as a hex value
-	auto is_hex = len > 1 && *buf == '0' && (buf[1] == 'x' || buf[1] == 'X');
-	bool is_binary = len > 1 && *buf == '0' && (buf[1] == 'b' || buf[1] == 'B');
-
 	if (ZERO_INITIALIZE) {
 		memset(&result, 0, sizeof(T));
 	}
-	if (!negative) {
-		if (is_hex) {
-			// Skip the 0x
-			buf++;
-			len--;
-			return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
-		}
-		if (is_binary) {
-			// Skip the 0b
-			buf++;
-			len--;
-			return IntegerBinaryCastLoop<T, false, false, OP>(buf, len, result, strict);
-		} else {
-			return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
-		}
-	} else {
+	// if the number is negative, we set the negative flag and skip the negative sign
+	if (*buf == '-') {
 		if (!IS_SIGNED) {
 			// Need to check if its not -0
 			idx_t pos = 1;
@@ -1068,6 +1048,22 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 			}
 		}
 		return IntegerCastLoop<T, true, ALLOW_EXPONENT, OP>(buf, len, result, strict);
+	}
+	// If it starts with 0x or 0X, we parse it as a hex value
+	else if (len > 1 && *buf == '0' && (buf[1] == 'x' || buf[1] == 'X')) {
+		// Skip the 0x
+		buf++;
+		len--;
+		return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
+	}
+	// If it starts with 0b or 0B, we parse it as a binary value
+	else if (len > 1 && *buf == '0' && (buf[1] == 'b' || buf[1] == 'B')) {
+		// Skip the 0b
+		buf++;
+		len--;
+		return IntegerBinaryCastLoop<T, false, false, OP>(buf, len, result, strict);
+	} else {
+		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	}
 }
 
