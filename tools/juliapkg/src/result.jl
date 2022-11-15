@@ -269,33 +269,6 @@ function convert_vector_struct(
     return size
 end
 
-function convert_union_members(column_data::ColumnConversionData, vector::Vec, size::UInt64)
-    # convert the child vectors of the struct
-    child_count = get_union_member_count(column_data.logical_type)
-    child_arrays = Vector()
-    for i in 1:child_count
-        child_vector = union_member(vector, i)
-        ldata = column_data.conversion_data.child_conversion_data[i]
-
-        child_column_data =
-            ColumnConversionData(column_data.chunks, column_data.col_idx, ldata.child_type, ldata.child_conversion_data)
-        child_array = Array{Union{Missing, ldata.target_type}}(missing, size)
-        ldata.conversion_loop_func(
-            child_column_data,
-            child_vector,
-            size,
-            ldata.conversion_func,
-            child_array,
-            1,
-            false,
-            ldata.internal_type,
-            ldata.target_type
-        )
-        push!(child_arrays, child_array)
-    end
-    return child_arrays
-end
-
 function convert_vector_union(
     column_data::ColumnConversionData,
     vector::Vec,
@@ -307,19 +280,22 @@ function convert_vector_union(
     ::Type{SRC},
     ::Type{DST}
 ) where {SRC, DST}
-    child_count = get_union_member_count(column_data.logical_type)
-    child_arrays = convert_union_members(column_data, vector, size)
+    child_arrays = convert_struct_children(column_data, vector, size)
 
     if !all_valid
         validity = get_validity(vector)
     end
-    for i in 1:size
-        if all_valid || isvalid(validity, i)
-            result_tuple = Vector()
-            for child_idx in 1:child_count
-                push!(result_tuple, child_arrays[child_idx][i])
-            end
-            result[position] = NamedTuple{column_data.conversion_data.tuple_type}(result_tuple)
+    for row in 1:size
+        # For every row/record
+        if all_valid || isvalid(validity, row)
+            # Get the tag of this row
+            tag::UInt64 = child_arrays[1][row]
+            type::DataType = duckdb_type_to_julia_type(get_union_member_type(column_data.logical_type, tag + 1))
+            # Get the value from the child array indicated by the tag
+            # Offset by 1 because of julia
+            # Offset by another 1 because of the tag vector
+            value = child_arrays[tag + 2][row]
+            result[position] = isequal(value, missing) ? missing : type(value)
         end
         position += 1
     end
@@ -440,15 +416,15 @@ function init_conversion_loop(logical_type::LogicalType)
         child_type = get_list_child_type(logical_type)
         return create_child_conversion_data(child_type)
     elseif type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_MAP || type == DUCKDB_TYPE_UNION
-		child_count_fun::Function = get_struct_child_count
-		child_type_fun::Function = get_struct_child_type
-		child_name_fun::Function = get_struct_child_name
+        child_count_fun::Function = get_struct_child_count
+        child_type_fun::Function = get_struct_child_type
+        child_name_fun::Function = get_struct_child_name
 
-		if type == DUCKDB_TYPE_UNION
-			child_count_fun = get_union_member_count
-			child_type_fun = get_union_member_type
-			child_name_fun = get_union_member_name
-		end
+        #if type == DUCKDB_TYPE_UNION
+        #	child_count_fun = get_union_member_count
+        #	child_type_fun = get_union_member_type
+        #	child_name_fun = get_union_member_name
+        #end
 
         child_count = child_count_fun(logical_type)
         child_symbols::Vector{Symbol} = Vector()
@@ -514,8 +490,8 @@ function get_conversion_loop_function(logical_type::LogicalType)::Function
         return convert_vector_struct
     elseif type == DUCKDB_TYPE_MAP
         return convert_vector_map
-	elseif type == DUCKDB_TYPE_UNION
-		return convert_vector_union
+    elseif type == DUCKDB_TYPE_UNION
+        return convert_vector_union
     else
         return convert_vector
     end

@@ -165,7 +165,7 @@
         df.nested_int_array,
         [[], [[], [42, 999, missing, missing, -42], missing, [], [42, 999, missing, missing, -42]], missing]
     )
-    @test isequal(df.varchar_union, [(a = missing, b = missing), (a = missing, b = "🦆🦆🦆🦆🦆🦆"), missing])
+    @test isequal(df.varchar_union, [missing, "🦆🦆🦆🦆🦆🦆", missing])
     @test isequal(df.struct, [(a = missing, b = missing), (a = 42, b = "🦆🦆🦆🦆🦆🦆"), missing])
     @test isequal(
         df.struct_of_arrays,

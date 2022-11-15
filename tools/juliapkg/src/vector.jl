@@ -41,7 +41,7 @@ function struct_child(vector::Vec, index::UInt64)::Vec
 end
 
 function union_member(vector::Vec, index::UInt64)::Vec
-	return Vec(duckdb_union_vector_get_member(vector.handle, index))
+    return Vec(duckdb_union_vector_get_member(vector.handle, index))
 end
 
 function assign_string_element(vector::Vec, index::Int64, str::String)
