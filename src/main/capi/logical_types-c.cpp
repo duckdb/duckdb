@@ -48,7 +48,7 @@ duckdb_logical_type duckdb_create_union_type(duckdb_logical_type member_types_p,
 		members.push_back(make_pair(member_names[i], member_types[i]));
 	}
 	*mtype = duckdb::LogicalType::UNION(members);
-	return mtype;
+	return reinterpret_cast<duckdb_logical_type>(mtype);
 }
 
 duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type) {
@@ -221,7 +221,8 @@ duckdb_logical_type duckdb_union_type_member_type(duckdb_logical_type type, idx_
 		return nullptr;
 	}
 	auto &ltype = *((duckdb::LogicalType *)type);
-	return new duckdb::LogicalType(duckdb::UnionType::GetMemberType(ltype, index));
+	return reinterpret_cast<duckdb_logical_type>(
+	    new duckdb::LogicalType(duckdb::UnionType::GetMemberType(ltype, index)));
 }
 
 char *duckdb_struct_type_child_name(duckdb_logical_type type, idx_t index) {
