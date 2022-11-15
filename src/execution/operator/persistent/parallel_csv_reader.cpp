@@ -122,6 +122,7 @@ void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 	reached_remainder_state = false;
 	verification_positions.beginning_of_first_line = 0;
 	verification_positions.end_of_last_line = 0;
+	read_one_line = false;
 	D_ASSERT(end_buffer <= buffer_size);
 }
 
@@ -393,6 +394,10 @@ final_state : {
 	// flush the parsed chunk and finalize parsing
 	if (mode == ParserMode::PARSING) {
 		Flush(insert_chunk);
+	}
+	if (insert_chunk.size() == 0) {
+		error_message = "Line does not fit in one buffer";
+		return false;
 	}
 	return true;
 };
