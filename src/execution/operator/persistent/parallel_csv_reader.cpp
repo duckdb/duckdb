@@ -395,8 +395,8 @@ final_state : {
 	if (mode == ParserMode::PARSING) {
 		Flush(insert_chunk);
 	}
-	if (insert_chunk.size() == 0) {
-		error_message = "Line does not fit in one buffer";
+	if (position_buffer != verification_positions.end_of_last_line) {
+		error_message = "Line does not fit in one buffer. Increase the buffer size.";
 		return false;
 	}
 	return true;
