@@ -16,7 +16,7 @@ WeakRefStrings = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 [compat]
 DBInterface = "2.5"
 DataFrames = "1.3"
-DuckDB_jll = "0.5.1"
+DuckDB_jll = "0.6"
 FixedPointDecimals = "0.4"
 julia = "1.6"
 Tables = "1.7"
