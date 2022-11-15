@@ -13,6 +13,7 @@
 #include <numeric>
 #include <string>
 #include <vector>
+#include <condition_variable>
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/constants.hpp"
