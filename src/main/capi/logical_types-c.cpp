@@ -23,7 +23,7 @@ static bool AssertInternalType(duckdb_logical_type type, duckdb::PhysicalType ph
 }
 
 duckdb_logical_type duckdb_create_logical_type(duckdb_type type) {
-	return new duckdb::LogicalType(duckdb::ConvertCTypeToCPP(type));
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::ConvertCTypeToCPP(type)));
 }
 
 duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type) {
@@ -32,7 +32,7 @@ duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type) {
 	}
 	duckdb::LogicalType *ltype = new duckdb::LogicalType;
 	*ltype = duckdb::LogicalType::LIST(*(duckdb::LogicalType *)type);
-	return ltype;
+	return reinterpret_cast<duckdb_logical_type>(ltype);
 }
 
 duckdb_logical_type duckdb_create_union_type(duckdb_logical_type member_types_p, const char **member_names,
@@ -57,11 +57,11 @@ duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_
 	}
 	duckdb::LogicalType *mtype = new duckdb::LogicalType;
 	*mtype = duckdb::LogicalType::MAP(*(duckdb::LogicalType *)key_type, *(duckdb::LogicalType *)value_type);
-	return mtype;
+	return reinterpret_cast<duckdb_logical_type>(mtype);
 }
 
 duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale) {
-	return new duckdb::LogicalType(duckdb::LogicalType::DECIMAL(width, scale));
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::LogicalType::DECIMAL(width, scale)));
 }
 
 duckdb_type duckdb_get_type_id(duckdb_logical_type type) {
@@ -155,23 +155,32 @@ duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type) {
 		return nullptr;
 	}
 	auto &ltype = *((duckdb::LogicalType *)type);
-	return new duckdb::LogicalType(duckdb::ListType::GetChildType(ltype));
+	if (ltype.id() != duckdb::LogicalTypeId::LIST) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::ListType::GetChildType(ltype)));
 }
 
 duckdb_logical_type duckdb_map_type_key_type(duckdb_logical_type type) {
 	if (!AssertLogicalTypeId(type, duckdb::LogicalTypeId::MAP)) {
 		return nullptr;
 	}
-	auto &ltype = *((duckdb::LogicalType *)type);
-	return new duckdb::LogicalType(duckdb::MapType::KeyType(ltype));
+	auto &mtype = *((duckdb::LogicalType *)type);
+	if (mtype.id() != duckdb::LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::MapType::KeyType(mtype)));
 }
 
 duckdb_logical_type duckdb_map_type_value_type(duckdb_logical_type type) {
 	if (!AssertLogicalTypeId(type, duckdb::LogicalTypeId::MAP)) {
 		return nullptr;
 	}
-	auto &ltype = *((duckdb::LogicalType *)type);
-	return new duckdb::LogicalType(duckdb::MapType::ValueType(ltype));
+	auto &mtype = *((duckdb::LogicalType *)type);
+	if (mtype.id() != duckdb::LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::MapType::ValueType(mtype)));
 }
 
 idx_t duckdb_struct_type_child_count(duckdb_logical_type type) {
@@ -228,5 +237,9 @@ duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_
 		return nullptr;
 	}
 	auto &ltype = *((duckdb::LogicalType *)type);
-	return new duckdb::LogicalType(duckdb::StructType::GetChildType(ltype, index));
+	if (ltype.InternalType() != duckdb::PhysicalType::STRUCT) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_logical_type>(
+	    new duckdb::LogicalType(duckdb::StructType::GetChildType(ltype, index)));
 }

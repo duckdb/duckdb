@@ -13,7 +13,10 @@
 #'
 #' dbiris <- copy_to(con, iris, overwrite = TRUE)
 #'
-#' dbiris %>% select(Petal.Length, Petal.Width) %>% filter(Petal.Length > 1.5) %>% head(5)
+#' dbiris %>%
+#'   select(Petal.Length, Petal.Width) %>%
+#'   filter(Petal.Length > 1.5) %>%
+#'   head(5)
 #'
 #' DBI::dbDisconnect(con, shutdown = TRUE)
 NULL
@@ -116,11 +119,9 @@ sql_translation.duckdb_connection <- function(con) {
       log = function(x, base = exp(1)) {
         if (isTRUE(all.equal(base, exp(1)))) {
           sql_expr(LN(!!x))
-        } else
-        if (base == 10) {
+        } else if (base == 10) {
           sql_expr(LOG10(!!x))
-        } else
-        if (base == 2) {
+        } else if (base == 2) {
           sql_expr(LOG2(!!x))
         } else {
           sql_expr(LOG(!!x) / LOG(!!base))
