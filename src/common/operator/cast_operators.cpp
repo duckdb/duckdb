@@ -1690,7 +1690,7 @@ struct DecimalCastOperation {
 		if (state.decimal_count == state.scale && !state.round_info.set) {
 			// Determine whether the last registered decimal should be rounded or not
 			state.round_info.set = true;
-			state.round_info.should_round = NEGATIVE ? digit <= -5 : digit >= 5;
+			state.round_info.should_round = digit >= 5;
 		}
 		if (!ALLOW_EXPONENT && state.decimal_count == state.scale) {
 			// we exceeded the amount of supported decimals
