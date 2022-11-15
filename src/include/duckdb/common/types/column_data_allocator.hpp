@@ -58,6 +58,7 @@ private:
 	void AllocateEmptyBlock(idx_t size);
 	void AllocateBlock();
 	BufferHandle Pin(uint32_t block_id);
+	BufferHandle PinInternal(uint32_t block_id);
 
 	bool HasBlocks() const {
 		return !blocks.empty();

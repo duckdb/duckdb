@@ -96,6 +96,26 @@ if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")
 endif()
 
+set(OS_NAME "unknown")
+set(OS_ARCH "amd64")
+
+string(REGEX MATCH "(arm64|aarch64)" IS_ARM "${CMAKE_SYSTEM_PROCESSOR}")
+if(IS_ARM)
+  set(OS_ARCH "arm64")
+elseif(FORCE_32_BIT)
+  set(OS_ARCH "i386")
+endif()
+
+if(APPLE)
+  set(OS_NAME "osx")
+endif()
+if(WIN32)
+  set(OS_NAME "windows")
+endif()
+if(UNIX AND NOT APPLE)
+  set(OS_NAME "linux") # sorry BSD
+endif()
+
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
@@ -256,6 +276,13 @@ option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
         FALSE)
 
+
+set(JEMALLOC_DEFAULT_BUILD FALSE)
+if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
+  # build jemalloc by default for linux
+  set(JEMALLOC_DEFAULT_BUILD TRUE)
+endif()
+
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
@@ -264,7 +291,7 @@ option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
 option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
 option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
-option(BUILD_JEMALLOC_EXTENSION "Build the JEMalloc extension." FALSE)
+option(BUILD_JEMALLOC_EXTENSION "Build the JEMalloc extension." ${JEMALLOC_DEFAULT_BUILD})
 option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
 option(BUILD_INET_EXTENSION "Build the inet extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
@@ -403,31 +430,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
       CACHE STRING "Choose the type of build." FORCE)
 endif()
 
-
-set(OS_NAME "unknown")
-set(OS_ARCH "amd64")
-
-string(REGEX MATCH "(arm64|aarch64)" IS_ARM "${CMAKE_SYSTEM_PROCESSOR}")
-if(IS_ARM)
-  set(OS_ARCH "arm64")
-elseif(FORCE_32_BIT)
-  set(OS_ARCH "i386")
-endif()
-
-if(APPLE)
-  set(OS_NAME "osx")
-endif()
-if(WIN32)
-  set(OS_NAME "windows")
-endif()
-if(UNIX AND NOT APPLE)
-  set(OS_NAME "linux") # sorry BSD
-endif()
-
-if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
-  # always build jemalloc for linux
-  set(BUILD_JEMALLOC_EXTENSION 1)
-elseif(OS_NAME STREQUAL "windows")
+if(OS_NAME STREQUAL "windows")
   if(BUILD_JEMALLOC_EXTENSION EQUAL 1)
     # have to throw an error because this will crash at runtime
     message(FATAL_ERROR "The jemalloc extension is not supported on Windows")
