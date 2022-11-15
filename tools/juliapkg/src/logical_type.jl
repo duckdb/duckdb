@@ -124,3 +124,14 @@ end
 function get_union_member_count(type::LogicalType)
     return duckdb_union_type_member_count(type.handle)
 end
+
+function get_union_member_name(type::LogicalType, index::UInt64)
+    val = duckdb_union_type_member_name(type.handle, index)
+    result = unsafe_string(val)
+    duckdb_free(val)
+    return result
+end
+
+function get_union_member_type(type::LogicalType, index::UInt64)
+    return LogicalType(duckdb_union_type_member_type(type.handle, index))
+end

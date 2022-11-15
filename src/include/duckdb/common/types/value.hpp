@@ -69,6 +69,10 @@ public:
 		return is_null;
 	}
 
+	inline void SetNull() {
+		is_null = true;
+	}
+
 	//! Create the lowest possible value of a given type (numeric only)
 	DUCKDB_API static Value MinimumValue(const LogicalType &type);
 	//! Create the highest possible value of a given type (numeric only)

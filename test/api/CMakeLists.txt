@@ -3,6 +3,7 @@ add_subdirectory(udf_function)
 
 set(TEST_API_OBJECTS
     test_api.cpp
+    test_all_types.cpp
     test_config.cpp
     test_custom_allocator.cpp
     test_results.cpp

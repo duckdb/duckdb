@@ -40,6 +40,10 @@ function struct_child(vector::Vec, index::UInt64)::Vec
     return Vec(duckdb_struct_vector_get_child(vector.handle, index))
 end
 
+function union_member(vector::Vec, index::UInt64)::Vec
+	return Vec(duckdb_union_vector_get_member(vector.handle, index))
+end
+
 function assign_string_element(vector::Vec, index::Int64, str::String)
     return duckdb_vector_assign_string_element_len(vector.handle, index, str, sizeof(str))
 end
