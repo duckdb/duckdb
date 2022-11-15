@@ -6,6 +6,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/common/list.hpp"
 
 namespace duckdb_httplib_openssl {
 struct Response;
@@ -36,13 +37,90 @@ struct HTTPParams {
 };
 
 struct FileHandleCacheValue {
+	string path;
 	idx_t length;
 	time_t last_modified;
 	milliseconds cache_time;
 };
 
-using file_handle_map_t = unordered_map<string, FileHandleCacheValue>;
 
+class HTTPFileCache {
+public:
+	// Note: duplicate inserts leave old deque entry dangling, which will eventually be cleared by PruneExpired
+	void Insert(string path, idx_t length, time_t last_modified) {
+		lock_guard<mutex> parallel_lock(lock);
+		empty = false;
+		milliseconds current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+		deque.push_back({path, length, last_modified, current_time});
+		map[path] = --deque.end();
+	}
+
+	void Erase(string path) {
+		lock_guard<mutex> parallel_lock(lock);
+		EraseInternal(path);
+	}
+
+	bool Find(string path, FileHandleCacheValue& ret_val, uint64_t max_age) {
+		lock_guard<mutex> parallel_lock(lock);
+		auto lookup = map.find(path);
+		bool found = lookup != map.end();
+		if (found) {
+			milliseconds current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+			if (current_time - lookup->second->cache_time <= milliseconds(max_age)) {
+				ret_val = *lookup->second;
+				return true;
+			}
+			EraseInternal(path);
+		}
+
+		return false;
+	}
+
+	void PruneExpired(uint64_t max_age) {
+		lock_guard<mutex> parallel_lock(lock);
+		milliseconds current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+		for (auto const& i : deque) {
+			if (current_time - i.cache_time > milliseconds(max_age)){
+				map.erase(i.path);
+				deque.pop_front();
+			} else {
+				return;
+			}
+		}
+
+		empty = true;
+	}
+
+	// Note: since we access empty without lock, in some edge cases this may not actually prune all
+	void PruneAll() {
+		if (empty) {
+			return;
+		}
+		lock_guard<mutex> parallel_lock(lock);
+		deque.clear();
+		map.clear();
+		empty = true;
+	}
+
+protected:
+	using list_position = list<FileHandleCacheValue>::iterator;
+	using file_handle_map_t = unordered_map<string, list_position>;
+
+	mutex lock;
+	file_handle_map_t file_handle_cache;
+	file_handle_map_t map;
+	list<FileHandleCacheValue> deque;
+
+	bool empty = true;
+
+	void EraseInternal(string path) {
+		auto lookup = map.find(path);
+		if (lookup != map.end()) {
+			deque.erase(lookup->second);
+		}
+		map.erase(path);
+	}
+};
 
 class HTTPFileHandle : public FileHandle {
 public:
@@ -128,8 +206,7 @@ public:
 
 	static void Verify();
 
-	mutex file_handle_cache_lock;
-	file_handle_map_t file_handle_cache;
+	HTTPFileCache metadata_cache;
 
 protected:
 	virtual unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,

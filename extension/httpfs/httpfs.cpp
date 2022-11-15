@@ -354,25 +354,34 @@ void HTTPFileHandle::Initialize() {
 	InitializeClient();
 	auto &hfs = (HTTPFileSystem &)file_system;
 
-	milliseconds current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
 	bool should_write_cache = false;
 
 	if (http_params.metadata_cache_max_age > 0) {
-		lock_guard<mutex> parallel_lock(hfs.file_handle_cache_lock);
-		auto lookup = hfs.file_handle_cache.find(path);
+		auto max_age = http_params.metadata_cache_max_age;
 
-		if (lookup != hfs.file_handle_cache.end() &&
-		    current_time - lookup->second.cache_time <= milliseconds(http_params.metadata_cache_max_age)) {
-			last_modified = lookup->second.last_modified;
-			length = lookup->second.length;
+		if (flags & FileFlags::FILE_FLAGS_WRITE) {
+			hfs.metadata_cache.Erase(path);
+		} else {
+			FileHandleCacheValue value;
+			bool found = hfs.metadata_cache.Find(path, value, max_age);
 
-			if (flags & FileFlags::FILE_FLAGS_READ) {
-				read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
+			if (found) {
+				last_modified = value.last_modified;
+				length = value.length;
+
+				if (flags & FileFlags::FILE_FLAGS_READ) {
+					read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
+				}
+				return;
 			}
-			return;
+
+			should_write_cache = true;
 		}
 
-		should_write_cache = true;
+		hfs.metadata_cache.PruneExpired(max_age);
+	} else {
+		// Cache is disabled, to prevent issues we should ensure cache is cleared
+		hfs.metadata_cache.PruneAll();
 	}
 
 	auto res = hfs.HeadRequest(*this, path, {});
@@ -413,12 +422,7 @@ void HTTPFileHandle::Initialize() {
 	}
 
 	if (should_write_cache) {
-		lock_guard<mutex> parallel_lock(hfs.file_handle_cache_lock);
-		hfs.file_handle_cache[path] = FileHandleCacheValue {
-		    length,
-		    last_modified,
-		    current_time
-		};
+		hfs.metadata_cache.Insert(path, length, last_modified);
 	}
 }
 
