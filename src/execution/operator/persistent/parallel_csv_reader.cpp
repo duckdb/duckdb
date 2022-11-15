@@ -81,7 +81,6 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		if (position_buffer < end_buffer) {
 			if (carriage_return && (*buffer)[position_buffer] == '\n') {
 				position_buffer++;
-				break;
 			}
 		}
 		D_ASSERT(position_buffer <= end_buffer);
