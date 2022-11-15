@@ -161,7 +161,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 				    string error = "HTTP GET error on '" + url + "' (HTTP " + to_string(response.status) + ")";
 				    if (response.status == 416) {
 					    if (hfs.http_params.metadata_cache_max_age > 0) {
-						    error += " This could mean the file was changed, please try again with http_metadata_cache_max_age set to 0.";
+						    error += " This could mean the file was changed, please try again with "
+						             "http_metadata_cache_max_age set to 0.";
 					    }
 				    }
 

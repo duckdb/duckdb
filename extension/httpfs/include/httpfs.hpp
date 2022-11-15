@@ -27,7 +27,7 @@ public:
 };
 
 struct HTTPParams {
-	static constexpr uint64_t DEFAULT_TIMEOUT = 30000; // 30 sec
+	static constexpr uint64_t DEFAULT_TIMEOUT = 30000;            // 30 sec
 	static constexpr uint64_t DEFAULT_METADATA_CACHE_MAX_AGE = 0; // disabled
 
 	uint64_t timeout;
@@ -42,7 +42,6 @@ struct FileHandleCacheValue {
 	time_t last_modified;
 	milliseconds cache_time;
 };
-
 
 class HTTPFileCache {
 public:
@@ -60,7 +59,7 @@ public:
 		EraseInternal(path);
 	}
 
-	bool Find(string path, FileHandleCacheValue& ret_val, uint64_t max_age) {
+	bool Find(string path, FileHandleCacheValue &ret_val, uint64_t max_age) {
 		lock_guard<mutex> parallel_lock(lock);
 		auto lookup = map.find(path);
 		bool found = lookup != map.end();
@@ -79,8 +78,8 @@ public:
 	void PruneExpired(uint64_t max_age) {
 		lock_guard<mutex> parallel_lock(lock);
 		milliseconds current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
-		for (auto const& i : deque) {
-			if (current_time - i.cache_time > milliseconds(max_age)){
+		for (auto const &i : deque) {
+			if (current_time - i.cache_time > milliseconds(max_age)) {
 				map.erase(i.path);
 				deque.pop_front();
 			} else {

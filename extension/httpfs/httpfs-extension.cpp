@@ -21,8 +21,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("httpfs_timeout", "HTTP timeout read/write/connection/retry (default 30000ms)",
 	                          LogicalType::UBIGINT);
 	// HTTPFS can cache the file size to reduce the amount of HEAD request that are made when reading a file in parallel
-	config.AddExtensionOption("http_metadata_cache_max_age", "HTTP cache max age (default 0ms)",
-	                          LogicalType::UBIGINT);
+	config.AddExtensionOption("http_metadata_cache_max_age", "HTTP cache max age (default 0ms)", LogicalType::UBIGINT);
 
 	// Global S3 config
 	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
