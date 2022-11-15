@@ -134,10 +134,9 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 	}
 }
 
-static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedColumnInfo> &correlated_columns,
-                                                                  JoinType join_type,
-                                                                  unique_ptr<LogicalOperator> original_plan,
-                                                                  bool perform_delim) {
+static unique_ptr<LogicalDelimJoin>
+CreateDuplicateEliminatedJoin(const vector<CorrelatedColumnInfo> &correlated_columns, JoinType join_type,
+                              unique_ptr<LogicalOperator> original_plan, bool perform_delim) {
 	auto delim_join = make_unique<LogicalDelimJoin>(join_type);
 	if (!perform_delim) {
 		// if we are not performing a delim join, we push a row_number() OVER() window operator on the LHS
@@ -163,7 +162,8 @@ static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<Correla
 	return delim_join;
 }
 
-static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join, vector<CorrelatedColumnInfo> &correlated_columns,
+static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join,
+                                      const vector<CorrelatedColumnInfo> &correlated_columns,
                                       vector<ColumnBinding> bindings, idx_t base_offset, bool perform_delim) {
 	auto col_count = perform_delim ? correlated_columns.size() : 1;
 	for (idx_t i = 0; i < col_count; i++) {
@@ -396,6 +396,37 @@ void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<Logical
 		}
 		*expr_ptr = PlanSubquery(subquery, *root);
 	}
+}
+
+unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
+                                                    const vector<CorrelatedColumnInfo> &correlated_columns) {
+	// scan the right operator for correlated columns
+	// correlated LATERAL JOIN
+	// first push a DUPLICATE ELIMINATED join
+	// a duplicate eliminated join creates a duplicate eliminated copy of the LHS
+	// and pushes it into any DUPLICATE_ELIMINATED SCAN operators on the RHS
+	auto perform_delim = true;
+	auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::INNER, move(left), perform_delim);
+
+	// the right side initially is a DEPENDENT join between the duplicate eliminated scan and the subquery
+	// HOWEVER: we do not explicitly create the dependent join
+	// instead, we eliminate the dependent join by pushing it down into the right side of the plan
+	FlattenDependentJoins flatten(*this, correlated_columns, perform_delim);
+
+	// first we check which logical operators have correlated expressions in the first place
+	flatten.DetectCorrelatedExpressions(right.get());
+	// now we push the dependent join down
+	auto dependent_join = flatten.PushDownDependentJoin(move(right));
+
+	// now the dependent join is fully eliminated
+	// we only need to create the join conditions between the LHS and the RHS
+	// fetch the set of columns
+	auto plan_columns = dependent_join->GetColumnBindings();
+
+	// now create the join conditions
+	CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
+	delim_join->AddChild(move(dependent_join));
+	return move(delim_join);
 }
 
 } // namespace duckdb

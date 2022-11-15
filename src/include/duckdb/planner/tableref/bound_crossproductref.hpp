@@ -27,5 +27,7 @@ public:
 	unique_ptr<BoundTableRef> left;
 	//! The right hand side of the cross product
 	unique_ptr<BoundTableRef> right;
+	//! The correlated columns of the right-side with the left-side
+	vector<CorrelatedColumnInfo> correlated_columns;
 };
 } // namespace duckdb

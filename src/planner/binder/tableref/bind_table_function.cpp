@@ -42,6 +42,7 @@ bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 	select_node->select_list = move(expressions);
 	select_node->from_table = make_unique<EmptyTableRef>();
 	auto node = binder->BindNode(*select_node);
+	MoveCorrelatedExpressions(*binder);
 	subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
 	return true;
 }
