@@ -70,8 +70,16 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	while (!successfully_read_first_line) {
 		DataChunk first_line_chunk;
 		first_line_chunk.Initialize(allocator, insert_chunk.GetTypes());
+		bool carriage_return = false;
 		for (; position_buffer < end_buffer; position_buffer++) {
 			if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
+				carriage_return = (*buffer)[position_buffer] == '\r';
+				position_buffer++;
+				break;
+			}
+		}
+		if (position_buffer < end_buffer) {
+			if (carriage_return && (*buffer)[position_buffer] == '\n') {
 				position_buffer++;
 				break;
 			}
