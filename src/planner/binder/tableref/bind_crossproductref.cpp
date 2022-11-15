@@ -16,12 +16,7 @@ unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
 	{
 		WhereBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
-		if (binder.HasBoundColumns()) {
-			if (binder.GetBoundColumns().size() != right_binder.correlated_columns.size()) {
-				throw InternalException("Nested lateral joins or lateral joins in subqueries not supported yet");
-			}
-			result->correlated_columns = move(right_binder.correlated_columns);
-		}
+		result->correlated_columns = move(right_binder.correlated_columns);
 	}
 
 	bind_context.AddContext(move(left_binder.bind_context));

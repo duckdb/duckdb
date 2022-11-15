@@ -127,11 +127,11 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	{
 		WhereBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
-		if (binder.HasBoundColumns()) {
-			if (binder.GetBoundColumns().size() != right_binder.correlated_columns.size()) {
-				throw InternalException("Nested lateral joins or lateral joins in subqueries not supported yet");
+		result->correlated_columns = move(right_binder.correlated_columns);
+		if (!result->correlated_columns.empty()) {
+			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
+				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
 			}
-			result->correlated_columns = move(right_binder.correlated_columns);
 		}
 	}
 
