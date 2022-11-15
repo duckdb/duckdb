@@ -95,7 +95,7 @@ public:
 
 public:
 	void Close() override;
-	unique_ptr<ResponseWrapper> Initialize() override;
+	void Initialize() override;
 
 protected:
 	string multipart_upload_id;

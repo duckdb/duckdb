@@ -49,7 +49,7 @@ public:
 	HTTPFileHandle(FileSystem &fs, string path, uint8_t flags, const HTTPParams &params);
 	~HTTPFileHandle() override;
 	// This two-phase construction allows subclasses more flexible setup.
-	virtual unique_ptr<ResponseWrapper> Initialize();
+	virtual void Initialize();
 
 	// We keep an http client stored for connection reuse with keep-alive headers
 	unique_ptr<duckdb_httplib_openssl::Client> http_client;

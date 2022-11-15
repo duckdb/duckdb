@@ -736,8 +736,8 @@ void S3FileSystem::Verify() {
 	// TODO add a test that checks the signing for path-style
 }
 
-unique_ptr<ResponseWrapper> S3FileHandle::Initialize() {
-	auto res = HTTPFileHandle::Initialize();
+void S3FileHandle::Initialize() {
+	HTTPFileHandle::Initialize();
 
 	auto &s3fs = (S3FileSystem &)file_system;
 
@@ -759,8 +759,6 @@ unique_ptr<ResponseWrapper> S3FileHandle::Initialize() {
 		parts_uploaded = 0;
 		upload_finalized = false;
 	}
-
-	return res;
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {

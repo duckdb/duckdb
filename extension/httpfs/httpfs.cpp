@@ -350,7 +350,7 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 	sfh.file_offset = location;
 }
 
-unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
+void HTTPFileHandle::Initialize() {
 	InitializeClient();
 	auto &hfs = (HTTPFileSystem &)file_system;
 
@@ -365,7 +365,11 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 		    current_time - lookup->second.cache_time <= milliseconds(http_params.metadata_cache_max_age)) {
 			last_modified = lookup->second.last_modified;
 			length = lookup->second.length;
-			return nullptr;
+
+			if (flags & FileFlags::FILE_FLAGS_READ) {
+				read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
+			}
+			return;
 		}
 
 		should_write_cache = true;
@@ -380,7 +384,7 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 				                         "\" for writing: file does not exists and CREATE flag is not set");
 			}
 			length = 0;
-			return res;
+			return;
 		} else {
 			throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + to_string(res->code) + " (" +
 			                         res->error + ")");
@@ -416,8 +420,6 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 		    current_time
 		};
 	}
-
-	return res;
 }
 
 void HTTPFileHandle::InitializeClient() {
