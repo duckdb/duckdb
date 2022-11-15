@@ -399,14 +399,45 @@ void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<Logical
 }
 
 unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-                                                    const vector<CorrelatedColumnInfo> &correlated_columns) {
+                                                    const vector<CorrelatedColumnInfo> &correlated_columns,
+                                                    JoinType join_type, unique_ptr<Expression> condition) {
 	// scan the right operator for correlated columns
 	// correlated LATERAL JOIN
+	vector<JoinCondition> conditions;
+	vector<unique_ptr<Expression>> arbitrary_expressions;
+	if (condition) {
+		// extract join conditions, if there are any
+		LogicalComparisonJoin::ExtractJoinConditions(join_type, left, right, move(condition), conditions,
+		                                             arbitrary_expressions);
+	}
+	if (arbitrary_expressions.size() > 0) {
+		// we can only evaluate scalar arbitrary expressions
+		if (join_type != JoinType::INNER) {
+			throw BinderException("Join condition for non-inner LATERAL JOIN must be a comparison expression");
+		}
+		bool empty_result = false;
+		for (auto &expr : arbitrary_expressions) {
+			if (!arbitrary_expressions[0]->IsFoldable()) {
+				throw BinderException("Join condition for LATERAL JOIN must be a comparison expression");
+			}
+			auto value = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, LogicalType::BOOLEAN);
+			if (value.IsNull() || !BooleanValue::Get(value)) {
+				empty_result = true;
+				break;
+			}
+		}
+		if (empty_result) {
+			// empty result
+			// FIXME: this is only correct for inner join
+			return make_unique<LogicalEmptyResult>(LogicalCrossProduct::Create(move(left), move(right)));
+		}
+	}
+
 	// first push a DUPLICATE ELIMINATED join
 	// a duplicate eliminated join creates a duplicate eliminated copy of the LHS
 	// and pushes it into any DUPLICATE_ELIMINATED SCAN operators on the RHS
 	auto perform_delim = true;
-	auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::INNER, move(left), perform_delim);
+	auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, join_type, move(left), perform_delim);
 
 	// the right side initially is a DEPENDENT join between the duplicate eliminated scan and the subquery
 	// HOWEVER: we do not explicitly create the dependent join
@@ -424,6 +455,10 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	auto plan_columns = dependent_join->GetColumnBindings();
 
 	// now create the join conditions
+	// start off with the conditions that were passed in (if any)
+	D_ASSERT(delim_join->conditions.empty());
+	delim_join->conditions = move(conditions);
+	// then add the delim join conditions
 	CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
 	delim_join->AddChild(move(dependent_join));
 	return move(delim_join);

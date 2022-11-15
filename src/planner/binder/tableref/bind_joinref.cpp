@@ -124,7 +124,16 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 	result->type = ref.type;
 	result->left = left_binder.Bind(*ref.left);
-	result->right = right_binder.Bind(*ref.right);
+	{
+		WhereBinder binder(left_binder, context);
+		result->right = right_binder.Bind(*ref.right);
+		if (binder.HasBoundColumns()) {
+			if (binder.GetBoundColumns().size() != right_binder.correlated_columns.size()) {
+				throw InternalException("Nested lateral joins or lateral joins in subqueries not supported yet");
+			}
+			result->correlated_columns = move(right_binder.correlated_columns);
+		}
+	}
 
 	vector<unique_ptr<ParsedExpression>> extra_conditions;
 	vector<string> extra_using_columns;

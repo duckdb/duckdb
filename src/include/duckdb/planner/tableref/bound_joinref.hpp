@@ -33,5 +33,7 @@ public:
 	unique_ptr<Expression> condition;
 	//! The join type
 	JoinType type;
+	//! The correlated columns of the right-side with the left-side
+	vector<CorrelatedColumnInfo> correlated_columns;
 };
 } // namespace duckdb

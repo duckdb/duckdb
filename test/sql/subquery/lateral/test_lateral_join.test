@@ -5,6 +5,13 @@
 statement ok
 PRAGMA enable_verification
 
+# FIXME table-in table-out functions not (yet) supported
+statement error
+select (select MIN(val) from unnest((select a)) t(val)) from (select ARRAY[1, 2, 3, NULL]) t(a);
+
+statement error
+select (select MIN(val) from unnest(a) t(val)) from (select ARRAY[1, 2, 3, NULL]) t(a);
+
 # simplest lateral joins
 query II
 select * from (select 42) t(a), (select t.a + 1);
@@ -18,13 +25,9 @@ select * from (select 42 union all select 84) t(a), (select t.a + 1) ORDER BY AL
 42	43
 84	85
 
-#query I
-#select (select MIN(val) from unnest(a) t(val)) from (select ARRAY[1, 2, 3, NULL]) t(a);
-#----
-#1
-
-#statement ok
-#PRAGMA disabled_optimizers='filter_pushdown'
+# FIXME table-in table-out functions not (yet) supported
+statement error
+select (select MIN(val) from unnest(a) t(val)) from (select ARRAY[1, 2, 3, NULL]) t(a);
 
 # unnest
 query II
@@ -60,22 +63,37 @@ select a, sum(b) from (select [42, 43, 44] union all select [45, NULL, 46]) t(a)
 [42, 43, 44]	129
 [45, NULL, 46]	91
 
-mode skip
-
+# join syntax
 query II
-select * from (select array[42, 43, 44]) t(a) join lateral (select unnest(t.a)) t2(b) on (true);
+select * from (select array[42, 43, 44]) t(a) join (select unnest(t.a)) t2(b) on (true) order by all;
 ----
 [42, 43, 44]	42
 [42, 43, 44]	43
 [42, 43, 44]	44
 
-## unnest
-#query II
-#select * from (select [42, 43, 44]) t(a), (select * from unnest(t.a));
-#----
-#[42, 43, 44]	42
-#[42, 43, 44]	43
-#[42, 43, 44]	44
+# explicit LATERAL (Postgres syntax)
+query II
+select * from (select array[42, 43, 44]) t(a) join lateral (select unnest(t.a)) t2(b) on (true) order by all;
+----
+[42, 43, 44]	42
+[42, 43, 44]	43
+[42, 43, 44]	44
+
+
+query II
+select * from (select array[42, 43, 44]) t(a) join lateral (select unnest(t.a)) t2(b) on (a[1]=b);
+----
+[42, 43, 44]	42
+
+query II
+select * from (select array[42, 43, 44]) t(a) join lateral (select unnest(t.a)) t2(b) on (a[1]<b) order by all;
+----
+[42, 43, 44]	43
+[42, 43, 44]	44
+
+query II
+select * from (select array[42, 43, 44]) t(a) join lateral (select unnest(t.a)) t2(b) on (false) order by all;
+----
 
 # postgres syntax
 query II
@@ -83,13 +101,9 @@ select * from (select 42) t(a) join lateral (select t.a + 1) t2(b) on (true);
 ----
 42	43
 
-# unnest
-query II
+# FIXME table-in table-out functions not (yet) supported
+statement error
 select * from (select ARRAY[42, 43, 44]) t(a) join lateral (select * from unnest(t.a)) t2(b) on (true);
-----
-[42, 43, 44]	42
-[42, 43, 44]	43
-[42, 43, 44]	44
 
 statement ok
 CREATE TABLE students(id INTEGER, name VARCHAR, major VARCHAR, year INTEGER)
@@ -116,11 +130,11 @@ statement ok
 INSERT INTO exams VALUES (2, 'Graphics', 'CS', 7, 2016)
 
 # lateral join with explicit LATERAL added
-#query II
-#SELECT name, total FROM students LEFT JOIN LATERAL (SELECT SUM(grade) AS total FROM exams WHERE exams.sid=students.id) grades ON true ORDER BY total DESC;
-#----
-#Mark	19
-#Dirk	14
+query II
+SELECT name, total FROM students JOIN LATERAL (SELECT SUM(grade) AS total FROM exams WHERE exams.sid=students.id) grades ON true ORDER BY total DESC;
+----
+Mark	19
+Dirk	14
 
 # lateral join without explicit LATERAL
 query II

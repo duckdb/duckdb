@@ -491,11 +491,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		return plan;
 	case LogicalOperatorType::LOGICAL_GET:
-		if (plan->children.size() != 1) {
-			throw InternalException("Correlated Logical GET should be a table-in-out function with a single child");
-		}
-		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
-		return plan;
+		throw BinderException("Table-in table-out functions not (yet) supported in correlated subqueries");
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		throw ParserException("Recursive CTEs not supported in correlated subquery");
 	}
