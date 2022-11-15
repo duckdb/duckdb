@@ -4,6 +4,8 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/chrono.hpp"
 
 namespace duckdb_httplib_openssl {
 struct Response;
@@ -25,34 +27,21 @@ public:
 
 struct HTTPParams {
 	static constexpr uint64_t DEFAULT_TIMEOUT = 30000; // 30 sec
+	static constexpr uint64_t DEFAULT_METADATA_CACHE_MAX_AGE = 0; // disabled
 
 	uint64_t timeout;
+	uint64_t metadata_cache_max_age;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
-};
-
-struct FileHandleCacheKey {
-	string path;
-	uint8_t flags;
-	uint64_t session_id;
 };
 
 struct FileHandleCacheValue {
 	idx_t length;
 	time_t last_modified;
+	milliseconds cache_time;
 };
 
-struct FileHandleCacheEquality {
-	bool operator()(const struct FileHandleCacheKey &a, const struct FileHandleCacheKey &b) const {
-		return a.path == b.path && a.flags == b.flags && a.session_id == b.session_id;
-	}
-};
-
-struct FileHandleCacheHash {
-	std::size_t operator()(const struct FileHandleCacheKey& key) const;
-};
-
-using file_handle_map_t = unordered_map<FileHandleCacheKey, FileHandleCacheValue, FileHandleCacheHash, FileHandleCacheEquality>;
+using file_handle_map_t = unordered_map<string, FileHandleCacheValue>;
 
 
 class HTTPFileHandle : public FileHandle {
@@ -139,6 +128,7 @@ public:
 
 	static void Verify();
 
+	mutex file_handle_cache_lock;
 	file_handle_map_t file_handle_cache;
 
 protected:

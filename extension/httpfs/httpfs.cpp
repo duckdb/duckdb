@@ -5,6 +5,7 @@
 #include "duckdb/common/thread.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/chrono.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
@@ -13,10 +14,6 @@
 #include <iostream>
 
 namespace duckdb {
-
-std::size_t FileHandleCacheHash::operator()(const struct FileHandleCacheKey& key) const {
-	return Hash(key.flags) ^ Hash(key.session_id) ^ Hash(key.path.c_str(), key.path.length());
-}
 
 static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
 	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
@@ -28,6 +25,7 @@ static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(Heade
 
 HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	uint64_t timeout;
+	uint64_t metadata_cache_max_age;
 	Value value;
 
 	if (opener->TryGetCurrentSetting("http_timeout", value)) {
@@ -36,7 +34,13 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 		timeout = DEFAULT_TIMEOUT;
 	}
 
-	return {timeout};
+	if (opener->TryGetCurrentSetting("http_metadata_cache_max_age", value)) {
+		metadata_cache_max_age = value.GetValue<uint64_t>();
+	} else {
+		metadata_cache_max_age = DEFAULT_METADATA_CACHE_MAX_AGE;
+	}
+
+	return {timeout, metadata_cache_max_age};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -348,25 +352,24 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 
 unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 	InitializeClient();
-
 	auto &hfs = (HTTPFileSystem &)file_system;
 
-	// Lookup handle in cache TODO: flags in parquet reader
-	FileHandleCacheKey cache_key {
-	    path,
-	    1,
-	    1
-	};
-//	auto lookup = hfs.file_handle_cache.find(cache_key);
-//	if (lookup != hfs.file_handle_cache.end()) {
-//		last_modified = lookup->second.last_modified;
-//		length = lookup->second.length;
-//
-////		std::cout << "Opening from cache, flags: " << (int64_t)flags << "path: " << path << "\n";
-//		return nullptr;
-//	} else {
-////		std::cout << "Opening new, flags: " << (int64_t)flags << "path: " << path << "\n";
-//	}
+	milliseconds current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+	bool should_write_cache = false;
+
+	if (http_params.metadata_cache_max_age > 0) {
+		lock_guard<mutex> parallel_lock(hfs.file_handle_cache_lock);
+		auto lookup = hfs.file_handle_cache.find(path);
+
+		if (lookup != hfs.file_handle_cache.end() &&
+		    current_time - lookup->second.cache_time <= milliseconds(http_params.metadata_cache_max_age)) {
+			last_modified = lookup->second.last_modified;
+			length = lookup->second.length;
+			return nullptr;
+		}
+
+		should_write_cache = true;
+	}
 
 	auto res = hfs.HeadRequest(*this, path, {});
 
@@ -391,28 +394,28 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 
 	length = atoll(res->headers["Content-Length"].c_str());
 
-	auto last_modified = res->headers["Last-Modified"];
-	if (last_modified.empty()) {
-		return res;
+	if (!res->headers["Last-Modified"].empty()) {
+		auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", res->headers["Last-Modified"]);
+
+		struct tm tm {};
+		tm.tm_year = result.data[0] - 1900;
+		tm.tm_mon = result.data[1] - 1;
+		tm.tm_mday = result.data[2];
+		tm.tm_hour = result.data[3];
+		tm.tm_min = result.data[4];
+		tm.tm_sec = result.data[5];
+		tm.tm_isdst = 0;
+		last_modified = mktime(&tm);
 	}
-	auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", last_modified);
 
-	struct tm tm {};
-	tm.tm_year = result.data[0] - 1900;
-	tm.tm_mon = result.data[1] - 1;
-	tm.tm_mday = result.data[2];
-	tm.tm_hour = result.data[3];
-	tm.tm_min = result.data[4];
-	tm.tm_sec = result.data[5];
-	tm.tm_isdst = 0;
-	last_modified = mktime(&tm);
-
-	FileHandleCacheValue cache_value {
-		length,
-		this->last_modified
-	};
-
-	hfs.file_handle_cache[cache_key] = cache_value;
+	if (should_write_cache) {
+		lock_guard<mutex> parallel_lock(hfs.file_handle_cache_lock);
+		hfs.file_handle_cache[path] = FileHandleCacheValue {
+		    length,
+		    last_modified,
+		    current_time
+		};
+	}
 
 	return res;
 }
