@@ -86,6 +86,8 @@ protected:
 	void AppendValueInternal(T value);
 	template <class SRC, class DST>
 	void AppendValueInternal(Vector &vector, SRC input);
+	template <class SRC, class DST>
+	void AppendDecimalValueInternal(Vector &vector, SRC input);
 
 	void AppendRowRecursive() {
 		EndRow();

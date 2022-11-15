@@ -1,9 +1,51 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+template <class SRC>
+void TestAppendingSingleValue(SRC value, Value expected_result, uint8_t width, uint8_t scale) {
+	auto db = make_unique<DuckDB>(nullptr);
+	auto conn = make_unique<Connection>(*db);
+	unique_ptr<Appender> appender;
+	unique_ptr<QueryResult> result;
+	REQUIRE_NO_FAIL(conn->Query(StringUtil::Format("CREATE TABLE decimals(i DECIMAL(%d,%d))", width, scale)));
+	appender = make_unique<Appender>(*conn, "decimals");
+
+	appender->BeginRow();
+	appender->Append<SRC>(value);
+	appender->EndRow();
+
+	appender->Flush();
+
+	result = conn->Query("SELECT * FROM decimals");
+	REQUIRE(CHECK_COLUMN(result, 0, {expected_result}));
+}
+
+TEST_CASE("Test appending to a decimal column", "[api]") {
+	TestAppendingSingleValue<int32_t>(1, Value::DECIMAL(1000, 4, 3), 4, 3);
+	TestAppendingSingleValue<int16_t>(-9999, Value::DECIMAL(-9999, 4, 0), 4, 0);
+	TestAppendingSingleValue<int16_t>(9999, Value::DECIMAL(9999, 4, 0), 4, 0);
+	TestAppendingSingleValue<int32_t>(99999999, Value::DECIMAL(99999999, 8, 0), 8, 0);
+	TestAppendingSingleValue<const char *>("1.234", Value::DECIMAL(1234, 4, 3), 4, 3);
+	TestAppendingSingleValue<const char *>("123.4", Value::DECIMAL(1234, 4, 1), 4, 1);
+	hugeint_t hugeint_value;
+	bool result;
+	result = Hugeint::TryConvert<const char *>("3245234123123", hugeint_value);
+	REQUIRE(result);
+	TestAppendingSingleValue<const char *>("3245234.123123", Value::DECIMAL(hugeint_value, 19, 6), 19, 6);
+	TestAppendingSingleValue<const char *>("3245234.123123", Value::DECIMAL(3245234123123ll, 13, 6), 13, 6);
+	// Precision loss
+	TestAppendingSingleValue<float>(12.3124324f, Value::DECIMAL(123124320, 9, 7), 9, 7);
+
+	// Precision loss
+	result = Hugeint::TryConvert<const char *>("12345234234312432287744000", hugeint_value);
+	REQUIRE(result);
+	TestAppendingSingleValue<double>(12345234234.31243244234324, Value::DECIMAL(hugeint_value, 26, 15), 26, 15);
+}
 
 TEST_CASE("Test using appender after connection is gone", "[api]") {
 	auto db = make_unique<DuckDB>(nullptr);

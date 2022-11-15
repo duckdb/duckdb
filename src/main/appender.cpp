@@ -10,6 +10,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 
 namespace duckdb {
 
@@ -90,6 +91,15 @@ void BaseAppender::AppendValueInternal(Vector &col, SRC input) {
 	FlatVector::GetData<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
 }
 
+template <class SRC, class DST>
+void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
+	auto &type = col.GetType();
+	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
+	auto width = DecimalType::GetWidth(type);
+	auto scale = DecimalType::GetScale(type);
+	TryCastToDecimal::Operation<SRC, DST>(input, FlatVector::GetData<DST>(col)[chunk.size()], nullptr, width, scale);
+}
+
 template <class T>
 void BaseAppender::AppendValueInternal(T input) {
 	if (column >= types.size()) {
@@ -135,18 +145,20 @@ void BaseAppender::AppendValueInternal(T input) {
 		break;
 	case LogicalTypeId::DECIMAL:
 		switch (col.GetType().InternalType()) {
-		case PhysicalType::INT8:
-			AppendValueInternal<T, int8_t>(col, input);
-			break;
 		case PhysicalType::INT16:
-			AppendValueInternal<T, int16_t>(col, input);
+			AppendDecimalValueInternal<T, int16_t>(col, input);
 			break;
 		case PhysicalType::INT32:
-			AppendValueInternal<T, int32_t>(col, input);
+			AppendDecimalValueInternal<T, int32_t>(col, input);
+			break;
+		case PhysicalType::INT64:
+			AppendDecimalValueInternal<T, int64_t>(col, input);
+			break;
+		case PhysicalType::INT128:
+			AppendDecimalValueInternal<T, hugeint_t>(col, input);
 			break;
 		default:
-			AppendValueInternal<T, int64_t>(col, input);
-			break;
+			throw InternalException("Internal type not recognized for Decimal");
 		}
 		break;
 	case LogicalTypeId::DATE:
