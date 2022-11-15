@@ -4,8 +4,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -57,7 +57,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, uni
       unswizzled(nullptr) {
 	buffer = move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
-	memory_usage = buffer->AllocSize();
+	memory_usage = block_size;
 	memory_charge = move(reservation);
 }
 
@@ -333,7 +333,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 	auto buffer = ConstructManagedBuffer(block_size, move(reusable_buffer));
 
 	// create a new block pointer for this block
-	return make_shared<BlockHandle>(*temp_block_manager, ++temporary_id, move(buffer), can_destroy, block_size,
+	return make_shared<BlockHandle>(*temp_block_manager, ++temporary_id, move(buffer), can_destroy, alloc_size,
 	                                move(res));
 }
 
@@ -424,6 +424,16 @@ void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	queue->q.enqueue(BufferEvictionNode(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
 }
 
+void BufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	auto replacement_buffer = make_unique<FileBuffer>(Allocator::Get(db), handle->buffer->type,
+	                                                  handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
+	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
+	memset(handle->buffer->buffer, 190, handle->buffer->size);
+	handle->buffer = move(replacement_buffer);
+#endif
+}
+
 void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	lock_guard<mutex> lock(handle->lock);
 	if (!handle->buffer || handle->buffer->type == FileBufferType::TINY_BUFFER) {
@@ -432,6 +442,7 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers > 0);
 	handle->readers--;
 	if (handle->readers == 0) {
+		VerifyZeroReaders(handle);
 		AddToEvictionQueue(handle);
 	}
 }
@@ -926,6 +937,22 @@ string BufferManager::InMemoryWarning() {
 	       "\nUnused blocks cannot be offloaded to disk."
 	       "\n\nLaunch the database with a persistent storage back-end"
 	       "\nOr set PRAGMA temp_directory='/path/to/tmp.tmp'";
+}
+
+void BufferManager::ReserveMemory(idx_t size) {
+	if (size == 0) {
+		return;
+	}
+	auto reservation =
+	    EvictBlocksOrThrow(size, maximum_memory, nullptr, "failed to reserve memory data of size %lld%s", size);
+	reservation.size = 0;
+}
+
+void BufferManager::FreeReservedMemory(idx_t size) {
+	if (size == 0) {
+		return;
+	}
+	current_memory -= size;
 }
 
 //===--------------------------------------------------------------------===//

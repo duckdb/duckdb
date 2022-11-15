@@ -37,6 +37,9 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 				throw BinderException("Vacuum the same column twice(same name in column name list)");
 			}
 			column_name_set.insert(col_name);
+			if (!ref->table->ColumnExists(col_name)) {
+				throw BinderException("Column with name \"%s\" does not exist", col_name);
+			}
 			auto &col = ref->table->GetColumn(col_name);
 			// ignore generated column
 			if (col.Generated()) {
@@ -60,7 +63,8 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 			D_ASSERT(select_list.size() == get.column_ids.size());
 			D_ASSERT(stmt.info->columns.size() == get.column_ids.size());
 			for (idx_t i = 0; i < get.column_ids.size(); i++) {
-				stmt.info->column_id_map[i] = ref->table->columns[get.column_ids[i]].StorageOid();
+				stmt.info->column_id_map[i] =
+				    ref->table->columns.LogicalToPhysical(LogicalIndex(get.column_ids[i])).index;
 			}
 
 			auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), move(select_list));

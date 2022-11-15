@@ -11,6 +11,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/index_map.hpp"
 
 namespace duckdb {
 
@@ -24,7 +25,7 @@ public:
 	//! The expression
 	unique_ptr<Expression> expression;
 	//! The columns used by the CHECK constraint
-	unordered_set<column_t> bound_columns;
+	physical_index_set_t bound_columns;
 };
 
 } // namespace duckdb

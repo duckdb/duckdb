@@ -104,13 +104,13 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			auto centry = TransformColumnDefinition(cdef);
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
-					auto constraint = TransformConstraint(constr, centry, info->columns.size());
+					auto constraint = TransformConstraint(constr, centry, info->columns.LogicalColumnCount());
 					if (constraint) {
 						info->constraints.push_back(move(constraint));
 					}
 				}
 			}
-			info->columns.push_back(move(centry));
+			info->columns.AddColumn(move(centry));
 			column_count++;
 			break;
 		}

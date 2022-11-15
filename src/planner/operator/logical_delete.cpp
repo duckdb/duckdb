@@ -23,4 +23,8 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationSta
 	return move(result);
 }
 
+idx_t LogicalDelete::EstimateCardinality(ClientContext &context) {
+	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
+}
+
 } // namespace duckdb

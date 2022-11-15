@@ -1,6 +1,7 @@
 #include "duckdb/common/types/column_data_allocator.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+
 #include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,15 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
 
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	if (shared) {
+		lock_guard<mutex> guard(lock);
+		return PinInternal(block_id);
+	} else {
+		return PinInternal(block_id);
+	}
+}
+
+BufferHandle ColumnDataAllocator::PinInternal(uint32_t block_id) {
 	return alloc.buffer_manager->Pin(blocks[block_id].handle);
 }
 
@@ -106,9 +116,15 @@ void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t 
                                        ChunkManagementState *chunk_state) {
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
-		AllocateBuffer(size, block_id, offset, chunk_state);
+		if (shared) {
+			lock_guard<mutex> guard(lock);
+			AllocateBuffer(size, block_id, offset, chunk_state);
+		} else {
+			AllocateBuffer(size, block_id, offset, chunk_state);
+		}
 		break;
 	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
+		D_ASSERT(!shared);
 		AllocateMemory(size, block_id, offset, chunk_state);
 		break;
 	default:
@@ -136,6 +152,10 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	}
 	D_ASSERT(state.handles.find(block_id) != state.handles.end());
 	return state.handles[block_id].Ptr() + offset;
+}
+
+void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {
+	blocks[block_id].handle->SetCanDestroy(true);
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {

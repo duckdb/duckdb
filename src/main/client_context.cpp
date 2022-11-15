@@ -224,6 +224,10 @@ FileOpener *FileOpener::Get(ClientContext &context) {
 	return ClientData::Get(context).file_opener.get();
 }
 
+SchemaCatalogEntry *SchemaCatalogEntry::GetTemporaryObjects(ClientContext &context) {
+	return context.client_data->temporary_objects.get();
+}
+
 const string &ClientContext::GetCurrentQuery() {
 	D_ASSERT(active_query);
 	return active_query->query;
@@ -943,7 +947,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 		result = make_unique<TableDescription>();
 		result->schema = schema_name;
 		result->table = table_name;
-		for (auto &column : table->columns) {
+		for (auto &column : table->columns.Logical()) {
 			result->columns.emplace_back(column.Name(), column.Type());
 		}
 	});
@@ -955,11 +959,11 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		auto &catalog = Catalog::GetCatalog(*this);
 		auto table_entry = catalog.GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
 		// verify that the table columns and types match up
-		if (description.columns.size() != table_entry->columns.size()) {
+		if (description.columns.size() != table_entry->columns.PhysicalColumnCount()) {
 			throw Exception("Failed to append: table entry has different number of columns!");
 		}
 		for (idx_t i = 0; i < description.columns.size(); i++) {
-			if (description.columns[i].Type() != table_entry->columns[i].Type()) {
+			if (description.columns[i].Type() != table_entry->columns.GetColumn(PhysicalIndex(i)).Type()) {
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}
 		}

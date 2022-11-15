@@ -5,6 +5,11 @@
 statement ok
 SELECT * FROM duckdb_extensions();
 
+query I
+SELECT aliases FROM duckdb_extensions() WHERE extension_name='postgres_scanner';
+----
+[postgres]
+
 require tpch
 
 query I

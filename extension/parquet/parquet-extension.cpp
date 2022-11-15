@@ -621,7 +621,7 @@ public:
 					column_map.insert({get.names[get.column_ids[i]], i});
 				}
 
-				HivePartitioning::ApplyFiltersToFileList(data->files, filters, column_map, get.table_index,
+				HivePartitioning::ApplyFiltersToFileList(context, data->files, filters, column_map, get.table_index,
 				                                         data->parquet_options.hive_partitioning,
 				                                         data->parquet_options.filename);
 

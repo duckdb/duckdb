@@ -96,7 +96,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			error = "Table function requires a constant parameter";
 			return false;
 		}
-		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
+		auto constant = ExpressionExecutor::EvaluateScalar(context, *expr);
 		if (parameter_name.empty()) {
 			// unnamed parameter
 			if (!named_parameters.empty()) {

@@ -41,6 +41,10 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	}
 }
 
+unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &source, PlanDeserializationState &state) {
+	return Deserialize(source);
+}
+
 void CreateInfo::CopyProperties(CreateInfo &other) const {
 	other.type = type;
 	other.schema = schema;

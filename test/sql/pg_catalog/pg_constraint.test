@@ -5,5 +5,21 @@
 query IIIIII nosort pg_constraint
 SELECT * FROM pg_constraint
 
-query IIIIII nosort pg_constraint
-SELECT * FROM pg_catalog.pg_constraint
+statement ok
+create table a (id int , primary key (id));
+
+statement ok
+create table b (id int , foreign_a int, foreign key (foreign_a) references a);
+
+statement ok
+insert into a (id) values (0);
+
+statement ok
+insert into b (id, foreign_a) VALUES (0, 0);
+
+query IIIIIIIIIIIIIIIIIIIIIII
+SELECT * EXCLUDE (OID, CONRELID) FROM pg_catalog.pg_constraint
+----
+PRIMARY KEY(id)								1	p	false	false	true	0	0	0	0	NULL	NULL	NULL	true	0	false	[0]	NULL	NULL	NULL	NULL	NULL	NULL
+NOT NULL									1	x	false	false	true	0	0	0	0	NULL	NULL	NULL	true	0	false	[0]	NULL	NULL	NULL	NULL	NULL	NULL
+FOREIGN KEY (foreign_a) REFERENCES a(id)	1	f	false	false	true	0	0	0	0	NULL	NULL	NULL	true	0	false	[1]	NULL	NULL	NULL	NULL	NULL	NULL

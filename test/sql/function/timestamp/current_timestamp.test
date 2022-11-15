@@ -9,7 +9,7 @@ statement ok
 SET Calendar = 'gregorian';
 
 statement ok
-SET TimeZone = 'America/Los_Angeles';
+SET TimeZone = 'America/Chihuahua';
 
 statement ok
 PRAGMA enable_verification
@@ -22,14 +22,14 @@ SELECT EXTRACT(MILLENNIUM FROM NOW())
 3
 
 query I
-SELECT SUFFIX(CURRENT_TIMESTAMP::VARCHAR, 'America/Los_Angeles');
+SELECT SUFFIX(CURRENT_TIMESTAMP::VARCHAR, '-06');
 ----
 True
 
 foreach func now get_current_timestamp transaction_timestamp
 
 query I
-SELECT SUFFIX(${func}()::VARCHAR, 'America/Los_Angeles');
+SELECT SUFFIX(${func}()::VARCHAR, '-06');
 ----
 True
 

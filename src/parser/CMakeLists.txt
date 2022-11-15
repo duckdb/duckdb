@@ -14,6 +14,7 @@ add_library_unity(
   OBJECT
   base_expression.cpp
   column_definition.cpp
+  column_list.cpp
   constraint.cpp
   expression_util.cpp
   keyword_helper.cpp

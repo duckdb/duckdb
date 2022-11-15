@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -411,7 +412,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 
 	vector<column_t> bound_columns;
 	idx_t column_count = 0;
-	for (auto &col : table->columns) {
+	for (auto &col : table->columns.Logical()) {
 		names.push_back(col.Name());
 		types.push_back(col.Type());
 		if (!col.Generated()) {

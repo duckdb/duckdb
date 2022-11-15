@@ -1,0 +1,40 @@
+# name: test/sql/copy/csv/parallel/csv_parallel_buffer_size.test
+# description: Test read CSV function
+# group: [parallel]
+
+statement ok
+SET experimental_parallel_csv=true;
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma threads=4
+
+query I
+SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='false', delim = '|', buffer_size=30)
+----
+111111111
+
+query IIII
+select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', buffer_size=20)
+----
+1	6370	371	p1
+10	214	465	p2
+100	2403	160	p3
+1000	1564	67	p4
+10000	10617	138	p5
+100000	430	181	p6
+1000000	1904	658	p7
+10000000	12845	370	p8
+100000000	15519	785	p9
+
+query I
+SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|')
+----
+111
+
+query I
+SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', buffer_size=60)
+----
+111
