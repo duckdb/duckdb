@@ -523,7 +523,9 @@ public:
 					                                 scan_data.table_filters);
 					scan_data.batch_index = parallel_state.batch_index++;
 					scan_data.file_index = parallel_state.file_index;
-					//					std::cout << "\nReading row group " << parallel_state.row_group_index << " from file "
+					//					std::cout << "\nReading row group " << parallel_state.row_group_index << " from
+					//file
+					//"
 					//<< bind_data.files[parallel_state.file_index] << "\n";
 					parallel_state.row_group_index++;
 					return true;
