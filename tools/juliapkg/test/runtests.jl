@@ -19,7 +19,6 @@ test_files = [
     "test_old_interface.jl",
     "test_all_types.jl",
     "test_union_type.jl",
-    "test_list_type.jl",
     "test_decimals.jl",
     "test_threading.jl",
     "test_tpch.jl"
