@@ -18,6 +18,11 @@ select * from (select 42) t(a), (select t.a + 1);
 ----
 42	43
 
+query II
+select * from (select 42) t(a) cross join lateral (select t.a + 1);
+----
+42	43
+
 # more rows
 query II
 select * from (select 42 union all select 84) t(a), (select t.a + 1) ORDER BY ALL;
