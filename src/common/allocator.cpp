@@ -190,7 +190,7 @@ void AllocatorDebugInfo::AllocateData(data_ptr_t pointer, idx_t size) {
 }
 
 void AllocatorDebugInfo::FreeData(data_ptr_t pointer, idx_t size) {
-//	D_ASSERT(allocation_count >= size);
+	D_ASSERT(allocation_count >= size);
 	allocation_count -= size;
 #ifdef DUCKDB_DEBUG_ALLOCATION
 	lock_guard<mutex> l(pointer_lock);
