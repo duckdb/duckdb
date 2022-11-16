@@ -153,6 +153,11 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
 	client_data->profiler->EndQuery();
 
+	// Notify any registered state of query end
+	for (auto const& s : registered_state) {
+		s.second->QueryEnd();
+	}
+
 	D_ASSERT(active_query.get());
 	PreservedError error;
 	try {

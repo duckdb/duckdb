@@ -6,6 +6,8 @@
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
@@ -130,6 +132,10 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
 
+	if (enable_stats) {
+		stats.head_count++;
+	}
+
 	auto res = hfs.http_client->Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
@@ -153,6 +159,9 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	idx_t max_tries = 2;
 
 	while (true) {
+		if (enable_stats) {
+			stats.get_count++;
+		}
 		auto res = hfs.http_client->Get(
 		    path.c_str(), *headers,
 		    [&](const duckdb_httplib_openssl::Response &response) {
@@ -178,6 +187,9 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 			    return true;
 		    },
 		    [&](const char *data, size_t data_length) {
+			    if (enable_stats) {
+				    stats.total_bytes_received += data_length;
+			    }
 			    memcpy(buffer_out + out_offset, data, data_length);
 			    out_offset += data_length;
 			    return true;
@@ -232,7 +244,7 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 	}
 
 	auto handle = CreateHandle(stripped_path, query_param, flags, lock, compression, opener);
-	handle->Initialize();
+	handle->Initialize(opener);
 	return move(handle);
 }
 
@@ -356,17 +368,44 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 	sfh.file_offset = location;
 }
 
-void HTTPFileHandle::Initialize() {
+// Get either the local, global, or no cache depending on settings
+static HTTPMetadataCache* TryGetMetadataCache(FileOpener *opener, HTTPFileSystem& httpfs) {
+	auto client_context = opener->TryGetClientContext();
+
+	if (client_context) {
+		bool use_shared_cache = client_context->db->config.options.http_metadata_cache_enable;
+
+		if (use_shared_cache) {
+			if (!httpfs.global_metadata_cache) {
+				httpfs.global_metadata_cache = make_unique<HTTPMetadataCache>(false, true);
+			}
+			return httpfs.global_metadata_cache.get();
+		} else {
+			auto lookup = client_context->registered_state.find("http_cache");
+			if (lookup == client_context->registered_state.end()) {
+				auto cache = make_shared<HTTPMetadataCache>(true, false);
+				client_context->registered_state["http_cache"] = cache;
+				return cache.get();
+			} else {
+				return (HTTPMetadataCache*)lookup->second.get();
+			}
+		}
+
+	}
+	return nullptr;
+}
+
+void HTTPFileHandle::Initialize(FileOpener *opener) {
 	InitializeClient();
 	auto &hfs = (HTTPFileSystem &)file_system;
 
-	bool should_write_cache = false;
+	HTTPMetadataCache* current_cache = TryGetMetadataCache(opener, hfs);
 
-	if (http_params.metadata_cache_max_age > 0 && !(flags & FileFlags::FILE_FLAGS_WRITE)) {
-		auto max_age = http_params.metadata_cache_max_age;
+	bool should_write_cache = false;
+	if (current_cache && !(flags & FileFlags::FILE_FLAGS_WRITE)) {
 
 		HTTPMetadataCacheEntry value;
-		bool found = hfs.metadata_cache.Find(path, value, max_age);
+		bool found = current_cache->Find(path, value);
 
 		if (found) {
 			last_modified = value.last_modified;
@@ -379,18 +418,11 @@ void HTTPFileHandle::Initialize() {
 		}
 
 		should_write_cache = true;
-
-		hfs.metadata_cache.PruneExpired(max_age);
 	}
 
-	if (flags & FileFlags::FILE_FLAGS_WRITE) {
-		if (http_params.metadata_cache_max_age == 0) {
-			// TODO: figure out a more elegant way to efficiently clear cache when user disables cache
-			hfs.metadata_cache.Clear();
-		} else {
-			hfs.metadata_cache.Erase(path);
-			hfs.metadata_cache.PruneExpired(http_params.metadata_cache_max_age);
-		}
+	// If we're writing to a file, we might as well remove it from the cache
+	if (current_cache && flags & FileFlags::FILE_FLAGS_WRITE) {
+		current_cache->Erase(path);
 	}
 
 	auto res = hfs.HeadRequest(*this, path, {});
@@ -431,7 +463,7 @@ void HTTPFileHandle::Initialize() {
 	}
 
 	if (should_write_cache) {
-		hfs.metadata_cache.Insert(path, length, last_modified);
+		current_cache->Insert(path, {length, last_modified});
 	}
 }
 

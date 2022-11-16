@@ -23,6 +23,10 @@ public:
 
 	bool TryGetCurrentSetting(const string &key, Value &result) override;
 
+	ClientContext* TryGetClientContext() override {
+	    return &context;
+	};
+
 private:
 	ClientContext &context;
 };

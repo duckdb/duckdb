@@ -95,7 +95,7 @@ public:
 
 public:
 	void Close() override;
-	void Initialize() override;
+	void Initialize(FileOpener *opener) override;
 
 protected:
 	string multipart_upload_id;

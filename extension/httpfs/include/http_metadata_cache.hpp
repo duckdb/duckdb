@@ -7,6 +7,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <stddef.h>
 #include <string>
@@ -15,33 +16,63 @@
 namespace duckdb {
 
 struct HTTPMetadataCacheEntry {
-	string path;
 	idx_t length;
 	time_t last_modified;
-	milliseconds cache_time;
 };
 
 // Simple cache with a max age for an entry to be valid
-class HTTPMetadataCache {
+class HTTPMetadataCache : public ClientContextState {
 public:
-	//! Insert entry in cache
-	void Insert(string path, idx_t length, time_t last_modified);
-	//! Erase entry from cache
-	void Erase(string path);
-	//! Find entry if its age < within max_age, if entry was found but too old: delete it
-	bool Find(string path, HTTPMetadataCacheEntry &ret_val, uint64_t max_age);
-	//! Prune all entries older than max_age
-	void PruneExpired(uint64_t max_age);
-	//! Clear the whole cache
-	void Clear();
+	explicit HTTPMetadataCache(bool flush_on_query_end_p, bool shared_p) : flush_on_query_end(flush_on_query_end_p), shared(shared_p) {};
+
+	void Insert(const string& path, HTTPMetadataCacheEntry val){
+		if (shared) {
+			lock_guard<mutex> parallel_lock(lock);
+		}
+		map[path] = val;
+	};
+
+	void Erase(string path){
+		if (shared) {
+			lock_guard<mutex> parallel_lock(lock);
+		}
+		map.erase(path);
+	};
+
+	bool Find(string path, HTTPMetadataCacheEntry &ret_val){
+		if (shared) {
+			lock_guard<mutex> parallel_lock(lock);
+		}
+		auto lookup = map.find(path);
+		if (lookup != map.end()) {
+			ret_val = lookup->second;
+			return true;
+		} else {
+			return false;
+		}
+
+		return false;
+	};
+
+	void Clear() {
+		if (shared){
+			lock_guard<mutex> parallel_lock(lock);
+		}
+		map.clear();
+	}
+
+	//! Called by the ClientContext when the current query ends
+	void QueryEnd() override {
+		if (flush_on_query_end) {
+			Clear();
+		}
+	}
 
 protected:
 	mutex lock;
-	unordered_map<string, list<HTTPMetadataCacheEntry>::iterator> map;
-	list<HTTPMetadataCacheEntry> list;
-	atomic<bool> empty {true};
-
-	void EraseInternal(string path);
+	unordered_map<string, HTTPMetadataCacheEntry> map;
+	bool flush_on_query_end;
+	bool shared;
 };
 
 } // namespace duckdb

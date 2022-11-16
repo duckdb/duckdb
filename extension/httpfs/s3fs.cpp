@@ -736,8 +736,8 @@ void S3FileSystem::Verify() {
 	// TODO add a test that checks the signing for path-style
 }
 
-void S3FileHandle::Initialize() {
-	HTTPFileHandle::Initialize();
+void S3FileHandle::Initialize(FileOpener *opener) {
+	HTTPFileHandle::Initialize(opener);
 
 	auto &s3fs = (S3FileSystem &)file_system;
 

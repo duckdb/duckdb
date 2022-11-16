@@ -6,6 +6,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "http_metadata_cache.hpp"
+#include <iostream>
 
 namespace duckdb_httplib_openssl {
 struct Response;
@@ -40,7 +41,7 @@ public:
 	HTTPFileHandle(FileSystem &fs, string path, uint8_t flags, const HTTPParams &params);
 	~HTTPFileHandle() override;
 	// This two-phase construction allows subclasses more flexible setup.
-	virtual void Initialize();
+	virtual void Initialize(FileOpener *opener);
 
 	// We keep an http client stored for connection reuse with keep-alive headers
 	unique_ptr<duckdb_httplib_openssl::Client> http_client;
@@ -71,8 +72,20 @@ protected:
 	virtual void InitializeClient();
 };
 
+struct HTTPFileSystemStats {
+	atomic<idx_t> head_count {0};
+	atomic<idx_t> get_count {0};
+	atomic<idx_t> total_bytes_received {0};
+};
+
 class HTTPFileSystem : public FileSystem {
 public:
+	~HTTPFileSystem() {
+		std::cout << "\nHTTPFS stats\n";
+		std::cout << " - GET: " << std::to_string(stats.get_count) << "\n";
+		std::cout << " - HEAD: " << std::to_string(stats.head_count) << "\n";
+		std::cout << " - total bytes received: " << std::to_string(stats.total_bytes_received) << "\n";
+	}
 	static unique_ptr<duckdb_httplib_openssl::Client> GetClient(const HTTPParams &http_params,
 	                                                            const char *proto_host_port);
 	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
@@ -119,7 +132,11 @@ public:
 
 	static void Verify();
 
-	HTTPMetadataCache metadata_cache;
+	HTTPFileSystemStats stats;
+	bool enable_stats = true;
+
+	// Global cache
+	unique_ptr<HTTPMetadataCache> global_metadata_cache;
 
 protected:
 	virtual unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,

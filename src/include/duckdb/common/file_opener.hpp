@@ -21,6 +21,7 @@ public:
 	virtual ~FileOpener() {};
 
 	virtual bool TryGetCurrentSetting(const string &key, Value &result) = 0;
+	virtual ClientContext* TryGetClientContext() = 0;
 
 	static FileOpener *Get(ClientContext &context);
 };
