@@ -11,7 +11,6 @@
 #include "httplib.hpp"
 
 #include <map>
-#include <iostream>
 
 namespace duckdb {
 
@@ -390,6 +389,7 @@ void HTTPFileHandle::Initialize() {
 			hfs.metadata_cache.Clear();
 		} else {
 			hfs.metadata_cache.Erase(path);
+			hfs.metadata_cache.PruneExpired(http_params.metadata_cache_max_age);
 		}
 	}
 
