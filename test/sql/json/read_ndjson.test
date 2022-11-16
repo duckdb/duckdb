@@ -2,15 +2,25 @@
 # description: Read ndjson files
 # group: [json]
 
+statement ok
+create table test as select range::bigint i from range(128000000);
+
+statement ok
+create index my_index on test(i)
+
+mode skip
+
 require json
 
 statement ok
 pragma threads=1
 
-#query T
-#SELECT count(*) FROM read_json_objects('/Users/laurens/git/experiments/json/data/lineitem.json.gz')
-#----
-#6001215
+query T
+SELECT count(*) FROM read_json_objects('/Users/laurens/git/experiments/json/data/lineitem.json')
+----
+6001215
+
+mode skip
 
 query I
 SELECT * FROM read_json_objects('data/json/example.ndjson')

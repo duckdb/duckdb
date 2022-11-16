@@ -89,6 +89,8 @@ template class std::weak_ptr<Pipeline>;
 template class std::shared_ptr<MetaPipeline>;
 template class std::unique_ptr<RowGroup>;
 template class std::shared_ptr<RowGroupCollection>;
+template class std::unique_ptr<RowDataBlock>;
+template class std::unique_ptr<RowDataCollection>;
 template class std::unique_ptr<ColumnDataCollection>;
 template class std::shared_ptr<ColumnDataAllocator>;
 template class std::unique_ptr<PartitionedColumnData>;
@@ -186,6 +188,7 @@ template class std::vector<LogicalType>;
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinHashTable>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<ColumnDataCollection>>)
 INSTANTIATE_VECTOR(std::vector<std::shared_ptr<ColumnDataAllocator>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<RowDataBlock>>)
 
 #if !defined(__clang__)
 template struct std::atomic<uint64_t>;

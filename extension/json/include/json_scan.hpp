@@ -28,10 +28,12 @@ public:
 
 struct JSONScanInfo : public TableFunctionInfo {
 public:
-	explicit JSONScanInfo(JSONFormat forced_format_p) : forced_format(forced_format_p) {
+	explicit JSONScanInfo(JSONFormat forced_format_p, bool return_strings)
+	    : forced_format(forced_format_p), return_json_strings(return_strings) {
 	}
 
 	JSONFormat forced_format;
+	bool return_json_strings;
 };
 
 struct JSONBufferHandle {
@@ -116,7 +118,7 @@ private:
 
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
 
-	void ReadUnstructured(idx_t &count);
+	void ReadUnstructured(idx_t &count, bool return_strings);
 	void ReadNewlineDelimited(idx_t &count);
 };
 

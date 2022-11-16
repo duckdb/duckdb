@@ -35,6 +35,7 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 		throw NotImplementedException("Auto-detection of JSON format");
 	}
 	options.format = info.forced_format;
+	options.return_json_strings = info.return_json_strings;
 
 	return make_unique<JSONScanData>(options);
 }
@@ -96,7 +97,7 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 
 	switch (gstate.json_reader->options.format) {
 	case JSONFormat::UNSTRUCTURED:
-		ReadUnstructured(count);
+		ReadUnstructured(count, gstate.json_reader->options.return_json_strings);
 		break;
 	case JSONFormat::NEWLINE_DELIMITED:
 		ReadNewlineDelimited(count);
@@ -299,22 +300,11 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	lines[0].size = part1_size + part2_size;
 }
 
-// static inline void ReconstructString(void *ptr, idx_t remaining) {
-//	auto next_ptr = memchr((void *)ptr, '\0', remaining);
-//	while (next_ptr) {
-//		*((char *)ptr) = '"';
-//		remaining -= (char *)next_ptr - (char *)ptr;
-//		ptr = next_ptr;
-//		next_ptr = memchr((void *)ptr, '\0', remaining);
-//	}
-//	//	for (idx_t i = 0; i < size; i++) {
-//	//		if (ptr[i] == '\0') {
-//	//			ptr[i] = '"';
-//	//		}
-//	//	}
-// }
+static inline void RestoreParsedString(const char *line_start, const idx_t remaining) {
+	std::replace((char *)line_start, (char *)line_start + remaining, '\0', '"');
+}
 
-void JSONScanLocalState::ReadUnstructured(idx_t &count) {
+void JSONScanLocalState::ReadUnstructured(idx_t &count, bool return_strings) {
 	objects.clear();
 	for (; count < STANDARD_VECTOR_SIZE; count++) {
 		auto line_start = buffer_ptr + buffer_offset;
@@ -325,7 +315,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count) {
 		auto &read_doc = objects.back();
 
 		if (read_doc.IsNull()) {
-			std::replace((char *)line_start, (char *)line_start + remaining, '\0', '"');
+			RestoreParsedString(line_start, remaining); // Always restore because we will re-parse
 			objects.pop_back();
 			if (!is_last) {
 				// Copy remaining to reconstruct_buffer
@@ -338,7 +328,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count) {
 			break;
 		}
 		idx_t line_size = read_doc.ReadSize();
-		std::replace((char *)line_start, (char *)line_start + line_size, '\0', '"');
+		RestoreParsedString(line_start, line_size);
 
 		lines[count].pointer = line_start;
 		lines[count].size = line_size;

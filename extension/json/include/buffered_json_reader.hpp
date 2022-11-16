@@ -29,6 +29,8 @@ struct BufferedJSONReaderOptions {
 	string file_path;
 	//! The format of the JSON
 	JSONFormat format = JSONFormat::AUTO_DETECT;
+	//! Whether we return JSON strings (if not, we return YYJSON documents)
+	bool return_json_strings = true;
 	//! Whether file is compressed or not, and if so which compression type
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Whether or not we should ignore malformed JSON (default to NULL)

@@ -23,7 +23,7 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 	output.SetCardinality(count);
 }
 
-TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, JSONFormat json_format) {
+TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
 	TableFunction table_function({parameter}, ReadJSONObjectsFunction, JSONScanData::Bind, JSONScanGlobalState::Init,
 	                             JSONScanLocalState::Init);
@@ -42,22 +42,24 @@ TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, JSONFormat js
 	table_function.filter_pushdown = false;
 	table_function.filter_prune = false;
 
-	table_function.function_info = make_shared<JSONScanInfo>(json_format);
+	table_function.function_info = move(function_info);
 
 	return table_function;
 }
 
 CreateTableFunctionInfo JSONFunctions::GetReadJSONObjectsFunction() {
 	TableFunctionSet function_set("read_json_objects");
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, JSONFormat::UNSTRUCTURED));
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, JSONFormat::UNSTRUCTURED));
+	auto function_info = make_shared<JSONScanInfo>(JSONFormat::UNSTRUCTURED, true);
+	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
+	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
 }
 
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONObjectsFunction() {
 	TableFunctionSet function_set("read_ndjson_objects");
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, JSONFormat::NEWLINE_DELIMITED));
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, JSONFormat::NEWLINE_DELIMITED));
+	auto function_info = make_shared<JSONScanInfo>(JSONFormat::NEWLINE_DELIMITED, true);
+	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
+	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
 }
 
