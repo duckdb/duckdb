@@ -37,7 +37,8 @@ TEST_CASE("Test appending to a decimal column", "[api]") {
 	result = Hugeint::TryConvert<const char *>("3245234123123", hugeint_value);
 	REQUIRE(result);
 	TestAppendingSingleValue<const char *>("3245234.123123", Value::DECIMAL(hugeint_value, 19, 6), 19, 6);
-	TestAppendingSingleValue<const char *>("3245234.123123", Value::DECIMAL(3245234123123ll, 13, 6), 13, 6);
+	int64_t bigint_reference_value = 3245234123123;
+	TestAppendingSingleValue<const char *>("3245234.123123", Value::DECIMAL(bigint_reference_value, 13, 6), 13, 6);
 	// Precision loss
 	TestAppendingSingleValue<float>(12.3124324f, Value::DECIMAL(123124320, 9, 7), 9, 7);
 
