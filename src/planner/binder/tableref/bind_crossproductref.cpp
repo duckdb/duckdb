@@ -2,6 +2,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_crossproductref.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 
 namespace duckdb {
 
@@ -14,7 +15,7 @@ unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
 
 	result->left = left_binder.Bind(*ref.left);
 	{
-		WhereBinder binder(left_binder, context);
+		LateralBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
 		result->correlated_columns = move(right_binder.correlated_columns);
 	}

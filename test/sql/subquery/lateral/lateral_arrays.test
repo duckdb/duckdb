@@ -1,6 +1,6 @@
 # name: test/sql/subquery/lateral/lateral_arrays.test
 # description: Test LATERAL joins with arrays
-# group: [scalar]
+# group: [lateral]
 
 statement ok
 PRAGMA enable_verification

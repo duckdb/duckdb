@@ -411,15 +411,9 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 		                                             arbitrary_expressions);
 	}
 
-	// first push a DUPLICATE ELIMINATED join
-	// a duplicate eliminated join creates a duplicate eliminated copy of the LHS
-	// and pushes it into any DUPLICATE_ELIMINATED SCAN operators on the RHS
 	auto perform_delim = true;
 	auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, join_type, move(left), perform_delim);
 
-	// the right side initially is a DEPENDENT join between the duplicate eliminated scan and the subquery
-	// HOWEVER: we do not explicitly create the dependent join
-	// instead, we eliminate the dependent join by pushing it down into the right side of the plan
 	FlattenDependentJoins flatten(*this, correlated_columns, perform_delim);
 
 	// first we check which logical operators have correlated expressions in the first place
@@ -444,7 +438,8 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	if (arbitrary_expressions.size() > 0) {
 		// we can only evaluate scalar arbitrary expressions for inner joins
 		if (join_type != JoinType::INNER) {
-			throw BinderException("Join condition for non-inner LATERAL JOIN must be a comparison between the left and right side");
+			throw BinderException(
+			    "Join condition for non-inner LATERAL JOIN must be a comparison between the left and right side");
 		}
 		auto filter = make_unique<LogicalFilter>();
 		filter->expressions = move(arbitrary_expressions);

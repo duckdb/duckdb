@@ -1,6 +1,6 @@
 # name: test/sql/subquery/lateral/pg_lateral.test
 # description: Several LATERAL JOIN tests taken from Postgres
-# group: [scalar]
+# group: [lateral]
 
 statement ok
 PRAGMA enable_verification

@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 
 namespace duckdb {
 
@@ -125,7 +126,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	result->type = ref.type;
 	result->left = left_binder.Bind(*ref.left);
 	{
-		WhereBinder binder(left_binder, context);
+		LateralBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
 		result->correlated_columns = move(right_binder.correlated_columns);
 		if (!result->correlated_columns.empty()) {
