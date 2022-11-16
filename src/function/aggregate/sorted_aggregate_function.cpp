@@ -1,47 +1,35 @@
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 struct SortedAggregateBindData : public FunctionData {
-
-	// TODO: Collection sorting does not handle OrderByNullType correctly
-	// so this is the third hack around it...
-	static OrderByNullType NormaliseNullOrder(OrderType sense, OrderByNullType null_order) {
-		if (sense != OrderType::DESCENDING) {
-			return null_order;
-		}
-
-		switch (null_order) {
-		case OrderByNullType::NULLS_FIRST:
-			return OrderByNullType::NULLS_LAST;
-		case OrderByNullType::NULLS_LAST:
-			return OrderByNullType::NULLS_FIRST;
-		default:
-			throw InternalException("Unknown NULL order sense");
-		}
-	}
-
-	SortedAggregateBindData(const AggregateFunction &function_p, vector<unique_ptr<Expression>> &children,
-	                        unique_ptr<FunctionData> bind_info_p, const BoundOrderModifier &order_bys)
-	    : function(function_p), bind_info(move(bind_info_p)) {
+	SortedAggregateBindData(ClientContext &context, const AggregateFunction &function_p,
+	                        vector<unique_ptr<Expression>> &children, unique_ptr<FunctionData> bind_info_p,
+	                        const BoundOrderModifier &order_bys)
+	    : buffer_manager(BufferManager::GetBufferManager(context)), function(function_p), bind_info(move(bind_info_p)) {
 		arg_types.reserve(children.size());
 		for (const auto &child : children) {
 			arg_types.emplace_back(child->return_type);
 		}
+		sort_types.reserve(order_bys.orders.size());
 		for (auto &order : order_bys.orders) {
-			order_sense.emplace_back(order.type);
-			null_order.emplace_back(NormaliseNullOrder(order.type, order.null_order));
+			orders.emplace_back(order.Copy());
 			sort_types.emplace_back(order.expression->return_type);
 		}
 	}
 
 	SortedAggregateBindData(const SortedAggregateBindData &other)
-	    : function(other.function), arg_types(other.arg_types), order_sense(other.order_sense),
-	      null_order(other.null_order), sort_types(other.sort_types) {
+	    : buffer_manager(other.buffer_manager), function(other.function), arg_types(other.arg_types),
+	      sort_types(other.sort_types) {
 		if (other.bind_info) {
 			bind_info = other.bind_info->Copy();
+		}
+		for (auto &order : other.orders) {
+			orders.emplace_back(order.Copy());
 		}
 	}
 
@@ -58,17 +46,26 @@ struct SortedAggregateBindData : public FunctionData {
 		} else if (bind_info || other.bind_info) {
 			return false;
 		}
-		return function == other.function && order_sense == other.order_sense && null_order == other.null_order &&
-		       sort_types == other.sort_types;
+		if (function != other.function) {
+			return false;
+		}
+		if (orders.size() != other.orders.size()) {
+			return false;
+		}
+		for (size_t i = 0; i < orders.size(); ++i) {
+			if (!orders[i].Equals(other.orders[i])) {
+				return false;
+			}
+		}
+		return true;
 	}
 
+	BufferManager &buffer_manager;
 	AggregateFunction function;
 	vector<LogicalType> arg_types;
 	unique_ptr<FunctionData> bind_info;
-
-	vector<OrderType> order_sense;
-	vector<OrderByNullType> null_order;
 	vector<LogicalType> sort_types;
+	vector<BoundOrderByNode> orders;
 };
 
 struct SortedAggregateState {
@@ -187,13 +184,16 @@ struct SortedAggregateFunction {
 	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
 	                     idx_t offset) {
 		const auto order_bind = (SortedAggregateBindData *)aggr_input_data.bind_data;
+		auto &buffer_manager = order_bind->buffer_manager;
+		auto &orders = order_bind->orders;
+		RowLayout payload_layout;
+		payload_layout.Initialize(order_bind->arg_types);
+		DataChunk chunk;
+		chunk.Initialize(Allocator::DefaultAllocator(), order_bind->arg_types);
 
 		//	 Reusable inner state
 		vector<data_t> agg_state(order_bind->function.state_size());
 		Vector agg_state_vec(Value::POINTER((idx_t)agg_state.data()));
-
-		// Sorting buffer
-		vector<idx_t> reordering;
 
 		// State variables
 		const auto input_count = order_bind->function.arguments.size();
@@ -213,21 +213,43 @@ struct SortedAggregateFunction {
 			auto state = sdata[i];
 
 			// Apply the sort before delegating the chunks
-			const auto agg_count = state->ordering.Count();
-			if (agg_count > 0) {
-				reordering.resize(agg_count);
-				state->ordering.Sort(order_bind->order_sense, order_bind->null_order, reordering.data());
-				state->arguments.Reorder(reordering.data());
+			auto global_sort = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
+			LocalSortState local_sort;
+			local_sort.Initialize(*global_sort, global_sort->buffer_manager);
+			const auto chunk_count = state->arguments.ChunkCount();
+			for (idx_t chunk_idx = 0; chunk_idx < chunk_count; ++chunk_idx) {
+				auto &sort_chunk = state->ordering.GetChunk(chunk_idx);
+				auto &payload_chunk = state->arguments.GetChunk(chunk_idx);
+				local_sort.SinkChunk(sort_chunk, payload_chunk);
 			}
+			global_sort->AddLocalState(local_sort);
 
-			for (auto &chunk : state->arguments.Chunks()) {
-				// These are all simple updates, so use it if available
-				if (simple_update) {
-					simple_update(chunk->data.data(), aggr_bind_info, input_count, agg_state.data(), chunk->size());
-				} else {
-					// We are only updating a constant state
-					agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-					update(chunk->data.data(), aggr_bind_info, input_count, agg_state_vec, chunk->size());
+			state->ordering.Reset();
+			state->arguments.Reset();
+			if (!global_sort->sorted_blocks.empty()) {
+				global_sort->PrepareMergePhase();
+				while (global_sort->sorted_blocks.size() > 1) {
+					global_sort->InitializeMergeRound();
+					MergeSorter merge_sorter(*global_sort, global_sort->buffer_manager);
+					merge_sorter.PerformInMergeRound();
+					global_sort->CompleteMergeRound(false);
+				}
+
+				PayloadScanner scanner(*global_sort);
+				for (;;) {
+					chunk.Reset();
+					scanner.Scan(chunk);
+					if (chunk.size() == 0) {
+						break;
+					}
+					// These are all simple updates, so use it if available
+					if (simple_update) {
+						simple_update(chunk.data.data(), aggr_bind_info, input_count, agg_state.data(), chunk.size());
+					} else {
+						// We are only updating a constant state
+						agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+						update(chunk.data.data(), aggr_bind_info, input_count, agg_state_vec, chunk.size());
+					}
 				}
 			}
 
@@ -255,7 +277,8 @@ unique_ptr<FunctionData> FunctionBinder::BindSortedAggregate(AggregateFunction &
                                                              unique_ptr<FunctionData> bind_info,
                                                              unique_ptr<BoundOrderModifier> order_bys) {
 
-	auto sorted_bind = make_unique<SortedAggregateBindData>(bound_function, children, move(bind_info), *order_bys);
+	auto sorted_bind =
+	    make_unique<SortedAggregateBindData>(context, bound_function, children, move(bind_info), *order_bys);
 
 	// The arguments are the children plus the sort columns.
 	for (auto &order : order_bys->orders) {
