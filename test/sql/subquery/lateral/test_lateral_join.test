@@ -106,6 +106,12 @@ select * from (select 42) t(a) join lateral (select t.a + 1) t2(b) on (true);
 ----
 42	43
 
+# we can use random expressions in join conditions of inner joins
+query II
+select * from (select 42) t(a) join lateral (select t.a + 1) t2(b) on (a+b>=80);
+----
+42	43
+
 # FIXME table-in table-out functions not (yet) supported
 statement error
 select * from (select ARRAY[42, 43, 44]) t(a) join lateral (select * from unnest(t.a)) t2(b) on (true);

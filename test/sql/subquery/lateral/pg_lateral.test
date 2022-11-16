@@ -276,7 +276,7 @@ where t1.f1 = ss.f1;
 ----
 doh!	4567890123456789	123	4567890123456789	doh!
 
-# FIXME: lateral chain
+# FIXME: lateral chain with star
 mode skip
 
 query IIIIIII
@@ -290,8 +290,6 @@ where t1.f1 = ss2.f1;
 ----
 doh!	4567890123456789	123	4567890123456789	doh!	4567890123456789	doh!
 
-mode unskip
-
 query I
 select 1 from
   text_tbl as tt1
@@ -301,9 +299,6 @@ select 1 from
   lateral (select tt4.f1 as c0 from text_tbl as tt5 limit 1) as ss1
 where tt1.f1 = ss1.c0;
 ----
-
-# FIXME: lateral chain
-mode skip
 
 query I
 select ss2.* from

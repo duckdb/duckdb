@@ -410,28 +410,6 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 		LogicalComparisonJoin::ExtractJoinConditions(join_type, left, right, move(condition), conditions,
 		                                             arbitrary_expressions);
 	}
-	if (arbitrary_expressions.size() > 0) {
-		// we can only evaluate scalar arbitrary expressions
-		if (join_type != JoinType::INNER) {
-			throw BinderException("Join condition for non-inner LATERAL JOIN must be a comparison expression");
-		}
-		bool empty_result = false;
-		for (auto &expr : arbitrary_expressions) {
-			if (!arbitrary_expressions[0]->IsFoldable()) {
-				throw BinderException("Join condition for LATERAL JOIN must be a comparison expression");
-			}
-			auto value = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, LogicalType::BOOLEAN);
-			if (value.IsNull() || !BooleanValue::Get(value)) {
-				empty_result = true;
-				break;
-			}
-		}
-		if (empty_result) {
-			// empty result
-			// FIXME: this is only correct for inner join
-			return make_unique<LogicalEmptyResult>(LogicalCrossProduct::Create(move(left), move(right)));
-		}
-	}
 
 	// first push a DUPLICATE ELIMINATED join
 	// a duplicate eliminated join creates a duplicate eliminated copy of the LHS
@@ -461,6 +439,18 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	// then add the delim join conditions
 	CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
 	delim_join->AddChild(move(dependent_join));
+
+	// check if there are any arbitrary expressions left
+	if (arbitrary_expressions.size() > 0) {
+		// we can only evaluate scalar arbitrary expressions for inner joins
+		if (join_type != JoinType::INNER) {
+			throw BinderException("Join condition for non-inner LATERAL JOIN must be a comparison between the left and right side");
+		}
+		auto filter = make_unique<LogicalFilter>();
+		filter->expressions = move(arbitrary_expressions);
+		filter->AddChild(move(delim_join));
+		return move(filter);
+	}
 	return move(delim_join);
 }
 
