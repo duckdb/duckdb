@@ -363,32 +363,34 @@ void HTTPFileHandle::Initialize() {
 
 	bool should_write_cache = false;
 
-	if (http_params.metadata_cache_max_age > 0) {
+	if (http_params.metadata_cache_max_age > 0 && !(flags & FileFlags::FILE_FLAGS_WRITE)) {
 		auto max_age = http_params.metadata_cache_max_age;
 
-		if (flags & FileFlags::FILE_FLAGS_WRITE) {
-			hfs.metadata_cache.Erase(path);
-		} else {
-			FileHandleCacheValue value;
-			bool found = hfs.metadata_cache.Find(path, value, max_age);
+		HTTPMetadataCacheEntry value;
+		bool found = hfs.metadata_cache.Find(path, value, max_age);
 
-			if (found) {
-				last_modified = value.last_modified;
-				length = value.length;
+		if (found) {
+			last_modified = value.last_modified;
+			length = value.length;
 
-				if (flags & FileFlags::FILE_FLAGS_READ) {
-					read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
-				}
-				return;
+			if (flags & FileFlags::FILE_FLAGS_READ) {
+				read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 			}
-
-			should_write_cache = true;
+			return;
 		}
 
+		should_write_cache = true;
+
 		hfs.metadata_cache.PruneExpired(max_age);
-	} else {
-		// Cache is disabled, to prevent issues we should ensure cache is cleared
-		hfs.metadata_cache.PruneAll();
+	}
+
+	if (flags & FileFlags::FILE_FLAGS_WRITE) {
+		if (http_params.metadata_cache_max_age == 0) {
+			// TODO: figure out a more elegant way to efficiently clear cache when user disables cache
+			hfs.metadata_cache.Clear();
+		} else {
+			hfs.metadata_cache.Erase(path);
+		}
 	}
 
 	auto res = hfs.HeadRequest(*this, path, {});
