@@ -1,6 +1,6 @@
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -69,12 +69,75 @@ struct SortedAggregateBindData : public FunctionData {
 };
 
 struct SortedAggregateState {
-	SortedAggregateState()
-	    : arguments(Allocator::DefaultAllocator()), ordering(Allocator::DefaultAllocator()), nsel(0) {
+	static const idx_t BUFFER_CAPACITY = STANDARD_VECTOR_SIZE;
+
+	SortedAggregateState() : nsel(0) {
 	}
 
-	ChunkCollection arguments;
-	ChunkCollection ordering;
+	unique_ptr<ColumnDataCollection> arguments;
+	unique_ptr<ColumnDataCollection> ordering;
+
+	DataChunk sort_buffer;
+	DataChunk arg_buffer;
+
+	void Flush(SortedAggregateBindData &order_bind) {
+		if (ordering) {
+			return;
+		}
+
+		ordering = make_unique<ColumnDataCollection>(order_bind.buffer_manager, order_bind.sort_types);
+		ordering->Append(sort_buffer);
+
+		arguments = make_unique<ColumnDataCollection>(order_bind.buffer_manager, order_bind.arg_types);
+		arguments->Append(arg_buffer);
+	}
+
+	void Update(SortedAggregateBindData &order_bind, DataChunk &sort_chunk, DataChunk &arg_chunk) {
+		// Lazy instantiation of the buffer chunks
+		if (sort_chunk.ColumnCount() != sort_buffer.ColumnCount()) {
+			sort_buffer.Initialize(Allocator::DefaultAllocator(), sort_chunk.GetTypes());
+		}
+		if (arg_chunk.ColumnCount() != arg_buffer.ColumnCount()) {
+			arg_buffer.Initialize(Allocator::DefaultAllocator(), arg_chunk.GetTypes());
+		}
+
+		if (sort_chunk.size() + sort_buffer.size() > BUFFER_CAPACITY) {
+			Flush(order_bind);
+		}
+		if (ordering) {
+			ordering->Append(sort_chunk);
+			arguments->Append(arg_chunk);
+		} else {
+			sort_buffer.Append(sort_chunk, true);
+			arg_buffer.Append(arg_chunk, true);
+		}
+	}
+
+	void Combine(SortedAggregateBindData &order_bind, SortedAggregateState &other) {
+		if (other.ordering) {
+			// Force CDC if the other hash it
+			Flush(order_bind);
+			ordering->Combine(*other.ordering);
+			arguments->Combine(*other.arguments);
+		} else if (other.sort_buffer.size()) {
+			Update(order_bind, other.sort_buffer, other.arg_buffer);
+		}
+	}
+
+	void Finalize(LocalSortState &local_sort) {
+		if (ordering) {
+			const auto chunk_count = ordering->ChunkCount();
+			for (idx_t chunk_idx = 0; chunk_idx < chunk_count; ++chunk_idx) {
+				ordering->FetchChunk(chunk_idx, sort_buffer);
+				arguments->FetchChunk(chunk_idx, arg_buffer);
+				local_sort.SinkChunk(sort_buffer, arg_buffer);
+			}
+			ordering->Reset();
+			arguments->Reset();
+		} else {
+			local_sort.SinkChunk(sort_buffer, arg_buffer);
+		}
+	}
 
 	// Selection for scattering
 	SelectionVector sel;
@@ -117,8 +180,7 @@ struct SortedAggregateFunction {
 		ProjectInputs(inputs, order_bind, input_count, count, arg_chunk, sort_chunk);
 
 		const auto order_state = (SortedAggregateState *)state;
-		order_state->arguments.Append(arg_chunk);
-		order_state->ordering.Append(sort_chunk);
+		order_state->Update(*order_bind, sort_chunk, arg_chunk);
 	}
 
 	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
@@ -160,12 +222,12 @@ struct SortedAggregateFunction {
 			DataChunk arg_chunk;
 			arg_chunk.InitializeEmpty(arg_inputs.GetTypes());
 			arg_chunk.Slice(arg_inputs, order_state->sel, order_state->nsel);
-			order_state->arguments.Append(arg_chunk);
 
 			DataChunk sort_chunk;
 			sort_chunk.InitializeEmpty(sort_inputs.GetTypes());
 			sort_chunk.Slice(sort_inputs, order_state->sel, order_state->nsel);
-			order_state->ordering.Append(sort_chunk);
+
+			order_state->Update(*order_bind, sort_chunk, arg_chunk);
 
 			// Mark the slice as empty now we have consumed it.
 			order_state->nsel = 0;
@@ -173,12 +235,10 @@ struct SortedAggregateFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		if (source.arguments.Count() == 0) {
-			return;
-		}
-		target->arguments.Append(const_cast<ChunkCollection &>(source.arguments));
-		target->ordering.Append(const_cast<ChunkCollection &>(source.ordering));
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
+		const auto order_bind = (SortedAggregateBindData *)aggr_input_data.bind_data;
+		auto &other = const_cast<STATE &>(source);
+		target->Combine(*order_bind, other);
 	}
 
 	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
@@ -188,8 +248,6 @@ struct SortedAggregateFunction {
 		auto &orders = order_bind->orders;
 		RowLayout payload_layout;
 		payload_layout.Initialize(order_bind->arg_types);
-		DataChunk chunk;
-		chunk.Initialize(Allocator::DefaultAllocator(), order_bind->arg_types);
 
 		//	 Reusable inner state
 		vector<data_t> agg_state(order_bind->function.state_size());
@@ -216,16 +274,9 @@ struct SortedAggregateFunction {
 			auto global_sort = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
 			LocalSortState local_sort;
 			local_sort.Initialize(*global_sort, global_sort->buffer_manager);
-			const auto chunk_count = state->arguments.ChunkCount();
-			for (idx_t chunk_idx = 0; chunk_idx < chunk_count; ++chunk_idx) {
-				auto &sort_chunk = state->ordering.GetChunk(chunk_idx);
-				auto &payload_chunk = state->arguments.GetChunk(chunk_idx);
-				local_sort.SinkChunk(sort_chunk, payload_chunk);
-			}
+			state->Finalize(local_sort);
 			global_sort->AddLocalState(local_sort);
 
-			state->ordering.Reset();
-			state->arguments.Reset();
 			if (!global_sort->sorted_blocks.empty()) {
 				global_sort->PrepareMergePhase();
 				while (global_sort->sorted_blocks.size() > 1) {
@@ -235,6 +286,7 @@ struct SortedAggregateFunction {
 					global_sort->CompleteMergeRound(false);
 				}
 
+				auto &chunk = state->arg_buffer;
 				PayloadScanner scanner(*global_sort);
 				for (;;) {
 					chunk.Reset();
