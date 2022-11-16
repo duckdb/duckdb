@@ -12,7 +12,13 @@ statement error
 SELECT CAST('  e1' AS INTEGER);
 
 statement error
+SELECT CAST('e1  ' AS INTEGER);
+
+statement error
 SELECT CAST('  E1' AS INTEGER);
+
+statement error
+SELECT CAST('E1  ' AS INTEGER);
 
 statement error
 SELECT CAST('e1' AS DOUBLE);
@@ -21,7 +27,13 @@ statement error
 SELECT CAST('  e1' AS DOUBLE);
 
 statement error
+SELECT CAST('e1  ' AS DOUBLE);
+
+statement error
 SELECT CAST('  E1' AS DOUBLE);
+
+statement error
+SELECT CAST('E1  ' AS DOUBLE);
 
 query I
 SELECT CAST('1e1' AS INTEGER);
@@ -34,6 +46,11 @@ SELECT CAST('  1e1' AS INTEGER);
 10
 
 query I
+SELECT CAST('1e1  ' AS INTEGER);
+----
+10
+
+query I
 SELECT CAST('1e1' AS DOUBLE);
 ----
 10.0
@@ -42,3 +59,38 @@ query I
 SELECT CAST('   1e1' AS DOUBLE);
 ----
 10.0
+
+query I
+SELECT CAST('1e1  ' AS DOUBLE);
+----
+10.0
+
+query I
+SELECT CAST('1.234567e4' AS INTEGER);
+----
+12346
+
+query I
+SELECT CAST('  1.234567e4' AS INTEGER);
+----
+12346
+
+query I
+SELECT CAST('1.234567e4  ' AS INTEGER);
+----
+12346
+
+query I
+SELECT CAST('1.234567e4' AS DOUBLE);
+----
+12345.67
+
+query I
+SELECT CAST('  1.234567e4' AS DOUBLE);
+----
+12345.67
+
+query I
+SELECT CAST('1.234567e4  ' AS DOUBLE);
+----
+12345.67

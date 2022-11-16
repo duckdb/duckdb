@@ -790,7 +790,8 @@ template <typename T>
 struct IntegerCastData {
 	using Result = T;
 	Result result;
-	bool seen_decimal;
+	uint8_t decimal_count;
+	bool bits_filled;
 };
 
 struct IntegerCastOperation {
@@ -822,45 +823,70 @@ struct IntegerCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
+	static void RoundUpResult(T &state) {
+		if (NEGATIVE) {
+			state.result -= 1;
+		} else {
+			state.result += 1;
+		}
+	}
+
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
 		using result_t = typename T::Result;
-		double dbl_res = state.result * std::pow(10.0L, exponent);
-		if (dbl_res < NumericLimits<result_t>::Minimum() || dbl_res > NumericLimits<result_t>::Maximum()) {
-			return false;
+		exponent = exponent - state.decimal_count;
+		if (exponent < 0) {
+			bool round_up = false;
+			for (idx_t i = 0; i < idx_t(-exponent); i++) {
+				auto mod = state.result % 10;
+				round_up = NEGATIVE ? mod <= static_cast<result_t>(-5) : mod >= static_cast<result_t>(5);
+				state.result /= 10;
+				if (state.result == 0) {
+					break;
+				}
+			}
+			if (round_up) {
+				RoundUpResult<T, NEGATIVE>(state);
+			}
+			return true;
+		} else {
+			// positive exponent: append 0's
+			for (idx_t i = 0; i < idx_t(exponent); i++) {
+				if (!HandleDigit<T, NEGATIVE>(state, 0)) {
+					return false;
+				}
+			}
+			return true;
 		}
-		state.result = (result_t)std::nearbyint(dbl_res);
 		return true;
 	}
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
-		if (state.seen_decimal) {
-			return true;
-		}
-		state.seen_decimal = true;
-		// round the integer based on what is after the decimal point
-		// if digit >= 5, then we round up (or down in case of negative numbers)
-		auto increment = digit >= 5;
-		if (!increment) {
-			return true;
-		}
+		using result_t = typename T::Result;
+		//! If we expect an exponent, we need to preserve the decimals
+		//! But we don't want to overflow, so we prevent overflowing the result with this check
 		if (NEGATIVE) {
-			if (state.result == NumericLimits<typename T::Result>::Minimum()) {
-				return false;
+			if (state.bits_filled || state.result < (NumericLimits<result_t>::Minimum() + digit) / 10) {
+				state.bits_filled = true;
+				return true;
 			}
-			state.result--;
+			state.result = state.result * 10 - digit;
 		} else {
-			if (state.result == NumericLimits<typename T::Result>::Maximum()) {
-				return false;
+			if (state.bits_filled || state.result > (NumericLimits<result_t>::Maximum() - digit) / 10) {
+				state.bits_filled = true;
+				return true;
 			}
-			state.result++;
+			state.result = state.result * 10 + digit;
 		}
+		state.decimal_count++;
 		return true;
 	}
 
 	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
-		return true;
+		//! Even when there is not exponent, scaling and rounding is needed
+		return HandleExponent<T, NEGATIVE>(state, 0);
 	}
 };
 
@@ -918,7 +944,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 						return false;
 					}
 					using ExponentData = IntegerCastData<int32_t>;
-					ExponentData exponent {0, false};
+					ExponentData exponent {0, 0, false};
 					int negative = buf[pos] == '-';
 					if (negative) {
 						if (!IntegerCastLoop<ExponentData, true, false>(buf + pos, len - pos, exponent, strict)) {
