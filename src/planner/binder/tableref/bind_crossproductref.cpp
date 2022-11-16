@@ -17,7 +17,7 @@ unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
 	{
 		LateralBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
-		result->correlated_columns = move(right_binder.correlated_columns);
+		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
 	}
 
 	bind_context.AddContext(move(left_binder.bind_context));

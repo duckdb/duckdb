@@ -128,7 +128,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	{
 		LateralBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
-		result->correlated_columns = move(right_binder.correlated_columns);
+		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
 		if (!result->correlated_columns.empty()) {
 			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
 				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
