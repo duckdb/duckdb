@@ -323,7 +323,7 @@ select i8.*, ss.v, t.unique2
     left join tenk1 t on t.unique2 = ss.v
 where q2 = 456;
 ----
-Join condition for non-inner LATERAL JOIN must be a comparison expression
+Join condition for non-inner LATERAL JOIN must be a comparison
 
 query II
 select unique2, x.*
@@ -341,7 +341,7 @@ statement error
 select unique2, x.*
 from int4_tbl x left join lateral (select unique1, unique2 from tenk1 where f1 = unique1) ss on true;
 ----
-Join condition for non-inner LATERAL JOIN must be a comparison expression
+Join condition for non-inner LATERAL JOIN must be a comparison
 
 # FIXME: INTERNAL Error: Logical operator type "DELIM_JOIN" for dependent join
 mode skip
@@ -376,22 +376,17 @@ select * from generate_series(100,200) g(g),
 123	123	4567890123456789
 123	4567890123456789	123
 
-# FIXME: Assertion triggered in file
-mode skip
-
-query I
+statement error
 select count(*) from tenk1 a,
   tenk1 b join lateral (values(a.unique1)) ss(x) on b.unique2 = ss.x;
 ----
-10000
+Nested lateral joins
 
-query I
+statement error
 select count(*) from tenk1 a,
   tenk1 b join lateral (values(a.unique1),(-1)) ss(x) on b.unique2 = ss.x;
 ----
-10000
-
-mode unskip
+Nested lateral joins
 
 query III
 select * from (select f1/2 as x from int4_tbl) ss1 join int4_tbl i4 on x = f1,
@@ -493,15 +488,11 @@ select x.* from
 4567890123456789	4567890123456789
 4567890123456789	4567890123456789
 
-# FIXME: lateral subquery?
-mode skip
-
+# FIXME: postgres has a better error message here
 statement error
 select 1 from tenk1 a, lateral (select max(a.unique1) from int4_tbl b) ss;
 ----
-aggregate functions are not allowed in FROM clause of their own query level
-
-mode unskip
+not found
 
 statement ok
 create temp table xx1 as select f1 as x1, -f1 as x2 from int4_tbl;

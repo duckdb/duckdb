@@ -2,8 +2,7 @@
 
 namespace duckdb {
 
-LateralBinder::LateralBinder(Binder &binder, ClientContext &context)
-    : ExpressionBinder(binder, context) {
+LateralBinder::LateralBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
 BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {

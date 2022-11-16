@@ -1,0 +1,32 @@
+# name: test/sql/subquery/lateral/lateral_join_nested.test
+# description: Lateral join inside a lateral join
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# nested correlated lateral joins
+query III
+SELECT i1.i, SUM(r2.k), COUNT(*) FROM integers i1, LATERAL (SELECT i1.i+i2.i FROM integers i2, LATERAL (SELECT i2.i+i3.i FROM integers i3) r3) r2(k) GROUP BY i1.i ORDER BY i1.i;
+----
+NULL	NULL	16
+1	36	16
+2	48	16
+3	60	16
+
+statement error
+SELECT i1.i, SUM(r2.k), COUNT(*) FROM integers i1, LATERAL (SELECT i1.i+i2.i FROM integers i2, LATERAL (SELECT i1.i+i2.i+i3.i FROM integers i3) r3) r2(k) GROUP BY i1.i ORDER BY i1.i;
+----
+Nested lateral joins
+
+# lateral join inside correlated subquery
+statement error
+SELECT (SELECT k+l FROM (SELECT i1.i + 1) t1(k), LATERAL (SELECT k + 1) t2(l)) FROM integers i1 ORDER BY i;
+----
+Nested lateral joins

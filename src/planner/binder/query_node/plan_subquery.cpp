@@ -417,7 +417,7 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	FlattenDependentJoins flatten(*this, correlated_columns, perform_delim);
 
 	// first we check which logical operators have correlated expressions in the first place
-	flatten.DetectCorrelatedExpressions(right.get());
+	flatten.DetectCorrelatedExpressions(right.get(), true);
 	// now we push the dependent join down
 	auto dependent_join = flatten.PushDownDependentJoin(move(right));
 
