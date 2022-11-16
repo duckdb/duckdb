@@ -129,3 +129,47 @@ SELECT 1_000_000_000_000_000_000_000_::DOUBLE == 1e+21
 
 statement error
 SELECT .000_000_000_000_000_000_000_123_::DOUBLE == 123e-23
+
+# Exponents
+statement error
+select '20e10_'::FLOAT
+
+statement error
+select '20e_10'::FLOAT
+
+statement error
+select '20e10_'::BIGINT
+
+statement error
+select '20e_10'::BIGINT
+
+query I
+SELECT 12e1_0::BIGINT == 12e10::BIGINT
+----
+true
+
+statement error 
+SELECT 12e10_::BIGINT == 12e10::BIGINT
+
+statement error 
+SELECT _12e10::BIGINT == 12e10::BIGINT
+
+query I
+select '12e10'::FLOAT == 12e10::FLOAT
+----
+true
+
+query I
+select '12e10'::BIGINT == 12e10::BIGINT
+----
+true
+
+query I
+select '12e1_0'::FLOAT == 12e10::FLOAT
+----
+true
+
+query I
+select '12e1_0'::BIGINT == 12e10::BIGINT
+----
+true

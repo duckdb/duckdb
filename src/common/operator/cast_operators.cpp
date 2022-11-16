@@ -882,14 +882,23 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 				pos++;
 				idx_t start_digit = pos;
 				while (pos < len) {
-					if (!StringUtil::CharacterIsDigit(buf[pos])) {
-						if (buf[pos] != '_') {
-							break;
-						} else {
-							// skip underscore
-							pos++;
-							continue;
+					if (buf[pos] == '_') {
+						// we cant start with an underscore
+						if (pos == start_digit) {
+							return false;
 						}
+						while (buf[pos] == '_') {
+							// skip underscores
+							pos++;
+						}
+						// we cant end on an underscore either
+						if (pos >= len || (ALLOW_EXPONENT && (buf[pos] == 'e' || buf[pos] == 'E'))) {
+							return false;
+						}
+						continue;
+					}
+					if (!StringUtil::CharacterIsDigit(buf[pos])) {
+						break;
 					}
 					if (!OP::template HandleDecimal<T, NEGATIVE, ALLOW_EXPONENT>(result, buf[pos] - '0')) {
 						return false;
@@ -905,11 +914,17 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 					break;
 				}
 			}
-			if (buf[pos] == '_' && pos > start_pos) {
-				// skip underscore, if it is not the first character
-				pos++;
-				if (pos >= len) {
-					// we cant end on an underscore either
+			if (buf[pos] == '_') {
+				// we cant start with an underscore
+				if (pos == start_pos) {
+					return false;
+				}
+				while (buf[pos] == '_') {
+					// skip underscores
+					pos++;
+				}
+				// we cant end on an underscore either
+				if (pos >= len || (ALLOW_EXPONENT && (buf[pos] == 'e' || buf[pos] == 'E'))) {
 					return false;
 				}
 				continue;

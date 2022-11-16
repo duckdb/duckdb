@@ -378,7 +378,7 @@ operator		{op_chars}+
 integer			{digit}("_"*{digit})*
 decimal			({integer}\.{integer}?)|({integer}?\.{integer})
 decimalfail		{integer}+\.\.
-real			({integer}|{decimal})[Ee][-+]?{digit}+
+real			({integer}|{decimal})[Ee][-+]?{integer}
 realfail1		({integer}|{decimal})[Ee]
 realfail2		({integer}|{decimal})[Ee][-+]
 

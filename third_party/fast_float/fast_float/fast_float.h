@@ -526,8 +526,13 @@ parsed_number_string parse_number_string(const char *p, const char *pend, chars_
           uint64_t(*p - '0'); // might overflow, we will handle the overflow later
       ++p;
     }
-    else if(*p == '_' && p != start_digits) {
-      ++p; // skip underscore if it is not the first character
+    else if(*p == '_') {
+      // skip underscores
+      if(p == start_digits) {
+        // can't start with an underscore
+        return answer;
+      }
+      ++p;
       if(p == pend || *p == '.') {
         // can't have underscore at the end or before the decimal point
         return answer;
@@ -560,7 +565,11 @@ parsed_number_string parse_number_string(const char *p, const char *pend, chars_
         ++p;
         i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
       }
-      else if(*p == '_' && p != end_of_integer_part + 1) {
+      else if(*p == '_') {
+        if(p == end_of_integer_part + 1) {
+          // can't have an underscore right after the decimal point
+          return answer;
+        }
         skipped_underscores++;
         ++p; // skip underscore, if it is not the first character
 
@@ -599,12 +608,26 @@ parsed_number_string parse_number_string(const char *p, const char *pend, chars_
       // Otherwise, we will be ignoring the 'e'.
       p = location_of_e;
     } else {
-      while ((p != pend) && is_integer(*p)) {
-        uint8_t digit = uint8_t(*p - '0');
-        if (exp_number < 0x10000) {
-          exp_number = 10 * exp_number + digit;
+      while ((p != pend)) {
+        if(is_integer(*p)) {
+          uint8_t digit = uint8_t(*p - '0');
+          if (exp_number < 0x10000) {
+            exp_number = 10 * exp_number + digit;
+          }
+          ++p;
+        } else if(*p == '_') {
+          if(p == location_of_e + 1) {
+            // can't have an underscore right after the 'e'
+            return answer;
+          }
+          ++p; // skip underscore, if it is not the first character
+          if(p == pend) {
+            // can't have underscore at the end
+            return answer;
+          }
+        } else {
+          break;
         }
-        ++p;
       }
       if(neg_exp) { exp_number = - exp_number; }
       exponent += exp_number;
