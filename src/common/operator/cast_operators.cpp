@@ -1577,6 +1577,16 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Decimal String Cast
 //===--------------------------------------------------------------------===//
+
+namespace {
+struct RoundInfo {
+	//! Set to true after 'should_round' has been set
+	bool set;
+	bool should_round;
+};
+enum class ExponentType : uint8_t { NONE, POSITIVE, NEGATIVE };
+} // namespace
+
 template <class TYPE>
 struct DecimalCastData {
 	DecimalCastData() {
@@ -1587,15 +1597,9 @@ struct DecimalCastData {
 	uint8_t scale;
 	uint8_t digit_count;
 	uint8_t decimal_count;
-	struct RoundInfo {
-		//! Set to true after 'should_round' has been set
-		bool set;
-		bool should_round;
-	};
 	RoundInfo round_info;
 	//! Only set when ALLOW_EXPONENT is enabled
 	uint8_t excessive_decimals;
-	enum class ExponentType { NONE, POSITIVE, NEGATIVE };
 	ExponentType exponent_type;
 };
 
@@ -1643,7 +1647,7 @@ struct DecimalCastOperation {
 	static bool HandleExponent(T &state, int32_t exponent) {
 		auto decimal_excess = (state.decimal_count > state.scale) ? state.decimal_count - state.scale : 0;
 		if (exponent > 0) {
-			state.exponent_type = T::ExponentType::POSITIVE;
+			state.exponent_type = ExponentType::POSITIVE;
 			// Positive exponents need up to 'exponent' amount of digits
 			// Everything beyond that amount needs to be truncated
 			if (decimal_excess > exponent) {
@@ -1655,7 +1659,7 @@ struct DecimalCastOperation {
 			}
 			D_ASSERT(exponent >= 0);
 		} else if (exponent < 0) {
-			state.exponent_type = T::ExponentType::NEGATIVE;
+			state.exponent_type = ExponentType::NEGATIVE;
 		}
 		if (!Finalize<T, NEGATIVE>(state)) {
 			return false;
@@ -1722,7 +1726,7 @@ struct DecimalCastOperation {
 			state.result /= 10.0;
 		}
 		//! Only round up when exponents are involved
-		if (state.exponent_type == T::ExponentType::POSITIVE && round_up) {
+		if (state.exponent_type == ExponentType::POSITIVE && round_up) {
 			RoundUpResult<T, NEGATIVE>(state);
 		}
 		D_ASSERT(state.decimal_count > state.scale);
@@ -1732,14 +1736,14 @@ struct DecimalCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
-		if (state.exponent_type != T::ExponentType::POSITIVE && state.decimal_count > state.scale) {
+		if (state.exponent_type != ExponentType::POSITIVE && state.decimal_count > state.scale) {
 			//! Did not encounter an exponent, but ALLOW_EXPONENT was on
 			state.excessive_decimals = state.decimal_count - state.scale;
 		}
 		if (state.excessive_decimals && !TruncateExcessiveDecimals<T, NEGATIVE>(state)) {
 			return false;
 		}
-		if (state.exponent_type == T::ExponentType::NONE && state.round_info.set && state.round_info.should_round) {
+		if (state.exponent_type == ExponentType::NONE && state.round_info.set && state.round_info.should_round) {
 			RoundUpResult<T, NEGATIVE>(state);
 		}
 		//  if we have not gotten exactly "scale" decimals, we need to multiply the result
@@ -1761,7 +1765,7 @@ bool TryDecimalStringCast(string_t input, T &result, string *error_message, uint
 	state.digit_count = 0;
 	state.decimal_count = 0;
 	state.excessive_decimals = 0;
-	state.exponent_type = DecimalCastData<T>::ExponentType::NONE;
+	state.exponent_type = ExponentType::NONE;
 	state.round_info.set = false;
 	state.round_info.should_round = false;
 	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false>(input.GetDataUnsafe(),
