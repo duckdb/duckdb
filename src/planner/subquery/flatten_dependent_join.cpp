@@ -15,7 +15,8 @@ namespace duckdb {
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated,
                                              bool perform_delim, bool any_join)
-    : binder(binder), correlated_columns(correlated), perform_delim(perform_delim), any_join(any_join) {
+    : binder(binder), delim_offset(DConstants::INVALID_INDEX), correlated_columns(correlated),
+      perform_delim(perform_delim), any_join(any_join) {
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		correlated_map[col.binding] = i;
@@ -80,6 +81,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// now create the duplicate eliminated scan for this node
 		auto delim_index = binder.GenerateTableIndex();
 		this->base_binding = ColumnBinding(delim_index, 0);
+		this->delim_offset = 0;
+		this->data_offset = 0;
 		auto delim_scan = make_unique<LogicalDelimGet>(delim_index, delim_types);
 		return LogicalCrossProduct::Create(move(delim_scan), move(plan));
 	}

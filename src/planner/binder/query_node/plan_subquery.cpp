@@ -168,9 +168,13 @@ static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join,
 	auto col_count = perform_delim ? correlated_columns.size() : 1;
 	for (idx_t i = 0; i < col_count; i++) {
 		auto &col = correlated_columns[i];
+		auto binding_idx = base_offset + i;
+		if (binding_idx >= bindings.size()) {
+			throw InternalException("Delim join - binding index out of range");
+		}
 		JoinCondition cond;
 		cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
-		cond.right = make_unique<BoundColumnRefExpression>(col.name, col.type, bindings[base_offset + i]);
+		cond.right = make_unique<BoundColumnRefExpression>(col.name, col.type, bindings[binding_idx]);
 		cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 		delim_join.conditions.push_back(move(cond));
 	}
@@ -435,7 +439,7 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	delim_join->AddChild(move(dependent_join));
 
 	// check if there are any arbitrary expressions left
-	if (arbitrary_expressions.size() > 0) {
+	if (!arbitrary_expressions.empty()) {
 		// we can only evaluate scalar arbitrary expressions for inner joins
 		if (join_type != JoinType::INNER) {
 			throw BinderException(
