@@ -39,8 +39,8 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	Connection con;
 	unique_ptr<MaterializedQueryResult> result;
 
-	explicit InterpretedBenchmarkState(string path)
-	    : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
+	explicit InterpretedBenchmarkState(string path) :
+	      benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
 	      con(db) {
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
@@ -315,7 +315,15 @@ void InterpretedBenchmark::LoadBenchmark() {
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
 	unique_ptr<QueryResult> result;
 	LoadBenchmark();
-	auto state = make_unique<InterpretedBenchmarkState>(GetDatabasePath());
+	unique_ptr<InterpretedBenchmarkState> state;
+	try {
+		state = make_unique<InterpretedBenchmarkState>(GetDatabasePath());
+	} catch (Exception(e)) {
+		// if the connection throws an error, chances are it's a storage format error.
+		// In this case delete the file and connect again.
+		std::remove(GetDatabasePath().c_str());
+		state = make_unique<InterpretedBenchmarkState>(GetDatabasePath());
+	}
 	extensions.insert("parquet");
 	for (auto &extension : extensions) {
 		auto result = ExtensionHelper::LoadExtension(state->db, extension);
@@ -343,17 +351,33 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		load_query = queries["load"];
 	}
 
-	if (data_cache.empty()) {
-		// no cache specified: just run the initialization code
+	if (data_cache.empty() && db_path.empty() && db_path.compare(DEFAULT_DB_PATH) != 0) {
+		// no cache or db_path specified: just run the initialization code
 		result = state->con.Query(load_query);
 	} else {
-		// cache specified: try to load the cache
-		if (!BenchmarkRunner::TryLoadDatabase(state->db, data_cache)) {
-			// failed to load: write the cache
-			result = state->con.Query(load_query);
-			BenchmarkRunner::SaveDatabase(state->db, data_cache);
+		// cache or db_path is specified: try to load from one of them
+		bool in_memory_db_has_data = false;
+		if (!db_path.empty()) {
+			// Currently connected to a cached db. check if any tables exist.
+			// If tables exist, it's a good indication that the database is fine
+			// If they don't load the database
+			auto result = state->con.Query("SHOW TABLES;");
+			if (result->HasError()) {
+				result->ThrowError();
+			}
+			if (result->RowCount() > 0) {
+				in_memory_db_has_data = true;
+			}
+		}
+		if (!in_memory_db_has_data) {
+			if (!BenchmarkRunner::TryLoadDatabase(state->db, data_cache)) {
+				// failed to load: write the cache
+				result = state->con.Query(load_query);
+				BenchmarkRunner::SaveDatabase(state->db, data_cache);
+			}
 		}
 	}
+
 	while (result) {
 		if (result->HasError()) {
 			result->ThrowError();

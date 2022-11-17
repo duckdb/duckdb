@@ -15,6 +15,8 @@ namespace duckdb {
 struct BenchmarkFileReader;
 class MaterializedQueryResult;
 
+static const string DEFAULT_DB_PATH = "duckdb_benchmark_db.db";
+
 //! Interpreted benchmarks read the benchmark from a file
 class InterpretedBenchmark : public Benchmark {
 public:
