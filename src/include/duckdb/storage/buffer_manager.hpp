@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/buffer_manager.hpp
+// duckdb/storage/base_buffer_manager.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -34,7 +34,13 @@ class BufferManager {
 	friend class BlockManager;
 
 public:
+	static unique_ptr<BufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory,
+	                                                     idx_t maximum_memory);
+
+protected:
 	BufferManager(DatabaseInstance &db, string temp_directory, idx_t maximum_memory);
+
+public:
 	virtual ~BufferManager();
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
@@ -91,7 +97,7 @@ public:
 	DUCKDB_API void ReserveMemory(idx_t size);
 	DUCKDB_API void FreeReservedMemory(idx_t size);
 
-private:
+protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
 	//! If the "buffer" argument is specified AND the system can find a buffer to re-use for the given allocation size
@@ -136,7 +142,7 @@ private:
 	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice TODO rewrite
 	void VerifyZeroReaders(shared_ptr<BlockHandle> &handle);
 
-private:
+protected:
 	//! The database instance
 	DatabaseInstance &db;
 	//! The lock for changing the memory limit

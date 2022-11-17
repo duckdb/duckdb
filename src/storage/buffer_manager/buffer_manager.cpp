@@ -6,6 +6,8 @@
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/system_buffer_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -88,6 +90,11 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 		throw NotImplementedException("Cannot switch temporary directory after the current one has been used");
 	}
 	this->temp_directory = move(new_dir);
+}
+
+unique_ptr<BufferManager> BufferManager::CreateBufferManager(DatabaseInstance &db, string temp_directory,
+                                                             idx_t maximum_memory) {
+	return make_unique<SystemBufferManager>(db, temp_directory, maximum_memory);
 }
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
