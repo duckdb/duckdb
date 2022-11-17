@@ -45,7 +45,10 @@ bool StorageManager::InMemory() {
 
 void StorageManager::CreateBufferManager() {
 	auto &config = DBConfig::GetConfig(db);
-	buffer_manager = make_unique<BufferManager>(db, config.options.temporary_directory, config.options.maximum_memory);
+	if (!config.virtual_buffer_manager) {
+		buffer_manager =
+		    make_unique<BufferManager>(db, config.options.temporary_directory, config.options.maximum_memory);
+	}
 }
 
 void StorageManager::Initialize() {

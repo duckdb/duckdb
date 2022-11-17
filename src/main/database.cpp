@@ -71,6 +71,11 @@ DatabaseInstance::~DatabaseInstance() {
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
+	auto &config = DBConfig::GetConfig(db);
+	if (config.virtual_buffer_manager) {
+		return *config.virtual_buffer_manager;
+		D_ASSERT(db.GetStorageManager().buffer_manager == nullptr);
+	}
 	return *db.GetStorageManager().buffer_manager;
 }
 
