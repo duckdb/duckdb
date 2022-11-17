@@ -37,9 +37,7 @@ public:
 	//! Save the current database state, exporting it to a set of CSVs in the DUCKDB_BENCHMARK_DIRECTORY directory
 	static void SaveDatabase(DuckDB &db, string name);
 	//! Try to initialize the database from the DUCKDB_BENCHMARK_DIRECTORY
-	static bool TryLoadDatabase(DuckDB &db, const string& name);
-	//! Try to connect to a duckdb database
-	static bool TryConnectDatabase(DuckDB &db, string db_name);
+	static bool TryLoadDatabase(DuckDB &db, string name);
 
 	//! Register a benchmark in the Benchmark Runner, this is done automatically
 	//! as long as the proper macro's are used
