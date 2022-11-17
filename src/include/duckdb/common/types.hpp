@@ -122,8 +122,8 @@ struct timestamp_t { // NOLINT
 	inline timestamp_t &operator-=(const int64_t &value) {this->value -= value; return *this;};
 
 	// special values
-	static inline timestamp_t infinity() {return timestamp_t(std::numeric_limits<int64_t>::max()); } // NOLINT
-	static inline timestamp_t ninfinity() {return timestamp_t(-std::numeric_limits<int64_t>::max()); } // NOLINT
+	static timestamp_t infinity();
+	static timestamp_t ninfinity();
 	static inline timestamp_t epoch() {return timestamp_t(0); } // NOLINT
 };
 
