@@ -78,13 +78,12 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 				break;
 			}
 		}
-		if (position_buffer < end_buffer) {
+		if (position_buffer < buffer_size) {
 			if (carriage_return && (*buffer)[position_buffer] == '\n') {
 				position_buffer++;
 			}
 		}
-		D_ASSERT(position_buffer <= end_buffer);
-		if (position_buffer == end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
+		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
 			break;
 		}
 		idx_t position_set = position_buffer;
@@ -94,7 +93,7 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		start_buffer = position_set;
 		end_buffer = end_buffer_real;
 		position_buffer = position_set;
-		if (end_buffer == position_buffer) {
+		if (position_buffer >= end_buffer) {
 			break;
 		}
 	}
@@ -247,7 +246,10 @@ add_row : {
 	has_quotes = false;
 	start_buffer = ++position_buffer;
 	verification_positions.end_of_last_line = position_buffer;
-	if (reached_remainder_state || !BufferRemainder()) {
+	if (reached_remainder_state) {
+		goto final_state;
+	}
+	if (!BufferRemainder()) {
 		goto final_state;
 	}
 	if (carriage_return) {
@@ -359,7 +361,7 @@ carriage_return : {
 		start_buffer = ++position_buffer;
 		verification_positions.end_of_last_line = position_buffer;
 	}
-	if (!BufferRemainder()) {
+	if (!BufferRemainder() || finished_chunk) {
 		goto final_state;
 	}
 	goto value_start;
@@ -395,7 +397,8 @@ final_state : {
 	if (mode == ParserMode::PARSING) {
 		Flush(insert_chunk);
 	}
-	if (position_buffer != verification_positions.end_of_last_line) {
+	if (position_buffer != verification_positions.end_of_last_line &&
+	    !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
 		error_message = "Line does not fit in one buffer. Increase the buffer size.";
 		return false;
 	}
