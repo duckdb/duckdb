@@ -10,6 +10,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<UpperFun>();
 	Register<StripAccentsFun>();
 	Register<ConcatFun>();
+	Register<StartsWithFun>();
 	Register<ContainsFun>();
 	Register<LengthFun>();
 	Register<LikeFun>();

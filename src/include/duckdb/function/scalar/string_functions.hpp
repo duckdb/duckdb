@@ -167,6 +167,10 @@ struct ContainsFun {
 	                  idx_t needle_size);
 };
 
+struct StartsWithFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct UnicodeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

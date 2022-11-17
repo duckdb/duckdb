@@ -1,0 +1,109 @@
+# name: test/sql/function/string/test_starts_with_operator.test
+# description: ^@ starts_with operator test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# starts_with of various lengths
+query IIIIIIIIII
+SELECT 'hello world' ^@ 'h',
+       'hello world' ^@ 'he',
+       'hello world' ^@ 'hel',
+       'hello world' ^@ 'hell',
+       'hello world' ^@ 'hello',
+       'hello world' ^@ 'hello ',
+       'hello world' ^@ 'hello w',
+       'hello world' ^@ 'hello wo',
+       'hello world' ^@ 'hello wor',
+       'hello world' ^@ 'hello worl'
+----
+1	1	1	1	1	1	1	1	1	1
+
+query IIIIIIIIII
+SELECT 'hello world' ^@ 'a',
+       'hello world' ^@ 'ha',
+       'hello world' ^@ 'hea',
+       'hello world' ^@ 'hela',
+       'hello world' ^@ 'hella',
+       'hello world' ^@ 'helloa',
+       'hello world' ^@ 'hello a',
+       'hello world' ^@ 'hello wa',
+       'hello world' ^@ 'hello woa',
+       'hello world' ^@ 'hello wora'
+----
+0	0	0	0	0	0	0	0	0	0
+
+# empty starts_with
+query III
+select 'hello' ^@ '', '' ^@ '', NULL ^@ ''
+----
+1	1	NULL
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
+
+statement ok
+INSERT INTO strings VALUES ('hello', 1, 2), ('world', 2, 3), ('h', 1, 1), (NULL, 2, 2)
+
+# Test first letter
+query T
+SELECT s ^@ 'h' FROM strings
+----
+1
+0
+1
+NULL
+
+# Test multiple letters
+query T
+SELECT s ^@ 'he' FROM strings
+----
+1
+0
+0
+NULL
+
+# Test no match
+query T
+SELECT s ^@ 'he-man' FROM strings
+----
+0
+0
+0
+NULL
+
+# Test NULL constant in different places
+query T
+SELECT NULL ^@ 'h' FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT s ^@ NULL FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT NULL ^@ NULL FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+# Test empty pattern
+query T
+SELECT s ^@ '' FROM strings
+----
+1
+1
+1
+NULL
+
