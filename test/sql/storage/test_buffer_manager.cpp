@@ -5,8 +5,8 @@
 #include "test_helpers.hpp"
 #include "duckdb/main/client_context.hpp"
 
+// Can't use 'using namespace std' here because of conflicting names
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test scanning a table and computing an aggregate over a table that exceeds buffer manager size",
           "[storage][.]") {
