@@ -254,7 +254,20 @@ add_row : {
 	}
 	if (carriage_return) {
 		// \r newline, go to special state that parses an optional \n afterwards
-		goto carriage_return;
+		// optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
+		if ((*buffer)[position_buffer] == '\n') {
+			if (reached_remainder_state) {
+				goto final_state;
+			}
+			// newline after carriage return: skip
+			// increase position by 1 and move start to the new position
+			start_buffer = ++position_buffer;
+			verification_positions.end_of_last_line = position_buffer;
+		}
+		if (!BufferRemainder()) {
+			goto final_state;
+		}
+		goto value_start;
 	} else {
 		// \n newline, move to value start
 		if (finished_chunk) {
@@ -350,21 +363,6 @@ handle_escape : {
 	}
 	// escape was followed by quote or escape, go back to quoted state
 	goto in_quotes;
-}
-
-carriage_return : {
-	/* state: carriage_return */
-	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
-	if ((*buffer)[position_buffer] == '\n') {
-		// newline after carriage return: skip
-		// increase position by 1 and move start to the new position
-		start_buffer = ++position_buffer;
-		verification_positions.end_of_last_line = position_buffer;
-	}
-	if (!BufferRemainder() || finished_chunk) {
-		goto final_state;
-	}
-	goto value_start;
 }
 final_state : {
 	/* state: final_stage reached after we finished reading the end_buffer of the csv buffer */
