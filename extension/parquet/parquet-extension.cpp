@@ -543,7 +543,8 @@ public:
 				}
 			}
 
-			// Currently we cannot read any rowgroups, check if this thread can start opening a file that needs to be read
+			// Currently we cannot read any rowgroups, check if this thread can start opening a file that needs to be
+			// read
 			if (TryOpenNextFile(context, bind_data, scan_data, parallel_state, parallel_lock)) {
 				continue;
 			}
@@ -588,7 +589,8 @@ public:
 	// Helper function that will look for a next file to open. Note that it will unlock the parellel_lock during this,
 	// allowing other threads to either start reading new row groups or also open files.
 	static bool TryOpenNextFile(ClientContext &context, const ParquetReadBindData &bind_data,
-	                            ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state, unique_lock<mutex>& parallel_lock) {
+	                            ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state,
+	                            unique_lock<mutex> &parallel_lock) {
 		for (idx_t i = parallel_state.file_index; i < bind_data.files.size(); i++) {
 			if (!parallel_state.readers[i] && parallel_state.file_opening[i] == false) {
 				string file = bind_data.files[i];

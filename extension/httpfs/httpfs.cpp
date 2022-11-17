@@ -384,7 +384,7 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 }
 
 // Get either the local, global, or no cache depending on settings
-static HTTPMetadataCache* TryGetMetadataCache(FileOpener *opener, HTTPFileSystem& httpfs) {
+static HTTPMetadataCache *TryGetMetadataCache(FileOpener *opener, HTTPFileSystem &httpfs) {
 	auto client_context = opener->TryGetClientContext();
 
 	if (client_context) {
@@ -402,10 +402,9 @@ static HTTPMetadataCache* TryGetMetadataCache(FileOpener *opener, HTTPFileSystem
 				client_context->registered_state["http_cache"] = cache;
 				return cache.get();
 			} else {
-				return (HTTPMetadataCache*)lookup->second.get();
+				return (HTTPMetadataCache *)lookup->second.get();
 			}
 		}
-
 	}
 	return nullptr;
 }
@@ -414,7 +413,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	InitializeClient();
 	auto &hfs = (HTTPFileSystem &)file_system;
 
-	HTTPMetadataCache* current_cache = TryGetMetadataCache(opener, hfs);
+	HTTPMetadataCache *current_cache = TryGetMetadataCache(opener, hfs);
 	stats = HTTPStats::TryGetStats(opener);
 
 	bool should_write_cache = false;

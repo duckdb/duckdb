@@ -12,7 +12,6 @@
 #include <stddef.h>
 #include <string>
 
-
 namespace duckdb {
 
 struct HTTPMetadataCacheEntry {
@@ -23,23 +22,24 @@ struct HTTPMetadataCacheEntry {
 // Simple cache with a max age for an entry to be valid
 class HTTPMetadataCache : public ClientContextState {
 public:
-	explicit HTTPMetadataCache(bool flush_on_query_end_p, bool shared_p) : flush_on_query_end(flush_on_query_end_p), shared(shared_p) {};
+	explicit HTTPMetadataCache(bool flush_on_query_end_p, bool shared_p)
+	    : flush_on_query_end(flush_on_query_end_p), shared(shared_p) {};
 
-	void Insert(const string& path, HTTPMetadataCacheEntry val){
+	void Insert(const string &path, HTTPMetadataCacheEntry val) {
 		if (shared) {
 			lock_guard<mutex> parallel_lock(lock);
 		}
 		map[path] = val;
 	};
 
-	void Erase(string path){
+	void Erase(string path) {
 		if (shared) {
 			lock_guard<mutex> parallel_lock(lock);
 		}
 		map.erase(path);
 	};
 
-	bool Find(string path, HTTPMetadataCacheEntry &ret_val){
+	bool Find(string path, HTTPMetadataCacheEntry &ret_val) {
 		if (shared) {
 			lock_guard<mutex> parallel_lock(lock);
 		}
@@ -55,7 +55,7 @@ public:
 	};
 
 	void Clear() {
-		if (shared){
+		if (shared) {
 			lock_guard<mutex> parallel_lock(lock);
 		}
 		map.clear();

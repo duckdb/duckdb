@@ -33,7 +33,7 @@ public:
 	}
 
 	//! helper function to get the HTTP
-	static HTTPStats* TryGetStats(FileOpener * opener) {
+	static HTTPStats *TryGetStats(FileOpener *opener) {
 		auto client_context = opener->TryGetClientContext();
 		if (client_context) {
 			return client_context->client_data->http_stats.get();

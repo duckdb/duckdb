@@ -159,7 +159,7 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 	}
 
 	// Notify any registered state of query end
-	for (auto const& s : registered_state) {
+	for (auto const &s : registered_state) {
 		s.second->QueryEnd();
 	}
 

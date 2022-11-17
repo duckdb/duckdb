@@ -66,7 +66,7 @@ public:
 	unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
-	HTTPStats* stats;
+	HTTPStats *stats;
 
 public:
 	void Close() override {

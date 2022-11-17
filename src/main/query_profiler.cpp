@@ -374,12 +374,14 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	}
 
 	if (context.client_data->http_stats) {
-		string read = "in: " + StringUtil::BytesToHumanReadableString(context.client_data->http_stats->total_bytes_received);
-		string written = "out: " + StringUtil::BytesToHumanReadableString(context.client_data->http_stats->total_bytes_sent);
+		string read =
+		    "in: " + StringUtil::BytesToHumanReadableString(context.client_data->http_stats->total_bytes_received);
+		string written =
+		    "out: " + StringUtil::BytesToHumanReadableString(context.client_data->http_stats->total_bytes_sent);
 		string head = "#HEAD: " + to_string(context.client_data->http_stats->head_count);
-		string get = "#GET: " +  to_string(context.client_data->http_stats->get_count);
-		string put = "#PUT: " +  to_string(context.client_data->http_stats->put_count);
-		string post = "#POST: " +  to_string(context.client_data->http_stats->post_count);
+		string get = "#GET: " + to_string(context.client_data->http_stats->get_count);
+		string put = "#PUT: " + to_string(context.client_data->http_stats->put_count);
+		string post = "#POST: " + to_string(context.client_data->http_stats->post_count);
 
 		constexpr idx_t TOTAL_BOX_WIDTH = 39;
 		ss << "┌─────────────────────────────────────┐\n";
