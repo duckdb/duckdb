@@ -12,7 +12,6 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/windows.hpp"
 
 #include <limits>
 
@@ -51,8 +50,8 @@ struct date_t { // NOLINT
 	inline date_t &operator-=(const int32_t &days) {this->days -= days; return *this;};
 
 	// special values
-	static inline date_t infinity() {return date_t(std::numeric_limits<int32_t>::max()); } // NOLINT
-	static inline date_t ninfinity() {return date_t(-std::numeric_limits<int32_t>::max()); } // NOLINT
+	static date_t infinity();
+	static date_t ninfinity();
 	static inline date_t epoch() {return date_t(0); } // NOLINT
 };
 

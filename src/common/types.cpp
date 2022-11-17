@@ -23,6 +23,13 @@
 
 namespace duckdb {
 
+date_t date_t::infinity() {
+	return date_t(NumericLimits<int32_t>::Maximum());
+} // NOLINT
+date_t date_t::ninfinity() {
+	return date_t(-NumericLimits<int32_t>::Maximum());
+} // NOLINT
+
 LogicalType::LogicalType() : LogicalType(LogicalTypeId::INVALID) {
 }
 
