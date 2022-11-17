@@ -6,6 +6,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
+#include "duckdb/common/http_stats.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/expression_executor.hpp"
