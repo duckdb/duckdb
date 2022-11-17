@@ -39,8 +39,8 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	Connection con;
 	unique_ptr<MaterializedQueryResult> result;
 
-	explicit InterpretedBenchmarkState(string path) :
-	      benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
+	explicit InterpretedBenchmarkState(string path)
+	    : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
 	      con(db) {
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));

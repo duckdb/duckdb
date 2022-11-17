@@ -2,7 +2,7 @@
 # description: Run query 07c from the imdb benchmark (single-threaded)
 # group: [imdb]
 
-# skipping because it runs out of memory on low-memory systems
-# template benchmark/imdb/benchmarks/imdb.benchmark.in
-# QUERY_NUMBER=07c
-# QUERY_NUMBER_PADDED=07c
+
+template benchmark/imdb/benchmarks/imdb.benchmark.in
+QUERY_NUMBER=07c
+QUERY_NUMBER_PADDED=07c
