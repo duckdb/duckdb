@@ -78,7 +78,7 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 				break;
 			}
 		}
-		if (position_buffer < buffer_size) {
+		if (position_buffer < end_buffer) {
 			if (carriage_return && (*buffer)[position_buffer] == '\n') {
 				position_buffer++;
 			}
@@ -265,6 +265,9 @@ add_row : {
 			verification_positions.end_of_last_line = position_buffer;
 		}
 		if (!BufferRemainder()) {
+			goto final_state;
+		}
+		if (reached_remainder_state) {
 			goto final_state;
 		}
 		goto value_start;
