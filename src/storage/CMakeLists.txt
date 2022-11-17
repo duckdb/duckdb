@@ -3,12 +3,12 @@ add_subdirectory(checkpoint)
 add_subdirectory(compression)
 add_subdirectory(statistics)
 add_subdirectory(table)
+add_subdirectory(buffer_manager)
 
 add_library_unity(
   duckdb_storage
   OBJECT
   arena_allocator.cpp
-  buffer_manager.cpp
   checkpoint_manager.cpp
   block.cpp
   data_table.cpp
