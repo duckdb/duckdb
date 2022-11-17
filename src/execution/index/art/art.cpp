@@ -895,7 +895,7 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	if (tree) {
 		serialized_data_pointer = tree->Serialize(*this, writer);
 	} else {
-		serialized_data_pointer = {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
+		serialized_data_pointer = BlockPointer::Invalid();
 	}
 	return serialized_data_pointer;
 }
