@@ -9,6 +9,8 @@ group H2OAI Join
 
 cache h2oaijoin
 
+# connect duckdb_benchmark_data/h2oaijoin/h2oai.duckdb
+
 load benchmark/h2oai/join/queries/load.sql
 
 run benchmark/h2oai/join/queries/q${QUERY_NUMBER_PADDED}.sql
