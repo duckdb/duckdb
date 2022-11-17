@@ -21,6 +21,11 @@ public:
 
 	//! Extract the correlated lateral join columns and remove them from the targeted binder
 	vector<CorrelatedColumnInfo> ExtractCorrelatedColumns(Binder &binder);
+	bool HasCorrelatedColumns() const {
+		return !correlated_columns.empty();
+	}
+
+	static void ReduceExpressionDepth(LogicalOperator &op, const vector<CorrelatedColumnInfo> &info);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,

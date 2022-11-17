@@ -128,12 +128,14 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	{
 		LateralBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
-		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
-		if (!result->correlated_columns.empty()) {
+		result->lateral = binder.HasCorrelatedColumns();
+		if (result->lateral) {
+			// lateral join: can only be an INNER or LEFT join
 			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
 				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
 			}
 		}
+		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
 	}
 
 	vector<unique_ptr<ParsedExpression>> extra_conditions;

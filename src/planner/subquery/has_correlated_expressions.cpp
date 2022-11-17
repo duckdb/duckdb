@@ -12,7 +12,6 @@ HasCorrelatedExpressions::HasCorrelatedExpressions(const vector<CorrelatedColumn
 }
 
 void HasCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
-	//! The HasCorrelatedExpressions does not recursively visit logical operators, it only visits the current one
 	VisitOperatorExpressions(op);
 }
 

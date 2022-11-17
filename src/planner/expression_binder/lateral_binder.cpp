@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 
@@ -36,6 +37,7 @@ BindResult LateralBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, 
 }
 
 vector<CorrelatedColumnInfo> LateralBinder::ExtractCorrelatedColumns(Binder &binder) {
+	auto all_correlated_columns = binder.correlated_columns;
 	for (auto &correlated : correlated_columns) {
 		auto entry = std::find(binder.correlated_columns.begin(), binder.correlated_columns.end(), correlated);
 		if (entry == binder.correlated_columns.end()) {
@@ -43,7 +45,7 @@ vector<CorrelatedColumnInfo> LateralBinder::ExtractCorrelatedColumns(Binder &bin
 		}
 		binder.correlated_columns.erase(entry);
 	}
-	return move(correlated_columns);
+	return all_correlated_columns;
 }
 
 BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
@@ -62,6 +64,35 @@ BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr,
 
 string LateralBinder::UnsupportedAggregateMessage() {
 	return "LATERAL join cannot contain aggregates!";
+}
+
+class ExpressionDepthReducer : public LogicalOperatorVisitor {
+public:
+	explicit ExpressionDepthReducer(const vector<CorrelatedColumnInfo> &correlated) : correlated_columns(correlated) {
+	}
+
+protected:
+	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+		// don't need to reduce this
+		if (expr.depth == 0) {
+			return nullptr;
+		}
+		for (auto &correlated : correlated_columns) {
+			if (correlated.binding == expr.binding) {
+				D_ASSERT(expr.depth > 1);
+				expr.depth--;
+				break;
+			}
+		}
+		return nullptr;
+	}
+
+	const vector<CorrelatedColumnInfo> &correlated_columns;
+};
+
+void LateralBinder::ReduceExpressionDepth(LogicalOperator &op, const vector<CorrelatedColumnInfo> &correlated) {
+	ExpressionDepthReducer depth_reducer(correlated);
+	depth_reducer.VisitOperator(op);
 }
 
 } // namespace duckdb
