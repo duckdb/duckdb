@@ -26,9 +26,6 @@ public:
 };
 
 struct BlockPointer {
-private:
-	static constexpr uint32_t ROWID_OFFSET_MASK = (1 << 31);
-
 public:
 	//! The BlockPointer value indicating invalid
 	static const BlockPointer &Invalid() {
