@@ -403,7 +403,7 @@ void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<Logical
 }
 
 unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-                                                    const vector<CorrelatedColumnInfo> &correlated_columns,
+                                                    vector<CorrelatedColumnInfo> &correlated_columns,
                                                     JoinType join_type, unique_ptr<Expression> condition) {
 	// scan the right operator for correlated columns
 	// correlated LATERAL JOIN
@@ -415,7 +415,7 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 		                                             arbitrary_expressions);
 	}
 
-	auto perform_delim = true;
+	auto perform_delim = PerformDuplicateElimination(*this, correlated_columns);
 	auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, join_type, move(left), perform_delim);
 
 	FlattenDependentJoins flatten(*this, correlated_columns, perform_delim);
