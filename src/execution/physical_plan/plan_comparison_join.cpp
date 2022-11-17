@@ -254,6 +254,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		default:
 			break;
 		}
+		if (left->estimated_cardinality <= 5 || right->estimated_cardinality <= 5) {
+			can_iejoin = false;
+			can_merge = false;
+		}
 		if (can_iejoin) {
 			plan = make_unique<PhysicalIEJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                   op.estimated_cardinality);
