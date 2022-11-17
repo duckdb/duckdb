@@ -18,6 +18,16 @@ TimeZone	America/Los_Angeles	The current time zone	VARCHAR
 statement error
 SET TimeZone = 'fnord';
 
+query I
+SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'America/Denver';
+----
+2001-02-16 19:38:40-08
+
+query I
+SELECT '2001-02-16 20:38:40-05'::TIMESTAMPTZ AT TIME ZONE 'America/Denver';
+----
+2001-02-16 18:38:40
+
 query III
 SELECT name, abbrev, utc_offset FROM pg_timezone_names() ORDER BY name;
 ----
