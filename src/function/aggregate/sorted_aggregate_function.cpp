@@ -80,26 +80,30 @@ struct SortedAggregateState {
 	DataChunk sort_buffer;
 	DataChunk arg_buffer;
 
+	static inline void InitializeBuffer(DataChunk &chunk, const vector<LogicalType> &types) {
+		if (!chunk.ColumnCount() && !types.empty()) {
+			chunk.Initialize(Allocator::DefaultAllocator(), types);
+		}
+	}
+
 	void Flush(SortedAggregateBindData &order_bind) {
 		if (ordering) {
 			return;
 		}
 
 		ordering = make_unique<ColumnDataCollection>(order_bind.buffer_manager, order_bind.sort_types);
+		InitializeBuffer(sort_buffer, order_bind.sort_types);
 		ordering->Append(sort_buffer);
 
 		arguments = make_unique<ColumnDataCollection>(order_bind.buffer_manager, order_bind.arg_types);
+		InitializeBuffer(arg_buffer, order_bind.arg_types);
 		arguments->Append(arg_buffer);
 	}
 
 	void Update(SortedAggregateBindData &order_bind, DataChunk &sort_chunk, DataChunk &arg_chunk) {
 		// Lazy instantiation of the buffer chunks
-		if (sort_chunk.ColumnCount() != sort_buffer.ColumnCount()) {
-			sort_buffer.Initialize(Allocator::DefaultAllocator(), sort_chunk.GetTypes());
-		}
-		if (arg_chunk.ColumnCount() != arg_buffer.ColumnCount()) {
-			arg_buffer.Initialize(Allocator::DefaultAllocator(), arg_chunk.GetTypes());
-		}
+		InitializeBuffer(sort_buffer, order_bind.sort_types);
+		InitializeBuffer(arg_buffer, order_bind.arg_types);
 
 		if (sort_chunk.size() + sort_buffer.size() > BUFFER_CAPACITY) {
 			Flush(order_bind);
