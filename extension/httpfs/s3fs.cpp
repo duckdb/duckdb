@@ -3,6 +3,7 @@
 #include "crypto.hpp"
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/http_stats.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
@@ -840,7 +841,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	do {
 		// main listobject call, may
 		string response_str =
-		    AWSListObjectV2::Request(shared_path, http_params, s3_auth_params, main_continuation_token);
+		    AWSListObjectV2::Request(shared_path, http_params, s3_auth_params, main_continuation_token, HTTPStats::TryGetStats(opener));
 		main_continuation_token = AWSListObjectV2::ParseContinuationToken(response_str);
 		AWSListObjectV2::ParseKey(response_str, s3_keys);
 
@@ -855,7 +856,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 			string common_prefix_continuation_token = "";
 			do {
 				auto prefix_res = AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params,
-				                                           common_prefix_continuation_token);
+				                                           common_prefix_continuation_token, HTTPStats::TryGetStats(opener));
 				AWSListObjectV2::ParseKey(prefix_res, s3_keys);
 				auto more_prefixes = AWSListObjectV2::ParseCommonPrefix(prefix_res);
 				common_prefixes.insert(common_prefixes.end(), more_prefixes.begin(), more_prefixes.end());
@@ -890,7 +891,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 }
 
 string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-                                string &continuation_token, bool use_delimiter) {
+                                string &continuation_token, HTTPStats* stats, bool use_delimiter) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
 
 	// Construct the ListObjectsV2 call
@@ -943,6 +944,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 		    response << string(data, data_length);
 		    return true;
 	    });
+
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (Error code " +
 		                         to_string((int)res.error()) + ")");

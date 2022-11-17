@@ -2,6 +2,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/http_stats.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -64,11 +65,11 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                         unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
                                                         char *buffer_in, idx_t buffer_in_len) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfh = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
-	auto client = GetClient(hfs.http_params, proto_host_port.c_str()); // POST requests use fresh connection
+	auto client = GetClient(hfh.http_params, proto_host_port.c_str()); // POST requests use fresh connection
 
 	// We use a custom Request method here, because there is no Post call with a contentreceiver in httplib
 	idx_t out_offset = 0;
@@ -78,6 +79,9 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	req.headers = *headers;
 	req.headers.emplace("Content-Type", "application/octet-stream");
 	req.content_receiver = [&](const char *data, size_t data_length, uint64_t /*offset*/, uint64_t /*total_length*/) {
+		if (hfh.stats) {
+			hfh.stats->total_bytes_received += data_length;
+		}
 		if (out_offset + data_length > buffer_out_len) {
 			// Buffer too small, increase its size by at least 2x to fit the new value
 			auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len * 2);
@@ -91,7 +95,12 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 		return true;
 	};
 	req.body.assign(buffer_in, buffer_in_len);
+
 	auto res = client->send(req);
+	if (hfh.stats) {
+		hfh.stats->post_count++;
+		hfh.stats->total_bytes_sent += buffer_in_len;
+	}
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP POST error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
 	}
@@ -112,14 +121,20 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                        char *buffer_in, idx_t buffer_in_len) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfh = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto client =
-	    GetClient(hfs.http_params, proto_host_port.c_str()); // Put requests use fresh connection for parallel uploads
+	    GetClient(hfh.http_params, proto_host_port.c_str()); // Put requests use fresh connection for parallel uploads
 	auto headers = initialize_http_headers(header_map);
 
 	auto res = client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
+
+	if (hfh.stats) {
+		hfh.stats->post_count++;
+		hfh.stats->total_bytes_sent += buffer_in_len;
+	}
+
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP PUT error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
 	}
@@ -127,16 +142,16 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfh = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
 
-	if (enable_stats) {
-		stats.head_count++;
+	if (hfh.stats) {
+		hfh.stats->head_count++;
 	}
 
-	auto res = hfs.http_client->Head(path.c_str(), *headers);
+	auto res = hfh.http_client->Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
 	}
@@ -145,7 +160,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfh = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -159,16 +174,13 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	idx_t max_tries = 2;
 
 	while (true) {
-		if (enable_stats) {
-			stats.get_count++;
-		}
-		auto res = hfs.http_client->Get(
+		auto res = hfh.http_client->Get(
 		    path.c_str(), *headers,
 		    [&](const duckdb_httplib_openssl::Response &response) {
 			    if (response.status >= 400) {
 				    string error = "HTTP GET error on '" + url + "' (HTTP " + to_string(response.status) + ")";
 				    if (response.status == 416) {
-					    if (hfs.http_params.metadata_cache_max_age > 0) {
+					    if (hfh.http_params.metadata_cache_max_age > 0) {
 						    error += " This could mean the file was changed, please try again with "
 						             "http_metadata_cache_max_age set to 0.";
 					    }
@@ -187,14 +199,17 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 			    return true;
 		    },
 		    [&](const char *data, size_t data_length) {
-			    if (enable_stats) {
-				    stats.total_bytes_received += data_length;
+			    if (hfh.stats) {
+				    hfh.stats->total_bytes_received += data_length;
 			    }
 			    memcpy(buffer_out + out_offset, data, data_length);
 			    out_offset += data_length;
 			    return true;
 		    });
 
+		if (hfh.stats) {
+			hfh.stats->get_count++;
+		}
 		if (res.error() == duckdb_httplib_openssl::Error::Success) {
 			return make_unique<ResponseWrapper>(res.value());
 		} else {
@@ -203,7 +218,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 
 			if (res.error() == duckdb_httplib_openssl::Error::Read) {
 				tries += 1;
-				hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
+				hfh.http_client = GetClient(hfh.http_params, proto_host_port.c_str());
 			}
 
 			if (tries >= max_tries) {
@@ -400,6 +415,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	auto &hfs = (HTTPFileSystem &)file_system;
 
 	HTTPMetadataCache* current_cache = TryGetMetadataCache(opener, hfs);
+	stats = HTTPStats::TryGetStats(opener);
 
 	bool should_write_cache = false;
 	if (current_cache && !(flags & FileFlags::FILE_FLAGS_WRITE)) {

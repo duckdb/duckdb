@@ -189,7 +189,7 @@ protected:
 // Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 struct AWSListObjectV2 {
 	static string Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-	                      string &continuation_token, bool use_delimiter = false);
+	                      string &continuation_token, HTTPStats* stats, bool use_delimiter = false);
 	static void ParseKey(string &aws_response, vector<string> &result);
 	static vector<string> ParseCommonPrefix(string &aws_response);
 	static string ParseContinuationToken(string &aws_response);

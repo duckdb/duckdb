@@ -5,6 +5,8 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "http_metadata_cache.hpp"
 #include <iostream>
 
@@ -64,6 +66,8 @@ public:
 	unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
+	HTTPStats* stats;
+
 public:
 	void Close() override {
 	}
@@ -72,20 +76,8 @@ protected:
 	virtual void InitializeClient();
 };
 
-struct HTTPFileSystemStats {
-	atomic<idx_t> head_count {0};
-	atomic<idx_t> get_count {0};
-	atomic<idx_t> total_bytes_received {0};
-};
-
 class HTTPFileSystem : public FileSystem {
 public:
-	~HTTPFileSystem() {
-		std::cout << "\nHTTPFS stats\n";
-		std::cout << " - GET: " << std::to_string(stats.get_count) << "\n";
-		std::cout << " - HEAD: " << std::to_string(stats.head_count) << "\n";
-		std::cout << " - total bytes received: " << std::to_string(stats.total_bytes_received) << "\n";
-	}
 	static unique_ptr<duckdb_httplib_openssl::Client> GetClient(const HTTPParams &http_params,
 	                                                            const char *proto_host_port);
 	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
@@ -131,9 +123,6 @@ public:
 	}
 
 	static void Verify();
-
-	HTTPFileSystemStats stats;
-	bool enable_stats = true;
 
 	// Global cache
 	unique_ptr<HTTPMetadataCache> global_metadata_cache;

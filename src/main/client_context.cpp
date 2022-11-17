@@ -43,6 +43,7 @@
 #include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/progress_bar.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/common/http_stats.hpp"
 
 namespace duckdb {
 
@@ -152,6 +153,10 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 
 PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
 	client_data->profiler->EndQuery();
+
+	if (client_data->http_stats) {
+		client_data->http_stats->Reset();
+	}
 
 	// Notify any registered state of query end
 	for (auto const& s : registered_state) {
@@ -690,6 +695,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	// start the profiler
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
+
+	if (IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get())) {
+		client_data->http_stats = make_unique<HTTPStats>();
+	}
+
 	bool invalidate_query = true;
 	try {
 		if (statement) {
