@@ -12,6 +12,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 
 namespace duckdb {
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 

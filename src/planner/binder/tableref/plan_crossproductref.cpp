@@ -1,6 +1,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/tableref/bound_crossproductref.hpp"
+#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 
 namespace duckdb {
 
