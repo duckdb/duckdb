@@ -455,6 +455,15 @@ NULL	NULL
 2022-01-01	{'isoyear': 2021, 'week': 52, 'yearweek': 202152}
 infinity	{'isoyear': NULL, 'week': NULL, 'yearweek': NULL}
 
+# Selective filtering (Issue #5342)
+query II
+SELECT d, DATE_PART(['year', 'month', 'day'], d) AS parts
+FROM dates
+WHERE s = 'day'
+ORDER BY 1;
+----
+1992-05-05	{'year': 1992, 'month': 5, 'day': 5}
+
 # Invalid parts
 
 foreach hour minute second millisecond microsecond timezone timezone_hour timezone_minute
