@@ -8,7 +8,6 @@ add_subdirectory(micro)
 if(${BUILD_TPCH_EXTENSION})
   add_subdirectory(tpch)
 endif()
-add_subdirectory(imdb)
 
 add_extension_definitions()
 add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
