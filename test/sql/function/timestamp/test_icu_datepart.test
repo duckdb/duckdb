@@ -628,6 +628,15 @@ WHERE p IS DISTINCT FROM s['${partcode}'];
 
 endloop
 
+# Selective filtering (Issue #5342)
+query II
+SELECT ts, DATE_PART(['year', 'month', 'day'], ts) AS parts
+FROM timestamps
+WHERE part = 'day'
+ORDER BY 1;
+----
+2021-12-24 14:00:00-08	{'year': 2021, 'month': 12, 'day': 24}
+
 # Invalid parts
 statement error
 SELECT DATE_PART(['duck', 'minute', 'microsecond', 'timezone'], ts), ts

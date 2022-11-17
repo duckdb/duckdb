@@ -1420,16 +1420,16 @@ struct StructDatePart {
 				const auto idx = rdata.sel->get_index(i);
 				if (arg_valid.RowIsValid(idx)) {
 					if (Value::IsFinite(tdata[idx])) {
-						DatePart::StructOperator::Operation(part_values.data(), tdata[idx], idx, part_mask);
+						DatePart::StructOperator::Operation(part_values.data(), tdata[idx], i, part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {
-							FlatVector::Validity(*child_entry).SetInvalid(idx);
+							FlatVector::Validity(*child_entry).SetInvalid(i);
 						}
 					}
 				} else {
-					res_valid.SetInvalid(idx);
+					res_valid.SetInvalid(i);
 					for (auto &child_entry : child_entries) {
-						FlatVector::Validity(*child_entry).SetInvalid(idx);
+						FlatVector::Validity(*child_entry).SetInvalid(i);
 					}
 				}
 			}
