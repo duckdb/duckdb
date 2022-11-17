@@ -3,7 +3,6 @@
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
