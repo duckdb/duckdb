@@ -1,6 +1,9 @@
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -72,10 +75,10 @@ public:
 	}
 
 protected:
-	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+	void ReduceColumnRefDepth(BoundColumnRefExpression &expr) {
 		// don't need to reduce this
 		if (expr.depth == 0) {
-			return nullptr;
+			return;
 		}
 		for (auto &correlated : correlated_columns) {
 			if (correlated.binding == expr.binding) {
@@ -84,6 +87,37 @@ protected:
 				break;
 			}
 		}
+	}
+
+	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+		ReduceColumnRefDepth(expr);
+		return nullptr;
+	}
+
+	void ReduceExpressionSubquery(BoundSubqueryExpression &expr) {
+		for (auto &s_correlated : expr.binder->correlated_columns) {
+			for (auto &correlated : correlated_columns) {
+				if (correlated == s_correlated) {
+					s_correlated.depth--;
+					break;
+				}
+			}
+		}
+	}
+
+	void ReduceExpressionDepth(Expression &expr) {
+		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+			ReduceColumnRefDepth((BoundColumnRefExpression &)expr);
+		}
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+			ReduceExpressionSubquery((BoundSubqueryExpression &)expr);
+		}
+	}
+
+	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+		ReduceExpressionSubquery(expr);
+		ExpressionIterator::EnumerateQueryNodeChildren(
+		    *expr.subquery, [&](Expression &child_expr) { ReduceExpressionDepth(child_expr); });
 		return nullptr;
 	}
 
