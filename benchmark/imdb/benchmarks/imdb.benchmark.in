@@ -5,11 +5,11 @@
 name Q${QUERY_NUMBER_PADDED}
 group imdb
 
-require httpfs
-
 require parquet
 
-connect benchmark/imdb/imdb.duckdb
+cache imdb
+
+connect duckdb_benchmark_data/imdb/job.duckdb
 
 load benchmark/imdb/init/load.sql
 

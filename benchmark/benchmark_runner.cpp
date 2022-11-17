@@ -67,7 +67,7 @@ void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
 	}
 }
 
-bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, string name) {
+bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, const string& name) {
 	auto &fs = db.GetFileSystem();
 	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
 		return false;

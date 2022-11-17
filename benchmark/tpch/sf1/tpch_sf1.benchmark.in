@@ -10,6 +10,8 @@ require tpch
 
 cache tpch_sf1
 
+connect duckdb_benchmark_data/tpch_sf1/tpch.duckdb
+
 load benchmark/tpch/sf1/load.sql
 
 run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql

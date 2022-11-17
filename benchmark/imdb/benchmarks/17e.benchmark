@@ -1,7 +1,7 @@
-# name: benchmark/imdb/17e
+# name: benchmark/imdb/benchmarks/17e
 # description: Run query 17e from the imdb benchmark (single-threaded)
 # group: [imdb]
 
-template benchmark/imdb/imdb.benchmark.in
+template benchmark/imdb/benchmarks/imdb.benchmark.in
 QUERY_NUMBER=17e
 QUERY_NUMBER_PADDED=17e
