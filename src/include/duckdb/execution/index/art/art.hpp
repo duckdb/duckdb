@@ -88,8 +88,7 @@ public:
 	//! Insert data into the index.
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
-	//! Construct ARTs from sorted chunks and merge them.
-	void ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
+	void SortAndConstruct(idx_t count, vector<Key> &keys, Vector &row_identifiers);
 
 	//! Search Equal and fetches the row IDs
 	bool SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids);

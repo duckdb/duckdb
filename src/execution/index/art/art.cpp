@@ -248,7 +248,7 @@ void GetChildSections(vector<KeySection> &child_sections, vector<Key> &keys, Key
 	child_sections.emplace_back(child_start_idx, key_section.end, keys, key_section);
 }
 
-void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_section, bool &has_constraint) {
+void Construct(vector<Key> &keys, Node *&node, KeySection &key_section, bool &has_constraint) {
 
 	D_ASSERT(key_section.start < keys.size());
 	D_ASSERT(key_section.end < keys.size());
@@ -269,11 +269,21 @@ void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_s
 		auto num_row_ids = key_section.end - key_section.start + 1;
 
 		// check for possible constraint violation
-		if (has_constraint && num_row_ids != 1) {
+		auto single_row_id = num_row_ids == 1;
+		if (has_constraint && !single_row_id) {
 			throw ConstraintException("New data contains duplicates on indexed column(s)");
 		}
 
-		node = Leaf::New(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
+		if (!single_row_id) {
+			auto row_ids = unique_ptr<row_t[]>(new row_t[num_row_ids]);
+			for (idx_t i = 0; i < num_row_ids; i++) {
+				row_ids[i] = keys[key_section.start + i].row_id;
+			}
+			node = Leaf::New(start_key, prefix_start, row_ids.get(), num_row_ids);
+			return;
+		}
+		node = Leaf::New(start_key, prefix_start, start_key.row_id);
+
 	} else { // create a new node and recurse
 
 		// we will find at least two child entries of this node, otherwise we'd have reached a leaf
@@ -289,67 +299,26 @@ void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_s
 		// recurse on each child section
 		for (auto &child_section : child_sections) {
 			Node *new_child = nullptr;
-			Construct(keys, row_ids, new_child, child_section, has_constraint);
+			Construct(keys, new_child, child_section, has_constraint);
 			Node::InsertChild(node, child_section.key_byte, new_child);
 		}
 	}
 }
 
-void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) {
+void ART::SortAndConstruct(idx_t count, vector<Key> &keys, Vector &row_identifiers) {
 
-	auto payload_types = logical_types;
-	payload_types.emplace_back(LogicalType::ROW_TYPE);
+	// prepare the row_identifiers
+	row_identifiers.Flatten(count);
+	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
-	ArenaAllocator arena_allocator(allocator);
-	vector<Key> keys(STANDARD_VECTOR_SIZE);
-
-	auto temp_art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
-	                                 this->constraint_type, this->db);
-
-	for (;;) {
-		DataChunk ordered_chunk;
-		ordered_chunk.Initialize(allocator, payload_types);
-		ordered_chunk.SetCardinality(0);
-		scanner.Scan(ordered_chunk);
-		if (ordered_chunk.size() == 0) {
-			break;
-		}
-
-		// get the key chunk and the row_identifiers vector
-		DataChunk row_id_chunk;
-		ordered_chunk.Split(row_id_chunk, ordered_chunk.ColumnCount() - 1);
-		auto &row_identifiers = row_id_chunk.data[0];
-
-		D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
-		D_ASSERT(logical_types[0] == ordered_chunk.data[0].GetType());
-
-		// generate the keys for the given input
-		arena_allocator.Reset();
-		GenerateKeys(arena_allocator, ordered_chunk, keys);
-
-		// prepare the row_identifiers
-		row_identifiers.Flatten(ordered_chunk.size());
-		auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-
-		// construct the ART of this chunk
-		auto art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
-		                            this->constraint_type, this->db);
-		auto key_section = KeySection(0, ordered_chunk.size() - 1, 0, 0);
-		auto has_constraint = IsUnique();
-		Construct(keys, row_ids, art->tree, key_section, has_constraint);
-
-		// merge art into temp_art
-		if (!temp_art->MergeIndexes(lock, art.get())) {
-			throw ConstraintException("Data contains duplicates on indexed column(s)");
-		}
+	for (idx_t i = 0; i < count; i++) {
+		keys[i].row_id = row_ids[i];
 	}
+	std::sort(keys.begin(), keys.begin() + count);
 
-	// NOTE: currently this code is only used for index creation, so we can assume that there are no
-	// duplicate violations between the existing index and the new data,
-	// so we do not need to revert any changes
-	if (!this->MergeIndexes(lock, temp_art.get())) {
-		throw ConstraintException("Data contains duplicates on indexed column(s)");
-	}
+	auto key_section = KeySection(0, count - 1, 0, 0);
+	auto has_constraint = IsUnique();
+	Construct(keys, this->tree, key_section, has_constraint);
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
