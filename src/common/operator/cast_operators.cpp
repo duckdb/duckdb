@@ -822,6 +822,16 @@ struct IntegerCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
+	static bool HandleBinaryDigit(T &state, uint8_t digit) {
+		using result_t = typename T::Result;
+		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 2) {
+			return false;
+		}
+		state.result = state.result * 2 + digit;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
 		using result_t = typename T::Result;
 		double dbl_res = state.result * std::pow(10.0L, exponent);
@@ -975,6 +985,43 @@ static bool IntegerHexCastLoop(const char *buf, idx_t len, T &result, bool stric
 	return pos > start_pos;
 }
 
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation>
+static bool IntegerBinaryCastLoop(const char *buf, idx_t len, T &result, bool strict) {
+	if (ALLOW_EXPONENT || NEGATIVE) {
+		return false;
+	}
+	idx_t start_pos = 1;
+	idx_t pos = start_pos;
+	uint8_t digit;
+	char current_char;
+	while (pos < len) {
+		current_char = buf[pos];
+		if (current_char == '_' && pos > start_pos) {
+			// skip underscore, if it is not the first character
+			pos++;
+			if (pos == len) {
+				// we cant end on an underscore either
+				return false;
+			}
+			continue;
+		} else if (current_char == '0') {
+			digit = 0;
+		} else if (current_char == '1') {
+			digit = 1;
+		} else {
+			return false;
+		}
+		pos++;
+		if (!OP::template HandleBinaryDigit<T, NEGATIVE>(result, digit)) {
+			return false;
+		}
+	}
+	if (!OP::template Finalize<T, NEGATIVE>(result)) {
+		return false;
+	}
+	return pos > start_pos;
+}
+
 template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation,
           bool ZERO_INITIALIZE = true>
 static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
@@ -986,24 +1033,11 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	if (len == 0) {
 		return false;
 	}
-	int negative = *buf == '-';
-
-	// If it starts with 0x or 0X, we parse it as a hex value
-	int hex = len > 1 && *buf == '0' && (buf[1] == 'x' || buf[1] == 'X');
-
 	if (ZERO_INITIALIZE) {
 		memset(&result, 0, sizeof(T));
 	}
-	if (!negative) {
-		if (hex) {
-			// Skip the 0x
-			buf++;
-			len--;
-			return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
-		} else {
-			return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
-		}
-	} else {
+	// if the number is negative, we set the negative flag and skip the negative sign
+	if (*buf == '-') {
 		if (!IS_SIGNED) {
 			// Need to check if its not -0
 			idx_t pos = 1;
@@ -1014,6 +1048,22 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 			}
 		}
 		return IntegerCastLoop<T, true, ALLOW_EXPONENT, OP>(buf, len, result, strict);
+	}
+	// If it starts with 0x or 0X, we parse it as a hex value
+	else if (len > 1 && *buf == '0' && (buf[1] == 'x' || buf[1] == 'X')) {
+		// Skip the 0x
+		buf++;
+		len--;
+		return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
+	}
+	// If it starts with 0b or 0B, we parse it as a binary value
+	else if (len > 1 && *buf == '0' && (buf[1] == 'b' || buf[1] == 'B')) {
+		// Skip the 0b
+		buf++;
+		len--;
+		return IntegerBinaryCastLoop<T, false, false, OP>(buf, len, result, strict);
+	} else {
+		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	}
 }
 
@@ -1515,6 +1565,19 @@ struct HugeIntegerCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
+	static bool HandleBinaryDigit(T &result, uint8_t digit) {
+		if (result.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 2) {
+			// intermediate is full: need to flush it
+			if (!result.Flush()) {
+				return false;
+			}
+		}
+		result.intermediate = result.intermediate * 2 + digit;
+		result.digits++;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &result, int32_t exponent) {
 		if (!result.Flush()) {
 			return false;
@@ -1618,6 +1681,11 @@ struct DecimalCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleHexDigit(T &state, uint8_t digit) {
+		return false;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleBinaryDigit(T &state, uint8_t digit) {
 		return false;
 	}
 
