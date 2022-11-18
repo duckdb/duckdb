@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 template <class SRC>
-void TestAppendingSingleValue(SRC value, Value expected_result, uint8_t width, uint8_t scale) {
+void TestAppendingSingleDecimalValue(SRC value, Value expected_result, uint8_t width, uint8_t scale) {
 	auto db = make_unique<DuckDB>(nullptr);
 	auto conn = make_unique<Connection>(*db);
 	unique_ptr<Appender> appender;
@@ -26,26 +26,27 @@ void TestAppendingSingleValue(SRC value, Value expected_result, uint8_t width, u
 }
 
 TEST_CASE("Test appending to a decimal column", "[api]") {
-	TestAppendingSingleValue<int32_t>(1, Value::DECIMAL(1000, 4, 3), 4, 3);
-	TestAppendingSingleValue<int16_t>(-9999, Value::DECIMAL(-9999, 4, 0), 4, 0);
-	TestAppendingSingleValue<int16_t>(9999, Value::DECIMAL(9999, 4, 0), 4, 0);
-	TestAppendingSingleValue<int32_t>(99999999, Value::DECIMAL(99999999, 8, 0), 8, 0);
-	TestAppendingSingleValue<const char *>("1.234", Value::DECIMAL(1234, 4, 3), 4, 3);
-	TestAppendingSingleValue<const char *>("123.4", Value::DECIMAL(1234, 4, 1), 4, 1);
+	TestAppendingSingleDecimalValue<int32_t>(1, Value::DECIMAL(1000, 4, 3), 4, 3);
+	TestAppendingSingleDecimalValue<int16_t>(-9999, Value::DECIMAL(-9999, 4, 0), 4, 0);
+	TestAppendingSingleDecimalValue<int16_t>(9999, Value::DECIMAL(9999, 4, 0), 4, 0);
+	TestAppendingSingleDecimalValue<int32_t>(99999999, Value::DECIMAL(99999999, 8, 0), 8, 0);
+	TestAppendingSingleDecimalValue<const char *>("1.234", Value::DECIMAL(1234, 4, 3), 4, 3);
+	TestAppendingSingleDecimalValue<const char *>("123.4", Value::DECIMAL(1234, 4, 1), 4, 1);
 	hugeint_t hugeint_value;
 	bool result;
 	result = Hugeint::TryConvert<const char *>("3245234123123", hugeint_value);
 	REQUIRE(result);
-	TestAppendingSingleValue<const char *>("3245234.123123", Value::DECIMAL(hugeint_value, 19, 6), 19, 6);
+	TestAppendingSingleDecimalValue<const char *>("3245234.123123", Value::DECIMAL(hugeint_value, 19, 6), 19, 6);
 	int64_t bigint_reference_value = 3245234123123;
-	TestAppendingSingleValue<const char *>("3245234.123123", Value::DECIMAL(bigint_reference_value, 13, 6), 13, 6);
+	TestAppendingSingleDecimalValue<const char *>("3245234.123123", Value::DECIMAL(bigint_reference_value, 13, 6), 13,
+	                                              6);
 	// Precision loss
-	TestAppendingSingleValue<float>(12.3124324f, Value::DECIMAL(123124320, 9, 7), 9, 7);
+	TestAppendingSingleDecimalValue<float>(12.3124324f, Value::DECIMAL(123124320, 9, 7), 9, 7);
 
 	// Precision loss
 	result = Hugeint::TryConvert<const char *>("12345234234312432287744000", hugeint_value);
 	REQUIRE(result);
-	TestAppendingSingleValue<double>(12345234234.31243244234324, Value::DECIMAL(hugeint_value, 26, 15), 26, 15);
+	TestAppendingSingleDecimalValue<double>(12345234234.31243244234324, Value::DECIMAL(hugeint_value, 26, 15), 26, 15);
 }
 
 TEST_CASE("Test using appender after connection is gone", "[api]") {

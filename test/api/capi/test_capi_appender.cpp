@@ -4,6 +4,87 @@
 using namespace duckdb;
 using namespace std;
 
+void AssertDecimalValueMatches(unique_ptr<CAPIResult> &result, duckdb_decimal expected) {
+	duckdb_decimal actual;
+
+	actual = result->Fetch<duckdb_decimal>(0, 0);
+	REQUIRE(actual.scale == expected.scale);
+	REQUIRE(actual.width == expected.width);
+	REQUIRE(actual.value.lower == expected.value.lower);
+	REQUIRE(actual.value.upper == expected.value.upper);
+}
+
+template <class TYPE, duckdb_state APPEND_FUNC(duckdb_appender, TYPE)>
+void TestAppendingSingleDecimalValue(TYPE value, duckdb_decimal expected, uint8_t width, uint8_t scale) {
+	// Set the width and scale of the expected value
+	expected.width = width;
+	expected.scale = scale;
+
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
+	duckdb_state status;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query(StringUtil::Format("CREATE TABLE decimals(i DECIMAL(%d,%d))", width, scale));
+
+	duckdb_appender appender;
+	status = duckdb_appender_create(tester.connection, nullptr, "decimals", &appender);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_begin_row(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = APPEND_FUNC(appender, value);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_end_row(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_flush(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	result = tester.Query("SELECT * FROM decimals");
+	AssertDecimalValueMatches(result, expected);
+}
+
+TEST_CASE("Test appending into DECIMAL in C API", "[capi]") {
+	duckdb_decimal expected;
+
+	expected.value.lower = 1000;
+	expected.value.upper = 0;
+	TestAppendingSingleDecimalValue<int32_t, &duckdb_append_int32>(1, expected, 4, 3);
+	expected.value.lower = (uint64_t)18446744073709541617UL;
+	expected.value.upper = -1;
+	TestAppendingSingleDecimalValue<int16_t, &duckdb_append_int16>(-9999, expected, 4, 0);
+	expected.value.lower = 9999;
+	expected.value.upper = 0;
+	TestAppendingSingleDecimalValue<int16_t, &duckdb_append_int16>(9999, expected, 4, 0);
+	expected.value.lower = 99999999;
+	expected.value.upper = 0;
+	TestAppendingSingleDecimalValue<int32_t, &duckdb_append_int32>(99999999, expected, 8, 0);
+	expected.value.lower = 1234;
+	expected.value.upper = 0;
+	TestAppendingSingleDecimalValue<const char *, &duckdb_append_varchar>("1.234", expected, 4, 3);
+	TestAppendingSingleDecimalValue<const char *, &duckdb_append_varchar>("123.4", expected, 4, 1);
+
+	expected.value.lower = 3245234123123;
+	expected.value.upper = 0;
+	TestAppendingSingleDecimalValue<const char *, &duckdb_append_varchar>("3245234.123123", expected, 19, 6);
+	TestAppendingSingleDecimalValue<const char *, &duckdb_append_varchar>("3245234.123123", expected, 13, 6);
+	// Precision loss
+	expected.value.lower = 123124320;
+	expected.value.upper = 0;
+	TestAppendingSingleDecimalValue<float, &duckdb_append_float>(12.3124324f, expected, 9, 7);
+
+	// Precision loss
+	expected.value.lower = 123452342343;
+	expected.value.upper = 0;
+	TestAppendingSingleDecimalValue<double, &duckdb_append_double>(12345234234.31243244234324, expected, 26, 1);
+}
+
 TEST_CASE("Test appender statements in C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
