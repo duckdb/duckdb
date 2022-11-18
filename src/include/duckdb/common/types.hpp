@@ -23,37 +23,7 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
-//! Type used to represent dates (days since 1970-01-01)
-struct date_t { // NOLINT
-	int32_t days;
 
-	date_t() = default;
-	explicit inline date_t(int32_t days_p) : days(days_p) {}
-
-	// explicit conversion
-	explicit inline operator int32_t() const {return days;}
-
-	// comparison operators
-	inline bool operator==(const date_t &rhs) const {return days == rhs.days;};
-	inline bool operator!=(const date_t &rhs) const {return days != rhs.days;};
-	inline bool operator<=(const date_t &rhs) const {return days <= rhs.days;};
-	inline bool operator<(const date_t &rhs) const {return days < rhs.days;};
-	inline bool operator>(const date_t &rhs) const {return days > rhs.days;};
-	inline bool operator>=(const date_t &rhs) const {return days >= rhs.days;};
-
-	// arithmetic operators
-	inline date_t operator+(const int32_t &days) const {return date_t(this->days + days);};
-	inline date_t operator-(const int32_t &days) const {return date_t(this->days - days);};
-
-	// in-place operators
-	inline date_t &operator+=(const int32_t &days) {this->days += days; return *this;};
-	inline date_t &operator-=(const int32_t &days) {this->days -= days; return *this;};
-
-	// special values
-	static date_t infinity();
-	static date_t ninfinity();
-	static inline date_t epoch() {return date_t(0); } // NOLINT
-};
 
 //! Type used to represent time (microseconds)
 struct dtime_t { // NOLINT
@@ -93,44 +63,6 @@ struct dtime_t { // NOLINT
 };
 
 struct dtime_tz_t : public dtime_t {};
-
-//! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
-struct timestamp_t { // NOLINT
-	int64_t value;
-
-	timestamp_t() = default;
-	explicit inline timestamp_t(int64_t value_p) : value(value_p) {}
-	inline timestamp_t& operator=(int64_t value_p) {value = value_p; return *this;}
-
-	// explicit conversion
-	explicit inline operator int64_t() const {return value;}
-
-	// comparison operators
-	inline bool operator==(const timestamp_t &rhs) const {return value == rhs.value;};
-	inline bool operator!=(const timestamp_t &rhs) const {return value != rhs.value;};
-	inline bool operator<=(const timestamp_t &rhs) const {return value <= rhs.value;};
-	inline bool operator<(const timestamp_t &rhs) const {return value < rhs.value;};
-	inline bool operator>(const timestamp_t &rhs) const {return value > rhs.value;};
-	inline bool operator>=(const timestamp_t &rhs) const {return value >= rhs.value;};
-
-	// arithmetic operators
-	inline timestamp_t operator+(const double &value) const {return timestamp_t(this->value + int64_t(value));};
-	inline int64_t operator-(const timestamp_t &other) const {return this->value - other.value;};
-
-	// in-place operators
-	inline timestamp_t &operator+=(const int64_t &value) {this->value += value; return *this;};
-	inline timestamp_t &operator-=(const int64_t &value) {this->value -= value; return *this;};
-
-	// special values
-	static timestamp_t infinity();
-	static timestamp_t ninfinity();
-	static inline timestamp_t epoch() {return timestamp_t(0); } // NOLINT
-};
-
-struct timestamp_tz_t : public timestamp_t {};
-struct timestamp_ns_t : public timestamp_t {};
-struct timestamp_ms_t : public timestamp_t {};
-struct timestamp_sec_t : public timestamp_t {};
 
 struct interval_t {
 	int32_t months;
