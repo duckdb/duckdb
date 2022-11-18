@@ -25,8 +25,9 @@ enum class JSONFormat : uint8_t {
 };
 
 struct BufferedJSONReaderOptions {
-	//! The file path of the JSON file to read
-	string file_path;
+public:
+	//! The file paths of the JSON files to read
+	vector<string> file_paths;
 	//! The format of the JSON
 	JSONFormat format = JSONFormat::AUTO_DETECT;
 	//! Whether we return JSON strings (if not, we return YYJSON documents)
@@ -37,6 +38,10 @@ struct BufferedJSONReaderOptions {
 	bool ignore_errors = false;
 	//! Maximum JSON object size (defaults to 1MB)
 	idx_t maximum_object_size = 1048576;
+
+public:
+	void Serialize(FieldWriter &writer);
+	void Deserialize(FieldReader &reader);
 };
 
 struct JSONFileHandle {
@@ -68,7 +73,8 @@ class BufferedJSONReader {
 public:
 	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options);
 	void OpenJSONFile();
-	JSONFileHandle &GetFileHandle();
+	JSONFileHandle &GetFileHandle(idx_t file_idx) const;
+	idx_t GetFileIndex();
 	double GetProgress() const;
 	idx_t MaxThreads(idx_t buffer_capacity) const;
 
@@ -78,8 +84,10 @@ public:
 private:
 	ClientContext &context;
 
+	//! Next file path index
+	idx_t next_file_idx;
 	//! The file currently being read
-	unique_ptr<JSONFileHandle> file_handle;
+	vector<unique_ptr<JSONFileHandle>> file_handles;
 };
 
 } // namespace duckdb

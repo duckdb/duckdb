@@ -4,6 +4,13 @@
 
 namespace duckdb {
 
+unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFunctionBindInput &input,
+                                             vector<LogicalType> &return_types, vector<string> &names) {
+	return_types.push_back(JSONCommon::JSONType());
+	names.emplace_back("json");
+	return JSONScanData::Bind(context, input);
+}
+
 static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	D_ASSERT(output.ColumnCount() == 1);
 	D_ASSERT(JSONCommon::LogicalTypeIsJSON(output.data[0].GetType()));
@@ -25,25 +32,10 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 
 TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction table_function({parameter}, ReadJSONObjectsFunction, JSONScanData::Bind, JSONScanGlobalState::Init,
+	TableFunction table_function({parameter}, ReadJSONObjectsFunction, ReadJSONObjectsBind, JSONScanGlobalState::Init,
 	                             JSONScanLocalState::Init);
-
-	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["maximum_object_size"] = LogicalType::UBIGINT;
-
-	table_function.table_scan_progress = JSONScanProgress;
-	table_function.get_batch_index = JSONScanGetBatchIndex;
-
-	// TODO:
-	//	table_function.serialize = JSONScanSerialize;
-	//	table_function.deserialize = JSONScanDeserialize;
-
-	table_function.projection_pushdown = false;
-	table_function.filter_pushdown = false;
-	table_function.filter_prune = false;
-
+	SetJSONTableFunctionDefaults(table_function);
 	table_function.function_info = move(function_info);
-
 	return table_function;
 }
 

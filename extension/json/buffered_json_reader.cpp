@@ -5,6 +5,24 @@
 
 namespace duckdb {
 
+void BufferedJSONReaderOptions::Serialize(FieldWriter &writer) {
+	writer.WriteList<string>(file_paths);
+	writer.WriteField<JSONFormat>(format);
+	writer.WriteField<bool>(return_json_strings);
+	writer.WriteField<FileCompressionType>(compression);
+	writer.WriteField<bool>(ignore_errors);
+	writer.WriteField<idx_t>(maximum_object_size);
+}
+
+void BufferedJSONReaderOptions::Deserialize(FieldReader &reader) {
+	file_paths = reader.ReadRequiredList<string>();
+	format = reader.ReadRequired<JSONFormat>();
+	return_json_strings = reader.ReadRequired<bool>();
+	compression = reader.ReadRequired<FileCompressionType>();
+	ignore_errors = reader.ReadRequired<bool>();
+	maximum_object_size = reader.ReadRequired<idx_t>();
+}
+
 JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p)
     : file_handle(move(file_handle_p)), can_seek(file_handle->CanSeek()),
       plain_file_source(file_handle->OnDiskFile() && can_seek), file_size(file_handle->GetFileSize()),
@@ -41,27 +59,43 @@ idx_t JSONFileHandle::Read(const char *pointer, idx_t requested_size) {
 }
 
 BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options)
-    : options(move(options)), context(context) {
+    : options(move(options)), context(context), next_file_idx(0) {
+	file_handles.reserve(options.file_paths.size());
 }
 
 void BufferedJSONReader::OpenJSONFile() {
 	auto &file_system = FileSystem::GetFileSystem(context);
 	auto file_opener = FileOpener::Get(context);
-	auto regular_file_handle = file_system.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ,
+	auto &next_file_path = options.file_paths[next_file_idx++];
+	auto regular_file_handle = file_system.OpenFile(next_file_path.c_str(), FileFlags::FILE_FLAGS_READ,
 	                                                FileLockType::NO_LOCK, options.compression, file_opener);
-	file_handle = make_unique<JSONFileHandle>(move(regular_file_handle));
+	file_handles.emplace_back(make_unique<JSONFileHandle>(move(regular_file_handle)));
 }
 
-JSONFileHandle &BufferedJSONReader::GetFileHandle() {
-	return *file_handle;
+idx_t BufferedJSONReader::GetFileIndex() {
+	return next_file_idx - 1;
+}
+
+JSONFileHandle &BufferedJSONReader::GetFileHandle(idx_t file_idx) const {
+	return *file_handles[file_idx];
 }
 
 double BufferedJSONReader::GetProgress() const {
-	return 100.0 * double(file_handle->Remaining()) / double(file_handle->FileSize());
+	if (options.file_paths.size() == 1) {
+		auto &fh = *file_handles[0];
+		return 100.0 * double(fh.Remaining()) / double(fh.FileSize());
+	} else {
+		return double(next_file_idx) / options.file_paths.size();
+	}
 }
 
 idx_t BufferedJSONReader::MaxThreads(idx_t buffer_capacity) const {
-	return (file_handle->FileSize() + buffer_capacity - 1) / buffer_capacity;
+	auto &fh = GetFileHandle(0);
+	if (fh.CanSeek()) {
+		return (fh.FileSize() + buffer_capacity - 1) / buffer_capacity;
+	} else {
+		return 1;
+	}
 }
 
 } // namespace duckdb

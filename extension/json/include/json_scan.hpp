@@ -18,8 +18,8 @@ struct JSONScanLocalState;
 struct JSONScanData : public TableFunctionData {
 public:
 	explicit JSONScanData(BufferedJSONReaderOptions options);
-	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names);
+	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input);
+	static void InitializeFilePaths(ClientContext &context, const vector<string> &patterns, vector<string> &file_paths);
 
 public:
 	//! The JSON reader options
@@ -36,11 +36,14 @@ public:
 	bool return_json_strings;
 };
 
+void SetJSONTableFunctionDefaults(TableFunction &table_function);
+
 struct JSONBufferHandle {
 public:
-	explicit JSONBufferHandle(idx_t readers, AllocatedData &&buffer);
+	JSONBufferHandle(idx_t file_index, idx_t readers, AllocatedData &&buffer);
 
 public:
+	idx_t file_index;
 	atomic<idx_t> readers;
 	AllocatedData buffer;
 };
@@ -53,8 +56,6 @@ public:
 	idx_t MaxThreads() const override;
 
 public:
-	//! Initial buffer capacity (1MB)
-	static constexpr idx_t INITIAL_BUFFER_CAPACITY = 1048576;
 	//! The current buffer capacity
 	idx_t buffer_capacity;
 
@@ -113,12 +114,14 @@ private:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &next_batch_index, idx_t &readers);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &next_batch_index, idx_t &readers);
+	void ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &file_index, idx_t &next_batch_index,
+	                        idx_t &readers);
+	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &file_index, idx_t &next_batch_index,
+	                          idx_t &readers);
 
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
 
-	void ReadUnstructured(idx_t &count, bool return_strings);
+	void ReadUnstructured(idx_t &count, const bool return_strings, const idx_t maximum_object_size);
 	void ReadNewlineDelimited(idx_t &count);
 };
 
@@ -132,6 +135,18 @@ static idx_t JSONScanGetBatchIndex(ClientContext &context, const FunctionData *b
                                    LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
 	auto &lstate = (JSONScanLocalState &)*local_state;
 	return lstate.GetBatchIndex();
+}
+
+static void JSONScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
+	auto &bind_data = (JSONScanData &)*bind_data_p;
+	bind_data.options.Serialize(writer);
+}
+
+static unique_ptr<FunctionData> JSONScanDeserialize(ClientContext &context, FieldReader &reader,
+                                                    TableFunction &function) {
+	BufferedJSONReaderOptions options;
+	options.Deserialize(reader);
+	return make_unique<JSONScanData>(options);
 }
 
 } // namespace duckdb

@@ -2,14 +2,6 @@
 # description: Read ndjson files
 # group: [json]
 
-statement ok
-create table test as select range::bigint i from range(128000000);
-
-statement ok
-create index my_index on test(i)
-
-mode skip
-
 require json
 
 statement ok
