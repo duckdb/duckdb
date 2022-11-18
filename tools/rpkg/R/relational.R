@@ -1,13 +1,10 @@
 # expressions
 
 #' Create a column reference expression
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param name the column name to be referenced
 #' @param table the optional table name or a relation object to be referenced
 #' @return a column reference expression
-#' @export
+#' @noRd
 #' @examples
 #' col_ref_expr <- expr_reference("some_column_name")
 #' col_ref_expr2 <- expr_reference("some_column_name", "some_table_name")
@@ -19,47 +16,35 @@ expr_reference <- function(name, table = "") {
 }
 
 #' Create a constant expression
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param val the constant value
 #' @return a constant expression
-#' @export
+#' @noRd
 #' @examples
 #' const_int_expr <- expr_constant(42)
 #' const_str_expr <- expr_constant("Hello, World")
 expr_constant <- rapi_expr_constant
 
 #' Create a function call expression
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param name the function name
 #' @param args the a list of expressions for the function arguments
 #' @return a function call expression
-#' @export
+#' @noRd
 #' @examples
 #' call_expr <- expr_function("ABS", list(expr_constant(-42)))
 expr_function <- rapi_expr_function
 
 #' Convert an expression to a string for debugging purposes
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param expr the expression
 #' @return a string representation of the expression
-#' @export
+#' @noRd
 #' @examples
 #' expr_str <- expr_tostring(expr_constant(42))
 expr_tostring <- rapi_expr_tostring
 
 #' Set the alias for an expression
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param expr the expression
 #' @param alias the alias
-#' @export
+#' @noRd
 #' @examples
 #' expr_set_alias(expr_constant(42), "my_alias")
 expr_set_alias <- rapi_expr_set_alias
@@ -73,14 +58,11 @@ print.duckdb_expr <- function(x, ...) {
 # relations
 
 #' Convert a R data.frame to a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param con a DuckDB DBI connection object
 #' @param df the data.frame
 #' @param experimental enable experimental string handling
 #' @return the `duckdb_relation` object wrapping the data.frame
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -112,13 +94,10 @@ head.duckdb_relation <- function(x, n=6L, ...) {
 }
 
 #' Lazily retrieve the top-n rows of a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the DuckDB relation object
 #' @param n the amount of rows to retrieve
 #' @return the now limited `duckdb_relation` object
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -126,13 +105,10 @@ head.duckdb_relation <- function(x, n=6L, ...) {
 rel_limit <- rapi_rel_limit
 
 #' Lazily project a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the DuckDB relation object
 #' @param exprs a list of DuckDB expressions to project
 #' @return the now projected `duckdb_relation` object
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -140,13 +116,10 @@ rel_limit <- rapi_rel_limit
 rel_project <- rapi_rel_project
 
 #' Lazily filter a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the DuckDB relation object
 #' @param exprs a list of DuckDB expressions to filter by
 #' @return the now filtered `duckdb_relation` object
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' DBI::dbExecute(con, 'CREATE MACRO gt(a, b) AS a > b')
@@ -155,14 +128,11 @@ rel_project <- rapi_rel_project
 rel_filter <- rapi_rel_filter
 
 #' Lazily aggregate a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the DuckDB relation object
 #' @param groups a list of DuckDB expressions to group by
 #' @param aggregates a (optionally named) list of DuckDB expressions with aggregates to compute
 #' @return the now aggregated `duckdb_relation` object
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -171,13 +141,10 @@ rel_filter <- rapi_rel_filter
 rel_aggregate <- rapi_rel_aggregate
 
 #' Lazily reorder a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the DuckDB relation object
 #' @param orders a list of DuckDB expressions to order by
 #' @return the now aggregated `duckdb_relation` object
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -185,14 +152,11 @@ rel_aggregate <- rapi_rel_aggregate
 rel_order <- rapi_rel_order
 
 #' Lazily INNER join two DuckDB relation objects
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param left the left-hand-side DuckDB relation object
 #' @param right the right-hand-side DuckDB relation object
 #' @param conds a list of DuckDB expressions to use for the join
 #' @return a new `duckdb_relation` object resulting from the join
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' DBI::dbExecute(con, 'CREATE MACRO eq(a, b) AS a = b')
@@ -203,12 +167,9 @@ rel_order <- rapi_rel_order
 rel_inner_join <- rapi_rel_inner_join
 
 #' Lazily compute a distinct result on a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the input DuckDB relation object
 #' @return a new `duckdb_relation` object with distinct rows
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -216,13 +177,10 @@ rel_inner_join <- rapi_rel_inner_join
 rel_distinct <- rapi_rel_distinct
 
 #' Run a SQL query on a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the DuckDB relation object
 #' @param sql a SQL query to run, use `_` to refer back to the relation
 #' @return the now aggregated `duckdb_relation` object
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -230,11 +188,8 @@ rel_distinct <- rapi_rel_distinct
 rel_sql <- rapi_rel_sql
 
 #' Print the EXPLAIN output for a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the DuckDB relation object
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -245,11 +200,8 @@ rel_explain <- function(rel) {
 }
 
 #' Get the internal alias for a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the DuckDB relation object
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -257,12 +209,9 @@ rel_explain <- function(rel) {
 rel_alias <- rapi_rel_alias
 
 #' Set the internal alias for a DuckDB relation object
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the DuckDB relation object
 #' @param alias the new alias
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -270,12 +219,9 @@ rel_alias <- rapi_rel_alias
 rel_set_alias <- rapi_rel_set_alias
 
 #' Transforms a relation object to a lazy data frame using altrep
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param rel the DuckDB relation object
 #' @return a data frame
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
@@ -284,12 +230,9 @@ rel_to_altrep <- rapi_rel_to_altrep
 
 
 #' Checks if a lazy data frame created using rel_to_altrep has been materialized yet
-#'
-#' NOTICE: This function is experimental and may change/disappear without warning in future versions
-#'
 #' @param df an altrep-backed lazy data frame
 #' @return true if materialization has happened
-#' @export
+#' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
 #' rel <- rel_from_df(con, mtcars)
