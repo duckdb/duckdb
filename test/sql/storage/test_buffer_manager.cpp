@@ -239,7 +239,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	DeleteDatabase(storage_database);
 	DuckDB db(storage_database, config.get());
 
-	[[maybe_unused]] auto align = [](idx_t requested_size) {
+	auto align = [](idx_t requested_size) {
 		return AlignValue<idx_t, Storage::SECTOR_SIZE>(requested_size);
 	};
 
