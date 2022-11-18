@@ -9,74 +9,16 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
-//! The Timestamp class is a static class that holds helper functions for the Timestamp
-//! type.
-class Timestamp {
-public:
-	// min timestamp is 290308-12-22 (BC)
-	constexpr static const int32_t MIN_YEAR = -290308;
-	constexpr static const int32_t MIN_MONTH = 12;
-	constexpr static const int32_t MIN_DAY = 22;
-
-public:
-	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss[.f][-+TH[:tm]]" to a timestamp object
-	DUCKDB_API static timestamp_t FromString(const string &str);
-	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/
-	//! If has_offset is true, then the result is an instant that was offset from UTC
-	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
-	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
-	                                             string_t &tz);
-	DUCKDB_API static bool TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);
-	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len);
-	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
-	DUCKDB_API static string ToString(timestamp_t timestamp);
-
-	DUCKDB_API static date_t GetDate(timestamp_t timestamp);
-
-	DUCKDB_API static dtime_t GetTime(timestamp_t timestamp);
-	//! Create a Timestamp object from a specified (date, time) combination
-	DUCKDB_API static timestamp_t FromDatetime(date_t date, dtime_t time);
-	DUCKDB_API static bool TryFromDatetime(date_t date, dtime_t time, timestamp_t &result);
-
-	//! Is the timestamp finite or infinite?
-	static inline bool IsFinite(timestamp_t timestamp) {
-		return timestamp != timestamp_t::infinity() && timestamp != timestamp_t::ninfinity();
-	}
-
-	//! Extract the date and time from a given timestamp object
-	DUCKDB_API static void Convert(timestamp_t date, date_t &out_date, dtime_t &out_time);
-	//! Returns current timestamp
-	DUCKDB_API static timestamp_t GetCurrentTimestamp();
-
-	//! Convert the epoch (in sec) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochSeconds(int64_t ms);
-	//! Convert the epoch (in ms) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochMs(int64_t ms);
-	//! Convert the epoch (in microseconds) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochMicroSeconds(int64_t micros);
-	//! Convert the epoch (in nanoseconds) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochNanoSeconds(int64_t micros);
-
-	//! Convert the epoch (in seconds) to a timestamp
-	DUCKDB_API static int64_t GetEpochSeconds(timestamp_t timestamp);
-	//! Convert the epoch (in ms) to a timestamp
-	DUCKDB_API static int64_t GetEpochMs(timestamp_t timestamp);
-	//! Convert a timestamp to epoch (in microseconds)
-	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
-	//! Convert a timestamp to epoch (in nanoseconds)
-	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
-
-	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset,
-	                                         int &minute_offset);
-
-	DUCKDB_API static string ConversionError(const string &str);
-	DUCKDB_API static string ConversionError(string_t str);
-};
+struct date_t;
+struct dtime_t;
 
 //! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
 struct timestamp_t { // NOLINT
@@ -150,4 +92,108 @@ struct timestamp_ns_t : public timestamp_t {};
 struct timestamp_ms_t : public timestamp_t {};
 struct timestamp_sec_t : public timestamp_t {};
 
+//! The Timestamp class is a static class that holds helper functions for the Timestamp
+//! type.
+class Timestamp {
+public:
+	// min timestamp is 290308-12-22 (BC)
+	constexpr static const int32_t MIN_YEAR = -290308;
+	constexpr static const int32_t MIN_MONTH = 12;
+	constexpr static const int32_t MIN_DAY = 22;
+
+public:
+	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss[.f][-+TH[:tm]]" to a timestamp object
+	DUCKDB_API static timestamp_t FromString(const string &str);
+	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/
+	//! If has_offset is true, then the result is an instant that was offset from UTC
+	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
+	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
+	                                             string_t &tz);
+	DUCKDB_API static bool TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);
+	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len);
+	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
+	DUCKDB_API static string ToString(timestamp_t timestamp);
+
+	DUCKDB_API static date_t GetDate(timestamp_t timestamp);
+
+	DUCKDB_API static dtime_t GetTime(timestamp_t timestamp);
+	//! Create a Timestamp object from a specified (date, time) combination
+	DUCKDB_API static timestamp_t FromDatetime(date_t date, dtime_t time);
+	DUCKDB_API static bool TryFromDatetime(date_t date, dtime_t time, timestamp_t &result);
+
+	//! Is the timestamp finite or infinite?
+	static inline bool IsFinite(timestamp_t timestamp) {
+		return timestamp != timestamp_t::infinity() && timestamp != timestamp_t::ninfinity();
+	}
+
+	//! Extract the date and time from a given timestamp object
+	DUCKDB_API static void Convert(timestamp_t date, date_t &out_date, dtime_t &out_time);
+	//! Returns current timestamp
+	DUCKDB_API static timestamp_t GetCurrentTimestamp();
+
+	//! Convert the epoch (in sec) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochSeconds(int64_t ms);
+	//! Convert the epoch (in ms) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochMs(int64_t ms);
+	//! Convert the epoch (in microseconds) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochMicroSeconds(int64_t micros);
+	//! Convert the epoch (in nanoseconds) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochNanoSeconds(int64_t micros);
+
+	//! Convert the epoch (in seconds) to a timestamp
+	DUCKDB_API static int64_t GetEpochSeconds(timestamp_t timestamp);
+	//! Convert the epoch (in ms) to a timestamp
+	DUCKDB_API static int64_t GetEpochMs(timestamp_t timestamp);
+	//! Convert a timestamp to epoch (in microseconds)
+	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
+	//! Convert a timestamp to epoch (in nanoseconds)
+	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
+
+	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset,
+	                                         int &minute_offset);
+
+	DUCKDB_API static string ConversionError(const string &str);
+	DUCKDB_API static string ConversionError(string_t str);
+};
+
 } // namespace duckdb
+
+namespace std {
+
+//! Timestamp
+template <>
+struct hash<duckdb::timestamp_t> {
+	std::size_t operator()(const duckdb::timestamp_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_ms_t> {
+	std::size_t operator()(const duckdb::timestamp_ms_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_ns_t> {
+	std::size_t operator()(const duckdb::timestamp_ns_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_sec_t> {
+	std::size_t operator()(const duckdb::timestamp_sec_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_tz_t> {
+	std::size_t operator()(const duckdb::timestamp_tz_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+} // namespace std

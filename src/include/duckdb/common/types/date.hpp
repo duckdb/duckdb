@@ -12,8 +12,76 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/limits.hpp"
+
+#include <functional>
 
 namespace duckdb {
+
+struct timestamp_t;
+
+//! Type used to represent dates (days since 1970-01-01)
+struct date_t { // NOLINT
+	int32_t days;
+
+	date_t() = default;
+	explicit inline date_t(int32_t days_p) : days(days_p) {
+	}
+
+	// explicit conversion
+	explicit inline operator int32_t() const {
+		return days;
+	}
+
+	// comparison operators
+	inline bool operator==(const date_t &rhs) const {
+		return days == rhs.days;
+	};
+	inline bool operator!=(const date_t &rhs) const {
+		return days != rhs.days;
+	};
+	inline bool operator<=(const date_t &rhs) const {
+		return days <= rhs.days;
+	};
+	inline bool operator<(const date_t &rhs) const {
+		return days < rhs.days;
+	};
+	inline bool operator>(const date_t &rhs) const {
+		return days > rhs.days;
+	};
+	inline bool operator>=(const date_t &rhs) const {
+		return days >= rhs.days;
+	};
+
+	// arithmetic operators
+	inline date_t operator+(const int32_t &days) const {
+		return date_t(this->days + days);
+	};
+	inline date_t operator-(const int32_t &days) const {
+		return date_t(this->days - days);
+	};
+
+	// in-place operators
+	inline date_t &operator+=(const int32_t &days) {
+		this->days += days;
+		return *this;
+	};
+	inline date_t &operator-=(const int32_t &days) {
+		this->days -= days;
+		return *this;
+	};
+
+	// special values
+	static inline date_t infinity() {
+		return date_t(NumericLimits<int32_t>::Maximum());
+	} // NOLINT
+	static inline date_t ninfinity() {
+		return date_t(-NumericLimits<int32_t>::Maximum());
+	} // NOLINT
+	static inline date_t epoch() {
+		return date_t(0);
+	} // NOLINT
+};
 
 //! The Date class is a static class that holds helper functions for the Date type.
 class Date {
@@ -137,67 +205,16 @@ private:
 	static void ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset);
 };
 
-//! Type used to represent dates (days since 1970-01-01)
-struct date_t { // NOLINT
-	int32_t days;
-
-	date_t() = default;
-	explicit inline date_t(int32_t days_p) : days(days_p) {
-	}
-
-	// explicit conversion
-	explicit inline operator int32_t() const {
-		return days;
-	}
-
-	// comparison operators
-	inline bool operator==(const date_t &rhs) const {
-		return days == rhs.days;
-	};
-	inline bool operator!=(const date_t &rhs) const {
-		return days != rhs.days;
-	};
-	inline bool operator<=(const date_t &rhs) const {
-		return days <= rhs.days;
-	};
-	inline bool operator<(const date_t &rhs) const {
-		return days < rhs.days;
-	};
-	inline bool operator>(const date_t &rhs) const {
-		return days > rhs.days;
-	};
-	inline bool operator>=(const date_t &rhs) const {
-		return days >= rhs.days;
-	};
-
-	// arithmetic operators
-	inline date_t operator+(const int32_t &days) const {
-		return date_t(this->days + days);
-	};
-	inline date_t operator-(const int32_t &days) const {
-		return date_t(this->days - days);
-	};
-
-	// in-place operators
-	inline date_t &operator+=(const int32_t &days) {
-		this->days += days;
-		return *this;
-	};
-	inline date_t &operator-=(const int32_t &days) {
-		this->days -= days;
-		return *this;
-	};
-
-	// special values
-	static inline date_t infinity() {
-		return date_t(NumericLimits<int32_t>::Maximum());
-	} // NOLINT
-	static inline date_t ninfinity() {
-		return date_t(-NumericLimits<int32_t>::Maximum());
-	} // NOLINT
-	static inline date_t epoch() {
-		return date_t(0);
-	} // NOLINT
-};
-
 } // namespace duckdb
+
+namespace std {
+
+//! Date
+template <>
+struct hash<duckdb::date_t> {
+	std::size_t operator()(const duckdb::date_t &k) const {
+		using std::hash;
+		return hash<int32_t>()((int32_t)k);
+	}
+};
+} // namespace std
