@@ -48,6 +48,9 @@ void TestAppendingSingleDecimalValue(TYPE value, duckdb_decimal expected, uint8_
 
 	result = tester.Query("SELECT * FROM decimals");
 	AssertDecimalValueMatches(result, expected);
+
+	duckdb_appender_close(appender);
+	duckdb_appender_destroy(&appender);
 }
 
 TEST_CASE("Test appending into DECIMAL in C API", "[capi]") {
