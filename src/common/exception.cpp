@@ -343,6 +343,3 @@ ParameterNotResolvedException::ParameterNotResolvedException()
 }
 
 } // namespace duckdb
-
-
-#undef table_size
