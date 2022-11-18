@@ -1,9 +1,9 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "test_helpers.hpp"
-#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -239,11 +239,9 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	DeleteDatabase(storage_database);
 	DuckDB db(storage_database, config.get());
 
-#if defined(DEBUG) || defined(DUCKDB_FORCE_ASSERT)
-	auto align = [](idx_t requested_size) {
+	[[maybe_unused]] auto align = [](idx_t requested_size) {
 		return AlignValue<idx_t, Storage::SECTOR_SIZE>(requested_size);
 	};
-#endif
 
 	// 1GB limit
 	Connection con(db);

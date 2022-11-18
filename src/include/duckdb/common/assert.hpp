@@ -25,6 +25,11 @@ DUCKDB_API void DuckDBAssertInternal(bool condition, const char *condition_name,
 
 #else
 
-#define D_ASSERT(X) do { if (!(X)) { __builtin_unreachable(); } } while (0)
+#define D_ASSERT(X)                                                                                                    \
+	do {                                                                                                               \
+		if (!(X)) {                                                                                                    \
+			__builtin_unreachable();                                                                                   \
+		}                                                                                                              \
+	} while (0)
 
 #endif
