@@ -1562,7 +1562,7 @@ int linenoiseHistoryAdd(const char *line) {
 	if (!linecopy)
 		return 0;
 	// replace all newlines with spaces
-	for(auto ptr = linecopy; *ptr; ptr++) {
+	for (auto ptr = linecopy; *ptr; ptr++) {
 		if (*ptr == '\n' || *ptr == '\r') {
 			*ptr = ' ';
 		}
