@@ -1,5 +1,5 @@
 # name: test/sql/copy/per_thread_output.test
-# description: 
+# description: test PER_THREAD_OUTPUT parameter for COPY
 # group: [copy]
 
 require parquet
@@ -34,6 +34,17 @@ out_3
 statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2.parquet/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
 
+query I
+SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2.parquet/*')
+----
+10000
+
+
+# cant write to existing folders
+statement error
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2.parquet/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+
+# we have not added anything
 query I
 SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2.parquet/*')
 ----

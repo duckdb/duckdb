@@ -72,8 +72,8 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                               GlobalSinkState &gstate_p) const {
 	auto &gstate = (CopyToFunctionGlobalState &)gstate_p;
-	// already happened in combine
 	if (per_thread_output) {
+		// already happened in combine
 		return SinkFinalizeType::READY;
 	}
 	if (function.copy_to_finalize) {
@@ -92,18 +92,25 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 	if (per_thread_output) {
 		auto& g = (CopyToFunctionGlobalState&) *sink_state;
 		auto& fs = FileSystem::GetFileSystem(context.client);
+
+		if (fs.FileExists(file_path)) {
+			throw IOException("%s exists", file_path);
+		}
+		if (!fs.DirectoryExists(file_path)) {
+			fs.CreateDirectory(file_path);
+		} else {
+			idx_t n_files = 0;
+			fs.ListFiles(file_path, [&n_files](const string &path, bool) { n_files++; });
+			if (n_files > 0) {
+				throw IOException("Directory %s is not empty", file_path);
+			}
+		}
 		idx_t this_file_offset;
 		{
 			lock_guard<mutex> glock(g.lock);
 			this_file_offset = g.last_file_offset++;
 		}
 		string output_path = fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset));
-		if (fs.FileExists(file_path)) {
-			throw IOException("%s exists", file_path);
-		}
-		if (!fs.DirectoryExists(file_path)) {
-			fs.CreateDirectory(file_path);
-		}
 		if (fs.FileExists(output_path)) {
 			throw IOException("%s exists", output_path);
 		}
