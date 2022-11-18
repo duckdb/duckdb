@@ -12,7 +12,6 @@ namespace duckdb {
 
 SystemBufferManager::SystemBufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : BufferManager(db, tmp, maximum_memory) {
-	temp_block_manager = make_unique<InMemoryBlockManager>(*this);
 }
 
 SystemBufferManager::~SystemBufferManager() {
