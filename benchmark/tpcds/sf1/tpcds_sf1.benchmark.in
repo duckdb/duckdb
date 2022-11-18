@@ -8,9 +8,9 @@ subgroup sf1
 
 require tpcds
 
-storage persistent
-
 cache tpcds_sf1
+
+connect duckdb_benchmark_data/tpcds_sf1/tpcds.duckdb
 
 load benchmark/tpcds/sf1/load.sql
 
