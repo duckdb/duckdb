@@ -284,7 +284,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 			}
 		}
 		bool cache_instance = database != ":memory:" && !database.empty();
-		auto shared_db = instance_cache.CreateInstance(database, config, cache_instance);
+		auto shared_db = instance_cache.GetOrCreateInstance(database, config, cache_instance);
 		auto db = shared_db.get();
 		std::lock_guard<std::mutex> lock(db_map_lock);
 		db_map[db] = move(shared_db);
