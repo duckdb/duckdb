@@ -19,6 +19,8 @@ pragma verify_parallelism
 statement ok
 create table integers as select range i from range(100000) order by random()
 
+mode skip
+
 loop i 0 20
 
 statement ok
@@ -28,7 +30,44 @@ restart
 
 # empty result if sorted
 query T
-select * FROM sorted_integers QUALIFY NOT (i>=lag(i) over () OR lag(i) OVER () IS NULL)
+select * FROM sorted_integers QUALIFY NOT (i>lag(i) over () OR lag(i) OVER () IS NULL)
+----
+
+
+statement ok
+drop table sorted_integers
+
+endloop
+
+mode unskip
+
+# now we do the same but with a UNION ALL
+
+loop i 0 20
+
+statement ok
+create table sorted_integers as
+with p1 as (
+    select i from integers order by i
+), p2 as (
+    select i + 100000 from integers order by i
+)
+select * from p1 union all select * from p2
+
+restart
+
+query I
+select * FROM sorted_integers LIMIT 5
+----
+0
+1
+2
+3
+4
+
+# empty result if sorted
+query T
+select * FROM sorted_integers QUALIFY NOT (i>lag(i) over () OR lag(i) OVER () IS NULL)
 ----
 
 
