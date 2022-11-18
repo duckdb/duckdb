@@ -4,10 +4,6 @@
 
 require parquet
 
-
-statement ok
-PRAGMA enable_verification
-
 statement ok
 PRAGMA verify_parallelism;
 
@@ -22,5 +18,23 @@ COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output.parquet' (FORMAT PARQUET,
 
 query I
 SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output.parquet/*')
+----
+10000
+
+query I
+SELECT STR_SPLIT(file, '/')[-1] f FROM GLOB('__TEST_DIR__/per_thread_output.parquet/*') ORDER BY f
+----
+out_0
+out_1
+out_2
+out_3
+
+
+# with a trailing slash
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2.parquet/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2.parquet/*')
 ----
 10000

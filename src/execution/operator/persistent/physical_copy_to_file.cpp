@@ -1,8 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/thread.hpp"
-#include "duckdb/common/types/uuid.hpp"
 
 #include <algorithm>
 
@@ -11,10 +9,11 @@ namespace duckdb {
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
-	    : rows_copied(0), global_state(move(global_state)) {
+	    : rows_copied(0), last_file_offset(0), global_state(move(global_state)) {
 	}
-
-	atomic<idx_t> rows_copied;
+	mutex lock;
+	idx_t rows_copied;
+	idx_t last_file_offset;
 	unique_ptr<GlobalFunctionData> global_state;
 };
 
@@ -49,7 +48,10 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkSta
 	auto &g = (CopyToFunctionGlobalState &)gstate;
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
-	g.rows_copied += input.size();
+	{
+		lock_guard<mutex> glock(g.lock);
+		g.rows_copied += input.size();
+	}
 	function.copy_to_sink(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state, *l.local_state, input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -88,8 +90,14 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	auto res = make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
 	if (per_thread_output) {
+		auto& g = (CopyToFunctionGlobalState&) *sink_state;
 		auto& fs = FileSystem::GetFileSystem(context.client);
-		string output_path = fs.JoinPath(file_path, UUID::ToString(UUID::GenerateRandomUUID()));
+		idx_t this_file_offset;
+		{
+			lock_guard<mutex> glock(g.lock);
+			this_file_offset = g.last_file_offset++;
+		}
+		string output_path = fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset));
 		if (fs.FileExists(file_path)) {
 			throw IOException("%s exists", file_path);
 		}

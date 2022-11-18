@@ -50,7 +50,7 @@ public:
 		return true;
 	}
 
-	bool ParallelOperator() const override {
+	bool ParallelSink() const override {
 		return per_thread_output;
 	}
 };
