@@ -40,10 +40,17 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	bool use_tmp_file = true;
+	bool per_thread_output = false;
+
 	for (auto &option : stmt.info->options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
 			use_tmp_file = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			stmt.info->options.erase(option.first);
+			break;
+		}
+		if (loption == "per_thread_output") {
+			per_thread_output = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			stmt.info->options.erase(option.first);
 			break;
 		}
@@ -54,6 +61,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
+	copy->per_thread_output = per_thread_output;
 	copy->is_file_and_exists = config.file_system->FileExists(copy->file_path);
 
 	copy->AddChild(move(select_node.plan));

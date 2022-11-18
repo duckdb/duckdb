@@ -1,0 +1,26 @@
+# name: test/sql/copy/per_thread_output.test
+# description: 
+# group: [copy]
+
+require parquet
+
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_parallelism;
+
+statement ok
+pragma threads=4;
+
+statement ok
+create table bigdata as select * from generate_series (9999);
+
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output.parquet' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output.parquet/*')
+----
+10000
