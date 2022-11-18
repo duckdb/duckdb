@@ -23,3 +23,7 @@ SELECT (SELECT avg(0)) c0, (SELECT 0 OFFSET c0 + 1);
 ----
 Serialization Error: Cannot copy BoundSubqueryExpression
 
+query II
+select avg(0) AS c0, (SELECT c0);
+----
+0.0	0.0
