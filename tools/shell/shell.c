@@ -746,7 +746,6 @@ static char *one_input_line(FILE *in, char *zPrior, int isContinuation){
 #else
     free(zPrior);
     zResult = shell_readline(zPrompt);
-    if( zResult && *zResult && *zResult != '\3' ) shell_add_history(zResult);
 #endif
   }
   return zResult;
@@ -20051,6 +20050,7 @@ static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline){
   open_db(p, 0);
   if( ShellHasFlag(p,SHFLG_Backslash) ) resolve_backslashes(zSql);
   if( p->flgProgress & SHELL_PROGRESS_RESET ) p->nProgress = 0;
+  if( zSql && *zSql && *zSql != '\3' ) shell_add_history(zSql);
   BEGIN_TIMER;
   rc = shell_exec(p, zSql, &zErrMsg);
   END_TIMER;
