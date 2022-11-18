@@ -942,10 +942,15 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 		    return true;
 	    },
 	    [&](const char *data, size_t data_length) {
+		    if (stats) {
+			    stats->total_bytes_received += data_length;
+		    }
 		    response << string(data, data_length);
 		    return true;
 	    });
-
+	if (stats) {
+		stats->get_count++;
+	}
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (Error code " +
 		                         to_string((int)res.error()) + ")");

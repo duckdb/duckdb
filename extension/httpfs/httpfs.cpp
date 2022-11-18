@@ -146,12 +146,10 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
-
+	auto res = hfh.http_client->Head(path.c_str(), *headers);
 	if (hfh.stats) {
 		hfh.stats->head_count++;
 	}
-
-	auto res = hfh.http_client->Head(path.c_str(), *headers);
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
 	}
