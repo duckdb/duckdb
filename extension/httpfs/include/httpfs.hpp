@@ -4,11 +4,8 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "http_metadata_cache.hpp"
-#include <iostream>
 
 namespace duckdb_httplib_openssl {
 struct Response;

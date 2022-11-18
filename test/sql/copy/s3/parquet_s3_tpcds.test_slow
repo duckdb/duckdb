@@ -22,7 +22,7 @@ statement ok
 PRAGMA default_null_order='NULLS LAST'
 
 statement ok
-SET http_metadata_cache_max_age=10000
+PRAGMA enable_http_metadata_cache
 
 statement ok
 CREATE SCHEMA tpcds;

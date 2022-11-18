@@ -6,7 +6,6 @@
 #include "duckdb/common/thread.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/chrono.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -34,12 +33,6 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 		timeout = value.GetValue<uint64_t>();
 	} else {
 		timeout = DEFAULT_TIMEOUT;
-	}
-
-	if (opener->TryGetCurrentSetting("http_metadata_cache_max_age", value)) {
-		metadata_cache_max_age = value.GetValue<uint64_t>();
-	} else {
-		metadata_cache_max_age = DEFAULT_METADATA_CACHE_MAX_AGE;
 	}
 
 	return {timeout, metadata_cache_max_age};
@@ -178,10 +171,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 			    if (response.status >= 400) {
 				    string error = "HTTP GET error on '" + url + "' (HTTP " + to_string(response.status) + ")";
 				    if (response.status == 416) {
-					    if (hfh.http_params.metadata_cache_max_age > 0) {
-						    error += " This could mean the file was changed, please try again with "
-						             "http_metadata_cache_max_age set to 0.";
-					    }
+					    error += " This could mean the file was changed. Try disabling the duckdb http metadata cache "
+					             "if enabled, and confirm the server supports range requests.";
 				    }
 
 				    throw std::runtime_error(error);
