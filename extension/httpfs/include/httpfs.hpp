@@ -27,10 +27,8 @@ public:
 
 struct HTTPParams {
 	static constexpr uint64_t DEFAULT_TIMEOUT = 30000;            // 30 sec
-	static constexpr uint64_t DEFAULT_METADATA_CACHE_MAX_AGE = 0; // disabled
 
 	uint64_t timeout;
-	uint64_t metadata_cache_max_age;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
 };

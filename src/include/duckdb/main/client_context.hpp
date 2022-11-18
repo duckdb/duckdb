@@ -55,6 +55,7 @@ struct PendingQueryParameters {
 //! e.g. caches that need to live as long as a ClientContext or Query.
 class ClientContextState {
 public:
+	virtual ~ClientContextState() {};
 	virtual void QueryEnd() = 0;
 };
 

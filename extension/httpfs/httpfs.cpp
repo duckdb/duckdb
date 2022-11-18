@@ -26,7 +26,6 @@ static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(Heade
 
 HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	uint64_t timeout;
-	uint64_t metadata_cache_max_age;
 	Value value;
 
 	if (opener->TryGetCurrentSetting("http_timeout", value)) {
@@ -35,7 +34,7 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 		timeout = DEFAULT_TIMEOUT;
 	}
 
-	return {timeout, metadata_cache_max_age};
+	return {timeout};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {

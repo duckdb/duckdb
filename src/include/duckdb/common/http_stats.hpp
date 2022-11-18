@@ -30,6 +30,7 @@ public:
 		put_count = 0;
 		post_count = 0;
 		total_bytes_received = 0;
+		total_bytes_sent = 0;
 	}
 
 	//! helper function to get the HTTP
