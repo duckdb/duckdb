@@ -622,6 +622,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 	rel->CreateView(view_name, replace);
 	// We need to pass ownership of any Python Object Dependencies to the connection
 	auto all_dependencies = rel->GetAllDependencies();
+	if (view_name == "stream_dependency") {
+		throw InvalidInputException("This view name is reserved, please utilize a different one");
+	}
 	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
 	return make_unique<DuckDBPyRelation>(rel);
 }
@@ -640,6 +643,9 @@ static bool IsDescribeStatement(SQLStatement &statement) {
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
 	auto view_relation = CreateView(view_name);
 	auto all_dependencies = rel->GetAllDependencies();
+	if (view_name == "stream_dependency") {
+		throw InvalidInputException("This view name is reserved, please utilize a different one");
+	}
 	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
 
 	Parser parser(rel->context.GetContext()->GetParserOptions());

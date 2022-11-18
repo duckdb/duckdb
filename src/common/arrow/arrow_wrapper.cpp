@@ -157,7 +157,7 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	return my_stream->last_error.Message().c_str();
 }
 
-ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)
+ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(shared_ptr<QueryResult> result_p, idx_t batch_size_p)
     : result(move(result_p)) {
 	//! We first initialize the private data of the stream
 	stream.private_data = this;

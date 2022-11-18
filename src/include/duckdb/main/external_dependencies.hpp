@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-enum ExternalDependenciesType { PYTHON_DEPENDENCY };
+enum ExternalDependenciesType { PYTHON_DEPENDENCY, STREAM_DEPENDENCY };
 class ExternalDependency {
 public:
 	explicit ExternalDependency(ExternalDependenciesType type_p) : type(type_p) {};

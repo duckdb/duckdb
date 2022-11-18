@@ -37,6 +37,14 @@ public:
 	vector<unique_ptr<RegisteredObject>> py_object_list;
 };
 
+class StreamDependencies : public ExternalDependency {
+public:
+	explicit StreamDependencies(StreamQueryResult *result_p)
+	    : ExternalDependency(ExternalDependenciesType::STREAM_DEPENDENCY), result(result_p) {};
+
+	StreamQueryResult *result;
+};
+
 struct DuckDBPyRelation {
 public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);

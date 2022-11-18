@@ -140,6 +140,14 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	if (params.is_none()) {
 		params = py::list();
 	}
+	auto stream_result = connection->context->external_dependencies.find("stream_result");
+	if (stream_result != connection->context->external_dependencies.end()) {
+		if (stream_result->second[0]) {
+			auto stream_result_dependency = (StreamDependencies &)*stream_result->second[0];
+			stream_result_dependency.result->Close();
+		}
+		connection->context->external_dependencies.erase("stream_result");
+	}
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
 	{
@@ -224,6 +232,9 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object),
 		                                                       make_unique<RegisteredObject>(new_df)));
+		if (name == "stream_dependency") {
+			throw InvalidInputException("This view name is reserved, please utilize a different one");
+		}
 		connection->context->external_dependencies[name] = move(dependencies);
 	} else if (IsAcceptedArrowObject(python_object)) {
 		auto stream_factory =
@@ -242,6 +253,9 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(
 		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), python_object)));
+		if (name == "stream_dependency") {
+			throw InvalidInputException("This view name is reserved, please utilize a different one");
+		}
 		connection->context->external_dependencies[name] = move(dependencies);
 	} else {
 		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));

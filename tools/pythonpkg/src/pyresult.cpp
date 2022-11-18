@@ -444,8 +444,15 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t 
 	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto stream = (StreamQueryResult *)result.get();
+		vector<shared_ptr<ExternalDependency>> dependencies;
+		dependencies.push_back(make_shared<StreamDependencies>(stream));
+		stream->context->external_dependencies["stream_result"] = dependencies;
+	}
 	//! We have to construct an Arrow Array Stream
 	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), chunk_size);
+
 	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
 	return py::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
 }

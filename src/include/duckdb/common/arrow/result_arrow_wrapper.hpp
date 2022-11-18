@@ -14,9 +14,9 @@
 namespace duckdb {
 class ResultArrowArrayStreamWrapper {
 public:
-	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result, idx_t batch_size);
+	explicit ResultArrowArrayStreamWrapper(shared_ptr<QueryResult> result, idx_t batch_size);
 	ArrowArrayStream stream;
-	unique_ptr<QueryResult> result;
+	shared_ptr<QueryResult> result;
 	PreservedError last_error;
 	idx_t batch_size;
 	vector<LogicalType> column_types;
