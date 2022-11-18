@@ -26,7 +26,7 @@ public:
 };
 
 struct HTTPParams {
-	static constexpr uint64_t DEFAULT_TIMEOUT = 30000;            // 30 sec
+	static constexpr uint64_t DEFAULT_TIMEOUT = 30000; // 30 sec
 
 	uint64_t timeout;
 

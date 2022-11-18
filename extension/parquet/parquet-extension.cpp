@@ -550,7 +550,7 @@ public:
 			// Check if the current file is being opened, in that case we need to wait for it.
 			if (!parallel_state.readers[parallel_state.file_index] &&
 			    parallel_state.file_opening[parallel_state.file_index]) {
-				WaitForFile(parallel_state.file_index ,parallel_state, parallel_lock);
+				WaitForFile(parallel_state.file_index, parallel_state, parallel_lock);
 			}
 		}
 	}
@@ -580,7 +580,8 @@ public:
 	}
 
 	//! Wait for a file to become available. Parallel lock should be locked when calling.
-	static void WaitForFile(idx_t file_index, ParquetReadGlobalState& parallel_state, unique_lock<mutex> &parallel_lock) {
+	static void WaitForFile(idx_t file_index, ParquetReadGlobalState &parallel_state,
+	                        unique_lock<mutex> &parallel_lock) {
 		while (true) {
 			// To get the file lock, we first need to release the parallel_lock to prevent deadlocking
 			parallel_lock.unlock();
@@ -617,7 +618,7 @@ public:
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types,
-					                                         scan_data.column_ids, pq_options, bind_data.files[0]);
+					                                    scan_data.column_ids, pq_options, bind_data.files[0]);
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;
