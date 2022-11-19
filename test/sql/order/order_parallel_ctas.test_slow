@@ -19,8 +19,6 @@ pragma verify_parallelism
 statement ok
 create table integers as select range i from range(100000) order by random()
 
-mode skip
-
 loop i 0 20
 
 statement ok
@@ -39,8 +37,6 @@ drop table sorted_integers
 
 endloop
 
-mode unskip
-
 # now we do the same but with a UNION ALL
 
 loop i 0 20
@@ -55,15 +51,6 @@ with p1 as (
 select * from p1 union all select * from p2
 
 restart
-
-query I
-select * FROM sorted_integers LIMIT 5
-----
-0
-1
-2
-3
-4
 
 # empty result if sorted
 query T
