@@ -52,7 +52,8 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkSta
 		lock_guard<mutex> glock(g.lock);
 		g.rows_copied += input.size();
 	}
-	function.copy_to_sink(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state, *l.local_state, input);
+	function.copy_to_sink(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state, *l.local_state,
+	                      input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -61,12 +62,12 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
 	if (function.copy_to_combine) {
-		function.copy_to_combine(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state, *l.local_state);
+		function.copy_to_combine(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state,
+		                         *l.local_state);
 		if (per_thread_output) {
 			function.copy_to_finalize(context.client, *bind_data, *l.global_state);
 		}
 	}
-
 }
 
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -90,8 +91,25 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	auto res = make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
 	if (per_thread_output) {
-		auto& g = (CopyToFunctionGlobalState&) *sink_state;
-		auto& fs = FileSystem::GetFileSystem(context.client);
+		idx_t this_file_offset;
+		{
+			auto &g = (CopyToFunctionGlobalState &)*sink_state;
+			lock_guard<mutex> glock(g.lock);
+			this_file_offset = g.last_file_offset++;
+		}
+		auto &fs = FileSystem::GetFileSystem(context.client);
+		string output_path = fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset));
+		if (fs.FileExists(output_path)) {
+			throw IOException("%s exists", output_path);
+		}
+		res->global_state = function.copy_to_initialize_global(context.client, *bind_data, output_path);
+	}
+	return move(res);
+}
+
+unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
+	if (per_thread_output) {
+		auto &fs = FileSystem::GetFileSystem(context);
 
 		if (fs.FileExists(file_path)) {
 			throw IOException("%s exists", file_path);
@@ -105,25 +123,11 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 				throw IOException("Directory %s is not empty", file_path);
 			}
 		}
-		idx_t this_file_offset;
-		{
-			lock_guard<mutex> glock(g.lock);
-			this_file_offset = g.last_file_offset++;
-		}
-		string output_path = fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset));
-		if (fs.FileExists(output_path)) {
-			throw IOException("%s exists", output_path);
-		}
-		res->global_state = function.copy_to_initialize_global(context.client, *bind_data, output_path);
-	}
-	return res;
-}
 
-unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
-	if (per_thread_output) {
 		return make_unique<CopyToFunctionGlobalState>(nullptr);
 	} else {
-		return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+		return make_unique<CopyToFunctionGlobalState>(
+		    function.copy_to_initialize_global(context, *bind_data, file_path));
 	}
 }
 

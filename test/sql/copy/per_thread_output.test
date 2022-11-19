@@ -22,7 +22,7 @@ SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output.parquet/*')
 10000
 
 query I
-SELECT STR_SPLIT(file, '/')[-1] f FROM GLOB('__TEST_DIR__/per_thread_output.parquet/*') ORDER BY f
+SELECT STR_SPLIT(REPLACE(file, '\','/'), '/')[-1]  f FROM GLOB('__TEST_DIR__/per_thread_output.parquet/*') ORDER BY f
 ----
 out_0
 out_1
@@ -49,3 +49,21 @@ query I
 SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2.parquet/*')
 ----
 10000
+
+
+# this should also work with csv
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output.csv' (FORMAT CSV, PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT COUNT(*) FROM READ_CSV_AUTO('__TEST_DIR__/per_thread_output.csv/*')
+----
+10000
+
+query I
+SELECT STR_SPLIT(REPLACE(file, '\','/'), '/')[-1]  f FROM GLOB('__TEST_DIR__/per_thread_output.csv/*') ORDER BY f
+----
+out_0
+out_1
+out_2
+out_3
