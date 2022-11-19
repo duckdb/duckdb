@@ -773,7 +773,7 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 #endif
 
 static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, size_t cols, size_t plen,
-                       std::string &highlight_buffer, bool enableHighlight, searchMatch *match = nullptr) {
+                       std::string &highlight_buffer, bool highlight, searchMatch *match = nullptr) {
 	if (duckdb::Utf8Proc::IsValid(buf, len)) {
 		// utf8 in prompt, handle rendering
 		size_t remaining_render_width = cols - plen - 1;
@@ -808,7 +808,7 @@ static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, 
 			}
 		}
 #ifndef DISABLE_HIGHLIGHT
-		if (enableHighlighting) {
+		if (highlight) {
 			highlight_buffer = highlightText(buf, len, start_pos, cpos, match);
 			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
@@ -1349,7 +1349,7 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 			break;
 		if (seq[0] == ESC) {
 			// double escape accepts search without any additional command
-			return acceptSearch(l, '\0');
+			return acceptSearch(l, 0);
 		}
 		if (seq[0] == 'b' || seq[0] == 'f') {
 			break;
@@ -1419,16 +1419,16 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 		return acceptSearch(l, CTRL_B);
 	case CTRL_F: // accept search - move cursor right
 		return acceptSearch(l, CTRL_F);
-	case CTRL_D:
-	case CTRL_T:
+	case CTRL_T: // accept search: swap character
+		return acceptSearch(l, CTRL_T);
+	case CTRL_U: // accept search, clear buffer
+		return acceptSearch(l, CTRL_U);
+	case CTRL_K: // accept search, clear after cursor
+		return acceptSearch(l, CTRL_K);
+	case CTRL_D: // accept saerch, delete a character
+		return acceptSearch(l, CTRL_D);
 	case CTRL_L:
-		// ignore all of these
-		break;
-	case CTRL_W:
-	case CTRL_U:
-	case CTRL_K:
-		l->search_buf.clear();
-		performSearch(l);
+		linenoiseClearScreen();
 		break;
 	case CTRL_P:
 		searchPrev(l);
@@ -1442,6 +1442,7 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 		return 0;
 	case BACKSPACE: /* backspace */
 	case 8:         /* ctrl-h */
+	case CTRL_W:    /* ctrl-w */
 		// remove trailing UTF-8 bytes (if any)
 		while (!l->search_buf.empty() && ((l->search_buf.back() & 0xc0) == 0x80)) {
 			l->search_buf.pop_back();
@@ -1453,7 +1454,7 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 		performSearch(l);
 		break;
 	default:
-		// add input
+		// add input to search buffer
 		l->search_buf += c;
 		// perform the search
 		performSearch(l);
