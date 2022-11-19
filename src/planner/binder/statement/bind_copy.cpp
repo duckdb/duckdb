@@ -40,21 +40,29 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	bool use_tmp_file = true;
+	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 
-	for (auto &option : stmt.info->options) {
+	auto original_options = stmt.info->options;
+	stmt.info->options.clear();
+
+	for (auto &option : original_options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
 			use_tmp_file = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
-			stmt.info->options.erase(option.first);
-			break;
+			user_set_use_tmp_file = true;
+			continue;
 		}
 		if (loption == "per_thread_output") {
 			per_thread_output = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
-			stmt.info->options.erase(option.first);
-			break;
+			continue;
 		}
+		stmt.info->options[option.first] = option.second;
 	}
+	if (user_set_use_tmp_file && per_thread_output) {
+		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");
+	}
+
 	auto function_data =
 	    copy_function->function.copy_to_bind(context, *stmt.info, select_node.names, select_node.types);
 	// now create the copy information

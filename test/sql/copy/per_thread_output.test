@@ -67,3 +67,8 @@ out_0
 out_1
 out_2
 out_3
+
+
+# this should not work
+statement error
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output.csv' (FORMAT CSV, PER_THREAD_OUTPUT TRUE, USE_TMP_FILE TRUE);
