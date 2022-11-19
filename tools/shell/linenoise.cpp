@@ -198,6 +198,7 @@ enum KEY_ACTION {
 	CTRL_D = 4,     /* Ctrl-d */
 	CTRL_E = 5,     /* Ctrl-e */
 	CTRL_F = 6,     /* Ctrl-f */
+	CTRL_G = 7,     /* Ctrl-g */
 	CTRL_H = 8,     /* Ctrl-h */
 	TAB = 9,        /* Tab */
 	CTRL_K = 11,    /* Ctrl+k */
@@ -1413,6 +1414,7 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 		break;
 	case CTRL_A: // accept search, move to start of line
 		return acceptSearch(l, CTRL_A);
+	case '\t':
 	case CTRL_E: // accept search - move to end of line
 		return acceptSearch(l, CTRL_E);
 	case CTRL_B: // accept search - move cursor left
@@ -1437,6 +1439,7 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 		searchNext(l);
 		break;
 	case CTRL_C:
+	case CTRL_G:
 		// abort search
 		cancelSearch(l);
 		return 0;
@@ -1554,6 +1557,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				hintsCallback = hc;
 			}
 			return (int)l.len;
+		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
 			l.buf[0] = '\3';
 			// we keep track of whether or not the line was empty by writing \3 to the second position of the line
