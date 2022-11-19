@@ -1296,15 +1296,16 @@ static void performSearch(linenoiseState *l) {
 		return;
 	}
 	auto lsearch = duckdb::StringUtil::Lower(l->search_buf);
-	for (size_t i = 0; i < history_len; i++) {
-		auto lhistory = duckdb::StringUtil::Lower(history[i]);
+	for (size_t i = history_len; i > 0; i--) {
+		size_t history_index = i - 1;
+		auto lhistory = duckdb::StringUtil::Lower(history[history_index]);
 		auto entry = lhistory.find(lsearch);
 		if (entry != duckdb::string::npos) {
-			if (i == current_match) {
+			if (history_index == current_match) {
 				l->search_index = l->search_matches.size();
 			}
 			searchMatch match;
-			match.history_index = i;
+			match.history_index = history_index;
 			match.match_start = entry;
 			match.match_end = entry + lsearch.size();
 			l->search_matches.push_back(match);
