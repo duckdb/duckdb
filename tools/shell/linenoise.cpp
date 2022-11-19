@@ -681,18 +681,33 @@ int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
 #include <sstream>
 #include "duckdb/parser/parser.hpp"
 
+struct highlightToken {
+	duckdb::SimplifiedTokenType type;
+	size_t start = 0;
+	bool search_match = false;
+};
+
 std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_pos, searchMatch *match = nullptr) {
 	std::string sql(buf, len);
-	auto tokens = duckdb::Parser::Tokenize(sql);
+	auto parseTokens = duckdb::Parser::Tokenize(sql);
 	std::stringstream ss;
+	std::vector<highlightToken> tokens;
+
+	for (auto &token : parseTokens) {
+		highlightToken new_token;
+		new_token.type = token.type;
+		new_token.start = token.start;
+		tokens.push_back(new_token);
+	}
+
 	if (!tokens.empty() && tokens[0].start > 0) {
-		duckdb::SimplifiedToken new_token;
+		highlightToken new_token;
 		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
 		new_token.start = 0;
 		tokens.insert(tokens.begin(), new_token);
 	}
 	if (tokens.empty() && sql.size() > 0) {
-		duckdb::SimplifiedToken new_token;
+		highlightToken new_token;
 		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
 		new_token.start = 0;
 		tokens.push_back(new_token);
@@ -701,42 +716,40 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 		// we have a search match - insert it into the token list
 		// we want to insert a search token with start = match_start, end = match_end
 		// first figure out which token type we would have at match_end (if any)
-		duckdb::SimplifiedTokenType end_type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
-		for (size_t i = 0; i < tokens.size(); i++) {
-			if (tokens[i].start >= match->match_end) {
-				break;
-			}
-			end_type = tokens[i].type;
-		}
-
 		for (size_t i = 0; i + 1 < tokens.size(); i++) {
 			if (tokens[i].start <= match->match_start && tokens[i + 1].start >= match->match_start) {
 				// this token begins after the search position, insert the token here
 				size_t token_position = i + 1;
+				duckdb::SimplifiedTokenType end_type = tokens[i].type;
 				if (tokens[i].start == match->match_start) {
-					// exact start: overwrite the token
-					tokens[i].type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
+					// exact start: only set the search match
+					tokens[i].search_match = true;
 				} else {
 					// non-exact start: add a new token
-					duckdb::SimplifiedToken search_token;
-					search_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
+					highlightToken search_token;
+					search_token.type = tokens[i].type;
 					search_token.start = match->match_start;
+					search_token.search_match = true;
 					tokens.insert(tokens.begin() + token_position, search_token);
 					token_position++;
 				}
 
-				// insert the token that marks the end of the search
-				duckdb::SimplifiedToken end_token;
-				end_token.type = end_type;
-				end_token.start = match->match_end;
-				tokens.insert(tokens.begin() + token_position, end_token);
-				token_position++;
-
-				// erase any tokens that are fully "consumed" by the search match
-				while (token_position < tokens.size() && tokens[token_position].start <= match->match_end) {
-					tokens.erase(tokens.begin() + token_position);
+				// move forwards
+				while (token_position < tokens.size() && tokens[token_position].start < match->match_end) {
+					// this token is
+					// mark this token as a search token
+					end_type = tokens[token_position].type;
+					tokens[token_position].search_match = true;
+					token_position++;
 				}
-
+				if (token_position >= tokens.size() || tokens[token_position].start > match->match_end) {
+					// insert the token that marks the end of the search
+					highlightToken end_token;
+					end_token.type = end_type;
+					end_token.start = match->match_end;
+					tokens.insert(tokens.begin() + token_position, end_token);
+					token_position++;
+				}
 				break;
 			}
 		}
@@ -755,6 +768,9 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 			continue;
 		}
 		std::string text = std::string(buf + start, end - start);
+		if (token.search_match) {
+			ss << underline;
+		}
 		switch (token.type) {
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
 			ss << keyword << text << reset;
@@ -763,11 +779,11 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
 			ss << constant << text << reset;
 			break;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
-			ss << bold << underline << text << reset;
-			break;
 		default:
 			ss << text;
+			if (token.search_match) {
+				ss << reset;
+			}
 		}
 	}
 	return ss.str();
