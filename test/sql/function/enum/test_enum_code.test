@@ -24,3 +24,22 @@ SELECT enum_code(x) FROM test
 
 statement error
 SELECT enum_code('bla')
+
+statement ok
+PREPARE p1 as SELECT enum_code(x) FROM test
+
+query I
+EXECUTE p1
+----
+1
+0
+3
+2
+
+statement ok
+PREPARE p2 as SELECT enum_code(?);
+
+query I
+EXECUTE p2('happy'::mood)
+----
+2

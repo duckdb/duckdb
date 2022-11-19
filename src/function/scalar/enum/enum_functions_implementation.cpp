@@ -63,7 +63,7 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 
 static void EnumCodeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.GetTypes().size() == 1);
-	result.Reference(input.data[0]);
+	result.Reinterpret(input.data[0]);
 }
 
 static void CheckEnumParameter(const Expression &expr) {
