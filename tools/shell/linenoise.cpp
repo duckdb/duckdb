@@ -117,6 +117,7 @@
 #include <unistd.h>
 #include "linenoise.h"
 #include "utf8proc_wrapper.hpp"
+#include <unordered_set>
 #include <vector>
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
@@ -1296,10 +1297,15 @@ static void performSearch(linenoiseState *l) {
 	if (l->search_buf.empty()) {
 		return;
 	}
+	std::unordered_set<std::string> matches;
 	auto lsearch = duckdb::StringUtil::Lower(l->search_buf);
 	for (size_t i = history_len; i > 0; i--) {
 		size_t history_index = i - 1;
 		auto lhistory = duckdb::StringUtil::Lower(history[history_index]);
+		if (matches.find(lhistory) != matches.end()) {
+			continue;
+		}
+		matches.insert(lhistory);
 		auto entry = lhistory.find(lsearch);
 		if (entry != duckdb::string::npos) {
 			if (history_index == current_match) {
