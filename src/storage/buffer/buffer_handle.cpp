@@ -24,20 +24,6 @@ BufferHandle::~BufferHandle() {
 	Destroy();
 }
 
-bool BufferHandle::IsValid() const {
-	return node != nullptr;
-}
-
-data_ptr_t BufferHandle::Ptr() const {
-	D_ASSERT(IsValid());
-	return node->buffer;
-}
-
-data_ptr_t BufferHandle::Ptr() {
-	D_ASSERT(IsValid());
-	return node->buffer;
-}
-
 void BufferHandle::Destroy() {
 	if (!handle || !IsValid()) {
 		return;

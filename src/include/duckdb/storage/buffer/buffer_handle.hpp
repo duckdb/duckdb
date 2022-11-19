@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/file_buffer.hpp"
 
 namespace duckdb {
 class BlockHandle;
@@ -28,11 +29,19 @@ public:
 
 public:
 	//! Returns whether or not the BufferHandle is valid.
-	DUCKDB_API bool IsValid() const;
+	DUCKDB_API bool IsValid() const {
+		return node != nullptr;
+	}
 	//! Returns a pointer to the buffer data. Handle must be valid.
-	DUCKDB_API data_ptr_t Ptr() const;
+	DUCKDB_API data_ptr_t Ptr() const {
+		D_ASSERT(IsValid());
+		return node->buffer;
+	}
 	//! Returns a pointer to the buffer data. Handle must be valid.
-	DUCKDB_API data_ptr_t Ptr();
+	DUCKDB_API data_ptr_t Ptr() {
+		D_ASSERT(IsValid());
+		return node->buffer;
+	}
 	//! Gets the underlying file buffer. Handle must be valid.
 	DUCKDB_API FileBuffer &GetFileBuffer();
 	//! Destroys the buffer handle
