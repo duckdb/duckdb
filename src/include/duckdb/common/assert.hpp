@@ -17,11 +17,13 @@ DUCKDB_API void DuckDBAssertInternal(bool condition, const char *condition_name,
 }
 
 #define D_ASSERT(condition) duckdb::DuckDBAssertInternal(bool(condition), #condition, __FILE__, __LINE__)
+#define D_ASSERT_HEAVY D_ASSERT
 
 #elif defined(DUCKDB_USE_STANDARD_ASSERT) && defined(DEBUG)
 
 #include <assert.h>
 #define D_ASSERT assert
+#define D_ASSERT_HEAVY D_ASSERT
 
 #else
 
@@ -31,5 +33,7 @@ DUCKDB_API void DuckDBAssertInternal(bool condition, const char *condition_name,
 			__builtin_unreachable();                                                                                   \
 		}                                                                                                              \
 	} while (0)
+
+#define D_ASSERT_HEAVY(X) (void (0))
 
 #endif
