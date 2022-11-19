@@ -1,11 +1,10 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
-
-#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -49,9 +48,22 @@ public:
 		if (Empty()) {
 			return nullptr;
 		}
-		unique_ptr<RowGroupCollection> new_collection = move(current_collections[0]);
-		if (current_collections.size() > 1) {
+		unique_ptr<RowGroupCollection> new_collection;
+		if (current_collections.size() == 1) {
+			// we have gathered only one row group collection: merge it directly
+			new_collection = move(current_collections[0]);
+		} else {
 			// we have gathered multiple collections: create one big collection and merge that
+			// find the biggest collection
+			idx_t biggest_index = 0;
+			for (idx_t i = 1; i < current_collections.size(); i++) {
+				D_ASSERT(current_collections[i]);
+				if (current_collections[i]->GetTotalRows() > current_collections[biggest_index]->GetTotalRows()) {
+					biggest_index = i;
+				}
+			}
+			// now append all the other collections to this collection
+			new_collection = move(current_collections[biggest_index]);
 			auto &types = new_collection->GetTypes();
 			TableAppendState append_state;
 			new_collection->InitializeAppend(append_state);
