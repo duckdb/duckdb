@@ -120,10 +120,6 @@ void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-idx_t ColumnSegment::SegmentSize() const {
-	return segment_size;
-}
-
 void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(new_size > this->segment_size);
 	D_ASSERT(offset == 0);

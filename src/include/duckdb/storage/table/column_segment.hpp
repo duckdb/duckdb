@@ -76,7 +76,10 @@ public:
 	void Skip(ColumnScanState &state);
 
 	// The maximum size of the buffer (in bytes)
-	idx_t SegmentSize() const;
+	inline idx_t ColumnSegment::SegmentSize() const {
+		return segment_size;
+	}
+
 	//! Resize the block
 	void Resize(idx_t segment_size);
 
