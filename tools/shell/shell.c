@@ -20050,7 +20050,9 @@ static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline){
   open_db(p, 0);
   if( ShellHasFlag(p,SHFLG_Backslash) ) resolve_backslashes(zSql);
   if( p->flgProgress & SHELL_PROGRESS_RESET ) p->nProgress = 0;
+#ifndef SHELL_USE_LOCAL_GETLINE
   if( zSql && *zSql && *zSql != '\3' ) shell_add_history(zSql);
+#endif
   BEGIN_TIMER;
   rc = shell_exec(p, zSql, &zErrMsg);
   END_TIMER;
@@ -20134,7 +20136,9 @@ static int process_input(ShellState *p){
     if( zLine && (zLine[0]=='.' || zLine[0]=='#') && nSql==0 ){
       if( ShellHasFlag(p, SHFLG_Echo) ) printf("%s\n", zLine);
       if( zLine[0]=='.' ){
+#ifndef SHELL_USE_LOCAL_GETLINE
         if( zLine && *zLine && *zLine != '\3' ) shell_add_history(zLine);
+#endif
         rc = do_meta_command(zLine, p);
         if( rc==2 ){ /* exit requested */
           break;
