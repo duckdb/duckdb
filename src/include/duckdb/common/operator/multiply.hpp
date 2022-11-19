@@ -10,8 +10,11 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/type_util.hpp"
 
 namespace duckdb {
+
+struct interval_t;
 
 struct MultiplyOperator {
 	template <class TA, class TB, class TR>
