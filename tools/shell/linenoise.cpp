@@ -896,39 +896,40 @@ static void refreshSearch(struct linenoiseState *l) {
 		no_matches_text = "(type to search)";
 	} else {
 		std::string search_text;
-		search_text += " (" + l->search_buf;
+		std::string matches_text;
+		search_text += l->search_buf;
 		if (!no_matches) {
-			search_text += ", " + std::to_string(l->search_index + 1);
-			search_text += "/" + std::to_string(l->search_matches.size());
+			matches_text += std::to_string(l->search_index + 1);
+			matches_text += "/" + std::to_string(l->search_matches.size());
 		}
-		search_text += ")";
 		size_t search_text_length = linenoiseComputeRenderWidth(search_text.c_str(), search_text.size());
-		if (search_text_length < SEARCH_PROMPT_RENDER_SIZE - 8) {
-			// search text is short: keep search prefix
-			search_prompt = "search";
-			search_prompt += std::string(SEARCH_PROMPT_RENDER_SIZE - 8 - search_text_length, ' ');
-			search_prompt += search_text;
-			search_prompt += "> ";
-		} else if (search_text_length < SEARCH_PROMPT_RENDER_SIZE - 2) {
-			// search text is on the long side - remove search prefix
+		size_t matches_text_length = linenoiseComputeRenderWidth(matches_text.c_str(), matches_text.size());
+		size_t total_text_length = search_text_length + matches_text_length;
+		if (total_text_length < SEARCH_PROMPT_RENDER_SIZE - 2) {
+			// search text is short: we can render the entire search text
 			search_prompt = search_text;
-			if (search_text_length < SEARCH_PROMPT_RENDER_SIZE - 2) {
-				size_t extra_spaces = SEARCH_PROMPT_RENDER_SIZE - search_text_length - 2;
-				search_prompt += std::string(extra_spaces, ' ');
-			}
+			search_prompt += std::string(SEARCH_PROMPT_RENDER_SIZE - 2 - total_text_length, ' ');
+			search_prompt += matches_text;
 			search_prompt += "> ";
 		} else {
 			// search text length is too long to fit: truncate
+			bool render_matches = matches_text_length < SEARCH_PROMPT_RENDER_SIZE - 8;
 			char *search_buf = (char *)search_text.c_str();
 			size_t search_len = search_text.size();
 			size_t search_render_pos = 0;
-			auto max_render_size = SEARCH_PROMPT_RENDER_SIZE - 2;
+			size_t max_render_size = SEARCH_PROMPT_RENDER_SIZE - 3;
+			if (render_matches) {
+				max_render_size -= matches_text_length;
+			}
 			std::string highlight_buffer;
 			renderText(search_render_pos, search_buf, search_len, search_len, max_render_size, 0, highlight_buffer,
 			           false);
 			search_prompt = std::string(search_buf, search_len);
 			for (size_t i = search_render_pos; i < max_render_size; i++) {
 				search_prompt += " ";
+			}
+			if (render_matches) {
+				search_prompt += matches_text;
 			}
 			search_prompt += "> ";
 		}
