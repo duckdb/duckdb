@@ -871,11 +871,11 @@ static void refreshSingleLine(struct linenoiseState *l) {
 static void refreshSearch(struct linenoiseState *l) {
 	std::string search_prompt;
 	static const size_t SEARCH_PROMPT_RENDER_SIZE = 28;
-	static const char *NO_MATCHES = "(no matches)";
-	static const size_t NO_MATCHES_LEN = 12;
+	std::string no_matches_text = "(no matches)";
 	bool no_matches = l->search_index >= l->search_matches.size();
 	if (l->search_buf.empty()) {
 		search_prompt = "search" + std::string(SEARCH_PROMPT_RENDER_SIZE - 8, ' ') + "> ";
+		no_matches_text = "(type to search)";
 	} else {
 		std::string search_text;
 		search_text += " (" + l->search_buf;
@@ -944,7 +944,7 @@ static void refreshSearch(struct linenoiseState *l) {
 	/* Write the prompt and the current buffer content */
 	abAppend(&ab, search_prompt.c_str(), search_prompt.size());
 	if (no_matches) {
-		abAppend(&ab, NO_MATCHES, NO_MATCHES_LEN);
+		abAppend(&ab, no_matches_text.c_str(), no_matches_text.size());
 	} else {
 		abAppend(&ab, buf, len);
 	}
@@ -1269,6 +1269,21 @@ static void cancelSearch(linenoiseState *l) {
 	refreshLine(l);
 }
 
+static char acceptSearch(linenoiseState *l, char nextCommand) {
+	if (l->search_index < l->search_matches.size()) {
+		// if there is a match - copy it into the buffer
+		auto match = l->search_matches[l->search_index];
+		auto history_entry = history[match.history_index];
+		auto history_len = strlen(history_entry);
+		memcpy(l->buf, history_entry, history_len);
+		l->buf[history_len] = '\0';
+		l->pos = match.match_end;
+		l->len = history_len;
+	}
+	cancelSearch(l);
+	return nextCommand;
+}
+
 static void performSearch(linenoiseState *l) {
 	// we try to maintain the current match while searching
 	size_t current_match = history_len;
@@ -1297,37 +1312,133 @@ static void performSearch(linenoiseState *l) {
 	}
 }
 
-static void linenoiseSearch(linenoiseState *l, char c) {
+static void searchPrev(linenoiseState *l) {
+	if (l->search_index > 0) {
+		l->search_index--;
+	} else if (l->search_matches.size() > 0) {
+		l->search_index = l->search_matches.size() - 1;
+	}
+}
+
+static void searchNext(linenoiseState *l) {
+	l->search_index += 1;
+	if (l->search_index >= l->search_matches.size()) {
+		l->search_index = 0;
+	}
+}
+
+static char linenoiseSearch(linenoiseState *l, char c) {
+	char seq[64];
+
 	switch (c) {
 	case 10:
 	case ENTER: /* enter */
-		// accept search
-		cancelSearch(l);
-		return;
+		// accept search and run
+		return acceptSearch(l, ENTER);
 	case CTRL_R:
 		// move to the next match index
-		l->search_index += 1;
-		if (l->search_index >= l->search_matches.size()) {
-			l->search_index = 0;
+		searchNext(l);
+		break;
+	case ESC: /* escape sequence */
+		/* Read the next two bytes representing the escape sequence.
+		 * Use two calls to handle slow terminals returning the two
+		 * chars at different times. */
+		// note: in search mode we ignore almost all special commands
+		if (read(l->ifd, seq, 1) == -1)
+			break;
+		if (seq[0] == ESC) {
+			// double escape accepts search without any additional command
+			return acceptSearch(l, '\0');
+		}
+		if (seq[0] == 'b' || seq[0] == 'f') {
+			break;
+		}
+		if (read(l->ifd, seq + 1, 1) == -1)
+			break;
+
+		/* ESC [ sequences. */
+		if (seq[0] == '[') {
+			if (seq[1] >= '0' && seq[1] <= '9') {
+				/* Extended escape, read additional byte. */
+				if (read(l->ifd, seq + 2, 1) == -1)
+					break;
+				if (seq[2] == '~') {
+					switch (seq[1]) {
+					case '1':
+						return acceptSearch(l, CTRL_A);
+					case '4':
+					case '8':
+						return acceptSearch(l, CTRL_E);
+					default:
+						break;
+					}
+				} else if (seq[2] == ';') {
+					// read 2 extra bytes
+					if (read(l->ifd, seq + 3, 2) == -1)
+						break;
+				}
+			} else {
+				switch (seq[1]) {
+				case 'A': /* Up */
+					searchPrev(l);
+					break;
+				case 'B': /* Down */
+					searchNext(l);
+					break;
+				case 'D': /* Left */
+					return acceptSearch(l, CTRL_B);
+				case 'C': /* Right */
+					return acceptSearch(l, CTRL_F);
+				case 'H': /* Home */
+					return acceptSearch(l, CTRL_A);
+				case 'F': /* End*/
+					return acceptSearch(l, CTRL_E);
+				default:
+					break;
+				}
+			}
+		}
+		/* ESC O sequences. */
+		else if (seq[0] == 'O') {
+			switch (seq[1]) {
+			case 'H': /* Home */
+				return acceptSearch(l, CTRL_A);
+			case 'F': /* End*/
+				return acceptSearch(l, CTRL_E);
+			default:
+				break;
+			}
 		}
 		break;
-	case ESC:
-	case CTRL_C:
+	case CTRL_A: // accept search, move to start of line
+		return acceptSearch(l, CTRL_A);
+	case CTRL_E: // accept search - move to end of line
+		return acceptSearch(l, CTRL_E);
+	case CTRL_B: // accept search - move cursor left
+		return acceptSearch(l, CTRL_B);
+	case CTRL_F: // accept search - move cursor right
+		return acceptSearch(l, CTRL_F);
 	case CTRL_D:
 	case CTRL_T:
-	case CTRL_B:
-	case CTRL_F:
-	case CTRL_P:
-	case CTRL_N:
+	case CTRL_L:
+		// ignore all of these
+		break;
+	case CTRL_W:
 	case CTRL_U:
 	case CTRL_K:
-	case CTRL_A:
-	case CTRL_E:
-	case CTRL_L:
-	case CTRL_W:
+		l->search_buf.clear();
+		performSearch(l);
+		break;
+	case CTRL_P:
+		searchPrev(l);
+		break;
+	case CTRL_N:
+		searchNext(l);
+		break;
+	case CTRL_C:
 		// abort search
 		cancelSearch(l);
-		return;
+		return 0;
 	case BACKSPACE: /* backspace */
 	case 8:         /* ctrl-h */
 		// remove trailing UTF-8 bytes (if any)
@@ -1348,6 +1459,7 @@ static void linenoiseSearch(linenoiseState *l, char c) {
 		break;
 	}
 	refreshSearch(l);
+	return 0;
 }
 
 /* This function is the core of the line editing capability of linenoise.
@@ -1396,8 +1508,13 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			return l.len;
 
 		if (l.search) {
-			linenoiseSearch(&l, c);
-			continue;
+			char ret = linenoiseSearch(&l, c);
+			if (l.search || ret == '\0') {
+				// still searching - continue searching
+				continue;
+			}
+			// run subsequent command
+			c = ret;
 		}
 
 		/* Only autocomplete when the callback is set. It returns < 0 when
