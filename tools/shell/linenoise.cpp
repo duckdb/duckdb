@@ -1561,6 +1561,12 @@ int linenoiseHistoryAdd(const char *line) {
 	linecopy = strdup(line);
 	if (!linecopy)
 		return 0;
+	// replace all newlines with spaces
+	for (auto ptr = linecopy; *ptr; ptr++) {
+		if (*ptr == '\n' || *ptr == '\r') {
+			*ptr = ' ';
+		}
+	}
 	if (history_len == history_max_len) {
 		free(history[0]);
 		memmove(history, history + 1, sizeof(char *) * (history_max_len - 1));
