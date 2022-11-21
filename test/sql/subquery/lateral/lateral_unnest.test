@@ -36,3 +36,16 @@ query I
 SELECT SUM(k) FROM lists, UNNEST(l) t(k)
 ----
 1501500
+
+# table in-out function in correlated scalar subquery
+query I
+SELECT (SELECT SUM(k) FROM UNNEST(l) t(k)) FROM (SELECT ARRAY [1, 2, 3]) t(l)
+----
+6
+
+query II
+SELECT l, (SELECT SUM(k) FROM UNNEST(l) t(k)) AS sum FROM (SELECT ARRAY [1, 2, 3] UNION ALL SELECT ARRAY[4, 5, NULL] UNION ALL SELECT ARRAY[]::INT[]) t(l) ORDER BY sum NULLS LAST
+----
+[1, 2, 3]	6
+[4, 5, NULL]	9
+[]	NULL
