@@ -320,7 +320,8 @@ struct Interpolator {
 template <>
 struct Interpolator<true> {
 	Interpolator(const double q, const idx_t n_p)
-	    : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(FRN), begin(0), end(n_p) {
+	    : n(n_p), RN((double)(n_p * q)), FRN(MaxValue<idx_t>(1, n_p - floor(n_p - RN)) - 1), CRN(FRN), begin(0),
+	      end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
