@@ -1,7 +1,0 @@
-# name: benchmark/imdb/benchmarks/02d
-# description: Run query 02d from the imdb benchmark (single-threaded)
-# group: [imdb]
-
-template benchmark/imdb/benchmarks/imdb.benchmark.in
-QUERY_NUMBER=02d
-QUERY_NUMBER_PADDED=02d

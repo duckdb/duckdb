@@ -1,7 +1,0 @@
-# name: benchmark/imdb/benchmarks/32a
-# description: Run query 32a from the imdb benchmark (single-threaded)
-# group: [imdb]
-
-template benchmark/imdb/benchmarks/imdb.benchmark.in
-QUERY_NUMBER=32a
-QUERY_NUMBER_PADDED=32a
