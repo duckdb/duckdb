@@ -54,6 +54,8 @@ public:
 
 	void Close();
 
+	bool IsClosed() const;
+
 	static py::object FromValue(const Value &val, const LogicalType &type);
 
 private:

@@ -17,11 +17,9 @@
 #include "duckdb_python/python_import_cache.hpp"
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
-#include "duckdb_python/pyresult.hpp"
+#include "duckdb_python/pyrelation.hpp"
 
 namespace duckdb {
-
-struct DuckDBPyRelation;
 
 class RegisteredArrow : public RegisteredObject {
 
@@ -35,7 +33,7 @@ struct DuckDBPyConnection {
 public:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
-	unique_ptr<DuckDBPyResult> result;
+	unique_ptr<DuckDBPyRelation> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::mutex py_connection_lock;

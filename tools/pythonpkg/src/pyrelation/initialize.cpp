@@ -30,15 +30,15 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	m.def("execute", &DuckDBPyRelation::Execute, "Transform the relation into a result set")
 	    .def("write_csv", &DuckDBPyRelation::WriteCsv, "Write the relation object to a CSV file in file_name",
 	         py::arg("file_name"))
-	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row as a tuple")
-	    .def("fetchmany", &DuckDBPyRelation::Fetchmany, "Execute and fetch the next set of rows as a list of tuples",
+	    .def("fetchone", &DuckDBPyRelation::FetchOne, "Execute and fetch a single row as a tuple")
+	    .def("fetchmany", &DuckDBPyRelation::FetchMany, "Execute and fetch the next set of rows as a list of tuples",
 	         py::arg("size") = 1)
-	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows as a list of tuples")
+	    .def("fetchall", &DuckDBPyRelation::FetchAll, "Execute and fetch all rows as a list of tuples")
 	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
 	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
-	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
+	    .def("df", &DuckDBPyRelation::FetchDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
 	         py::arg("date_as_object") = false)
-	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
+	    .def("to_df", &DuckDBPyRelation::FetchDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
 	         py::arg("date_as_object") = false)
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)

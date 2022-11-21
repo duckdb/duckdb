@@ -525,4 +525,8 @@ void DuckDBPyResult::Close() {
 	result = nullptr;
 }
 
+bool DuckDBPyResult::IsClosed() const {
+	return result_closed;
+}
+
 } // namespace duckdb

@@ -16,6 +16,9 @@ namespace duckdb {
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
 }
 
+DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result) : rel(nullptr), result(move(result)) {
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, DuckDBPyConnection *conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
@@ -173,6 +176,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
 }
 
+void DuckDBPyRelation::AssertResult() const {
+	if (!result) {
+		throw InvalidInputException("No open result set");
+	}
+}
+
+py::list DuckDBPyRelation::Description() {
+	AssertResult();
+	return result->Description();
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	auto &columns = rel->Columns();
 	vector<string> column_list;
@@ -295,7 +309,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SEM(const string &aggr_columns, c
 }
 
 idx_t DuckDBPyRelation::Length() {
-	auto query_result = GenericAggregator("count", "*")->Execute();
+	GenericAggregator("count", "*")->Execute();
+	auto query_result = move(result);
 	return query_result->result->Fetch()->GetValue(0, 0).GetValue<idx_t>();
 }
 
@@ -349,89 +364,83 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const DataFrame &df, D
 	}
 	return conn->FromDF(df)->Distinct();
 }
-
-DataFrame DuckDBPyRelation::ToDF(bool date_as_object) {
-	auto res = make_unique<DuckDBPyResult>();
-	{
-		py::gil_scoped_release release;
-		res->result = rel->Execute();
-	}
-	if (res->result->HasError()) {
-		res->result->ThrowError();
-	}
-	return res->FetchDF(date_as_object);
+duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_t chunk_size) {
+	AssertResult();
+	return result->FetchRecordBatchReader(chunk_size);
 }
 
-py::object DuckDBPyRelation::Fetchone() {
-	auto res = make_unique<DuckDBPyResult>();
+void DuckDBPyRelation::ExecuteOrThrow() {
+	result = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
-		res->result = rel->Execute();
+		result->result = rel->Execute();
 	}
-	if (res->result->HasError()) {
-		res->result->ThrowError();
+	if (result->result->HasError()) {
+		result->result->ThrowError();
 	}
-	return res->Fetchone();
 }
 
-py::object DuckDBPyRelation::Fetchmany(idx_t size) {
-	auto res = make_unique<DuckDBPyResult>();
-	{
-		py::gil_scoped_release release;
-		res->result = rel->Execute();
+DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
+	if (!result || result->IsClosed()) {
+		ExecuteOrThrow();
 	}
-	if (res->result->HasError()) {
-		res->result->ThrowError();
-	}
-	return res->Fetchmany(size);
+	return result->FetchDF(date_as_object);
 }
 
-py::object DuckDBPyRelation::Fetchall() {
-	auto res = make_unique<DuckDBPyResult>();
-	{
-		py::gil_scoped_release release;
-		res->result = rel->Execute();
+py::object DuckDBPyRelation::FetchOne() {
+	if (!result || result->IsClosed()) {
+		ExecuteOrThrow();
 	}
-	if (res->result->HasError()) {
-		res->result->ThrowError();
+	return result->Fetchone();
+}
+
+py::object DuckDBPyRelation::FetchMany(idx_t size) {
+	if (!result || result->IsClosed()) {
+		ExecuteOrThrow();
 	}
-	return res->Fetchall();
+	return result->Fetchmany(size);
+}
+
+py::object DuckDBPyRelation::FetchAll() {
+	if (!result || result->IsClosed()) {
+		ExecuteOrThrow();
+	}
+	return result->Fetchall();
 }
 
 py::dict DuckDBPyRelation::FetchNumpy() {
-	auto res = make_unique<DuckDBPyResult>();
-	{
-		py::gil_scoped_release release;
-		res->result = rel->Execute();
+	if (!result || result->IsClosed()) {
+		ExecuteOrThrow();
 	}
-	if (res->result->HasError()) {
-		res->result->ThrowError();
+	return result->FetchNumpy();
+}
+
+py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
+	if (!result || result->IsClosed()) {
+		ExecuteOrThrow();
 	}
-	return res->FetchNumpy();
+	return result->FetchNumpyInternal(stream, vectors_per_chunk);
+}
+
+DataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
+	if (!result || result->IsClosed()) {
+		ExecuteOrThrow();
+	}
+	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
 }
 
 duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
-	auto res = make_unique<DuckDBPyResult>();
-	{
-		py::gil_scoped_release release;
-		res->result = rel->Execute();
+	if (!result || result->IsClosed()) {
+		ExecuteOrThrow();
 	}
-	if (res->result->HasError()) {
-		res->result->ThrowError();
-	}
-	return res->FetchArrowTable(batch_size);
+	return result->FetchArrowTable(batch_size);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
-	auto res = make_unique<DuckDBPyResult>();
-	{
-		py::gil_scoped_release release;
-		res->result = rel->Execute();
+	if (!result || result->IsClosed()) {
+		ExecuteOrThrow();
 	}
-	if (res->result->HasError()) {
-		res->result->ThrowError();
-	}
-	return res->FetchRecordBatchReader(batch_size);
+	return result->FetchRecordBatchReader(batch_size);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {
@@ -518,24 +527,25 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	                            StatementTypeToString(statement.type));
 }
 
-unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
-	auto res = make_unique<DuckDBPyResult>();
+void DuckDBPyRelation::Execute() {
+	result = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
-		res->result = rel->Execute();
+		// Execute the stored relation
+		result->result = rel->Execute();
 	}
-	if (res->result->HasError()) {
-		res->result->ThrowError();
+	// Throw an error if an error occurred
+	if (result->result->HasError()) {
+		result->result->ThrowError();
 	}
-	return res;
 }
 
-unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(const DataFrame &df, const string &view_name,
-                                                     const string &sql_query, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QueryDF(const DataFrame &df, const string &view_name,
+                                                       const string &sql_query, DuckDBPyConnection *conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromDF(df)->Query(view_name, sql_query)->Execute();
+	conn->FromDF(df)->Query(view_name, sql_query);
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
@@ -570,9 +580,9 @@ void DuckDBPyRelation::Create(const string &table) {
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
-	auto res = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
-	res->rel->extra_dependencies = make_unique<PythonDependencies>(fun);
-	return res;
+	auto relation = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
+	relation->rel->extra_dependencies = make_unique<PythonDependencies>(fun);
+	return relation;
 }
 
 string DuckDBPyRelation::Print() {
