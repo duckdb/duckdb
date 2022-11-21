@@ -8,6 +8,7 @@ classifiers = [
     'Intended Audience :: Developers',
     'License :: OSI Approved :: MIT License',
 ]
+license = {text = "MIT"}
 
 [project.urls]
 Documentation = "https://duckdb.org/docs/api/python/overview"
