@@ -126,7 +126,9 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::VALIDITY:
 		return PhysicalType::BIT;
 	case LogicalTypeId::ENUM: {
-		D_ASSERT(type_info_);
+		if (!type_info_) {
+			return PhysicalType::INVALID;
+		}
 		return EnumType::GetPhysicalType(*this);
 	}
 	case LogicalTypeId::TABLE:
@@ -506,7 +508,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
-	return Parser::ParseColumnList("dummy " + str)[0].Type();
+	return Parser::ParseColumnList("dummy " + str).GetColumn(LogicalIndex(0)).Type();
 }
 
 bool LogicalType::IsIntegral() const {

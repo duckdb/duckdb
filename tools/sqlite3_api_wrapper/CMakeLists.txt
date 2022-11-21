@@ -6,6 +6,7 @@ add_subdirectory(sqlite3_udf_api)
 
 add_extension_definitions()
 add_definitions(-DSQLITE_SHELL_IS_UTF8)
+add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
 
 include_directories(../../third_party/utf8proc/include)
 

@@ -59,7 +59,7 @@ public:
 	}
 
 	vector<unique_ptr<PartitionableHashTable>> intermediate_hts;
-	vector<unique_ptr<GroupedAggregateHashTable>> finalized_hts;
+	vector<shared_ptr<GroupedAggregateHashTable>> finalized_hts;
 
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
@@ -139,9 +139,9 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		gstate.is_empty = gstate.is_empty && group_chunk.size() == 0;
 		if (gstate.finalized_hts.empty()) {
 			// Create a finalized ht in the global state, that we can populate
-			gstate.finalized_hts.push_back(make_unique<GroupedAggregateHashTable>(
-			    Allocator::Get(context.client), BufferManager::GetBufferManager(context.client), group_types,
-			    op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64));
+			gstate.finalized_hts.push_back(
+			    make_unique<GroupedAggregateHashTable>(context.client, Allocator::Get(context.client), group_types,
+			                                           op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64));
 		}
 		D_ASSERT(gstate.finalized_hts.size() == 1);
 		D_ASSERT(gstate.finalized_hts[0]);
@@ -154,9 +154,9 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 	}
 
 	if (!llstate.ht) {
-		llstate.ht = make_unique<PartitionableHashTable>(
-		    Allocator::Get(context.client), BufferManager::GetBufferManager(context.client), gstate.partition_info,
-		    group_types, op.payload_types, op.bindings);
+		llstate.ht =
+		    make_unique<PartitionableHashTable>(context.client, Allocator::Get(context.client), gstate.partition_info,
+		                                        group_types, op.payload_types, op.bindings);
 	}
 
 	gstate.total_groups +=
@@ -224,7 +224,6 @@ bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 	}
 
 	auto &allocator = Allocator::Get(context);
-	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	if (any_partitioned) {
 		// if one is partitioned, all have to be
 		// this should mostly have already happened in Combine, but if not we do it here
@@ -236,8 +235,8 @@ bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		// schedule additional tasks to combine the partial HTs
 		gstate.finalized_hts.resize(gstate.partition_info.n_partitions);
 		for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
-			gstate.finalized_hts[r] = make_unique<GroupedAggregateHashTable>(
-			    allocator, buffer_manager, group_types, op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64);
+			gstate.finalized_hts[r] = make_shared<GroupedAggregateHashTable>(
+			    context, allocator, group_types, op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64);
 		}
 		gstate.is_partitioned = true;
 		return true;
@@ -245,8 +244,8 @@ bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		     // TODO possible optimization, if total count < limit for 32 bit ht, use that one
 		     // create this ht here so finalize needs no lock on gstate
 
-		gstate.finalized_hts.push_back(make_unique<GroupedAggregateHashTable>(
-		    allocator, buffer_manager, group_types, op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64));
+		gstate.finalized_hts.push_back(make_shared<GroupedAggregateHashTable>(
+		    context, allocator, group_types, op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64));
 		for (auto &pht : gstate.intermediate_hts) {
 			auto unpartitioned = pht->GetUnpartitioned();
 			for (auto &unpartitioned_ht : unpartitioned) {
@@ -325,7 +324,7 @@ public:
 	//! Heavy handed for now.
 	mutex lock;
 	//! The current position to scan the HT for output tuples
-	atomic<idx_t> ht_index;
+	idx_t ht_index;
 	//! The set of aggregate scan states
 	unique_ptr<AggregateHTScanState[]> ht_scan_states;
 	atomic<bool> initialized;
@@ -345,6 +344,8 @@ public:
 
 	//! Materialized GROUP BY expressions & aggregates
 	DataChunk scan_chunk;
+	//! A reference to the current HT that we are scanning
+	shared_ptr<GroupedAggregateHashTable> ht;
 };
 
 unique_ptr<GlobalSourceState> RadixPartitionedHashTable::GetGlobalSourceState(ClientContext &context) const {
@@ -416,6 +417,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 	idx_t elements_found = 0;
 
 	lstate.scan_chunk.Reset();
+	lstate.ht.reset();
 	if (!state.initialized) {
 		lock_guard<mutex> l(state.lock);
 		if (!state.ht_scan_states) {
@@ -427,17 +429,23 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 		state.initialized = true;
 	}
 	while (true) {
-		idx_t ht_index = state.ht_index;
-		if (ht_index >= gstate.finalized_hts.size()) {
-			state.finished = true;
-			return;
+		idx_t ht_index;
+
+		{
+			lock_guard<mutex> l(state.lock);
+			ht_index = state.ht_index;
+			if (ht_index >= gstate.finalized_hts.size()) {
+				state.finished = true;
+				return;
+			}
+			D_ASSERT(ht_index < gstate.finalized_hts.size());
+			lstate.ht = gstate.finalized_hts[ht_index];
+			D_ASSERT(lstate.ht);
 		}
-		D_ASSERT(ht_index < gstate.finalized_hts.size());
 		D_ASSERT(state.ht_scan_states);
-		auto &ht = gstate.finalized_hts[ht_index];
 		auto &scan_state = state.ht_scan_states[ht_index];
-		D_ASSERT(ht);
-		elements_found = ht->Scan(scan_state, lstate.scan_chunk);
+		D_ASSERT(lstate.ht);
+		elements_found = lstate.ht->Scan(scan_state, lstate.scan_chunk);
 		if (elements_found > 0) {
 			break;
 		}
@@ -447,6 +455,9 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 		if (ht_index > state.ht_index) {
 			// we have not yet worked on the table
 			// move the global index forwards
+			if (!gstate.multi_scan) {
+				gstate.finalized_hts[state.ht_index].reset();
+			}
 			state.ht_index = ht_index;
 		}
 	}

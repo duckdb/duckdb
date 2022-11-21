@@ -62,6 +62,9 @@ extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'e
 if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts', 'tpch', 'json', 'excel']
 
+if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
+    extensions.append('jemalloc')
+
 unity_build = 0
 if 'DUCKDB_BUILD_UNITY' in os.environ:
     unity_build = 16

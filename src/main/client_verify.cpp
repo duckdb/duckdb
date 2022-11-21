@@ -26,7 +26,6 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	if (config.query_verification_enabled) {
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::PARSED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
 		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
 	}
@@ -57,6 +56,10 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	bool any_failed = original->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
 		return RunStatementInternal(lock, q, move(s), false, false);
 	});
+	if (!any_failed) {
+		statement_verifiers.emplace_back(
+		    StatementVerifier::Create(VerificationType::PARSED, *statement_copy_for_explain));
+	}
 	// Execute the verifiers
 	for (auto &verifier : statement_verifiers) {
 		bool failed = verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
@@ -75,7 +78,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 			statement_verifiers.push_back(move(prepared_statement_verifier));
 		}
 	} else {
-		if (db->IsInvalidated()) {
+		if (ValidChecker::IsInvalidated(*db)) {
 			return original->materialized_result->GetErrorObject();
 		}
 	}

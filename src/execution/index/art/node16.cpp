@@ -77,7 +77,7 @@ void Node16::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 		n->count++;
 	} else {
 		// Grow to Node48
-		auto new_node = new Node48();
+		auto new_node = Node48::New();
 		for (idx_t i = 0; i < node->count; i++) {
 			new_node->child_index[n->key[i]] = i;
 			new_node->children[i] = n->children[i];
@@ -85,7 +85,7 @@ void Node16::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 		}
 		new_node->prefix = move(n->prefix);
 		new_node->count = node->count;
-		delete node;
+		Node::Delete(node);
 		node = new_node;
 
 		Node48::InsertChild(node, key_byte, new_child);
@@ -112,14 +112,14 @@ void Node16::EraseChild(Node *&node, int pos, ART &art) {
 
 	if (node->count <= 3) {
 		// Shrink node
-		auto new_node = new Node4();
+		auto new_node = Node4::New();
 		for (unsigned i = 0; i < n->count; i++) {
 			new_node->key[new_node->count] = n->key[i];
 			new_node->children[new_node->count++] = n->children[i];
 			n->children[i] = nullptr;
 		}
 		new_node->prefix = move(n->prefix);
-		delete node;
+		Node::Delete(node);
 		node = new_node;
 	}
 }

@@ -41,8 +41,8 @@ def parse_args():
 
 def init_db(cli, dbname, benchmark_dir):
     print(f"INITIALIZING {dbname} ...")
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, capture_output=True)
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, capture_output=True)
+    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
     print("INITIALIZATION DONE")
 
 
@@ -98,7 +98,7 @@ def print_diffs(diffs):
 def cardinality_is_higher(card_a, card_b):
     # card_a > card_b?
     # add 20% threshold before we start caring
-    return card_a > (card_b + card_b / 5)
+    return card_a > (card_b + card_b / 5 + 5000)
 
 def main():
     old, new, benchmark_dir = parse_args()
@@ -115,6 +115,7 @@ def main():
     print("RUNNING BENCHMARK QUERIES")
     for f in tqdm(files):
         query_name = f.split("/")[-1].replace(".sql", "")
+
         with open(f, "r") as file:
             query = file.read()
 

@@ -1,7 +1,7 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 
 duckdb_logical_type duckdb_create_logical_type(duckdb_type type) {
-	return new duckdb::LogicalType(duckdb::ConvertCTypeToCPP(type));
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::ConvertCTypeToCPP(type)));
 }
 
 duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type) {
@@ -10,7 +10,7 @@ duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type) {
 	}
 	duckdb::LogicalType *ltype = new duckdb::LogicalType;
 	*ltype = duckdb::LogicalType::LIST(*(duckdb::LogicalType *)type);
-	return ltype;
+	return reinterpret_cast<duckdb_logical_type>(ltype);
 }
 
 duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type) {
@@ -19,11 +19,11 @@ duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_
 	}
 	duckdb::LogicalType *mtype = new duckdb::LogicalType;
 	*mtype = duckdb::LogicalType::MAP(*(duckdb::LogicalType *)key_type, *(duckdb::LogicalType *)value_type);
-	return mtype;
+	return reinterpret_cast<duckdb_logical_type>(mtype);
 }
 
 duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale) {
-	return new duckdb::LogicalType(duckdb::LogicalType::DECIMAL(width, scale));
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::LogicalType::DECIMAL(width, scale)));
 }
 
 duckdb_type duckdb_get_type_id(duckdb_logical_type type) {
@@ -138,7 +138,7 @@ duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type) {
 	if (ltype.id() != duckdb::LogicalTypeId::LIST) {
 		return nullptr;
 	}
-	return new duckdb::LogicalType(duckdb::ListType::GetChildType(ltype));
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::ListType::GetChildType(ltype)));
 }
 
 duckdb_logical_type duckdb_map_type_key_type(duckdb_logical_type type) {
@@ -149,7 +149,7 @@ duckdb_logical_type duckdb_map_type_key_type(duckdb_logical_type type) {
 	if (mtype.id() != duckdb::LogicalTypeId::MAP) {
 		return nullptr;
 	}
-	return new duckdb::LogicalType(duckdb::MapType::KeyType(mtype));
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::MapType::KeyType(mtype)));
 }
 
 duckdb_logical_type duckdb_map_type_value_type(duckdb_logical_type type) {
@@ -160,7 +160,7 @@ duckdb_logical_type duckdb_map_type_value_type(duckdb_logical_type type) {
 	if (mtype.id() != duckdb::LogicalTypeId::MAP) {
 		return nullptr;
 	}
-	return new duckdb::LogicalType(duckdb::MapType::ValueType(mtype));
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::MapType::ValueType(mtype)));
 }
 
 idx_t duckdb_struct_type_child_count(duckdb_logical_type type) {
@@ -193,5 +193,6 @@ duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_
 	if (ltype.InternalType() != duckdb::PhysicalType::STRUCT) {
 		return nullptr;
 	}
-	return new duckdb::LogicalType(duckdb::StructType::GetChildType(ltype, index));
+	return reinterpret_cast<duckdb_logical_type>(
+	    new duckdb::LogicalType(duckdb::StructType::GetChildType(ltype, index)));
 }

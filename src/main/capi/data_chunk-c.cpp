@@ -1,4 +1,4 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include <string.h>
@@ -15,7 +15,7 @@ duckdb_data_chunk duckdb_create_data_chunk(duckdb_logical_type *ctypes, idx_t co
 
 	auto result = new duckdb::DataChunk();
 	result->Initialize(duckdb::Allocator::DefaultAllocator(), types);
-	return result;
+	return reinterpret_cast<duckdb_data_chunk>(result);
 }
 
 void duckdb_destroy_data_chunk(duckdb_data_chunk *chunk) {
@@ -47,7 +47,7 @@ duckdb_vector duckdb_data_chunk_get_vector(duckdb_data_chunk chunk, idx_t col_id
 		return nullptr;
 	}
 	auto dchunk = (duckdb::DataChunk *)chunk;
-	return &dchunk->data[col_idx];
+	return reinterpret_cast<duckdb_vector>(&dchunk->data[col_idx]);
 }
 
 idx_t duckdb_data_chunk_get_size(duckdb_data_chunk chunk) {
@@ -71,7 +71,7 @@ duckdb_logical_type duckdb_vector_get_column_type(duckdb_vector vector) {
 		return nullptr;
 	}
 	auto v = (duckdb::Vector *)vector;
-	return new duckdb::LogicalType(v->GetType());
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(v->GetType()));
 }
 
 void *duckdb_vector_get_data(duckdb_vector vector) {
@@ -117,7 +117,7 @@ duckdb_vector duckdb_list_vector_get_child(duckdb_vector vector) {
 		return nullptr;
 	}
 	auto v = (duckdb::Vector *)vector;
-	return &duckdb::ListVector::GetEntry(*v);
+	return reinterpret_cast<duckdb_vector>(&duckdb::ListVector::GetEntry(*v));
 }
 
 idx_t duckdb_list_vector_get_size(duckdb_vector vector) {
@@ -133,7 +133,7 @@ duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index) 
 		return nullptr;
 	}
 	auto v = (duckdb::Vector *)vector;
-	return duckdb::StructVector::GetEntries(*v)[index].get();
+	return reinterpret_cast<duckdb_vector>(duckdb::StructVector::GetEntries(*v)[index].get());
 }
 
 bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {

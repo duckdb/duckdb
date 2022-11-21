@@ -88,12 +88,26 @@ public:
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 
+	DUCKDB_API void ReserveMemory(idx_t size);
+	DUCKDB_API void FreeReservedMemory(idx_t size);
+
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
 	//! If the "buffer" argument is specified AND the system can find a buffer to re-use for the given allocation size
 	//! "buffer" will be made to point to the re-usable memory. Note that this is not guaranteed.
-	bool EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
+	//! Returns a pair. result.first indicates if eviction was successful. result.second contains the
+	//! reservation handle, which can be moved to the BlockHandle that will own the reservation.
+	struct EvictionResult {
+		bool success;
+		TempBufferPoolReservation reservation;
+	};
+	EvictionResult EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
+
+	//! Helper
+	template <typename... ARGS>
+	TempBufferPoolReservation EvictBlocksOrThrow(idx_t extra_memory, idx_t limit, unique_ptr<FileBuffer> *buffer,
+	                                             ARGS...);
 
 	//! Garbage collect eviction queue
 	void PurgeQueue();
@@ -118,6 +132,10 @@ private:
 	static data_ptr_t BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
 	                                         idx_t size);
 
+	//! When the BlockHandle reaches 0 readers, this creates a new FileBuffer for this BlockHandle and
+	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice TODO rewrite
+	void VerifyZeroReaders(shared_ptr<BlockHandle> &handle);
+
 private:
 	//! The database instance
 	DatabaseInstance &db;
@@ -137,6 +155,8 @@ private:
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
+	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
+	atomic<uint32_t> queue_insertions;
 	//! Allocator associated with the buffer manager, that passes all allocations through this buffer manager
 	Allocator buffer_allocator;
 	//! Block manager for temp data

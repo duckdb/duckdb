@@ -5,6 +5,9 @@
 require icu
 
 statement ok
+SET Calendar = 'gregorian';
+
+statement ok
 SET TimeZone = 'America/Los_Angeles';
 
 query IIII
@@ -117,7 +120,7 @@ America/Catamarca	America/Catamarca	-03:00:00
 America/Cayenne	America/Cayenne	-03:00:00
 America/Cayman	America/Cayman	-05:00:00
 America/Chicago	CST	-06:00:00
-America/Chihuahua	America/Chihuahua	-07:00:00
+America/Chihuahua	America/Chihuahua	-06:00:00
 America/Coral_Harbour	America/Coral_Harbour	-05:00:00
 America/Cordoba	America/Cordoba	-03:00:00
 America/Costa_Rica	America/Costa_Rica	-06:00:00
@@ -199,7 +202,7 @@ America/North_Dakota/Beulah	America/North_Dakota/Beulah	-06:00:00
 America/North_Dakota/Center	America/North_Dakota/Center	-06:00:00
 America/North_Dakota/New_Salem	America/North_Dakota/New_Salem	-06:00:00
 America/Nuuk	America/Nuuk	-03:00:00
-America/Ojinaga	America/Ojinaga	-07:00:00
+America/Ojinaga	America/Ojinaga	-06:00:00
 America/Panama	America/Panama	-05:00:00
 America/Pangnirtung	America/Pangnirtung	-05:00:00
 America/Paramaribo	America/Paramaribo	-03:00:00
@@ -249,10 +252,10 @@ Antarctica/Davis	Antarctica/Davis	07:00:00
 Antarctica/DumontDUrville	Antarctica/DumontDUrville	10:00:00
 Antarctica/Macquarie	Antarctica/Macquarie	10:00:00
 Antarctica/Mawson	Antarctica/Mawson	05:00:00
-Antarctica/McMurdo	NST	12:00:00
+Antarctica/McMurdo	NZ	12:00:00
 Antarctica/Palmer	Antarctica/Palmer	-03:00:00
 Antarctica/Rothera	Antarctica/Rothera	-03:00:00
-Antarctica/South_Pole	NST	12:00:00
+Antarctica/South_Pole	NZ	12:00:00
 Antarctica/Syowa	Antarctica/Syowa	03:00:00
 Antarctica/Troll	Antarctica/Troll	00:00:00
 Antarctica/Vostok	Antarctica/Vostok	06:00:00
@@ -560,8 +563,8 @@ Mexico/BajaNorte	Mexico/BajaNorte	-08:00:00
 Mexico/BajaSur	Mexico/BajaSur	-07:00:00
 Mexico/General	Mexico/General	-06:00:00
 NET	NET	04:00:00
-NST	NST	12:00:00
-NZ	NST	12:00:00
+NST	NZ	12:00:00
+NZ	NZ	12:00:00
 NZ-CHAT	NZ-CHAT	12:45:00
 Navajo	Navajo	-07:00:00
 PLT	PLT	05:00:00
@@ -571,7 +574,7 @@ PRT	PRT	-04:00:00
 PST	PST	-08:00:00
 PST8PDT	PST8PDT	-08:00:00
 Pacific/Apia	MIT	13:00:00
-Pacific/Auckland	NST	12:00:00
+Pacific/Auckland	NZ	12:00:00
 Pacific/Bougainville	Pacific/Bougainville	11:00:00
 Pacific/Chatham	NZ-CHAT	12:45:00
 Pacific/Chuuk	Pacific/Chuuk	10:00:00
@@ -665,4 +668,14 @@ SET TimeZone = 'Asia/Amman';
 query I
 SELECT '2022-10-29 00:00:00+00'::TIMESTAMPTZ;
 ----
-2022-10-29 03:00:00 Asia/Amman
+2022-10-29 03:00:00+03
+
+# 2022f
+# Chihuahua moves to year-round -06 on 2022-10-30.  
+statement ok
+SET TimeZone = 'America/Chihuahua';
+
+query I
+SELECT '2022-11-01 00:00:00+00'::TIMESTAMPTZ;
+----
+2022-10-31 18:00:00-06

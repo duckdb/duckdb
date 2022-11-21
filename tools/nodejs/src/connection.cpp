@@ -15,8 +15,10 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	Napi::Function t =
 	    DefineClass(env, "Connection",
 	                {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec),
-	                 InstanceMethod("register_bulk", &Connection::Register),
-	                 InstanceMethod("unregister", &Connection::Unregister)});
+	                 InstanceMethod("register_udf_bulk", &Connection::RegisterUdf),
+	                 InstanceMethod("register_buffer", &Connection::RegisterBuffer),
+	                 InstanceMethod("unregister_udf", &Connection::UnregisterUdf),
+	                 InstanceMethod("unregister_buffer", &Connection::UnRegisterBuffer)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -56,6 +58,46 @@ struct ConnectTask : public Task {
 	bool success = false;
 };
 
+struct NodeReplacementScanData : duckdb::ReplacementScanData {
+	NodeReplacementScanData(Connection *con_p) : connection_ref(con_p) {};
+	Connection *connection_ref;
+};
+
+static duckdb::unique_ptr<duckdb::TableFunctionRef>
+ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, duckdb::ReplacementScanData *data) {
+	auto &buffers = ((NodeReplacementScanData *)data)->connection_ref->buffers;
+	// Lookup buffer
+	auto lookup = buffers.find(table_name);
+	if (lookup == buffers.end()) {
+		return nullptr;
+	}
+
+	// Create table scan on ipc buffers
+	auto name = lookup->first;
+	auto ipc_buffer_array = lookup->second;
+
+	auto table_function = duckdb::make_unique<duckdb::TableFunctionRef>();
+	std::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> table_fun_children;
+
+	duckdb::vector<duckdb::Value> list_children;
+
+	for (uint64_t ipc_idx = 0; ipc_idx < ipc_buffer_array.size(); ipc_idx++) {
+		auto &v = ipc_buffer_array[ipc_idx];
+		duckdb::child_list_t<duckdb::Value> struct_children;
+		struct_children.push_back(make_pair("ptr", duckdb::Value::UBIGINT(v.first)));
+		struct_children.push_back(make_pair("size", duckdb::Value::UBIGINT(v.second)));
+
+		// Push struct into table fun
+		list_children.push_back(duckdb::Value::STRUCT(move(struct_children)));
+	}
+
+	table_fun_children.push_back(
+	    duckdb::make_unique<duckdb::ConstantExpression>(duckdb::Value::LIST(move(list_children))));
+	table_function->function =
+	    duckdb::make_unique<duckdb::FunctionExpression>("scan_arrow_ipc", move(table_fun_children));
+	return table_function;
+}
+
 Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connection>(info) {
 	Napi::Env env = info.Env();
 	int length = info.Length();
@@ -67,6 +109,11 @@ Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connec
 
 	database_ref = Napi::ObjectWrap<Database>::Unwrap(info[0].As<Napi::Object>());
 	database_ref->Ref();
+
+	// Register replacement scan
+	// TODO: disabled currently, either fix or remove.
+	//	database_ref->database->instance->config.replacement_scans.emplace_back(
+	//	    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(this));
 
 	Napi::Function callback;
 	if (info.Length() > 0 && info[1].IsFunction()) {
@@ -217,8 +264,8 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 	jsargs->done = true;
 }
 
-struct RegisterTask : public Task {
-	RegisterTask(Connection &connection, std::string name, std::string return_type_name, Napi::Function callback)
+struct RegisterUdfTask : public Task {
+	RegisterUdfTask(Connection &connection, std::string name, std::string return_type_name, Napi::Function callback)
 	    : Task(connection, callback), name(std::move(name)), return_type_name(std::move(return_type_name)) {
 	}
 
@@ -258,7 +305,7 @@ struct RegisterTask : public Task {
 	std::string return_type_name;
 };
 
-Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
+Napi::Value Connection::RegisterUdf(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	if (info.Length() < 3 || !info[0].IsString() || !info[1].IsString() || !info[2].IsFunction()) {
 		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
@@ -287,13 +334,77 @@ Napi::Value Connection::Register(const Napi::CallbackInfo &info) {
 	udfs[name] = udf;
 
 	database_ref->Schedule(info.Env(),
-	                       duckdb::make_unique<RegisterTask>(*this, name, return_type_name, completion_callback));
+	                       duckdb::make_unique<RegisterUdfTask>(*this, name, return_type_name, completion_callback));
 
 	return Value();
 }
 
-struct UnregisterTask : public Task {
-	UnregisterTask(Connection &connection, std::string name, Napi::Function callback)
+// Register Arrow IPC buffers for scanning from DuckDB
+Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
+	auto env = info.Env();
+
+	Napi::TypeError::New(env, "Register buffer currently not implemented").ThrowAsJavaScriptException();
+	return env.Null();
+
+	if (info.Length() < 2 || !info[0].IsString() || !info[1].IsObject()) {
+		Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
+		return env.Null();
+	}
+
+	std::string name = info[0].As<Napi::String>();
+	Napi::Array array = info[1].As<Napi::Array>();
+	bool force_register = false;
+
+	if (info.Length() > 2) {
+		if (!info[2].IsBoolean()) {
+			Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
+			return env.Null();
+		}
+		force_register = info[2].As<Napi::Boolean>().Value();
+	}
+
+	array_references[name] = Napi::Persistent(array);
+
+	if (!force_register && buffers.find(name) != buffers.end()) {
+		Napi::TypeError::New(env, "Buffer with this name already exists").ThrowAsJavaScriptException();
+		return env.Null();
+	}
+
+	buffers[name] = std::vector<std::pair<uint64_t, uint64_t>>();
+
+	for (uint64_t ipc_idx = 0; ipc_idx < array.Length(); ipc_idx++) {
+		Napi::Value v = array[ipc_idx];
+		if (!v.IsObject()) {
+			Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
+			return env.Null();
+		}
+		Napi::Uint8Array arr = v.As<Napi::Uint8Array>();
+		auto raw_ptr = reinterpret_cast<uint64_t>(arr.ArrayBuffer().Data());
+		auto length = (uint64_t)arr.ElementLength();
+
+		buffers[name].push_back(std::pair<uint64_t, uint64_t>({raw_ptr, length}));
+	}
+
+	return Value();
+}
+
+Napi::Value Connection::UnRegisterBuffer(const Napi::CallbackInfo &info) {
+	auto env = info.Env();
+
+	Napi::TypeError::New(env, "Register buffer currently not implemented").ThrowAsJavaScriptException();
+	return env.Null();
+
+	if (info.Length() != 1 || !info[0].IsString()) {
+		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
+		return env.Null();
+	}
+	std::string name = info[0].As<Napi::String>();
+	buffers.erase(name);
+	return Value();
+}
+
+struct UnregisterUdfTask : public Task {
+	UnregisterUdfTask(Connection &connection, std::string name, Napi::Function callback)
 	    : Task(connection, callback), name(std::move(name)) {
 	}
 
@@ -318,7 +429,7 @@ struct UnregisterTask : public Task {
 	std::string name;
 };
 
-Napi::Value Connection::Unregister(const Napi::CallbackInfo &info) {
+Napi::Value Connection::UnregisterUdf(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	if (info.Length() < 1 || !info[0].IsString()) {
 		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
@@ -331,7 +442,7 @@ Napi::Value Connection::Unregister(const Napi::CallbackInfo &info) {
 		callback = info[1].As<Napi::Function>();
 	}
 
-	database_ref->Schedule(info.Env(), duckdb::make_unique<UnregisterTask>(*this, name, callback));
+	database_ref->Schedule(info.Env(), duckdb::make_unique<UnregisterUdfTask>(*this, name, callback));
 	return Value();
 }
 

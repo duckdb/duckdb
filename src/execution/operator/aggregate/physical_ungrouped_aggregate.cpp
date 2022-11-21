@@ -96,7 +96,7 @@ class UngroupedAggregateLocalState : public LocalSinkState {
 public:
 	UngroupedAggregateLocalState(const PhysicalUngroupedAggregate &op, const vector<LogicalType> &child_types,
 	                             GlobalSinkState &gstate_p, ExecutionContext &context)
-	    : state(op.aggregates), child_executor(Allocator::Get(context.client)), aggregate_input_chunk(), filter_set() {
+	    : state(op.aggregates), child_executor(context.client), aggregate_input_chunk(), filter_set() {
 		auto &gstate = (UngroupedAggregateGlobalState &)gstate_p;
 
 		auto &allocator = Allocator::Get(context.client);
@@ -117,7 +117,7 @@ public:
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
 			aggregate_input_chunk.Initialize(allocator, payload_types);
 		}
-		filter_set.Initialize(allocator, aggregate_objects, child_types);
+		filter_set.Initialize(context.client, aggregate_objects, child_types);
 	}
 
 	//! The local aggregate state
@@ -460,11 +460,6 @@ public:
 	void Schedule() override {
 		auto &distinct_state = *gstate.distinct_state;
 		auto &distinct_data = *op.distinct_data;
-
-		//! Now that all tables are combined, it's time to do the distinct aggregations
-		auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
-		this->InsertEvent(move(new_event));
-
 		vector<unique_ptr<Task>> tasks;
 		for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
 			distinct_data.radix_tables[table_idx]->ScheduleTasks(pipeline->executor, shared_from_this(),
@@ -472,6 +467,12 @@ public:
 		}
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
+	}
+
+	void FinishEvent() override {
+		//! Now that all tables are combined, it's time to do the distinct aggregations
+		auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
+		this->InsertEvent(move(new_event));
 	}
 };
 

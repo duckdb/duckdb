@@ -14,8 +14,10 @@ versions <- list(
   release = list(repo = "duckdb/duckdb", ref = "v0.3.1")
 )
 
-versions <- Map(`[[<-`, versions, "lib",
-                dir_create(temp_lib_dir, names(versions)))
+versions <- Map(
+  `[[<-`, versions, "lib",
+  dir_create(temp_lib_dir, names(versions))
+)
 
 install_all(versions, update_deps = TRUE)
 
@@ -27,7 +29,7 @@ res <- bench_mark(
   reps = 50,
   grid = list(nrow = c(1e3, 1e5, 1e7)),
   setup = {
-    con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+    con <- dbConnect(duckdb(), dbdir = ":memory:")
     dat <- setup_data(nrow)
     arw <- InMemoryDataset$create(dat)
 

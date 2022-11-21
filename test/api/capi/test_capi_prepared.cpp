@@ -57,6 +57,18 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_hugeint_to_double(duckdb_value_hugeint(&res, 0, 0)) == 64.0);
 	duckdb_destroy_result(&res);
 
+	// Fetching a DECIMAL from a non-DECIMAL result returns 0
+	duckdb_decimal decimal = duckdb_double_to_decimal(634.3453, 7, 4);
+	duckdb_bind_decimal(stmt, 1, decimal);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	duckdb_decimal result_decimal = duckdb_value_decimal(&res, 0, 0);
+	REQUIRE(result_decimal.scale == 0);
+	REQUIRE(result_decimal.width == 0);
+	REQUIRE(result_decimal.value.upper == 0);
+	REQUIRE(result_decimal.value.lower == 0);
+	duckdb_destroy_result(&res);
+
 	duckdb_bind_uint8(stmt, 1, 8);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
@@ -125,7 +137,10 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != nullptr);
 
-	REQUIRE(duckdb_bind_varchar_length(stmt, 1, "\x00\x40\x41", 3) == DuckDBError);
+	// invalid unicode
+	REQUIRE(duckdb_bind_varchar_length(stmt, 1, "\x80", 1) == DuckDBError);
+	// we can bind null values, though!
+	REQUIRE(duckdb_bind_varchar_length(stmt, 1, "\x00\x40\x41", 3) == DuckDBSuccess);
 	duckdb_bind_varchar_length(stmt, 1, "hello world", 5);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);

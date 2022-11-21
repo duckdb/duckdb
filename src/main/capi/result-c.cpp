@@ -1,4 +1,4 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/allocator.hpp"
 
@@ -397,7 +397,7 @@ duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col)
 		return nullptr;
 	}
 	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
-	return new duckdb::LogicalType(result_data.result->types[col]);
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(result_data.result->types[col]));
 }
 
 idx_t duckdb_column_count(duckdb_result *result) {
@@ -485,5 +485,5 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	auto chunk = duckdb::make_unique<duckdb::DataChunk>();
 	chunk->Initialize(duckdb::Allocator::DefaultAllocator(), collection.Types());
 	collection.FetchChunk(chunk_idx, *chunk);
-	return chunk.release();
+	return reinterpret_cast<duckdb_data_chunk>(chunk.release());
 }

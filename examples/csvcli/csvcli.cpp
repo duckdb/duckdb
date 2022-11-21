@@ -1,7 +1,7 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #endif
 
 #include <algorithm>

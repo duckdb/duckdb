@@ -183,6 +183,11 @@ typedef struct {
 } duckdb_decimal;
 
 typedef struct {
+	char *data;
+	idx_t size;
+} duckdb_string;
+
+typedef struct {
 	void *data;
 	idx_t size;
 } duckdb_blob;
@@ -228,19 +233,45 @@ typedef struct {
 	void *internal_data;
 } duckdb_result;
 
-typedef void *duckdb_database;
-typedef void *duckdb_connection;
-typedef void *duckdb_prepared_statement;
-typedef void *duckdb_pending_result;
-typedef void *duckdb_appender;
-typedef void *duckdb_arrow;
-typedef void *duckdb_config;
-typedef void *duckdb_arrow_schema;
-typedef void *duckdb_arrow_array;
-typedef void *duckdb_logical_type;
-typedef void *duckdb_data_chunk;
-typedef void *duckdb_vector;
-typedef void *duckdb_value;
+typedef struct _duckdb_database {
+	void *__db;
+} * duckdb_database;
+typedef struct _duckdb_connection {
+	void *__conn;
+} * duckdb_connection;
+typedef struct _duckdb_prepared_statement {
+	void *__prep;
+} * duckdb_prepared_statement;
+typedef struct _duckdb_pending_result {
+	void *__pend;
+} * duckdb_pending_result;
+typedef struct _duckdb_appender {
+	void *__appn;
+} * duckdb_appender;
+typedef struct _duckdb_arrow {
+	void *__arrw;
+} * duckdb_arrow;
+typedef struct _duckdb_config {
+	void *__cnfg;
+} * duckdb_config;
+typedef struct _duckdb_arrow_schema {
+	void *__arrs;
+} * duckdb_arrow_schema;
+typedef struct _duckdb_arrow_array {
+	void *__arra;
+} * duckdb_arrow_array;
+typedef struct _duckdb_logical_type {
+	void *__lglt;
+} * duckdb_logical_type;
+typedef struct _duckdb_data_chunk {
+	void *__dtck;
+} * duckdb_data_chunk;
+typedef struct _duckdb_vector {
+	void *__vctr;
+} * duckdb_vector;
+typedef struct _duckdb_value {
+	void *__val;
+} * duckdb_value;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 typedef enum {
@@ -629,18 +660,37 @@ DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t 
 DUCKDB_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-* returns: The char* value at the specified location, or nullptr if the value cannot be converted.
-The result must be freed with `duckdb_free`.
+* DEPRECATED: use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.
+* returns: The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
+converted. The result must be freed with `duckdb_free`.
 */
 DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
 
+/*!s
+* returns: The string value at the specified location.
+The result must be freed with `duckdb_free`.
+*/
+DUCKDB_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
+
 /*!
+* DEPRECATED: use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
 * returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
 
 The result must NOT be freed.
 */
 DUCKDB_API char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row);
+
+/*!
+* DEPRECATED: use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
+* returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
+If the column is NOT a VARCHAR column this function will return NULL.
+
+The result must NOT be freed.
+*/
+DUCKDB_API duckdb_string duckdb_value_string_internal(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
 * returns: The duckdb_blob value at the specified location. Returns a blob with blob.data set to nullptr if the
@@ -751,6 +801,16 @@ If the conversion fails because the double value is too big the result will be 0
 * returns: The converted `duckdb_hugeint` element.
 */
 DUCKDB_API duckdb_hugeint duckdb_double_to_hugeint(double val);
+
+/*!
+Converts a double value to a duckdb_decimal object.
+
+If the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.
+
+* val: The double value.
+* returns: The converted `duckdb_decimal` element.
+*/
+DUCKDB_API duckdb_decimal duckdb_double_to_decimal(double val, uint8_t width, uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Decimal Helpers
@@ -865,6 +925,11 @@ Binds an duckdb_hugeint value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             duckdb_hugeint val);
+/*!
+Binds a duckdb_decimal value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_decimal(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                            duckdb_decimal val);
 
 /*!
 Binds an uint8_t value to the prepared statement at the specified index.

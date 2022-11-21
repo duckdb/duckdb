@@ -81,8 +81,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, T
 	}
 
 	// check the temp schema as well
-	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
-	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
+	    context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
@@ -109,7 +109,7 @@ public:
 		for (auto &constraint : entry->constraints) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
 				auto &not_null = *reinterpret_cast<NotNullConstraint *>(constraint.get());
-				not_null_cols.insert(not_null.index);
+				not_null_cols.insert(not_null.index.index);
 			}
 		}
 	}
@@ -118,17 +118,18 @@ public:
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return entry->columns.size();
+		return entry->columns.LogicalColumnCount();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry->columns[col].Name();
+		return entry->columns.GetColumn(LogicalIndex(col)).Name();
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return entry->columns[col].Type();
+		return entry->columns.GetColumn(LogicalIndex(col)).Type();
 	}
 	const Value ColumnDefault(idx_t col) override {
-		if (entry->columns[col].DefaultValue()) {
-			return Value(entry->columns[col].DefaultValue()->ToString());
+		auto &column = entry->columns.GetColumn(LogicalIndex(col));
+		if (column.DefaultValue()) {
+			return Value(column.DefaultValue()->ToString());
 		}
 		return Value();
 	}

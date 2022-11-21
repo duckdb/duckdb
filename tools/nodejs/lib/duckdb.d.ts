@@ -20,13 +20,14 @@ export class Connection {
   constructor(db: Database, callback?: Callback<any>);
 
   all(sql: string, ...args: [...any, Callback<TableData>] | []): void;
+  arrowIPCAll(sql: string, ...args: [...any, Callback<TableData>] | []): void;
   each(sql: string, ...args: [...any, Callback<RowData>] | []): void;
   exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
   prepare(sql: string, ...args: [...any, Callback<Statement>] | []): Statement;
   run(sql: string, ...args: [...any, Callback<void>] | []): Statement;
 
-  register(
+  register_udf(
     name: string,
     return_type: string,
     fun: (...args: any[]) => any
@@ -37,9 +38,10 @@ export class Connection {
     return_type: string,
     fun: (...args: any[]) => any
   ): void;
-  unregister(name: string, callback: Callback<any>): void;
+  unregister_udf(name: string, callback: Callback<any>): void;
 
   stream(sql: any, ...args: any[]): QueryResult;
+  arrowIPCStream(sql: any, ...args: any[]): QueryResult;
 }
 
 export class QueryResult {
@@ -47,31 +49,38 @@ export class QueryResult {
 }
 
 export class Database {
-  constructor(path: string, callback?: Callback<any>);
+  constructor(path: string, accessMode?: number, callback?: Callback<any>);
 
   close(callback: Callback<void>): void;
 
   connect(): Connection;
 
   all(sql: string, ...args: [...any, Callback<TableData>] | []): void;
+  arrowIPCAll(sql: string, ...args: [...any, Callback<TableData>] | []): void;
   each(sql: string, ...args: [...any, Callback<RowData>] | []): void;
   exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
   prepare(sql: string, ...args: [...any, Callback<Statement>] | []): Statement;
   run(sql: string, ...args: [...any, Callback<void>] | []): Statement;
 
-  register(
+  register_udf(
     name: string,
     return_type: string,
     fun: (...args: any[]) => any
   ): void;
-  unregister(name: string, callback: Callback<any>): void;
+  unregister_udf(name: string, callback: Callback<any>): void;
+
+  stream(sql: any, ...args: any[]): QueryResult;
+  arrowIPCStream(sql: any, ...args: any[]): QueryResult;
 }
 
 export class Statement {
   constructor();
 
   all(...args: [...any, Callback<TableData>] | []): void;
+
+  arrowIPCAll(...args: [...any, Callback<TableData>] | []): void;
+
   each(...args: [...any, Callback<RowData>] | []): void;
 
   finalize(callback?: Callback<void>): void;

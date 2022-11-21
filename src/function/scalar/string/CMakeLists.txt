@@ -23,6 +23,7 @@ add_library_unity(
   trim.cpp
   left_right.cpp
   contains.cpp
+  starts_with.cpp
   string_split.cpp
   mismatches.cpp
   levenshtein.cpp

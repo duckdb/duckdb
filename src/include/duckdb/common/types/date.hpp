@@ -55,7 +55,9 @@ public:
 	//! Convert a date object to a string in the format "YYYY-MM-DD"
 	DUCKDB_API static string ToString(date_t date);
 	//! Try to convert text in a buffer to a date; returns true if parsing was successful
-	DUCKDB_API static bool TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool strict = false);
+	//! If the date was a "special" value, the special flag will be set.
+	DUCKDB_API static bool TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool &special,
+	                                      bool strict = false);
 
 	//! Create a string "YYYY-MM-DD" from a specified (year, month, day)
 	//! combination

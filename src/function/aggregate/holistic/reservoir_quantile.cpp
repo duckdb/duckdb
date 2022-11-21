@@ -339,13 +339,14 @@ static double CheckReservoirQuantile(const Value &quantile_val) {
 
 unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(arguments.size() >= 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("RESERVOIR_QUANTILE can only take constant quantile parameters");
 	}
-	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	Value quantile_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	vector<double> quantiles;
 	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckReservoirQuantile(quantile_val));
@@ -355,14 +356,18 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 		}
 	}
 
-	if (arguments.size() <= 2) {
-		arguments.pop_back();
+	if (arguments.size() == 2) {
+		if (function.arguments.size() == 2) {
+			Function::EraseArgument(function, arguments, arguments.size() - 1);
+		} else {
+			arguments.pop_back();
+		}
 		return make_unique<ReservoirQuantileBindData>(quantiles, 8192);
 	}
 	if (!arguments[2]->IsFoldable()) {
 		throw BinderException("RESERVOIR_QUANTILE can only take constant sample size parameters");
 	}
-	Value sample_size_val = ExpressionExecutor::EvaluateScalar(*arguments[2]);
+	Value sample_size_val = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
 	if (sample_size_val.IsNull()) {
 		throw BinderException("Size of the RESERVOIR_QUANTILE sample cannot be NULL");
 	}

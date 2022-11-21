@@ -47,7 +47,7 @@ DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_on
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() : is_invalidated(false) {
+DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
@@ -272,6 +272,12 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.replacement_opens = move(new_config.replacement_opens);
 	config.parser_extensions = move(new_config.parser_extensions);
 	config.error_manager = move(new_config.error_manager);
+	if (!config.error_manager) {
+		config.error_manager = make_unique<ErrorManager>();
+	}
+	if (!config.default_allocator) {
+		config.default_allocator = Allocator::DefaultAllocatorReference();
+	}
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
@@ -324,11 +330,12 @@ string ClientConfig::ExtractTimezone() const {
 	}
 }
 
-void DatabaseInstance::Invalidate() {
-	this->is_invalidated = true;
+ValidChecker &DatabaseInstance::GetValidChecker() {
+	return db_validity;
 }
-bool DatabaseInstance::IsInvalidated() {
-	return this->is_invalidated;
+
+ValidChecker &ValidChecker::Get(DatabaseInstance &db) {
+	return db.GetValidChecker();
 }
 
 } // namespace duckdb

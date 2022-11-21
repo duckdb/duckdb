@@ -46,6 +46,9 @@ private:
 	string raw_message;
 	//! The final message (stored in the preserved error for compatibility reasons with C-API)
 	string final_message;
+
+private:
+	static string SanitizeErrorMessage(string error);
 };
 
 } // namespace duckdb

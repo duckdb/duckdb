@@ -1,0 +1,129 @@
+# name: test/sql/function/string/null_byte.test
+# description: Test string functions with null bytes
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT chr(0)
+----
+\0
+
+query I
+SELECT chr(0)::blob
+----
+\x00
+
+query I
+select ascii(chr(0));
+----
+0
+
+query I
+CREATE TABLE null_byte AS SELECT concat('goo', chr(0), 'se') AS v
+----
+1
+
+query I
+SELECT * FROM null_byte
+----
+goo\0se
+
+query I
+SELECT * FROM null_byte WHERE contains(v, chr(0))
+----
+goo\0se
+
+query I
+SELECT instr(v, chr(0)) FROM null_byte
+----
+4
+
+query I
+SELECT * FROM null_byte WHERE v LIKE concat('%', chr(0), '%')
+----
+goo\0se
+
+query I
+SELECT * FROM null_byte WHERE regexp_matches(v, chr(0))
+----
+goo\0se
+
+query I
+SELECT * FROM null_byte WHERE regexp_full_match(v, concat('goo', chr(0), 'se'))
+----
+goo\0se
+
+# nested types
+query I
+SELECT {'a': v} FROM null_byte
+----
+{'a': goo\0se}
+
+query I
+SELECT [v] FROM null_byte
+----
+[goo\0se]
+
+query I
+SELECT LENGTH(v) FROM null_byte
+----
+6
+
+query I
+SELECT STRLEN(v) FROM null_byte
+----
+6
+
+query I
+SELECT LENGTH_GRAPHEME(v) FROM null_byte
+----
+6
+
+query I
+SELECT v||v FROM null_byte
+----
+goo\0segoo\0se
+
+query I
+SELECT printf('%s - zzz', v) FROM null_byte
+----
+goo\0se - zzz
+
+query I
+SELECT substr(v, 4) FROM null_byte
+----
+\0se
+
+statement ok
+CREATE TABLE more_null_bytes AS
+SELECT 1 AS id, v FROM null_byte
+UNION ALL
+SELECT 2 AS id, substr(v, 4, 1) FROM null_byte
+UNION ALL
+SELECT 3 AS id, v FROM null_byte
+
+query II
+SELECT * FROM more_null_bytes ORDER BY v, id
+----
+2	\0
+1	goo\0se
+3	goo\0se
+
+query II
+SELECT v, SUM(id) FROM more_null_bytes GROUP BY v ORDER BY ALL
+----
+\0	2
+goo\0se	4
+
+query II
+SELECT v, SUM(id) FROM more_null_bytes GROUP BY v ORDER BY ALL
+----
+\0	2
+goo\0se	4
+
+query I
+SELECT COUNT(*) FROM null_byte JOIN more_null_bytes USING(v)
+----
+2

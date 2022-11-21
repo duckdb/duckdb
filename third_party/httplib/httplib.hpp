@@ -3237,7 +3237,7 @@ inline bool parse_header(const char *beg, const char *end, T fn) {
 	}
 
 	if (p < end) {
-		fn(std::string(beg, key_end), decode_url(std::string(p, end), false));
+		fn(std::string(beg, key_end), std::string(p, end));
 		return true;
 	}
 
@@ -6077,7 +6077,7 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
 		return false;
 	}
 
-	auto location = detail::decode_url(res.get_header_value("location"), false);
+	auto location = res.get_header_value("location");
 	if (location.empty()) { return false; }
 
 	const static Regex re(
