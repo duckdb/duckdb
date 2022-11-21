@@ -35,6 +35,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	D_ASSERT(op->children.size() == 2);
 	auto left_bindings = op->children[0]->GetColumnBindings();
 	auto right_bindings = op->children[1]->GetColumnBindings();
+	if (left_bindings.size() != right_bindings.size()) {
+		throw InternalException("Filter pushdown - set operation LHS and RHS have incompatible counts");
+	}
 
 	// pushdown into set operation, we can duplicate the condition and pushdown the expressions into both sides
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);

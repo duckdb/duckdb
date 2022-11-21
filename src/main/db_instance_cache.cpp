@@ -16,8 +16,7 @@ string GetDBAbsolutePath(const string &database) {
 	return FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), database);
 }
 
-shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DBConfig &config) {
-	lock_guard<mutex> l(cache_lock);
+shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, const DBConfig &config) {
 	shared_ptr<DuckDB> db_instance;
 	auto abs_database_path = GetDBAbsolutePath(database);
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
@@ -36,8 +35,13 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DB
 	return db_instance;
 }
 
-shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBConfig &config, bool cache_instance) {
+shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DBConfig &config) {
 	lock_guard<mutex> l(cache_lock);
+	return GetInstanceInternal(database, config);
+}
+
+shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &database, DBConfig &config,
+                                                           bool cache_instance) {
 	auto abs_database_path = GetDBAbsolutePath(database);
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
 		throw duckdb::Exception(ExceptionType::CONNECTION,
@@ -53,6 +57,23 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBCon
 		db_instances[abs_database_path] = db_instance;
 	}
 	return db_instance;
+}
+
+shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBConfig &config, bool cache_instance) {
+	lock_guard<mutex> l(cache_lock);
+	return CreateInstanceInternal(database, config, cache_instance);
+}
+
+shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, DBConfig &config_dict,
+                                                        bool cache_instance) {
+	lock_guard<mutex> l(cache_lock);
+	if (cache_instance) {
+		auto instance = GetInstanceInternal(database, config_dict);
+		if (instance) {
+			return instance;
+		}
+	}
+	return CreateInstanceInternal(database, config_dict, cache_instance);
 }
 
 } // namespace duckdb

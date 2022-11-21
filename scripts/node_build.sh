@@ -9,6 +9,11 @@ cd tools/nodejs
 make clean
 ./configure
 
+if [[ "$1" == "15" ]] ; then
+  # force upgrade npm's internal copy of node-gyp
+  npm explore npm/node_modules/@npmcli/run-script -g -- npm_config_global=false npm install node-gyp@latest
+fi
+
 npm install --build-from-source --target_arch="$TARGET_ARCH"
 
 ./node_modules/.bin/node-pre-gyp reveal --target_arch="$TARGET_ARCH"

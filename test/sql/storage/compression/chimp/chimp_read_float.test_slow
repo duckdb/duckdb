@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/chimp/chimp_read_float.test
+# name: test/sql/storage/compression/chimp/chimp_read_float.test_slow
 # group: [chimp]
 
 require parquet
