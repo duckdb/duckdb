@@ -22,7 +22,8 @@ Issues = "https://github.com/duckdb/duckdb/issues"
 Changelog = "https://github.com/duckdb/duckdb/releases"
 
 [build-system]
-requires = ["setuptools_scm<7.0.0", "oldest-supported-numpy", 'pybind11>=2.6.0']
+requires = ["setuptools", "wheel", "setuptools_scm<7.0.0", "oldest-supported-numpy", 'pybind11>=2.6.0']
+build-backend = "setuptools.build_meta"
 
 # Config for cibuildwheel, some values are overridden by env variables of specific jobs
 
