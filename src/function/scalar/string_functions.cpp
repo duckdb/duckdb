@@ -27,6 +27,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<RepeatFun>();
 	Register<ReplaceFun>();
 	Register<RpadFun>();
+	Register<TranslateFun>();
 	Register<SuffixFun>();
 	Register<TrimFun>();
 	Register<UnicodeFun>();
