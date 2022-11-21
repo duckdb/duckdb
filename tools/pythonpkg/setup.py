@@ -239,12 +239,6 @@ else:
         library_dirs=library_dirs,
         language='c++')
 
-# Only include pytest-runner in setup_requires if we're invoking tests
-if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
-    setup_requires = ['pytest-runner']
-else:
-    setup_requires = []
-
 setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
 if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
     setuptools_scm_conf['local_scheme'] = 'no-local-version'
@@ -276,16 +270,12 @@ data_files = setup_data_files(extra_files + header_files)
 setup(
     url="https://www.duckdb.org",
     long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
-    install_requires=[ # these version is still available for Python 2, newer ones aren't
-         'numpy>=1.14'
-    ],
     data_files = data_files,
     packages=[
         'duckdb_query_graph',
         'duckdb-stubs'
     ],
     include_package_data=True,
-    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'numpy>=1.14', 'pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     ext_modules = [libduckdb],
