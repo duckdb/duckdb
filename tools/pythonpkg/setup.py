@@ -274,9 +274,6 @@ def setup_data_files(data_files):
 data_files = setup_data_files(extra_files + header_files)
 
 setup(
-    name = lib_name,
-    description = 'DuckDB embedded database',
-    keywords = 'DuckDB Database SQL OLAP',
     url="https://www.duckdb.org",
     long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
