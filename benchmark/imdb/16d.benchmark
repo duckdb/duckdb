@@ -1,4 +1,4 @@
-# name: benchmark/imdb/16d
+# name: benchmark/imdb/16d.benchmark
 # description: Run query 16d from the imdb benchmark (single-threaded)
 # group: [imdb]
 
