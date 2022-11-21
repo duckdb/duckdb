@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/patas/patas_skip.test
+# name: test/sql/storage/compression/patas/patas_skip.test_slow
 # group: [patas]
 
 # load the DB from disk
