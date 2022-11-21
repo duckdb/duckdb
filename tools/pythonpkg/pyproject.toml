@@ -9,6 +9,9 @@ classifiers = [
     'License :: OSI Approved :: MIT License',
 ]
 license = {text = "MIT"}
+maintainers = [
+    { name = "Hannes Muehleisen", email = "hannes@duckdblabs.com" }
+]
 
 [project.urls]
 Documentation = "https://duckdb.org/docs/api/python/overview"

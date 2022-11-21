@@ -289,7 +289,5 @@ setup(
     use_scm_version = setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     ext_modules = [libduckdb],
-    maintainer = "Hannes Muehleisen",
-    maintainer_email = "hannes@cwi.nl",
     cmdclass={"build_ext": build_ext},
 )
