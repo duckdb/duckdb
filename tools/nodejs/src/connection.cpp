@@ -388,17 +388,18 @@ struct ExecTask : public Task {
 	duckdb::PreservedError error;
 };
 
-struct ExecTaskWithCppCallback : public ExecTask {
-    ExecTaskWithCppCallback(Connection &connection, std::string sql, Napi::Function js_callback, std::function<void(void)> cpp_callback)
-            : ExecTask(connection, sql, js_callback), cpp_callback(cpp_callback) {
-    }
+struct ExecTaskWithCallback : public ExecTask {
+	ExecTaskWithCallback(Connection &connection, std::string sql, Napi::Function js_callback,
+	                     std::function<void(void)> cpp_callback)
+	    : ExecTask(connection, sql, js_callback), cpp_callback(cpp_callback) {
+	}
 
-    void Callback() override {
-        cpp_callback();
-        ExecTask::Callback();
-    };
+	void Callback() override {
+		cpp_callback();
+		ExecTask::Callback();
+	};
 
-    std::function<void(void)> cpp_callback;
+	std::function<void(void)> cpp_callback;
 };
 
 Napi::Value Connection::Exec(const Napi::CallbackInfo &info) {
@@ -442,11 +443,12 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 	}
 
 	if (!force_register && array_references.find(name) != array_references.end()) {
-		Napi::TypeError::New(env, "Buffer with this name already exists and force_register is not enabled").ThrowAsJavaScriptException();
+		Napi::TypeError::New(env, "Buffer with this name already exists and force_register is not enabled")
+		    .ThrowAsJavaScriptException();
 		return env.Null();
 	}
 
-    array_references[name] = Napi::Persistent(array);
+	array_references[name] = Napi::Persistent(array);
 
 	std::string arrow_scan_function = "scan_arrow_ipc([";
 
@@ -485,19 +487,20 @@ Napi::Value Connection::UnRegisterBuffer(const Napi::CallbackInfo &info) {
 	}
 	std::string name = info[0].As<Napi::String>();
 
-	std::string final_query = "DROP VIEW " + name;
+	std::string final_query = "DROP VIEW IF EXISTS " + name;
 
 	Napi::Function callback;
 	if (info.Length() > 1 && info[1].IsFunction()) {
 		callback = info[1].As<Napi::Function>();
 	}
 
-    // When query succeeds we can safely delete the ref
-    std::function<void(void)> cpp_callback = [&, name](){
-        array_references.erase(name);
-    };
+	// When query succeeds we can safely delete the ref
+	std::function<void(void)> cpp_callback = [&, name]() {
+		array_references.erase(name);
+	};
 
-	database_ref->Schedule(info.Env(), duckdb::make_unique<ExecTaskWithCppCallback>(*this, final_query, callback, cpp_callback));
+	database_ref->Schedule(info.Env(),
+	                       duckdb::make_unique<ExecTaskWithCallback>(*this, final_query, callback, cpp_callback));
 
 	return Value();
 }
