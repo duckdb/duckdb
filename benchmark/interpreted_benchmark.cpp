@@ -355,6 +355,12 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		// no cache or db_path specified: just run the initialization code
 		result = state->con.Query(load_query);
 	} else {
+
+		auto &fs = state->db.GetFileSystem();
+		if (!fs.DirectoryExists(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY)) {
+			return false;
+		}
+
 		// cache or db_path is specified: try to load from one of them
 		bool in_memory_db_has_data = false;
 		if (!db_path.empty()) {
@@ -419,6 +425,7 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 }
 
 string InterpretedBenchmark::GetDatabasePath() {
+
 	if (!InMemory()) {
 		string path = "duckdb_benchmark_db.db";
 		DeleteDatabase(path);
