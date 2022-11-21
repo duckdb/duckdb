@@ -248,7 +248,7 @@ void GetChildSections(vector<KeySection> &child_sections, vector<Key> &keys, Key
 	child_sections.emplace_back(child_start_idx, key_section.end, keys, key_section);
 }
 
-void Construct(vector<Key> &keys, Node *&node, KeySection &key_section, bool &has_constraint) {
+void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_section, bool &has_constraint) {
 
 	D_ASSERT(key_section.start < keys.size());
 	D_ASSERT(key_section.end < keys.size());
@@ -274,15 +274,11 @@ void Construct(vector<Key> &keys, Node *&node, KeySection &key_section, bool &ha
 			throw ConstraintException("New data contains duplicates on indexed column(s)");
 		}
 
-		if (!single_row_id) {
-			auto row_ids = unique_ptr<row_t[]>(new row_t[num_row_ids]);
-			for (idx_t i = 0; i < num_row_ids; i++) {
-				row_ids[i] = keys[key_section.start + i].row_id;
-			}
-			node = Leaf::New(start_key, prefix_start, row_ids.get(), num_row_ids);
+		if (single_row_id) {
+			node = Leaf::New(start_key, prefix_start, row_ids[key_section.start]);
 			return;
 		}
-		node = Leaf::New(start_key, prefix_start, start_key.row_id);
+		node = Leaf::New(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
 
 	} else { // create a new node and recurse
 
@@ -299,26 +295,21 @@ void Construct(vector<Key> &keys, Node *&node, KeySection &key_section, bool &ha
 		// recurse on each child section
 		for (auto &child_section : child_sections) {
 			Node *new_child = nullptr;
-			Construct(keys, new_child, child_section, has_constraint);
+			Construct(keys, row_ids, new_child, child_section, has_constraint);
 			Node::InsertChild(node, child_section.key_byte, new_child);
 		}
 	}
 }
 
-void ART::SortAndConstruct(idx_t count, vector<Key> &keys, Vector &row_identifiers) {
+void ART::ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers) {
 
 	// prepare the row_identifiers
 	row_identifiers.Flatten(count);
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
-	for (idx_t i = 0; i < count; i++) {
-		keys[i].row_id = row_ids[i];
-	}
-	std::sort(keys.begin(), keys.begin() + count);
-
 	auto key_section = KeySection(0, count - 1, 0, 0);
 	auto has_constraint = IsUnique();
-	Construct(keys, this->tree, key_section, has_constraint);
+	Construct(keys, row_ids, this->tree, key_section, has_constraint);
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {

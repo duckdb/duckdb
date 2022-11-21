@@ -25,7 +25,6 @@ public:
 
 	idx_t len;
 	data_ptr_t data;
-	row_t row_id;
 
 public:
 	template <class T>

@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
+#include "duckdb/execution/operator/order/physical_order.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
@@ -37,11 +38,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 
 	// projection to execute expressions on the key columns
 
+	vector<LogicalType> new_column_types;
 	vector<unique_ptr<Expression>> select_list;
 	for (idx_t i = 0; i < op.expressions.size(); i++) {
+		new_column_types.push_back(op.expressions[i]->return_type);
 		select_list.push_back(move(op.expressions[i]));
 	}
+	new_column_types.push_back(LogicalType::ROW_TYPE);
 	select_list.push_back(make_unique<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
+
 	auto projection = make_unique<PhysicalProjection>(op.info->scan_types, move(select_list), op.estimated_cardinality);
 	projection->children.push_back(move(table_scan));
 
@@ -50,12 +55,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	vector<LogicalType> filter_types;
 	vector<unique_ptr<Expression>> filter_select_list;
 
-	for (idx_t i = 0; i < op.info->scan_types.size() - 1; i++) {
-		filter_types.push_back(op.info->scan_types[i]);
+	for (idx_t i = 0; i < new_column_types.size() - 1; i++) {
+		filter_types.push_back(new_column_types[i]);
 		auto is_not_null_expr =
 		    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 		auto bound_ref =
-		    make_unique<BoundReferenceExpression>(op.info->names[op.info->column_ids[i]], op.info->scan_types[i], i);
+		    make_unique<BoundReferenceExpression>(op.info->names[op.info->column_ids[i]], new_column_types[i], i);
 		is_not_null_expr->children.push_back(move(bound_ref));
 		filter_select_list.push_back(move(is_not_null_expr));
 	}
@@ -65,11 +70,26 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	null_filter->types.emplace_back(LogicalType::ROW_TYPE);
 	null_filter->children.push_back(move(projection));
 
+	// order operator
+
+	vector<BoundOrderByNode> orders;
+	vector<idx_t> projections;
+	for (idx_t i = 0; i < new_column_types.size() - 1; i++) {
+		auto col_expr = make_unique_base<Expression, BoundReferenceExpression>(new_column_types[i], i);
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, move(col_expr));
+		projections.emplace_back(i);
+	}
+	projections.emplace_back(new_column_types.size() - 1);
+
+	auto physical_order =
+	    make_unique<PhysicalOrder>(new_column_types, move(orders), move(projections), op.estimated_cardinality);
+	physical_order->children.push_back(move(null_filter));
+
 	// actual physical create index operator
 
 	auto physical_create_index = make_unique<PhysicalCreateIndex>(
 	    op, op.table, op.info->column_ids, move(op.info), move(op.unbound_expressions), op.estimated_cardinality);
-	physical_create_index->children.push_back(move(null_filter));
+	physical_create_index->children.push_back(move(physical_order));
 	return move(physical_create_index);
 }
 

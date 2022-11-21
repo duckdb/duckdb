@@ -85,7 +85,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 	auto art = make_unique<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
 	                            lstate.local_index->unbound_expressions, lstate.local_index->constraint_type,
 	                            *context.client.db);
-	art->SortAndConstruct(lstate.key_chunk.size(), lstate.keys, row_identifiers);
+	art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers);
 
 	// merge into the local ART
 	{
