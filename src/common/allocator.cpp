@@ -117,6 +117,11 @@ Allocator::~Allocator() {
 
 data_ptr_t Allocator::AllocateData(idx_t size) {
 	D_ASSERT(size > 0);
+	if (DUCKDB_UNLIKELY(size >= MAXIMUM_ALLOC_SIZE)) {
+		D_ASSERT(false);
+		throw InternalException("Requested allocation size of %llu is out of range - maximum allocation size is %llu",
+		                        size, MAXIMUM_ALLOC_SIZE);
+	}
 	auto result = allocate_function(private_data.get(), size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
@@ -143,6 +148,12 @@ void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t size) {
 	if (!pointer) {
 		return nullptr;
+	}
+	if (DUCKDB_UNLIKELY(size >= MAXIMUM_ALLOC_SIZE)) {
+		D_ASSERT(false);
+		throw InternalException(
+		    "Requested re-allocation size of %llu is out of range - maximum allocation size is %llu", size,
+		    MAXIMUM_ALLOC_SIZE);
 	}
 	auto new_pointer = reallocate_function(private_data.get(), pointer, old_size, size);
 #ifdef DEBUG
