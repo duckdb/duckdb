@@ -436,7 +436,7 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 
 	if (info.Length() > 2) {
 		if (!info[2].IsBoolean()) {
-			Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
+			Napi::TypeError::New(env, "Parameter 3 is of unexpected type. Expected boolean").ThrowAsJavaScriptException();
 			return env.Null();
 		}
 		force_register = info[2].As<Napi::Boolean>().Value();
@@ -455,7 +455,7 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 	for (uint64_t ipc_idx = 0; ipc_idx < array.Length(); ipc_idx++) {
 		Napi::Value v = array[ipc_idx];
 		if (!v.IsObject()) {
-			Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
+			Napi::TypeError::New(env, "Parameter 2 contains unexpected type at index " + std::to_string(ipc_idx)).ThrowAsJavaScriptException();
 			return env.Null();
 		}
 		Napi::Uint8Array arr = v.As<Napi::Uint8Array>();
@@ -482,7 +482,7 @@ Napi::Value Connection::UnRegisterBuffer(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 
 	if (info.Length() < 1 || !info[0].IsString()) {
-		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
+		Napi::TypeError::New(env, "Incorrect params").ThrowAsJavaScriptException();
 		return env.Null();
 	}
 	std::string name = info[0].As<Napi::String>();
