@@ -149,6 +149,9 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	D_ASSERT(private_data);
 	private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
 #endif
+	if (DUCKDB_UNLIKELY(!new_pointer)) {
+		throw std::bad_alloc();
+	}
 	return new_pointer;
 }
 
