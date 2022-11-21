@@ -611,13 +611,4 @@ py::list DuckDBPyRelation::ColumnTypes() {
 	return res;
 }
 
-py::list DuckDBPyRelation::Description() {
-	if (!result) {
-		// FIXME: maybe make Description part of the relation itself, not of the result, then we can always provide this
-		// list
-		return py::list();
-	}
-	return result->Description();
-}
-
 } // namespace duckdb

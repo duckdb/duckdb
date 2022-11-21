@@ -215,7 +215,6 @@ public:
 	py::str Type();
 	py::list Columns();
 	py::list ColumnTypes();
-	py::list Description();
 
 	string Print();
 
@@ -229,8 +228,6 @@ private:
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");
 
-private:
-	unique_ptr<DuckDBPyResult> result;
 };
 
 } // namespace duckdb
