@@ -19,7 +19,7 @@ class PhysicalTableInOutFunction : public PhysicalOperator {
 public:
 	PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
 	                           unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
-	                           idx_t estimated_cardinality);
+	                           idx_t estimated_cardinality, vector<column_t> projected_input);
 
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
@@ -42,8 +42,10 @@ private:
 	TableFunction function;
 	//! Bind data of the function
 	unique_ptr<FunctionData> bind_data;
-
+	//! The set of column ids to fetch
 	vector<column_t> column_ids;
+	//! The set of input columns to project out
+	vector<column_t> projected_input;
 };
 
 } // namespace duckdb

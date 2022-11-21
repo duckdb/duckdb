@@ -493,8 +493,19 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		return plan;
-	case LogicalOperatorType::LOGICAL_GET:
-		throw BinderException("Table-in table-out functions not (yet) supported in correlated subqueries");
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = (LogicalGet &)*plan;
+		if (get.children.size() != 1) {
+			throw InternalException("Flatten dependent joins - logical get encountered without children");
+		}
+		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+		for (idx_t i = 0; i < (perform_delim ? correlated_columns.size() : 1); i++) {
+			get.projected_input.push_back(this->delim_offset + i);
+		}
+		this->delim_offset = get.returned_types.size();
+		this->data_offset = 0;
+		return plan;
+	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		throw BinderException("Recursive CTEs not supported in correlated subquery");
 	}

@@ -44,6 +44,8 @@ public:
 	vector<LogicalType> input_table_types;
 	//! The set of named input table names for the table-in table-out function
 	vector<string> input_table_names;
+	//! For a table-in-out function, the set of projected input columns
+	vector<column_t> projected_input;
 
 	string GetName() const override;
 	string ParamsToString() const override;

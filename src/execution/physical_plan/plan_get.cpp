@@ -33,10 +33,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.children.empty()) {
 		// this is for table producing functions that consume subquery results
 		D_ASSERT(op.children.size() == 1);
-		auto node = make_unique<PhysicalTableInOutFunction>(op.returned_types, op.function, move(op.bind_data),
-		                                                    op.column_ids, op.estimated_cardinality);
+		auto node = make_unique<PhysicalTableInOutFunction>(op.types, op.function, move(op.bind_data), op.column_ids,
+		                                                    op.estimated_cardinality, move(op.projected_input));
 		node->children.push_back(CreatePlan(move(op.children[0])));
 		return move(node);
+	}
+	if (!op.projected_input.empty()) {
+		throw InternalException("LogicalGet::project_input can only be set for table-in-out functions");
 	}
 
 	unique_ptr<TableFilterSet> table_filters;

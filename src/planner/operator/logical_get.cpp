@@ -54,6 +54,16 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 			result.emplace_back(table_index, proj_id);
 		}
 	}
+	if (!projected_input.empty()) {
+		if (children.size() != 1) {
+			throw InternalException("LogicalGet::project_input can only be set for table-in-out functions");
+		}
+		auto child_bindings = children[0]->GetColumnBindings();
+		for (auto entry : projected_input) {
+			D_ASSERT(entry < child_bindings.size());
+			result.emplace_back(child_bindings[entry]);
+		}
+	}
 	return result;
 }
 
@@ -78,6 +88,15 @@ void LogicalGet::ResolveTypes() {
 			} else {
 				types.push_back(returned_types[index]);
 			}
+		}
+	}
+	if (!projected_input.empty()) {
+		if (children.size() != 1) {
+			throw InternalException("LogicalGet::project_input can only be set for table-in-out functions");
+		}
+		for (auto entry : projected_input) {
+			D_ASSERT(entry < children[0]->types.size());
+			types.push_back(children[0]->types[entry]);
 		}
 	}
 }
@@ -113,6 +132,7 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 		writer.WriteRegularSerializableList(input_table_types);
 		writer.WriteList<string>(input_table_names);
 	}
+	writer.WriteList<column_t>(projected_input);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -162,6 +182,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 			    "Table function deserialization failure - bind returned different returned names than were serialized");
 		}
 	}
+	vector<column_t> projected_input;
+	reader.ReadList<column_t>(projected_input);
 
 	auto result = make_unique<LogicalGet>(table_index, function, move(bind_data), returned_types, returned_names);
 	result->column_ids = move(column_ids);
@@ -171,6 +193,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 	result->named_parameters = move(named_parameters);
 	result->input_table_types = input_table_types;
 	result->input_table_names = input_table_names;
+	result->projected_input = move(projected_input);
 	return move(result);
 }
 
