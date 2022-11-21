@@ -64,8 +64,9 @@ struct SortedAggregateBindData : public FunctionData {
 	AggregateFunction function;
 	vector<LogicalType> arg_types;
 	unique_ptr<FunctionData> bind_info;
-	vector<LogicalType> sort_types;
+
 	vector<BoundOrderByNode> orders;
+	vector<LogicalType> sort_types;
 };
 
 struct SortedAggregateState {
@@ -73,12 +74,6 @@ struct SortedAggregateState {
 
 	SortedAggregateState() : nsel(0) {
 	}
-
-	unique_ptr<ColumnDataCollection> arguments;
-	unique_ptr<ColumnDataCollection> ordering;
-
-	DataChunk sort_buffer;
-	DataChunk arg_buffer;
 
 	static inline void InitializeBuffer(DataChunk &chunk, const vector<LogicalType> &types) {
 		if (!chunk.ColumnCount() && !types.empty()) {
@@ -117,6 +112,30 @@ struct SortedAggregateState {
 		}
 	}
 
+	void UpdateSlice(SortedAggregateBindData &order_bind, DataChunk &sort_inputs, DataChunk &arg_inputs) {
+		// Lazy instantiation of the buffer chunks
+		InitializeBuffer(sort_buffer, order_bind.sort_types);
+		InitializeBuffer(arg_buffer, order_bind.arg_types);
+
+		if (nsel + sort_buffer.size() > BUFFER_CAPACITY) {
+			Flush(order_bind);
+		}
+		if (ordering) {
+			sort_buffer.Reset();
+			sort_buffer.Slice(sort_inputs, sel, nsel);
+			ordering->Append(sort_buffer);
+
+			arg_buffer.Reset();
+			arg_buffer.Slice(arg_inputs, sel, nsel);
+			arguments->Append(arg_buffer);
+		} else {
+			sort_buffer.Append(sort_inputs, true, &sel, nsel);
+			arg_buffer.Append(arg_inputs, true, &sel, nsel);
+		}
+
+		nsel = 0;
+	}
+
 	void Combine(SortedAggregateBindData &order_bind, SortedAggregateState &other) {
 		if (other.ordering) {
 			// Force CDC if the other hash it
@@ -130,10 +149,13 @@ struct SortedAggregateState {
 
 	void Finalize(LocalSortState &local_sort) {
 		if (ordering) {
-			const auto chunk_count = ordering->ChunkCount();
-			for (idx_t chunk_idx = 0; chunk_idx < chunk_count; ++chunk_idx) {
-				ordering->FetchChunk(chunk_idx, sort_buffer);
-				arguments->FetchChunk(chunk_idx, arg_buffer);
+			ColumnDataScanState sort_state;
+			ordering->InitializeScan(sort_state);
+			ColumnDataScanState arg_state;
+			arguments->InitializeScan(arg_state);
+			for (sort_buffer.Reset(); ordering->Scan(sort_state, sort_buffer); sort_buffer.Reset()) {
+				arg_buffer.Reset();
+				arguments->Scan(arg_state, arg_buffer);
 				local_sort.SinkChunk(sort_buffer, arg_buffer);
 			}
 			ordering->Reset();
@@ -142,6 +164,12 @@ struct SortedAggregateState {
 			local_sort.SinkChunk(sort_buffer, arg_buffer);
 		}
 	}
+
+	unique_ptr<ColumnDataCollection> arguments;
+	unique_ptr<ColumnDataCollection> ordering;
+
+	DataChunk sort_buffer;
+	DataChunk arg_buffer;
 
 	// Selection for scattering
 	SelectionVector sel;
@@ -223,18 +251,7 @@ struct SortedAggregateFunction {
 				continue;
 			}
 
-			DataChunk arg_chunk;
-			arg_chunk.InitializeEmpty(arg_inputs.GetTypes());
-			arg_chunk.Slice(arg_inputs, order_state->sel, order_state->nsel);
-
-			DataChunk sort_chunk;
-			sort_chunk.InitializeEmpty(sort_inputs.GetTypes());
-			sort_chunk.Slice(sort_inputs, order_state->sel, order_state->nsel);
-
-			order_state->Update(*order_bind, sort_chunk, arg_chunk);
-
-			// Mark the slice as empty now we have consumed it.
-			order_state->nsel = 0;
+			order_state->UpdateSlice(*order_bind, sort_inputs, arg_inputs);
 		}
 	}
 
