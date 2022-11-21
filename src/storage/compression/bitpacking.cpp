@@ -10,6 +10,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/storage/compression/bitpacking.hpp"
 
 #include <functional>
 #include <iostream>
@@ -18,6 +19,24 @@ namespace duckdb {
 
 // TODO solve VZ2 issue
 static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SIZE;
+
+BitpackingMode BitpackingModeFromString(const string &str) {
+	auto mode = StringUtil::Lower(str);
+
+	if (mode == "auto") {
+		return BitpackingMode::AUTO;
+	} else if (mode == "constant") {
+		return BitpackingMode::CONSTANT;
+	} else if (mode == "constant_delta") {
+		return BitpackingMode::CONSTANT_DELTA;
+	} else if (mode == "delta_for") {
+		return BitpackingMode::DELTA_FOR;
+	} else if (mode == "for") {
+		return BitpackingMode::FOR;
+	} else {
+		return BitpackingMode::AUTO;
+	}
+}
 
 struct EmptyBitpackingWriter {
 	template <class T>
@@ -30,15 +49,6 @@ struct EmptyBitpackingWriter {
 	static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {}
 };
 
-// TODO add uncompressed?
-enum class BitpackingMode : uint8_t {
-	CONSTANT,
-	CONSTANT_DELTA,
-	DELTA_FOR,
-	FOR,
-};
-
-// Option 1: Allows random access
 typedef struct {
 	BitpackingMode mode;
 	uint32_t offset;
@@ -52,7 +62,7 @@ bitpacking_metadata_t decode_meta(bitpacking_metadata_encoded_t metadata);
 // Types of blocks
 // CONSTANT
 // - BLOCK is [CONSTANT VALUE]
-// - Compression ratio: VectorSize*sizeof(T)/(sizeof(T)+4) (INT64 @ VZ2048 = 1048x)
+// - Compression ratio: VectorSize*sizeof(T)/(sizeof(T)+8) (INT64 @ VZ2048 = 1048x)
 // CONSTANT_DELTA
 // - BLOCK IS [FOR VALUE, DELTA]
 // - Compression ratio: VectorSize*sizeof(T)/(sizeof(T)*2+4) (INT64 @ VZ2048 = 819x)
@@ -67,7 +77,7 @@ bitpacking_metadata_t decode_meta(bitpacking_metadata_encoded_t metadata);
 template <class T, class T_U = typename std::make_unsigned<T>::type, class T_S = typename std::make_signed<T>::type>
 struct BitpackingState {
 public:
-	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr){
+	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
 		compression_buffer_internal[0] = (T)0;
 		compression_buffer = &compression_buffer_internal[1];
 		Reset();
@@ -92,6 +102,10 @@ public:
 	bool all_invalid;
 	bool can_do_delta;
 
+	// Used to force a specific mode, useful in testing
+	// Note that forcing CONSTANT_DELTA or CONSTANT does not actually do anything: if we can use those they are chosen.
+	BitpackingMode mode = BitpackingMode::AUTO;
+
 public:
 	void Reset() {
 		minimum = NumericLimits<T>::Maximum();
@@ -105,8 +119,8 @@ public:
 		compression_buffer_idx = 0;
 	}
 
-	// ->    Easy way: only allow delta if falls within corresponding signed domain
-	// TODO  Harder way: also allow shifting -> separate method?
+	// Currently: only allow delta if falls within corresponding signed domain
+	// TODO: by subtracting a FOR beforehand, we can support cases with values over NumericLimits<T_S>::Maximum();
 	void CalculateDeltaStats() {
 		T_S limit1 = NumericLimits<T_S>::Maximum();
 		T limit = (T)limit1;
@@ -117,8 +131,7 @@ public:
 
 		D_ASSERT(compression_buffer_idx >= 2);
 
-
-		// TODO handle NULLS here?
+		// TODO: handle NULLS here?
 		// Currently we cannot handle nulls because we would need an additional step of patching for this.
 		// we could for example copy the last value on a null insert. This would help a bit, but not be optimal for large deltas
 		// since theres suddenly a zero then. Ideally we would insert a value that leads to a delta within the current domain of deltas
@@ -126,7 +139,11 @@ public:
 		if (!all_valid) {
 			return;
 		}
+
 		for (int64_t i = 0; i < (int64_t)compression_buffer_idx; i++) {
+			if (!compression_buffer_validity[i] || !compression_buffer_validity[i]){
+				continue;
+			}
 			auto success = TrySubtractOperator::Operation(compression_buffer[i], compression_buffer[i-1], *(T*)&delta_buffer[i]);
 			if (!success) {
 				return;
@@ -137,10 +154,8 @@ public:
 
 		// Note: skips the first as it will be corrected with the for
 		for (int64_t i = 1; i < (int64_t)compression_buffer_idx; i++) {
-			if (compression_buffer_validity[i]) {
-				maximum_delta = MaxValue<T_S>(maximum_delta, delta_buffer[i]);
-				minimum_delta = MinValue<T_S>(minimum_delta, delta_buffer[i]);
-			}
+			maximum_delta = MaxValue<T_S>(maximum_delta, delta_buffer[i]);
+			minimum_delta = MinValue<T_S>(minimum_delta, delta_buffer[i]);
 		}
 
 		// Since we can set the first value arbitrarily, we want to pick one from the current domain, note that
@@ -179,10 +194,8 @@ public:
 			return true;
 		}
 
-		if (all_invalid || maximum == minimum) {
-			// Note: if all are invalid, we will write NumericLimits<T>::Minimum(), which is fine as these are not used
-			// TODO: do we want to have an optimization where we can just skip NULLS? this should slightly speed up
-			//       scanning columns with many NULLS
+		if ((all_invalid || maximum == minimum) && (mode == BitpackingMode::AUTO || mode == BitpackingMode::CONSTANT)) {
+//			std::cout << "\nchoosing CONSTANT size = " << to_string(sizeof(T) + sizeof(bitpacking_metadata_t)) << "\n";
 			OP::WriteConstant(maximum, compression_buffer_idx, data_ptr, all_invalid);
 			total_size += sizeof(T) + sizeof(bitpacking_metadata_t);
 			return true;
@@ -190,19 +203,21 @@ public:
 
 		CalculateDeltaStats();
 		if (can_do_delta) {
-			if (maximum_delta == minimum_delta) {
+			if (maximum_delta == minimum_delta && mode != BitpackingMode::FOR && mode != BitpackingMode::DELTA_FOR) {
+//				std::cout << "\nchoosing CONSTANT_DELTA size = " << to_string(sizeof(T) + sizeof(bitpacking_metadata_t)) << "\n";
 				idx_t frame_of_reference = compression_buffer[0];
-//				static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T* values, bool* validity, void* data_ptr)
 				OP::WriteConstantDelta((T_S)maximum_delta, (T)frame_of_reference, compression_buffer_idx, (T*)compression_buffer, (bool*)compression_buffer_validity, data_ptr);
+				total_size += sizeof(T) + sizeof(T) + sizeof(bitpacking_metadata_t);
 				return true;
 			}
 
 			// Check if delta has benefit
-			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum_delta-minimum_delta);
+			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth<T_U>(maximum_delta-minimum_delta);
 			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum-minimum);
 
-			if (delta_required_bitwidth < regular_required_bitwidth) {
-				PatchNullValues(minimum_delta);
+			if (delta_required_bitwidth < regular_required_bitwidth && mode != BitpackingMode::FOR) {
+//				std::cout << "\nchoosing DELTA_FOR bw=" << to_string((int64_t)delta_required_bitwidth) << " : ";
+//				auto size_before = total_size;
 				SubtractFrameOfReference(delta_buffer, minimum_delta);
 
 				// TODO: shouldnt this and others be T_S instead? Since for Delta we currently only support values within T_S domain, all could be T_S
@@ -215,11 +230,15 @@ public:
 				total_size += sizeof(T); // Delta offset value
 				total_size += AlignValue(sizeof(bitpacking_width_t)); // FOR value
 
+//				std::cout << "size = " << to_string(total_size-size_before) << "\n";
+
 				return true;
 			}
 		}
 
 		if (CanDoFOR()) {
+//			std::cout << "\nchoosing FOR ";
+//			auto size_before = total_size;
 			auto width = BitpackingPrimitives::MinimumBitWidth<T_U>(maximum-minimum);
 			PatchNullValues(minimum);
 			SubtractFrameOfReference(compression_buffer, minimum);
@@ -228,7 +247,8 @@ public:
 
 			total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, width);
 			total_size += sizeof(T); // FOR value
-			total_size += AlignValue(sizeof(bitpacking_width_t)); // FOR value
+			total_size += AlignValue(sizeof(bitpacking_width_t));
+//			std::cout << "size = " << to_string(total_size-size_before) << "\n";
 
 			return true;
 		}
@@ -269,8 +289,12 @@ struct BitpackingAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
-//	std::cout << "\n";
-	return make_unique<BitpackingAnalyzeState<T>>();
+	auto& config =  DBConfig::GetConfig(col_data.GetDatabase());
+
+	auto state = make_unique<BitpackingAnalyzeState<T>>();
+	state->state.mode = config.options.force_bitpacking_mode;
+
+	return std::move(state);
 }
 
 template <class T>
@@ -313,6 +337,8 @@ public:
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		state.data_ptr = (void *)this;
+
+		state.mode = config.options.force_bitpacking_mode;
 	}
 
 	ColumnDataCheckpointer &checkpointer;
@@ -651,6 +677,8 @@ public:
 			    current_frame_of_reference = *(T*)(current_group_ptr);
 			    current_group_ptr += sizeof(T);
 			    break;
+		    case BitpackingMode::AUTO:
+			    throw InternalException("Invalid bitpacking mode");
 		}
 
 		// Read second meta value
@@ -666,6 +694,8 @@ public:
 			break;
 		case BitpackingMode::CONSTANT:
 			break;
+		case BitpackingMode::AUTO:
+			throw InternalException("Invalid bitpacking mode");
 		}
 
 		// Read third meta value
@@ -681,6 +711,8 @@ public:
 		case BitpackingMode::FOR:
 		case BitpackingMode::CONSTANT:
 			break;
+		case BitpackingMode::AUTO:
+			throw InternalException("Invalid bitpacking mode");
 		}
 
 
@@ -705,6 +737,8 @@ public:
 //			std::cout << "For is " << current_frame_of_reference << "\n";
 //			std::cout << "width is " << (int64_t)current_width << "\n";
 			break;
+		case BitpackingMode::AUTO:
+			throw InternalException("Invalid bitpacking mode");
 		}
 
 	}

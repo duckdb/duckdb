@@ -8,7 +8,12 @@ load __TEST_DIR__/test_bitpacking.db
 statement ok
 PRAGMA force_compression = 'bitpacking'
 
+foreach bitpacking_mode constant constant_delta delta_for for
+
 foreach typesize 8 16 32 64
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
 
 statement ok
 CREATE TABLE test_unsigned AS SELECT cast(2**(i/2048) as UINT${typesize}) i FROM range(${typesize}*2048) tbl(i);
@@ -108,5 +113,7 @@ SELECT AVG(cast (i as int)) FROM test_nullpack
 
 statement ok
 drop table test_nullpack
+
+endloop
 
 endloop

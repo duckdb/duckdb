@@ -6,18 +6,21 @@
 # load the DB from disk
 load __TEST_DIR__/test_bitpacking.db
 
-# First test: detailed compression ratio
+#### CONSTANT MODE Compression ratio calculation:
+# For single row group (note we choose values such that we don't create the constant segments):
+# 59 vectors with CONSTANT mode, the last one will be FOR mode
+# Total compressed bytes = 59*(8+8) + 1*(2048/8 + 8 + 8 + 8) = 1334
+# Total uncompressed bytes = 120000*8 = 960000
+# Ratio ~= 720x
+# However, because this completely fills up a block and we do not support block sharing yet, we waste a lot of space
 statement ok
 PRAGMA force_compression='bitpacking'
 
-halt
-# TODO figure out compression ratios
-
-#####
-##### Constant Delta mode should achieve ~800x
-#####
 statement ok
-CREATE TABLE test_bitpacked AS SELECT i::INT64 AS i FROM range(0, 10000000) tbl(i);
+PRAGMA force_bitpacking_mode='constant'
+
+statement ok
+CREATE TABLE test_bitpacked AS SELECT (i/119000::INT64)::INT64 AS i FROM range(0, 120000000) tbl(i);
 
 statement ok
 checkpoint
@@ -26,7 +29,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT i::INT64 AS i FROM range(0, 10000000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT i::INT64 FROM range(0, 120000000) tbl(i);
 
 statement ok
 checkpoint
@@ -35,10 +38,12 @@ query I
 SELECT compression FROM pragma_storage_info('test_bitpacked') WHERE segment_type != 'VALIDITY' AND compression != 'BitPacking';
 ----
 
-# This query keeps a pretty wide margin in compression ratio on purpose to account for possible changes that
-# influence compression ratio.
+query I
+SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_type != 'VALIDITY' AND compression != 'Uncompressed';
+----
+
 query II
-select (uncompressed::FLOAT / bitpacked::FLOAT) FROM (
+select (uncompressed::FLOAT / bitpacked::FLOAT) > 600, (uncompressed::FLOAT / bitpacked::FLOAT) < 730 FROM (
     select
         (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
@@ -47,16 +52,23 @@ select (uncompressed::FLOAT / bitpacked::FLOAT) FROM (
 True	True
 
 statement ok
-drop table test_bitpacked
+drop table test_bitpacked;
+drop table test_uncompressed;
+
+#### CONSTANT DELTA MODE Compression ratio calculation:
+# For single row group
+# 60 vectors with a constant increase (1)
+# Total compressed bytes = 60*(8+8+8) = 1440
+# Total uncompressed bytes = 120000*8 = 960000
+# Expected Ratio ~= 666x
+statement ok
+PRAGMA force_compression='bitpacking'
 
 statement ok
-drop table test_uncompressed
+PRAGMA force_bitpacking_mode='constant_delta'
 
-# Uncompressed value size: (1024 * 64bit) = 65536
-# Compress value size: 64(bits) + 64(frame-of-reference) + (1024 * 1) = 1152
-# Ratio: 65536 / 1152 = 56.88
 statement ok
-CREATE TABLE test_bitpacked AS SELECT (2000 + i%2)::INT64 AS i FROM range(0, 10000000) tbl(i);
+CREATE TABLE test_bitpacked AS SELECT i::INT64 AS i FROM range(0, 120000000) tbl(i);
 
 statement ok
 checkpoint
@@ -65,7 +77,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT (2000 + i%2)::INT64 AS i FROM range(0, 10000000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT i::INT64 AS i FROM range(0, 120000000) tbl(i);
 
 statement ok
 checkpoint
@@ -74,10 +86,15 @@ query I
 SELECT compression FROM pragma_storage_info('test_bitpacked') WHERE segment_type != 'VALIDITY' AND compression != 'BitPacking';
 ----
 
-# This query keeps a pretty wide margin in compression ratio on purpose to account for possible changes that
-# influence compression ratio.
+query I
+SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_type != 'VALIDITY' AND compression != 'Uncompressed';
+----
+
+statement ok
+checkpoint
+
 query II
-select (uncompressed::FLOAT / bitpacked::FLOAT) > 45, (uncompressed::FLOAT / bitpacked::FLOAT) < 57 FROM (
+select (uncompressed::FLOAT / bitpacked::FLOAT) > 500, (uncompressed::FLOAT / bitpacked::FLOAT) < 670 FROM (
     select
         (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
@@ -86,10 +103,113 @@ select (uncompressed::FLOAT / bitpacked::FLOAT) > 45, (uncompressed::FLOAT / bit
 True	True
 
 statement ok
-drop table test_bitpacked
+drop table test_bitpacked;
+drop table test_uncompressed;
+
+#### DELTA FOR MODE Compression ratio calculation:
+# For single row group
+# 60 vectors with DELTA_FOR mode smallest possible compression
+# Total compressed bytes = 60*(8+8+8+(2048/8)) = 16800
+# Total uncompressed bytes = 120000*8 = 960000
+# Expected Ratio ~= 57x
+statement ok
+PRAGMA force_compression='bitpacking'
 
 statement ok
-drop table test_uncompressed
+PRAGMA force_bitpacking_mode='delta_for'
+
+statement ok
+CREATE TABLE test_bitpacked AS SELECT i/2::INT64 AS i FROM range(0, 120000000) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+CREATE TABLE test_uncompressed AS SELECT i AS i FROM range(0, 120000000) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test_bitpacked') WHERE segment_type != 'VALIDITY' AND compression != 'BitPacking';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_type != 'VALIDITY' AND compression != 'Uncompressed';
+----
+
+statement ok
+checkpoint
+
+query II
+select (uncompressed::FLOAT / bitpacked::FLOAT) > 50, (uncompressed::FLOAT / bitpacked::FLOAT) < 60 FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
+        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
+)
+----
+True	True
+
+statement ok
+drop table test_bitpacked;
+drop table test_uncompressed;
+
+# FOR MODE Compression ratio calculation:
+# For single row group
+# 60 vectors with DELTA_FOR mode smallest possible compression
+# Total compressed bytes = 60*(8+8+(2048/8)) = 16320
+# Total uncompressed bytes = 120000*8 = 960000
+# Expected Ratio ~= 59x
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+PRAGMA force_bitpacking_mode='for'
+
+statement ok
+CREATE TABLE test_bitpacked AS SELECT i%2::INT64 AS i FROM range(0, 120000000) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+CREATE TABLE test_uncompressed AS SELECT i::INT64 AS i FROM range(0, 120000000) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test_bitpacked') WHERE segment_type != 'VALIDITY' AND compression != 'BitPacking';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_type != 'VALIDITY' AND compression != 'Uncompressed';
+----
+
+statement ok
+checkpoint
+
+query II
+select (uncompressed::FLOAT / bitpacked::FLOAT) > 50, (uncompressed::FLOAT / bitpacked::FLOAT) < 60 FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
+        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
+)
+----
+True	True
+
+statement ok
+drop table test_bitpacked;
+drop table test_uncompressed;
+
+statement ok
+PRAGMA force_bitpacking_mode='none'
 
 # Assert that all supported types do in fact compress
 foreach type int8 int16 int32 int64 uint8 uint16 uint32 uint64 decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) bool

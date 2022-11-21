@@ -414,13 +414,34 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 		auto compression_type = CompressionTypeFromString(compression);
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, "
-			                      "dictionary, pfor, bitpacking or fsst");
+			                      "dictionary, pfor, chimp, patas, bitpacking or fsst");
 		}
 		config.options.force_compression = compression_type;
 	}
 }
 
 Value ForceCompressionSetting::GetSetting(ClientContext &context) {
+	return Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Force Bitpacking mode
+//===--------------------------------------------------------------------===//
+void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto mode_str = StringUtil::Lower(input.ToString());
+	if (mode_str == "none") {
+		config.options.force_bitpacking_mode = BitpackingMode::AUTO;
+	} else {
+		auto mode = BitpackingModeFromString(mode_str);
+		if (mode == BitpackingMode::AUTO) {
+			throw ParserException("Unrecognized option for PRAGMA set bitpacking mode, expected none, constant, constant_delta, "
+			                      "delta_for, or for");
+		}
+		config.options.force_bitpacking_mode = mode;
+	}
+}
+
+Value ForceBitpackingModeSetting::GetSetting(ClientContext &context) {
 	return Value();
 }
 

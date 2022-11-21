@@ -5,6 +5,11 @@
 # load the DB from disk
 load __TEST_DIR__/test_bitpacking.db
 
+foreach bitpacking_mode delta_for for
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
 statement ok
 PRAGMA force_compression = 'bitpacking'
 
@@ -28,3 +33,10 @@ query IIIIII
 SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
 ----
 5000	5000	5000	5000	5000	1
+
+statement ok
+drop table test
+
+endloop
+
+# TODO test for constant delta/constant
