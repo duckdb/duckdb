@@ -146,6 +146,10 @@ struct ReplaceFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct TranslateFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct RpadFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
