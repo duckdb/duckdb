@@ -26,6 +26,9 @@ AllocatedData::AllocatedData() : allocator(nullptr), pointer(nullptr), allocated
 
 AllocatedData::AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size)
     : allocator(&allocator), pointer(pointer), allocated_size(allocated_size) {
+	if (!pointer) {
+		throw InternalException("AllocatedData object constructed with nullptr");
+	}
 }
 AllocatedData::~AllocatedData() {
 	Reset();
