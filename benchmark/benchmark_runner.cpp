@@ -55,7 +55,6 @@ void BenchmarkRunner::InitializeBenchmarkDirectory() {
 	}
 }
 
-
 atomic<bool> is_active;
 atomic<bool> timeout;
 
