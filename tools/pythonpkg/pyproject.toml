@@ -1,3 +1,9 @@
+[project]
+name = "duckdb"
+dynamic = ["version"]
+description = 'DuckDB embedded database'
+keywords = ['DuckDB', 'Database', 'SQL', 'OLAP']
+
 # Config for cibuildwheel, some values are overridden by env variables of specific jobs
 
 # Default config runs all tests and requires at least one extension to be tested against
