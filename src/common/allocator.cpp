@@ -3,6 +3,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/likely.hpp"
 
 #include <cstdint>
 
@@ -121,6 +122,9 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 	D_ASSERT(private_data);
 	private_data->debug_info->AllocateData(result, size);
 #endif
+	if (DUCKDB_UNLIKELY(!result)) {
+		throw std::bad_alloc();
+	}
 	return result;
 }
 
