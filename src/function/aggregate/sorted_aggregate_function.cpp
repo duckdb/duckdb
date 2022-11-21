@@ -269,15 +269,18 @@ unique_ptr<FunctionData> FunctionBinder::BindSortedAggregate(AggregateFunction &
 	}
 
 	// Replace the aggregate with the wrapper
-	bound_function = AggregateFunction(
+	AggregateFunction ordered_aggregate(
 	    bound_function.name, arguments, bound_function.return_type, AggregateFunction::StateSize<SortedAggregateState>,
 	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
 	    SortedAggregateFunction::Finalize, SortedAggregateFunction::SimpleUpdate, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>);
-	bound_function.serialize = SortedAggregateFunction::Serialize;
-	bound_function.deserialize = SortedAggregateFunction::Deserialize;
+	ordered_aggregate.serialize = SortedAggregateFunction::Serialize;
+	ordered_aggregate.deserialize = SortedAggregateFunction::Deserialize;
+	ordered_aggregate.null_handling = bound_function.null_handling;
+
+	bound_function = move(ordered_aggregate);
 
 	return move(sorted_bind);
 }

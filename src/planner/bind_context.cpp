@@ -8,11 +8,11 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "re2/re2.h"
 
 #include <algorithm>
 
@@ -191,8 +191,7 @@ static bool ColumnIsGenerated(Binding *binding, column_t index) {
 	}
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
 	auto table_entry = (TableCatalogEntry *)catalog_entry;
-	D_ASSERT(table_entry->columns.size() >= index);
-	return table_entry->columns[index].Generated();
+	return table_entry->columns.GetColumn(LogicalIndex(index)).Generated();
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &schema_name, const string &table_name,
@@ -310,6 +309,13 @@ bool BindContext::CheckExclusionList(StarExpression &expr, Binding *binding, con
 	return false;
 }
 
+bool CheckRegex(const string &column_name, duckdb_re2::RE2 *regex) {
+	if (!regex) {
+		return true;
+	}
+	return RE2::PartialMatch(column_name, *regex);
+}
+
 void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
                                                vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	if (bindings_list.empty()) {
@@ -319,6 +325,15 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	if (expr.relation_name.empty()) {
 		// SELECT * case
 		// bind all expressions of each table in-order
+		unique_ptr<duckdb_re2::RE2> regex;
+		bool found_match = true;
+		if (!expr.regex.empty()) {
+			regex = make_unique<duckdb_re2::RE2>(expr.regex);
+			if (!regex->error().empty()) {
+				throw BinderException("Failed to compile regex \"%s\": %s", expr.regex, regex->error());
+			}
+			found_match = false;
+		}
 		unordered_set<UsingColumnSet *> handled_using_columns;
 		for (auto &entry : bindings_list) {
 			auto binding = entry.second;
@@ -326,6 +341,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
 					continue;
 				}
+				if (!CheckRegex(column_name, regex.get())) {
+					continue;
+				}
+				found_match = true;
 				// check if this column is a USING column
 				auto using_binding = GetUsingBinding(column_name, binding->alias);
 				if (using_binding) {
@@ -354,6 +373,9 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				}
 				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
 			}
+		}
+		if (!found_match) {
+			throw BinderException("No matching columns found that match regex \"%s\"", expr.regex);
 		}
 	} else {
 		// SELECT tbl.* case

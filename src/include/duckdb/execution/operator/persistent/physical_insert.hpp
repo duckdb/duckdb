@@ -11,6 +11,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/common/index_vector.hpp"
 
 namespace duckdb {
 
@@ -18,7 +19,7 @@ namespace duckdb {
 class PhysicalInsert : public PhysicalOperator {
 public:
 	//! INSERT INTO
-	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
+	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, physical_index_vector_t<idx_t> column_index_map,
 	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, bool return_chunk,
 	               bool parallel);
 	//! CREATE TABLE AS
@@ -26,7 +27,7 @@ public:
 	               idx_t estimated_cardinality, bool parallel);
 
 	//! The map from insert column index to table column index
-	vector<idx_t> column_index_map;
+	physical_index_vector_t<idx_t> column_index_map;
 	//! The table to insert into
 	TableCatalogEntry *insert_table;
 	//! The insert types
@@ -70,7 +71,8 @@ public:
 public:
 	static void GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types,
 	                          vector<unique_ptr<Expression>> &bound_defaults);
-	static void ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk, const vector<idx_t> &column_index_map,
+	static void ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
+	                            const physical_index_vector_t<idx_t> &column_index_map,
 	                            ExpressionExecutor &defaults_executor, DataChunk &result);
 };
 

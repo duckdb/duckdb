@@ -23,13 +23,6 @@ struct ClientLockWrapper;
 class DatabaseInstance;
 class Transaction;
 
-struct StoredCatalogSet {
-	//! Stored catalog set
-	unique_ptr<CatalogSet> stored_set;
-	//! The highest active query number when the catalog set was stored; used for cleaning up
-	transaction_t highest_active_query;
-};
-
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
 class TransactionManager {
@@ -90,8 +83,6 @@ private:
 	vector<unique_ptr<Transaction>> recently_committed_transactions;
 	//! Transactions awaiting GC
 	vector<unique_ptr<Transaction>> old_transactions;
-	//! Catalog sets
-	vector<StoredCatalogSet> old_catalog_sets;
 	//! The lock used for transaction operations
 	mutex transaction_lock;
 

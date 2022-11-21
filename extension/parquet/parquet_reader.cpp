@@ -5,6 +5,7 @@
 
 #include "boolean_column_reader.hpp"
 #include "generated_column_reader.hpp"
+#include "row_number_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "callback_column_reader.hpp"
 #include "list_column_reader.hpp"
@@ -199,10 +200,11 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			}
 		case ConvertedType::INTERVAL:
 			return LogicalType::INTERVAL;
+		case ConvertedType::JSON:
+			return LogicalType::JSON;
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
-		case ConvertedType::JSON:
 		case ConvertedType::BSON:
 		default:
 			throw IOException("Unsupported converted type");
@@ -368,6 +370,11 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 		    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
 	}
 
+	if (parquet_options.file_row_number) {
+		root_struct_reader.child_readers.push_back(
+		    make_unique<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
+	}
+
 	if (parquet_options.hive_partitioning) {
 		auto res = HivePartitioning::Parse(file_name);
 
@@ -413,6 +420,16 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 		}
 		return_types.emplace_back(LogicalType::VARCHAR);
 		names.emplace_back("filename");
+	}
+
+	// Add generated constant column for row number
+	if (parquet_options.file_row_number) {
+		if (std::find(names.begin(), names.end(), "file_row_number") != names.end()) {
+			throw BinderException(
+			    "Using file_row_number option on file with column named file_row_number is not supported");
+		}
+		return_types.emplace_back(LogicalType::BIGINT);
+		names.emplace_back("file_row_number");
 	}
 
 	// Add generated constant column for filename
@@ -538,8 +555,9 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ParquetReader &reader, 
 	auto root_reader = reader.CreateReader(file_meta_data);
 	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
 
-	for (auto &row_group : file_meta_data->row_groups) {
-		auto chunk_stats = column_reader->Stats(row_group.columns);
+	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data->row_groups.size(); row_group_idx++) {
+		auto &row_group = file_meta_data->row_groups[row_group_idx];
+		auto chunk_stats = column_reader->Stats(row_group_idx, row_group.columns);
 		if (!chunk_stats) {
 			return nullptr;
 		}
@@ -628,7 +646,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t o
 
 	// TODO move this to columnreader too
 	if (state.filters) {
-		auto stats = column_reader->Stats(group.columns);
+		auto stats = column_reader->Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
 		auto filter_entry = state.filters->filters.find(out_col_idx);
 		if (stats && filter_entry != state.filters->filters.end()) {
@@ -646,7 +664,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t o
 		}
 	}
 
-	state.root_reader->InitializeRead(group.columns, *state.thrift_file_proto);
+	state.root_reader->InitializeRead(state.group_idx_list[state.current_group], group.columns,
+	                                  *state.thrift_file_proto);
 }
 
 idx_t ParquetReader::NumRows() {

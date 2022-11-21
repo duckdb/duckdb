@@ -32,12 +32,12 @@ static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
 	if (column_id == DConstants::INVALID_INDEX) {
 		return column_id;
 	}
-	auto &col = table.columns[column_id];
+	auto &col = table.columns.GetColumn(LogicalIndex(column_id));
 	return col.StorageOid();
 }
 
 struct TableScanGlobalState : public GlobalTableFunctionState {
-	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) {
+	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) : row_count(0) {
 		D_ASSERT(bind_data_p);
 		auto &bind_data = (const TableScanBindData &)*bind_data_p;
 		max_threads = bind_data.table->storage->MaxThreads(context);
@@ -46,6 +46,8 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	ParallelTableScanState state;
 	mutex lock;
 	idx_t max_threads;
+	//! How many rows we already scanned
+	atomic<idx_t> row_count;
 
 	vector<idx_t> projection_ids;
 	vector<LogicalType> scanned_types;
@@ -90,7 +92,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 			} else {
-				result->scanned_types.push_back(columns[col_idx].Type());
+				result->scanned_types.push_back(columns.GetColumn(LogicalIndex(col_idx)).Type());
 			}
 		}
 	}
@@ -125,6 +127,7 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 			bind_data.table->storage->Scan(transaction, output, state.scan_state);
 		}
 		if (output.size() > 0) {
+			gstate.row_count += output.size();
 			return;
 		}
 		if (!TableScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {
@@ -144,14 +147,15 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 }
 
 double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p,
-                         const GlobalTableFunctionState *gstate) {
+                         const GlobalTableFunctionState *gstate_p) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
+	auto &gstate = (TableScanGlobalState &)*gstate_p;
 	idx_t total_rows = bind_data.table->storage->GetTotalRows();
-	if (total_rows == 0 || total_rows < STANDARD_VECTOR_SIZE) {
+	if (total_rows == 0) {
 		//! Table is either empty or smaller than a vector size, so it is finished
 		return 100;
 	}
-	auto percentage = double(bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0) / total_rows;
+	auto percentage = 100 * (double(gstate.row_count) / total_rows);
 	if (percentage > 100) {
 		//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
 		//! It means we finished this table.
@@ -394,7 +398,6 @@ string TableScanToString(const FunctionData *bind_data_p) {
 static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 
-	D_ASSERT(bind_data.chunk_count == 0);
 	writer.WriteString(bind_data.table->schema->name);
 	writer.WriteString(bind_data.table->name);
 	writer.WriteField<bool>(bind_data.is_index_scan);

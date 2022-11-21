@@ -1,0 +1,11 @@
+# name: test/sql/aggregate/distinct/ungrouped/test_distinct_ungrouped_shared_input.test
+# description: DISTINCT aggregations, without GROUP BY
+# group: [ungrouped]
+
+statement ok
+create table tbl as select i%50 as i from range(1000000) tbl(i);
+
+query IIIII
+select count(distinct i), min(distinct i), max(distinct i), sum(distinct i), product(distinct i) from tbl;
+----
+50	0	49	1225	0.0

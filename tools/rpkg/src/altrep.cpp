@@ -41,6 +41,19 @@ Rboolean AltrepString::Inspect(SEXP x, int pre, int deep, int pvec, void (*inspe
 	return TRUE;
 }
 
+SEXP ToRString(string_t input) {
+	auto data = input.GetDataUnsafe();
+	auto len = input.GetSize();
+	idx_t has_null_byte = 0;
+	for (idx_t c = 0; c < len; c++) {
+		has_null_byte += data[c] == 0;
+	}
+	if (has_null_byte) {
+		Rf_error("String contains null byte");
+	}
+	return Rf_mkCharLenCE(data, len, CE_UTF8);
+}
+
 void *AltrepString::Dataptr(SEXP x, Rboolean writeable) {
 	auto *wrapper = duckdb_altrep_wrapper(x);
 	if (R_altrep_data2(x) == R_NilValue) {
@@ -49,9 +62,7 @@ void *AltrepString::Dataptr(SEXP x, Rboolean writeable) {
 			if (!wrapper->mask_data[row_idx]) {
 				SET_STRING_ELT(R_altrep_data2(x), row_idx, NA_STRING);
 			} else {
-				SET_STRING_ELT(R_altrep_data2(x), row_idx,
-				               Rf_mkCharLenCE(wrapper->string_data[row_idx].GetDataUnsafe(),
-				                              wrapper->string_data[row_idx].GetSize(), CE_UTF8));
+				SET_STRING_ELT(R_altrep_data2(x), row_idx, ToRString(wrapper->string_data[row_idx]));
 			}
 		}
 		wrapper->string_data.reset();
@@ -72,7 +83,7 @@ SEXP AltrepString::Elt(SEXP x, R_xlen_t i) {
 	if (!wrapper->mask_data[i]) {
 		return NA_STRING;
 	}
-	return Rf_mkCharLenCE(wrapper->string_data[i].GetDataUnsafe(), wrapper->string_data[i].GetSize(), CE_UTF8);
+	return ToRString(wrapper->string_data[i]);
 }
 
 void AltrepString::SetElt(SEXP x, R_xlen_t i, SEXP val) {

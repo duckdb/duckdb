@@ -14,6 +14,7 @@
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/main/client_data.hpp"
 
 #include <cstring>
 
@@ -26,12 +27,12 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
     : transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
 }
 
-Transaction::Transaction(weak_ptr<ClientContext> context_p, transaction_t start_time, transaction_t transaction_id,
+Transaction::Transaction(ClientContext &context_p, transaction_t start_time, transaction_t transaction_id,
                          timestamp_t start_timestamp, idx_t catalog_version)
-    : context(move(context_p)), start_time(start_time), transaction_id(transaction_id), commit_id(0),
+    : context(context_p.shared_from_this()), start_time(start_time), transaction_id(transaction_id), commit_id(0),
       highest_active_query(0), active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp),
-      catalog_version(catalog_version), is_invalidated(false), undo_buffer(context.lock()),
-      storage(make_unique<LocalStorage>(*this)) {
+      catalog_version(catalog_version), temporary_objects(context_p.client_data->temporary_objects),
+      undo_buffer(context.lock()), storage(make_unique<LocalStorage>(context_p, *this)) {
 }
 
 Transaction::~Transaction() {
@@ -138,11 +139,8 @@ void Transaction::Cleanup() {
 	undo_buffer.Cleanup();
 }
 
-void Transaction::Invalidate() {
-	is_invalidated = true;
-}
-bool Transaction::IsInvalidated() {
-	return is_invalidated;
+ValidChecker &ValidChecker::Get(Transaction &transaction) {
+	return transaction.transaction_validity;
 }
 
 } // namespace duckdb

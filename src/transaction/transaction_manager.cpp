@@ -74,8 +74,8 @@ Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 
 	// create the actual transaction
 	auto &catalog = Catalog::GetCatalog(db);
-	auto transaction = make_unique<Transaction>(weak_ptr<ClientContext>(context.shared_from_this()), start_time,
-	                                            transaction_id, start_timestamp, catalog.GetCatalogVersion());
+	auto transaction =
+	    make_unique<Transaction>(context, start_time, transaction_id, start_timestamp, catalog.GetCatalogVersion());
 	auto transaction_ptr = transaction.get();
 
 	// store it in the set of active transactions
@@ -325,19 +325,6 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	if (i > 0) {
 		// we garbage collected transactions: remove them from the list
 		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + i);
-	}
-	// check if we can free the memory of any old catalog sets
-	for (i = 0; i < old_catalog_sets.size(); i++) {
-		D_ASSERT(old_catalog_sets[i].highest_active_query > 0);
-		if (old_catalog_sets[i].highest_active_query >= lowest_stored_query) {
-			// there is still a query running that could be using
-			// this catalog sets' data
-			break;
-		}
-	}
-	if (i > 0) {
-		// we garbage collected catalog sets: remove them from the list
-		old_catalog_sets.erase(old_catalog_sets.begin(), old_catalog_sets.begin() + i);
 	}
 }
 

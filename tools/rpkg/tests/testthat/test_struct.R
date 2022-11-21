@@ -1,7 +1,7 @@
 test_that("structs can be read", {
   skip_if_not_installed("vctrs")
 
-  con <- dbConnect(duckdb::duckdb())
+  con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   res <- dbGetQuery(con, "SELECT {'x': 100, 'y': 'hello', 'z': 3.14} AS s")
@@ -53,7 +53,7 @@ test_that("structs give the same results via Arrow", {
   skip_if_not_installed("tibble")
   skip_if_not_installed("arrow")
 
-  con <- dbConnect(duckdb::duckdb())
+  con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   res <- dbGetQuery(con, "SELECT {'x': 100, 'y': 'hello', 'z': 3.14} AS s", arrow = TRUE)

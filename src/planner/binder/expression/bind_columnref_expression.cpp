@@ -24,7 +24,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		unique_ptr<Expression> expression;
 		if (!using_binding->primary_binding.empty()) {
 			// we can! just assign the table name and re-bind
-			return make_unique<ColumnRefExpression>(column_name, using_binding->primary_binding);
+			return binder.bind_context.CreateColumnReference(using_binding->primary_binding, column_name);
 		} else {
 			// // we cannot! we need to bind this as a coalesce between all the relevant columns
 			auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
@@ -88,6 +88,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 			if (!expr->alias.empty()) {
 				new_expr->alias = expr->alias;
 			}
+			new_expr->query_location = colref.query_location;
 			expr = move(new_expr);
 		}
 		break;
@@ -258,6 +259,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	if (!expr) {
 		return BindResult(binder.FormatError(colref_p, error_message));
 	}
+	expr->query_location = colref_p.query_location;
 
 	// a generated column returns a generated expression, a struct on a column returns a struct extract
 	if (expr->type != ExpressionType::COLUMN_REF) {

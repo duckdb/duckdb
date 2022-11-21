@@ -12,6 +12,10 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 
@@ -26,6 +30,7 @@ class Value {
 	friend struct StringValue;
 	friend struct StructValue;
 	friend struct ListValue;
+	friend struct UnionValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -154,6 +159,8 @@ public:
 	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
 	//! Create a map value from a (key, value) pair
 	DUCKDB_API static Value MAP(Value key, Value value);
+	//! Create a union value from a selected value and a tag from a set of alternatives.
+	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	DUCKDB_API static Value BLOB(const_data_ptr_t data, idx_t len);
@@ -389,6 +396,11 @@ struct StructValue {
 
 struct ListValue {
 	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
+};
+
+struct UnionValue {
+	DUCKDB_API static const Value &GetValue(const Value &value);
+	DUCKDB_API static uint8_t GetTag(const Value &value);
 };
 
 //! Return the internal integral value for any type that is stored as an integral value internally

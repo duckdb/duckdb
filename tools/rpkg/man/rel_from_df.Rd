@@ -18,6 +18,6 @@ the \code{duckdb_relation} object wrapping the data.frame
 Convert a R data.frame to a DuckDB relation object
 }
 \examples{
-con <- DBI::dbConnect(duckdb::duckdb())
+con <- DBI::dbConnect(duckdb())
 rel <- rel_from_df(con, mtcars)
 }

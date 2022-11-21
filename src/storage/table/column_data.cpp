@@ -88,6 +88,7 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining) {
+	state.previous_states.clear();
 	if (state.version != version) {
 		InitializeScanWithOffset(state, state.row_index);
 		state.current->InitializeScan(state);
@@ -122,6 +123,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			if (!state.current->next) {
 				break;
 			}
+			state.previous_states.emplace_back(move(state.scan_state));
 			state.current = (ColumnSegment *)state.current->Next();
 			state.current->InitializeScan(state);
 			state.segment_checked = false;
@@ -337,7 +339,15 @@ unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
-	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row);
+	idx_t segment_size = Storage::BLOCK_SIZE;
+	if (start_row == idx_t(MAX_ROW_ID)) {
+#if STANDARD_VECTOR_SIZE < 1024
+		segment_size = 1024 * GetTypeIdSize(type.InternalType());
+#else
+		segment_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
+#endif
+	}
+	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
 	data.AppendSegment(l, move(new_segment));
 }
 

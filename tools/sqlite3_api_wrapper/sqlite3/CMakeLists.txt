@@ -1,6 +1,7 @@
 # this directory contains some of the original code from SQLite mainly helper
 # functions that we don't really care about replacing ourselves
 
+add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
 set(SQLITE_FILES printf.c strglob.c)
 if(WIN32)
   set(SQLITE_FILES ${SQLITE_FILES} os_win.c)

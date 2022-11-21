@@ -6,6 +6,7 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -19,6 +20,7 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -49,7 +51,7 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 	auto expr = expr_binder.Bind(delimiter);
 	if (expr->IsFoldable()) {
 		//! this is a constant
-		delimiter_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(context, type);
+		delimiter_value = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, type);
 		return nullptr;
 	}
 	// move any correlated columns to this binder
@@ -259,6 +261,69 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 	}
 }
 
+bool Binder::FindStarExpression(ParsedExpression &expr, StarExpression **star) {
+	if (expr.GetExpressionClass() == ExpressionClass::STAR) {
+		auto current_star = (StarExpression *)&expr;
+		if (*star) {
+			// we can have multiple
+			if (!StarExpression::Equals(*star, current_star)) {
+				throw BinderException(
+				    FormatError(expr, "Multiple different STAR/COLUMNS in the same expression are not supported"));
+			}
+			return true;
+		}
+		*star = current_star;
+		return true;
+	}
+	bool has_star = false;
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child_expr) {
+		if (FindStarExpression(child_expr, star)) {
+			has_star = true;
+		}
+	});
+	return has_star;
+}
+
+void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement) {
+	D_ASSERT(expr);
+	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
+		D_ASSERT(replacement);
+		expr = replacement->Copy();
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { ReplaceStarExpression(child_expr, replacement); });
+}
+
+void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
+                                  vector<unique_ptr<ParsedExpression>> &new_select_list) {
+	StarExpression *star = nullptr;
+	if (!FindStarExpression(*expr, &star)) {
+		// no star expression: add it as-is
+		D_ASSERT(!star);
+		new_select_list.push_back(move(expr));
+		return;
+	}
+	D_ASSERT(star);
+	vector<unique_ptr<ParsedExpression>> star_list;
+	// we have star expressions! expand the list of star expressions
+	bind_context.GenerateAllColumnExpressions(*star, star_list);
+
+	// now perform the replacement
+	for (idx_t i = 0; i < star_list.size(); i++) {
+		auto new_expr = expr->Copy();
+		ReplaceStarExpression(new_expr, star_list[i]);
+		new_select_list.push_back(move(new_expr));
+	}
+}
+
+void Binder::ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
+                                   vector<unique_ptr<ParsedExpression>> &new_select_list) {
+	for (auto &select_element : select_list) {
+		ExpandStarExpression(move(select_element), new_select_list);
+	}
+}
+
 unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	auto result = make_unique<BoundSelectNode>();
 	result->projection_index = GenerateTableIndex();
@@ -279,15 +344,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;
-	for (auto &select_element : statement.select_list) {
-		if (select_element->GetExpressionType() == ExpressionType::STAR) {
-			// * statement, expand to all columns from the FROM clause
-			bind_context.GenerateAllColumnExpressions((StarExpression &)*select_element, new_select_list);
-		} else {
-			// regular statement, add it to the list
-			new_select_list.push_back(move(select_element));
-		}
-	}
+	ExpandStarExpressions(statement.select_list, new_select_list);
+
 	if (new_select_list.empty()) {
 		throw BinderException("SELECT list is empty after resolving * expressions!");
 	}
@@ -416,10 +474,12 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {
 			if (select_binder.HasBoundColumns()) {
 				auto &bound_columns = select_binder.GetBoundColumns();
-				throw BinderException(
-				    FormatError(bound_columns[0].query_location,
-				                "column \"%s\" must appear in the GROUP BY clause or be used in an aggregate function",
-				                bound_columns[0].name));
+				string error;
+				error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
+				error += "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
+				         "is not important.";
+				throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
+				                                  bound_columns[0].name, bound_columns[0].name));
 			}
 		}
 	}

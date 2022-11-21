@@ -68,6 +68,15 @@ var QueryResult = duckdb.QueryResult;
 QueryResult.prototype.nextChunk;
 
 /**
+ * Function to fetch the next result blob of an Arrow IPC Stream in a zero-copy way.
+ * (requires arrow extension to be loaded)
+ *
+ * @method
+ * @return data chunk
+ */
+QueryResult.prototype.nextIpcBuffer;
+
+/**
  * @name asyncIterator
  * @memberof module:duckdb~QueryResult
  * @method
@@ -115,6 +124,75 @@ Connection.prototype.all = function (sql) {
     return statement.all.apply(statement, arguments);
 }
 
+// Utility class for streaming Apache Arrow IPC
+class IpcResultStreamIterator {
+    constructor(stream_result_p) {
+        this._depleted = false;
+        this.stream_result = stream_result_p;
+    }
+
+    async next() {
+        if (this._depleted) {
+            return { done: true, value: null };
+        }
+
+        const ipc_raw = await this.stream_result.nextIpcBuffer();
+        const res = new Uint8Array(ipc_raw);
+
+        this._depleted = res.length == 0;
+        return {
+            done: this._depleted,
+            value: res,
+        };
+    }
+
+    [Symbol.asyncIterator]() {
+        return this;
+    }
+
+    // Materialize the IPC stream into a list of Uint8Arrays
+    async toArray () {
+        const retval = []
+
+        for await (const ipc_buf of this) {
+            retval.push(ipc_buf);
+        }
+
+        // Push EOS message containing 4 bytes of 0
+        retval.push(new Uint8Array([0,0,0,0]));
+
+        return retval;
+    }
+}
+
+/**
+ * Run a SQL query and serialize the result into the Apache Arrow IPC format (requires arrow extension to be loaded)
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Connection.prototype.arrowIPCAll = function (sql) {
+    const query = "SELECT * FROM to_arrow_ipc((" + sql + "));";
+    var statement = new Statement(this, query);
+    return statement.arrowIPCAll.apply(statement, arguments);
+}
+
+/**
+ * Run a SQL query, returns a IpcResultStreamIterator that allows streaming the result into the Apache Arrow IPC format
+ * (requires arrow extension to be loaded)
+ *
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return IpcResultStreamIterator
+ */
+Connection.prototype.arrowIPCStream = async function (sql) {
+    const query = "SELECT * FROM to_arrow_ipc((" + sql + "));";
+    const statement = new Statement(this, query);
+    return new IpcResultStreamIterator(await statement.stream.apply(statement, arguments));
+}
+
 /**
  * Runs a SQL query and triggers the callback for each result row
  * @arg sql
@@ -149,9 +227,9 @@ Connection.prototype.stream = async function* (sql) {
  * @return {void}
  * @note this follows the wasm udfs somewhat but is simpler because we can pass data much more cleanly
  */
-Connection.prototype.register = function (name, return_type, fun) {
+Connection.prototype.register_udf = function (name, return_type, fun) {
     // TODO what if this throws an error somewhere? do we need a try/catch?
-    return this.register_bulk(name, return_type, function (desc) {
+    return this.register_udf_bulk(name, return_type, function (desc) {
         try {
             // Build an argument resolver
             const buildResolver = (arg) => {
@@ -289,7 +367,7 @@ Connection.prototype.exec;
  * @param callback
  * @return {void}
  */
-Connection.prototype.register_bulk;
+Connection.prototype.register_udf_bulk;
 /**
  * Unregister a User Defined Function
  *
@@ -299,7 +377,7 @@ Connection.prototype.register_bulk;
  * @param callback
  * @return {void}
  */
-Connection.prototype.unregister;
+Connection.prototype.unregister_udf;
 
 var default_connection = function (o) {
     if (o.default_connection == undefined) {
@@ -307,6 +385,29 @@ var default_connection = function (o) {
     }
     return o.default_connection;
 }
+
+/**
+ * Register a Buffer to be scanned using the Apache Arrow IPC scanner
+ * (requires arrow extension to be loaded)
+ *
+ * @method
+ * @arg name
+ * @arg array
+ * @arg force
+ * @param callback
+ * @return {void}
+ */
+Connection.prototype.register_buffer;
+
+/**
+ * Unregister the Buffer
+ *
+ * @method
+ * @arg name
+ * @param callback
+ * @return {void}
+ */
+Connection.prototype.unregister_buffer;
 
 
 /**
@@ -390,7 +491,18 @@ Database.prototype.run = function () {
 }
 
 /**
- * Convenience method for Connection#each using a built-in default connection
+ * Convenience method for Connection#scanArrowIpc using a built-in default connection
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Database.prototype.scanArrowIpc = function () {
+    default_connection(this).scanArrowIpc.apply(this.default_connection, arguments);
+    return this;
+}
+
+/**
  * @arg sql
  * @param {...*} params
  * @param callback
@@ -414,7 +526,29 @@ Database.prototype.all = function () {
 }
 
 /**
- * Convenience method for Connection#exec using a built-in default connection
+ * Convenience method for Connection#arrowIPCAll using a built-in default connection
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Database.prototype.arrowIPCAll = function () {
+    default_connection(this).arrowIPCAll.apply(this.default_connection, arguments);
+    return this;
+}
+
+/**
+ * Convenience method for Connection#arrowIPCStream using a built-in default connection
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Database.prototype.arrowIPCStream = function () {
+    return default_connection(this).arrowIPCStream.apply(this.default_connection, arguments);
+}
+
+/**
  * @arg sql
  * @param {...*} params
  * @param callback
@@ -426,24 +560,52 @@ Database.prototype.exec = function () {
 }
 
 /**
- * Convenience method for Connection#register using a built-in default connection
+ * Register a User Defined Function
+ *
+ * Convenience method for Connection#register_udf
  * @arg name
  * @arg return_type
  * @arg fun
  * @return {this}
  */
-Database.prototype.register = function () {
-    default_connection(this).register.apply(this.default_connection, arguments);
+Database.prototype.register_udf = function () {
+    default_connection(this).register_udf.apply(this.default_connection, arguments);
     return this;
 }
 
 /**
- * Convenience method for Connection#unregister using a built-in default connection
+ * Register a buffer containing serialized data to be scanned from DuckDB.
+ *
+ * Convenience method for Connection#unregister_buffer
  * @arg name
  * @return {this}
  */
-Database.prototype.unregister = function () {
-    default_connection(this).unregister.apply(this.default_connection, arguments);
+Database.prototype.register_buffer = function () {
+    default_connection(this).register_buffer.apply(this.default_connection, arguments);
+    return this;
+}
+
+/**
+ * Unregister a Buffer
+ *
+ * Convenience method for Connection#unregister_buffer
+ * @arg name
+ * @return {this}
+ */
+Database.prototype.unregister_buffer = function () {
+    default_connection(this).unregister_buffer.apply(this.default_connection, arguments);
+    return this;
+}
+
+/**
+ * Unregister a UDF
+ *
+ * Convenience method for Connection#unregister_udf
+ * @arg name
+ * @return {this}
+ */
+Database.prototype.unregister_udf = function () {
+    default_connection(this).unregister_udf.apply(this.default_connection, arguments);
     return this;
 }
 
@@ -477,6 +639,14 @@ Statement.prototype.run;
  * @return {void}
  */
 Statement.prototype.all;
+/**
+ * @method
+ * @arg sql
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Statement.prototype.arrowIPCAll;
 /**
  * @method
  * @arg sql

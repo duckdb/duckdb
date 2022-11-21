@@ -812,6 +812,16 @@ struct IntegerCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
+	static bool HandleHexDigit(T &state, uint8_t digit) {
+		using result_t = typename T::Result;
+		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 16) {
+			return false;
+		}
+		state.result = state.result * 16 + digit;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
 		using result_t = typename T::Result;
 		double dbl_res = state.result * std::pow(10.0L, exponent);
@@ -935,6 +945,36 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 	return pos > start_pos;
 }
 
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation>
+static bool IntegerHexCastLoop(const char *buf, idx_t len, T &result, bool strict) {
+	if (ALLOW_EXPONENT || NEGATIVE) {
+		return false;
+	}
+	idx_t start_pos = 1;
+	idx_t pos = start_pos;
+	char current_char;
+	while (pos < len) {
+		current_char = StringUtil::CharacterToLower(buf[pos]);
+		if (!StringUtil::CharacterIsHex(current_char)) {
+			return false;
+		}
+		uint8_t digit;
+		if (current_char >= 'a') {
+			digit = current_char - 'a' + 10;
+		} else {
+			digit = current_char - '0';
+		}
+		pos++;
+		if (!OP::template HandleHexDigit<T, NEGATIVE>(result, digit)) {
+			return false;
+		}
+	}
+	if (!OP::template Finalize<T, NEGATIVE>(result)) {
+		return false;
+	}
+	return pos > start_pos;
+}
+
 template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation,
           bool ZERO_INITIALIZE = true>
 static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
@@ -948,11 +988,21 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	}
 	int negative = *buf == '-';
 
+	// If it starts with 0x or 0X, we parse it as a hex value
+	int hex = len > 1 && *buf == '0' && (buf[1] == 'x' || buf[1] == 'X');
+
 	if (ZERO_INITIALIZE) {
 		memset(&result, 0, sizeof(T));
 	}
 	if (!negative) {
-		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
+		if (hex) {
+			// Skip the 0x
+			buf++;
+			len--;
+			return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
+		} else {
+			return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
+		}
 	} else {
 		if (!IS_SIGNED) {
 			// Need to check if its not -0
@@ -1337,7 +1387,8 @@ bool TryCastErrorMessage::Operation(string_t input, date_t &result, string *erro
 template <>
 bool TryCast::Operation(string_t input, date_t &result, bool strict) {
 	idx_t pos;
-	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
+	bool special = false;
+	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, special, strict);
 }
 
 template <>
@@ -1459,6 +1510,11 @@ struct HugeIntegerCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
+	static bool HandleHexDigit(T &result, uint8_t digit) {
+		return false;
+	}
+
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &result, int32_t exponent) {
 		if (!result.Flush()) {
 			return false;
@@ -1521,9 +1577,10 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Decimal String Cast
 //===--------------------------------------------------------------------===//
-template <class T>
+template <class TYPE>
 struct DecimalCastData {
-	T result;
+	typedef TYPE type_t;
+	TYPE result;
 	uint8_t width;
 	uint8_t scale;
 	uint8_t digit_count;
@@ -1546,11 +1603,22 @@ struct DecimalCastOperation {
 		}
 		state.digit_count++;
 		if (NEGATIVE) {
+			if (state.result < (NumericLimits<typename T::type_t>::Minimum() / 10)) {
+				return false;
+			}
 			state.result = state.result * 10 - digit;
 		} else {
+			if (state.result > (NumericLimits<typename T::type_t>::Maximum() / 10)) {
+				return false;
+			}
 			state.result = state.result * 10 + digit;
 		}
 		return true;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleHexDigit(T &state, uint8_t digit) {
+		return false;
 	}
 
 	template <class T, bool NEGATIVE>

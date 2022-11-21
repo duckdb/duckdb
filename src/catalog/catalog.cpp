@@ -27,7 +27,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
-#include "extension_functions.hpp"
+#include "duckdb/main/extension_functions.hpp"
 #include <algorithm>
 namespace duckdb {
 
@@ -198,7 +198,7 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
                                        QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
 	if (schema_name == TEMP_SCHEMA) {
-		return ClientData::Get(context).temporary_objects.get();
+		return SchemaCatalogEntry::GetTemporaryObjects(context);
 	}
 	auto entry = schemas->GetEntry(context, schema_name);
 	if (!entry && !if_exists) {

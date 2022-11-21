@@ -101,7 +101,8 @@ public:
 	using Types = vector<LogicalType>;
 
 	WindowGlobalSinkState(const PhysicalWindow &op_p, ClientContext &context)
-	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), allocator(Allocator::Get(context)),
+	    : op(op_p), context(context), buffer_manager(BufferManager::GetBufferManager(context)),
+	      allocator(Allocator::Get(context)),
 	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()), next_sort(0),
 	      memory_per_thread(0), count(0), mode(DBConfig::GetConfig(context).options.window_mode) {
 
@@ -186,6 +187,7 @@ public:
 	}
 
 	const PhysicalWindow &op;
+	ClientContext &context;
 	BufferManager &buffer_manager;
 	Allocator &allocator;
 	size_t partition_cols;
@@ -259,8 +261,8 @@ class WindowLocalSinkState : public LocalSinkState {
 public:
 	using LocalHashGroupPtr = unique_ptr<WindowLocalHashGroup>;
 
-	WindowLocalSinkState(Allocator &allocator, const PhysicalWindow &op_p)
-	    : op(op_p), executor(allocator), count(0), hash_vector(LogicalTypeId::UBIGINT), sel(STANDARD_VECTOR_SIZE) {
+	WindowLocalSinkState(ClientContext &context, const PhysicalWindow &op_p)
+	    : op(op_p), executor(context), count(0), hash_vector(LogicalTypeId::UBIGINT), sel(STANDARD_VECTOR_SIZE) {
 
 		D_ASSERT(op.select_list[0]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[0].get());
@@ -281,6 +283,7 @@ public:
 			executor.AddExpression(*oexpr);
 		}
 
+		auto &allocator = Allocator::Get(context);
 		if (!over_types.empty()) {
 			over_chunk.Initialize(allocator, over_types);
 			over_subset.Initialize(allocator, over_types);
@@ -570,7 +573,7 @@ void WindowGlobalSinkState::Finalize() {
 	}
 
 	// 	Sink it into a temporary local sink state
-	auto lstate = make_unique<WindowLocalSinkState>(allocator, op);
+	auto lstate = make_unique<WindowLocalSinkState>(context, op);
 
 	//	Match the grouping.
 	lstate->Group(*this);
@@ -597,9 +600,17 @@ void WindowGlobalSinkState::Finalize() {
 }
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list_p,
                                idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types), estimated_cardinality), select_list(move(select_list)) {
+    : PhysicalOperator(type, move(types), estimated_cardinality), select_list(move(select_list_p)) {
+	is_order_dependent = false;
+	for (auto &expr : select_list) {
+		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_WINDOW);
+		auto &bound_window = (BoundWindowExpression &)*expr;
+		if (bound_window.partitions.empty() && bound_window.orders.empty()) {
+			is_order_dependent = true;
+		}
+	}
 }
 
 static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {
@@ -680,7 +691,8 @@ static void PrepareInputExpressions(Expression **exprs, idx_t expr_count, Expres
 	}
 
 	if (!types.empty()) {
-		chunk.Initialize(executor.allocator, types);
+		auto &allocator = executor.GetAllocator();
+		chunk.Initialize(allocator, types);
 	}
 }
 
@@ -689,8 +701,8 @@ static void PrepareInputExpression(Expression *expr, ExpressionExecutor &executo
 }
 
 struct WindowInputExpression {
-	WindowInputExpression(Expression *expr_p, Allocator &allocator)
-	    : expr(expr_p), ptype(PhysicalType::INVALID), scalar(true), executor(allocator) {
+	WindowInputExpression(Expression *expr_p, ClientContext &context)
+	    : expr(expr_p), ptype(PhysicalType::INVALID), scalar(true), executor(context) {
 		if (expr) {
 			PrepareInputExpression(expr, executor, chunk);
 			ptype = expr->return_type.InternalType();
@@ -736,8 +748,8 @@ struct WindowInputExpression {
 };
 
 struct WindowInputColumn {
-	WindowInputColumn(Expression *expr_p, Allocator &allocator, idx_t capacity_p)
-	    : input_expr(expr_p, allocator), count(0), capacity(capacity_p) {
+	WindowInputColumn(Expression *expr_p, ClientContext &context, idx_t capacity_p)
+	    : input_expr(expr_p, context), count(0), capacity(capacity_p) {
 		if (input_expr.expr) {
 			target = make_unique<Vector>(input_expr.chunk.data[0].GetType(), capacity);
 		}
@@ -1134,7 +1146,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 }
 
 struct WindowExecutor {
-	WindowExecutor(BoundWindowExpression *wexpr, Allocator &allocator, const idx_t count);
+	WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const idx_t count);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count);
 	void Finalize(WindowAggregationMode mode);
@@ -1180,12 +1192,12 @@ struct WindowExecutor {
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
 };
 
-WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, Allocator &allocator, const idx_t count)
-    : wexpr(wexpr), bounds(wexpr, count), payload_collection(), payload_executor(allocator), filter_executor(allocator),
-      leadlag_offset(wexpr->offset_expr.get(), allocator), leadlag_default(wexpr->default_expr.get(), allocator),
-      boundary_start(wexpr->start_expr.get(), allocator), boundary_end(wexpr->end_expr.get(), allocator),
+WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const idx_t count)
+    : wexpr(wexpr), bounds(wexpr, count), payload_collection(), payload_executor(context), filter_executor(context),
+      leadlag_offset(wexpr->offset_expr.get(), context), leadlag_default(wexpr->default_expr.get(), context),
+      boundary_start(wexpr->start_expr.get(), context), boundary_end(wexpr->end_expr.get(), context),
       range((bounds.has_preceding_range || bounds.has_following_range) ? wexpr->orders[0].expression.get() : nullptr,
-            allocator, count)
+            context, count)
 
 {
 	// TODO we could evaluate those expressions in parallel
@@ -1210,7 +1222,7 @@ WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, Allocator &allocato
 
 	auto types = payload_chunk.GetTypes();
 	if (!types.empty()) {
-		payload_collection.Initialize(allocator, types);
+		payload_collection.Initialize(Allocator::Get(context), types);
 	}
 }
 
@@ -1489,7 +1501,7 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<WindowLocalSinkState>(Allocator::Get(context.client), *this);
+	return make_unique<WindowLocalSinkState>(context.client, *this);
 }
 
 unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &context) const {
@@ -1803,7 +1815,7 @@ public:
 	using WindowExecutors = vector<WindowExecutorPtr>;
 
 	WindowLocalSourceState(Allocator &allocator_p, const PhysicalWindow &op, ExecutionContext &context)
-	    : allocator(allocator_p) {
+	    : context(context.client), allocator(allocator_p) {
 		vector<LogicalType> output_types;
 		for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 			D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
@@ -1822,6 +1834,7 @@ public:
 	void Scan(DataChunk &chunk);
 
 	HashGroupPtr hash_group;
+	ClientContext &context;
 	Allocator &allocator;
 
 	//! The generated input chunks
@@ -1913,7 +1926,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
-		auto wexec = make_unique<WindowExecutor>(wexpr, allocator, count);
+		auto wexec = make_unique<WindowExecutor>(wexpr, context, count);
 		window_execs.emplace_back(move(wexec));
 	}
 

@@ -108,6 +108,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
 	case LogicalTypeId::MAP:
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::STRUCT:
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
@@ -209,7 +210,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,     LogicalType::USMALLINT,
 	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,         LogicalTypeId::LIST,
 	    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,
-	    LogicalType::UUID,     LogicalType::JSON};
+	    LogicalTypeId::UNION,  LogicalType::UUID,      LogicalType::JSON};
 	return types;
 }
 
@@ -393,6 +394,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "LAMBDA";
 	case LogicalTypeId::INVALID:
 		return "INVALID";
+	case LogicalTypeId::UNION:
+		return "UNION";
 	case LogicalTypeId::UNKNOWN:
 		return "UNKNOWN";
 	case LogicalTypeId::ENUM:
@@ -448,6 +451,21 @@ string LogicalType::ToString() const {
 		return "MAP(" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
 		       ListType::GetChildType(child_types[1].second).ToString() + ")";
 	}
+	case LogicalTypeId::UNION: {
+		if (!type_info_) {
+			return "UNION";
+		}
+		string ret = "UNION(";
+		size_t count = UnionType::GetMemberCount(*this);
+		for (size_t i = 0; i < count; i++) {
+			ret += UnionType::GetMemberType(*this, i).ToString();
+			if (i < count - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ")";
+		return ret;
+	}
 	case LogicalTypeId::DECIMAL: {
 		if (!type_info_) {
 			return "DECIMAL";
@@ -488,7 +506,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
-	return Parser::ParseColumnList("dummy " + str)[0].Type();
+	return Parser::ParseColumnList("dummy " + str).GetColumn(LogicalIndex(0)).Type();
 }
 
 bool LogicalType::IsIntegral() const {
@@ -741,8 +759,19 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
 			child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
 		}
+
 		return type_id == LogicalTypeId::STRUCT ? LogicalType::STRUCT(move(child_types))
 		                                        : LogicalType::MAP(move(child_types));
+	}
+	if (type_id == LogicalTypeId::UNION) {
+		auto left_member_count = UnionType::GetMemberCount(left);
+		auto right_member_count = UnionType::GetMemberCount(right);
+		if (left_member_count != right_member_count) {
+			// return the "larger" type, with the most members
+			return left_member_count > right_member_count ? left : right;
+		}
+		// otherwise, keep left, dont try to meld the two together.
+		return left;
 	}
 	// types are equal but no extra specifier: just return the type
 	return left;
@@ -1123,7 +1152,9 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 }
 
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP);
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP ||
+	         type.id() == LogicalTypeId::UNION);
+
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((StructTypeInfo &)*info).child_types;
@@ -1178,6 +1209,43 @@ const LogicalType &MapType::KeyType(const LogicalType &type) {
 const LogicalType &MapType::ValueType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
 	return ListType::GetChildType(StructType::GetChildTypes(type)[1].second);
+}
+
+//===--------------------------------------------------------------------===//
+// Union Type
+//===--------------------------------------------------------------------===//
+
+LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
+	D_ASSERT(members.size() > 0);
+	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
+	// union types always have a hidden "tag" field in front
+	members.insert(members.begin(), {"", LogicalType::TINYINT});
+	auto info = make_shared<StructTypeInfo>(move(members));
+	return LogicalType(LogicalTypeId::UNION, move(info));
+}
+
+const LogicalType &UnionType::GetMemberType(const LogicalType &type, idx_t index) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(index < child_types.size());
+	// skip the "tag" field
+	return child_types[index + 1].second;
+}
+
+const string &UnionType::GetMemberName(const LogicalType &type, idx_t index) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(index < child_types.size());
+	// skip the "tag" field
+	return child_types[index + 1].first;
+}
+
+idx_t UnionType::GetMemberCount(const LogicalType &type) {
+	// dont count the "tag" field
+	return StructType::GetChildTypes(type).size() - 1;
+}
+const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &type) {
+	auto child_types = StructType::GetChildTypes(type);
+	child_types.erase(child_types.begin());
+	return child_types;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1288,8 +1356,12 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		auto data = (string_t *)vdata.data;
 		for (idx_t i = 0; i < size_p; i++) {
 			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(i)) {
-				continue;
+			if (!vdata.validity.RowIsValid(idx)) {
+				throw InternalException("Attempted to create ENUM type with NULL value");
+			}
+			if (values.count(data[idx]) > 0) {
+				throw InvalidInputException("Attempted to create ENUM type with duplicate value %s",
+				                            data[idx].GetString());
 			}
 			values[data[idx]] = i;
 		}

@@ -104,18 +104,6 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Debug Many Free List blocks
-//===--------------------------------------------------------------------===//
-void DebugManyFreeListBlocks::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.debug_many_free_list_blocks = input.GetValue<bool>();
-}
-
-Value DebugManyFreeListBlocks::GetSetting(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.debug_many_free_list_blocks);
-}
-
-//===--------------------------------------------------------------------===//
 // Debug Window Mode
 //===--------------------------------------------------------------------===//
 void DebugWindowMode::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -345,6 +333,18 @@ void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &inp
 
 Value EnableProgressBarSetting::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).enable_progress_bar);
+}
+
+//===--------------------------------------------------------------------===//
+// Experimental Parallel CSV
+//===--------------------------------------------------------------------===//
+void ExperimentalParallelCSVSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.experimental_parallel_csv_reader = input.GetValue<bool>();
+}
+
+Value ExperimentalParallelCSVSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(config.options.experimental_parallel_csv_reader);
 }
 
 //===--------------------------------------------------------------------===//

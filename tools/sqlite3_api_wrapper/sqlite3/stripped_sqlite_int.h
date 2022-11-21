@@ -1,4 +1,5 @@
 #ifndef __STRIPPED_SQLITE_INT__
+#define __STRIPPED_SQLITE_INT__
 
 #define LONGDOUBLE_TYPE long double
 #include <stdint.h>
@@ -14,11 +15,18 @@ typedef uint64_t u64;
 
 typedef int64_t sqlite3_int64;
 typedef uint64_t sqlite_uint64;
+typedef uint64_t sqlite3_uint64;
 
-#define sqlite3Malloc     malloc
-#define sqlite3_free      free
+#ifdef USE_DUCKDB_SHELL_WRAPPER
+#include "duckdb_shell_wrapper.h"
+void *sqlite3_realloc64(void *ptr, sqlite3_uint64 n);
+#else
 #define sqlite3_realloc64 realloc
-#define sqlite3IsNaN      isnan
+#define sqlite3_free      free
+#endif
+
+#define sqlite3Malloc malloc
+#define sqlite3IsNaN  isnan
 
 #define ArraySize(X)   ((int)(sizeof(X) / sizeof(X[0])))
 #define LARGEST_INT64  (0xffffffff | (((i64)0x7fffffff) << 32))

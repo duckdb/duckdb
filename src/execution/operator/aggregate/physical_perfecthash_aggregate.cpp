@@ -35,7 +35,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 		auto &aggr = (BoundAggregateExpression &)*expr;
 		bindings.push_back(&aggr);
 
-		D_ASSERT(!aggr.distinct);
+		D_ASSERT(!aggr.IsDistinct());
 		D_ASSERT(aggr.function.combine);
 		for (auto &child : aggr.children) {
 			payload_types.push_back(child->return_type);
@@ -72,8 +72,8 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Allocator &allocator,
                                                                              ClientContext &context) const {
-	return make_unique<PerfectAggregateHashTable>(allocator, BufferManager::GetBufferManager(context), group_types,
-	                                              payload_types, aggregate_objects, group_minima, required_bits);
+	return make_unique<PerfectAggregateHashTable>(context, allocator, group_types, payload_types, aggregate_objects,
+	                                              group_minima, required_bits);
 }
 
 //===--------------------------------------------------------------------===//

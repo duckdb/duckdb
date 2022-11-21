@@ -27,6 +27,7 @@ public:
 	}
 
 public:
+	bool IsLoaded() const;
 	bool IsInstance(py::handle object) const;
 	py::handle operator()(void) const;
 	void LoadModule(const string &name, PythonImportCache &cache);
@@ -49,17 +50,36 @@ private:
 // Modules
 //===--------------------------------------------------------------------===//
 
+struct PandasLibsCacheItem : public PythonImportCacheItem {
+public:
+	~PandasLibsCacheItem() override {
+	}
+	virtual void LoadSubtypes(PythonImportCache &cache) override {
+		NAType.LoadAttribute("NAType", cache, *this);
+	}
+
+public:
+	PythonImportCacheItem NAType;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
+};
+
 struct PandasCacheItem : public PythonImportCacheItem {
 public:
 	~PandasCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
 		DataFrame.LoadAttribute("DataFrame", cache, *this);
+		libs.LoadModule("pandas._libs.missing", cache);
 	}
 
 public:
 	//! pandas.DataFrame
 	PythonImportCacheItem DataFrame;
+	PandasLibsCacheItem libs;
 
 protected:
 	bool IsRequired() const override final {
@@ -86,14 +106,12 @@ public:
 	~ArrowDatasetCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		FileSystemDataset.LoadAttribute("FileSystemDataset", cache, *this);
-		InMemoryDataset.LoadAttribute("InMemoryDataset", cache, *this);
+		Dataset.LoadAttribute("Dataset", cache, *this);
 		Scanner.LoadAttribute("Scanner", cache, *this);
 	}
 
 public:
-	PythonImportCacheItem FileSystemDataset;
-	PythonImportCacheItem InMemoryDataset;
+	PythonImportCacheItem Dataset;
 	PythonImportCacheItem Scanner;
 };
 

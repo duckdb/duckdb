@@ -1,3 +1,6 @@
+#ifdef USE_DUCKDB_SHELL_WRAPPER
+#include "duckdb_shell_wrapper.h"
+#endif
 #include "sqlite3.h"
 #include "sql_auto_complete_extension.hpp"
 #include "udf_struct_sqlite3.h"
@@ -10,7 +13,9 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/main/error_manager.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -25,6 +30,10 @@
 
 using namespace duckdb;
 using namespace std;
+
+extern "C" {
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value);
+}
 
 static char *sqlite3_strdup(const char *str);
 
@@ -99,6 +108,11 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		if (flags & DUCKDB_UNSIGNED_EXTENSIONS) {
 			config.options.allow_unsigned_extensions = true;
 		}
+		config.error_manager->AddCustomError(
+		    ErrorType::UNSIGNED_EXTENSION,
+		    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
+		    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
+		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_unique<DuckDB>(filename, &config);
 		pDb->db->LoadExtension<SQLAutoCompleteExtension>();
 		pDb->con = make_unique<Connection>(*pDb->db);
@@ -206,6 +220,52 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		db->last_error = PreservedError(ex);
 		return SQLITE_ERROR;
 	}
+}
+
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value) {
+	if (!pStmt) {
+		return nullptr;
+	}
+	if (!pStmt->prepared) {
+		pStmt->db->last_error = PreservedError("Attempting sqlite3_step() on a non-successfully prepared statement");
+		return nullptr;
+	}
+	if (pStmt->result) {
+		pStmt->db->last_error = PreservedError("Statement has already been executed");
+		return nullptr;
+	}
+	pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
+	if (pStmt->result->HasError()) {
+		// error in execute: clear prepared statement
+		pStmt->db->last_error = pStmt->result->GetErrorObject();
+		pStmt->prepared = nullptr;
+		return nullptr;
+	}
+	auto &materialized = (MaterializedQueryResult &)*pStmt->result;
+	auto properties = pStmt->prepared->GetStatementProperties();
+	if (properties.return_type == StatementReturnType::CHANGED_ROWS && materialized.RowCount() > 0) {
+		// update total changes
+		auto row_changes = materialized.Collection().GetRows().GetValue(0, 0);
+		if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
+			pStmt->db->last_changes = row_changes.GetValue<int64_t>();
+			pStmt->db->total_changes += row_changes.GetValue<int64_t>();
+		}
+	}
+	if (properties.return_type != StatementReturnType::QUERY_RESULT) {
+		// only SELECT statements return results
+		return nullptr;
+	}
+	BoxRendererConfig config;
+	if (max_rows != 0) {
+		config.max_rows = max_rows;
+	}
+	if (null_value) {
+		config.null_value = null_value;
+	}
+	BoxRenderer renderer(config);
+	auto result_rendering =
+	    renderer.ToString(*pStmt->db->con->context, pStmt->result->names, materialized.Collection());
+	return sqlite3_strdup(result_rendering.c_str());
 }
 
 /* Prepare the next result to be retrieved */
@@ -983,12 +1043,6 @@ int sqlite3_complete(const char *zSql) {
 	return state == 1;
 }
 
-// checks if input ends with ;
-int sqlite3_complete_old(const char *sql) {
-	fprintf(stderr, "sqlite3_complete: unsupported. '%s'\n", sql);
-	return -1;
-}
-
 // length of varchar or blob value
 int sqlite3_column_bytes(sqlite3_stmt *pStmt, int iCol) {
 	// fprintf(stderr, "sqlite3_column_bytes: unsupported.\n");
@@ -1082,12 +1136,7 @@ const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	return NULL;
 }
 
-int sqlite3_status64(int op, sqlite3_int64 *pCurrent, sqlite3_int64 *pHighwater, int resetFlag) {
-	fprintf(stderr, "sqlite3_status64: unsupported.\n");
-	return -1;
-}
-
-int sqlite3_status64(sqlite3 *, int op, int *pCur, int *pHiwtr, int resetFlg) {
+SQLITE_API int sqlite3_status64(int op, sqlite3_int64 *pCurrent, sqlite3_int64 *pHighwater, int resetFlag) {
 	fprintf(stderr, "sqlite3_status64: unsupported.\n");
 	return -1;
 }
@@ -1606,7 +1655,6 @@ SQLITE_API int sqlite3_result_zeroblob64(sqlite3_context *, sqlite3_uint64 n) {
 	return -1;
 }
 
-// TODO complain
 const void *sqlite3_value_blob(sqlite3_value *pVal) {
 	return sqlite3_value_text(pVal);
 }

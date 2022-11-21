@@ -45,11 +45,11 @@ class TestAllTypes(object):
             'timestamp_s': "'1990-01-01 00:00:00'::TIMESTAMP_S",
             'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
             'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
-            'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ",
+            'timestamp_tz': "'1990-01-01 00:00:00Z'::TIMESTAMPTZ",
             'date': "'1990-01-01'::DATE",
             'date_array': "[], ['1970-01-01'::DATE, NULL, '0001-01-01'::DATE, '9999-12-31'::DATE,], [NULL::DATE,]",
             'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
-            'timestamptz_array': "[], ['1970-01-01'::TIMESTAMPTZ, NULL, '0001-01-01'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
+            'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
         }
 
         correct_answer_map = {'bool':[(False,), (True,), (None,)]
@@ -63,7 +63,7 @@ class TestAllTypes(object):
             , 'dec_4_1': [(Decimal('-999.9'),), (Decimal('999.9'),), (None,)], 'dec_9_4': [(Decimal('-99999.9999'),), (Decimal('99999.9999'),), (None,)]
             , 'dec_18_6': [(Decimal('-999999999999.999999'),), (Decimal('999999999999.999999'),), (None,)], 'dec38_10':[(Decimal('-9999999999999999999999999999.9999999999'),), (Decimal('9999999999999999999999999999.9999999999'),), (None,)]
             , 'uuid': [(UUID('00000000-0000-0000-0000-000000000001'),), (UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),), (None,)]
-            , 'varchar': [('🦆🦆🦆🦆🦆🦆',), ('goose',), (None,)], 'json': [('🦆🦆🦆🦆🦆🦆',), ('goose',), (None,)], 'blob': [(b'thisisalongblob\x00withnullbytes',), (b'\x00\x00\x00a',), (None,)]
+            , 'varchar': [('🦆🦆🦆🦆🦆🦆',), ('goo\0se',), (None,)], 'json': [('🦆🦆🦆🦆🦆🦆',), ('goose',), (None,)], 'blob': [(b'thisisalongblob\x00withnullbytes',), (b'\x00\x00\x00a',), (None,)]
             , 'small_enum':[('DUCK_DUCK_ENUM',), ('GOOSE',), (None,)], 'medium_enum': [('enum_0',), ('enum_299',), (None,)], 'large_enum': [('enum_0',), ('enum_69999',), (None,)]
             , 'date_array': [([], [datetime.date(1970, 1, 1), None, datetime.date.min, datetime.date.max], [None,],)]
             , 'timestamp_array': [([], [datetime.datetime(1970, 1, 1), None, datetime.datetime.min, datetime.datetime.max], [None,],),]
@@ -154,7 +154,7 @@ class TestAllTypes(object):
                 dtype=object,
             ),
             'varchar': np.ma.array(
-                ['🦆🦆🦆🦆🦆🦆', 'goose', "42"],
+                ['🦆🦆🦆🦆🦆🦆', 'goo\0se', "42"],
                 mask=[0, 0, 1],
                 dtype=object,
             ),
@@ -362,11 +362,11 @@ class TestAllTypes(object):
             'timestamp_s': "'1990-01-01 00:00:00'::TIMESTAMP_S",
             'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
             'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
-            'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ",
+            'timestamp_tz': "'1990-01-01 00:00:00Z'::TIMESTAMPTZ",
             'date': "'1990-01-01'::DATE",
             'date_array': "[], ['1970-01-01'::DATE, NULL, '0001-01-01'::DATE, '9999-12-31'::DATE,], [NULL::DATE,]",
             'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
-            'timestamptz_array': "[], ['1970-01-01'::TIMESTAMPTZ, NULL, '0001-01-01'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
+            'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
             }
 
         conn = duckdb.connect()

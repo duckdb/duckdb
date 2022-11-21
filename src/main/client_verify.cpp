@@ -3,6 +3,7 @@
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -25,7 +26,6 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	if (config.query_verification_enabled) {
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::PARSED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
 		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
 	}
@@ -56,6 +56,10 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	bool any_failed = original->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
 		return RunStatementInternal(lock, q, move(s), false, false);
 	});
+	if (!any_failed) {
+		statement_verifiers.emplace_back(
+		    StatementVerifier::Create(VerificationType::PARSED, *statement_copy_for_explain));
+	}
 	// Execute the verifiers
 	for (auto &verifier : statement_verifiers) {
 		bool failed = verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
@@ -74,7 +78,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 			statement_verifiers.push_back(move(prepared_statement_verifier));
 		}
 	} else {
-		if (db->IsInvalidated()) {
+		if (ValidChecker::IsInvalidated(*db)) {
 			return original->materialized_result->GetErrorObject();
 		}
 	}
@@ -93,6 +97,18 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 			interrupted = false;
 			return PreservedError("EXPLAIN failed but query did not (" + string(ex.what()) + ")");
 		} // LCOV_EXCL_STOP
+
+#ifdef DUCKDB_VERIFY_BOX_RENDERER
+		// this is pretty slow, so disabled by default
+		// test the box renderer on the result
+		// we mostly care that this does not crash
+		RandomEngine random;
+		BoxRendererConfig config;
+		// test with a random width
+		config.max_width = random.NextRandomInteger() % 500;
+		BoxRenderer renderer(config);
+		renderer.ToString(*this, original->materialized_result->names, original->materialized_result->Collection());
+#endif
 	}
 
 	// Restore profiler setting

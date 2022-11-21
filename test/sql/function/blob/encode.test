@@ -21,12 +21,15 @@ SELECT decode('\xF0\x9F\xA6\x86'::BLOB)
 ----
 🦆
 
+# null byte
+query I
+SELECT decode('\x00'::BLOB)
+----
+\0
+
 # test invalid decodes
 statement error
 SELECT decode('\xFF'::BLOB)
-
-statement error
-SELECT decode('\x00'::BLOB)
 
 query I
 SELECT decode(encode(a)) || a from (values ('hello'), ('world')) tbl(a);

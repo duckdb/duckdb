@@ -37,6 +37,12 @@ public:
 	ColumnDataAllocatorType GetType() {
 		return type;
 	}
+	void MakeShared() {
+		shared = true;
+	}
+	idx_t BlockCount() const {
+		return blocks.size();
+	}
 
 public:
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
@@ -45,13 +51,23 @@ public:
 	void InitializeChunkState(ChunkManagementState &state, ChunkMetaData &meta_data);
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
 
+	//! Deletes the block with the given id
+	void DeleteBlock(uint32_t block_id);
+
 private:
+	void AllocateEmptyBlock(idx_t size);
 	void AllocateBlock();
 	BufferHandle Pin(uint32_t block_id);
+	BufferHandle PinInternal(uint32_t block_id);
 
-	bool HasBlocks() {
+	bool HasBlocks() const {
 		return !blocks.empty();
 	}
+
+private:
+	void AllocateBuffer(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
+	void AllocateMemory(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
+	void AssignPointer(uint32_t &block_id, uint32_t &offset, data_ptr_t pointer);
 
 private:
 	ColumnDataAllocatorType type;
@@ -65,6 +81,10 @@ private:
 	vector<BlockMetaData> blocks;
 	//! The set of allocated data
 	vector<AllocatedData> allocated_data;
+	//! Whether this ColumnDataAllocator is shared across ColumnDataCollections that allocate in parallel
+	bool shared = false;
+	//! Lock used in case this ColumnDataAllocator is shared across threads
+	mutex lock;
 };
 
 } // namespace duckdb

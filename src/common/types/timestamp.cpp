@@ -24,11 +24,12 @@ static inline bool CharacterIsTimeZone(char c) {
 	return StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '/';
 }
 
-bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, string_t &tz) {
+bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset, string_t &tz) {
 	idx_t pos;
 	date_t date;
 	dtime_t time;
-	if (!Date::TryConvertDate(str, len, pos, date)) {
+	has_offset = false;
+	if (!Date::TryConvertDate(str, len, pos, date, has_offset)) {
 		return false;
 	}
 	if (pos == len) {
@@ -59,8 +60,10 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 		int hour_offset, minute_offset;
 		if (str[pos] == 'Z') {
 			pos++;
+			has_offset = true;
 		} else if (Timestamp::TryParseUTCOffset(str, pos, len, hour_offset, minute_offset)) {
 			result -= hour_offset * Interval::MICROS_PER_HOUR + minute_offset * Interval::MICROS_PER_MINUTE;
+			has_offset = true;
 		} else {
 			// Parse a time zone: / [A-Za-z0-9/_]+/
 			if (str[pos++] != ' ') {
@@ -90,7 +93,9 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 
 bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result) {
 	string_t tz(nullptr, 0);
-	return TryConvertTimestampTZ(str, len, result, tz) && !tz.GetSize();
+	bool has_offset = false;
+	// We don't understand TZ without an extension, so fail if one was provided.
+	return TryConvertTimestampTZ(str, len, result, has_offset, tz) && !tz.GetSize();
 }
 
 string Timestamp::ConversionError(const string &str) {

@@ -1,5 +1,5 @@
 test_that("duckdb_read_csv() works as expected", {
-  con <- dbConnect(duckdb::duckdb())
+  con <- dbConnect(duckdb())
 
   tf <- tempfile()
 

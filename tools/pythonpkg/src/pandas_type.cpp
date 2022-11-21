@@ -11,13 +11,13 @@ PandasType ConvertPandasType(const py::object &col_type) {
 
 	if (col_type_str == "bool" || col_type_str == "boolean") {
 		return PandasType::BOOL;
-	} else if (col_type_str == "uint8" || col_type_str == "Uint8") {
+	} else if (col_type_str == "uint8" || col_type_str == "UInt8") {
 		return PandasType::UINT_8;
-	} else if (col_type_str == "uint16" || col_type_str == "Uint16") {
+	} else if (col_type_str == "uint16" || col_type_str == "UInt16") {
 		return PandasType::UINT_16;
-	} else if (col_type_str == "uint32" || col_type_str == "Uint32") {
+	} else if (col_type_str == "uint32" || col_type_str == "UInt32") {
 		return PandasType::UINT_32;
-	} else if (col_type_str == "uint64" || col_type_str == "Uint64") {
+	} else if (col_type_str == "uint64" || col_type_str == "UInt64") {
 		return PandasType::UINT_64;
 	} else if (col_type_str == "int8" || col_type_str == "Int8") {
 		return PandasType::INT_8;

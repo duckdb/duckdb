@@ -193,7 +193,7 @@ private:
 	//! Bind the expressions of generated columns to check for errors
 	void BindGeneratedColumns(BoundCreateTableInfo &info);
 	//! Bind the default values of the columns of a table
-	void BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults);
+	void BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a limit value (LIMIT or OFFSET)
 	unique_ptr<Expression> BindDelimiter(ClientContext &context, OrderBinder &order_binder,
 	                                     unique_ptr<ParsedExpression> delimiter, const LogicalType &type,
@@ -300,6 +300,12 @@ private:
 	                            const string &join_side, UsingColumnSet *new_set);
 
 	void AddCTEMap(CommonTableExpressionMap &cte_map);
+
+	void ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
+	                           vector<unique_ptr<ParsedExpression>> &new_select_list);
+	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
+	bool FindStarExpression(ParsedExpression &expr, StarExpression **star);
+	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...
