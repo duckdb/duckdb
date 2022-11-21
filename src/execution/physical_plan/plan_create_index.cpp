@@ -12,9 +12,13 @@ namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 
+	// generate a physical plan for the parallel index creation which consists of the following operators
+	// table scan - projection (for expression execution) - filter (NOT NULL) - order - create index
+
 	D_ASSERT(op.children.empty());
 
 	// table scan operator for index key columns and row IDs
+
 	unique_ptr<TableFilterSet> table_filters;
 	op.info->column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 
@@ -31,7 +35,18 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->names.size());
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->column_ids.size());
 
+	// projection to execute expressions on the key columns
+
+	vector<unique_ptr<Expression>> select_list;
+	for (idx_t i = 0; i < op.expressions.size(); i++) {
+		select_list.push_back(move(op.expressions[i]));
+	}
+	select_list.push_back(make_unique<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
+	auto projection = make_unique<PhysicalProjection>(op.info->scan_types, move(select_list), op.estimated_cardinality);
+	projection->children.push_back(move(table_scan));
+
 	// filter operator for IS_NOT_NULL on each key column
+
 	vector<LogicalType> filter_types;
 	vector<unique_ptr<Expression>> filter_select_list;
 
@@ -45,14 +60,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 		filter_select_list.push_back(move(is_not_null_expr));
 	}
 
-	auto null_filter = make_unique<PhysicalFilter>(move(filter_types), move(filter_select_list), STANDARD_VECTOR_SIZE);
+	auto null_filter =
+	    make_unique<PhysicalFilter>(move(filter_types), move(filter_select_list), op.estimated_cardinality);
 	null_filter->types.emplace_back(LogicalType::ROW_TYPE);
-	null_filter->children.push_back(move(table_scan));
+	null_filter->children.push_back(move(projection));
 
 	// actual physical create index operator
-	auto physical_create_index =
-	    make_unique<PhysicalCreateIndex>(op, op.table, op.info->column_ids, move(op.expressions), move(op.info),
-	                                     move(op.unbound_expressions), op.estimated_cardinality);
+
+	auto physical_create_index = make_unique<PhysicalCreateIndex>(
+	    op, op.table, op.info->column_ids, move(op.info), move(op.unbound_expressions), op.estimated_cardinality);
 	physical_create_index->children.push_back(move(null_filter));
 	return move(physical_create_index);
 }

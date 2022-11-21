@@ -21,17 +21,13 @@ public:
 
 class CreateIndexLocalSinkState : public LocalSinkState {
 public:
-	explicit CreateIndexLocalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &expressions)
-	    : arena_allocator(Allocator::Get(context)), executor(expressions) {
-		keys = vector<Key>(STANDARD_VECTOR_SIZE);
-	};
+	explicit CreateIndexLocalSinkState(ClientContext &context) : arena_allocator(Allocator::Get(context)) {};
 
 	unique_ptr<Index> local_index;
 	ArenaAllocator arena_allocator;
 	vector<Key> keys;
-
 	DataChunk key_chunk;
-	ExpressionExecutor executor;
+	vector<column_t> key_column_ids;
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
@@ -53,7 +49,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
 
-	auto state = make_unique<CreateIndexLocalSinkState>(context.client, expressions);
+	auto state = make_unique<CreateIndexLocalSinkState>(context.client);
 
 	// create the local index
 	switch (info->index_type) {
@@ -65,23 +61,24 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	default:
 		throw InternalException("Unimplemented index type");
 	}
+	state->keys = vector<Key>(STANDARD_VECTOR_SIZE);
 	state->key_chunk.Initialize(Allocator::Get(context.client), state->local_index->logical_types);
+
+	for (idx_t i = 0; i < state->key_chunk.ColumnCount(); i++) {
+		state->key_column_ids.push_back(i);
+	}
 	return move(state);
 }
 
 SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                          DataChunk &input) const {
 
+	D_ASSERT(input.ColumnCount() >= 2);
 	auto &lstate = (CreateIndexLocalSinkState &)lstate_p;
-
 	auto &row_identifiers = input.data[input.ColumnCount() - 1];
 
-	// resolve the expressions for this chunk
-	D_ASSERT(!lstate.executor.HasContext());
-	lstate.key_chunk.Reset();
-	lstate.executor.Execute(input, lstate.key_chunk);
-
 	// generate the keys for the given input
+	lstate.key_chunk.ReferenceColumns(input, lstate.key_column_ids);
 	lstate.arena_allocator.Reset();
 	ART::GenerateKeys(lstate.arena_allocator, lstate.key_chunk, lstate.keys);
 
