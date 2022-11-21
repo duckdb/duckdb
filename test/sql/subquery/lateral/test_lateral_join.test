@@ -2,25 +2,154 @@
 # description: Test lateral join
 # group: [lateral]
 
-# FIXME: not supported yet
-# REQUIRE_NO_FAIL(con.Query("CREATE TABLE students(id INTEGER, name VARCHAR, major VARCHAR, year INTEGER)"));
-# REQUIRE_NO_FAIL(
-# 	con.Query("CREATE TABLE exams(sid INTEGER, course VARCHAR, curriculum VARCHAR, grade INTEGER, year INTEGER)"));
+statement ok
+PRAGMA enable_verification
 
-# REQUIRE_NO_FAIL(con.Query("INSERT INTO students VALUES (1, 'Mark', 'CS', 2017)"));
-# REQUIRE_NO_FAIL(con.Query("INSERT INTO students VALUES (2, 'Dirk', 'CS', 2017)"));
-# REQUIRE_NO_FAIL(con.Query("INSERT INTO exams VALUES (1, 'Database Systems', 'CS', 10, 2015)"));
-# REQUIRE_NO_FAIL(con.Query("INSERT INTO exams VALUES (1, 'Graphics', 'CS', 9, 2016)"));
-# REQUIRE_NO_FAIL(con.Query("INSERT INTO exams VALUES (2, 'Database Systems', 'CS', 7, 2015)"));
-# REQUIRE_NO_FAIL(con.Query("INSERT INTO exams VALUES (2, 'Graphics', 'CS', 7, 2016)"));
+# FIXME table-in table-out functions not (yet) supported
+statement error
+select (select MIN(val) from unnest((select a)) t(val)) from (select ARRAY[1, 2, 3, NULL]) t(a);
 
-# // // lateral join with explicit LATERAL added
-# // result = con.Query("SELECT name, total FROM students LEFT JOIN LATERAL (SELECT SUM(grade) AS total FROM exams
-# // WHERE exams.sid=students.id) grades ON true ORDER BY total DESC;"); REQUIRE(CHECK_COLUMN(result, 0, {"Mark",
-# // "Dirk"})); REQUIRE(CHECK_COLUMN(result, 1, {19, 14}));
+statement error
+select (select MIN(val) from unnest(a) t(val)) from (select ARRAY[1, 2, 3, NULL]) t(a);
 
-# // lateral join without explicit LATERAL
-# result = con.Query("SELECT name, total FROM students, (SELECT SUM(grade) AS total FROM exams WHERE "
-# 					"exams.sid=students.id) grades ORDER BY total DESC;");
-# REQUIRE(CHECK_COLUMN(result, 0, {"Mark", "Dirk"}));
-# REQUIRE(CHECK_COLUMN(result, 1, {19, 14}));
+# simplest lateral joins
+query II
+select * from (select 42) t(a), (select t.a + 1);
+----
+42	43
+
+query II
+select * from (select 42) t(a) cross join lateral (select t.a + 1);
+----
+42	43
+
+# more rows
+query II
+select * from (select 42 union all select 84) t(a), (select t.a + 1) ORDER BY ALL;
+----
+42	43
+84	85
+
+# FIXME table-in table-out functions not (yet) supported
+statement error
+select (select MIN(val) from unnest(a) t(val)) from (select ARRAY[1, 2, 3, NULL]) t(a);
+
+# unnest
+query II
+select * from (select [42, 43, 44]) t(a), (select unnest(t.a)) order by all;
+----
+[42, 43, 44]	42
+[42, 43, 44]	43
+[42, 43, 44]	44
+
+query II
+select * from (select [42, 43, 44]) t(a), (select unnest(t.a)) t2(b) where b=43;
+----
+[42, 43, 44]	43
+
+query II
+select * from (select [42, 43, 44] union all select [45, NULL, 46]) t(a), (select unnest(t.a)) t2(b) order by all;
+----
+[42, 43, 44]	42
+[42, 43, 44]	43
+[42, 43, 44]	44
+[45, NULL, 46]	NULL
+[45, NULL, 46]	45
+[45, NULL, 46]	46
+
+query I
+select sum(b) from (select [42, 43, 44] union all select [45, NULL, 46]) t(a), (select unnest(t.a)) t2(b);
+----
+220
+
+query II
+select a, sum(b) from (select [42, 43, 44] union all select [45, NULL, 46]) t(a), (select unnest(t.a)) t2(b) group by a order by a;
+----
+[42, 43, 44]	129
+[45, NULL, 46]	91
+
+# join syntax
+query II
+select * from (select array[42, 43, 44]) t(a) join (select unnest(t.a)) t2(b) on (true) order by all;
+----
+[42, 43, 44]	42
+[42, 43, 44]	43
+[42, 43, 44]	44
+
+# explicit LATERAL (Postgres syntax)
+query II
+select * from (select array[42, 43, 44]) t(a) join lateral (select unnest(t.a)) t2(b) on (true) order by all;
+----
+[42, 43, 44]	42
+[42, 43, 44]	43
+[42, 43, 44]	44
+
+
+query II
+select * from (select array[42, 43, 44]) t(a) join lateral (select unnest(t.a)) t2(b) on (a[1]=b);
+----
+[42, 43, 44]	42
+
+query II
+select * from (select array[42, 43, 44]) t(a) join lateral (select unnest(t.a)) t2(b) on (a[1]<b) order by all;
+----
+[42, 43, 44]	43
+[42, 43, 44]	44
+
+query II
+select * from (select array[42, 43, 44]) t(a) join lateral (select unnest(t.a)) t2(b) on (false) order by all;
+----
+
+# postgres syntax
+query II
+select * from (select 42) t(a) join lateral (select t.a + 1) t2(b) on (true);
+----
+42	43
+
+# we can use random expressions in join conditions of inner joins
+query II
+select * from (select 42) t(a) join lateral (select t.a + 1) t2(b) on (a+b>=80);
+----
+42	43
+
+# FIXME table-in table-out functions not (yet) supported
+statement error
+select * from (select ARRAY[42, 43, 44]) t(a) join lateral (select * from unnest(t.a)) t2(b) on (true);
+
+statement ok
+CREATE TABLE students(id INTEGER, name VARCHAR, major VARCHAR, year INTEGER)
+
+statement ok
+CREATE TABLE exams(sid INTEGER, course VARCHAR, curriculum VARCHAR, grade INTEGER, year INTEGER)
+
+statement ok
+INSERT INTO students VALUES (1, 'Mark', 'CS', 2017)
+
+statement ok
+INSERT INTO students VALUES (2, 'Dirk', 'CS', 2017)
+
+statement ok
+INSERT INTO exams VALUES (1, 'Database Systems', 'CS', 10, 2015)
+
+statement ok
+INSERT INTO exams VALUES (1, 'Graphics', 'CS', 9, 2016)
+
+statement ok
+INSERT INTO exams VALUES (2, 'Database Systems', 'CS', 7, 2015)
+
+statement ok
+INSERT INTO exams VALUES (2, 'Graphics', 'CS', 7, 2016)
+
+# lateral join with explicit LATERAL added
+query II
+SELECT name, total FROM students JOIN LATERAL (SELECT SUM(grade) AS total FROM exams WHERE exams.sid=students.id) grades ON true ORDER BY total DESC;
+----
+Mark	19
+Dirk	14
+
+# lateral join without explicit LATERAL
+query II
+SELECT name, total FROM students, (SELECT SUM(grade) AS total FROM exams WHERE exams.sid=students.id) grades ORDER BY total DESC;
+----
+Mark	19
+Dirk	14

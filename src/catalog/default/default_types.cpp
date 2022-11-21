@@ -79,6 +79,7 @@ static DefaultType internal_types[] = {{"int", LogicalTypeId::INTEGER},
                                        {"timestamptz", LogicalTypeId::TIMESTAMP_TZ},
                                        {"timetz", LogicalTypeId::TIME_TZ},
                                        {"json", LogicalTypeId::JSON},
+                                       {"enum", LogicalTypeId::ENUM},
                                        {"null", LogicalTypeId::SQLNULL},
                                        {nullptr, LogicalTypeId::INVALID}};
 

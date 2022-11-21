@@ -12,10 +12,10 @@ duckdb_prepare_substrait <- function(conn, query, arrow = FALSE) {
   stopifnot(is.raw(query))
   stmt_lst <- rapi_prepare_substrait(conn@conn_ref, query)
   duckdb_result(
-      connection = conn,
-      stmt_lst = stmt_lst,
-      arrow = arrow
-    )
+    connection = conn,
+    stmt_lst = stmt_lst,
+    arrow = arrow
+  )
 }
 
 

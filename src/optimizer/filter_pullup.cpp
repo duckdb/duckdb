@@ -40,7 +40,6 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 	case JoinType::LEFT:
 	case JoinType::ANTI:
 	case JoinType::SEMI: {
-		can_add_column = true;
 		return PullupFromLeft(move(op));
 	}
 	default:
@@ -51,7 +50,9 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 
 unique_ptr<LogicalOperator> FilterPullup::PullupInnerJoin(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(((LogicalJoin &)*op).join_type == JoinType::INNER);
-	D_ASSERT(op->type != LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		return op;
+	}
 	return PullupBothSide(move(op));
 }
 

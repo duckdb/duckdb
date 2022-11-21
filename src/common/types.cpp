@@ -126,7 +126,9 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::VALIDITY:
 		return PhysicalType::BIT;
 	case LogicalTypeId::ENUM: {
-		D_ASSERT(type_info_);
+		if (!type_info_) {
+			return PhysicalType::INVALID;
+		}
 		return EnumType::GetPhysicalType(*this);
 	}
 	case LogicalTypeId::TABLE:
