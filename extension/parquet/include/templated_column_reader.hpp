@@ -35,10 +35,18 @@ public:
 	                      idx_t max_define_p, idx_t max_repeat_p)
 	    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {};
 
-	shared_ptr<ByteBuffer> dict;
+	shared_ptr<ResizeableBuffer> dict;
 
 public:
-	void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) override {
+	void AllocateDict(idx_t size) {
+		if (!dict) {
+			dict = make_shared<ResizeableBuffer>(this->reader.allocator, size);
+		} else {
+			dict->resize(this->reader.allocator, size);
+		}
+	}
+
+	void Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) override {
 		dict = move(data);
 	}
 

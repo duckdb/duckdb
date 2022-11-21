@@ -128,7 +128,7 @@ void ColumnReader::Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, id
 	throw NotImplementedException("Plain");
 }
 
-void ColumnReader::Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) { // NOLINT
+void ColumnReader::Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries) { // NOLINT
 	throw NotImplementedException("Dictionary");
 }
 
@@ -194,8 +194,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
-	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
-
+	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
 			throw std::runtime_error("Page size mismatch");
@@ -210,18 +209,30 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	trans.read((uint8_t *)block->ptr, uncompressed_bytes);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
-	ResizeableBuffer compressed_buffer(reader.allocator, compressed_bytes);
+
+	AllocateCompressed(compressed_bytes);
 	trans.read((uint8_t *)compressed_buffer.ptr, compressed_bytes);
 
 	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr, compressed_bytes,
 	                   (char *)block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
 }
 
+void ColumnReader::AllocateBlock(idx_t size) {
+	if (!block) {
+		block = make_shared<ResizeableBuffer>(this->reader.allocator, size);
+	} else {
+		block->resize(this->reader.allocator, size);
+	}
+}
+
+void ColumnReader::AllocateCompressed(idx_t size) {
+	compressed_buffer.resize(this->reader.allocator, size);
+}
+
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
-	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
-
+	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
 			throw std::runtime_error("Page size mismatch");
@@ -230,7 +241,7 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 		return;
 	}
 
-	ResizeableBuffer compressed_buffer(reader.allocator, page_hdr.compressed_page_size + 1);
+	AllocateCompressed(page_hdr.compressed_page_size + 1);
 	trans.read((uint8_t *)compressed_buffer.ptr, page_hdr.compressed_page_size);
 
 	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr, page_hdr.compressed_page_size,
@@ -516,7 +527,7 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 	return str_len;
 }
 
-void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) {
+void StringColumnReader::Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) {
 	dict = move(data);
 	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
 	for (idx_t dict_idx = 0; dict_idx < num_entries; dict_idx++) {
@@ -958,6 +969,8 @@ template <class DUCKDB_PHYSICAL_TYPE, bool FIXED_LENGTH>
 class DecimalColumnReader
     : public TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
                                    DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>> {
+	using BaseType =
+	    TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>;
 
 public:
 	DecimalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, // NOLINT
@@ -967,8 +980,8 @@ public:
 	          reader, move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
 
 protected:
-	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) { // NOLINT
-		this->dict = make_shared<ResizeableBuffer>(this->reader.allocator, num_entries * sizeof(DUCKDB_PHYSICAL_TYPE));
+	void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries) { // NOLINT
+		BaseType::AllocateDict(num_entries * sizeof(DUCKDB_PHYSICAL_TYPE));
 		auto dict_ptr = (DUCKDB_PHYSICAL_TYPE *)this->dict->ptr;
 		for (idx_t i = 0; i < num_entries; i++) {
 			dict_ptr[i] =
@@ -1058,8 +1071,8 @@ public:
 	                                                            max_define_p, max_repeat_p) {};
 
 protected:
-	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) { // NOLINT
-		this->dict = make_shared<ResizeableBuffer>(this->reader.allocator, num_entries * sizeof(hugeint_t));
+	void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries) { // NOLINT
+		AllocateDict(num_entries * sizeof(hugeint_t));
 		auto dict_ptr = (hugeint_t *)this->dict->ptr;
 		for (idx_t i = 0; i < num_entries; i++) {
 			dict_ptr[i] = UUIDValueConversion::PlainRead(*dictionary_data, *this);
@@ -1109,8 +1122,8 @@ public:
 	                                                                 max_define_p, max_repeat_p) {};
 
 protected:
-	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override { // NOLINT
-		this->dict = make_shared<ResizeableBuffer>(this->reader.allocator, num_entries * sizeof(interval_t));
+	void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries) override { // NOLINT
+		AllocateDict(num_entries * sizeof(interval_t));
 		auto dict_ptr = (interval_t *)this->dict->ptr;
 		for (idx_t i = 0; i < num_entries; i++) {
 			dict_ptr[i] = IntervalValueConversion::PlainRead(*dictionary_data, *this);

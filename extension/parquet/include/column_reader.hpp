@@ -77,7 +77,7 @@ protected:
 	// readers that use the default Read() need to implement those
 	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
 	                   idx_t result_offset, Vector &result);
-	virtual void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries);
+	virtual void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries);
 	virtual void Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
 	                     idx_t result_offset, Vector &result);
 
@@ -109,6 +109,8 @@ protected:
 	idx_t pending_skips = 0;
 
 private:
+	void AllocateBlock(idx_t size);
+	void AllocateCompressed(idx_t size);
 	void PrepareRead(parquet_filter_t &filter);
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
@@ -124,6 +126,7 @@ private:
 
 	shared_ptr<ResizeableBuffer> block;
 
+	ResizeableBuffer compressed_buffer;
 	ResizeableBuffer offset_buffer;
 
 	unique_ptr<RleBpDecoder> dict_decoder;
