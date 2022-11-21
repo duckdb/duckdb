@@ -7,9 +7,11 @@ require httpfs
 name Q${QUERY_NUMBER_PADDED}
 group H2OAI
 
+storage persistent
+
 cache h2oai
 
-# connect duckdb_benchmark_data/h2oai/h2oai.duckdb
+connect h2oai.duckdb
 
 load benchmark/h2oai/group/queries/load.sql
 

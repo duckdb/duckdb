@@ -6,11 +6,13 @@ name DSQ${QUERY_NUMBER_PADDED}
 group tpcds
 subgroup sf1
 
+storage persistent
+
 require tpcds
 
 cache tpcds_sf1
 
-connect duckdb_benchmark_data/tpcds_sf1/tpcds.duckdb
+connect tpcds_sf1.duckdb
 
 load benchmark/tpcds/sf1/load.sql
 

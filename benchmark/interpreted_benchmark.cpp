@@ -316,13 +316,14 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	unique_ptr<QueryResult> result;
 	LoadBenchmark();
 	unique_ptr<InterpretedBenchmarkState> state;
+	auto full_db_path = GetDatabasePath();
 	try {
-		state = make_unique<InterpretedBenchmarkState>(GetDatabasePath());
+		state = make_unique<InterpretedBenchmarkState>(full_db_path);
 	} catch (Exception(e)) {
 		// if the connection throws an error, chances are it's a storage format error.
 		// In this case delete the file and connect again.
-		std::remove(GetDatabasePath().c_str());
-		state = make_unique<InterpretedBenchmarkState>(GetDatabasePath());
+		DeleteDatabase(full_db_path);
+		state = make_unique<InterpretedBenchmarkState>(full_db_path);
 	}
 	extensions.insert("parquet");
 	for (auto &extension : extensions) {
@@ -355,12 +356,6 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		// no cache or db_path specified: just run the initialization code
 		result = state->con.Query(load_query);
 	} else {
-
-		auto &fs = state->db.GetFileSystem();
-		if (!fs.DirectoryExists(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY)) {
-			return false;
-		}
-
 		// cache or db_path is specified: try to load from one of them
 		bool in_memory_db_has_data = false;
 		if (!db_path.empty()) {
@@ -425,13 +420,17 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 }
 
 string InterpretedBenchmark::GetDatabasePath() {
-
-	if (!InMemory()) {
+	if (!InMemory() && db_path.compare("") == 0) {
 		string path = "duckdb_benchmark_db.db";
 		DeleteDatabase(path);
 		return path;
-	} else if (db_path != "") {
-		return db_path;
+	} else if (db_path.compare("") != 0) {
+		auto fs = FileSystem::CreateLocal();
+		auto cache_dir = fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, data_cache);
+		if (!fs->DirectoryExists(cache_dir)) {
+			fs->CreateDirectory(cache_dir);
+		}
+		return fs->JoinPath(cache_dir, db_path);
 	} else {
 		return string();
 	}
