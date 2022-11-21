@@ -912,7 +912,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 
 	string req_params = "";
 	if (!continuation_token.empty()) {
-		req_params += "continuation-token=" + S3FileSystem::UrlEncode(continuation_token);
+		req_params += "continuation-token=" + S3FileSystem::UrlEncode(continuation_token, true);
 		req_params += "&";
 	}
 	req_params += "encoding-type=url&list-type=2";

@@ -1,4 +1,4 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
 using duckdb::DatabaseData;

@@ -626,7 +626,7 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 }
 
 void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_t *ids, idx_t offset, idx_t count,
-                      const vector<column_t> &column_ids) {
+                      const vector<PhysicalIndex> &column_ids) {
 #ifdef DEBUG
 	for (size_t i = offset; i < offset + count; i++) {
 		D_ASSERT(ids[i] >= row_t(this->start) && ids[i] < row_t(this->start + this->count));
@@ -634,16 +634,16 @@ void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_
 #endif
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
-		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
-		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
+		D_ASSERT(column.index != COLUMN_IDENTIFIER_ROW_ID);
+		D_ASSERT(columns[column.index]->type.id() == update_chunk.data[i].GetType().id());
 		if (offset > 0) {
 			Vector sliced_vector(update_chunk.data[i], offset, offset + count);
 			sliced_vector.Flatten(count);
-			columns[column]->Update(transaction, column, sliced_vector, ids + offset, count);
+			columns[column.index]->Update(transaction, column.index, sliced_vector, ids + offset, count);
 		} else {
-			columns[column]->Update(transaction, column, update_chunk.data[i], ids, count);
+			columns[column.index]->Update(transaction, column.index, update_chunk.data[i], ids, count);
 		}
-		MergeStatistics(column, *columns[column]->GetUpdateStatistics());
+		MergeStatistics(column.index, *columns[column.index]->GetUpdateStatistics());
 	}
 }
 
@@ -807,30 +807,23 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer) 
 	writer.Finalize();
 }
 
-RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<ColumnDefinition> &columns) {
+RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const ColumnList &columns) {
 	RowGroupPointer result;
 
 	FieldReader reader(main_source);
 	result.row_start = reader.ReadRequired<uint64_t>();
 	result.tuple_count = reader.ReadRequired<uint64_t>();
 
-	result.data_pointers.reserve(columns.size());
-	result.statistics.reserve(columns.size());
+	auto physical_columns = columns.PhysicalColumnCount();
+	result.data_pointers.reserve(physical_columns);
+	result.statistics.reserve(physical_columns);
 
 	auto &source = reader.GetSource();
-	for (idx_t i = 0; i < columns.size(); i++) {
-		auto &col = columns[i];
-		if (col.Generated()) {
-			continue;
-		}
-		auto stats = BaseStatistics::Deserialize(source, columns[i].Type());
+	for (auto &col : columns.Physical()) {
+		auto stats = BaseStatistics::Deserialize(source, col.Type());
 		result.statistics.push_back(move(stats));
 	}
-	for (idx_t i = 0; i < columns.size(); i++) {
-		auto &col = columns[i];
-		if (col.Generated()) {
-			continue;
-		}
+	for (idx_t i = 0; i < columns.PhysicalColumnCount(); i++) {
 		BlockPointer pointer;
 		pointer.block_id = source.Read<block_id_t>();
 		pointer.offset = source.Read<uint64_t>();

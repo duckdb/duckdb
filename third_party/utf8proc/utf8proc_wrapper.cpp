@@ -74,35 +74,29 @@ UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *i
 		int c = (int) s[i];
 
 		if ((c & 0x80) == 0) {
-			/* 1 byte sequence */
-			if (c == '\0') {
-				/* NULL byte not allowed */
-				AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::NULL_BYTE);
-				return UnicodeType::INVALID;
-			}
-		} else {
-			int first_pos_seq = i;
+			continue;
+		}
+		int first_pos_seq = i;
 
-			if ((c & 0xE0) == 0xC0) {
-				/* 2 byte sequence */
-				int utf8char = c & 0x1F;
-				type = UTF8ExtraByteLoop<1, 0x000780>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
-			} else if ((c & 0xF0) == 0xE0) {
-				/* 3 byte sequence */
-				int utf8char = c & 0x0F;
-				type = UTF8ExtraByteLoop<2, 0x00F800>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
-			} else if ((c & 0xF8) == 0xF0) {
-				/* 4 byte sequence */
-				int utf8char = c & 0x07;
-				type = UTF8ExtraByteLoop<3, 0x1F0000>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
-			} else {
-				/* invalid UTF-8 start byte */
-				AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
-				return UnicodeType::INVALID;
-			}
-			if (type == UnicodeType::INVALID) {
-				return type;
-			}
+		if ((c & 0xE0) == 0xC0) {
+			/* 2 byte sequence */
+			int utf8char = c & 0x1F;
+			type = UTF8ExtraByteLoop<1, 0x000780>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
+		} else if ((c & 0xF0) == 0xE0) {
+			/* 3 byte sequence */
+			int utf8char = c & 0x0F;
+			type = UTF8ExtraByteLoop<2, 0x00F800>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
+		} else if ((c & 0xF8) == 0xF0) {
+			/* 4 byte sequence */
+			int utf8char = c & 0x07;
+			type = UTF8ExtraByteLoop<3, 0x1F0000>(first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);
+		} else {
+			/* invalid UTF-8 start byte */
+			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
+			return UnicodeType::INVALID;
+		}
+		if (type == UnicodeType::INVALID) {
+			return type;
 		}
 	}
 	return type;

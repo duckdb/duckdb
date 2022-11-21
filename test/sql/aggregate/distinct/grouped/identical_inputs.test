@@ -1,0 +1,15 @@
+# name: test/sql/aggregate/distinct/grouped/identical_inputs.test
+# description: DISTINCT aggregations
+# group: [grouped]
+
+statement ok
+create table tbl as select i%50::BIGINT as i, i%5::BIGINT as j from range(1000000) tbl(i);
+
+query IIIII
+select count(distinct i), min(distinct i), max(distinct i), sum(distinct i), product(distinct i) from tbl group by j order by all;
+----
+10	0	45	225	0.0
+10	1	46	235	1213563326976.0
+10	2	47	245	3965002804224.0
+10	3	48	255	9360955828224.0
+10	4	49	265	19053977918976.0

@@ -29,6 +29,9 @@ public:
 	bool IsRootBlock(block_id_t root) override {
 		throw InternalException("Cannot perform IO in in-memory database!");
 	}
+	void MarkBlockAsFree(block_id_t block_id) override {
+		throw InternalException("Cannot perform IO in in-memory database!");
+	}
 	void MarkBlockAsModified(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database!");
 	}

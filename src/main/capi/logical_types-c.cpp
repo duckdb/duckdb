@@ -1,4 +1,4 @@
-#include "duckdb/main/capi_internal.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 
 duckdb_logical_type duckdb_create_logical_type(duckdb_type type) {
 	return new duckdb::LogicalType(duckdb::ConvertCTypeToCPP(type));

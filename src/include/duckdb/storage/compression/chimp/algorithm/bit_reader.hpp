@@ -18,7 +18,7 @@ namespace duckdb {
 struct BitReader {
 private:
 	//! Align the masks to the right
-	static constexpr uint8_t masks[] = {
+	static constexpr uint8_t MASKS[] = {
 	    0,   // 0b00000000,
 	    128, // 0b10000000,
 	    192, // 0b11000000,
@@ -38,7 +38,7 @@ private:
 	    128, // 0b10000000,
 	};
 
-	static constexpr uint8_t remainder_masks[] = {
+	static constexpr uint8_t REMAINDER_MASKS[] = {
 	    0,   0, 0, 0, 0, 0, 0, 0, 0,
 	    128, // 0b10000000,
 	    192, // 0b11000000,
@@ -72,7 +72,7 @@ public:
 
 	inline uint8_t InnerReadByte(const uint8_t &offset) {
 		uint8_t result = input[ByteIndex() + offset] << BitIndex() |
-		                 ((input[ByteIndex() + offset + 1] & remainder_masks[8 + BitIndex()]) >> (8 - BitIndex()));
+		                 ((input[ByteIndex() + offset + 1] & REMAINDER_MASKS[8 + BitIndex()]) >> (8 - BitIndex()));
 		return result;
 	}
 
@@ -100,13 +100,13 @@ public:
 		// SPILL = (index + size >= 8)
 		//
 		// If SPILL is true:
-		// The remainder_masks gives us the mask for the bits we're interested in
+		// The REMAINDER_MASKS gives us the mask for the bits we're interested in
 		// We bit-wise AND these together (no need to shift anything because the index is essentially zero for this new
 		// byte) And we then right-shift these bits in place (to the right of the previous bits)
 		const bool spill_to_next_byte = (size + BitIndex() >= 8);
 		uint8_t result =
-		    ((input[ByteIndex() + offset] << BitIndex()) & masks[size]) >> right_shift |
-		    ((input[ByteIndex() + offset + spill_to_next_byte] & remainder_masks[size + BitIndex()]) >> bit_remainder);
+		    ((input[ByteIndex() + offset] << BitIndex()) & MASKS[size]) >> right_shift |
+		    ((input[ByteIndex() + offset + spill_to_next_byte] & REMAINDER_MASKS[size + BitIndex()]) >> bit_remainder);
 		return result;
 	}
 
@@ -167,8 +167,5 @@ public:
 		return ReadBytes<T>(bytes, remainder);
 	}
 };
-
-constexpr uint8_t BitReader::remainder_masks[];
-constexpr uint8_t BitReader::masks[];
 
 } // namespace duckdb

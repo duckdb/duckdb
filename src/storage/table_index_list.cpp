@@ -35,7 +35,7 @@ void TableIndexList::Move(TableIndexList &other) {
 	indexes = move(other.indexes);
 }
 
-Index *TableIndexList::FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type) {
+Index *TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type) {
 	Index *result = nullptr;
 	Scan([&](Index &index) {
 		if (DataTable::IsForeignKeyIndex(fk_keys, index, fk_type)) {
@@ -46,7 +46,7 @@ Index *TableIndexList::FindForeignKeyIndex(const vector<idx_t> &fk_keys, Foreign
 	return result;
 }
 
-void TableIndexList::VerifyForeignKey(const vector<idx_t> &fk_keys, bool is_append, DataChunk &chunk,
+void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, bool is_append, DataChunk &chunk,
                                       vector<string> &err_msgs) {
 	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 

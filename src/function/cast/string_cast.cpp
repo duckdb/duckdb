@@ -168,8 +168,12 @@ bool VectorStringToList::StringToNestedTypeCastLoop(string_t *source_data, Valid
 }
 
 static LogicalType InitVarcharStructType(const LogicalType &target) {
-	return LogicalType::STRUCT(
-	    child_list_t<LogicalType>(StructType::GetChildCount(target), make_pair("", LogicalType::VARCHAR)));
+	child_list_t<LogicalType> child_types;
+	for (auto &child : StructType::GetChildTypes(target)) {
+		child_types.push_back(make_pair(child.first, LogicalType::VARCHAR));
+	}
+
+	return LogicalType::STRUCT(child_types);
 }
 
 //string -> struct casting
@@ -186,12 +190,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(string_t *source_data, Val
 	vector<ValidityMask *> child_masks;
 	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
 		child_names.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx});
-		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			(child_vectors[child_idx])->SetVectorType(VectorType::CONSTANT_VECTOR);
-			child_masks.emplace_back(&ConstantVector::Validity(*child_vectors[child_idx]));
-		} else {
-			child_masks.emplace_back(&FlatVector::Validity(*child_vectors[child_idx]));
-		}
+		child_masks.emplace_back(&FlatVector::Validity(*child_vectors[child_idx]));
 		child_masks[child_idx]->SetAllInvalid(count);
 	}
 
@@ -342,7 +341,6 @@ bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, CastPar
 		auto source_data = ConstantVector::GetData<string_t>(source);
 		auto &source_mask = ConstantVector::Validity(source);
 		auto &result_mask = FlatVector::Validity(result);
-
         auto ret = T::StringToNestedTypeCastLoop(source_data, source_mask, result, result_mask, 1, parameters, nullptr);
         result.SetVectorType(VectorType::CONSTANT_VECTOR);
         return ret;

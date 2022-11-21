@@ -19,7 +19,7 @@ namespace duckdb {
 
 struct UniqueKeyInfo {
 	string schema, table;
-	vector<storage_t> columns;
+	vector<LogicalIndex> columns;
 
 	bool operator==(const UniqueKeyInfo &other) const {
 		return (schema == other.schema) && (table == other.table) && (columns == other.columns);
@@ -39,7 +39,7 @@ struct hash<duckdb::UniqueKeyInfo> {
 
 	size_t operator()(const duckdb::UniqueKeyInfo &j) const {
 		D_ASSERT(j.columns.size() > 0);
-		return ComputeHash(j.schema) + ComputeHash(j.table) + ComputeHash(j.columns[0]);
+		return ComputeHash(j.schema) + ComputeHash(j.table) + ComputeHash(j.columns[0].index);
 	}
 };
 
@@ -103,8 +103,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 	sort(schemas.begin(), schemas.end(), [&](CatalogEntry *x, CatalogEntry *y) { return (x->name < y->name); });
 
 	// check the temp schema as well
-	auto &temp_schema = ClientData::Get(context).temporary_objects;
-	schemas.push_back(temp_schema.get());
+	auto temp_schema = SchemaCatalogEntry::GetTemporaryObjects(context);
+	schemas.push_back(temp_schema);
 
 	for (auto &schema : schemas) {
 		vector<CatalogEntry *> entries;
@@ -192,18 +192,19 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			case ConstraintType::FOREIGN_KEY: {
 				const auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
 				const auto &info = bound_foreign_key.info;
-				uk_info = {info.schema, info.table, info.pk_keys};
-				if (uk_info.schema.empty()) {
-					// FIXME: Can we somehow make use of Binder::BindSchema() here?
-					// From experiments, an omitted schema in REFERENCES ... means "main" or "temp", even if the table
-					// resides in a different schema. Is this guaranteed to be stable?
-					if (entry->temporary) {
-						uk_info.schema = "temp";
-					} else {
-						uk_info.schema = "main";
-					}
+				// find the other table
+				auto &catalog = Catalog::GetCatalog(context);
+				auto table_entry = (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info.schema,
+				                                                         info.table, true);
+				if (!table_entry) {
+					throw InternalException("dukdb_constraints: entry %s.%s referenced in foreign key not found",
+					                        info.schema, info.table);
 				}
-
+				vector<LogicalIndex> index;
+				for (auto &key : info.pk_keys) {
+					index.push_back(table_entry->columns.PhysicalToLogical(key));
+				}
+				uk_info = {table_entry->schema->name, table_entry->name, index};
 				break;
 			}
 			default:
@@ -234,31 +235,31 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 			output.SetValue(7, count, expression_text);
 
-			vector<column_t> column_index_list;
+			vector<LogicalIndex> column_index_list;
 			switch (bound_constraint.type) {
 			case ConstraintType::CHECK: {
 				auto &bound_check = (BoundCheckConstraint &)bound_constraint;
 				for (auto &col_idx : bound_check.bound_columns) {
-					column_index_list.push_back(col_idx);
+					column_index_list.push_back(table.columns.PhysicalToLogical(col_idx));
 				}
 				break;
 			}
 			case ConstraintType::UNIQUE: {
 				auto &bound_unique = (BoundUniqueConstraint &)bound_constraint;
 				for (auto &col_idx : bound_unique.keys) {
-					column_index_list.push_back(column_t(col_idx));
+					column_index_list.push_back(col_idx);
 				}
 				break;
 			}
 			case ConstraintType::NOT_NULL: {
 				auto &bound_not_null = (BoundNotNullConstraint &)bound_constraint;
-				column_index_list.push_back(bound_not_null.index);
+				column_index_list.push_back(table.columns.PhysicalToLogical(bound_not_null.index));
 				break;
 			}
 			case ConstraintType::FOREIGN_KEY: {
 				auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
 				for (auto &col_idx : bound_foreign_key.info.fk_keys) {
-					column_index_list.push_back(column_t(col_idx));
+					column_index_list.push_back(table.columns.PhysicalToLogical(col_idx));
 				}
 				break;
 			}
@@ -269,8 +270,8 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			vector<Value> index_list;
 			vector<Value> column_name_list;
 			for (auto column_index : column_index_list) {
-				index_list.push_back(Value::BIGINT(column_index));
-				column_name_list.emplace_back(table.columns[column_index].Name());
+				index_list.push_back(Value::BIGINT(column_index.index));
+				column_name_list.emplace_back(table.columns.GetColumn(column_index).Name());
 			}
 
 			// constraint_column_indexes, LIST

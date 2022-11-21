@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-static void InvertPercentileFractions(unique_ptr<ParsedExpression> &fractions) {
+static void InvertPercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions) {
 	D_ASSERT(fractions.get());
 	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = (BoundExpression &)*fractions;
@@ -25,13 +25,19 @@ static void InvertPercentileFractions(unique_ptr<ParsedExpression> &fractions) {
 		return;
 	}
 
-	Value value = ExpressionExecutor::EvaluateScalar(*bound.expr);
+	Value value = ExpressionExecutor::EvaluateScalar(context, *bound.expr);
 	if (value.type().id() == LogicalTypeId::LIST) {
 		vector<Value> values;
 		for (const auto &element_val : ListValue::GetChildren(value)) {
-			values.push_back(Value::DOUBLE(1 - element_val.GetValue<double>()));
+			if (element_val.IsNull()) {
+				values.push_back(element_val);
+			} else {
+				values.push_back(Value::DOUBLE(1 - element_val.GetValue<double>()));
+			}
 		}
 		bound.expr = make_unique<BoundConstantExpression>(Value::LIST(values));
+	} else if (value.IsNull()) {
+		bound.expr = make_unique<BoundConstantExpression>(value);
 	} else {
 		bound.expr = make_unique<BoundConstantExpression>(Value::DOUBLE(1 - value.GetValue<double>()));
 	}
@@ -70,7 +76,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		aggregate_binder.BindChild(child, 0, error);
 		// We have to invert the fractions for PERCENTILE_XXXX DESC
 		if (error.empty() && invert_fractions) {
-			InvertPercentileFractions(child);
+			InvertPercentileFractions(context, child);
 		}
 	}
 
@@ -178,8 +184,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		}
 	}
 
-	auto aggregate = function_binder.BindAggregateFunction(bound_function, move(children), move(bound_filter),
-	                                                       aggr.distinct, move(order_bys));
+	auto aggregate = function_binder.BindAggregateFunction(
+	    bound_function, move(children), move(bound_filter),
+	    aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT, move(order_bys));
 	if (aggr.export_state) {
 		aggregate = ExportAggregateFunction::Bind(move(aggregate));
 	}

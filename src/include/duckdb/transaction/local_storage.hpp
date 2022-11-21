@@ -28,11 +28,15 @@ public:
 	//! Flushes a specific row group to disk
 	void FlushToDisk(RowGroup *row_group);
 	//! Flushes the final row group to disk (if any)
-	void FlushToDisk(RowGroupCollection &row_groups);
+	void FlushToDisk(RowGroupCollection &row_groups, bool force = false);
 	//! Final flush: flush the partial block manager to disk
 	void FinalFlush();
 
 	void Rollback();
+
+private:
+	//! Prepare a write to disk
+	bool PrepareWrite();
 
 private:
 	//! The table
@@ -48,12 +52,12 @@ public:
 	// Create a new LocalTableStorage
 	explicit LocalTableStorage(DataTable &table);
 	// Create a LocalTableStorage from an ALTER TYPE
-	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t changed_idx, const LogicalType &target_type,
-	                  const vector<column_t> &bound_columns, Expression &cast_expr);
+	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
+	                  const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
 	// Create a LocalTableStorage from a DROP COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
-	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
+	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  Expression *default_value);
 	~LocalTableStorage();
 
@@ -66,8 +70,10 @@ public:
 	TableIndexList indexes;
 	//! The number of deleted rows
 	idx_t deleted_rows;
-	//! The optimistic data writer
+	//! The main optimistic data writer
 	OptimisticDataWriter optimistic_writer;
+	//! The set of all optimistic data writers associated with this table
+	vector<unique_ptr<OptimisticDataWriter>> optimistic_writers;
 
 public:
 	void InitializeScan(CollectionScanState &state, TableFilterSet *table_filters = nullptr);
@@ -80,6 +86,11 @@ public:
 
 	void AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
 	                     bool append_to_table);
+	bool AppendToIndexes(Transaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
+	                     const vector<LogicalType> &table_types, row_t &start_row);
+
+	//! Creates an optimistic writer for this table
+	OptimisticDataWriter *CreateOptimisticWriter();
 };
 
 class LocalTableManager {
@@ -109,7 +120,7 @@ public:
 	};
 
 public:
-	explicit LocalStorage(Transaction &transaction);
+	explicit LocalStorage(ClientContext &context, Transaction &transaction);
 
 	static LocalStorage &Get(Transaction &transaction);
 	static LocalStorage &Get(ClientContext &context);
@@ -131,11 +142,13 @@ public:
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(DataTable *table, RowGroupCollection &collection);
+	//! Create an optimistic writer for the specified table
+	OptimisticDataWriter *CreateOptimisticWriter(DataTable *table);
 
 	//! Delete a set of rows from the local storage
 	idx_t Delete(DataTable *table, Vector &row_ids, idx_t count);
 	//! Update a set of rows in the local storage
-	void Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &data);
+	void Update(DataTable *table, Vector &row_ids, const vector<PhysicalIndex> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
 	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction);
@@ -161,6 +174,7 @@ public:
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 private:
+	ClientContext &context;
 	Transaction &transaction;
 	LocalTableManager table_manager;
 

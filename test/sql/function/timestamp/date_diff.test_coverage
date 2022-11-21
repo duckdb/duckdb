@@ -333,6 +333,14 @@ endloop
 endloop
 
 #
+# Errors
+#
+
+# Issue #5239: Overflow
+statement error
+SELECT datediff('microseconds',TIMESTAMP '276858-10-21 9:36:33',TIMESTAMP '-222154-6-30 5:19:49');----
+
+#
 # VARCHAR
 #
 statement ok

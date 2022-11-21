@@ -27,7 +27,7 @@ OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, Da
 	for (; chunk.size() + input.size() <= STANDARD_VECTOR_SIZE && state.expression_index < expressions.size();
 	     state.expression_index++) {
 		state.temp_chunk.Reset();
-		EvaluateExpression(Allocator::Get(context.client), state.expression_index, &input, state.temp_chunk);
+		EvaluateExpression(context.client, state.expression_index, &input, state.temp_chunk);
 		chunk.Append(state.temp_chunk);
 	}
 	if (state.expression_index < expressions.size()) {
@@ -38,9 +38,9 @@ OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, Da
 	}
 }
 
-void PhysicalExpressionScan::EvaluateExpression(Allocator &allocator, idx_t expression_idx, DataChunk *child_chunk,
+void PhysicalExpressionScan::EvaluateExpression(ClientContext &context, idx_t expression_idx, DataChunk *child_chunk,
                                                 DataChunk &result) const {
-	ExpressionExecutor executor(allocator, expressions[expression_idx]);
+	ExpressionExecutor executor(context, expressions[expression_idx]);
 	if (child_chunk) {
 		child_chunk->Verify();
 		executor.Execute(*child_chunk, result);

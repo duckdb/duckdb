@@ -235,6 +235,14 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 	return block;
 }
 
+void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
+	lock_guard<mutex> lock(block_lock);
+	D_ASSERT(block_id >= 0);
+	D_ASSERT(free_list.find(block_id) == free_list.end());
+	multi_use_blocks.erase(block_id);
+	free_list.insert(block_id);
+}
+
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);

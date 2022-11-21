@@ -9,7 +9,7 @@ void LogicalUpdate::Serialize(FieldWriter &writer) const {
 	table->Serialize(writer.GetSerializer());
 	writer.WriteField(table_index);
 	writer.WriteField(return_chunk);
-	writer.WriteList<column_t>(columns);
+	writer.WriteIndexList<PhysicalIndex>(columns);
 	writer.WriteSerializableList(bound_defaults);
 	writer.WriteField(update_is_del_and_insert);
 }
@@ -28,10 +28,14 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationSta
 	auto result = make_unique<LogicalUpdate>(table_catalog_entry);
 	result->table_index = reader.ReadRequired<idx_t>();
 	result->return_chunk = reader.ReadRequired<bool>();
-	result->columns = reader.ReadRequiredList<column_t>();
+	result->columns = reader.ReadRequiredIndexList<PhysicalIndex>();
 	result->bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->update_is_del_and_insert = reader.ReadRequired<bool>();
 	return move(result);
+}
+
+idx_t LogicalUpdate::EstimateCardinality(ClientContext &context) {
+	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
 }
 
 } // namespace duckdb

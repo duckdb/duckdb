@@ -298,7 +298,7 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 		if (col_name == "*") {
 			// star found - get all columns
 			doc_values.clear();
-			for (auto &cd : table->columns) {
+			for (auto &cd : table->columns.Logical()) {
 				if (cd.Type() == LogicalType::VARCHAR) {
 					doc_values.push_back(cd.Name());
 				}

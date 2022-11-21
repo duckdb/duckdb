@@ -506,7 +506,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
-	return Parser::ParseColumnList("dummy " + str)[0].Type();
+	return Parser::ParseColumnList("dummy " + str).GetColumn(LogicalIndex(0)).Type();
 }
 
 bool LogicalType::IsIntegral() const {
@@ -1356,8 +1356,12 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		auto data = (string_t *)vdata.data;
 		for (idx_t i = 0; i < size_p; i++) {
 			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(i)) {
-				continue;
+			if (!vdata.validity.RowIsValid(idx)) {
+				throw InternalException("Attempted to create ENUM type with NULL value");
+			}
+			if (values.count(data[idx]) > 0) {
+				throw InvalidInputException("Attempted to create ENUM type with duplicate value %s",
+				                            data[idx].GetString());
 			}
 			values[data[idx]] = i;
 		}

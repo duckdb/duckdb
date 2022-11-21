@@ -69,13 +69,13 @@ public:
 	constexpr static uint8_t HASH_WIDTH = sizeof(hash_t);
 
 public:
-	GroupedAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager, vector<LogicalType> group_types,
+	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
 	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
-	GroupedAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager, vector<LogicalType> group_types,
+	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
 	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
-	GroupedAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager, vector<LogicalType> group_types);
+	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types);
 	~GroupedAggregateHashTable() override;
 
 	//! The stringheap of the AggregateHashTable
@@ -85,8 +85,9 @@ public:
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
-	idx_t AddChunk(DataChunk &groups, DataChunk &payload);
-	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, const vector<idx_t> &filter);
+	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload, const vector<idx_t> &filter);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter);
 
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.

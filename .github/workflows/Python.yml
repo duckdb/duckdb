@@ -90,25 +90,25 @@ jobs:
         aws --version
 
       # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
-    - name: Download OpenSSL 1.1.1k
+    - name: Download OpenSSL 1.1.1s
       shell: bash
       run: |
-        wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1k.tar.gz
-        tar -xzvf OpenSSL_1_1_1k.tar.gz
-        mv openssl-OpenSSL_1_1_1k openssl-1.1.1k
-        cd openssl-1.1.1k
+        wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1s.tar.gz
+        tar -xzvf OpenSSL_1_1_1s.tar.gz
+        mv openssl-OpenSSL_1_1_1s openssl-1.1.1s
+        cd openssl-1.1.1s
         find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
 
     - name: Configure OpenSSL
       shell: bash
       run: |
-        cd openssl-1.1.1k
+        cd openssl-1.1.1s
         ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
 
     - name: Build OpenSSL
       shell: bash
       run: |
-        cd openssl-1.1.1k
+        cd openssl-1.1.1s
         make
         make install
 
@@ -153,6 +153,8 @@ jobs:
             python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
+          - isRelease: false
+            python_build: 'cp311-*'
     needs: manylinux-extensions
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
@@ -277,6 +279,8 @@ jobs:
             python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
+          - isRelease: false
+            python_build: 'cp311-*'
       needs: linux-python3-9
 
       env:

@@ -63,32 +63,32 @@ void FileBuffer::ReallocBuffer(size_t new_size) {
 	size = 0;
 }
 
-void FileBuffer::Resize(uint64_t new_size) {
-	idx_t header_size = Storage::BLOCK_HEADER_SIZE;
-	{
-		// TODO: All the logic here is specific to SingleFileBlockManager.
-		// and should be moved there, via a specific implementation of FileBuffer.
-		//
-		// make room for the block header (if this is not the db file header)
-		if (type == FileBufferType::TINY_BUFFER) {
-			header_size = 0;
-		}
-		if (type == FileBufferType::MANAGED_BUFFER) {
-			new_size += Storage::BLOCK_HEADER_SIZE;
-		}
-		if (type != FileBufferType::TINY_BUFFER) {
-			new_size = AlignValue<uint32_t, Storage::SECTOR_SIZE>(new_size);
-		}
-		ReallocBuffer(new_size);
+FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
+	FileBuffer::MemoryRequirement result;
+
+	if (type == FileBufferType::TINY_BUFFER) {
+		// We never do IO on tiny buffers, so there's no need to add a header or sector-align.
+		result.header_size = 0;
+		result.alloc_size = user_size;
+	} else {
+		result.header_size = Storage::BLOCK_HEADER_SIZE;
+		result.alloc_size = AlignValue<uint32_t, Storage::SECTOR_SIZE>(result.header_size + user_size);
 	}
+	return result;
+}
+
+void FileBuffer::Resize(uint64_t new_size) {
+	auto req = CalculateMemory(new_size);
+	ReallocBuffer(req.alloc_size);
 
 	if (new_size > 0) {
-		buffer = internal_buffer + header_size;
-		size = internal_size - header_size;
+		buffer = internal_buffer + req.header_size;
+		size = internal_size - req.header_size;
 	}
 }
 
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {
+	D_ASSERT(type != FileBufferType::TINY_BUFFER);
 	handle.Read(internal_buffer, internal_size, location);
 }
 
@@ -106,6 +106,7 @@ void FileBuffer::ReadAndChecksum(FileHandle &handle, uint64_t location) {
 }
 
 void FileBuffer::Write(FileHandle &handle, uint64_t location) {
+	D_ASSERT(type != FileBufferType::TINY_BUFFER);
 	handle.Write(internal_buffer, internal_size, location);
 }
 

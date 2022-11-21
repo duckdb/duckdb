@@ -14,9 +14,11 @@
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 class SequenceCatalogEntry;
+class SchemaCatalogEntry;
 
 class ColumnData;
 class ClientContext;
@@ -33,10 +35,9 @@ struct UpdateInfo;
 
 //! The transaction object holds information about a currently running or past
 //! transaction
-
 class Transaction {
 public:
-	Transaction(weak_ptr<ClientContext> context, transaction_t start_time, transaction_t transaction_id,
+	Transaction(ClientContext &context, transaction_t start_time, transaction_t transaction_id,
 	            timestamp_t start_timestamp, idx_t catalog_version);
 	~Transaction();
 
@@ -58,8 +59,10 @@ public:
 	idx_t catalog_version;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
-	//! Whether or not the transaction has been invalidated
-	bool is_invalidated;
+	//! The validity checker of the transaction
+	ValidChecker transaction_validity;
+	//! A pointer to the temporary objects of the client context
+	shared_ptr<SchemaCatalogEntry> temporary_objects;
 
 public:
 	static Transaction &GetTransaction(ClientContext &context);
@@ -78,8 +81,6 @@ public:
 	//! Cleanup the undo buffer
 	void Cleanup();
 
-	void Invalidate();
-	bool IsInvalidated();
 	bool ChangesMade();
 
 	timestamp_t GetCurrentTransactionStartTimestamp() {

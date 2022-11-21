@@ -1,9 +1,9 @@
 #! /bin/sh
 
 # ICU File Structure
-url="https://github.com/unicode-org/icu/archive/refs/tags/release-version.zip"
-zip_file="release-version.zip"
-source_path="icu-release-version/icu4c/source"
+icu=https://github.com/unicode-org/icu/archive/refs/tags/release-version.zip
+zip_file=release-version.zip
+source_path=icu-release-version/icu4c/source
 data_path=$source_path"/data"
 
 #rm -rf build
@@ -12,18 +12,24 @@ mkdir -p build
 pushd build
 
 # download ICU 66
-code_version="66-1"
-wget -nc ${url/version/$code_version}
+code_version=66-1
+wget -nc ${icu/version/$code_version}
 unzip -o ${zip_file/version/$code_version}
 
-# download ICU 71 (replace with latest version)
-data_version="72-1"
-wget -nc ${url/version/$data_version}
+# download ICU 72 (replace with latest version)
+data_version=72-1
+wget -nc ${icu/version/$data_version}
 unzip -o ${zip_file/version/$data_version}
 
-# copy over the data
+# copy over the collation data
 find ${data_path/version/$data_version} -type f ! -iname "*.txt" -delete
 cp -r ${data_path/version/$data_version} ${source_path/version/$code_version}
+
+# download IANA and copy the latest Time Zone Data
+tz_version=2022f
+rm -rf icu-data
+git clone git@github.com:unicode-org/icu-data.git
+cp icu-data/tzdata/icunew/${tz_version}/44/*.txt ${data_path/version/$code_version}/misc
 
 # build the data, make sure to create "filters.json" first, see above
 cp ../filters.json ${source_path/version/$code_version}

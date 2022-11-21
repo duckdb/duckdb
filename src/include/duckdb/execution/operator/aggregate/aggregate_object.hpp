@@ -17,22 +17,26 @@ class BoundAggregateExpression;
 
 struct AggregateObject {
 	AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count, idx_t payload_size,
-	                bool distinct, PhysicalType return_type, Expression *filter = nullptr);
+	                AggregateType aggr_type, PhysicalType return_type, Expression *filter = nullptr);
 	AggregateObject(BoundAggregateExpression *aggr);
 
 	AggregateFunction function;
 	FunctionData *bind_data;
 	idx_t child_count;
 	idx_t payload_size;
-	bool distinct;
+	AggregateType aggr_type;
 	PhysicalType return_type;
 	Expression *filter = nullptr;
 
+public:
+	bool IsDistinct() const {
+		return aggr_type == AggregateType::DISTINCT;
+	}
 	static vector<AggregateObject> CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings);
 };
 
 struct AggregateFilterData {
-	AggregateFilterData(Allocator &allocator, Expression &filter_expr, const vector<LogicalType> &payload_types);
+	AggregateFilterData(ClientContext &context, Expression &filter_expr, const vector<LogicalType> &payload_types);
 
 	idx_t ApplyFilter(DataChunk &payload);
 
@@ -47,7 +51,7 @@ struct AggregateFilterDataSet {
 	vector<unique_ptr<AggregateFilterData>> filter_data;
 
 public:
-	void Initialize(Allocator &allocator, const vector<AggregateObject> &aggregates,
+	void Initialize(ClientContext &context, const vector<AggregateObject> &aggregates,
 	                const vector<LogicalType> &payload_types);
 
 	AggregateFilterData &GetFilterData(idx_t aggr_idx);
