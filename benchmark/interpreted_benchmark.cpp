@@ -494,7 +494,8 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		auto &names = state.result->names;
 		auto &types = state.result->types;
 		// first create the (empty) table
-		string create_tbl = "CREATE OR REPLACE TABLE __answer(";
+
+		string create_tbl = "CREATE OR REPLACE TEMP TABLE __answer(";
 		for (idx_t i = 0; i < names.size(); i++) {
 			if (i > 0) {
 				create_tbl += ", ";
@@ -510,6 +511,9 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		}
 		// now append the result to the answer table
 		auto table_info = state.con.TableInfo("__answer");
+		if (table_info == nullptr) {
+			throw std::runtime_error("Received a nullptr when querying table info of __answer");
+		}
 		state.con.Append(*table_info, collection);
 
 		// finally run the result query and verify the result of that query

@@ -11,6 +11,10 @@ group Clickbench
 
 cache clickbench
 
+storage persistent
+
+connect clickbench.duckdb
+
 load benchmark/clickbench/queries/load.sql
 
 run benchmark/clickbench/queries/q${QUERY_NUMBER_PADDED}.sql

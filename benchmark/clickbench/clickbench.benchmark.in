@@ -11,7 +11,9 @@ group Clickbench
 
 cache clickbench
 
-connect duckdb_benchmark_data/clickbench/clickbench.duckdb
+storage persistent
+
+connect clickbench.duckdb
 
 load benchmark/clickbench/queries/load.sql
 
