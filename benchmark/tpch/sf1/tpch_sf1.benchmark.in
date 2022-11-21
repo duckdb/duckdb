@@ -6,13 +6,9 @@ name Q${QUERY_NUMBER_PADDED}
 group tpch
 subgroup sf1
 
-storage persistent
-
 require tpch
 
-cache tpch_sf1
-
-connect tpch_sf1.duckdb
+cache tpch_sf1.duckdb
 
 load benchmark/tpch/sf1/load.sql
 

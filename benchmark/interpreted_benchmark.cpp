@@ -176,16 +176,11 @@ void InterpretedBenchmark::LoadBenchmark() {
 				throw std::runtime_error(reader.FormatException("require requires a single parameter"));
 			}
 			extensions.insert(splits[1]);
-		} else if (splits[0] == "connect") {
-			if (splits.size() != 2) {
-				throw std::runtime_error(reader.FormatException("connect requires a database path"));
-			}
-			db_path = (splits[1]);
 		} else if (splits[0] == "cache") {
 			if (splits.size() != 2) {
 				throw std::runtime_error(reader.FormatException("cache requires a single parameter"));
 			}
-			data_cache = splits[1];
+			cache_db = splits[1];
 		} else if (splits[0] == "storage") {
 			if (splits.size() != 2) {
 				throw std::runtime_error(reader.FormatException("storage requires a single parameter"));
@@ -352,13 +347,13 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		load_query = queries["load"];
 	}
 
-	if (data_cache.empty() && db_path.empty() && db_path.compare(DEFAULT_DB_PATH) != 0) {
+	if (cache_db.empty() && cache_db.compare(DEFAULT_DB_PATH) != 0) {
 		// no cache or db_path specified: just run the initialization code
 		result = state->con.Query(load_query);
 	} else {
 		// cache or db_path is specified: try to load from one of them
 		bool in_memory_db_has_data = false;
-		if (!db_path.empty()) {
+		if (!cache_db.empty()) {
 			// Currently connected to a cached db. check if any tables exist.
 			// If tables exist, it's a good indication that the database is fine
 			// If they don't load the database
@@ -371,11 +366,8 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 			}
 		}
 		if (!in_memory_db_has_data) {
-			if (!BenchmarkRunner::TryLoadDatabase(state->db, data_cache)) {
-				// failed to load: write the cache
-				result = state->con.Query(load_query);
-				BenchmarkRunner::SaveDatabase(state->db, data_cache);
-			}
+			// failed to load: write the cache
+			result = state->con.Query(load_query);
 		}
 	}
 
@@ -420,17 +412,13 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 }
 
 string InterpretedBenchmark::GetDatabasePath() {
-	if (!InMemory() && db_path.compare("") == 0) {
+	if (!InMemory() && cache_db.compare("") == 0) {
 		string path = "duckdb_benchmark_db.db";
 		DeleteDatabase(path);
 		return path;
-	} else if (db_path.compare("") != 0) {
+	} else if (cache_db.compare("") != 0) {
 		auto fs = FileSystem::CreateLocal();
-		auto cache_dir = fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, data_cache);
-		if (!fs->DirectoryExists(cache_dir)) {
-			fs->CreateDirectory(cache_dir);
-		}
-		return fs->JoinPath(cache_dir, db_path);
+		return fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_db);
 	} else {
 		return string();
 	}
