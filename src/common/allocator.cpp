@@ -3,7 +3,6 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/likely.hpp"
 
 #include <cstdint>
 
@@ -120,7 +119,7 @@ Allocator::~Allocator() {
 
 data_ptr_t Allocator::AllocateData(idx_t size) {
 	D_ASSERT(size > 0);
-	if (DUCKDB_UNLIKELY(size >= MAXIMUM_ALLOC_SIZE)) {
+	if (size >= MAXIMUM_ALLOC_SIZE) {
 		D_ASSERT(false);
 		throw InternalException("Requested allocation size of %llu is out of range - maximum allocation size is %llu",
 		                        size, MAXIMUM_ALLOC_SIZE);
@@ -130,7 +129,7 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 	D_ASSERT(private_data);
 	private_data->debug_info->AllocateData(result, size);
 #endif
-	if (DUCKDB_UNLIKELY(!result)) {
+	if (!result) {
 		throw std::bad_alloc();
 	}
 	return result;
@@ -152,7 +151,7 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	if (!pointer) {
 		return nullptr;
 	}
-	if (DUCKDB_UNLIKELY(size >= MAXIMUM_ALLOC_SIZE)) {
+	if (size >= MAXIMUM_ALLOC_SIZE) {
 		D_ASSERT(false);
 		throw InternalException(
 		    "Requested re-allocation size of %llu is out of range - maximum allocation size is %llu", size,
@@ -163,7 +162,7 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	D_ASSERT(private_data);
 	private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
 #endif
-	if (DUCKDB_UNLIKELY(!new_pointer)) {
+	if (!new_pointer) {
 		throw std::bad_alloc();
 	}
 	return new_pointer;
