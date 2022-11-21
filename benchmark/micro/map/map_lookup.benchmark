@@ -1,0 +1,18 @@
+# name: benchmark/micro/map/lookup.benchmark
+# description: lookup speed of map
+# group: [map]
+
+name Lookup
+group micro
+subgroup map
+
+load
+CREATE TABLE mapvalues AS SELECT map([i, i+1, i+2],[i+1, i+2, i+3]) col FROM range(0, 10000000) tbl(i);
+
+run
+SELECT * FROM mapvalues WHERE col[999]!=[];
+
+result I
+{997=998, 998=999, 999=1000}
+{998=999, 999=1000, 1000=1001}
+{999=1000, 1000=1001, 1001=1002}
