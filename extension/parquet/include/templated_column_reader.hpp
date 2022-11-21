@@ -40,9 +40,9 @@ public:
 public:
 	void AllocateDict(idx_t size) {
 		if (!dict) {
-			dict = make_shared<ResizeableBuffer>(this->reader.allocator, size);
+			dict = make_shared<ResizeableBuffer>(GetAllocator(), size);
 		} else {
-			dict->resize(this->reader.allocator, size);
+			dict->resize(GetAllocator(), size);
 		}
 	}
 

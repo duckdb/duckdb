@@ -74,6 +74,7 @@ public:
 	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns);
 
 protected:
+	Allocator &GetAllocator();
 	// readers that use the default Read() need to implement those
 	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
 	                   idx_t result_offset, Vector &result);

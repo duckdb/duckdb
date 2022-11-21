@@ -53,6 +53,10 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
 ColumnReader::~ColumnReader() {
 }
 
+Allocator &ColumnReader::GetAllocator() {
+	return reader.allocator;
+}
+
 ParquetReader &ColumnReader::Reader() {
 	return reader;
 }
@@ -219,14 +223,14 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 
 void ColumnReader::AllocateBlock(idx_t size) {
 	if (!block) {
-		block = make_shared<ResizeableBuffer>(this->reader.allocator, size);
+		block = make_shared<ResizeableBuffer>(GetAllocator(), size);
 	} else {
-		block->resize(this->reader.allocator, size);
+		block->resize(GetAllocator(), size);
 	}
 }
 
 void ColumnReader::AllocateCompressed(idx_t size) {
-	compressed_buffer.resize(this->reader.allocator, size);
+	compressed_buffer.resize(GetAllocator(), size);
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
