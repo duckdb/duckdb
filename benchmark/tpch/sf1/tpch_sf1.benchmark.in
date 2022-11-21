@@ -6,6 +6,8 @@ name Q${QUERY_NUMBER_PADDED}
 group tpch
 subgroup sf1
 
+storage persistent
+
 require tpch
 
 cache tpch_sf1
