@@ -4,6 +4,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 #include <cmath>
 #include <limits>
@@ -497,6 +498,13 @@ template <>
 bool Hugeint::TryConvert(int8_t value, hugeint_t &result) {
 	result = HugeintConvertInteger<int8_t>(value);
 	return true;
+}
+
+template <>
+bool Hugeint::TryConvert(const char *value, hugeint_t &result) {
+	auto len = strlen(value);
+	string_t string_val(value, len);
+	return TryCast::Operation<string_t, hugeint_t>(string_val, result, true);
 }
 
 template <>
