@@ -11,7 +11,7 @@ statement ok
 pragma threads=4;
 
 statement ok
-create table bigdata as select * from generate_series (9999);
+CREATE TABLE bigdata AS FROM generate_series (9999);
 
 statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output.parquet' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
@@ -56,7 +56,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output.csv' (FORMAT CSV, PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM READ_CSV_AUTO('__TEST_DIR__/per_thread_output.csv/*')
+SELECT COUNT(*) FROM READ_CSV_AUTO('__TEST_DIR__/per_thread_output.csv/*', HEADER=FALSE, SEP=',', QUOTE=FALSE)
 ----
 10000
 
