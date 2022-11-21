@@ -3,6 +3,11 @@ name = "duckdb"
 dynamic = ["version"]
 description = 'DuckDB embedded database'
 keywords = ['DuckDB', 'Database', 'SQL', 'OLAP']
+classifiers = [
+    'Topic :: Database :: Database Engines/Servers',
+    'Intended Audience :: Developers',
+    'License :: OSI Approved :: MIT License',
+]
 
 [project.urls]
 Documentation = "https://duckdb.org/docs/api/python/overview"

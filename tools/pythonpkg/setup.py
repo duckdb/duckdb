@@ -289,11 +289,6 @@ setup(
     setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'numpy>=1.14', 'pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
-    classifiers = [
-        'Topic :: Database :: Database Engines/Servers',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
-    ],
     ext_modules = [libduckdb],
     maintainer = "Hannes Muehleisen",
     maintainer_email = "hannes@cwi.nl",
