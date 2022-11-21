@@ -2,6 +2,7 @@
 name = "duckdb"
 dynamic = ["version"]
 description = 'DuckDB embedded database'
+readme = {text = "See here for an introduction: https://duckdb.org/docs/api/python/overview", content-type = "markdown"}
 keywords = ['DuckDB', 'Database', 'SQL', 'OLAP']
 classifiers = [
     'Topic :: Database :: Database Engines/Servers',

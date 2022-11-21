@@ -268,8 +268,6 @@ def setup_data_files(data_files):
 data_files = setup_data_files(extra_files + header_files)
 
 setup(
-    url="https://www.duckdb.org",
-    long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     data_files = data_files,
     packages=[
         'duckdb_query_graph',
