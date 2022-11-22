@@ -7,7 +7,7 @@ require tpch
 # load the DB from disk
 load __TEST_DIR__/test_bitpacking_struct_bug.db
 
-foreach bitpacking_mode delta_for for constant constant_delta
+foreach bitpacking_mode delta_for for none
 
 statement ok
 PRAGMA force_bitpacking_mode='${bitpacking_mode}'

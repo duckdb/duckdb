@@ -8,7 +8,7 @@ load __TEST_DIR__/test_rle.db
 statement ok
 PRAGMA force_compression = 'bitpacking'
 
-foreach bitpacking_mode constant constant_delta delta_for for
+foreach bitpacking_mode constant constant_delta none
 
 statement ok
 PRAGMA force_bitpacking_mode='${bitpacking_mode}'

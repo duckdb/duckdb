@@ -60,7 +60,7 @@ static bitpacking_metadata_encoded_t encode_meta(bitpacking_metadata_t metadata)
 	encoded_value |= (uint8_t)metadata.mode << 24;
 	return encoded_value;
 }
-bitpacking_metadata_t decode_meta(bitpacking_metadata_encoded_t metadata_encoded) {
+static bitpacking_metadata_t decode_meta(bitpacking_metadata_encoded_t metadata_encoded) {
 	bitpacking_metadata_t metadata;
 	metadata.mode = Load<BitpackingMode>((data_ptr_t)(&metadata_encoded)+3);
 	metadata.offset = metadata_encoded &= 0x00FFFFFF;

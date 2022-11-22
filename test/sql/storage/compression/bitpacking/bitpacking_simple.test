@@ -8,7 +8,7 @@ load __TEST_DIR__/test_bitpacking.db
 statement ok
 PRAGMA force_compression='bitpacking'
 
-foreach bitpacking_mode constant constant_delta for delta_for
+foreach bitpacking_mode none for delta_for
 
 statement ok
 PRAGMA force_bitpacking_mode='${bitpacking_mode}'
