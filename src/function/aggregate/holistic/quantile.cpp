@@ -269,7 +269,10 @@ struct QuantileCompare {
 	}
 
 	inline bool operator()(const INPUT_TYPE &lhs, const INPUT_TYPE &rhs) const {
-		return desc ? accessor(rhs) < accessor(lhs) : accessor(lhs) < accessor(rhs);
+		const auto lval = accessor(lhs);
+		const auto rval = accessor(rhs);
+
+		return desc ? (rval < lval) : (lval < rval);
 	}
 };
 
