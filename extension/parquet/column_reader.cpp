@@ -324,6 +324,14 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		block->inc(block->len);
 		break;
 	}
+	case Encoding::RLE: {
+		if (type.id() != LogicalTypeId::BOOLEAN) {
+			throw std::runtime_error("RLE encoding is only supported for boolean data");
+		}
+		auto rle_len = block->read<uint32_t>();
+		rle_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rle_len, 1);
+		break;
+	}
 	case Encoding::DELTA_BINARY_PACKED: {
 		dbp_decoder = make_unique<DbpDecoder>((const uint8_t *)block->ptr, block->len);
 		block->inc(block->len);
@@ -444,6 +452,13 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 			}
 			// Plain() will put NULLs in the right place
 			Plain(read_buf, define_out, read_now, filter, result_offset, result);
+		} else if (rle_decoder) {
+			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+			auto read_buf = make_shared<ResizeableBuffer>();
+			read_buf->resize(reader.allocator, sizeof(bool) * (read_now - null_count));
+			rle_decoder->GetBatch<uint8_t>(read_buf->ptr, read_now - null_count);
+			PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(read_buf, define_out, read_now, filter,
+			                                                            result_offset, result);
 		} else {
 			PlainReference(block, result);
 			Plain(block, define_out, read_now, filter, result_offset, result);
