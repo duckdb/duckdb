@@ -54,20 +54,26 @@ SEXP ToRString(string_t input) {
 	return Rf_mkCharLenCE(data, len, CE_UTF8);
 }
 
-void *AltrepString::Dataptr(SEXP x, Rboolean writeable) {
-	auto *wrapper = duckdb_altrep_wrapper(x);
-	if (R_altrep_data2(x) == R_NilValue) {
-		R_set_altrep_data2(x, NEW_STRING(wrapper->length));
-		for (idx_t row_idx = 0; row_idx < wrapper->length; row_idx++) {
-			if (!wrapper->mask_data[row_idx]) {
-				SET_STRING_ELT(R_altrep_data2(x), row_idx, NA_STRING);
-			} else {
-				SET_STRING_ELT(R_altrep_data2(x), row_idx, ToRString(wrapper->string_data[row_idx]));
-			}
-		}
-		wrapper->string_data.reset();
-		wrapper->mask_data.reset();
+void *AltrepString::Dataptr(SEXP x, Rboolean) {
+	if (R_altrep_data2(x) != R_NilValue) {
+		return CHARACTER_POINTER(R_altrep_data2(x));
 	}
+	auto *wrapper = duckdb_altrep_wrapper(x);
+
+	R_set_altrep_data2(x, NEW_STRING(wrapper->length));
+	for (idx_t row_idx = 0; row_idx < wrapper->length; row_idx++) {
+		if (!wrapper->mask_data[row_idx]) {
+			SET_STRING_ELT(R_altrep_data2(x), row_idx, NA_STRING);
+		} else {
+			SET_STRING_ELT(R_altrep_data2(x), row_idx, ToRString(wrapper->string_data[row_idx]));
+		}
+	}
+	// this is not strictly neccessary but lets be sure
+	wrapper->string_data.reset();
+	wrapper->mask_data.reset();
+	wrapper->heap.Destroy();
+	R_set_altrep_data2(x, R_NilValue);
+
 	return CHARACTER_POINTER(R_altrep_data2(x));
 }
 
@@ -76,14 +82,8 @@ const void *AltrepString::DataptrOrNull(SEXP x) {
 }
 
 SEXP AltrepString::Elt(SEXP x, R_xlen_t i) {
-	auto *wrapper = duckdb_altrep_wrapper(x);
-	if (R_altrep_data2(x) != R_NilValue) {
-		return STRING_ELT(R_altrep_data2(x), i);
-	}
-	if (!wrapper->mask_data[i]) {
-		return NA_STRING;
-	}
-	return ToRString(wrapper->string_data[i]);
+	Dataptr(x, FALSE);
+	return STRING_ELT(R_altrep_data2(x), i);
 }
 
 void AltrepString::SetElt(SEXP x, R_xlen_t i, SEXP val) {

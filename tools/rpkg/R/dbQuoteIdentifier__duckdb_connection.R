@@ -33,16 +33,15 @@ setMethod("dbQuoteIdentifier", signature("duckdb_connection", "Id"), dbQuoteIden
 reserved_words <- function(con) {
   if (!isS4(con)) {
     con <- dbConnect(duckdb())
-    on.exit(dbDisconnect(con, shutdown = TRUE))
-    return(get_reserved_words(con))
+    words <- get_reserved_words(con)
+    dbDisconnect(con, shutdown = TRUE)
+    words
   }
 
   con@reserved_words
 }
 
 get_reserved_words <- function(con) {
-  rs <- dbSendQuery__duckdb_connection_character(con, "SELECT * FROM duckdb_keywords()")
-  on.exit(dbClearResult__duckdb_result(rs))
-
-  dbFetch__duckdb_result(rs)[[1]]
+  # the otherwise unnecessary sort here forces the ALTREP materialization #5446
+  sort(dbGetQuery(con, "SELECT keyword_name FROM duckdb_keywords()")[[1]])
 }
