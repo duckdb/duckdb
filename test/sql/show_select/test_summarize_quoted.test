@@ -1,0 +1,71 @@
+# name: test/sql/show_select/test_summarize_quoted.test
+# group: [show_select]
+
+statement ok
+pragma enable_verification;
+
+# Quoted table name, no schema name
+statement ok
+create table "a.b.c" (x int);
+
+query IIIIIIIIIIII
+summarize "a.b.c";
+----
+x	INTEGER	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	0	%
+
+statement ok
+create schema defg;
+
+statement ok
+drop table "a.b.c";
+
+statement ok
+create table defg."a.b.c" (x int);
+
+# Non-quoted schema name, quoted table name
+query IIIIIIIIIIII
+summarize defg."a.b.c";
+----
+x	INTEGER	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	0	%
+
+statement ok
+drop table defg."a.b.c";
+
+statement ok
+create table defg.abc (x int);
+
+# Non-quoted schema name, non-quoted table name
+query IIIIIIIIIIII
+summarize defg.abc;
+----
+x	INTEGER	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	0	%
+
+statement ok
+drop table defg.abc;
+
+statement ok
+drop schema defg;
+
+statement ok
+create schema "d.e.f.g";
+
+statement ok
+create table "d.e.f.g"."a.b.c" (x int);
+
+# Quoted schema name, quoted table name
+query IIIIIIIIIIII
+summarize "d.e.f.g"."a.b.c";
+----
+x	INTEGER	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	0	%
+
+statement ok
+drop table "d.e.f.g"."a.b.c"
+
+statement ok
+create table "d.e.f.g".abc (x int);
+
+# Quoted schema name, non-quoted table name
+query IIIIIIIIIIII
+summarize "d.e.f.g".abc;
+----
+x	INTEGER	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	0	%

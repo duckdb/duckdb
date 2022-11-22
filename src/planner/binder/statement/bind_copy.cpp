@@ -14,7 +14,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include <algorithm>
 

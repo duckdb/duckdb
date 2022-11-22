@@ -52,5 +52,7 @@ protected:
 			types.emplace_back(LogicalType::BIGINT);
 		}
 	}
+
+	idx_t EstimateCardinality(ClientContext &context) override;
 };
 } // namespace duckdb

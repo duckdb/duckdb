@@ -27,6 +27,9 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	bitmap_build_idx = unique_ptr<bool[]>(new bool[build_size]);
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
+	// pin all fixed-size blocks (variable-sized should still be pinned)
+	ht.PinAllBlocks();
+
 	// Now fill columns with build data
 	JoinHTScanState join_ht_state;
 	return FullScanHashTable(join_ht_state, key_type);

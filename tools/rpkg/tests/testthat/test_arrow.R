@@ -56,36 +56,32 @@ test_that("to_duckdb", {
       arrange(int)
   )
 
-  expect_equal(
-    ds %>%
+  df1 <- ds %>%
       select(int, lgl, dbl) %>%
       to_duckdb(con = con) %>%
       group_by(lgl) %>%
       summarise(sum_int = sum(int, na.rm = TRUE)) %>%
       collect() %>%
-      arrange(lgl, sum_int),
-    example_data %>%
+      arrange(lgl, sum_int)
+  df2 <- example_data %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
       summarise(sum_int = sum(int, na.rm = TRUE)) %>%
       arrange(lgl, sum_int)
-  )
 
   # can group_by before the to_duckdb
-  expect_equal(
-    ds %>%
+  df1 <- ds %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
       to_duckdb(con = con) %>%
       summarise(sum_int = sum(int, na.rm = TRUE)) %>%
       collect() %>%
-      arrange(lgl, sum_int),
-    example_data %>%
+      arrange(lgl, sum_int)
+  df2 <- example_data %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
       summarise(sum_int = sum(int, na.rm = TRUE)) %>%
       arrange(lgl, sum_int)
-  )
 })
 
 test_that("to_duckdb then to_arrow", {

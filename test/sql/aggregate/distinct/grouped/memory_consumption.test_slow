@@ -9,9 +9,13 @@ pragma enable_verification
 statement ok
 pragma verify_parallelism
 
-# This same test will fail on current master (01c074b55e), as it requires 3.2gb minimum
 statement ok
-pragma memory_limit='2.7gb'
+pragma threads=4
+
+# This same test will fail on current master (01c074b55e), as it requires 3.2gb minimum
+# UPDATE: PR #5263 found issues with unpinned blocks - this now requires more memory
+statement ok
+pragma memory_limit='4gb'
 
 statement ok
 CALL dbgen(sf=1);

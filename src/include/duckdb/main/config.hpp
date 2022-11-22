@@ -11,21 +11,22 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/order_type.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/winapi.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/function/replacement_open.hpp"
-#include "duckdb/common/set.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
-#include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
-#include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/set.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/replacement_open.hpp"
+#include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/planner/operator_extension.hpp"
 
 namespace duckdb {
 class CastFunctionSet;
@@ -125,6 +126,8 @@ struct DBConfigOptions {
 	bool allow_unsigned_extensions = false;
 	//! Enable emitting FSST Vectors
 	bool enable_fsst_vectors = false;
+	//! Experimental parallel CSV reader
+	bool experimental_parallel_csv_reader = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -138,6 +141,7 @@ public:
 	DUCKDB_API DBConfig(std::unordered_map<string, string> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
+	mutex config_lock;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
 
@@ -159,9 +163,10 @@ public:
 	vector<OptimizerExtension> optimizer_extensions;
 	//! Error manager
 	unique_ptr<ErrorManager> error_manager;
-
-	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
-	                                   set_option_callback_t function = nullptr);
+	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
+	shared_ptr<Allocator> default_allocator;
+	//! Extensions made to binder
+	vector<OperatorExtension> operator_extensions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -172,12 +177,16 @@ public:
 	DUCKDB_API static idx_t GetOptionCount();
 	DUCKDB_API static vector<string> GetOptionNames();
 
+	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
+	                                   set_option_callback_t function = nullptr);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static ConfigurationOption *GetOptionByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
 	DUCKDB_API static ConfigurationOption *GetOptionByName(const string &name);
 
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
+	DUCKDB_API void SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value);
+	DUCKDB_API void SetOption(const string &name, Value value);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 

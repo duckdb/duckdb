@@ -25,6 +25,9 @@ AllocatedData::AllocatedData() : allocator(nullptr), pointer(nullptr), allocated
 
 AllocatedData::AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size)
     : allocator(&allocator), pointer(pointer), allocated_size(allocated_size) {
+	if (!pointer) {
+		throw InternalException("AllocatedData object constructed with nullptr");
+	}
 }
 AllocatedData::~AllocatedData() {
 	Reset();
@@ -115,11 +118,20 @@ Allocator::~Allocator() {
 }
 
 data_ptr_t Allocator::AllocateData(idx_t size) {
+	D_ASSERT(size > 0);
+	if (size >= MAXIMUM_ALLOC_SIZE) {
+		D_ASSERT(false);
+		throw InternalException("Requested allocation size of %llu is out of range - maximum allocation size is %llu",
+		                        size, MAXIMUM_ALLOC_SIZE);
+	}
 	auto result = allocate_function(private_data.get(), size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
 	private_data->debug_info->AllocateData(result, size);
 #endif
+	if (!result) {
+		throw std::bad_alloc();
+	}
 	return result;
 }
 
@@ -127,6 +139,7 @@ void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 	if (!pointer) {
 		return;
 	}
+	D_ASSERT(size > 0);
 #ifdef DEBUG
 	D_ASSERT(private_data);
 	private_data->debug_info->FreeData(pointer, size);
@@ -138,17 +151,30 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	if (!pointer) {
 		return nullptr;
 	}
+	if (size >= MAXIMUM_ALLOC_SIZE) {
+		D_ASSERT(false);
+		throw InternalException(
+		    "Requested re-allocation size of %llu is out of range - maximum allocation size is %llu", size,
+		    MAXIMUM_ALLOC_SIZE);
+	}
 	auto new_pointer = reallocate_function(private_data.get(), pointer, old_size, size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
 	private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
 #endif
+	if (!new_pointer) {
+		throw std::bad_alloc();
+	}
 	return new_pointer;
 }
 
-Allocator &Allocator::DefaultAllocator() {
-	static Allocator DEFAULT_ALLOCATOR;
+shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
+	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_shared<Allocator>();
 	return DEFAULT_ALLOCATOR;
+}
+
+Allocator &Allocator::DefaultAllocator() {
+	return *DefaultAllocatorReference();
 }
 
 //===--------------------------------------------------------------------===//

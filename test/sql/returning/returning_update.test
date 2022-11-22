@@ -168,19 +168,19 @@ statement ok
 INSERT INTO table5 VALUES (1, 0, 0), (2, 0, 0), (3, 0, 1), (4, 0, 1), (5, 0, 2), (6, 0, 2);
 
 # another join with GROUP by
-query III
+query III rowsort
 UPDATE table4
 SET b4 = temp_table.sum_a
 FROM (SELECT sum(a5) as sum_a, c5 FROM table5 GROUP BY c5 ORDER BY sum_a) as temp_table
 WHERE table4.c4 = temp_table.c5
 RETURNING *;
 ----
-3	3	0
-2	7	1
 1	11	2
+2	7	1
+3	3	0
 
 # update using a window function
-query III
+query III rowsort
 UPDATE table4
 SET b4 = temp_table.row_num
 FROM (SELECT row_number() OVER (ORDER BY a4) as row_num, c4 from table4) as temp_table

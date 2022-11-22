@@ -82,13 +82,13 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		unique_ptr<LogicalOperator> del_as_logicaloperator = move(del);
 		return BindReturning(move(stmt.returning_list), table, update_table_index, move(del_as_logicaloperator),
 		                     move(result));
-	} else {
-		result.plan = move(del);
-		result.names = {"Count"};
-		result.types = {LogicalType::BIGINT};
-		properties.allow_stream_result = false;
-		properties.return_type = StatementReturnType::CHANGED_ROWS;
 	}
+	result.plan = move(del);
+	result.names = {"Count"};
+	result.types = {LogicalType::BIGINT};
+	properties.allow_stream_result = false;
+	properties.return_type = StatementReturnType::CHANGED_ROWS;
+
 	return result;
 }
 

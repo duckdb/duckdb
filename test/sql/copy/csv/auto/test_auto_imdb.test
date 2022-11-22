@@ -12,3 +12,15 @@ SELECT COUNT(*) FROM movie_info;
 ----
 201
 
+# read with parallel reader and verify that we get the same result
+statement ok
+SET experimental_parallel_csv=true;
+
+statement ok
+CREATE TABLE movie_info2 AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/imdb_movie_info_escaped.csv');
+
+query IIIII
+(FROM movie_info EXCEPT FROM movie_info2)
+UNION ALL
+(FROM movie_info2 EXCEPT FROM movie_info)
+----

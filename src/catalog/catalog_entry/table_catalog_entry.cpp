@@ -51,6 +51,7 @@ void AddDataTableIndex(DataTable *storage, const ColumnList &columns, const vect
 	vector<unique_ptr<Expression>> unbound_expressions;
 	vector<unique_ptr<Expression>> bound_expressions;
 	idx_t key_nr = 0;
+	column_ids.reserve(keys.size());
 	for (auto &physical_key : keys) {
 		auto &column = columns.GetColumn(physical_key);
 		D_ASSERT(!column.Generated());
@@ -78,6 +79,7 @@ void AddDataTableIndex(DataTable *storage, const ColumnList &columns, const vect
 void AddDataTableIndex(DataTable *storage, const ColumnList &columns, vector<LogicalIndex> &keys,
                        IndexConstraintType constraint_type, BlockPointer *index_block = nullptr) {
 	vector<PhysicalIndex> new_keys;
+	new_keys.reserve(keys.size());
 	for (auto &logical_key : keys) {
 		new_keys.push_back(columns.LogicalToPhysical(logical_key));
 	}
