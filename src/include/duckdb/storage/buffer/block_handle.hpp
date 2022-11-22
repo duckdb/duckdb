@@ -85,6 +85,14 @@ public:
 		can_destroy = can_destroy_p;
 	}
 
+	void AddLoadCallback(const std::function<void()> &callback) {
+		load_callbacks.push_back(move(callback));
+	}
+
+	void AddUnloadCallback(const std::function<void()> &callback) {
+		unload_callbacks.push_back(move(callback));
+	}
+
 private:
 	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock();
@@ -112,6 +120,10 @@ private:
 	BufferPoolReservation memory_charge;
 	//! Does the block contain any memory pointers?
 	const char *unswizzled;
+	//! Callbacks that are called after loading this block from disk
+	vector<std::function<void()>> load_callbacks;
+	//! Callbacks that are called before unloading this block to disk
+	vector<std::function<void()>> unload_callbacks;
 };
 
 } // namespace duckdb

@@ -79,8 +79,7 @@ public:
 	vector<VectorMetaData> vector_data;
 	//! The set of child indices
 	vector<VectorDataIndex> child_indices;
-	//! The string heap for the column data collection
-	// FIXME: we should get rid of the string heap and store strings as LIST<UINT8>
+	//! The string heap for the column data collection (only used for IN_MEMORY_ALLOCATOR)
 	StringHeap heap;
 
 public:
@@ -89,9 +88,15 @@ public:
 	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
 	                               ChunkManagementState *chunk_state = nullptr,
 	                               VectorDataIndex prev_index = VectorDataIndex());
-	//! Allocate space for a vector during append,
+	//! Allocate space for a vector during append
 	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
 	                               ColumnDataAppendState &append_state, VectorDataIndex prev_index = VectorDataIndex());
+	//! Allocate space for string data during append (BUFFER_MANAGER_ALLOCATOR only)
+	VectorDataIndex AllocateStringHeap(idx_t size, ChunkMetaData &chunk_meta, ColumnDataAppendState &append_state,
+	                                   VectorDataIndex parent_index);
+	//! Add a callback to swizzle string pointers (BUFFER_MANAGER_ALLOCATOR only)
+	void AddSwizzleCallbacks(VectorDataIndex parent_index, idx_t parent_offset, VectorDataIndex child_index,
+	                         idx_t count);
 
 	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);
 	void ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk,

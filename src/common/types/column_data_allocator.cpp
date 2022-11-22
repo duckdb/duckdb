@@ -2,6 +2,7 @@
 
 #include "duckdb/common/types/column_data_collection_segment.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include ""
 
 namespace duckdb {
 
@@ -152,6 +153,35 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	}
 	D_ASSERT(state.handles.find(block_id) != state.handles.end());
 	return state.handles[block_id].Ptr() + offset;
+}
+
+void ColumnDataAllocator::AddSwizzleCallbacks(VectorMetaData &parent_vdata, idx_t parent_offset,
+                                              VectorMetaData &child_vdata, idx_t count) {
+	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	auto &heap_block = blocks[child_vdata.block_id];
+	heap_block.handle->AddUnloadCallback([&](void) -> void {
+		ChunkManagementState state;
+		state.handles[child_vdata.block_id] = Pin(child_vdata.block_id);
+		state.handles[parent_vdata.block_id] = Pin(parent_vdata.block_id);
+
+		auto base_ptr = GetDataPointer(state, parent_vdata.block_id, parent_vdata.offset);
+		auto heap_ptr = GetDataPointer(state, child_vdata.block_id, child_vdata.offset);
+
+		auto entries = (string_t *)base_ptr;
+		auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, sizeof(string_t));
+		ValidityMask result_validity(validity_data);
+
+		for (idx_t i = 0; i < count; i++) {
+			if (!result_validity.RowIsValid(parent_offset + i)) {
+				continue;
+			}
+			auto &entry = entries[parent_offset + i];
+			if (entry.IsInlined()) {
+				continue;
+			}
+
+		}
+	});
 }
 
 void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {

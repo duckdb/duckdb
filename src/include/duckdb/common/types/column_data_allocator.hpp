@@ -11,7 +11,9 @@
 #include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
+
 struct ChunkMetaData;
+struct VectorMetaData;
 
 struct BlockMetaData {
 	//! The underlying block handle
@@ -50,6 +52,8 @@ public:
 	void Initialize(ColumnDataAllocator &other);
 	void InitializeChunkState(ChunkManagementState &state, ChunkMetaData &meta_data);
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
+	void AddSwizzleCallbacks(VectorMetaData &parent_vdata, idx_t parent_offset, VectorMetaData &child_vdata,
+	                         idx_t count);
 
 	//! Deletes the block with the given id
 	void DeleteBlock(uint32_t block_id);

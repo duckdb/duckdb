@@ -413,7 +413,114 @@ static void ColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFor
 template <>
 void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                               idx_t offset, idx_t copy_count) {
-	TemplatedColumnDataCopy<StringValueCopy>(meta_data, source_data, source, offset, copy_count);
+
+	const auto &allocator_type = meta_data.segment.allocator->GetType();
+	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		// strings cannot be spilled to disk - use StringHeap
+		TemplatedColumnDataCopy<StringValueCopy>(meta_data, source_data, source, offset, copy_count);
+		return;
+	}
+	D_ASSERT(allocator_type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+
+	// figure out total size of all strings
+	const auto source_entries = (string_t *)source_data.data;
+	idx_t total_size = 0;
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto idx = source_data.sel->get_index(offset + i);
+		if (source_data.validity.RowIsValid(idx)) {
+			total_size += source_entries[idx].GetSize();
+		}
+	}
+
+	auto &segment = meta_data.segment;
+	auto &append_state = meta_data.state;
+
+	auto current_index = meta_data.vector_data_index;
+	idx_t remaining = copy_count;
+	while (remaining > 0) {
+		auto &current_segment = segment.GetVectorData(current_index);
+		idx_t append_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE - current_segment.count, remaining);
+
+		// reduce 'append_count' if we cannot fit that amount of non-inlined strings on one buffer-managed block
+		idx_t append_i;
+		idx_t heap_size = 0;
+		for (append_i = 0; append_i < append_count; append_i++) {
+			auto source_idx = source_data.sel->get_index(offset + append_i);
+			if (!source_data.validity.RowIsValid(source_idx)) {
+				continue;
+			}
+			const auto &entry = source_entries[source_idx];
+			if (entry.IsInlined()) {
+				continue;
+			}
+			if (heap_size + entry.GetSize() > Storage::BLOCK_SIZE) {
+				break;
+			}
+			heap_size += entry.GetSize();
+		}
+		append_count = append_i;
+
+		if (append_count == 0) {
+			throw NotImplementedException("longgggggggggggg strings");
+		}
+
+		VectorDataIndex child_index;
+		data_ptr_t heap_ptr = nullptr;
+		if (heap_size != 0) {
+			// allocate heap for the strings and get a pointer to it
+			child_index =
+			    segment.AllocateStringHeap(append_count, meta_data.chunk_data, meta_data.state, current_index);
+			auto &child_segment = segment.GetVectorData(child_index);
+			heap_ptr = meta_data.segment.allocator->GetDataPointer(append_state.current_chunk_state,
+			                                                       child_segment.block_id, child_segment.offset);
+		}
+
+		auto base_ptr = meta_data.segment.allocator->GetDataPointer(append_state.current_chunk_state,
+		                                                            current_segment.block_id, current_segment.offset);
+		auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, sizeof(string_t));
+		auto target_entries = (string_t *)base_ptr;
+
+		ValidityMask result_validity(validity_data);
+		if (current_segment.count == 0) {
+			// first time appending to this vector
+			// all data here is still uninitialized
+			// initialize the validity mask to set all to valid
+			result_validity.SetAllValid(STANDARD_VECTOR_SIZE);
+		}
+		for (idx_t i = 0; i < append_count; i++) {
+			auto source_idx = source_data.sel->get_index(offset + i);
+			if (!source_data.validity.RowIsValid(source_idx)) {
+				result_validity.SetInvalid(current_segment.count + i);
+				continue;
+			}
+			const auto &entry = source_entries[source_idx];
+			if (entry.IsInlined()) {
+				target_entries[current_segment.count + i] = entry;
+			} else {
+				D_ASSERT(heap_ptr != nullptr);
+				auto data = entry.GetDataUnsafe();
+				memcpy(heap_ptr, data, entry.GetSize());
+				target_entries[current_segment.count + i] = string_t((const char *)heap_ptr, entry.GetSize());
+				heap_ptr += entry.GetSize();
+			}
+		}
+		// TODO set callback on buffer-managed blocks
+		if (heap_size != 0) {
+			meta_data.segment.AddSwizzleCallbacks(current_index, offset, child_index, current_segment.count);
+		}
+
+		current_segment.count += append_count;
+		offset += append_count;
+		remaining -= append_count;
+		if (remaining > 0) {
+			// need to append more, check if we need to allocate a new vector or not
+			if (!current_segment.next_data.IsValid()) {
+				segment.AllocateVector(source.GetType(), meta_data.chunk_data, meta_data.state, current_index);
+			}
+			D_ASSERT(segment.GetVectorData(current_index).next_data.IsValid());
+			current_index = segment.GetVectorData(current_index).next_data;
+		}
+	}
 }
 
 template <>

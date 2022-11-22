@@ -63,6 +63,51 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &t
 	return AllocateVector(type, chunk_meta, &append_state.current_chunk_state, prev_index);
 }
 
+VectorDataIndex ColumnDataCollectionSegment::AllocateStringHeap(idx_t size, ChunkMetaData &chunk_meta,
+                                                                ColumnDataAppendState &append_state,
+                                                                VectorDataIndex parent_index) {
+	D_ASSERT(allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	D_ASSERT(size != 0);
+
+	VectorMetaData meta_data;
+	meta_data.count = 0;
+
+	allocator->AllocateData(AlignValue(size), meta_data.block_id, meta_data.offset, &append_state.current_chunk_state);
+	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+		chunk_meta.block_ids.insert(meta_data.block_id);
+	}
+
+	VectorDataIndex current_child_index(vector_data.size());
+	vector_data.push_back(meta_data);
+
+	// find previous child index
+	VectorDataIndex previous_child_index;
+	auto vdata = GetVectorData(parent_index);
+	if (vdata.child_index.IsValid()) {
+		previous_child_index = GetChildIndex(vdata.child_index);
+		while (GetVectorData(previous_child_index).next_data.IsValid()) {
+			previous_child_index = GetVectorData(previous_child_index).next_data;
+		}
+	}
+
+	if (previous_child_index.IsValid()) {
+		GetVectorData(previous_child_index).next_data = current_child_index;
+	} else {
+		auto base_child_index = ReserveChildren(1);
+		SetChildIndex(base_child_index, 0, current_child_index);
+	}
+
+	return current_child_index;
+}
+
+void ColumnDataCollectionSegment::AddSwizzleCallbacks(VectorDataIndex parent_index, idx_t parent_offset,
+                                                     VectorDataIndex child_index, idx_t count_p) {
+	D_ASSERT(allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	auto &parent_vdata = GetVectorData(parent_index);
+	auto &child_vdata = GetVectorData(child_index);
+	allocator->AddSwizzleCallbacks(parent_vdata, parent_offset, child_vdata, count_p);
+}
+
 void ColumnDataCollectionSegment::AllocateNewChunk() {
 	ChunkMetaData meta_data;
 	meta_data.count = 0;

@@ -100,7 +100,10 @@ unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_
                                                              FileBufferType type) {
 	if (source) {
 		auto tmp = move(source);
-		D_ASSERT(tmp->size == size);
+#ifdef DEBUG
+		auto alloc_size = AlignValue<idx_t, Storage::SECTOR_SIZE>(size + Storage::BLOCK_HEADER_SIZE);
+		D_ASSERT(tmp->AllocSize() == alloc_size);
+#endif
 		return make_unique<FileBuffer>(*tmp, type);
 	} else {
 		// no re-usable buffer: allocate a new buffer
