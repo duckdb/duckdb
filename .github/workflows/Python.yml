@@ -60,6 +60,8 @@ jobs:
       shell: bash
       working-directory: tools/pythonpkg
       run: python setup.py sdist
+      
+    - run: ls dist/
 
     - name: Build wheel
       working-directory: tools/pythonpkg
