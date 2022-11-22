@@ -103,6 +103,7 @@ bool StreamQueryResult::IsOpen() {
 }
 
 void StreamQueryResult::Close() {
+	context->external_dependencies.erase("stream_result");
 	context.reset();
 }
 

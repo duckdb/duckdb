@@ -146,12 +146,7 @@ void ResultArrowArrayStreamWrapper::MyStreamRelease(struct ArrowArrayStream *str
 		return;
 	}
 	stream->release = nullptr;
-	auto stream_wrapper = (ResultArrowArrayStreamWrapper *)stream->private_data;
-	if (stream_wrapper->result->type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = (StreamQueryResult &)*stream_wrapper->result;
-		// nuke the dependency
-		stream_result.context->external_dependencies.erase("stream_result");
-	}
+
 	delete (ResultArrowArrayStreamWrapper *)stream->private_data;
 }
 
@@ -164,7 +159,7 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	return my_stream->last_error.Message().c_str();
 }
 
-ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(shared_ptr<QueryResult> result_p, idx_t batch_size_p)
+ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)
     : result(move(result_p)) {
 	//! We first initialize the private data of the stream
 	stream.private_data = this;
@@ -178,6 +173,18 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(shared_ptr<QueryRes
 	stream.get_next = ResultArrowArrayStreamWrapper::MyStreamGetNext;
 	stream.release = ResultArrowArrayStreamWrapper::MyStreamRelease;
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
+}
+
+ResultArrowArrayStreamWrapper::~ResultArrowArrayStreamWrapper() {
+	if (result) {
+		if (result->type == QueryResultType::STREAM_RESULT) {
+			auto &stream_result = (StreamQueryResult &)*result;
+			// nuke the dependency
+			if (stream_result.context) {
+				stream_result.context->external_dependencies.erase("stream_result");
+			}
+		}
+	}
 }
 
 bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, PreservedError &error) {

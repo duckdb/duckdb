@@ -18,7 +18,7 @@ struct DuckDBPyResult {
 public:
 	idx_t chunk_offset = 0;
 
-	shared_ptr<QueryResult> result;
+	unique_ptr<QueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
 	// Holds the categories of Categorical/ENUM types
 	unordered_map<idx_t, py::list> categories;
