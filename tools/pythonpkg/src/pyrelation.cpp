@@ -553,11 +553,11 @@ static bool IsAcceptedInsertRelationType(const Relation &relation) {
 	return relation.type == RelationType::TABLE_RELATION;
 }
 
-void DuckDBPyRelation::Insert(py::object params) {
+void DuckDBPyRelation::Insert(const py::object &params) {
 	if (!IsAcceptedInsertRelationType(*this->rel)) {
 		throw InvalidInputException("'DuckDBPyRelation.insert' can only be used on a table relation");
 	}
-	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(move(params))};
+	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(params)};
 	py::gil_scoped_release release;
 	rel->Insert(values);
 }

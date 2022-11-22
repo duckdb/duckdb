@@ -128,7 +128,7 @@ public:
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
 
-	static vector<Value> TransformPythonParamList(py::handle params);
+	static vector<Value> TransformPythonParamList(const py::handle &params);
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;

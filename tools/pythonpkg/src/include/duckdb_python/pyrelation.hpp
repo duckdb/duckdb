@@ -208,7 +208,7 @@ public:
 
 	void InsertInto(const string &table);
 
-	void Insert(py::object params = py::list());
+	void Insert(const py::object &params = py::list());
 
 	void Create(const string &table);
 
