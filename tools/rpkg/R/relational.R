@@ -229,6 +229,17 @@ rel_set_alias <- rapi_rel_set_alias
 rel_to_altrep <- rapi_rel_to_altrep
 
 
+#' Retrieves the data frame back from a altrep df
+#' @param df the data frame created by rel_to_altrep
+#' @return the relation object
+#' @noRd
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' rel <- rel_from_df(con, mtcars)
+#' df = rel_to_altrep(rel)
+#' print(rel_from_altrep_df(df))
+rel_from_altrep_df <- rapi_rel_from_altrep_df
+
 #' Checks if a lazy data frame created using rel_to_altrep has been materialized yet
 #' @param df an altrep-backed lazy data frame
 #' @return true if materialization has happened

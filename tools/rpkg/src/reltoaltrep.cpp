@@ -63,7 +63,6 @@ struct AltrepRelationWrapper {
 	MaterializedQueryResult *GetQueryResult() {
 		if (!res) {
 			auto option = Rf_GetOption(RStrings::get().materialize_sym, R_BaseEnv);
-			Rf_PrintValue(option);
 			if (option != R_NilValue && !Rf_isNull(option) && LOGICAL_ELT(option, 0) == true) {
 				Rprintf("materializing:\n%s\n", rel->ToString().c_str());
 			}
@@ -225,7 +224,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	RProtector r_protector;
 
 	cpp11::external_pointer<AltrepRownamesWrapper> ptr(new AltrepRownamesWrapper(relation_wrapper));
-	auto row_names_sexp = R_new_altrep(RelToAltrep::rownames_class, ptr, R_NilValue);
+	auto row_names_sexp = R_new_altrep(RelToAltrep::rownames_class, ptr, rel);
 	install_new_attrib(data_frame, R_RowNamesSymbol, row_names_sexp);
 	vector<string> names;
 	for (auto &col : drel->Columns()) {
@@ -241,6 +240,28 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 		SET_VECTOR_ELT(data_frame, col_idx, vector_sexp);
 	}
 	return data_frame;
+}
+
+[[cpp11::register]] SEXP rapi_rel_from_altrep_df(SEXP df) {
+	if (!Rf_inherits(df, "data.frame")) {
+		Rf_error("Not a data.frame");
+	}
+
+	SEXP row_names = R_NilValue;
+	for (SEXP attrib = ATTRIB(df); attrib != R_NilValue; attrib = CDR(attrib)) {
+		if (TAG(attrib) == R_RowNamesSymbol) {
+			row_names = CAR(attrib);
+		}
+	}
+
+	if (row_names == R_NilValue || !ALTREP(row_names)) {
+		Rf_error("Not a 'special' data.frame");
+	}
+	auto res = R_altrep_data2(row_names);
+	if (res == R_NilValue) {
+		Rf_error("NULL in data2?");
+	}
+	return res;
 }
 
 [[cpp11::register]] bool rapi_df_is_materialized(SEXP df) {

@@ -115,3 +115,11 @@ test_that("the altrep-conversion for relations work for weirdo types", {
   expect_equal(test_df, df)
 })
 
+
+test_that("we can get the relation object back from an altrep df", {
+  iris$Species <- as.character(iris$Species)
+  rel <- rel_from_df(con, iris)
+  df <- rel_to_altrep(rel)
+  rel2 <- rel_from_altrep_df(df)
+  expect_true(TRUE)
+})
