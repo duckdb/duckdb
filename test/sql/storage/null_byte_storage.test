@@ -1,0 +1,41 @@
+# name: test/sql/storage/null_byte_storage.test
+# description: Test storage of with null bytes
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/null_byte_storage.db
+
+statement ok
+PRAGMA enable_verification
+
+foreach compr uncompressed fsst dictionary
+
+statement ok
+PRAGMA force_compression='${compr}'
+
+statement ok
+CREATE TABLE null_byte AS SELECT concat('goo', chr(0), i) AS v FROM range(10000) tbl(i)
+
+query II
+SELECT MIN(v), MAX(v) FROM null_byte
+----
+goo\00	goo\09999
+
+query I
+SELECT * FROM null_byte WHERE v=concat('goo', chr(0), 42)
+----
+goo\042
+
+# null byte in index
+statement ok
+CREATE INDEX i_index ON null_byte(v)
+
+query I
+SELECT * FROM null_byte WHERE v=concat('goo', chr(0), 42)
+----
+goo\042
+
+statement ok
+DROP TABLE null_byte
+
+endloop

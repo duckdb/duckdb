@@ -1,5 +1,8 @@
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
+#ifdef USE_DUCKDB_SHELL_WRAPPER
+#include "duckdb_shell_wrapper.h"
+#endif
 #include "sqlite3.h"
 #include <string>
 #include <thread>

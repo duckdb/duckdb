@@ -1,16 +1,17 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/storage/table_io_manager.hpp"
+
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
 PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry *table,
-                                         vector<idx_t> column_index_map, vector<unique_ptr<Expression>> bound_defaults,
-                                         idx_t estimated_cardinality)
+                                         physical_index_vector_t<idx_t> column_index_map,
+                                         vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::BATCH_INSERT, move(types), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
       bound_defaults(move(bound_defaults)) {
@@ -48,22 +49,9 @@ public:
 		if (Empty()) {
 			return nullptr;
 		}
-		unique_ptr<RowGroupCollection> new_collection;
-		if (current_collections.size() == 1) {
-			// we have gathered only one row group collection: merge it directly
-			new_collection = move(current_collections[0]);
-		} else {
+		unique_ptr<RowGroupCollection> new_collection = move(current_collections[0]);
+		if (current_collections.size() > 1) {
 			// we have gathered multiple collections: create one big collection and merge that
-			// find the biggest collection
-			idx_t biggest_index = 0;
-			for (idx_t i = 1; i < current_collections.size(); i++) {
-				D_ASSERT(current_collections[i]);
-				if (current_collections[i]->GetTotalRows() > current_collections[biggest_index]->GetTotalRows()) {
-					biggest_index = i;
-				}
-			}
-			// now append all the other collections to this collection
-			new_collection = move(current_collections[biggest_index]);
 			auto &types = new_collection->GetTypes();
 			TableAppendState append_state;
 			new_collection->InitializeAppend(append_state);
@@ -239,7 +227,7 @@ class BatchInsertLocalState : public LocalSinkState {
 public:
 	BatchInsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                      const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(Allocator::Get(context), bound_defaults), written_to_disk(false) {
+	    : default_executor(context, bound_defaults), written_to_disk(false) {
 		insert_chunk.Initialize(Allocator::Get(context), types);
 	}
 
@@ -255,10 +243,10 @@ public:
 		if (!current_collection) {
 			return;
 		}
-		if (!written_to_disk || current_collection->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
+		if (!written_to_disk && current_collection->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
 			return;
 		}
-		writer->FlushToDisk(*current_collection);
+		writer->FlushToDisk(*current_collection, true);
 	}
 
 	void CreateNewCollection(TableCatalogEntry *table, const vector<LogicalType> &insert_types) {
@@ -307,7 +295,6 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		lstate.FlushToDisk();
-
 		gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection), lstate.writer,
 		                     &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);

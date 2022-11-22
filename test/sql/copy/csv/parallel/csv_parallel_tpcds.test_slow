@@ -1,0 +1,180 @@
+# name: test/sql/copy/csv/parallel/csv_parallel_tpcds.test_slow
+# description: Test parallel read CSV function on TPCH
+# group: [parallel]
+
+require tpcds
+
+statement ok
+SET experimental_parallel_csv=true;
+
+statement ok
+pragma threads=4
+
+statement ok
+CALL dsdgen(sf=1, suffix='_og');
+
+
+foreach tpcds_tbl call_center catalog_page catalog_returns catalog_sales customer customer_address customer_demographics date_dim household_demographics income_band inventory item promotion reason ship_mode store store_returns store_sales time_dim warehouse web_page web_returns web_sales web_site
+
+statement ok
+COPY ${tpcds_tbl}_og TO '__TEST_DIR__/${tpcds_tbl}.csv';
+
+statement ok
+create table ${tpcds_tbl} as select * from ${tpcds_tbl}_og limit 0;
+
+statement ok
+copy ${tpcds_tbl} from '__TEST_DIR__/${tpcds_tbl}.csv';
+
+query I
+select count(*) from (SELECT * FROM ${tpcds_tbl} EXCEPT SELECT * FROM ${tpcds_tbl}_og);
+----
+0
+
+query I
+select count (*) from (SELECT * FROM ${tpcds_tbl}_og EXCEPT SELECT * FROM ${tpcds_tbl});
+----
+0
+
+endloop
+
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
+# check table counts
+query T
+SELECT COUNT(*) FROM call_center
+----
+6
+
+query T
+SELECT COUNT(*) FROM catalog_page
+----
+11718
+
+query T
+SELECT COUNT(*) FROM catalog_returns
+----
+144067
+
+query T
+SELECT COUNT(*) FROM catalog_sales
+----
+1441548
+
+query T
+SELECT COUNT(*) FROM customer
+----
+100000
+
+query T
+SELECT COUNT(*) FROM customer_demographics
+----
+1920800
+
+query T
+SELECT COUNT(*) FROM customer_address
+----
+50000
+
+query T
+SELECT COUNT(*) FROM date_dim
+----
+73049
+
+query T
+SELECT COUNT(*) FROM household_demographics
+----
+7200
+
+query T
+SELECT COUNT(*) FROM inventory
+----
+11745000
+
+query T
+SELECT COUNT(*) FROM income_band
+----
+20
+
+query T
+SELECT COUNT(*) FROM item
+----
+18000
+
+query T
+SELECT COUNT(*) FROM promotion
+----
+300
+
+query T
+SELECT COUNT(*) FROM reason
+----
+35
+
+query T
+SELECT COUNT(*) FROM ship_mode
+----
+20
+
+query T
+SELECT COUNT(*) FROM store
+----
+12
+
+query T
+SELECT COUNT(*) FROM store_returns
+----
+287867
+
+query T
+SELECT COUNT(*) FROM store_sales
+----
+2880404
+
+query T
+SELECT COUNT(*) FROM time_dim
+----
+86400
+
+query T
+SELECT COUNT(*) FROM warehouse
+----
+5
+
+query T
+SELECT COUNT(*) FROM web_page
+----
+60
+
+query T
+SELECT COUNT(*) FROM web_returns
+----
+71654
+
+query T
+SELECT COUNT(*) FROM web_sales
+----
+719384
+
+query T
+SELECT COUNT(*) FROM web_site
+----
+30
+
+loop i 1 9
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/0${i}.csv
+
+endloop
+
+loop i 10 100
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop

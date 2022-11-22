@@ -14,7 +14,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include <algorithm>
 
@@ -97,15 +97,16 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
-		for (idx_t i = 0; i < table->columns.size(); i++) {
+		for (auto &col : table->columns.Logical()) {
+			auto i = col.Physical();
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
-				expected_names[bound_insert.column_index_map[i]] = table->columns[i].Name();
+				expected_names[bound_insert.column_index_map[i]] = col.Name();
 			}
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
-		for (idx_t i = 0; i < table->columns.size(); i++) {
-			expected_names.push_back(table->columns[i].Name());
+		for (auto &col : table->columns.Logical()) {
+			expected_names.push_back(col.Name());
 		}
 	}
 

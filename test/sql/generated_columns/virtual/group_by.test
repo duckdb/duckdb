@@ -1,0 +1,73 @@
+# name: test/sql/generated_columns/virtual/group_by.test
+# group: [virtual]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+CREATE TABLE tbl (
+    foo INTEGER,
+    bar INTEGER GENERATED ALWAYS AS (foo+1) VIRTUAL,
+    foobar INTEGER
+);
+
+statement ok
+insert into tbl VALUES
+(1, 24),
+(2342, 123),
+(23523, 1),
+(235, 213),
+(8435, null),
+(NULL, NULL),
+(345, 213),
+(12, 5)
+
+statement ok
+insert into tbl select i % 20, random()::INTEGER * 20 from range(10000) tbl(i);
+
+statement ok
+CREATE TABLE non_generated as select * from tbl;
+
+# Verify that the created table contains only regular columns (not generated)
+query I
+SELECT sql FROM sqlite_master WHERE name = 'tbl' and contains(sql, 'GENERATED');
+----
+CREATE TABLE tbl(foo INTEGER, bar INTEGER GENERATED ALWAYS AS(CAST((foo + 1) AS INTEGER)), foobar INTEGER);
+
+query I
+SELECT sql FROM sqlite_master WHERE name = 'non_generated' and contains(sql, 'GENERATED');
+----
+
+query III nosort r1
+select * from tbl;
+----
+
+query III nosort r1
+select * from non_generated;
+----
+
+# Both tables should produce the same result, regardless of the group by expression used
+
+foreach table_name tbl non_generated
+
+query IIIIII nosort r2
+select count(*), foobar, foo, last(foo), avg(bar), count(bar) from ${table_name} group by bar, foobar, foo order by all;
+----
+
+query IIII nosort r3
+select count(*), last(foo), avg(bar), count(bar) from ${table_name} group by bar order by all;
+----
+
+query III nosort r4
+select count(bar order by foobar desc), count(bar), count(distinct bar), avg(bar) from ${table_name} group by foo, foobar order by all;
+----
+
+query III nosort r5
+select count(bar order by foo asc), count(distinct bar) filter ((foo+1) != bar) from ${table_name} group by foo order by all;
+----
+
+query IIII nosort r6
+select count(foo), count(foobar), bar from ${table_name} group by CUBE(foo, foobar, bar), bar, foo, CUBE(foo) order by all;
+----
+
+endloop

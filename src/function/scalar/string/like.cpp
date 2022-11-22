@@ -19,14 +19,14 @@ struct ASCIILCaseReader {
 	}
 };
 
-template <char PERCENTAGE, char UNDERSCORE, class READER = StandardCharacterReader>
+template <char PERCENTAGE, char UNDERSCORE, bool HAS_ESCAPE, class READER = StandardCharacterReader>
 bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx_t plen, char escape) {
 	idx_t pidx = 0;
 	idx_t sidx = 0;
 	for (; pidx < plen && sidx < slen; pidx++) {
 		char pchar = READER::Operation(pdata, pidx);
 		char schar = READER::Operation(sdata, sidx);
-		if (pchar == escape) {
+		if (HAS_ESCAPE && pchar == escape) {
 			pidx++;
 			if (pidx == plen) {
 				throw SyntaxException("Like pattern must not end with escape character!");
@@ -46,8 +46,8 @@ bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx
 				return true; /* tail is acceptable */
 			}
 			for (; sidx < slen; sidx++) {
-				if (TemplatedLikeOperator<PERCENTAGE, UNDERSCORE, READER>(sdata + sidx, slen - sidx, pdata + pidx,
-				                                                          plen - pidx, escape)) {
+				if (TemplatedLikeOperator<PERCENTAGE, UNDERSCORE, HAS_ESCAPE, READER>(
+				        sdata + sidx, slen - sidx, pdata + pidx, plen - pidx, escape)) {
 					return true;
 				}
 			}
@@ -194,7 +194,7 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->IsFoldable()) {
-		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		Value pattern_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		if (pattern_str.IsNull()) {
 			return nullptr;
 		}
@@ -204,10 +204,18 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
 }
 
 bool LikeOperatorFunction(const char *s, idx_t slen, const char *pattern, idx_t plen, char escape) {
-	return TemplatedLikeOperator<'%', '_'>(s, slen, pattern, plen, escape);
+	return TemplatedLikeOperator<'%', '_', true>(s, slen, pattern, plen, escape);
 }
 
-bool LikeOperatorFunction(string_t &s, string_t &pat, char escape = '\0') {
+bool LikeOperatorFunction(const char *s, idx_t slen, const char *pattern, idx_t plen) {
+	return TemplatedLikeOperator<'%', '_', false>(s, slen, pattern, plen, '\0');
+}
+
+bool LikeOperatorFunction(string_t &s, string_t &pat) {
+	return LikeOperatorFunction(s.GetDataUnsafe(), s.GetSize(), pat.GetDataUnsafe(), pat.GetSize());
+}
+
+bool LikeOperatorFunction(string_t &s, string_t &pat, char escape) {
 	return LikeOperatorFunction(s.GetDataUnsafe(), s.GetSize(), pat.GetDataUnsafe(), pat.GetSize(), escape);
 }
 
@@ -434,8 +442,8 @@ struct NotILikeOperator {
 struct ILikeOperatorASCII {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		return TemplatedLikeOperator<'%', '_', ASCIILCaseReader>(str.GetDataUnsafe(), str.GetSize(),
-		                                                         pattern.GetDataUnsafe(), pattern.GetSize(), '\0');
+		return TemplatedLikeOperator<'%', '_', false, ASCIILCaseReader>(
+		    str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(), '\0');
 	}
 };
 
