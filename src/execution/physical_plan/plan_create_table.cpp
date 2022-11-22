@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
 
 namespace duckdb {
 
@@ -26,6 +27,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 	for (auto &default_value : op.info->bound_defaults) {
 		if (default_value) {
 			ExtractDependencies(*default_value, op.info->dependencies);
+		}
+	}
+	for (auto &constraint : op.info->bound_constraints) {
+		if (constraint->type == ConstraintType::CHECK) {
+			auto &bound_check = (BoundCheckConstraint &)*constraint;
+			ExtractDependencies(*bound_check.expression, op.info->dependencies);
 		}
 	}
 	auto &create_info = (CreateTableInfo &)*op.info->base;
