@@ -301,29 +301,32 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		throw std::runtime_error("Missing data page header from data page v2");
 	}
 
-	page_rows_available = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.num_values
-	                                                           : page_hdr.data_page_header_v2.num_values;
-	auto page_encoding = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.encoding
-	                                                          : page_hdr.data_page_header_v2.encoding;
+	bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
+	bool is_v2 = page_hdr.type == PageType::DATA_PAGE_V2;
+	auto &v1_header = page_hdr.data_page_header;
+	auto &v2_header = page_hdr.data_page_header_v2;
+
+	page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
+	auto page_encoding = is_v1 ? v1_header.encoding : v2_header.encoding;
 
 	if (HasRepeats()) {
-		uint32_t rep_length = page_hdr.type == PageType::DATA_PAGE
-		                          ? block->read<uint32_t>()
-		                          : page_hdr.data_page_header_v2.repetition_levels_byte_length;
+		uint32_t rep_length = is_v1 ? block->read<uint32_t>() : v2_header.repetition_levels_byte_length;
 		block->available(rep_length);
 		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length,
 		                                             RleBpDecoder::ComputeBitWidth(max_repeat));
 		block->inc(rep_length);
+	} else if (is_v2 && v2_header.repetition_levels_byte_length > 0) {
+		block->inc(v2_header.repetition_levels_byte_length);
 	}
 
 	if (HasDefines()) {
-		uint32_t def_length = page_hdr.type == PageType::DATA_PAGE
-		                          ? block->read<uint32_t>()
-		                          : page_hdr.data_page_header_v2.definition_levels_byte_length;
+		uint32_t def_length = is_v1 ? block->read<uint32_t>() : v2_header.definition_levels_byte_length;
 		block->available(def_length);
 		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length,
 		                                            RleBpDecoder::ComputeBitWidth(max_define));
 		block->inc(def_length);
+	} else if (is_v2 && v2_header.definition_levels_byte_length > 0) {
+		block->inc(v2_header.definition_levels_byte_length);
 	}
 
 	switch (page_encoding) {
@@ -340,8 +343,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		if (type.id() != LogicalTypeId::BOOLEAN) {
 			throw std::runtime_error("RLE encoding is only supported for boolean data");
 		}
-		auto rle_len = block->read<uint32_t>();
-		rle_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rle_len, 1);
+		block->inc(sizeof(uint32_t));
+		rle_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, block->len, 1);
 		break;
 	}
 	case Encoding::DELTA_BINARY_PACKED: {
@@ -445,7 +448,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 			PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(read_buf, define_out, read_now, filter,
 			                                                            result_offset, result);
 		} else if (byte_array_data) {
-			// DELTA_BYTE_ARRAY
+			// DELTA_BYTE_ARRAY or DELTA_LENGTH_BYTE_ARRAY
 			DeltaByteArray(define_out, read_now, filter, result_offset, result);
 		} else {
 			PlainReference(block, result);
