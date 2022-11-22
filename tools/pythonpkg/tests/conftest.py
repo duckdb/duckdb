@@ -55,11 +55,11 @@ def duckdb_cursor(request):
 
     connection = duckdb.connect('')
     cursor = connection.cursor()
-    cursor.execute('CREATE TABLE integers (i integer)')
-    cursor.execute('INSERT INTO integers VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(NULL)')
-    cursor.execute('CREATE TABLE timestamps (t timestamp)')
-    cursor.execute("INSERT INTO timestamps VALUES ('1992-10-03 18:34:45'), ('2010-01-01 00:00:01'), (NULL)")
-    cursor.execute("CALL dbgen(sf=0.01)")
+    cursor.execute('CREATE TABLE integers (i integer)').fetchall()
+    cursor.execute('INSERT INTO integers VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(NULL)').fetchall()
+    cursor.execute('CREATE TABLE timestamps (t timestamp)').fetchall()
+    cursor.execute("INSERT INTO timestamps VALUES ('1992-10-03 18:34:45'), ('2010-01-01 00:00:01'), (NULL)").fetchall()
+    cursor.execute("CALL dbgen(sf=0.01)").fetchall()
     return cursor
 
 

@@ -183,7 +183,9 @@ void DuckDBPyRelation::AssertResult() const {
 }
 
 py::list DuckDBPyRelation::Description() {
-	AssertResult();
+	if (!result || result->IsClosed()) {
+		ExecuteOrThrow();
+	}
 	return result->Description();
 }
 

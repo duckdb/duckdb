@@ -47,6 +47,7 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 }
 
 py::object DuckDBPyResult::FromValue(const Value &val, const LogicalType &type) {
+	PyDateTime_IMPORT;
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	if (val.IsNull()) {
 		return py::none();

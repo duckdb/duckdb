@@ -21,6 +21,7 @@ static void InitializeReadOnlyProperties(py::class_<DuckDBPyRelation> &m) {
 	                           "Return a list containing the types of the columns of the relation.")
 	    .def_property_readonly("dtypes", &DuckDBPyRelation::ColumnTypes,
 	                           "Return a list containing the types of the columns of the relation.")
+	    .def_property_readonly("description", &DuckDBPyRelation::Description, "Return the description of the result")
 	    .def_property_readonly("alias", &DuckDBPyRelation::GetAlias, "Get the name of the current alias")
 	    .def("__len__", &DuckDBPyRelation::Length, "Number of rows in relation.")
 	    .def_property_readonly("shape", &DuckDBPyRelation::Shape, " Tuple of # of rows, # of columns in relation.");
@@ -37,6 +38,8 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
 	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
 	    .def("df", &DuckDBPyRelation::FetchDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
+	         py::arg("date_as_object") = false)
+	    .def("fetchdf", &DuckDBPyRelation::FetchDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
 	         py::arg("date_as_object") = false)
 	    .def("to_df", &DuckDBPyRelation::FetchDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
 	         py::arg("date_as_object") = false)

@@ -301,12 +301,12 @@ def from_parquet(duckdb_conn, queue):
 def description(duckdb_conn, queue):
     # Get a new connection
     duckdb_conn = duckdb.connect()
-    duckdb_conn.execute('CREATE TABLE test (i bool, j TIME, k VARCHAR)')
-    duckdb_conn.execute("INSERT INTO test VALUES (TRUE, '01:01:01', 'bla' )")
+    duckdb_conn.execute('CREATE TABLE test (i bool, j TIME, k VARCHAR)').fetchall()
+    duckdb_conn.execute("INSERT INTO test VALUES (TRUE, '01:01:01', 'bla' )").fetchall()
     rel = duckdb_conn.table("test")
-    res = rel.execute()
+    rel.execute()
     try:
-        res.description()
+        rel.description
         queue.put(True)
     except:
         queue.put(False)          
