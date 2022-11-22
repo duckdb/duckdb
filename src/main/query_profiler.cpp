@@ -369,7 +369,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	ss << "│└───────────────────────────────────┘│\n";
 	ss << "└─────────────────────────────────────┘\n";
 	ss << StringUtil::Replace(query, "\n", " ") + "\n";
-	
+
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
 	if (query.empty() && !root) {
