@@ -88,6 +88,13 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 			BindExtraColumns(table, get, proj, update, check.bound_columns);
 		}
 	}
+	if (update.return_chunk) {
+		physical_index_set_t all_columns;
+		for (idx_t i = 0; i < table.storage->column_definitions.size(); i++) {
+			all_columns.insert(PhysicalIndex(i));
+		}
+		BindExtraColumns(table, get, proj, update, all_columns);
+	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
 	// If the returning keyword is used, we need access to the whole row in case the user requests it.
@@ -110,7 +117,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 		}
 	}
 
-	if (update.update_is_del_and_insert || update.return_chunk) {
+	if (update.update_is_del_and_insert) {
 		// the update updates a column required by an index or requires returning the updated rows,
 		// push projections for all columns
 		physical_index_set_t all_columns;
