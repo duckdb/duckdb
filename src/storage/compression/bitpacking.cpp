@@ -17,8 +17,7 @@
 
 namespace duckdb {
 
-// TODO solve VZ2 issue
-static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SIZE;
+static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SIZE > 512 ? STANDARD_VECTOR_SIZE : 2048;
 
 BitpackingMode BitpackingModeFromString(const string &str) {
 	auto mode = StringUtil::Lower(str);
@@ -763,8 +762,10 @@ public:
 					BitpackingPrimitives::UnPackBuffer<T>((data_ptr_t)decompression_buffer, current_group_ptr + decompress_offset, decompress_count, current_width, skip_sign_extension);
 
 					ApplyFrameOfReference<T_S>((T_S*)&decompression_buffer[extra_count], current_frame_of_reference, skip_count);
-					ApplyDelta<T_S>((T_S*)&decompression_buffer[extra_count], (T_S)current_delta_offset - current_frame_of_reference, (idx_t)skip_count);
+					ApplyDelta<T_S>((T_S*)&decompression_buffer[extra_count], (T_S)current_delta_offset, (idx_t)skip_count);
 					current_delta_offset = decompression_buffer[extra_count + skip_count - 1];
+
+					current_group_offset += skip_count;
 				} else {
 					// For all other modes skipping withing the group is trivial
 					current_group_offset += skip_count;
@@ -807,15 +808,6 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
-	// Fast path for when no compression was used, we can do a single memcopy
-	// TODO optimizations such as this old one that is now not working
-//	if (scan_state.current_frame_of_reference == 0 && scan_state.current_width == sizeof(T) * 8 &&
-//		scan_count <= BITPACKING_METADATA_GROUP_SIZE && scan_state.current_group_offset == 0) {
-//		memcpy(result_data + result_offset, scan_state.current_group_ptr, scan_count * sizeof(T));
-//		scan_state.LoadNextGroup();
-//		return;
-//	}
-
 	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
 	bool skip_sign_extend = true;
 
@@ -855,7 +847,6 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		}
 		D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR || scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
-		// TODO: should we modify this to allow scanning multiple blocks? should be a bit faster
 		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
 		                                                          offset_in_compression_group);
 		// Calculate start of compression algorithm group
@@ -946,18 +937,17 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 		return;
 	}
 
-	D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR);
+	D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR || scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
 	BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
 	                                     scan_state.current_width, skip_sign_extend);
 
-	if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
-		// TODO: Does this every trigger? Write tests for it!
-		throw InternalException("Not implemented yet");
-	}
-
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
 	*current_result_ptr += scan_state.current_frame_of_reference;
+
+	if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
+		*current_result_ptr += scan_state.current_delta_offset;
+	}
 }
 template <class T>
 void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
