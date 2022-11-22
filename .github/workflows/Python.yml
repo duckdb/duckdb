@@ -49,7 +49,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: pip install cibuildwheel twine
+      run: pip install cibuildwheel twine build
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -59,7 +59,7 @@ jobs:
     - name: Build source dist
       shell: bash
       working-directory: tools/pythonpkg
-      run: python setup.py sdist
+      run: pyproject-build --sdist
       
     - run: ls dist/
 
