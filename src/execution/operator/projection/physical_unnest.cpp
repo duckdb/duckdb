@@ -89,6 +89,7 @@ static void UnnestValidity(UnifiedVectorFormat &vdata, idx_t start, idx_t end, V
 
 static void UnnestVector(UnifiedVectorFormat &vdata, Vector &source, idx_t list_size, idx_t start, idx_t end,
                          Vector &result) {
+	D_ASSERT(source.GetType() == result.GetType());
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
