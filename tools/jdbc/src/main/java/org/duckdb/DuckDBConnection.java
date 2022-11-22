@@ -345,28 +345,13 @@ public class DuckDBConnection implements java.sql.Connection {
 		return new DuckDBAppender(this, schemaName, tableName);
 	}
 	
-	private static long createArrowArrayStream(Object arrow_buffer_allocator, Object arrow_reader) {
+	private static long getArrowStreamAddress(Object arrow_array_stream) {
 		try {
-
-			Class<?> buffer_allocator_class = Class.forName("org.apache.arrow.memory.BufferAllocator");
-			if (!buffer_allocator_class.isInstance(arrow_buffer_allocator)) {
-				throw new RuntimeException("Need to pass an Arrow BufferAllocator");
-			}
-			Class<?> arrow_reader_class = Class.forName("org.apache.arrow.vector.ipc.ArrowReader");
-			if (!arrow_reader_class.isInstance(arrow_reader)) {
-				throw new RuntimeException("Need to pass an ArrowReader");
-			}
-
 			Class<?> arrow_array_stream_class = Class.forName("org.apache.arrow.c.ArrowArrayStream");
-			Object arrow_array_stream = arrow_array_stream_class.getMethod("allocateNew", buffer_allocator_class)
-					.invoke(null, arrow_buffer_allocator);
+			if (!arrow_array_stream_class.isInstance(arrow_array_stream)) {
+				throw new RuntimeException("Need to pass an ArrowArrayStream");
 
-			Class<?> c_data_class = Class.forName("org.apache.arrow.c.Data");
-			c_data_class
-					.getMethod("exportArrayStream", buffer_allocator_class, arrow_reader_class,
-							arrow_array_stream_class)
-					.invoke(null, arrow_buffer_allocator, arrow_reader, arrow_array_stream);
-
+			}
 			return (Long) arrow_array_stream_class.getMethod("memoryAddress").invoke(arrow_array_stream);
 
 		} catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException | SecurityException
@@ -375,8 +360,8 @@ public class DuckDBConnection implements java.sql.Connection {
 		}
 	}
 	
-	public void registerArrowReader(Object arrow_buffer_allocator, Object arrow_reader, String name) {
-		long array_stream_pointer = createArrowArrayStream(arrow_buffer_allocator, arrow_reader);
-		DuckDBNative.duckdb_jdbc_arrow_register(conn_ref, array_stream_pointer, name.getBytes(StandardCharsets.UTF_8));
+	public void registerArrowStream(String name, Object arrow_array_stream) {
+		long array_stream_address = getArrowStreamAddress(arrow_array_stream);
+		DuckDBNative.duckdb_jdbc_arrow_register(conn_ref, array_stream_address, name.getBytes(StandardCharsets.UTF_8));
 	}
 }

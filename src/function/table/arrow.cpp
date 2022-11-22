@@ -356,7 +356,7 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(arrow);
 
 	TableFunction arrow_dumb("arrow_scan_dumb", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
-	                    ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
+	                         ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow_dumb.cardinality = ArrowScanCardinality;
 	arrow_dumb.get_batch_index = ArrowGetBatchIndex;
 	arrow_dumb.projection_pushdown = false;
