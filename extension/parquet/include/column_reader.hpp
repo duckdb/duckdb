@@ -104,6 +104,11 @@ protected:
 	virtual void DictReference(Vector &result);
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result);
 
+	virtual void PrepareDeltaLengthByteArray(ResizeableBuffer &buffer);
+	virtual void PrepareDeltaByteArray(ResizeableBuffer &buffer);
+	virtual void DeltaByteArray(uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
+	                            Vector &result);
+
 	// applies any skips that were registered using Skip()
 	virtual void ApplyPendingSkips(idx_t num_values);
 
@@ -124,6 +129,7 @@ protected:
 
 	ParquetReader &reader;
 	LogicalType type;
+	unique_ptr<Vector> byte_array_data;
 
 	idx_t pending_skips = 0;
 

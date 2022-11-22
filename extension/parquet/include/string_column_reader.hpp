@@ -27,10 +27,15 @@ public:
 
 	unique_ptr<string_t[]> dict_strings;
 	idx_t fixed_width_string_length;
+	idx_t delta_offset = 0;
 
 public:
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override;
 
+	void PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) override;
+	void PrepareDeltaByteArray(ResizeableBuffer &buffer) override;
+	void DeltaByteArray(uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
+	                    Vector &result) override;
 	uint32_t VerifyString(const char *str_data, uint32_t str_len);
 
 protected:
