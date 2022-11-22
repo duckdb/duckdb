@@ -29,6 +29,7 @@ static void InitializeReadOnlyProperties(py::class_<DuckDBPyRelation> &m) {
 
 static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	m.def("execute", &DuckDBPyRelation::Execute, "Transform the relation into a result set")
+	    .def("close", &DuckDBPyRelation::Close, "Closes the result")
 	    .def("write_csv", &DuckDBPyRelation::WriteCsv, "Write the relation object to a CSV file in file_name",
 	         py::arg("file_name"))
 	    .def("fetchone", &DuckDBPyRelation::FetchOne, "Execute and fetch a single row as a tuple")
@@ -45,9 +46,13 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("date_as_object") = false)
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
+	    .def("fetch_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
+	         py::arg("batch_size") = 1000000)
 	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
 	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
+	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
+	    .def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,
 	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000);
 }
 

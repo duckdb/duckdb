@@ -50,6 +50,8 @@ public:
 
 	py::list Description();
 
+	void Close();
+
 	static unique_ptr<DuckDBPyRelation> FromDf(const DataFrame &df, DuckDBPyConnection *conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list(), DuckDBPyConnection *conn = nullptr);
@@ -201,7 +203,7 @@ public:
 	unique_ptr<DuckDBPyRelation> Query(const string &view_name, const string &sql_query);
 
 	// Update the internal result of the relation
-	void Execute();
+	DuckDBPyRelation &Execute();
 
 	static unique_ptr<DuckDBPyRelation> QueryDF(const DataFrame &df, const string &view_name, const string &sql_query,
 	                                            DuckDBPyConnection *conn = nullptr);
@@ -228,6 +230,7 @@ private:
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");
 	void AssertResult() const;
+	void AssertResultOpen() const;
 	void ExecuteOrThrow();
 
 private:
