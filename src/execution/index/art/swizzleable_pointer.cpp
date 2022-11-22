@@ -19,7 +19,7 @@ SwizzleablePointer::SwizzleablePointer(duckdb::MetaBlockReader &reader) {
 	pointer = block_pointer.block_id;
 	// This assumes high 32 bits of pointer are zero.
 	pointer = pointer << (pointer_size / 2);
-	D_ASSERT((pointer >> (pointer_size / 2)) == block_pointer.block_id);
+	D_ASSERT((pointer >> (pointer_size / 2)) == (idx_t)block_pointer.block_id);
 	pointer += block_pointer.offset;
 	// Set the left most bit to indicate this is a swizzled pointer and send it back to the mother-ship
 	uint64_t mask = 1;
