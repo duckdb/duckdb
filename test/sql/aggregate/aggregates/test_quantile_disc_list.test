@@ -2,6 +2,8 @@
 # description: Test QUANTILE_DISC operator with LIST quantiles
 # group: [aggregates]
 
+require 64bit
+
 statement ok
 PRAGMA enable_verification
 
