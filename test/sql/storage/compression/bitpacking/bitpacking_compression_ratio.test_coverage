@@ -1,7 +1,6 @@
-# name: test/sql/storage/compression/bitpacking/bitpacking_compression_ratio.test
-# description: Assert bitpacking compression ratio is within reasonable margins
+# name: test/sql/storage/compression/bitpacking/bitpacking_compression_ratio.test_coverage
+# description: Assert bitpacking compression ratio is within reasonable margins for each mode
 # group: [bitpacking]
-# TODO restore .slow name
 
 # load the DB from disk
 load __TEST_DIR__/test_bitpacking.db

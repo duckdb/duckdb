@@ -25,10 +25,8 @@ statement ok
 checkpoint
 
 query I
-SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' LIMIT 1
+SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
 ----
-BitPacking
-
 
 query I
 SELECT * FROM test;
@@ -54,9 +52,8 @@ statement ok
 checkpoint
 
 query I
-SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' LIMIT 1
+SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
 ----
-BitPacking
 
 query I
 SELECT avg(c) FROM test;
