@@ -545,7 +545,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QueryDF(const DataFrame &df, cons
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	conn->FromDF(df)->Query(view_name, sql_query);
+	return conn->FromDF(df)->Query(view_name, sql_query);
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
