@@ -62,8 +62,10 @@ jobs:
       run: pyproject-build --sdist
 
     - run: ls
+      working-directory: tools/pythonpkg
     
     - run: mkdir duckdb_tarball && tar xvf duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+      working-directory: tools/pythonpkg
 
     - name: Build wheel
       working-directory: tools/pythonpkg
