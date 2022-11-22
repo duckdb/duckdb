@@ -554,9 +554,21 @@ void StringColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
 	idx_t value_count;
 	auto length_buffer = ReadDbpData(reader.allocator, buffer, value_count);
 	if (value_count == 0) {
+		// no values
+		byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, nullptr);
 		return;
 	}
-	throw std::runtime_error("FIXME: read delta length byte array");
+	auto length_data = (uint32_t *)length_buffer->ptr;
+	byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, value_count);
+	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
+	for (idx_t i = 0; i < value_count; i++) {
+		auto str_len = length_data[i];
+		string_data[i] = StringVector::EmptyString(*byte_array_data, str_len);
+		auto result_data = string_data[i].GetDataWriteable();
+		memcpy(result_data, buffer.ptr, length_data[i]);
+		buffer.inc(length_data[i]);
+		string_data[i].Finalize();
+	}
 }
 
 void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
