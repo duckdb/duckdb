@@ -9,6 +9,7 @@
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -145,6 +146,12 @@ void ResultArrowArrayStreamWrapper::MyStreamRelease(struct ArrowArrayStream *str
 		return;
 	}
 	stream->release = nullptr;
+	auto stream_wrapper = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	if (stream_wrapper->result->type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = (StreamQueryResult &)*stream_wrapper->result;
+		// nuke the dependency
+		stream_result.context->external_dependencies.erase("stream_result");
+	}
 	delete (ResultArrowArrayStreamWrapper *)stream->private_data;
 }
 
