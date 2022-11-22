@@ -256,13 +256,13 @@ add_row : {
 		// \r newline, go to special state that parses an optional \n afterwards
 		// optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
 		if ((*buffer)[position_buffer] == '\n') {
-			if (reached_remainder_state) {
-				goto final_state;
-			}
 			// newline after carriage return: skip
 			// increase position by 1 and move start to the new position
 			start_buffer = ++position_buffer;
 			verification_positions.end_of_last_line = position_buffer;
+			if (reached_remainder_state) {
+				goto final_state;
+			}
 		}
 		if (!BufferRemainder()) {
 			goto final_state;

@@ -306,6 +306,10 @@ void ParallelCSVGlobalState::Verify() {
 	// All threads are done, we run some magic sweet verification code
 	for (auto &last_pos : tuple_end) {
 		auto first_pos = tuple_start.find(last_pos);
+		if (first_pos == tuple_start.end()) {
+			// this might be necessary due to carriage returns outside buffer scopes.
+			first_pos = tuple_start.find(last_pos + 1);
+		}
 		if (first_pos == tuple_start.end() && last_pos != max_tuple_end) {
 			string error = "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
 			               " does not have a match\n";
