@@ -352,7 +352,12 @@ struct Interpolator<true> {
 };
 
 struct QuantileBindData : public FunctionData {
-	explicit QuantileBindData(double quantile_p) : quantiles(1, abs(quantile_p)), order(1, 0), desc(quantile_p < 0) {
+	template <typename T>
+	static inline T Abs(const T &t) {
+		return AbsOperator::Operation<T, T>(t);
+	}
+
+	explicit QuantileBindData(double quantile_p) : quantiles(1, Abs(quantile_p)), order(1, 0), desc(quantile_p < 0) {
 	}
 
 	explicit QuantileBindData(const vector<double> &quantiles_p) {
@@ -362,7 +367,7 @@ struct QuantileBindData : public FunctionData {
 			const auto q = quantiles_p[i];
 			pos += (q > 0);
 			neg += (q < 0);
-			quantiles.push_back(abs(q));
+			quantiles.push_back(Abs(q));
 			order.push_back(i);
 		}
 		if (pos && neg) {
