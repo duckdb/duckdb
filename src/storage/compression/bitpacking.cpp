@@ -112,14 +112,18 @@ public:
 		compression_buffer_idx = 0;
 	}
 
-	// Currently: only allow delta if falls within corresponding signed domain
-	// TODO: by subtracting a FOR beforehand, we can support cases with values over NumericLimits<T_S>::Maximum();
 	void CalculateDeltaStats() {
 		T_S limit1 = NumericLimits<T_S>::Maximum();
 		T limit = (T)limit1;
+		T shift_amount = 0;
 
+		// TODO test and benchmark this
 		if (maximum >= limit){
-			return;
+			shift_amount = maximum - limit;
+			if (shift_amount > minimum) {
+				// Domain too big, we cannot do delta here.
+				return;
+			}
 		}
 
 		D_ASSERT(compression_buffer_idx >= 2);
@@ -137,7 +141,7 @@ public:
 			if (!compression_buffer_validity[i] || !compression_buffer_validity[i]){
 				continue;
 			}
-			auto success = TrySubtractOperator::Operation(compression_buffer[i], compression_buffer[i-1], *(T*)&delta_buffer[i]);
+			auto success = TrySubtractOperator::Operation((T_S)(compression_buffer[i]-shift_amount), (T_S)(compression_buffer[i-1]-shift_amount), delta_buffer[i]);
 			if (!success) {
 				return;
 			}
