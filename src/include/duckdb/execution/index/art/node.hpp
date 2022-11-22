@@ -88,6 +88,11 @@ public:
 	virtual idx_t GetNextPos(idx_t pos) {
 		return DConstants::INVALID_INDEX;
 	}
+	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. if pos ==
+	//! DConstants::INVALID_INDEX, then the first valid position in the node is returned
+	virtual idx_t GetNextPosAndByte(idx_t pos, uint8_t &byte) {
+		return DConstants::INVALID_INDEX;
+	}
 	//! Get the child at the specified position in the node. pos should be between [0, count). Throws an assertion if
 	//! the element is not found
 	virtual Node *GetChild(ART &art, idx_t pos);
@@ -110,9 +115,6 @@ public:
 
 	//! Deserialize this node
 	static Node *Deserialize(ART &art, idx_t block_id, idx_t offset);
-	//! Merge r_node into l_node at the specified byte
-	static bool MergeAtByte(MergeInfo &info, idx_t depth, idx_t &l_child_pos, idx_t &r_pos, uint8_t &key_byte,
-	                        Node *&l_parent, idx_t l_pos);
 	//! Merge two ART
 	static bool MergeARTs(ART *l_art, ART *r_art);
 
