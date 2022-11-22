@@ -158,10 +158,17 @@ void Leaf::Merge(Node *&l_node, Node *&r_node) {
 	Leaf *l_n = (Leaf *)l_node;
 	Leaf *r_n = (Leaf *)r_node;
 
-	// append non-duplicate row_ids to l_n
-	for (idx_t i = 0; i < r_n->count; i++) {
-		l_n->Insert(r_n->GetRowId(i));
+	auto l_capacity = l_n->GetCapacity();
+	auto l_row_ids = l_n->GetRowIds();
+	auto r_row_ids = r_n->GetRowIds();
+
+	if (l_n->count + r_n->count > l_capacity) {
+		auto new_capacity = NextPowerOfTwo(l_n->count + r_n->count);
+		l_row_ids = l_n->Resize(l_row_ids, l_n->count, new_capacity);
 	}
+
+	memcpy(l_row_ids + l_n->count, r_row_ids, r_n->count * sizeof(row_t));
+	l_n->count += r_n->count;
 }
 
 BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {

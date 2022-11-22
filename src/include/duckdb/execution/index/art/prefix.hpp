@@ -23,8 +23,10 @@ public:
 	Prefix(Prefix &other_prefix, uint32_t size);
 	~Prefix();
 
-	// Returns the Prefix's size
-	uint32_t Size() const;
+	//! Returns the Prefix's size
+	inline uint32_t Size() const {
+		return size;
+	}
 	//! Return a pointer to the prefix data
 	uint8_t *GetPrefixData();
 	const uint8_t *GetPrefixData() const;

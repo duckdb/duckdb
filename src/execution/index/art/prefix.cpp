@@ -2,10 +2,6 @@
 
 namespace duckdb {
 
-uint32_t Prefix::Size() const {
-	return size;
-}
-
 bool Prefix::IsInlined() const {
 	return size <= PREFIX_INLINE_BYTES;
 }

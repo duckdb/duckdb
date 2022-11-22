@@ -377,22 +377,25 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 
 	// NOTE: we always merge into the left ART
 	D_ASSERT(l_node);
+	auto l_prefix_size = l_node->prefix.Size();
+	auto r_prefix_size = r_node->prefix.Size();
 
 	// make sure that r_node has the longer (or equally long) prefix
-	if (l_node->prefix.Size() > r_node->prefix.Size()) {
+	if (l_prefix_size > r_prefix_size) {
 		swap(info.l_art, info.r_art);
 		swap(l_node, r_node);
+		swap(l_prefix_size, r_prefix_size);
 		UpdateParentsOfNodes(l_node, r_node, parents);
 	}
 
 	auto mismatch_pos = l_node->prefix.MismatchPosition(r_node->prefix);
 
 	// both nodes have no prefix or the same prefix
-	if (mismatch_pos == l_node->prefix.Size() && l_node->prefix.Size() == r_node->prefix.Size()) {
+	if (mismatch_pos == l_prefix_size && l_prefix_size == r_prefix_size) {
 		return Merge(info, depth + mismatch_pos, parents);
 	}
 
-	if (mismatch_pos == l_node->prefix.Size()) {
+	if (mismatch_pos == l_prefix_size) {
 		// r_node's prefix contains l_node's prefix
 		// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
 		// which is not possible by our construction
