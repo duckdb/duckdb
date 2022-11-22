@@ -239,9 +239,6 @@ else:
         library_dirs=library_dirs,
         language='c++')
 
-setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
-if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
-    setuptools_scm_conf['local_scheme'] = 'no-local-version'
 
 # data files need to be formatted as [(directory, [files...]), (directory2, [files...])]
 # no clue why the setup script can't do this automatically, but hey
@@ -274,7 +271,6 @@ setup(
         'duckdb-stubs'
     ],
     include_package_data=True,
-    use_scm_version = setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     ext_modules = [libduckdb],
     cmdclass={"build_ext": build_ext},
