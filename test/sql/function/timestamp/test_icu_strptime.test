@@ -55,14 +55,14 @@ CREATE TABLE abbrevs AS (
 query II
 SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
 FROM zones
-ORDER BY tstz
+ORDER BY ALL
 ----
 2022-03-04 19:59:17.877-08	Etc/GMT-14
 2022-03-04 20:14:17.877-08	NZ-CHAT
 2022-03-04 20:59:17.877-08	Pacific/Auckland
 2022-03-04 20:59:17.877-08	Pacific/Enderbury
-2022-03-04 22:59:17.877-08	Australia/Melbourne
 2022-03-04 22:59:17.877-08	Australia/LHI
+2022-03-04 22:59:17.877-08	Australia/Melbourne
 2022-03-04 22:59:17.877-08	Pacific/Efate
 2022-03-05 00:29:17.877-08	Australia/Darwin
 2022-03-05 00:59:17.877-08	Asia/Tokyo
@@ -100,7 +100,7 @@ ORDER BY tstz
 query II
 SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
 FROM abbrevs
-ORDER BY tstz
+ORDER BY ALL
 ----
 2022-03-04 19:59:17.877-08	Etc/GMT-14
 2022-03-04 20:14:17.877-08	NZ-CHAT
