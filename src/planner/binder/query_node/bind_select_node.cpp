@@ -54,6 +54,9 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 		delimiter_value = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, type);
 		return nullptr;
 	}
+	if (!new_binder->correlated_columns.empty()) {
+		throw BinderException("Correlated columns not supported in LIMIT/OFFSET");
+	}
 	// move any correlated columns to this binder
 	MoveCorrelatedExpressions(*new_binder);
 	return expr;
