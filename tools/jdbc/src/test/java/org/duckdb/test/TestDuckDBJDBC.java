@@ -2446,6 +2446,19 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_instance_cache() throws Exception {
+		Path database_file = Files.createTempFile("duckdb-instance-cache-test-", ".duckdb");
+		database_file.toFile().delete();
+
+		String jdbc_url = "jdbc:duckdb:" + database_file.toString();
+
+		Connection conn = DriverManager.getConnection(jdbc_url);
+		Connection conn2 = DriverManager.getConnection(jdbc_url);
+
+		conn.close();
+		conn2.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();

@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/patas/patas_read.test
+# name: test/sql/storage/compression/patas/patas_read.test_slow
 # group: [patas]
 
 require parquet
