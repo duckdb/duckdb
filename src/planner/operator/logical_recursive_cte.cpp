@@ -17,4 +17,8 @@ unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(LogicalDeserializat
 	return unique_ptr<LogicalRecursiveCTE>(new LogicalRecursiveCTE(table_index, column_count, union_all, state.type));
 }
 
+vector<idx_t> LogicalRecursiveCTE::GetTableIndex() const {
+	return vector<idx_t> {table_index};
+}
+
 } // namespace duckdb

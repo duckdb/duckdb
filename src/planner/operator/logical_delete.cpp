@@ -27,4 +27,8 @@ idx_t LogicalDelete::EstimateCardinality(ClientContext &context) {
 	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
 }
 
+vector<idx_t> LogicalDelete::GetTableIndex() const {
+	return vector<idx_t> {table_index};
+}
+
 } // namespace duckdb

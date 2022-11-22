@@ -95,4 +95,32 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// LCOV_EXCL_STOP
 }
 
+unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) {
+	unordered_set<idx_t> result;
+	for (auto &child : op.children) {
+		auto child_indexes = VerifyInternal(*child);
+		for (auto index : child_indexes) {
+			if (result.find(index) != result.end()) {
+				throw InternalException("Duplicate table index \"%lld\" found", index);
+			}
+			result.insert(index);
+		}
+	}
+	auto indexes = op.GetTableIndex();
+	for (auto index : indexes) {
+		if (result.find(index) != result.end()) {
+			throw InternalException("Duplicate table index \"%lld\" found", index);
+		}
+		result.insert(index);
+	}
+	return result;
+}
+
+void ColumnBindingResolver::Verify(LogicalOperator &op) {
+	return;
+#ifdef DEBUG
+	VerifyInternal(op);
+#endif
+}
+
 } // namespace duckdb
