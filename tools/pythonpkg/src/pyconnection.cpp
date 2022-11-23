@@ -299,7 +299,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 	if (!py::hasattr(params, "__len__")) {
 		throw InvalidInputException("Type of object passed to parameter 'values' must be iterable");
 	}
-	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
+	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(params)};
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
 }
 
@@ -323,7 +323,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 	}
 
 	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(std::move(params))));
+	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(params)));
 }
 
 static std::string GenerateRandomName() {

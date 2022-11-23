@@ -176,6 +176,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	auto &columns = rel->Columns();
 	vector<string> column_list;
+	column_list.reserve(columns.size());
 	for (auto &column_rel : columns) {
 		column_list.push_back(column_rel.Name());
 	}
