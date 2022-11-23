@@ -37,13 +37,28 @@ BitpackingMode BitpackingModeFromString(const string &str) {
 	}
 }
 
+string BitpackingModeToString(const BitpackingMode &mode) {
+	switch(mode) {
+	case (BitpackingMode::AUTO):
+		return "auto";
+	case (BitpackingMode::CONSTANT):
+		return "constant";
+	case (BitpackingMode::CONSTANT_DELTA):
+		return "constant_delta";
+	case (BitpackingMode::DELTA_FOR):
+		return "delta_for";
+	case (BitpackingMode::FOR):
+		return "for";
+	}
+}
+
 struct EmptyBitpackingWriter {
 	template <class T>
 	static void WriteConstant(T constant, idx_t count, void* data_ptr, bool all_invalid) {}
 	template <class T, class T_S=typename std::make_signed<T>::type>
 	static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T* values, bool* validity, void* data_ptr) {}
 	template <class T, class T_S=typename std::make_signed<T>::type>
-	static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, T delta_offset, T* original_values, idx_t count, void *data_ptr) {}
+	static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, T_S delta_offset, T* original_values, idx_t count, void *data_ptr) {}
 	template <class T>
 	static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {}
 };
@@ -88,12 +103,15 @@ public:
 
 	T minimum;
 	T maximum;
+	T min_max_diff;
 	T_S minimum_delta;
 	T_S maximum_delta;
+	T_S min_max_delta_diff;
 	T_S delta_offset;
 	bool all_valid;
 	bool all_invalid;
 	bool can_do_delta;
+	bool can_do_for;
 
 	// Used to force a specific mode, useful in testing
 	// Note that forcing CONSTANT_DELTA or CONSTANT does not actually do anything: if we can use those they are chosen.
@@ -109,21 +127,24 @@ public:
 		all_valid = true;
 		all_invalid = true;
 		can_do_delta = false;
+		can_do_for = false;
 		compression_buffer_idx = 0;
+		min_max_diff = 0;
+		min_max_delta_diff =0;
+	}
+
+	void CalculateFORStats() {
+		can_do_for = TrySubtractOperator::Operation(maximum, minimum, min_max_diff);
 	}
 
 	void CalculateDeltaStats() {
 		T_S limit1 = NumericLimits<T_S>::Maximum();
 		T limit = (T)limit1;
-		T shift_amount = 0;
 
-		// TODO test and benchmark this
-		if (maximum >= limit){
-			shift_amount = maximum - limit;
-			if (shift_amount > minimum) {
-				// Domain too big, we cannot do delta here.
-				return;
-			}
+		// TODO: currently we dont support delta compression of values above NumericLimits<T_S>::Maximum(),
+		// 		 we could support this with some clever substract trickery?
+		if (maximum > limit){
+			return;
 		}
 
 		D_ASSERT(compression_buffer_idx >= 2);
@@ -141,7 +162,7 @@ public:
 			if (!compression_buffer_validity[i] || !compression_buffer_validity[i]){
 				continue;
 			}
-			auto success = TrySubtractOperator::Operation((T_S)(compression_buffer[i]-shift_amount), (T_S)(compression_buffer[i-1]-shift_amount), delta_buffer[i]);
+			auto success = TrySubtractOperator::Operation((T_S)(compression_buffer[i]), (T_S)(compression_buffer[i-1]), delta_buffer[i]);
 			if (!success) {
 				return;
 			}
@@ -158,6 +179,9 @@ public:
 		// Since we can set the first value arbitrarily, we want to pick one from the current domain, note that
 		// we will store the original first value - this offset as the  delta_offset to be able to decode this again.
 		delta_buffer[0] = minimum_delta;
+
+		can_do_delta = can_do_delta && TrySubtractOperator::Operation(maximum_delta, minimum_delta, min_max_delta_diff);
+		can_do_delta = can_do_delta && TrySubtractOperator::Operation((T_S)(compression_buffer[0]), minimum_delta, delta_offset);
 	}
 
 	template <class T_INNER>
@@ -180,11 +204,6 @@ public:
 		}
 	}
 
-	bool CanDoFOR() {
-		T ignore;
-		return TrySubtractOperator::Operation(maximum, minimum, ignore);
-	}
-
 	template <class OP>
 	bool Flush() {
 		if (compression_buffer_idx == 0) {
@@ -197,7 +216,9 @@ public:
 			return true;
 		}
 
+		CalculateFORStats();
 		CalculateDeltaStats();
+
 		if (can_do_delta) {
 			if (maximum_delta == minimum_delta && mode != BitpackingMode::FOR && mode != BitpackingMode::DELTA_FOR) {
 				idx_t frame_of_reference = compression_buffer[0];
@@ -207,15 +228,13 @@ public:
 			}
 
 			// Check if delta has benefit
-			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth<T_U>(maximum_delta-minimum_delta);
-			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(maximum-minimum);
+			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth<T_U>(min_max_delta_diff);
+			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(min_max_diff);
 
 			if (delta_required_bitwidth < regular_required_bitwidth && mode != BitpackingMode::FOR) {
 				SubtractFrameOfReference(delta_buffer, minimum_delta);
 
-				// TODO: shouldnt this and others be T_S instead? Since for Delta we currently only support values within T_S domain, all could be T_S
-				// 		 we should consider carefully if we need to add features to support compressing small ranges in [T_S < domain < T]
-				OP::WriteDeltaFor((T*)delta_buffer, compression_buffer_validity, delta_required_bitwidth, (T)minimum_delta, (T)compression_buffer[0], (T*)compression_buffer,
+				OP::WriteDeltaFor((T*)delta_buffer, compression_buffer_validity, delta_required_bitwidth, (T)minimum_delta, delta_offset, (T*)compression_buffer,
 				             compression_buffer_idx, data_ptr);
 
 				total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, delta_required_bitwidth);
@@ -227,8 +246,8 @@ public:
 			}
 		}
 
-		if (CanDoFOR()) {
-			auto width = BitpackingPrimitives::MinimumBitWidth<T_U>(maximum-minimum);
+		if (can_do_for) {
+			auto width = BitpackingPrimitives::MinimumBitWidth<T_U>(min_max_diff);
 			PatchNullValues(minimum);
 			SubtractFrameOfReference(compression_buffer, minimum);
 			OP::WriteFor(compression_buffer, compression_buffer_validity, width, minimum,
@@ -240,8 +259,6 @@ public:
 
 			return true;
 		}
-
-		// TODO uncompressed option?
 
 		return false;
 	}
@@ -393,12 +410,14 @@ public:
 			}
 		}
 
-		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, T delta_offset, T* original_values, idx_t count, void *data_ptr) {
+		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, T_S delta_offset, T* original_values, idx_t count, void *data_ptr) {
 			auto state = (BitpackingCompressState<T> *)data_ptr;
 			auto bits_required_for_bp = (width * BITPACKING_METADATA_GROUP_SIZE);
 			D_ASSERT(bits_required_for_bp % 8 == 0);
 			auto data_bytes = bits_required_for_bp / 8 + sizeof(T) + sizeof(T) + AlignValue(sizeof(bitpacking_width_t));
 			auto meta_bytes = AlignValue<T>(sizeof(bitpacking_metadata_encoded_t));
+
+//			std::cout << "Writing DELTA-FOR: (for:" << to_string(frame_of_reference) << ", delta_offset:" << to_string(delta_offset) << ", minimum:" << to_string(state->state.minimum_delta) << ", maximum:" <<  to_string(state->state.minimum_delta) << ", width:" << to_string(width) << ", typesize:" << to_string(sizeof(T)) << ", is_signed:" << to_string(std::is_signed<T>()) << ")\n";
 
 			state->FlushAndCreateSegmentIfFull(data_bytes + meta_bytes);
 
@@ -427,14 +446,13 @@ public:
 			}
 		}
 
-		// TODO values should be T_S?
 		static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count, void *data_ptr) {
 				auto state = (BitpackingCompressState<T> *)data_ptr;
 				auto bits_required_for_bp = (width * BITPACKING_METADATA_GROUP_SIZE);
 				D_ASSERT(bits_required_for_bp % 8 == 0);
 				auto data_bytes = bits_required_for_bp / 8 + sizeof(T) + AlignValue(sizeof(bitpacking_width_t));
 				auto meta_bytes = AlignValue<T>(sizeof(bitpacking_metadata_encoded_t));
-
+//			    std::cout << "Writing FOR: (for:" << to_string(frame_of_reference) << ", minimum:" << to_string(state->state.minimum) << ", maximum:" <<  to_string(state->state.maximum) << ", width:" << to_string(width) << ", typesize:" << to_string(sizeof(T)) << ", is_signed:" << to_string(std::is_signed<T>()) << ")\n";
 				state->FlushAndCreateSegmentIfFull(data_bytes + meta_bytes);
 
 			    bitpacking_metadata_t metadata{BitpackingMode::FOR, (uint32_t)(state->data_ptr - state->handle.Ptr())};
@@ -462,9 +480,8 @@ public:
 	};
 
 	// Space remaining between the metadata_ptr growing down and data ptr growing up
-	// TODO: off-by-one shouldnt this be +1 ?
 	idx_t RemainingSize() {
-		return metadata_ptr - data_ptr;
+		return metadata_ptr - data_ptr + 1;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -594,7 +611,7 @@ public:
 	bitpacking_metadata_t current_group;
 
 	bitpacking_width_t current_width;
-	T_S current_frame_of_reference;
+	T current_frame_of_reference;
 	T current_constant;
 	T current_delta_offset;
 
@@ -651,10 +668,7 @@ public:
 		// Read third meta value
 		switch (current_group.mode) {
 		case BitpackingMode::DELTA_FOR:
-			// The reason we need to subtract the current_frame_of_referance from the current_delta_offset is
-			// that we apply FOR on top of delta decoded values. This means the first values is the
-			// TODO: handle when writing?
-			current_delta_offset = *(T*)(current_group_ptr) - current_frame_of_reference;
+			current_delta_offset = *(T*)(current_group_ptr);
 			current_group_ptr += sizeof(T);
 			break;
 		case BitpackingMode::CONSTANT_DELTA:
@@ -664,6 +678,8 @@ public:
 		case BitpackingMode::AUTO:
 			throw InternalException("Invalid bitpacking mode");
 		}
+
+//		std::cout << "Reading (" << BitpackingModeToString(current_group.mode) << "): (for:" << to_string(current_frame_of_reference) << ", delta_offset:" << to_string(current_delta_offset) << ", width:" << to_string(current_width) << ", typesize:" << to_string(sizeof(T)) << ", is_signed:" << to_string(std::is_signed<T>()) << ")\n";
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
@@ -793,10 +809,11 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			       to_scan * sizeof(T));
 		}
 
-		ApplyFrameOfReference<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_frame_of_reference, to_scan);
-
-		if(scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
+		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
+			ApplyFrameOfReference<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_frame_of_reference, to_scan);
 			ApplyDelta<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_delta_offset, to_scan);
+		} else {
+			ApplyFrameOfReference<T>(current_result_ptr, scan_state.current_frame_of_reference, to_scan);
 		}
 
 		scanned += to_scan;
