@@ -852,13 +852,13 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
 			ApplyFrameOfReference<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_frame_of_reference, to_scan);
 			DeltaDecode<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_delta_offset, to_scan);
+			scan_state.current_delta_offset = ((T *)current_result_ptr)[to_scan - 1];
 		} else {
 			ApplyFrameOfReference<T>(current_result_ptr, scan_state.current_frame_of_reference, to_scan);
 		}
 
 		scanned += to_scan;
 		scan_state.current_group_offset += to_scan;
-		scan_state.current_delta_offset = ((T *)current_result_ptr)[to_scan - 1];
 	}
 }
 
