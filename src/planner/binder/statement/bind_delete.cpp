@@ -67,7 +67,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		root = move(filter);
 	}
 	// create the delete node
-	auto del = make_unique<LogicalDelete>(table);
+	auto del = make_unique<LogicalDelete>(table, GenerateTableIndex());
 	del->AddChild(move(root));
 
 	// set up the delete expression

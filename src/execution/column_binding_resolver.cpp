@@ -100,6 +100,7 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 	for (auto &child : op.children) {
 		auto child_indexes = VerifyInternal(*child);
 		for (auto index : child_indexes) {
+			D_ASSERT(index != DConstants::INVALID_INDEX);
 			if (result.find(index) != result.end()) {
 				throw InternalException("Duplicate table index \"%lld\" found", index);
 			}
@@ -108,6 +109,7 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 	}
 	auto indexes = op.GetTableIndex();
 	for (auto index : indexes) {
+		D_ASSERT(index != DConstants::INVALID_INDEX);
 		if (result.find(index) != result.end()) {
 			throw InternalException("Duplicate table index \"%lld\" found", index);
 		}
@@ -117,7 +119,6 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 }
 
 void ColumnBindingResolver::Verify(LogicalOperator &op) {
-	return;
 #ifdef DEBUG
 	VerifyInternal(op);
 #endif

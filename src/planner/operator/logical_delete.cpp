@@ -17,8 +17,8 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationSta
 
 	TableCatalogEntry *table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 
-	auto result = make_unique<LogicalDelete>(table_catalog_entry);
-	result->table_index = reader.ReadRequired<idx_t>();
+	auto table_index = reader.ReadRequired<idx_t>();
+	auto result = make_unique<LogicalDelete>(table_catalog_entry, table_index);
 	result->return_chunk = reader.ReadRequired<bool>();
 	return move(result);
 }

@@ -16,8 +16,9 @@ namespace duckdb {
 
 class LogicalDelete : public LogicalOperator {
 public:
-	explicit LogicalDelete(TableCatalogEntry *table)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(table), table_index(0), return_chunk(false) {
+	explicit LogicalDelete(TableCatalogEntry *table, idx_t table_index)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(table), table_index(table_index),
+	      return_chunk(false) {
 	}
 
 	TableCatalogEntry *table;
