@@ -114,9 +114,6 @@ public:
 
 		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
 
-		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel);
-		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel);
-
 	public:
 		void InitializeSelectionVector(const SelectionVector *&current_sel);
 		void AdvancePointers();

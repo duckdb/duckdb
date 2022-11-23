@@ -351,7 +351,7 @@ void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool pa
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
-	// as we can the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
+	// as we scan the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
 	// this is so that we can keep pointers around to the blocks
 	for (idx_t block_idx = block_idx_start; block_idx < block_idx_end; block_idx++) {
 		auto &block = block_collection->blocks[block_idx];
@@ -1044,8 +1044,8 @@ void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_pt
 	}
 
 	total_size += PointerTableCapacity(total_count) * sizeof(data_ptr_t);
-	idx_t avg_tuple_size = total_size / total_count;
-	tuples_per_round = max_ht_size / avg_tuple_size;
+	double avg_tuple_size = double(total_size) / double(total_count);
+	tuples_per_round = double(max_ht_size) / avg_tuple_size;
 
 	if (config.force_external) {
 		// For force_external we do three rounds to test all code paths
@@ -1134,7 +1134,7 @@ bool JoinHashTable::PrepareExternalFinalize() {
 
 	// Unswizzle them
 	D_ASSERT(Count() == 0);
-	UnswizzleBlocks();
+	UnswizzleBlocks(); // TODO: this in parallel
 	D_ASSERT(count == Count());
 
 	return true;

@@ -133,7 +133,7 @@ private:
 	                                         idx_t size);
 
 	//! When the BlockHandle reaches 0 readers, this creates a new FileBuffer for this BlockHandle and
-	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice TODO rewrite
+	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
 	void VerifyZeroReaders(shared_ptr<BlockHandle> &handle);
 
 private:

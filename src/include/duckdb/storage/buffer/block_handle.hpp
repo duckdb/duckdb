@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
@@ -50,6 +50,14 @@ struct TempBufferPoolReservation : BufferPoolReservation {
 	}
 };
 
+struct BlockHandleCallback {
+public:
+	virtual void Operation(FileBuffer &file_buffer) = 0;
+
+	virtual ~BlockHandleCallback() {
+	}
+};
+
 class BlockHandle {
 	friend class BlockManager;
 	friend struct BufferEvictionNode;
@@ -73,6 +81,10 @@ public:
 		return readers;
 	}
 
+	const idx_t &GetMemoryUsage() const {
+		return memory_usage;
+	}
+
 	inline bool IsSwizzled() const {
 		return !unswizzled;
 	}
@@ -85,12 +97,26 @@ public:
 		can_destroy = can_destroy_p;
 	}
 
-	void AddLoadCallback(const std::function<void()> &callback) {
+	void AddLoadCallback(unique_ptr<BlockHandleCallback> callback) {
 		load_callbacks.push_back(move(callback));
 	}
 
-	void AddUnloadCallback(const std::function<void()> &callback) {
+	void AddUnloadCallback(unique_ptr<BlockHandleCallback> callback) {
 		unload_callbacks.push_back(move(callback));
+	}
+
+	void ExecuteLoadCallbacks(FileBuffer &file_buffer) {
+		D_ASSERT(state == BlockState::BLOCK_UNLOADED);
+		for (auto &callback : load_callbacks) {
+			callback->Operation(file_buffer);
+		}
+	}
+
+	void ExecuteUnloadCallbacks(FileBuffer &file_buffer) {
+		D_ASSERT(state == BlockState::BLOCK_LOADED);
+		for (auto &callback : unload_callbacks) {
+			callback->Operation(file_buffer);
+		}
 	}
 
 private:
@@ -121,9 +147,9 @@ private:
 	//! Does the block contain any memory pointers?
 	const char *unswizzled;
 	//! Callbacks that are called after loading this block from disk
-	vector<std::function<void()>> load_callbacks;
+	vector<unique_ptr<BlockHandleCallback>> load_callbacks;
 	//! Callbacks that are called before unloading this block to disk
-	vector<std::function<void()>> unload_callbacks;
+	vector<unique_ptr<BlockHandleCallback>> unload_callbacks;
 };
 
 } // namespace duckdb

@@ -96,14 +96,15 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 	}
 }
 
+idx_t GetAllocSize(idx_t size) {
+	return AlignValue<idx_t, Storage::SECTOR_SIZE>(size + Storage::BLOCK_HEADER_SIZE);
+}
+
 unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
                                                              FileBufferType type) {
 	if (source) {
 		auto tmp = move(source);
-#ifdef DEBUG
-		auto alloc_size = AlignValue<idx_t, Storage::SECTOR_SIZE>(size + Storage::BLOCK_HEADER_SIZE);
-		D_ASSERT(tmp->AllocSize() == alloc_size);
-#endif
+		D_ASSERT(tmp->AllocSize() == GetAllocSize(size));
 		return make_unique<FileBuffer>(*tmp, type);
 	} else {
 		// no re-usable buffer: allocate a new buffer
@@ -130,6 +131,7 @@ BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileB
 			handle->buffer = block_manager.buffer_manager.ReadTemporaryBuffer(handle->block_id, move(reusable_buffer));
 		}
 	}
+	handle->ExecuteLoadCallbacks(*handle->buffer);
 	handle->state = BlockState::BLOCK_LOADED;
 	return BufferHandle(handle, handle->buffer.get());
 }
@@ -141,6 +143,7 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 	}
 	D_ASSERT(!unswizzled);
 	D_ASSERT(CanUnload());
+	ExecuteUnloadCallbacks(*buffer);
 
 	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
 		// temporary block that cannot be destroyed: write to temporary file
@@ -326,7 +329,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {
 
 shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can_destroy) {
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
-	auto alloc_size = AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::BLOCK_HEADER_SIZE);
+	auto alloc_size = GetAllocSize(block_size);
 	// first evict blocks until we have enough memory to store this buffer
 	unique_ptr<FileBuffer> reusable_buffer;
 	auto res = EvictBlocksOrThrow(alloc_size, maximum_memory, &reusable_buffer,
@@ -432,7 +435,7 @@ void BufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 	auto replacement_buffer = make_unique<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                  handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
-	memset(handle->buffer->buffer, 190, handle->buffer->size);
+	memset(handle->buffer->buffer, 165, handle->buffer->size); // 165 is default memory in debug mode
 	handle->buffer = move(replacement_buffer);
 #endif
 }

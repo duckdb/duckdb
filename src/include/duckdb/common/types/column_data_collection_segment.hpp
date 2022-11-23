@@ -93,9 +93,9 @@ public:
 	                               ColumnDataAppendState &append_state, VectorDataIndex prev_index = VectorDataIndex());
 	//! Allocate space for string data during append (BUFFER_MANAGER_ALLOCATOR only)
 	VectorDataIndex AllocateStringHeap(idx_t size, ChunkMetaData &chunk_meta, ColumnDataAppendState &append_state,
-	                                   VectorDataIndex parent_index);
+	                                   VectorDataIndex prev_index = VectorDataIndex());
 	//! Add a callback to swizzle string pointers (BUFFER_MANAGER_ALLOCATOR only)
-	void AddSwizzleCallbacks(VectorDataIndex parent_index, idx_t parent_offset, VectorDataIndex child_index,
+	void AddSwizzleCallbacks(VectorDataIndex &parent_index, idx_t entry_offset, VectorDataIndex &child_index,
 	                         idx_t count);
 
 	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);

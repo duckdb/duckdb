@@ -2,7 +2,6 @@
 
 #include "duckdb/common/types/column_data_collection_segment.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include ""
 
 namespace duckdb {
 
@@ -31,16 +30,16 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
 
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	shared_ptr<BlockHandle> handle;
 	if (shared) {
+		// we only need to grab the lock when accessing the vector, because vector access is not thread-safe:
+		// the vector can be resized by another thread while we try to access it
 		lock_guard<mutex> guard(lock);
-		return PinInternal(block_id);
+		handle = blocks[block_id].handle;
 	} else {
-		return PinInternal(block_id);
+		handle = blocks[block_id].handle;
 	}
-}
-
-BufferHandle ColumnDataAllocator::PinInternal(uint32_t block_id) {
-	return alloc.buffer_manager->Pin(blocks[block_id].handle);
+	return alloc.buffer_manager->Pin(handle);
 }
 
 void ColumnDataAllocator::AllocateBlock() {
@@ -94,6 +93,10 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
 	auto &block = blocks.back();
 	D_ASSERT(size <= block.capacity - block.size);
 	block_id = blocks.size() - 1;
+	if (chunk_state && chunk_state->handles.find(block_id) == chunk_state->handles.end()) {
+		// not guaranteed to be pinned already by this thread (if shared allocator)
+		chunk_state->handles[block_id] = alloc.buffer_manager->Pin(blocks[block_id].handle);
+	}
 	offset = block.size;
 	block.size += size;
 }
@@ -155,33 +158,73 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	return state.handles[block_id].Ptr() + offset;
 }
 
-void ColumnDataAllocator::AddSwizzleCallbacks(VectorMetaData &parent_vdata, idx_t parent_offset,
+ColumnDataAllocator::SwizzleCallback::SwizzleCallback(ColumnDataAllocator *allocator, VectorMetaData &parent_vdata,
+                                                      idx_t entry_offset, VectorMetaData &child_vdata, idx_t count,
+                                                      bool swizzle)
+    : allocator(allocator), parent_block_id(parent_vdata.block_id), parent_block_offset(parent_vdata.offset),
+      child_block_id(child_vdata.block_id), child_block_offset(child_vdata.offset), entry_offset(entry_offset),
+      count(count), swizzle(swizzle) {
+}
+
+template <bool SWIZZLE>
+static void SwizzleLoop(string_t *entries, const ValidityMask &validity, const idx_t &entry_offset,
+                        char *const heap_ptr, const idx_t &count) {
+	for (idx_t i = 0; i < count; i++) {
+		if (!validity.RowIsValid(entry_offset + i)) {
+			continue;
+		}
+		auto &entry = entries[entry_offset + i];
+		if (entry.IsInlined()) {
+			continue;
+		}
+
+		if (SWIZZLE) {
+			entry.Swizzle(heap_ptr);
+		} else {
+			entry.Unswizzle(heap_ptr);
+#ifdef DEBUG
+			entry.Verify();
+#endif
+		}
+	}
+}
+
+void ColumnDataAllocator::SwizzleCallback::Operation(FileBuffer &file_buffer) {
+	// file_buffer is the StringHeap block
+	auto heap_ptr = file_buffer.buffer + child_block_offset;
+
+	data_ptr_t base_ptr;
+	ChunkManagementState state;
+	if (parent_block_id == child_block_id) {
+		base_ptr = file_buffer.buffer + parent_block_offset;
+	} else {
+		// lock of the BlockHandle is already held during the callback,
+		// so we have to make sure we don't Pin() the same block else we deadlock
+		state.handles[parent_block_id] = allocator->Pin(parent_block_id);
+		base_ptr = allocator->GetDataPointer(state, parent_block_id, parent_block_offset);
+	}
+
+	auto entries = (string_t *)base_ptr;
+	auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, sizeof(string_t));
+	ValidityMask validity(validity_data);
+
+	if (swizzle) {
+		SwizzleLoop<true>(entries, validity, entry_offset, (char *)heap_ptr, count);
+	} else {
+		SwizzleLoop<false>(entries, validity, entry_offset, (char *)heap_ptr, count);
+	}
+}
+
+void ColumnDataAllocator::AddSwizzleCallbacks(VectorMetaData &parent_vdata, idx_t entry_offset,
                                               VectorMetaData &child_vdata, idx_t count) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	D_ASSERT(count != 0);
 	auto &heap_block = blocks[child_vdata.block_id];
-	heap_block.handle->AddUnloadCallback([&](void) -> void {
-		ChunkManagementState state;
-		state.handles[child_vdata.block_id] = Pin(child_vdata.block_id);
-		state.handles[parent_vdata.block_id] = Pin(parent_vdata.block_id);
 
-		auto base_ptr = GetDataPointer(state, parent_vdata.block_id, parent_vdata.offset);
-		auto heap_ptr = GetDataPointer(state, child_vdata.block_id, child_vdata.offset);
-
-		auto entries = (string_t *)base_ptr;
-		auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, sizeof(string_t));
-		ValidityMask result_validity(validity_data);
-
-		for (idx_t i = 0; i < count; i++) {
-			if (!result_validity.RowIsValid(parent_offset + i)) {
-				continue;
-			}
-			auto &entry = entries[parent_offset + i];
-			if (entry.IsInlined()) {
-				continue;
-			}
-
-		}
-	});
+	heap_block.handle->AddUnloadCallback(
+	    make_unique<SwizzleCallback>(this, parent_vdata, entry_offset, child_vdata, count, true));
+	heap_block.handle->AddLoadCallback(
+	    make_unique<SwizzleCallback>(this, parent_vdata, entry_offset, child_vdata, count, false));
 }
 
 void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {
