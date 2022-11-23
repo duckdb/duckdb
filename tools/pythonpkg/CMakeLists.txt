@@ -1,14 +1,15 @@
+include_directories(src)
 include_directories(../../)
 include_directories(src/include)
 include_directories(${pybind11_INCLUDE_DIR})
 include_directories(${PYTHON_INCLUDE_DIRS})
 
+add_subdirectory(src)
+
 find_package(PythonLibs)
 if(NOT PythonLibs_FOUND)
   return()
 endif()
-
-add_subdirectory(src)
 
 find_package(pybind11)
 if(NOT pybind11_FOUND)
