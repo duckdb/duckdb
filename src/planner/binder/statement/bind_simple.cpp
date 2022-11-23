@@ -29,7 +29,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 
 BoundStatement Binder::Bind(TransactionStatement &stmt) {
 	// transaction statements do not require a valid transaction
-	properties.requires_valid_transaction = false;
+	properties.requires_valid_transaction = stmt.info->type != TransactionType::ROLLBACK;
 
 	BoundStatement result;
 	result.names = {"Success"};
