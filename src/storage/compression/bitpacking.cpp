@@ -572,19 +572,31 @@ static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
 	}
 }
 
-
-// TODO there's probably some highly efficient variant for this one
+// Based on https://github.com/lemire/FastPFor (Apache License 2.0)
 template <class T>
-static T ApplyDelta(T *dst, T previous_value, idx_t size) {
+static T DeltaDecode(T *data, T previous_value, const size_t size) {
 	D_ASSERT(size >= 1);
 
-	dst[0] += previous_value;
+	data[0] += previous_value;
 
-	for (idx_t i = 1; i < size; i++) {
-		dst[i] += dst[i-1];
+	const size_t UnrollQty = 4;
+	const size_t sz0 =
+	    (size / UnrollQty) * UnrollQty; // equal to 0, if size < UnrollQty
+	size_t i = 1;
+	if (sz0 >= UnrollQty) {
+		T a = data[0];
+		for (; i < sz0 - UnrollQty; i += UnrollQty) {
+			a = data[i] += a;
+			a = data[i + 1] += a;
+			a = data[i + 2] += a;
+			a = data[i + 3] += a;
+		}
+	}
+	for (; i != size; ++i) {
+		data[i] += data[i - 1];
 	}
 
-	return dst[size-1];
+	return data[size-1];
 }
 
 template <class T, class T_S = typename std::make_signed<T>::type>
@@ -700,7 +712,7 @@ public:
 					BitpackingPrimitives::UnPackBuffer<T>((data_ptr_t)decompression_buffer, current_group_ptr + decompress_offset, decompress_count, current_width, skip_sign_extension);
 
 					ApplyFrameOfReference<T_S>((T_S*)&decompression_buffer[extra_count], current_frame_of_reference, skip_count);
-					ApplyDelta<T_S>((T_S*)&decompression_buffer[extra_count], (T_S)current_delta_offset, (idx_t)skip_count);
+					DeltaDecode<T_S>((T_S*)&decompression_buffer[extra_count], (T_S)current_delta_offset, (idx_t)skip_count);
 					current_delta_offset = decompression_buffer[extra_count + skip_count - 1];
 
 					current_group_offset += skip_count;
@@ -811,7 +823,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
 			ApplyFrameOfReference<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_frame_of_reference, to_scan);
-			ApplyDelta<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_delta_offset, to_scan);
+			DeltaDecode<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_delta_offset, to_scan);
 		} else {
 			ApplyFrameOfReference<T>(current_result_ptr, scan_state.current_frame_of_reference, to_scan);
 		}
