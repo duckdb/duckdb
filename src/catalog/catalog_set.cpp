@@ -274,6 +274,7 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
+	lock_guard<mutex> read_lock(catalog_lock);
 	DropEntryInternal(context, entry_index, *entry, cascade);
 	return true;
 }
