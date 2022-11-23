@@ -9,15 +9,15 @@
 using namespace duckdb;
 
 RType RApiTypes::DetectRType(SEXP v, bool integer64) {
-	if (IS_NUMERIC(v) && Rf_inherits(v, "POSIXct")) {
+	if (TYPEOF(v) == REALSXP && Rf_inherits(v, "POSIXct")) {
 		return RType::TIMESTAMP;
-	} else if (IS_NUMERIC(v) && Rf_inherits(v, "Date")) {
+	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "Date")) {
 		return RType::DATE;
-	} else if (IS_INTEGER(v) && Rf_inherits(v, "Date")) {
+	} else if (TYPEOF(v) == INTSXP && Rf_inherits(v, "Date")) {
 		return RType::DATE_INTEGER;
-	} else if (IS_NUMERIC(v) && Rf_inherits(v, "difftime")) {
+	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "difftime")) {
 		SEXP units = Rf_getAttrib(v, RStrings::get().units_sym);
-		if (!IS_CHARACTER(units)) {
+		if (TYPEOF(units) != STRSXP) {
 			return RType::UNKNOWN;
 		}
 		SEXP units0 = STRING_ELT(units, 0);
@@ -34,9 +34,9 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 		} else {
 			return RType::UNKNOWN;
 		}
-	} else if (IS_INTEGER(v) && Rf_inherits(v, "difftime")) {
+	} else if (TYPEOF(v) == INTSXP && Rf_inherits(v, "difftime")) {
 		SEXP units = Rf_getAttrib(v, RStrings::get().units_sym);
-		if (!IS_CHARACTER(units)) {
+		if (TYPEOF(units) != STRSXP) {
 			return RType::UNKNOWN;
 		}
 		SEXP units0 = STRING_ELT(units, 0);
@@ -53,20 +53,20 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 		} else {
 			return RType::UNKNOWN;
 		}
-	} else if (Rf_isFactor(v) && IS_INTEGER(v)) {
+	} else if (Rf_isFactor(v) && TYPEOF(v) == INTSXP) {
 		return RType::FACTOR;
-	} else if (IS_LOGICAL(v)) {
+	} else if (TYPEOF(v) == LGLSXP) {
 		return RType::LOGICAL;
-	} else if (IS_INTEGER(v)) {
+	} else if (TYPEOF(v) == INTSXP) {
 		return RType::INTEGER;
-	} else if (IS_NUMERIC(v)) {
+	} else if (TYPEOF(v) == REALSXP) {
 		if (integer64 && Rf_inherits(v, "integer64")) {
 			return RType::INTEGER64;
 		}
 		return RType::NUMERIC;
-	} else if (IS_CHARACTER(v)) {
+	} else if (TYPEOF(v) == STRSXP) {
 		return RType::STRING;
-	} else if (IS_LIST(v)) {
+	} else if (TYPEOF(v) == VECSXP) {
 		if (Rf_inherits(v, "blob")) {
 			return RType::BLOB;
 		}
@@ -75,7 +75,7 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 		R_xlen_t i = 0;
 		for (; i < len; ++i) {
 			auto elt = VECTOR_ELT(v, i);
-			if (IS_RAW(elt)) {
+			if (TYPEOF(elt) == RAWSXP) {
 				break;
 			}
 			if (elt != R_NilValue) {
@@ -89,7 +89,7 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 
 		for (; i < len; ++i) {
 			auto elt = VECTOR_ELT(v, i);
-			if (!IS_RAW(elt) && elt != R_NilValue) {
+			if (TYPEOF(elt) != RAWSXP && elt != R_NilValue) {
 				return RType::UNKNOWN;
 			}
 		}
