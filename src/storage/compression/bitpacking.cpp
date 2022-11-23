@@ -13,7 +13,6 @@
 #include "duckdb/storage/compression/bitpacking.hpp"
 
 #include <functional>
-#include <iostream>
 
 namespace duckdb {
 
@@ -49,6 +48,8 @@ string BitpackingModeToString(const BitpackingMode &mode) {
 		return "delta_for";
 	case (BitpackingMode::FOR):
 		return "for";
+	default:
+		throw NotImplementedException("Unknown bitpacking mode" + to_string((uint8_t)mode) + "\n");
 	}
 }
 
@@ -436,11 +437,6 @@ public:
 			auto data_bytes = bits_required_for_bp / 8 + sizeof(T) + sizeof(T) + AlignValue(sizeof(bitpacking_width_t));
 			auto meta_bytes = AlignValue<T>(sizeof(bitpacking_metadata_encoded_t));
 
-			//			std::cout << "Writing DELTA-FOR: (for:" << to_string(frame_of_reference) << ", delta_offset:" <<
-			//to_string(delta_offset) << ", minimum:" << to_string(state->state.minimum_delta) << ", maximum:" <<
-			//to_string(state->state.minimum_delta) << ", width:" << to_string(width) << ", typesize:" <<
-			//to_string(sizeof(T)) << ", is_signed:" << to_string(std::is_signed<T>()) << ")\n";
-
 			state->FlushAndCreateSegmentIfFull(data_bytes + meta_bytes);
 
 			bitpacking_metadata_t metadata {BitpackingMode::DELTA_FOR,
@@ -476,10 +472,7 @@ public:
 			D_ASSERT(bits_required_for_bp % 8 == 0);
 			auto data_bytes = bits_required_for_bp / 8 + sizeof(T) + AlignValue(sizeof(bitpacking_width_t));
 			auto meta_bytes = AlignValue<T>(sizeof(bitpacking_metadata_encoded_t));
-			//			    std::cout << "Writing FOR: (for:" << to_string(frame_of_reference) << ", minimum:" <<
-			//to_string(state->state.minimum) << ", maximum:" <<  to_string(state->state.maximum) << ", width:" <<
-			//to_string(width) << ", typesize:" << to_string(sizeof(T)) << ", is_signed:" <<
-			//to_string(std::is_signed<T>()) << ")\n";
+
 			state->FlushAndCreateSegmentIfFull(data_bytes + meta_bytes);
 
 			bitpacking_metadata_t metadata {BitpackingMode::FOR, (uint32_t)(state->data_ptr - state->handle.Ptr())};
@@ -672,8 +665,6 @@ public:
 		bitpacking_metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
 		current_group_ptr = GetPtr(current_group);
 
-		//		std::cout << "Reading " << BitpackingModeToString(current_group.mode) << "\n";
-
 		// Read first meta value
 		switch (current_group.mode) {
 		case BitpackingMode::CONSTANT:
@@ -720,11 +711,6 @@ public:
 		case BitpackingMode::AUTO:
 			throw InternalException("Invalid bitpacking mode");
 		}
-
-		//		std::cout << "Reading (" << BitpackingModeToString(current_group.mode) << "): (for:" <<
-		//to_string(current_frame_of_reference) << ", delta_offset:" << to_string(current_delta_offset) << ", width:" <<
-		//to_string(current_width) << ", typesize:" << to_string(sizeof(T)) << ", is_signed:" <<
-		//to_string(std::is_signed<T>()) << ")\n";
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
