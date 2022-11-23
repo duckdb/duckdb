@@ -5,7 +5,7 @@
 # load the DB from disk
 load __TEST_DIR__/test_bitpacking.db
 
-foreach bitpacking_mode none delta_for for
+foreach bitpacking_mode delta_for for constant_delta constant
 
 statement ok
 PRAGMA force_bitpacking_mode='${bitpacking_mode}'

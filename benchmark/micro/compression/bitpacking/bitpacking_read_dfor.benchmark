@@ -1,5 +1,5 @@
 # name: benchmark/micro/compression/bitpacking/bitpacking_read.benchmark
-# description: Scanning 1GB of ints compressed at ~3x compression
+# description: Scanning 1GB of ints compressed mostly with the CONSTANT_DELTA bitpacking mode
 # group: [bitpacking]
 
 name Bitpacking Scan
@@ -9,7 +9,8 @@ storage persistent
 load
 DROP TABLE IF EXISTS integers;
 PRAGMA force_compression='bitpacking';
-CREATE TABLE integers AS SELECT i % 4000000 AS i FROM range(0, 250000000) tbl(i);
+PRAGMA force_bitpacking_mode='delta_for';
+CREATE TABLE integers AS SELECT (i%4000000)::INT32 AS i FROM range(0, 250000000) tbl(i);
 checkpoint;
 
 run

@@ -644,6 +644,8 @@ public:
 		bitpacking_metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
 		current_group_ptr = GetPtr(current_group);
 
+//		std::cout << "Reading " << BitpackingModeToString(current_group.mode) << "\n";
+
 		// Read first meta value
 		switch (current_group.mode) {
 			case BitpackingMode::CONSTANT:
@@ -762,6 +764,8 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 	bool skip_sign_extend = true;
 
 	idx_t scanned = 0;
+
+	// TODO: add an optimzed case here where we emit a CONSTANT_VECTOR
 
 	while (scanned < scan_count) {
 		// Exhausted this metadata group, move pointers to next group and load metadata for next group.
