@@ -404,40 +404,6 @@ inline Value QuantileAbs(const Value &v) {
 	}
 }
 
-template <typename T>
-static inline T QuantileDesc(const T &t, bool desc) {
-	return desc ? -t : t;
-}
-
-template <>
-inline Value QuantileDesc(const Value &v, bool desc) {
-	const auto &type = v.type();
-	switch (type.id()) {
-	case LogicalTypeId::DECIMAL: {
-		const auto integral = IntegralValue::Get(v);
-		const auto width = DecimalType::GetWidth(type);
-		const auto scale = DecimalType::GetScale(type);
-		switch (type.InternalType()) {
-		case PhysicalType::INT16:
-			return Value::DECIMAL(QuantileDesc<int16_t>(Cast::Operation<hugeint_t, int16_t>(integral), desc), width,
-			                      scale);
-		case PhysicalType::INT32:
-			return Value::DECIMAL(QuantileDesc<int32_t>(Cast::Operation<hugeint_t, int32_t>(integral), desc), width,
-			                      scale);
-		case PhysicalType::INT64:
-			return Value::DECIMAL(QuantileDesc<int64_t>(Cast::Operation<hugeint_t, int64_t>(integral), desc), width,
-			                      scale);
-		case PhysicalType::INT128:
-			return Value::DECIMAL(QuantileDesc<hugeint_t>(integral, desc), width, scale);
-		default:
-			throw InternalException("Unknown DECIMAL type");
-		}
-	}
-	default:
-		return Value::DOUBLE(QuantileDesc<double>(v.GetValue<double>(), desc));
-	}
-}
-
 struct QuantileBindData : public FunctionData {
 
 	explicit QuantileBindData(const Value &quantile_p)
@@ -463,12 +429,14 @@ struct QuantileBindData : public FunctionData {
 		std::sort(order.begin(), order.end(), lt);
 	}
 
-	unique_ptr<FunctionData> Copy() const override {
-		vector<Value> copies;
-		for (const auto &q : quantiles) {
-			copies.emplace_back(QuantileDesc(q, desc));
+	QuantileBindData(const QuantileBindData &other) : order(other.order), desc(other.desc) {
+		for (const auto &q : other.quantiles) {
+			quantiles.emplace_back(q);
 		}
-		return make_unique<QuantileBindData>(copies);
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<QuantileBindData>(*this);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
