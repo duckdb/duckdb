@@ -1,3 +1,17 @@
+find_package(PythonLibs)
+find_package(pybind11)
+if(NOT pybind11_FOUND)
+  return()
+endif()
+if(NOT PythonLibs_FOUND)
+  return()
+endif()
+include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/../../)
+include_directories(${CMAKE_SOURCE_DIR}/src/include)
+include_directories(${pybind11_INCLUDE_DIR})
+# this is used for clang-tidy checks
+
 add_subdirectory(pyrelation)
 add_subdirectory(common)
 add_subdirectory(pandas)
