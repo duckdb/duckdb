@@ -305,6 +305,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 		create_info->constraints.push_back(constraint->Copy());
 	}
 	Binder::BindLogicalType(context, info.new_column.TypeMutable(), schema->name);
+	info.new_column.SetOid(columns.LogicalColumnCount());
+	info.new_column.SetStorageOid(columns.PhysicalColumnCount());
 	auto col = info.new_column.Copy();
 
 	create_info->columns.AddColumn(move(col));
