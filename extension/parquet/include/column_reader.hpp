@@ -73,6 +73,25 @@ public:
 
 	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns);
 
+	template <class VALUE_TYPE, class CONVERSION>
+	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values,
+	                    parquet_filter_t &filter, idx_t result_offset, Vector &result) {
+		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+		auto &result_mask = FlatVector::Validity(result);
+		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
+			if (HasDefines() && defines[row_idx + result_offset] != max_define) {
+				result_mask.SetInvalid(row_idx + result_offset);
+				continue;
+			}
+			if (filter[row_idx + result_offset]) {
+				VALUE_TYPE val = CONVERSION::PlainRead(*plain_data, *this);
+				result_ptr[row_idx + result_offset] = val;
+			} else { // there is still some data there that we have to skip over
+				CONVERSION::PlainSkip(*plain_data, *this);
+			}
+		}
+	}
+
 protected:
 	Allocator &GetAllocator();
 	// readers that use the default Read() need to implement those
@@ -85,6 +104,11 @@ protected:
 	// these are nops for most types, but not for strings
 	virtual void DictReference(Vector &result);
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result);
+
+	virtual void PrepareDeltaLengthByteArray(ResizeableBuffer &buffer);
+	virtual void PrepareDeltaByteArray(ResizeableBuffer &buffer);
+	virtual void DeltaByteArray(uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
+	                            Vector &result);
 
 	// applies any skips that were registered using Skip()
 	virtual void ApplyPendingSkips(idx_t num_values);
@@ -106,6 +130,7 @@ protected:
 
 	ParquetReader &reader;
 	LogicalType type;
+	unique_ptr<Vector> byte_array_data;
 
 	idx_t pending_skips = 0;
 
@@ -134,6 +159,7 @@ private:
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> repeated_decoder;
 	unique_ptr<DbpDecoder> dbp_decoder;
+	unique_ptr<RleBpDecoder> rle_decoder;
 
 	// dummies for Skip()
 	parquet_filter_t none_filter;

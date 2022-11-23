@@ -141,6 +141,19 @@ void ColumnReader::Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values
 	throw NotImplementedException("Offsets");
 }
 
+void ColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
+	throw std::runtime_error("DELTA_LENGTH_BYTE_ARRAY encoding is only supported for text or binary data");
+}
+
+void ColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
+	throw std::runtime_error("DELTA_BYTE_ARRAY encoding is only supported for text or binary data");
+}
+
+void ColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, // NOLINT
+                                  parquet_filter_t &filter, idx_t result_offset, Vector &result) {
+	throw NotImplementedException("DeltaByteArray");
+}
+
 void ColumnReader::DictReference(Vector &result) {
 }
 void ColumnReader::PlainReference(shared_ptr<ByteBuffer>, Vector &result) { // NOLINT
@@ -291,7 +304,6 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const char *
 		codec_name << codec;
 		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
 		                         "\". Supported options are uncompressed, gzip, snappy or zstd");
-		break;
 	}
 	}
 }
@@ -304,29 +316,32 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		throw std::runtime_error("Missing data page header from data page v2");
 	}
 
-	page_rows_available = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.num_values
-	                                                           : page_hdr.data_page_header_v2.num_values;
-	auto page_encoding = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.encoding
-	                                                          : page_hdr.data_page_header_v2.encoding;
+	bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
+	bool is_v2 = page_hdr.type == PageType::DATA_PAGE_V2;
+	auto &v1_header = page_hdr.data_page_header;
+	auto &v2_header = page_hdr.data_page_header_v2;
+
+	page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
+	auto page_encoding = is_v1 ? v1_header.encoding : v2_header.encoding;
 
 	if (HasRepeats()) {
-		uint32_t rep_length = page_hdr.type == PageType::DATA_PAGE
-		                          ? block->read<uint32_t>()
-		                          : page_hdr.data_page_header_v2.repetition_levels_byte_length;
+		uint32_t rep_length = is_v1 ? block->read<uint32_t>() : v2_header.repetition_levels_byte_length;
 		block->available(rep_length);
 		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length,
 		                                             RleBpDecoder::ComputeBitWidth(max_repeat));
 		block->inc(rep_length);
+	} else if (is_v2 && v2_header.repetition_levels_byte_length > 0) {
+		block->inc(v2_header.repetition_levels_byte_length);
 	}
 
 	if (HasDefines()) {
-		uint32_t def_length = page_hdr.type == PageType::DATA_PAGE
-		                          ? block->read<uint32_t>()
-		                          : page_hdr.data_page_header_v2.definition_levels_byte_length;
+		uint32_t def_length = is_v1 ? block->read<uint32_t>() : v2_header.definition_levels_byte_length;
 		block->available(def_length);
 		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length,
 		                                            RleBpDecoder::ComputeBitWidth(max_define));
 		block->inc(def_length);
+	} else if (is_v2 && v2_header.definition_levels_byte_length > 0) {
+		block->inc(v2_header.definition_levels_byte_length);
 	}
 
 	switch (page_encoding) {
@@ -339,47 +354,27 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		block->inc(block->len);
 		break;
 	}
+	case Encoding::RLE: {
+		if (type.id() != LogicalTypeId::BOOLEAN) {
+			throw std::runtime_error("RLE encoding is only supported for boolean data");
+		}
+		block->inc(sizeof(uint32_t));
+		rle_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, block->len, 1);
+		break;
+	}
 	case Encoding::DELTA_BINARY_PACKED: {
 		dbp_decoder = make_unique<DbpDecoder>((const uint8_t *)block->ptr, block->len);
 		block->inc(block->len);
 		break;
 	}
-		/*
-	case Encoding::DELTA_BYTE_ARRAY: {
-		dbp_decoder = make_unique<DbpDecoder>((const uint8_t *)block->ptr, block->len);
-		auto prefix_buffer = make_shared<ResizeableBuffer>();
-		prefix_buffer->resize(reader.allocator, sizeof(uint32_t) * page_hdr.data_page_header_v2.num_rows);
-
-		auto suffix_buffer = make_shared<ResizeableBuffer>();
-		suffix_buffer->resize(reader.allocator, sizeof(uint32_t) * page_hdr.data_page_header_v2.num_rows);
-
-		dbp_decoder->GetBatch<uint32_t>(prefix_buffer->ptr, page_hdr.data_page_header_v2.num_rows);
-		auto buffer_after_prefixes = dbp_decoder->BufferPtr();
-
-		dbp_decoder = make_unique<DbpDecoder>((const uint8_t *)buffer_after_prefixes.ptr, buffer_after_prefixes.len);
-		dbp_decoder->GetBatch<uint32_t>(suffix_buffer->ptr, page_hdr.data_page_header_v2.num_rows);
-
-		auto string_buffer = dbp_decoder->BufferPtr();
-
-		for (idx_t i = 0 ; i < page_hdr.data_page_header_v2.num_rows; i++) {
-		    auto suffix_length = (uint32_t*) suffix_buffer->ptr;
-		    string str( suffix_length[i] + 1, '\0');
-		    string_buffer.copy_to((char*) str.data(), suffix_length[i]);
-		    printf("%s\n", str.c_str());
-		}
-		throw std::runtime_error("eek");
-
-
-		// This is also known as incremental encoding or front compression: for each element in a sequence of strings,
-		// store the prefix length of the previous entry plus the suffix. This is stored as a sequence of delta-encoded
-		// prefix lengths (DELTA_BINARY_PACKED), followed by the suffixes encoded as delta length byte arrays
-		// (DELTA_LENGTH_BYTE_ARRAY). DELTA_LENGTH_BYTE_ARRAY: The encoded data would be DeltaEncoding(5, 5, 6, 6)
-		// "HelloWorldFoobarABCDEF"
-
-		// TODO actually do something here
+	case Encoding::DELTA_LENGTH_BYTE_ARRAY: {
+		PrepareDeltaLengthByteArray(*block);
 		break;
 	}
-		 */
+	case Encoding::DELTA_BYTE_ARRAY: {
+		PrepareDeltaByteArray(*block);
+		break;
+	}
 	case Encoding::PLAIN:
 		// nothing to do here, will be read directly below
 		break;
@@ -425,7 +420,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 
 		idx_t null_count = 0;
 
-		if ((dict_decoder || dbp_decoder) && HasDefines()) {
+		if ((dict_decoder || dbp_decoder || rle_decoder) && HasDefines()) {
 			// we need the null count because the dictionary offsets have no entries for nulls
 			for (idx_t i = 0; i < read_now; i++) {
 				if (define_out[i + result_offset] != max_define) {
@@ -459,6 +454,17 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 			}
 			// Plain() will put NULLs in the right place
 			Plain(read_buf, define_out, read_now, filter, result_offset, result);
+		} else if (rle_decoder) {
+			// RLE encoding for boolean
+			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+			auto read_buf = make_shared<ResizeableBuffer>();
+			read_buf->resize(reader.allocator, sizeof(bool) * (read_now - null_count));
+			rle_decoder->GetBatch<uint8_t>(read_buf->ptr, read_now - null_count);
+			PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(read_buf, define_out, read_now, filter,
+			                                                            result_offset, result);
+		} else if (byte_array_data) {
+			// DELTA_BYTE_ARRAY or DELTA_LENGTH_BYTE_ARRAY
+			DeltaByteArray(define_out, read_now, filter, result_offset, result);
 		} else {
 			PlainReference(block, result);
 			Plain(block, define_out, read_now, filter, result_offset, result);
@@ -548,6 +554,91 @@ void StringColumnReader::Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num
 		auto actual_str_len = VerifyString(dict->ptr, str_len);
 		dict_strings[dict_idx] = string_t(dict->ptr, actual_str_len);
 		dict->inc(str_len);
+	}
+}
+
+static shared_ptr<ResizeableBuffer> ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer, idx_t &value_count) {
+	auto decoder = make_unique<DbpDecoder>((const uint8_t *)buffer.ptr, buffer.len);
+	value_count = decoder->TotalValues();
+	auto result = make_shared<ResizeableBuffer>();
+	result->resize(allocator, sizeof(uint32_t) * value_count);
+	decoder->GetBatch<uint32_t>(result->ptr, value_count);
+	decoder->Finalize();
+	buffer.inc(buffer.len - decoder->BufferPtr().len);
+	return result;
+}
+
+void StringColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
+	idx_t value_count;
+	auto length_buffer = ReadDbpData(reader.allocator, buffer, value_count);
+	if (value_count == 0) {
+		// no values
+		byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, nullptr);
+		return;
+	}
+	auto length_data = (uint32_t *)length_buffer->ptr;
+	byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, value_count);
+	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
+	for (idx_t i = 0; i < value_count; i++) {
+		auto str_len = length_data[i];
+		string_data[i] = StringVector::EmptyString(*byte_array_data, str_len);
+		auto result_data = string_data[i].GetDataWriteable();
+		memcpy(result_data, buffer.ptr, length_data[i]);
+		buffer.inc(length_data[i]);
+		string_data[i].Finalize();
+	}
+}
+
+void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
+	idx_t prefix_count, suffix_count;
+	auto prefix_buffer = ReadDbpData(reader.allocator, buffer, prefix_count);
+	auto suffix_buffer = ReadDbpData(reader.allocator, buffer, suffix_count);
+	if (prefix_count != suffix_count) {
+		throw std::runtime_error("DELTA_BYTE_ARRAY - prefix and suffix counts are different - corrupt file?");
+	}
+	if (prefix_count == 0) {
+		// no values
+		byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, nullptr);
+		return;
+	}
+	auto prefix_data = (uint32_t *)prefix_buffer->ptr;
+	auto suffix_data = (uint32_t *)suffix_buffer->ptr;
+	byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, prefix_count);
+	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
+	for (idx_t i = 0; i < prefix_count; i++) {
+		auto str_len = prefix_data[i] + suffix_data[i];
+		string_data[i] = StringVector::EmptyString(*byte_array_data, str_len);
+		auto result_data = string_data[i].GetDataWriteable();
+		if (prefix_data[i] > 0) {
+			if (i == 0 || prefix_data[i] > string_data[i - 1].GetSize()) {
+				throw std::runtime_error("DELTA_BYTE_ARRAY - prefix is out of range - corrupt file?");
+			}
+			memcpy(result_data, string_data[i - 1].GetDataUnsafe(), prefix_data[i]);
+		}
+		memcpy(result_data + prefix_data[i], buffer.ptr, suffix_data[i]);
+		buffer.inc(suffix_data[i]);
+		string_data[i].Finalize();
+	}
+}
+
+void StringColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
+                                        idx_t result_offset, Vector &result) {
+	if (!byte_array_data) {
+		throw std::runtime_error("Internal error - DeltaByteArray called but there was no byte_array_data set");
+	}
+	auto result_ptr = FlatVector::GetData<string_t>(result);
+	auto &result_mask = FlatVector::Validity(result);
+	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
+	for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
+		if (HasDefines() && defines[row_idx + result_offset] != max_define) {
+			result_mask.SetInvalid(row_idx + result_offset);
+			continue;
+		}
+		if (filter[row_idx + result_offset]) {
+			result_ptr[row_idx + result_offset] = string_data[delta_offset++];
+		} else {
+			delta_offset++;
+		}
 	}
 }
 
