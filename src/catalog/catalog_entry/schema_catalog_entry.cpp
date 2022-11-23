@@ -165,21 +165,25 @@ CatalogEntry *SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateInde
 
 CatalogEntry *SchemaCatalogEntry::CreateCollation(ClientContext &context, CreateCollationInfo *info) {
 	auto collation = make_unique<CollateCatalogEntry>(catalog, this, info);
+	collation->internal = info->internal;
 	return AddEntry(context, move(collation), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {
 	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
+	table_function->internal = info->internal;
 	return AddEntry(context, move(table_function), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info) {
 	auto copy_function = make_unique<CopyFunctionCatalogEntry>(catalog, this, info);
+	copy_function->internal = info->internal;
 	return AddEntry(context, move(copy_function), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info) {
 	auto pragma_function = make_unique<PragmaFunctionCatalogEntry>(catalog, this, info);
+	pragma_function->internal = info->internal;
 	return AddEntry(context, move(pragma_function), info->on_conflict);
 }
 
@@ -219,6 +223,7 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 	default:
 		throw InternalException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
 	}
+	function->internal = info->internal;
 	return AddEntry(context, move(function), info->on_conflict);
 }
 
