@@ -1,3 +1,8 @@
+# this is used for clang-tidy checks
+find_package(PythonLibs REQUIRED)
+find_package(pybind11 REQUIRED)
+include_directories(${pybind11_INCLUDE_DIR})
+
 add_library(python_relation OBJECT initialize.cpp)
 
 set(ALL_OBJECT_FILES
