@@ -1,0 +1,20 @@
+# name: test/fuzzer/pedro/setop_type_mismatch.test
+# description: Correlated SetOp type mismatches
+# group: [pedro]
+
+query I
+SELECT '\x1E' FROM (SELECT 1) t1(c0) ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
+----
+\x1E
+
+statement ok
+CREATE TABLE t1 (c0 BOOLEAN, c1 BIGINT);
+
+statement ok
+INSERT INTO t1 (c1) VALUES (1);
+
+query I
+SELECT ((SELECT 0) UNION (SELECT t1.c0) OFFSET 1) FROM t1;
+----
+NULL
+
