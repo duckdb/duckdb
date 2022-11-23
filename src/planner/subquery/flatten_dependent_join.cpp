@@ -80,6 +80,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// now create the duplicate eliminated scan for this node
 		auto delim_index = binder.GenerateTableIndex();
 		this->base_binding = ColumnBinding(delim_index, 0);
+		this->delim_offset = 0;
+		this->data_offset = 0;
 		auto delim_scan = make_unique<LogicalDelimGet>(delim_index, delim_types);
 		return LogicalCrossProduct::Create(move(plan), move(delim_scan));
 	}
