@@ -207,6 +207,20 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	}
 }
 
+void TableCatalogEntry::UndoAlter(ClientContext &context, AlterInfo *info) {
+	D_ASSERT(!internal);
+	D_ASSERT(info->type == AlterType::ALTER_TABLE);
+	auto table_info = (AlterTableInfo *)info;
+	switch (table_info->alter_table_type) {
+	case AlterTableType::RENAME_TABLE: {
+		storage->info->table = this->name;
+		break;
+	default:
+		break;
+	}
+	}
+}
+
 static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
