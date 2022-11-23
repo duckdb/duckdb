@@ -373,71 +373,75 @@ struct Interpolator<true> {
 	idx_t end;
 };
 
+template <typename T>
+static inline T QuantileAbs(const T &t) {
+	return AbsOperator::Operation<T, T>(t);
+}
+
+template <>
+inline Value QuantileAbs(const Value &v) {
+	const auto &type = v.type();
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL: {
+		const auto integral = IntegralValue::Get(v);
+		const auto width = DecimalType::GetWidth(type);
+		const auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return Value::DECIMAL(QuantileAbs<int16_t>(Cast::Operation<hugeint_t, int16_t>(integral)), width, scale);
+		case PhysicalType::INT32:
+			return Value::DECIMAL(QuantileAbs<int32_t>(Cast::Operation<hugeint_t, int32_t>(integral)), width, scale);
+		case PhysicalType::INT64:
+			return Value::DECIMAL(QuantileAbs<int64_t>(Cast::Operation<hugeint_t, int64_t>(integral)), width, scale);
+		case PhysicalType::INT128:
+			return Value::DECIMAL(QuantileAbs<hugeint_t>(integral), width, scale);
+		default:
+			throw InternalException("Unknown DECIMAL type");
+		}
+	}
+	default:
+		return Value::DOUBLE(QuantileAbs<double>(v.GetValue<double>()));
+	}
+}
+
+template <typename T>
+static inline T QuantileDesc(const T &t, bool desc) {
+	return desc ? -t : t;
+}
+
+template <>
+inline Value QuantileDesc(const Value &v, bool desc) {
+	const auto &type = v.type();
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL: {
+		const auto integral = IntegralValue::Get(v);
+		const auto width = DecimalType::GetWidth(type);
+		const auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return Value::DECIMAL(QuantileDesc<int16_t>(Cast::Operation<hugeint_t, int16_t>(integral), desc), width,
+			                      scale);
+		case PhysicalType::INT32:
+			return Value::DECIMAL(QuantileDesc<int32_t>(Cast::Operation<hugeint_t, int32_t>(integral), desc), width,
+			                      scale);
+		case PhysicalType::INT64:
+			return Value::DECIMAL(QuantileDesc<int64_t>(Cast::Operation<hugeint_t, int64_t>(integral), desc), width,
+			                      scale);
+		case PhysicalType::INT128:
+			return Value::DECIMAL(QuantileDesc<hugeint_t>(integral, desc), width, scale);
+		default:
+			throw InternalException("Unknown DECIMAL type");
+		}
+	}
+	default:
+		return Value::DOUBLE(QuantileDesc<double>(v.GetValue<double>(), desc));
+	}
+}
+
 struct QuantileBindData : public FunctionData {
-	template <typename T>
-	static inline T Abs(const T &t) {
-		return AbsOperator::Operation<T, T>(t);
-	}
-
-	template <>
-	inline Value Abs(const Value &v) {
-		const auto &type = v.type();
-		switch (type.id()) {
-		case LogicalTypeId::DECIMAL: {
-			const auto integral = IntegralValue::Get(v);
-			const auto width = DecimalType::GetWidth(type);
-			const auto scale = DecimalType::GetScale(type);
-			switch (type.InternalType()) {
-			case PhysicalType::INT16:
-				return Value::DECIMAL(Abs(Cast::Operation<hugeint_t, int16_t>(integral)), width, scale);
-			case PhysicalType::INT32:
-				return Value::DECIMAL(Abs(Cast::Operation<hugeint_t, int32_t>(integral)), width, scale);
-			case PhysicalType::INT64:
-				return Value::DECIMAL(Abs(Cast::Operation<hugeint_t, int64_t>(integral)), width, scale);
-			case PhysicalType::INT128:
-				return Value::DECIMAL(Abs(integral), width, scale);
-			default:
-				throw InternalException("Unknown DECIMAL type");
-			}
-		}
-		default:
-			return Value::DOUBLE(Abs(v.GetValue<double>()));
-		}
-	}
-
-	template <typename T>
-	static inline T Desc(const T &t, bool desc) {
-		return desc ? -t : t;
-	}
-
-	template <>
-	inline Value Desc(const Value &v, bool desc) {
-		const auto &type = v.type();
-		switch (type.id()) {
-		case LogicalTypeId::DECIMAL: {
-			const auto integral = IntegralValue::Get(v);
-			const auto width = DecimalType::GetWidth(type);
-			const auto scale = DecimalType::GetScale(type);
-			switch (type.InternalType()) {
-			case PhysicalType::INT16:
-				return Value::DECIMAL(Desc(Cast::Operation<hugeint_t, int16_t>(integral), desc), width, scale);
-			case PhysicalType::INT32:
-				return Value::DECIMAL(Desc(Cast::Operation<hugeint_t, int32_t>(integral), desc), width, scale);
-			case PhysicalType::INT64:
-				return Value::DECIMAL(Desc(Cast::Operation<hugeint_t, int64_t>(integral), desc), width, scale);
-			case PhysicalType::INT128:
-				return Value::DECIMAL(Desc(integral, desc), width, scale);
-			default:
-				throw InternalException("Unknown DECIMAL type");
-			}
-		}
-		default:
-			return Value::DOUBLE(Desc(v.GetValue<double>(), desc));
-		}
-	}
 
 	explicit QuantileBindData(const Value &quantile_p)
-	    : quantiles(1, Abs(quantile_p)), order(1, 0), desc(quantile_p < 0) {
+	    : quantiles(1, QuantileAbs(quantile_p)), order(1, 0), desc(quantile_p < 0) {
 	}
 
 	explicit QuantileBindData(const vector<Value> &quantiles_p) {
@@ -447,7 +451,7 @@ struct QuantileBindData : public FunctionData {
 			const auto q = quantiles_p[i];
 			pos += (q > 0);
 			neg += (q < 0);
-			quantiles.emplace_back(Abs(q));
+			quantiles.emplace_back(QuantileAbs(q));
 			order.push_back(i);
 		}
 		if (pos && neg) {
@@ -462,7 +466,7 @@ struct QuantileBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() const override {
 		vector<Value> copies;
 		for (const auto &q : quantiles) {
-			copies.emplace_back(Desc(q, desc));
+			copies.emplace_back(QuantileDesc(q, desc));
 		}
 		return make_unique<QuantileBindData>(copies);
 	}
