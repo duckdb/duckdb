@@ -5,6 +5,7 @@ import os
 import sys
 import platform
 import multiprocessing.pool
+from glob import glob
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as _build_ext
@@ -161,11 +162,7 @@ extra_files = []
 header_files = []
 
 def list_source_files(directory):
-    sources = []
-    dir_len = len(directory) + len(os.sep)
-    for (subdir, dirs, files) in os.walk(directory):
-        subdir = subdir[dir_len::]
-        sources.extend([os.path.join('src', subdir, x) for x in files if '.cpp' in x])
+    sources = glob('src/**/*.cpp', recursive=True)
     return sources
 
 script_path = os.path.dirname(os.path.abspath(__file__))

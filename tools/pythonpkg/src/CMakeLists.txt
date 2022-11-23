@@ -1,3 +1,10 @@
+# this is used for clang-tidy checks
+
+find_package(pybind11 REQUIRED)
+
+include_directories(${pybind11_INCLUDE_DIR})
+include_directories(${PYTHON_INCLUDE_DIRS})
+
 add_subdirectory(pyrelation)
 add_subdirectory(common)
 add_subdirectory(pandas)

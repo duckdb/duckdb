@@ -26,6 +26,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	if (get.function.pushdown_complex_filter) {
 		// for the remaining filters, check if we can push any of them into the scan as well
 		vector<unique_ptr<Expression>> expressions;
+		expressions.reserve(filters.size());
 		for (auto &filter : filters) {
 			expressions.push_back(move(filter->filter));
 		}
