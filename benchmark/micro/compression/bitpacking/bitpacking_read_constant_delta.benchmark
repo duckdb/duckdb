@@ -1,4 +1,4 @@
-# name: benchmark/micro/compression/bitpacking/bitpacking_read.benchmark
+# name: benchmark/micro/compression/bitpacking/bitpacking_read_constant_delta.benchmark
 # description: Scanning 1GB of ints compressed mostly with the CONSTANT_DELTA bitpacking mode
 # group: [bitpacking]
 

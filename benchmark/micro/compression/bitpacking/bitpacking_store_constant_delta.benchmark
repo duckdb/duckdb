@@ -1,4 +1,4 @@
-# name: benchmark/micro/compression/bitpacking/bitpacking_store.benchmark
+# name: benchmark/micro/compression/bitpacking/bitpacking_store_constant_delta.benchmark
 # description: Storing 1GB of ints compressed mostly with the CONSTANT DELTA bitpacking mode
 # group: [bitpacking]
 

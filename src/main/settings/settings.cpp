@@ -434,8 +434,9 @@ void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &confi
 	} else {
 		auto mode = BitpackingModeFromString(mode_str);
 		if (mode == BitpackingMode::AUTO) {
-			throw ParserException("Unrecognized option for PRAGMA set bitpacking mode, expected none, constant, constant_delta, "
-			                      "delta_for, or for");
+			throw ParserException(
+			    "Unrecognized option for PRAGMA set bitpacking mode, expected none, constant, constant_delta, "
+			    "delta_for, or for");
 		}
 		config.options.force_bitpacking_mode = mode;
 	}

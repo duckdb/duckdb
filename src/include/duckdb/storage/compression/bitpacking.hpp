@@ -24,4 +24,4 @@ enum class BitpackingMode : uint8_t {
 BitpackingMode BitpackingModeFromString(const string &str);
 string BitpackingModeToString(const BitpackingMode &mode);
 
-}
+} // namespace duckdb

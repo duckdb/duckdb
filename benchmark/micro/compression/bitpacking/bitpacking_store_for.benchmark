@@ -1,4 +1,4 @@
-# name: benchmark/micro/compression/bitpacking/bitpacking_store.benchmark
+# name: benchmark/micro/compression/bitpacking/bitpacking_store_for.benchmark
 # description: Storing 1GB of ints compressed mostly with the FOR bitpacking mode
 # group: [bitpacking]
 
