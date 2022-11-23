@@ -227,37 +227,6 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 	return AddEntry(context, move(function), info->on_conflict);
 }
 
-CatalogEntry *SchemaCatalogEntry::AddFunction(ClientContext &context, CreateFunctionInfo *info) {
-	auto entry = GetCatalogSet(info->type).GetEntry(context, info->name);
-	if (!entry) {
-		return CreateFunction(context, info);
-	}
-
-	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
-	switch (info->type) {
-	case CatalogType::SCALAR_FUNCTION_ENTRY: {
-		auto scalar_info = (CreateScalarFunctionInfo *)info;
-		auto &scalars = *(ScalarFunctionCatalogEntry *)entry;
-		for (const auto &scalar : scalars.functions.functions) {
-			scalar_info->functions.AddFunction(scalar);
-		}
-		break;
-	}
-	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
-		auto agg_info = (CreateAggregateFunctionInfo *)info;
-		auto &aggs = *(AggregateFunctionCatalogEntry *)entry;
-		for (const auto &agg : aggs.functions.functions) {
-			agg_info->functions.AddFunction(agg);
-		}
-		break;
-	}
-	default:
-		// Macros can only be replaced because there is only one of each name.
-		throw InternalException("Unsupported function type \"%s\" for adding", CatalogTypeToString(info->type));
-	}
-	return CreateFunction(context, info);
-}
-
 void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	auto &set = GetCatalogSet(info->type);
 
