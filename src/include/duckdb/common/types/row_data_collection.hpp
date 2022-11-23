@@ -19,7 +19,8 @@ public:
 	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
 		idx_t size = MaxValue<idx_t>(Storage::BLOCK_SIZE, capacity * entry_size);
-		block = buffer_manager.RegisterMemory(size, false);
+		buffer_manager.Allocate(size, false, &block);
+		D_ASSERT(BufferManager::GetAllocSize(size) == block->GetMemoryUsage());
 	}
 	explicit RowDataBlock(idx_t entry_size) : entry_size(entry_size) {
 	}
@@ -95,15 +96,11 @@ public:
 
 	//! The size (in bytes) of this RowDataCollection if it were stored in a single block
 	idx_t SizeInBytes() const {
-		idx_t bytes = 0;
-		if (entry_size == 1) {
-			for (auto &block : blocks) {
-				bytes += block->byte_offset;
-			}
-		} else {
-			bytes = count * entry_size;
+		idx_t size = 0;
+		for (auto &block : blocks) {
+			size += block->block->GetMemoryUsage();
 		}
-		return bytes;
+		return size;
 	}
 
 	static inline idx_t EntriesPerBlock(idx_t width) {
