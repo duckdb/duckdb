@@ -13,5 +13,5 @@ PRAGMA force_bitpacking_mode='delta_for';
 DROP TABLE IF EXISTS integers;
 
 run
-CREATE TABLE integers AS SELECT (i%250000000)::INT32 AS i FROM range(0, 250000000) tbl(i);
+CREATE TABLE integers AS SELECT CASE WHEN i%2=0 THEN 0 ELSE 2048 END AS i FROM range(0, 250000000) tbl(i);
 checkpoint;

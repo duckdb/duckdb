@@ -146,6 +146,7 @@ public:
 	}
 
 	void CalculateDeltaStats() {
+		// TODO: THIS SEEMS TO NOT BE CONSTEXPR WITH BIG PERFORMANCE OVERHEAD!
 		T_S limit1 = NumericLimits<T_S>::Maximum();
 		T limit = (T)limit1;
 
@@ -421,12 +422,8 @@ public:
 
 			state->current_segment->count += count;
 
-			// Update Validity
-			for (idx_t i = 0; i < count; i++) {
-				if (validity[i]) {
-					NumericStatistics::Update<T>(state->current_segment->stats, values[i]);
-				}
-			}
+			NumericStatistics::Update<T>(state->current_segment->stats, state->state.minimum);
+			NumericStatistics::Update<T>(state->current_segment->stats, state->state.maximum);
 		}
 
 		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference,
@@ -458,11 +455,8 @@ public:
 
 			state->current_segment->count += count;
 
-			for (idx_t i = 0; i < count; i++) {
-				if (validity[i]) {
-					NumericStatistics::Update<T>(state->current_segment->stats, original_values[i]);
-				}
-			}
+			NumericStatistics::Update<T>(state->current_segment->stats, state->state.minimum);
+			NumericStatistics::Update<T>(state->current_segment->stats, state->state.maximum);
 		}
 
 		static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count,
@@ -491,11 +485,8 @@ public:
 
 			state->current_segment->count += count;
 
-			for (idx_t i = 0; i < count; i++) {
-				if (validity[i]) {
-					NumericStatistics::Update<T>(state->current_segment->stats, values[i] + frame_of_reference);
-				}
-			}
+			NumericStatistics::Update<T>(state->current_segment->stats, state->state.minimum);
+			NumericStatistics::Update<T>(state->current_segment->stats, state->state.maximum);
 		}
 	};
 
