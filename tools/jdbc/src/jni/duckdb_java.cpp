@@ -956,11 +956,6 @@ class JavaArrowTabularStreamFactory {
 public:
 	JavaArrowTabularStreamFactory(ArrowArrayStream *stream_ptr_p) : stream_ptr(stream_ptr_p) {};
 
-	~JavaArrowTabularStreamFactory() {
-		printf("close()\n");
-		stream_ptr->release(stream_ptr);
-	}
-
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
 
 		auto factory = (JavaArrowTabularStreamFactory *)factory_p;
