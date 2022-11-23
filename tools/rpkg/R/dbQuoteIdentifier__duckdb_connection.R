@@ -42,6 +42,5 @@ reserved_words <- function(con) {
 }
 
 get_reserved_words <- function(con) {
-  # the otherwise unnecessary sort here forces the ALTREP materialization #5446
-  sort(dbGetQuery(con, "SELECT keyword_name FROM duckdb_keywords()")[[1]])
+  dbGetQuery(con, "SELECT keyword_name FROM duckdb_keywords()")[[1]]
 }

@@ -1,6 +1,5 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "altrepstring.hpp"
 
 #include <R_ext/Utils.h>
 
