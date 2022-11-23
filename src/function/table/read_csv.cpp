@@ -433,7 +433,11 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 		if (output.size() != 0) {
 			break;
 		}
-		if (csv_local_state.csv_reader->position_buffer >= csv_local_state.csv_reader->end_buffer) {
+		if (csv_local_state.csv_reader->position_buffer > csv_local_state.csv_reader->end_buffer ||
+		    csv_local_state.csv_reader->position_buffer == csv_local_state.csv_reader->buffer_size ||
+		    (csv_local_state.csv_reader->position_buffer == csv_local_state.csv_reader->end_buffer &&
+		     !StringUtil::CharacterIsNewline(
+		         (*csv_local_state.csv_reader->buffer)[csv_local_state.csv_reader->position_buffer - 1]))) {
 			csv_global_state.UpdateVerification(csv_local_state.csv_reader->GetVerificationPositions());
 			auto next_chunk = csv_global_state.Next(context, bind_data);
 			if (!next_chunk) {
