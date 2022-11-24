@@ -88,8 +88,12 @@ struct NumericLimits<int64_t> {
 };
 template <>
 struct NumericLimits<hugeint_t> {
-	DUCKDB_API static hugeint_t Minimum();
-	DUCKDB_API static hugeint_t Maximum();
+	DUCKDB_API static constexpr hugeint_t Minimum(){
+		return {1, std::numeric_limits<uint64_t>::lowest()};
+	};
+	DUCKDB_API static constexpr hugeint_t Maximum(){
+		return {std::numeric_limits<int64_t>::max(), std::numeric_limits<uint64_t>::max()};
+	};
 	DUCKDB_API static bool IsSigned() {
 		return true;
 	}
