@@ -19,20 +19,40 @@ void ProgressBar::Start() {
 	supported = true;
 }
 
-void ProgressBar::Update(bool final) {
+bool ProgressBar::ShouldPrint(bool final) const {
+	if (!print_progress) {
+		// Don't print progress at all
+		return false;
+	}
+	// FIXME - do we need to check supported before running `profiler.Elapsed()` ?
+	auto sufficient_time_elapsed = profiler.Elapsed() > show_progress_after / 1000.0;
+	if (!sufficient_time_elapsed) {
+		// Don't print yet
+		return false;
+	}
+	if (final) {
+		// Print the last completed bar
+		return true;
+	}
 	if (!supported) {
+		return false;
+	}
+	return current_percentage > -1;
+}
+
+void ProgressBar::Update(bool final) {
+	if (!final && !supported) {
 		return;
 	}
 	double new_percentage;
 	supported = executor.GetPipelinesProgress(new_percentage);
-	if (!supported) {
+	if (!final && !supported) {
 		return;
 	}
-	auto sufficient_time_elapsed = profiler.Elapsed() > show_progress_after / 1000.0;
 	if (new_percentage > current_percentage) {
 		current_percentage = new_percentage;
 	}
-	if (supported && print_progress && sufficient_time_elapsed && current_percentage > -1 && print_progress) {
+	if (ShouldPrint(final)) {
 #ifndef DUCKDB_DISABLE_PRINT
 		if (final) {
 			FinishProgressBarPrint();

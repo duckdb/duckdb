@@ -48,6 +48,7 @@ private:
 	void PrintProgressInternal(int percentage);
 	void PrintProgress(int percentage);
 	void FinishProgressBarPrint();
+	bool ShouldPrint(bool final) const;
 
 private:
 	//! The executor
