@@ -19,8 +19,11 @@
 #include "duckdb/main/relation/aggregate_relation.hpp"
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/join_relation.hpp"
+#include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
+
+#include <iostream>
 
 using namespace duckdb;
 using namespace cpp11;
@@ -187,14 +190,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rapi_rel_limit(duckdb::rel_extptr_t rel, int64_t n) {
-	return make_external<RelationWrapper>("duckdb_relation", std::make_shared<LimitRelation>(rel->rel, n, 0));
-}
-
-[[cpp11::register]] SEXP rapi_rel_distinct(duckdb::rel_extptr_t rel) {
-	return make_external<RelationWrapper>("duckdb_relation", std::make_shared<DistinctRelation>(rel->rel));
-}
-
 static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	if (res->HasError()) {
 		stop(res->GetError());
@@ -219,6 +214,19 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	df.attr("class") = classes;
 	df.attr("row.names") = row_names;
 	return df;
+}
+
+[[cpp11::register]] SEXP rapi_rel_union_all(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b) {
+	auto res = std::make_shared<SetOpRelation>(rel_a->rel, rel_b->rel, SetOperationType::UNION);
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+[[cpp11::register]] SEXP rapi_rel_limit(duckdb::rel_extptr_t rel, int64_t n) {
+	return make_external<RelationWrapper>("duckdb_relation", std::make_shared<LimitRelation>(rel->rel, n, 0));
+}
+
+[[cpp11::register]] SEXP rapi_rel_distinct(duckdb::rel_extptr_t rel) {
+	return make_external<RelationWrapper>("duckdb_relation", std::make_shared<DistinctRelation>(rel->rel));
 }
 
 [[cpp11::register]] SEXP rapi_rel_to_df(duckdb::rel_extptr_t rel) {

@@ -1,5 +1,7 @@
 #include "rapi.hpp"
 
+#include <iostream>
+
 using namespace duckdb;
 
 void duckdb::ConnDeleter(ConnWrapper *conn) {
@@ -11,7 +13,7 @@ void duckdb::ConnDeleter(ConnWrapper *conn) {
 	if (!db || !db.get() || !db->db) {
 		cpp11::stop("rapi_connect: Invalid database reference");
 	}
-
+	std::cout << "registered here" << std::endl;
 	auto conn_wrapper = new ConnWrapper();
 	conn_wrapper->conn = make_unique<Connection>(*db->db);
 	conn_wrapper->db_eptr.swap(db);

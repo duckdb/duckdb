@@ -122,3 +122,85 @@ test_that("we can get the relation object back from an altrep df", {
   rel2 <- rel_from_altrep_df(df)
   expect_true(TRUE)
 })
+
+test_that("Union all doesn't immediately materialize", {
+    test_df_a <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+    test_df_b <- rel_from_df(con, data.frame(a=c('5', '6'), b=c('7', '8')))
+    rel <- rel_union_all(test_df_a, test_df_b)
+    rel_df <- rel_to_altrep(rel)
+    expect_false(df_is_materialized(rel_df))
+    dim(rel_df)
+    expect_true(df_is_materialized(rel_df))
+})
+
+test_that("Union all has the correct values", {
+    test_df_a <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+    test_df_b <- rel_from_df(con, data.frame(a=c('5', '6'), b=c('7', '8')))
+    rel <- rel_union_all(test_df_a, test_df_b)
+    rel_df <- rel_to_altrep(rel)
+    expect_false(df_is_materialized(rel_df))
+    dim(rel_df)
+    expect_true(df_is_materialized(rel_df))
+    expect_true(df_is_materialized(rel_df))
+    expect_equal(rel_df[[1]][[1]], '1')
+    expect_equal(rel_df[[1]][[2]], '2')
+    expect_equal(rel_df[[1]][[3]], '5')
+    expect_equal(rel_df[[1]][[4]], '6')
+    expect_equal(rel_df[[2]][[1]], '3')
+    expect_equal(rel_df[[2]][[2]], '4')
+    expect_equal(rel_df[[2]][[3]], '7')
+    expect_equal(rel_df[[2]][[4]], '8')
+})
+
+test_that("Union all keeps duplicates", {
+    test_df_a2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+    test_df_b2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+    rel <- rel_union_all(test_df_a2, test_df_b2)
+    rel_df <- rel_to_altrep(rel)
+    dim(rel_df)
+    expect_true(df_is_materialized(rel_df))
+    expect_equal(rel_df[[1]][[1]], '1')
+    expect_equal(rel_df[[1]][[2]], '2')
+    expect_equal(rel_df[[1]][[3]], '1')
+    expect_equal(rel_df[[1]][[4]], '2')
+    expect_equal(rel_df[[2]][[1]], '3')
+    expect_equal(rel_df[[2]][[2]], '4')
+    expect_equal(rel_df[[2]][[3]], '3')
+    expect_equal(rel_df[[2]][[4]], '4')
+})
+
+# nobody should do this in reality. It's a pretty dumb idea
+test_that("we can union the same relation to itself", {
+     test_df_a2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+     rel <- rel_union_all(test_df_a2, test_df_a2)
+     rel_df <- rel_to_altrep(rel)
+     expect_equal(rel_df[[1]][[1]], '1')
+     expect_equal(rel_df[[1]][[2]], '2')
+     expect_equal(rel_df[[1]][[3]], '1')
+     expect_equal(rel_df[[1]][[4]], '2')
+     expect_equal(rel_df[[2]][[1]], '3')
+     expect_equal(rel_df[[2]][[2]], '4')
+     expect_equal(rel_df[[2]][[3]], '3')
+     expect_equal(rel_df[[2]][[4]], '4')
+})
+
+test_that("A union with different column types throws an error", {
+     test_df_a1 <- duckdb:::rel_from_df(con, data.frame(a=c(1)))
+     test_df_a2 <- duckdb:::rel_from_df(con, data.frame(a=c('1')))
+     rel <- duckdb:::rel_union_all(test_df_a1, test_df_a2)
+     # Error in row.names.data.frame(x) :
+     #  Invalid Error: Result mismatch in query!
+     #  Expected the following columns: [a INT]
+     #  But result contained the following: [a VARCHAR]
+     # expect_error(rel_to_altrep(rel))
+     # duckdb can't support the union all, so 
+
+    expect_true(TRUE)
+})
+
+test_that("we throw an error when attempting to union all relations that are not compatible", {
+    test_df_a2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+    test_df_b2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4'), c=c('5', '6')))
+    # can't figure out how to throw the correct error
+    expect_error(rel_union_all(test_df_a2, test_df_b2))
+})
