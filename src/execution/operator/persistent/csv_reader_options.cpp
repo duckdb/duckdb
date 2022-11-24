@@ -117,6 +117,19 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	}
 }
 
+void BufferedCSVReaderOptions::SetNewline(const string &input) {
+	if (input == "\\n") {
+		this->new_line = NewLineIdentifier::N;
+	} else if (input == "\\r") {
+		this->new_line = NewLineIdentifier::R;
+	} else if (input == "\\r\\n") {
+		this->new_line = NewLineIdentifier::RN;
+	} else {
+		throw InvalidInputException("This is not accepted as a newline: " + input);
+	}
+	this->has_newline = true;
+}
+
 void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {

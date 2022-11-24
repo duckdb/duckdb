@@ -141,6 +141,7 @@ private:
 	//! when changing the buffer end the first time.
 	//! It returns FALSE if the parser should jump to the final state of parsing or not
 	bool BufferRemainder();
+
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
 	//! Position of the first read line and last read line for verification purposes

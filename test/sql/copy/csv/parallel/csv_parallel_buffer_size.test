@@ -36,7 +36,7 @@ select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  C
 100000000	15519	785	p9
 
 query IIII
-select * from read_csv('test/sql/copy/csv/data/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', buffer_size=25)
+select * from read_csv('test/sql/copy/csv/data/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=25)
 ----
 1	6370	371	p1
 10	214	465	p2

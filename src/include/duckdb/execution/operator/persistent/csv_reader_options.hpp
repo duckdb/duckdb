@@ -16,6 +16,14 @@
 
 namespace duckdb {
 
+enum NewLineIdentifier {
+	N = 1,   // Only has \n
+	R = 2,   // Only has \r
+	RN = 3,  // Only has \rn
+	MIX = 4, // Hippie-land
+	INVALID = 5
+};
+
 struct BufferedCSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	// CommonCSVOptions
@@ -25,7 +33,11 @@ struct BufferedCSVReaderOptions {
 	bool has_delimiter = false;
 	//! Delimiter to separate columns within each line
 	string delimiter = ",";
-	//! Whether or not a quote sign was defined by the user
+	//! Whether or not a new_line was defined by the user
+	bool has_newline = false;
+	//! New Line separator
+	NewLineIdentifier new_line = NewLineIdentifier::INVALID;
+
 	bool has_quote = false;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
 	string quote = "\"";
@@ -102,6 +114,8 @@ struct BufferedCSVReaderOptions {
 	void Deserialize(FieldReader &reader);
 
 	void SetDelimiter(const string &delimiter);
+
+	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
 	bool SetBaseOption(const string &loption, const Value &value);
