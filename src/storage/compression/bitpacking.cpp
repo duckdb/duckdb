@@ -66,7 +66,7 @@ static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) 
 	encoded_value |= (uint8_t)metadata.mode << 24;
 	return encoded_value;
 }
-static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t* metadata_encoded) {
+static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
 	bitpacking_metadata_t metadata;
 	metadata.mode = Load<BitpackingMode>((data_ptr_t)(metadata_encoded) + 3);
 	metadata.offset = *metadata_encoded & 0x00FFFFFF;
@@ -386,7 +386,7 @@ public:
 		                               void *data_ptr) {
 			auto state = (BitpackingCompressState<T> *)data_ptr;
 
-			ReserveSpace(state, 2*sizeof(T));
+			ReserveSpace(state, 2 * sizeof(T));
 			WriteMetaData(state, BitpackingMode::CONSTANT_DELTA);
 			WriteData(state->data_ptr, frame_of_reference);
 			WriteData(state->data_ptr, constant);
@@ -399,7 +399,7 @@ public:
 			auto state = (BitpackingCompressState<T> *)data_ptr;
 
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(count, width);
-			ReserveSpace(state, bp_size + 3*sizeof(T));
+			ReserveSpace(state, bp_size + 3 * sizeof(T));
 
 			WriteMetaData(state, BitpackingMode::DELTA_FOR);
 			WriteData(state->data_ptr, frame_of_reference);
@@ -417,7 +417,7 @@ public:
 			auto state = (BitpackingCompressState<T> *)data_ptr;
 
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(count, width);
-			ReserveSpace(state, bp_size + 2*sizeof(T));
+			ReserveSpace(state, bp_size + 2 * sizeof(T));
 
 			WriteMetaData(state, BitpackingMode::FOR);
 			WriteData(state->data_ptr, frame_of_reference);
@@ -430,8 +430,8 @@ public:
 		}
 
 		template <class T_OUT>
-		static void WriteData(data_ptr_t& ptr, T_OUT val) {
-			*((T_OUT*)ptr) = val;
+		static void WriteData(data_ptr_t &ptr, T_OUT val) {
+			*((T_OUT *)ptr) = val;
 			ptr += sizeof(T_OUT);
 		}
 
