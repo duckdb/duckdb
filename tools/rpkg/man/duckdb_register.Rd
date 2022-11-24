@@ -5,7 +5,7 @@
 \alias{duckdb_unregister}
 \title{Register a data frame as a virtual table}
 \usage{
-duckdb_register(conn, name, df, overwrite = FALSE)
+duckdb_register(conn, name, df, overwrite = FALSE, experimental = FALSE)
 
 duckdb_unregister(conn, name)
 }
