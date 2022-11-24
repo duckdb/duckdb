@@ -42,13 +42,14 @@ BufferHandle ColumnDataAllocator::PinInternal(uint32_t block_id) {
 	return alloc.buffer_manager->Pin(blocks[block_id].handle);
 }
 
-void ColumnDataAllocator::AllocateBlock() {
+BufferHandle ColumnDataAllocator::AllocateBlock() {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	BlockMetaData data;
 	data.size = 0;
 	data.capacity = Storage::BLOCK_SIZE;
-	alloc.buffer_manager->Allocate(Storage::BLOCK_SIZE, false, &data.handle);
+	auto pin = alloc.buffer_manager->Allocate(Storage::BLOCK_SIZE, false, &data.handle);
 	blocks.push_back(move(data));
+	return pin;
 }
 
 void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
@@ -82,11 +83,10 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
                                          ChunkManagementState *chunk_state) {
 	D_ASSERT(allocated_data.empty());
 	if (blocks.empty() || blocks.back().Capacity() < size) {
-		AllocateBlock();
+		auto pinned_block = AllocateBlock();
 		if (chunk_state && !blocks.empty()) {
 			auto &last_block = blocks.back();
 			auto new_block_id = blocks.size() - 1;
-			auto pinned_block = alloc.buffer_manager->Pin(last_block.handle);
 			chunk_state->handles[new_block_id] = move(pinned_block);
 		}
 	}

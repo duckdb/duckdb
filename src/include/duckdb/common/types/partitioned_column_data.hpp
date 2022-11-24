@@ -92,7 +92,7 @@ protected:
 	//! Create a DataChunk used for buffering appends to the partition
 	unique_ptr<DataChunk> CreatePartitionBuffer() const {
 		auto result = make_unique<DataChunk>();
-		result->Initialize(Allocator::Get(context), types, BufferSize());
+		result->Initialize(BufferManager::GetBufferManager(context).GetBufferAllocator(), types, BufferSize());
 		return result;
 	}
 

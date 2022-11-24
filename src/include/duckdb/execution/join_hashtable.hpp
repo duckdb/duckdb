@@ -233,7 +233,7 @@ private:
 	mutex pinned_handles_lock;
 	vector<BufferHandle> pinned_handles;
 	//! The hash map of the HT, created after finalization
-	BufferHandle hash_map;
+	AllocatedData hash_map;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 
@@ -317,9 +317,9 @@ public:
 	idx_t SwizzledSize() const {
 		return swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes();
 	}
-	//! Capacity of the pointer table given the
+	//! Capacity of the pointer table given the count
 	static idx_t PointerTableCapacity(idx_t count) {
-		return NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
+		return NextPowerOfTwo(count * 2);
 	}
 
 	//! Swizzle the blocks in this HT (moves from block_collection and string_heap to swizzled_...)

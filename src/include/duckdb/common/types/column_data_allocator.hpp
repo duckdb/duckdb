@@ -56,7 +56,7 @@ public:
 
 private:
 	void AllocateEmptyBlock(idx_t size);
-	void AllocateBlock();
+	BufferHandle AllocateBlock();
 	BufferHandle Pin(uint32_t block_id);
 	BufferHandle PinInternal(uint32_t block_id);
 

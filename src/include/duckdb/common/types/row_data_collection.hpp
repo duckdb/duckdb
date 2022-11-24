@@ -94,13 +94,23 @@ public:
 		count = 0;
 	}
 
-	//! The size (in bytes) of this RowDataCollection if it were stored in a single block
+	//! The size (in bytes) of this RowDataCollection
 	idx_t SizeInBytes() const {
+		VerifyBlockSizes();
 		idx_t size = 0;
 		for (auto &block : blocks) {
 			size += block->block->GetMemoryUsage();
 		}
 		return size;
+	}
+
+	//! Verifies that the block sizes are correct (Debug only)
+	void VerifyBlockSizes() const {
+#ifdef DEBUG
+		for (auto &block : blocks) {
+			D_ASSERT(block->block->GetMemoryUsage() == BufferManager::GetAllocSize(block->capacity * entry_size));
+		}
+#endif
 	}
 
 	static inline idx_t EntriesPerBlock(idx_t width) {

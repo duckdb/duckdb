@@ -998,6 +998,10 @@ Allocator &BufferAllocator::Get(ClientContext &context) {
 	return manager.GetBufferAllocator();
 }
 
+Allocator &BufferAllocator::Get(DatabaseInstance &db) {
+	return BufferManager::GetBufferManager(db).GetBufferAllocator();
+}
+
 Allocator &BufferManager::GetBufferAllocator() {
 	return buffer_allocator;
 }
