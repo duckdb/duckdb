@@ -96,9 +96,13 @@ void ProgressBar::PrintProgress(int percentage) {
 }
 
 void ProgressBar::FinishProgressBarPrint() {
+	if (finished) {
+		return;
+	}
 	PrintProgressInternal(100);
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, "\n");
 	Printer::Flush(OutputStream::STREAM_STDOUT);
+	finished = true;
 }
 
 } // namespace duckdb

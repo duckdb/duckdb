@@ -140,7 +140,7 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		pending_query.ThrowError();
 	}
-	return pending_query.ExecuteUnsafe();
+	return pending_query.Execute();
 }
 
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {

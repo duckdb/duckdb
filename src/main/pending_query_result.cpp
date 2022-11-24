@@ -65,25 +65,9 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 	return result;
 }
 
-unique_ptr<QueryResult> PendingQueryResult::ExecuteInternalUnsafe(ClientContextLock &lock) {
-	CheckExecutableInternal(lock);
-	// Don't call ExecuteTaskInternal - result is already assumed to be RESULT_READY
-	if (HasError()) {
-		return make_unique<MaterializedQueryResult>(error);
-	}
-	auto result = context->FetchResultInternal(lock, *this);
-	Close();
-	return result;
-}
-
 unique_ptr<QueryResult> PendingQueryResult::Execute() {
 	auto lock = LockContext();
 	return ExecuteInternal(*lock);
-}
-
-unique_ptr<QueryResult> PendingQueryResult::ExecuteUnsafe() {
-	auto lock = LockContext();
-	return ExecuteInternalUnsafe(*lock);
 }
 
 void PendingQueryResult::Close() {

@@ -62,5 +62,7 @@ private:
 	bool print_progress;
 	//! Whether or not profiling is supported for the current query
 	bool supported = true;
+	//! Whether the bar has already finished
+	bool finished = false;
 };
 } // namespace duckdb
