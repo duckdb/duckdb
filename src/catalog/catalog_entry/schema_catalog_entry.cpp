@@ -165,21 +165,25 @@ CatalogEntry *SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateInde
 
 CatalogEntry *SchemaCatalogEntry::CreateCollation(ClientContext &context, CreateCollationInfo *info) {
 	auto collation = make_unique<CollateCatalogEntry>(catalog, this, info);
+	collation->internal = info->internal;
 	return AddEntry(context, move(collation), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {
 	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
+	table_function->internal = info->internal;
 	return AddEntry(context, move(table_function), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info) {
 	auto copy_function = make_unique<CopyFunctionCatalogEntry>(catalog, this, info);
+	copy_function->internal = info->internal;
 	return AddEntry(context, move(copy_function), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info) {
 	auto pragma_function = make_unique<PragmaFunctionCatalogEntry>(catalog, this, info);
+	pragma_function->internal = info->internal;
 	return AddEntry(context, move(pragma_function), info->on_conflict);
 }
 
@@ -219,38 +223,8 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 	default:
 		throw InternalException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
 	}
+	function->internal = info->internal;
 	return AddEntry(context, move(function), info->on_conflict);
-}
-
-CatalogEntry *SchemaCatalogEntry::AddFunction(ClientContext &context, CreateFunctionInfo *info) {
-	auto entry = GetCatalogSet(info->type).GetEntry(context, info->name);
-	if (!entry) {
-		return CreateFunction(context, info);
-	}
-
-	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
-	switch (info->type) {
-	case CatalogType::SCALAR_FUNCTION_ENTRY: {
-		auto scalar_info = (CreateScalarFunctionInfo *)info;
-		auto &scalars = *(ScalarFunctionCatalogEntry *)entry;
-		for (const auto &scalar : scalars.functions.functions) {
-			scalar_info->functions.AddFunction(scalar);
-		}
-		break;
-	}
-	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
-		auto agg_info = (CreateAggregateFunctionInfo *)info;
-		auto &aggs = *(AggregateFunctionCatalogEntry *)entry;
-		for (const auto &agg : aggs.functions.functions) {
-			agg_info->functions.AddFunction(agg);
-		}
-		break;
-	}
-	default:
-		// Macros can only be replaced because there is only one of each name.
-		throw InternalException("Unsupported function type \"%s\" for adding", CatalogTypeToString(info->type));
-	}
-	return CreateFunction(context, info);
 }
 
 void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
