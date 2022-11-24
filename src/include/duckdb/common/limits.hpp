@@ -89,7 +89,7 @@ struct NumericLimits<int64_t> {
 template <>
 struct NumericLimits<hugeint_t> {
 	DUCKDB_API static constexpr hugeint_t Minimum() {
-		return {1, std::numeric_limits<uint64_t>::lowest()};
+		return {std::numeric_limits<int64_t>::lowest(), 1};
 	};
 	DUCKDB_API static constexpr hugeint_t Maximum() {
 		return {std::numeric_limits<int64_t>::max(), std::numeric_limits<uint64_t>::max()};
