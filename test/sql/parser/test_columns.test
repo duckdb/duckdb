@@ -78,3 +78,10 @@ SELECT COLUMNS(*) + COLUMNS(* EXCLUDE(j)) FROM integers
 # COLUMNS in subquery without FROM clause
 statement error
 SELECT (SELECT COLUMNS(*)) FROM integers
+
+# COLUMNS in order by cluase
+statement error
+SELECT * FROM integers ORDER BY COLUMNS('index[0-9]');
+
+statement error
+SELECT * FROM integers ORDER BY COLUMNS(*);
