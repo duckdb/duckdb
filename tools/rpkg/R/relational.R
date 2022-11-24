@@ -166,6 +166,17 @@ rel_order <- rapi_rel_order
 #' rel2 <- rel_inner_join(left, right, cond)
 rel_inner_join <- rapi_rel_inner_join
 
+#' UNION ALL on two DuckDB relation objects
+#' @param rel_a a DuckDB relation object
+#' @param rel_b a DuckDB relation object
+#' @noRd
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' rel_a <- rel_from_df(con, mtcars)
+#' rel_b <- rel_from_df(con, mtcars)
+#' rel_union_all(rel_a, rel_b)
+rel_union_all <- rapi_rel_union_all
+
 #' Lazily compute a distinct result on a DuckDB relation object
 #' @param rel the input DuckDB relation object
 #' @return a new `duckdb_relation` object with distinct rows
