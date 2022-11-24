@@ -2,6 +2,8 @@
 # description: Test QUANTILE_DISC aggregate
 # group: [aggregates]
 
+require 64bit
+
 statement ok
 PRAGMA enable_verification
 
