@@ -4,7 +4,6 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
@@ -12,29 +11,7 @@
 
 namespace duckdb {
 
-static void ExtractDependencies(Expression &expr, unordered_set<CatalogEntry *> &dependencies) {
-	if (expr.type == ExpressionType::BOUND_FUNCTION) {
-		auto &function = (BoundFunctionExpression &)expr;
-		if (function.function.dependency) {
-			function.function.dependency(function, dependencies);
-		}
-	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractDependencies(child, dependencies); });
-}
-
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
-	// extract dependencies from any default values
-	for (auto &default_value : op.info->bound_defaults) {
-		if (default_value) {
-			ExtractDependencies(*default_value, op.info->dependencies);
-		}
-	}
-	for (auto &constraint : op.info->bound_constraints) {
-		if (constraint->type == ConstraintType::CHECK) {
-			auto &bound_check = (BoundCheckConstraint &)*constraint;
-			ExtractDependencies(*bound_check.expression, op.info->dependencies);
-		}
-	}
 	auto &create_info = (CreateTableInfo &)*op.info->base;
 	auto &catalog = Catalog::GetCatalog(context);
 	auto existing_entry =
