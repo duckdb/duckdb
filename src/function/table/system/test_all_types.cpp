@@ -57,8 +57,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	result.emplace_back(LogicalType::INTERVAL, "interval", Value::INTERVAL(min_interval),
 	                    Value::INTERVAL(max_interval));
 	// strings/blobs
-	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"),
-	                    Value(string("goo\x00se", 6)));
+	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"), Value(string("goo\x00se", 6)));
 	result.emplace_back(LogicalType::JSON, "json", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
 	                    Value::BLOB("\\x00\\x00\\x00a"));
@@ -122,8 +121,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto empty_varchar_list = Value::EMPTYLIST(LogicalType::VARCHAR);
-	auto varchar_list =
-	    Value::LIST({Value("🦆🦆🦆🦆🦆🦆"), Value("goose"), Value(LogicalType::VARCHAR), Value("")});
+	auto varchar_list = Value::LIST({Value("🦆🦆🦆🦆🦆🦆"), Value("goose"), Value(LogicalType::VARCHAR), Value("")});
 	result.emplace_back(varchar_list_type, "varchar_array", empty_varchar_list, varchar_list);
 
 	// nested arrays
@@ -178,8 +176,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	// map
 	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	auto min_map_value = Value::MAP(Value::EMPTYLIST(LogicalType::VARCHAR), Value::EMPTYLIST(LogicalType::VARCHAR));
-	auto max_map_value = Value::MAP(Value::LIST({Value("key1"), Value("key2")}),
-	                                Value::LIST({Value("🦆🦆🦆🦆🦆🦆"), Value("goose")}));
+	auto max_map_value =
+	    Value::MAP(Value::LIST({Value("key1"), Value("key2")}), Value::LIST({Value("🦆🦆🦆🦆🦆🦆"), Value("goose")}));
 	result.emplace_back(map_type, "map", move(min_map_value), move(max_map_value));
 
 	return result;

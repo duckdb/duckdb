@@ -58,9 +58,7 @@ HyperLogLog *HyperLogLog::MergePointer(HyperLogLog &other) {
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], idx_t count) {
-	auto hlls_uptr = unique_ptr<duckdb_hll::robj *[]> {
-		new duckdb_hll::robj *[count]
-	};
+	auto hlls_uptr = unique_ptr<duckdb_hll::robj *[]> {new duckdb_hll::robj *[count]};
 	auto hlls = hlls_uptr.get();
 	for (idx_t i = 0; i < count; i++) {
 		hlls[i] = (duckdb_hll::robj *)logs[i].hll;
