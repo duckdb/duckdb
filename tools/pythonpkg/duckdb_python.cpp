@@ -10,8 +10,6 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/exceptions.hpp"
 
-#include "datetime.h" // from Python
-
 #include "duckdb.hpp"
 
 #ifndef DUCKDB_PYTHON_LIB_NAME
@@ -156,8 +154,6 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 		DuckDBPyConnection::Cleanup();
 	};
 	m.add_object("_clean_default_connection", py::capsule(clean_default_connection));
-
-	PyDateTime_IMPORT;
 }
 
 } // namespace duckdb

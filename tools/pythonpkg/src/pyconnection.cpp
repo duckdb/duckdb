@@ -1,6 +1,5 @@
 #include "duckdb_python/pyconnection.hpp"
 
-#include "datetime.h" // from Python
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types.hpp"
@@ -110,7 +109,6 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
 
-	PyDateTime_IMPORT;
 	DuckDBPyConnection::ImportCache();
 }
 
