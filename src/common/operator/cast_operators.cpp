@@ -825,7 +825,7 @@ struct IntegerCastOperation {
 	static bool HandleExponent(T &state, int32_t exponent) {
 		using result_t = typename T::Result;
 		double dbl_res = state.result * std::pow(10.0L, exponent);
-		if (dbl_res < NumericLimits<result_t>::Minimum() || dbl_res > NumericLimits<result_t>::Maximum()) {
+		if (dbl_res < (double)NumericLimits<result_t>::Minimum() || dbl_res > (double)NumericLimits<result_t>::Maximum()) {
 			return false;
 		}
 		state.result = (result_t)std::nearbyint(dbl_res);
