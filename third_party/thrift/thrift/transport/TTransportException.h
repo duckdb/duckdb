@@ -20,7 +20,6 @@
 #ifndef _DUCKDB_THRIFT_TRANSPORT_TTRANSPORTEXCEPTION_H_
 #define _DUCKDB_THRIFT_TRANSPORT_TTRANSPORTEXCEPTION_H_ 1
 
-// FUCK OFF #include <boost/numeric/conversion/cast.hpp>
 #include <string>
 #include "thrift/Thrift.h"
 
