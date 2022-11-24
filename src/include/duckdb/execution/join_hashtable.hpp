@@ -317,9 +317,10 @@ public:
 	idx_t SwizzledSize() const {
 		return swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes();
 	}
-	//! Capacity of the pointer table given the count
+	//! Capacity of the pointer table given the ht count
+	//! (minimum of 1024 to prevent collision chance for small HT's)
 	static idx_t PointerTableCapacity(idx_t count) {
-		return NextPowerOfTwo(count * 2);
+		return MaxValue<idx_t>(NextPowerOfTwo(count * 2), 1 << 10);
 	}
 
 	//! Swizzle the blocks in this HT (moves from block_collection and string_heap to swizzled_...)
