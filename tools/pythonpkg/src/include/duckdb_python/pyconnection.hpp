@@ -53,8 +53,10 @@ public:
 	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
 	                 const py::object &traceback);
 
+	static bool DetectEnvironment();
 	static DuckDBPyConnection *DefaultConnection();
 	static PythonImportCache *ImportCache();
+	static bool IsInteractive();
 
 	DuckDBPyConnection *ExecuteMany(const string &query, py::object params = py::list());
 
@@ -140,6 +142,7 @@ public:
 
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();
+	static bool interactive;
 };
 
 } // namespace duckdb

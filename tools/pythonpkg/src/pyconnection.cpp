@@ -28,6 +28,16 @@ namespace duckdb {
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
+bool DuckDBPyConnection::interactive = false;
+
+bool DuckDBPyConnection::DetectEnvironment() {
+	//! If __main__ does not have a __file__ attribute, we are in interactive mode
+	auto main_module = py::module_::import("__main__");
+	if (!py::hasattr(main_module, "__file__")) {
+		DuckDBPyConnection::interactive = true;
+	}
+	return DuckDBPyConnection::IsInteractive();
+}
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
@@ -708,6 +718,10 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 		import_cache = make_shared<PythonImportCache>();
 	}
 	return import_cache.get();
+}
+
+bool DuckDBPyConnection::IsInteractive() {
+	return DuckDBPyConnection::interactive;
 }
 
 DuckDBPyConnection *DuckDBPyConnection::Enter() {
