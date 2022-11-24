@@ -673,19 +673,27 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 	}
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           py::object config_options) {
-	if (config_options.is_none()) {
-		config_options = py::dict();
+static void SetDefaultConfigArguments(ClientContext &context) {
+	if (!DuckDBPyConnection::IsInteractive()) {
+		// Don't need to set any special default arguments
+		return;
 	}
-	auto res = make_shared<DuckDBPyConnection>();
-	if (!py::isinstance<py::dict>(config_options)) {
-		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");
-	}
-	py::dict py_config_dict = config_options;
-	auto config_dict = TransformPyConfigDict(py_config_dict);
-	DBConfig config(config_dict, read_only);
 
+	// Get the options we want to set/override
+	auto progress_bar_time_opt = DBConfig::GetOptionByName("progress_bar_time");
+	D_ASSERT(progress_bar_time_opt);
+	auto enable_progress_bar_opt = DBConfig::GetOptionByName("enable_progress_bar");
+	D_ASSERT(enable_progress_bar_opt);
+
+	// FIXME: currently we have no way of knowing this was default or explicitly set by the user
+	if (progress_bar_time_opt->get_setting(context) == 2000) {
+		// nasty hardcoded default value check
+		progress_bar_time_opt->set_local(context, Value(0));
+	}
+}
+
+static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database, DBConfig &config) {
+	auto res = make_shared<DuckDBPyConnection>();
 	res->database = instance_cache.GetInstance(database, config);
 	if (!res->database) {
 		//! No cached database, we must create a new instance
@@ -693,6 +701,24 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		return res;
 	}
 	res->connection = make_unique<Connection>(*res->database);
+	return res;
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
+                                                           py::object config_options) {
+	if (config_options.is_none()) {
+		config_options = py::dict();
+	}
+	if (!py::isinstance<py::dict>(config_options)) {
+		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");
+	}
+	py::dict py_config_dict = config_options;
+	auto config_dict = TransformPyConfigDict(py_config_dict);
+	DBConfig config(config_dict, read_only);
+
+	auto res = FetchOrCreateInstance(database, config);
+	auto &client_context = *res->connection->context;
+	SetDefaultConfigArguments(client_context);
 	return res;
 }
 
