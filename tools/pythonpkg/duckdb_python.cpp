@@ -4,6 +4,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
@@ -64,6 +65,7 @@ static py::object PyTokenize(const string &query) {
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
+	PythonObject::Initialize();
 
 	py::options pybind_opts;
 
