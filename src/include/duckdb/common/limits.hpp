@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/common/types.hpp"
 
 #include <limits>
