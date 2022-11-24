@@ -1,8 +1,8 @@
 # name: benchmark/micro/compression/bitpacking/bitpacking_read_dfor.benchmark
-# description: Scanning 1GB of ints compressed mostly with the CONSTANT_DELTA bitpacking mode
+# description: Scanning 1GB of ints compressed mostly with the Delta FOR bitpacking mode
 # group: [bitpacking]
 
-name Bitpacking Scan
+name Bitpacking Scan Delta For Mode
 group bitpacking
 storage persistent
 

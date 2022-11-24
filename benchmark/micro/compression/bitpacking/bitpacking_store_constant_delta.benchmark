@@ -2,7 +2,7 @@
 # description: Storing 1GB of ints compressed mostly with the CONSTANT DELTA bitpacking mode
 # group: [bitpacking]
 
-name Bitpacking Insert
+name Bitpacking Insert Constant Delta Mode
 group bitpacking
 storage persistent
 require_reinit

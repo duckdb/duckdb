@@ -2,7 +2,7 @@
 # description: Storing 1GB of ints compressed mostly with the FOR bitpacking mode
 # group: [bitpacking]
 
-name Bitpacking Insert
+name Bitpacking Insert For Mode
 group bitpacking
 storage persistent
 require_reinit
