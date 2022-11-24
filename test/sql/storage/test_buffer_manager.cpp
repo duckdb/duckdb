@@ -245,38 +245,38 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
-	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	idx_t requested_size = Storage::BLOCK_SIZE;
 	shared_ptr<BlockHandle> block;
 	auto handle = buffer_manager.Allocate(requested_size, false, &block);
-	D_ASSERT(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
+	CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 	for (; requested_size < limit; requested_size *= 2) {
 		// increase size
 		buffer_manager.ReAllocate(block, requested_size);
-		D_ASSERT(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
+		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 		// unpin and make sure it's evicted
 		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
-		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+		CHECK(buffer_manager.GetUsedMemory() == 0);
 		// re-pin
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 		handle = buffer_manager.Pin(block);
-		D_ASSERT(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
+		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 	}
 	requested_size /= 2;
 	for (; requested_size > Storage::BLOCK_SIZE; requested_size /= 2) {
 		// decrease size
 		buffer_manager.ReAllocate(block, requested_size);
-		D_ASSERT(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
+		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 		// unpin and make sure it's evicted
 		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
-		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+		CHECK(buffer_manager.GetUsedMemory() == 0);
 		// re-pin
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 		handle = buffer_manager.Pin(block);
-		D_ASSERT(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
+		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 	}
 }
 
@@ -289,16 +289,16 @@ TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 	Connection con(db);
 
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
-	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	idx_t requested_size = 424242;
 	shared_ptr<BlockHandle> block;
 	auto pin = buffer_manager.Allocate(requested_size, false, &block);
-	D_ASSERT(buffer_manager.GetUsedMemory() >= requested_size + Storage::BLOCK_HEADER_SIZE);
+	CHECK(buffer_manager.GetUsedMemory() >= requested_size + Storage::BLOCK_HEADER_SIZE);
 
 	pin.Destroy();
 	block.reset();
-	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
 }
 
 TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
@@ -310,7 +310,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	Connection con(db);
 
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
-	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	// Set memory limit to hold exactly 10 blocks
 	idx_t pin_count = 10;
@@ -326,18 +326,18 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 		blocks.emplace_back();
 		buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &blocks.back());
 		// used memory should increment by exactly one block at a time, up to 10
-		D_ASSERT(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * Storage::BLOCK_ALLOC_SIZE);
+		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * Storage::BLOCK_ALLOC_SIZE);
 	}
 
 	// now pin them one by one - cycling through should trigger more buffer re-use
 	for (idx_t i = 0; i < block_count; i++) {
 		auto pin = buffer_manager.Pin(blocks[i]);
-		D_ASSERT(buffer_manager.GetUsedMemory() == pin_count * Storage::BLOCK_ALLOC_SIZE);
+		CHECK(buffer_manager.GetUsedMemory() == pin_count * Storage::BLOCK_ALLOC_SIZE);
 	}
 
 	// Clear all blocks and verify we go back down to 0 used memory
 	blocks.clear();
-	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	// now we do exactly the same, but with variable-sized blocks
 	idx_t block_size = 424242;
@@ -346,47 +346,47 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
 		buffer_manager.Allocate(block_size, false, &blocks.back());
-		D_ASSERT(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
+		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 	}
 	for (idx_t i = 0; i < block_count; i++) {
 		auto pin = buffer_manager.Pin(blocks[i]);
-		D_ASSERT(buffer_manager.GetUsedMemory() == pin_count * alloc_size);
+		CHECK(buffer_manager.GetUsedMemory() == pin_count * alloc_size);
 	}
 	blocks.clear();
-	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	// again, the same but incrementing block_size by 1 for every block (has same alloc_size)
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
 		buffer_manager.Allocate(block_size, false, &blocks.back());
-		D_ASSERT(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
+		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 		// increment block_size
 		block_size++;
-		D_ASSERT(BufferManager::GetAllocSize(block_size) == alloc_size);
+		CHECK(BufferManager::GetAllocSize(block_size) == alloc_size);
 	}
 	for (idx_t i = 0; i < block_count; i++) {
 		auto pin = buffer_manager.Pin(blocks[i]);
-		D_ASSERT(buffer_manager.GetUsedMemory() == pin_count * alloc_size);
+		CHECK(buffer_manager.GetUsedMemory() == pin_count * alloc_size);
 	}
 	blocks.clear();
-	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	// reset block size and do the same but decrement by 1 for every block (still same alloc_size)
 	block_size = 424242;
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
 		buffer_manager.Allocate(block_size, false, &blocks.back());
-		D_ASSERT(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
+		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 		// increment block_size
 		block_size--;
-		D_ASSERT(BufferManager::GetAllocSize(block_size) == alloc_size);
+		CHECK(BufferManager::GetAllocSize(block_size) == alloc_size);
 	}
 	for (idx_t i = 0; i < block_count; i++) {
 		auto pin = buffer_manager.Pin(blocks[i]);
-		D_ASSERT(buffer_manager.GetUsedMemory() == pin_count * alloc_size);
+		CHECK(buffer_manager.GetUsedMemory() == pin_count * alloc_size);
 	}
 	blocks.clear();
-	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
 }
 
 TEST_CASE("Test buffer allocator", "[storage][.]") {
@@ -398,7 +398,7 @@ TEST_CASE("Test buffer allocator", "[storage][.]") {
 	Connection con(db);
 
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
-	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	const idx_t limit = 1000000000;
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
@@ -407,20 +407,20 @@ TEST_CASE("Test buffer allocator", "[storage][.]") {
 	idx_t requested_size = Storage::BLOCK_SIZE;
 	auto pointer = allocator.AllocateData(requested_size);
 	idx_t current_size = requested_size;
-	D_ASSERT(buffer_manager.GetUsedMemory() == requested_size);
+	CHECK(buffer_manager.GetUsedMemory() == requested_size);
 
 	// increase
 	for (; requested_size < limit; requested_size *= 2) {
 		pointer = allocator.ReallocateData(pointer, current_size, requested_size);
 		current_size = requested_size;
-		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size);
+		CHECK(buffer_manager.GetUsedMemory() == requested_size);
 	}
 
 	// decrease
 	for (; requested_size >= Storage::BLOCK_SIZE; requested_size /= 2) {
 		pointer = allocator.ReallocateData(pointer, current_size, requested_size);
 		current_size = requested_size;
-		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size);
+		CHECK(buffer_manager.GetUsedMemory() == requested_size);
 	}
 
 	allocator.FreeData(pointer, current_size);
