@@ -19,7 +19,7 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrows) {
 	SEXP varvalue = NULL;
 
-	if (type.GetAlias() == "r_string") { // TODO is there a better way for this?!
+	if (type.GetAlias() == R_STRING_TYPE_NAME) {
 		return NEW_STRING(nrows);
 	}
 
@@ -148,7 +148,7 @@ void ConvertTimestampVector(Vector &src_vec, size_t count, SEXP &dest, uint64_t 
 std::once_flag nanosecond_coercion_warning;
 
 void duckdb_r_decorate(const LogicalType &type, SEXP &dest, bool integer64) {
-	if (type.GetAlias() == "r_string") {
+	if (type.GetAlias() == R_STRING_TYPE_NAME) {
 		return;
 	}
 
@@ -222,7 +222,7 @@ void duckdb_r_decorate(const LogicalType &type, SEXP &dest, bool integer64) {
 }
 
 void duckdb_r_transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, bool integer64) {
-	if (src_vec.GetType().GetAlias() == "r_string") {
+	if (src_vec.GetType().GetAlias() == R_STRING_TYPE_NAME) {
 		ptrdiff_t sexp_header_size = (data_ptr_t)DATAPTR(R_BlankString) - (data_ptr_t)R_BlankString;
 
 		auto child_ptr = FlatVector::GetData<uintptr_t>(src_vec);

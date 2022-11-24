@@ -101,7 +101,7 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 
 string RApiTypes::DetectLogicalType(const LogicalType &stype, const char *caller) {
 
-	if (stype.GetAlias() == "r_string") {
+	if (stype.GetAlias() == R_STRING_TYPE_NAME) {
 		return "character";
 	}
 

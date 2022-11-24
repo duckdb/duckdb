@@ -80,6 +80,12 @@ RStrings::RStrings() {
 	materialize_sym = Rf_install("duckdb.materialize_message");
 }
 
+LogicalType RStringsType::Get() {
+	LogicalType r_string_type(LogicalTypeId::POINTER);
+	r_string_type.SetAlias(R_STRING_TYPE_NAME);
+	return r_string_type;
+}
+
 template <class SRC, class DST, class RTYPE>
 static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	auto result_data = FlatVector::GetData<DST>(result);

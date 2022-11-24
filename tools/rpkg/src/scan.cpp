@@ -139,7 +139,7 @@ static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableF
 		}
 		case RType::STRING:
 			if (experimental) {
-				duckdb_col_type = Catalog::GetCatalog(context).GetType(context, DEFAULT_SCHEMA, "r_string");
+				duckdb_col_type = RStringsType::Get();
 				coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
 			} else {
 				duckdb_col_type = LogicalType::VARCHAR;

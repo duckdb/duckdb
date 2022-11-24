@@ -73,16 +73,11 @@ static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, Ca
 	context.transaction.BeginTransaction();
 
 	catalog.CreateTableFunction(context, &info);
-	LogicalType r_string_type(LogicalTypeId::POINTER);
-	r_string_type.SetAlias("r_string");
-
-	CreateTypeInfo type_info("r_string", r_string_type);
-	catalog.CreateType(context, &type_info);
 
 	auto &runtime_config = DBConfig::GetConfig(context);
 
 	auto &casts = runtime_config.GetCastFunctions();
-	casts.RegisterCastFunction(r_string_type, LogicalType::VARCHAR, CastRstringToVarchar);
+	casts.RegisterCastFunction(RStringsType::Get(), LogicalType::VARCHAR, CastRstringToVarchar);
 
 	context.transaction.Commit();
 
