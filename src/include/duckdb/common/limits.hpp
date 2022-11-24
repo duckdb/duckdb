@@ -17,7 +17,7 @@ namespace duckdb {
 template <class T>
 struct NumericLimits {
 	DUCKDB_API static constexpr T Minimum() {
-	    return std::numeric_limits<T>::lowest();
+		return std::numeric_limits<T>::lowest();
 	};
 	DUCKDB_API static constexpr T Maximum() {
 		return std::numeric_limits<T>::max();
@@ -88,10 +88,10 @@ struct NumericLimits<int64_t> {
 };
 template <>
 struct NumericLimits<hugeint_t> {
-	DUCKDB_API static constexpr hugeint_t Minimum(){
+	DUCKDB_API static constexpr hugeint_t Minimum() {
 		return {1, std::numeric_limits<uint64_t>::lowest()};
 	};
-	DUCKDB_API static constexpr hugeint_t Maximum(){
+	DUCKDB_API static constexpr hugeint_t Maximum() {
 		return {std::numeric_limits<int64_t>::max(), std::numeric_limits<uint64_t>::max()};
 	};
 	DUCKDB_API static bool IsSigned() {
