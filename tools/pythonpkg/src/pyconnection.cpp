@@ -140,7 +140,7 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		pending_query.ThrowError();
 	}
-	return pending_query.Execute();
+	return pending_query.ExecuteUnsafe();
 }
 
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
@@ -187,6 +187,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		params_set = params;
 	}
 
+	// For every entry of the argument list, execute the prepared statement with said arguments
 	for (pybind11::handle single_query_params : params_set) {
 		if (prep->n_param != py::len(single_query_params)) {
 			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->n_param,
