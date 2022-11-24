@@ -164,7 +164,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	if (!GetEntryInternal(context, name, entry_index, entry)) {
 		return false;
 	}
-	if (entry->internal) {
+	if (!alter_info->allow_internal && entry->internal) {
 		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
 	}
 

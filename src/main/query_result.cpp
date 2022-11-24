@@ -63,6 +63,11 @@ QueryResult::QueryResult(QueryResultType type, PreservedError error) : BaseQuery
 QueryResult::~QueryResult() {
 }
 
+const string &QueryResult::ColumnName(idx_t index) const {
+	D_ASSERT(index < names.size());
+	return names[index];
+}
+
 unique_ptr<DataChunk> QueryResult::Fetch() {
 	auto chunk = FetchRaw();
 	if (!chunk) {

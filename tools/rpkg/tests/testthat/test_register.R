@@ -23,7 +23,7 @@ test_that("duckdb_register() works", {
   # re-registering under same name is an error by default, see issue #967
   expect_error(duckdb_register(con, "my_df1", iris))
   # can force an overwrite
-  duckdb_register(con, "my_df1", iris, overwrite=TRUE)
+  duckdb_register(con, "my_df1", iris, overwrite = TRUE)
   res <- dbReadTable(con, "my_df1")
   res$Species <- as.factor(res$Species)
   expect_true(identical(res, iris))
