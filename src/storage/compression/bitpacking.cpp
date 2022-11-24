@@ -168,9 +168,6 @@ public:
 		}
 
 		for (int64_t i = 0; i < (int64_t)compression_buffer_idx; i++) {
-			if (!compression_buffer_validity[i] || !compression_buffer_validity[i]) {
-				continue;
-			}
 			auto success = TrySubtractOperator::Operation((T_S)(compression_buffer[i]),
 			                                              (T_S)(compression_buffer[i - 1]), delta_buffer[i]);
 			if (!success) {
