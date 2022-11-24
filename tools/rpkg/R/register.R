@@ -28,6 +28,7 @@ encode_values <- function(value) {
 #' @param name The name for the virtual table that is registered or unregistered
 #' @param df A `data.frame` with the data for the virtual table
 #' @param overwrite Should an existing registration be overwritten?
+#' @param experimental Enable experimental optimizations
 #' @return These functions are called for their side effect.
 #' @export
 #' @examples
@@ -42,10 +43,10 @@ encode_values <- function(value) {
 #' try(dbReadTable(con, "data"))
 #'
 #' dbDisconnect(con)
-duckdb_register <- function(conn, name, df, overwrite=FALSE) {
+duckdb_register <- function(conn, name, df, overwrite=FALSE, experimental=FALSE) {
   stopifnot(dbIsValid(conn))
   df <- encode_values(as.data.frame(df))
-  rapi_register_df(conn@conn_ref, enc2utf8(as.character(name)), df, conn@driver@bigint == "integer64", overwrite)
+  rapi_register_df(conn@conn_ref, enc2utf8(as.character(name)), df, conn@driver@bigint == "integer64", overwrite, experimental)
   invisible(TRUE)
 }
 

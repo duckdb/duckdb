@@ -117,8 +117,6 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	case RType::STRING: {
 		auto str_val = STRING_ELT(ToUtf8(valsexp), idx);
 		return str_val == NA_STRING ? Value(LogicalType::VARCHAR) : Value(CHAR(str_val));
-		//  TODO this does not deal with NULLs yet
-		// return Value::ENUM((uint64_t)DATAPTR(str_val), LogicalType::DEDUP_POINTER_ENUM());
 	}
 	case RType::FACTOR: {
 		auto int_val = INTEGER_POINTER(valsexp)[idx];

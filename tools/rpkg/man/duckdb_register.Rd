@@ -17,6 +17,8 @@ duckdb_unregister(conn, name)
 \item{df}{A \code{data.frame} with the data for the virtual table}
 
 \item{overwrite}{Should an existing registration be overwritten?}
+
+\item{experimental}{Enable experimental optimizations}
 }
 \value{
 These functions are called for their side effect.

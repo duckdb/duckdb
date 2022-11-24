@@ -100,6 +100,11 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 }
 
 string RApiTypes::DetectLogicalType(const LogicalType &stype, const char *caller) {
+
+	if (stype.GetAlias() == "r_string") {
+		return "character";
+	}
+
 	switch (stype.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return "logical";
