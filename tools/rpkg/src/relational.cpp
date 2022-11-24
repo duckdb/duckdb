@@ -23,8 +23,6 @@
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
 
-#include <iostream>
-
 using namespace duckdb;
 using namespace cpp11;
 
