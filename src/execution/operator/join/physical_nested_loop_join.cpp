@@ -153,7 +153,7 @@ public:
 	//! Materialized join condition of the RHS
 	ColumnDataCollection right_condition_data;
 	//! Whether or not the RHS of the nested loop join has NULL values
-	bool has_null;
+	atomic<bool> has_null;
 	//! A bool indicating for each tuple in the RHS if they found a match (only used in FULL OUTER JOIN)
 	OuterJoinMarker right_outer;
 };
