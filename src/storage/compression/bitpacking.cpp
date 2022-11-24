@@ -146,13 +146,9 @@ public:
 	}
 
 	void CalculateDeltaStats() {
-		// TODO: THIS SEEMS TO NOT BE CONSTEXPR WITH BIG PERFORMANCE OVERHEAD!
-		T_S limit1 = NumericLimits<T_S>::Maximum();
-		T limit = (T)limit1;
-
 		// TODO: currently we dont support delta compression of values above NumericLimits<T_S>::Maximum(),
 		// 		 we could support this with some clever substract trickery?
-		if (maximum > limit) {
+		if (maximum > (T)NumericLimits<T_S>::Maximum()) {
 			return;
 		}
 
@@ -167,11 +163,27 @@ public:
 			return;
 		}
 
-		for (int64_t i = 0; i < (int64_t)compression_buffer_idx; i++) {
-			auto success = TrySubtractOperator::Operation((T_S)(compression_buffer[i]),
-			                                              (T_S)(compression_buffer[i - 1]), delta_buffer[i]);
-			if (!success) {
-				return;
+		// Note: since we dont allow any values over NumericLimits<T_S>::Maximum(), all subtractions for unsigned types
+		// are guaranteed not to overflow
+		bool can_do_all = true;
+		if (std::is_signed<T>()) {
+			T_S bogus;
+			can_do_all = TrySubtractOperator::Operation((T_S)(minimum), (T_S)(maximum), bogus) &&
+			             TrySubtractOperator::Operation((T_S)(maximum), (T_S)(minimum), bogus);
+		}
+
+		// Calculate delta's
+		if (can_do_all) {
+			for (int64_t i = 0; i < (int64_t)compression_buffer_idx; i++) {
+				delta_buffer[i] = (T_S)compression_buffer[i] - (T_S)compression_buffer[i - 1];
+			}
+		} else {
+			for (int64_t i = 0; i < (int64_t)compression_buffer_idx; i++) {
+				auto success = TrySubtractOperator::Operation((T_S)(compression_buffer[i]),
+				                                              (T_S)(compression_buffer[i - 1]), delta_buffer[i]);
+				if (!success) {
+					return;
+				}
 			}
 		}
 
@@ -506,7 +518,6 @@ public:
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		// TODO: Optimization: avoid use of compression buffer if we can compress straight to result vector
 		auto data = (T *)vdata.data;
 
 		for (idx_t i = 0; i < count; i++) {
