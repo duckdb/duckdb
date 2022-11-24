@@ -84,8 +84,8 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
 	D_ASSERT(allocated_data.empty());
 	if (blocks.empty() || blocks.back().Capacity() < size) {
 		auto pinned_block = AllocateBlock();
-		if (chunk_state && !blocks.empty()) {
-			auto &last_block = blocks.back();
+		if (chunk_state) {
+			D_ASSERT(!blocks.empty());
 			auto new_block_id = blocks.size() - 1;
 			chunk_state->handles[new_block_id] = move(pinned_block);
 		}
