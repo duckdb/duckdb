@@ -982,7 +982,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 		auto result = relation.Bind(*binder);
 		D_ASSERT(result.names.size() == result.types.size());
 
-		result_columns.reserve(result.names.size());
+		result_columns.reserve(result_columns.size() + result.names.size());
 		for (idx_t i = 0; i < result.names.size(); i++) {
 			result_columns.emplace_back(result.names[i], result.types[i]);
 		}
