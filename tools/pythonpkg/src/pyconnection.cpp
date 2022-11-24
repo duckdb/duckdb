@@ -126,6 +126,12 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 	PendingExecutionResult execution_result;
 	do {
 		execution_result = pending_query.ExecuteTask();
+		{
+			py::gil_scoped_acquire gil;
+			if (PyErr_CheckSignals() != 0) {
+				throw std::runtime_error("Query interrupted");
+			}
+		}
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		pending_query.ThrowError();
