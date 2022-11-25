@@ -91,14 +91,6 @@ static void PragmaDisableForceParallelism(ClientContext &context, const Function
 	ClientConfig::GetConfig(context).verify_parallelism = false;
 }
 
-static void PragmaEnableHTTPMetadataCache(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.http_metadata_cache_enable = true;
-}
-
-static void PragmaDisableHTTPMetadataCache(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.http_metadata_cache_enable = false;
-}
-
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).options.object_cache_enable = true;
 }
