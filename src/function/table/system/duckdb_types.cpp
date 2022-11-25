@@ -45,6 +45,9 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("labels");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
 	return nullptr;
 }
 
@@ -151,6 +154,20 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		output.SetValue(6, count, category.empty() ? Value() : Value(category));
 		// internal, BOOLEAN
 		output.SetValue(7, count, Value::BOOLEAN(type_entry->internal));
+		// labels, VARCHAR[]
+		if (type.id() == LogicalTypeId::ENUM && type.AuxInfo()) {
+			auto data = FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(type));
+			idx_t size = EnumType::GetSize(type);
+
+			vector<Value> labels;
+			for (idx_t i = 0; i < size; i++) {
+				labels.emplace_back(data[i]);
+			}
+
+			output.SetValue(8, count, Value::LIST(labels));
+		} else {
+			output.SetValue(8, count, Value());
+		}
 
 		count++;
 	}
