@@ -1,0 +1,32 @@
+# name: test/fuzzer/pedro/nested_limit_subquery.test
+# description: Test correlated limit
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 1 FROM (SELECT 1) t0(c0) WHERE (SELECT c0);
+----
+1
+
+query I
+SELECT 1 FROM (SELECT 1) t0(c0) WHERE (SELECT (SELECT c0));
+----
+1
+
+query I
+SELECT 1 FROM (SELECT 1) t0(c0) WHERE (SELECT (SELECT 1 ORDER BY c0));
+----
+1
+
+statement error
+SELECT 1 FROM (SELECT 1) t0(c0) WHERE (SELECT 1 LIMIT c0);
+----
+Correlated columns not supported in LIMIT/OFFSET
+
+statement error
+SELECT 1 FROM (SELECT 1) t0(c0) WHERE (SELECT (SELECT 1 LIMIT c0));
+----
+Correlated columns not supported in LIMIT/OFFSET
+

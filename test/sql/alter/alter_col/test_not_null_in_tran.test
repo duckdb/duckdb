@@ -23,10 +23,13 @@ statement error
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
 
 statement ok
-COMMIT
+ROLLBACK
+
+statement ok
+INSERT INTO t VALUES(9999, NULL)
 
 # Has null, cannot alter after tran
-statement error 
+statement error
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
 
 query I
