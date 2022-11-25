@@ -162,15 +162,14 @@ DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::obj
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
 	unique_ptr<JupyterProgressBar> progress_bar;
-	{
-		//FIXME: only do this when we're in a Jupyter Notebook
-		// This is necessary for the progress bars to display/update properly
+	if (DuckDBPyConnection::IsJupyter()) {
 		py::gil_scoped_acquire gil;
-		if (DuckDBPyConnection::IsJupyter()) {
-			progress_bar = make_unique<JupyterProgressBar>();
-		}
-		do {
-			execution_result = pending_query.ExecuteTask();
+		progress_bar = make_unique<JupyterProgressBar>();
+	}
+	do {
+		execution_result = pending_query.ExecuteTask();
+		{
+			py::gil_scoped_acquire gil;
 			if (PyErr_CheckSignals() != 0) {
 				throw std::runtime_error("Query interrupted");
 			}
@@ -183,13 +182,14 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 				auto progress = context.GetProgress();
 				progress_bar->Update(progress);
 			}
-		} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
-		if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
-			pending_query.ThrowError();
 		}
-		if (progress_bar) {
-			progress_bar->Finish();
-		}
+	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
+	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
+		pending_query.ThrowError();
+	}
+	if (progress_bar) {
+		py::gil_scoped_acquire gil;
+		progress_bar->Finish();
 	}
 	return pending_query.Execute();
 }
