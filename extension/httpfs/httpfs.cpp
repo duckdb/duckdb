@@ -143,7 +143,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 			tries += 1;
 			hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
 		} else {
-			throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
+			throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + to_string((int)res.error()) +
+			                         ")");
 		}
 	}
 }
@@ -195,7 +196,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 			tries += 1;
 			hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
 		} else {
-			throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
+			throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + to_string((int)res.error()) +
+			                         ")");
 		}
 	}
 }
