@@ -3,11 +3,7 @@ import time
 import pytest
 
 import threading
-
-try:
-  import thread
-except ImportError:  # for Python 3 compat
-  import _thread as thread
+import _thread as thread
 
 def send_keyboard_interrupt():
     # Wait a couple seconds
@@ -21,9 +17,7 @@ class TestQueryInterruption(object):
         thread = threading.Thread(target=send_keyboard_interrupt)
         # Start the thread
         thread.start()
-        try:
+        with pytest.raises(RuntimeError):
             res = con.execute('select count(*) from range(100000000000000)').fetchall()
-        except RuntimeError:
-            assert True
         # If this is not reached, this test will hang forever
         # indicating that the query interruption functionality is broken
