@@ -17,14 +17,18 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationSta
 
 	TableCatalogEntry *table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 
-	auto result = make_unique<LogicalDelete>(table_catalog_entry);
-	result->table_index = reader.ReadRequired<idx_t>();
+	auto table_index = reader.ReadRequired<idx_t>();
+	auto result = make_unique<LogicalDelete>(table_catalog_entry, table_index);
 	result->return_chunk = reader.ReadRequired<bool>();
 	return move(result);
 }
 
 idx_t LogicalDelete::EstimateCardinality(ClientContext &context) {
 	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
+}
+
+vector<idx_t> LogicalDelete::GetTableIndex() const {
+	return vector<idx_t> {table_index};
 }
 
 } // namespace duckdb

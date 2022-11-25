@@ -37,7 +37,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		properties.read_only = false;
 	}
 
-	auto insert = make_unique<LogicalInsert>(table);
+	auto insert = make_unique<LogicalInsert>(table, GenerateTableIndex());
 
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
