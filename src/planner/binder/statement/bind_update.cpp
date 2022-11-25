@@ -88,6 +88,13 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 			BindExtraColumns(table, get, proj, update, check.bound_columns);
 		}
 	}
+	if (update.return_chunk) {
+		physical_index_set_t all_columns;
+		for (idx_t i = 0; i < table.storage->column_definitions.size(); i++) {
+			all_columns.insert(PhysicalIndex(i));
+		}
+		BindExtraColumns(table, get, proj, update, all_columns);
+	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
 	// If the returning keyword is used, we need access to the whole row in case the user requests it.
@@ -110,7 +117,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 		}
 	}
 
-	if (update.update_is_del_and_insert || update.return_chunk) {
+	if (update.update_is_del_and_insert) {
 		// the update updates a column required by an index or requires returning the updated rows,
 		// push projections for all columns
 		physical_index_set_t all_columns;
@@ -221,16 +228,15 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(move(proj));
 
+	auto update_table_index = GenerateTableIndex();
+	update->table_index = update_table_index;
 	if (!stmt.returning_list.empty()) {
-		auto update_table_index = GenerateTableIndex();
-		update->table_index = update_table_index;
 		unique_ptr<LogicalOperator> update_as_logicaloperator = move(update);
 
 		return BindReturning(move(stmt.returning_list), table, update_table_index, move(update_as_logicaloperator),
 		                     move(result));
 	}
 
-	update->table_index = 0;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	result.plan = move(update);
