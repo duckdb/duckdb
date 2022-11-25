@@ -14,6 +14,7 @@
 #include "duckdb/main/replacement_opens.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -163,17 +164,16 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// TODO: Support an extension here, to generate different storage managers
 	// depending on the DB path structure/prefix.
-	const string dbPath = config.options.database_path;
-	storage = make_unique<SingleFileStorageManager>(*this, dbPath, config.options.access_mode == AccessMode::READ_ONLY);
-
+	auto attached_database = make_unique<AttachedDatabase>(*this);
+	auto initial_database = attached_database.get();
 	db_manager = make_unique<DatabaseManager>(*this);
-	transaction_manager = make_unique<TransactionManager>(*this);
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
+	db_manager->AddDatabase(database_path, move(attached_database));
 
 	// initialize the database
-	storage->Initialize();
+	initial_database->Initialize();
 
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads);
@@ -203,7 +203,7 @@ DuckDB::~DuckDB() {
 }
 
 StorageManager &DatabaseInstance::GetStorageManager() {
-	return *storage;
+	return db_manager->GetDefaultDatabase().GetStorageManager();
 }
 
 Catalog &DatabaseInstance::GetCatalog() {
@@ -211,7 +211,7 @@ Catalog &DatabaseInstance::GetCatalog() {
 }
 
 TransactionManager &DatabaseInstance::GetTransactionManager() {
-	return *transaction_manager;
+	return db_manager->GetDefaultDatabase().GetTransactionManager();
 }
 
 TaskScheduler &DatabaseInstance::GetScheduler() {

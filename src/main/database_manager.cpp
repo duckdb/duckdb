@@ -13,8 +13,8 @@ DatabaseManager::~DatabaseManager() {
 
 AttachedDatabase *DatabaseManager::GetDatabase(const string &name) {
 	lock_guard<mutex> l(manager_lock);
-	auto entry = catalogs.find(name);
-	if (entry != catalogs.end()) {
+	auto entry = databases.find(name);
+	if (entry != databases.end()) {
 		return entry->second.get();
 	}
 	return nullptr;
@@ -22,11 +22,19 @@ AttachedDatabase *DatabaseManager::GetDatabase(const string &name) {
 
 void DatabaseManager::AddDatabase(string name, unique_ptr<AttachedDatabase> catalog) {
 	lock_guard<mutex> l(manager_lock);
-	auto entry = catalogs.find(name);
-	if (entry != catalogs.end()) {
+	auto entry = databases.find(name);
+	if (entry != databases.end()) {
 		throw CatalogException("Catalog with name \"%s\" already exists", name);
 	}
-	catalogs[name] = move(catalog);
+	databases[name] = move(catalog);
+}
+
+AttachedDatabase &DatabaseManager::GetDefaultDatabase() {
+	lock_guard<mutex> l(manager_lock);
+	for (auto &db : databases) {
+		return *db.second;
+	}
+	throw InternalException("GetDefaultDatabase called but there are no databases");
 }
 
 Catalog &DatabaseManager::GetSystemCatalog() {

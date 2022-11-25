@@ -30,12 +30,13 @@ public:
 	void AddDatabase(string name, unique_ptr<AttachedDatabase> db);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
+	AttachedDatabase &GetDefaultDatabase();
 
 private:
-	//! The lock controlling access to the catalog set
+	//! The lock controlling access to the databases
 	mutex manager_lock;
-	//! The set of catalogs
-	case_insensitive_map_t<unique_ptr<AttachedDatabase>> catalogs;
+	//! The set of attached databases
+	case_insensitive_map_t<unique_ptr<AttachedDatabase>> databases;
 	//! The system catalog is a special catalog that holds system entries (e.g. functions)
 	unique_ptr<Catalog> system_catalog;
 };
