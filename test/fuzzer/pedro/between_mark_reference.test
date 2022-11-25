@@ -1,0 +1,16 @@
+# name: test/fuzzer/pedro/between_mark_reference.test
+# description: Test deletions with USING clause
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification;
+
+query I
+SELECT 1 WHERE '23:' > ALL(SELECT '0') BETWEEN false AND true;
+----
+1
+
+statement error
+SELECT 1 WHERE '23:' > ALL(SELECT '0') BETWEEN '0' AND '0:';
+----
+'0:'

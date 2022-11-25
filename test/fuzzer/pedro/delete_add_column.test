@@ -1,0 +1,48 @@
+# name: test/fuzzer/pedro/delete_add_column.test
+# description: Delete from altered table triggers assertion
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 AS SELECT 1 c1;
+
+statement ok
+ALTER TABLE t1 ADD c0 INT;
+
+query II
+SELECT * FROM t1
+----
+1	NULL
+
+statement ok
+TRUNCATE t1;
+
+query II
+SELECT * FROM t1
+----
+
+statement ok
+DROP TABLE t1
+
+statement ok
+CREATE TABLE t1(c0 VARCHAR);
+
+statement ok
+ALTER TABLE t1 ADD c1 INT;
+
+statement ok
+INSERT INTO t1 AS t0(c0) VALUES(4);
+
+query II
+SELECT * FROM t1
+----
+4	NULL
+
+statement ok
+DELETE FROM t1;
+
+query II
+SELECT * FROM t1
+----
