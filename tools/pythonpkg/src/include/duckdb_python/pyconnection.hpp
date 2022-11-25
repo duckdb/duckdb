@@ -14,7 +14,7 @@
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb_python/python_import_cache.hpp"
+#include "duckdb_python/import_cache/python_import_cache.hpp"
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/pyresult.hpp"
