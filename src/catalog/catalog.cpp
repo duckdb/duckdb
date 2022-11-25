@@ -370,7 +370,7 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 	D_ASSERT(!catalogs.empty());
 	CatalogEntry *result = nullptr;
 	for (idx_t i = 0; i < catalogs.size(); i++) {
-		auto if_exists = i + 1 == catalogs.size() ? true : if_exists_p;
+		auto if_exists = i + 1 == catalogs.size() ? if_exists_p : true;
 		result = catalogs[i]->GetEntry(context, type, schema, name, if_exists, error_context);
 	}
 	return result;
@@ -382,7 +382,7 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &cat
 	D_ASSERT(!catalogs.empty());
 	SchemaCatalogEntry *result = nullptr;
 	for (idx_t i = 0; i < catalogs.size(); i++) {
-		auto if_exists = i + 1 == catalogs.size() ? true : if_exists_p;
+		auto if_exists = i + 1 == catalogs.size() ? if_exists_p : true;
 		result = catalogs[i]->GetSchema(context, schema_name, if_exists, error_context);
 	}
 	return result;
@@ -393,7 +393,7 @@ LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name,
 	auto catalogs = GetCatalogs(context, catalog_name);
 	D_ASSERT(!catalogs.empty());
 	for (idx_t i = 0; i < catalogs.size(); i++) {
-		auto if_exists = i + 1 == catalogs.size() ? true : false;
+		auto if_exists = i + 1 == catalogs.size() ? false : true;
 		auto entry = catalogs[i]->GetEntry<TypeCatalogEntry>(context, schema, name, if_exists);
 		if (entry) {
 			return catalogs[i]->GetType(context, schema, name);
