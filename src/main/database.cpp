@@ -73,7 +73,7 @@ DatabaseInstance::~DatabaseInstance() {
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
-	return *db.GetStorageManager().buffer_manager;
+	return db.GetBufferManager();
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
@@ -167,6 +167,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	auto attached_database = make_unique<AttachedDatabase>(*this);
 	auto initial_database = attached_database.get();
 	db_manager = make_unique<DatabaseManager>(*this);
+	buffer_manager =
+	    make_unique<BufferManager>(*this, config.options.temporary_directory, config.options.maximum_memory);
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
@@ -200,6 +202,10 @@ DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_t
 }
 
 DuckDB::~DuckDB() {
+}
+
+BufferManager &DatabaseInstance::GetBufferManager() {
+	return *buffer_manager;
 }
 
 StorageManager &DatabaseInstance::GetStorageManager() {

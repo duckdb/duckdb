@@ -49,8 +49,6 @@ public:
 	StorageManager(DatabaseInstance &db, string path, bool read_only);
 	virtual ~StorageManager();
 
-	//! The BufferManager of the database
-	unique_ptr<BufferManager> buffer_manager;
 	//! The database this storagemanager belongs to
 	DatabaseInstance &db;
 
@@ -84,7 +82,6 @@ public:
 
 protected:
 	virtual void LoadDatabase() = 0;
-	virtual void CreateBufferManager();
 
 	//! The path of the database
 	string path;

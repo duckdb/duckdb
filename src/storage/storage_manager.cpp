@@ -43,17 +43,11 @@ bool StorageManager::InMemory() {
 	return path.empty() || path == ":memory:";
 }
 
-void StorageManager::CreateBufferManager() {
-	auto &config = DBConfig::GetConfig(db);
-	buffer_manager = make_unique<BufferManager>(db, config.options.temporary_directory, config.options.maximum_memory);
-}
-
 void StorageManager::Initialize() {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
-	CreateBufferManager();
 
 	auto &config = DBConfig::GetConfig(db);
 	auto &catalog = Catalog::GetCatalog(db);
@@ -105,7 +99,7 @@ SingleFileStorageManager::SingleFileStorageManager(DatabaseInstance &db, string 
 
 void SingleFileStorageManager::LoadDatabase() {
 	if (InMemory()) {
-		block_manager = make_unique<InMemoryBlockManager>(*buffer_manager);
+		block_manager = make_unique<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
 		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
 		return;
 	}

@@ -14,6 +14,7 @@
 #include "duckdb/main/extension.hpp"
 
 namespace duckdb {
+class BufferManager;
 class DatabaseManager;
 class StorageManager;
 class Catalog;
@@ -33,6 +34,7 @@ public:
 	DBConfig config;
 
 public:
+	DUCKDB_API BufferManager &GetBufferManager();
 	DUCKDB_API StorageManager &GetStorageManager();
 	DUCKDB_API Catalog &GetCatalog();
 	DUCKDB_API FileSystem &GetFileSystem();
@@ -57,6 +59,7 @@ private:
 	void Configure(DBConfig &config);
 
 private:
+	unique_ptr<BufferManager> buffer_manager;
 	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
