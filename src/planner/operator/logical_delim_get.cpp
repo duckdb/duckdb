@@ -14,4 +14,8 @@ unique_ptr<LogicalOperator> LogicalDelimGet::Deserialize(LogicalDeserializationS
 	return make_unique<LogicalDelimGet>(table_index, chunk_types);
 }
 
+vector<idx_t> LogicalDelimGet::GetTableIndex() const {
+	return vector<idx_t> {table_index};
+}
+
 } // namespace duckdb
