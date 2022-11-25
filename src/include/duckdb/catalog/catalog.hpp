@@ -88,16 +88,16 @@ public:
 	mutex write_lock;
 
 public:
-	//! Get the Catalog from the ClientContext
-	DUCKDB_API static Catalog &GetCatalog(ClientContext &context);
-	//! Get the Catalog from the DatabaseInstance
-	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db);
+	//! Get the SystemCatalog from the ClientContext
+	DUCKDB_API static Catalog &GetSystemCatalog(ClientContext &context);
+	//! Get the SystemCatalog from the DatabaseInstance
+	DUCKDB_API static Catalog &GetSystemCatalog(DatabaseInstance &db);
 
 	DUCKDB_API DependencyManager &GetDependencyManager() {
 		return *dependency_manager;
 	}
 
-	void Initialize(bool load_builtin = true);
+	void Initialize(bool load_builtin);
 
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	DUCKDB_API idx_t GetCatalogVersion();

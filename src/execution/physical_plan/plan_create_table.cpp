@@ -29,9 +29,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 		}
 	}
 	auto &create_info = (CreateTableInfo &)*op.info->base;
-	auto &catalog = Catalog::GetCatalog(context);
-	auto existing_entry =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.schema, create_info.table, true);
+	auto existing_entry = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, CatalogType::TABLE_ENTRY, create_info.schema, create_info.table, true);
 	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
 	if ((!existing_entry || replace) && !op.children.empty()) {
 		auto plan = CreatePlan(*op.children[0]);

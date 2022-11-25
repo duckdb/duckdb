@@ -88,7 +88,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 };

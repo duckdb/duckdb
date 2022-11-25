@@ -878,9 +878,8 @@ void ClientContext::DisableProfiling() {
 
 void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*this);
-		auto existing_function = (ScalarFunctionCatalogEntry *)catalog.GetEntry(
-		    *this, CatalogType::SCALAR_FUNCTION_ENTRY, info->schema, info->name, true);
+		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(
+		    *this, INVALID_CATALOG, info->schema, info->name, true);
 		if (existing_function) {
 			auto new_info = (CreateScalarFunctionInfo *)info;
 			if (new_info->functions.MergeFunctionSet(existing_function->functions)) {
@@ -889,6 +888,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 			}
 		}
 		// create function
+		auto &catalog = Catalog::GetCatalog(*this);
 		catalog.CreateFunction(*this, info);
 	});
 }
@@ -938,8 +938,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
 		// obtain the table info
-		auto &catalog = Catalog::GetCatalog(*this);
-		auto table = catalog.GetEntry<TableCatalogEntry>(*this, schema_name, table_name, true);
+		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, schema_name, table_name, true);
 		if (!table) {
 			return;
 		}
@@ -956,8 +955,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection) {
 	RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*this);
-		auto table_entry = catalog.GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
+		auto table_entry = Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, description.schema, description.table);
 		// verify that the table columns and types match up
 		if (description.columns.size() != table_entry->columns.PhysicalColumnCount()) {
 			throw Exception("Failed to append: table entry has different number of columns!");

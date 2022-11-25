@@ -50,7 +50,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBViewsInit(ClientContext &context, Tab
 	auto result = make_unique<DuckDBViewsData>();
 
 	// scan all the schemas for tables and collect themand collect them
-	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto schemas = Catalog::GetEntries<SchemaCatalogEntry>(context, INVALID_CATALOG);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::VIEW_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	};

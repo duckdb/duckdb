@@ -24,7 +24,8 @@ void PhysicalCreateView::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 	if (state.finished) {
 		return;
 	}
-	Catalog::GetCatalog(context.client).CreateView(context.client, info.get());
+	auto &catalog = Catalog::GetCatalog(context.client, INVALID_CATALOG);
+	catalog.CreateView(context.client, info.get());
 	state.finished = true;
 }
 

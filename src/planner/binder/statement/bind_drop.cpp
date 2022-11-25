@@ -27,7 +27,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
-		auto entry = (StandardEntry *)Catalog::GetCatalog(context).GetEntry(context, stmt.info->type, stmt.info->schema,
+		auto entry = (StandardEntry *)Catalog::GetEntry(context, stmt.info->type, INVALID_CATALOG, stmt.info->schema,
 		                                                                    stmt.info->name, true);
 		if (!entry) {
 			break;

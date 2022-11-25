@@ -47,8 +47,7 @@ public:
 		// note: original_arguments are optional (can be list of size 0)
 		auto original_arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 
-		auto &catalog = Catalog::GetCatalog(context);
-		auto func_catalog = catalog.GetEntry(context, type, DEFAULT_SCHEMA, name);
+		auto func_catalog = Catalog::GetEntry(context, type, INVALID_CATALOG, DEFAULT_SCHEMA, name);
 		if (!func_catalog || func_catalog->type != type) {
 			throw InternalException("Cant find catalog entry for function %s", name);
 		}

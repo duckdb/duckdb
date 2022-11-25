@@ -32,7 +32,7 @@ void TestHelperExtension::Load(DuckDB &db) {
 	Connection conn(db);
 	conn.BeginTransaction();
 	auto &client_context = *conn.context;
-	auto &catalog = Catalog::GetCatalog(client_context);
+	auto &catalog = Catalog::GetSystemCatalog(client_context);
 	catalog.CreateFunction(client_context, &hello_info);
 	catalog.CreateFunction(client_context, &last_error_info);
 	conn.Commit();

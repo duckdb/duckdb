@@ -10,10 +10,7 @@ unique_ptr<LogicalOperator> LogicalCreate::Deserialize(LogicalDeserializationSta
 	auto &context = state.gstate.context;
 	auto info = CreateInfo::Deserialize(reader.GetSource());
 
-	auto &catalog = Catalog::GetCatalog(context);
-	// TODO(stephwang): review if below is necessary or just not pass schema_catalog_entry
-	SchemaCatalogEntry *schema_catalog_entry = catalog.GetSchema(context, info->schema, true);
-
+	auto schema_catalog_entry = Catalog::GetSchema(context, INVALID_CATALOG, info->schema, true);
 	return make_unique<LogicalCreate>(state.type, move(info), schema_catalog_entry);
 }
 

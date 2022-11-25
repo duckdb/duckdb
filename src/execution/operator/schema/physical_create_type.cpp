@@ -108,7 +108,7 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 		info->type = LogicalType::ENUM(info->name, result, total_row_count);
 	}
 
-	auto &catalog = Catalog::GetCatalog(context.client);
+	auto &catalog = Catalog::GetCatalog(context.client, INVALID_CATALOG);
 	catalog.CreateType(context.client, info.get());
 	state.finished = true;
 }

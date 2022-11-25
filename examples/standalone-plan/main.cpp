@@ -161,7 +161,7 @@ int main() {
 //===--------------------------------------------------------------------===//
 void CreateFunction(Connection &con, string name, vector<LogicalType> arguments, LogicalType return_type) {
 	auto &context = *con.context;
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// we can register multiple functions here if we want overloads
 	// you may also want to set has_side_effects or varargs in the ScalarFunction (if required)
@@ -174,7 +174,7 @@ void CreateFunction(Connection &con, string name, vector<LogicalType> arguments,
 
 void CreateAggregateFunction(Connection &con, string name, vector<LogicalType> arguments, LogicalType return_type) {
 	auto &context = *con.context;
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::Vs(context);
 
 	// we can register multiple functions here if we want overloads
 	AggregateFunctionSet set(name);
@@ -251,7 +251,7 @@ unique_ptr<NodeStatistics> MyScanCardinality(ClientContext &context, const Funct
 
 void CreateMyScanFunction(Connection &con) {
 	auto &context = *con.context;
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::Catalog::GetSystemCatalog(context);
 
 	TableFunction my_scan("my_scan", {LogicalType::VARCHAR}, nullptr, MyScanBind, nullptr, MyScanStatistics, nullptr,
 	                      nullptr, MyScanCardinality);

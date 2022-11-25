@@ -417,7 +417,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 
 	// look up the aggregate function in the catalog
 	QueryErrorContext error_context(nullptr, 0);
-	auto func = (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+	auto func = (AggregateFunctionCatalogEntry *)Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
 	    context, DEFAULT_SCHEMA, function_name, false, error_context);
 	D_ASSERT(func->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 

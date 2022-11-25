@@ -102,7 +102,7 @@ static vector<CatalogEntry *> GetAllTables(ClientContext &context, bool for_tabl
 	// scan all the schemas for tables and collect them and collect them
 	// for column names we avoid adding internal entries, because it pollutes the auto-complete too much
 	// for table names this is generally fine, however
-	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto schemas = Catalog::GetEntries<SchemaCatalogEntry>(context, INVALID_CATALOG);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (!entry->internal || for_table_names) {
@@ -406,7 +406,7 @@ void SQLAutoCompleteExtension::Load(DuckDB &db) {
 
 	auto &context = *con.context;
 
-	Catalog &catalog = Catalog::GetCatalog(context);
+	Catalog &catalog = Catalog::GetSystemCatalog(context);
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
 	CreateTableFunctionInfo auto_complete_info(auto_complete_fun);

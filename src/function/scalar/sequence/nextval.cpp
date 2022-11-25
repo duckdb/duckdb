@@ -107,7 +107,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
 			auto sequence =
-			    Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
+			    Catalog::GetEntry<SequenceCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
 			// finally get the next value from the sequence
 			return OP::Operation(transaction, sequence);
 		});
@@ -123,7 +123,7 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 		auto seqname = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 		if (!seqname.IsNull()) {
 			auto qname = QualifiedName::Parse(seqname.ToString());
-			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
+			sequence = Catalog::GetEntry<SequenceCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
 		}
 	}
 	return make_unique<NextvalBindData>(sequence);

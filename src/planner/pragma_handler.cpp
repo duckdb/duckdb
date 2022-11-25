@@ -62,7 +62,7 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 string PragmaHandler::HandlePragma(SQLStatement *statement) { // PragmaInfo &info
 	auto info = *((PragmaStatement &)*statement).info;
 	auto entry =
-	    Catalog::GetCatalog(context).GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, info.name, false);
+	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name, false);
 	string error;
 
 	FunctionBinder function_binder(context);

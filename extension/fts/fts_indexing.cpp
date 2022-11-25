@@ -19,7 +19,7 @@ string drop_fts_index_query(ClientContext &context, const FunctionParameters &pa
 	qname.schema = ClientData::Get(context).catalog_search_path->GetOrDefault(qname.schema);
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	if (!catalog.schemas->GetEntry(context, fts_schema)) {
 		throw CatalogException(
 		    "a FTS index does not exist on table '%s.%s'. Create one with 'PRAGMA create_fts_index()'.", qname.schema,
@@ -232,8 +232,7 @@ static string indexing_script(const string &input_schema, const string &input_ta
 }
 
 void check_exists(ClientContext &context, QualifiedName &qname) {
-	auto &catalog = Catalog::GetCatalog(context);
-	catalog.GetEntry<TableCatalogEntry>(context, qname.schema, qname.name);
+	Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
 }
 
 string create_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
@@ -281,8 +280,7 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	}
 
 	// throw error if an index already exists on this table
-	auto &catalog = Catalog::GetCatalog(context);
-	if (catalog.schemas->GetEntry(context, fts_schema) && !overwrite) {
+	if (Catalog::GetEntry<SchemaCatalogEntry>(context, INVALID_CATALOG, fts_schema) && !overwrite) {
 		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwite=1' to overwrite, or "
 		                       "drop the existing index with 'PRAGMA drop_fts_index()' before creating a new one.",
 		                       qname.schema, qname.name);

@@ -192,7 +192,6 @@ void ReplayState::ReplayCreateTable() {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_info = binder->BindCreateTableInfo(move(info));
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateTable(context, bound_info.get());
 }
 
@@ -206,7 +205,6 @@ void ReplayState::ReplayDropTable() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -215,7 +213,6 @@ void ReplayState::ReplayAlter() {
 	if (deserialize_only) {
 		return;
 	}
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.Alter(context, info.get());
 }
 
@@ -228,7 +225,6 @@ void ReplayState::ReplayCreateView() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateView(context, entry.get());
 }
 
@@ -240,7 +236,6 @@ void ReplayState::ReplayDropView() {
 	if (deserialize_only) {
 		return;
 	}
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -254,7 +249,6 @@ void ReplayState::ReplayCreateSchema() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateSchema(context, &info);
 }
 
@@ -267,7 +261,6 @@ void ReplayState::ReplayDropSchema() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -280,7 +273,6 @@ void ReplayState::ReplayCreateType() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateType(context, info.get());
 }
 
@@ -294,7 +286,6 @@ void ReplayState::ReplayDropType() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -307,7 +298,6 @@ void ReplayState::ReplayCreateSequence() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateSequence(context, entry.get());
 }
 
@@ -320,7 +310,6 @@ void ReplayState::ReplayDropSequence() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -334,7 +323,6 @@ void ReplayState::ReplaySequenceValue() {
 	}
 
 	// fetch the sequence from the catalog
-	auto &catalog = Catalog::GetCatalog(context);
 	auto seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
 	if (usage_count > seq->usage_count) {
 		seq->usage_count = usage_count;
@@ -351,7 +339,6 @@ void ReplayState::ReplayCreateMacro() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateFunction(context, entry.get());
 }
 
@@ -364,7 +351,6 @@ void ReplayState::ReplayDropMacro() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -377,7 +363,6 @@ void ReplayState::ReplayCreateTableMacro() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateFunction(context, entry.get());
 }
 
@@ -390,7 +375,6 @@ void ReplayState::ReplayDropTableMacro() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -403,7 +387,6 @@ void ReplayState::ReplayUseTable() {
 	if (deserialize_only) {
 		return;
 	}
-	auto &catalog = Catalog::GetCatalog(context);
 	current_table = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
 }
 

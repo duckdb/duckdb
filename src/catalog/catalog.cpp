@@ -71,8 +71,8 @@ void Catalog::Initialize(bool load_builtin) {
 	con.Commit();
 }
 
-Catalog &Catalog::GetCatalog(ClientContext &context) {
-	return context.db->GetCatalog();
+Catalog &Catalog::GetSystemCatalog(ClientContext &context) {
+	return Catalog::GetSystemCatalog(context.db);
 }
 
 CatalogEntry *Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {

@@ -37,12 +37,13 @@ class TransactionManager;
 class ReplayState {
 public:
 	ReplayState(DatabaseInstance &db, ClientContext &context, Deserializer &source)
-	    : db(db), context(context), source(source), current_table(nullptr), deserialize_only(false),
+	    : db(db), context(context), catalog(Catalog::GetCatalog(context, INVALID_CATALOG)), source(source), current_table(nullptr), deserialize_only(false),
 	      checkpoint_id(INVALID_BLOCK) {
 	}
 
 	DatabaseInstance &db;
 	ClientContext &context;
+	Catalog &catalog;
 	Deserializer &source;
 	TableCatalogEntry *current_table;
 	bool deserialize_only;

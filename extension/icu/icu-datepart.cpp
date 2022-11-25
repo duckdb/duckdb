@@ -432,7 +432,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static void AddUnaryPartCodeFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		CreateScalarFunctionInfo func_info(set);
@@ -456,7 +456,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static void AddDatePartFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetBinaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
@@ -476,7 +476,7 @@ struct ICUDatePart : public ICUDateFunc {
 		                      BindLastDate);
 	}
 	static void AddLastDayFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetLastDayFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 		CreateScalarFunctionInfo func_info(set);

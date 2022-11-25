@@ -16,9 +16,8 @@ void CatalogSearchPath::Set(vector<string> &new_paths, bool is_set_schema) {
 	if (is_set_schema && new_paths.size() != 1) {
 		throw CatalogException("SET schema can set only 1 schema. This has %d", new_paths.size());
 	}
-	auto &catalog = Catalog::GetCatalog(context);
 	for (const auto &path : new_paths) {
-		if (!catalog.GetSchema(context, StringUtil::Lower(path), true)) {
+		if (!Catalog::GetSchema(context, INVALID_CATALOG, StringUtil::Lower(path), true)) {
 			throw CatalogException("SET %s: No schema named %s found.", is_set_schema ? "schema" : "search_path", path);
 		}
 	}

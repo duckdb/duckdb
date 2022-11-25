@@ -143,7 +143,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 };
@@ -270,7 +270,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 };

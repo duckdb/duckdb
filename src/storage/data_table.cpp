@@ -324,8 +324,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		dst_keys_ptr = &bfk.info.fk_keys;
 	}
 
-	auto table_entry_ptr =
-	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, bfk.info.schema, bfk.info.table);
+	auto table_entry_ptr = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, bfk.info.schema, bfk.info.table);
 	if (table_entry_ptr == nullptr) {
 		throw InternalException("Can't find table \"%s\" in foreign key constraint", bfk.info.table);
 	}

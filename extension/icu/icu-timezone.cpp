@@ -194,13 +194,13 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		                               Execute<ICUToLocalTime>, Bind));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 };
 
 void RegisterICUTimeZoneFunctions(ClientContext &context) {
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);
 	CreateTableFunctionInfo tz_names_info(move(tz_names));
 	catalog.CreateTableFunction(context, &tz_names_info);

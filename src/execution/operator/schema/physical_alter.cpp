@@ -25,7 +25,7 @@ void PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 	if (state.finished) {
 		return;
 	}
-	auto &catalog = Catalog::GetCatalog(context.client);
+	auto &catalog = Catalog::GetCatalog(context.client, INVALID_CATALOG);
 	catalog.Alter(context.client, info.get());
 	state.finished = true;
 }

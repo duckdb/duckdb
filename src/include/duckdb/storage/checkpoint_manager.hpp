@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -24,13 +25,15 @@ class TypeCatalogEntry;
 
 class CheckpointWriter {
 public:
-	explicit CheckpointWriter(DatabaseInstance &db) : db(db) {
+	explicit CheckpointWriter(DatabaseInstance &db) : db(db), catalog(Catalog::GetCatalog(db, INVALID_CATALOG)) {
 	}
 	virtual ~CheckpointWriter() {
 	}
 
 	//! The database
 	DatabaseInstance &db;
+	//! The catalog
+	Catalog &catalog;
 
 	virtual MetaBlockWriter &GetMetaBlockWriter() = 0;
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) = 0;
@@ -48,8 +51,12 @@ protected:
 
 class CheckpointReader {
 public:
+	CheckpointReader(Catalog &catalog) : catalog(catalog) {}
 	virtual ~CheckpointReader() {
 	}
+
+protected:
+	Catalog &catalog;
 
 protected:
 	virtual void LoadCheckpoint(ClientContext &context, MetaBlockReader &reader);
@@ -67,7 +74,8 @@ protected:
 
 class SingleFileCheckpointReader final : public CheckpointReader {
 public:
-	explicit SingleFileCheckpointReader(SingleFileStorageManager &storage) : storage(storage) {
+	explicit SingleFileCheckpointReader(SingleFileStorageManager &storage) :
+	    CheckpointReader(Catalog::GetCatalog(storage.db, INVALID_CATALOG)), storage(storage) {
 	}
 
 	void LoadFromStorage();
@@ -85,9 +93,7 @@ class SingleFileCheckpointWriter final : public CheckpointWriter {
 	friend class SingleFileTableDataWriter;
 
 public:
-	explicit SingleFileCheckpointWriter(DatabaseInstance &db, BlockManager &block_manager)
-	    : CheckpointWriter(db), partial_block_manager(block_manager) {
-	}
+	SingleFileCheckpointWriter(DatabaseInstance &db, BlockManager &block_manager);
 
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connection is available because right now the checkpointing cannot be done online. (TODO)

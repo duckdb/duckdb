@@ -96,15 +96,14 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.names = {"Success"};
 
 	// lookup the format in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
+	auto copy_function = Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
 	if (!copy_function->function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 
 	// gather a list of all the tables
 	vector<TableCatalogEntry *> tables;
-	auto schemas = catalog.schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto schemas = Catalog::GetEntries<SchemaCatalogEntry>(context, INVALID_CATALOG);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {

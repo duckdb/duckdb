@@ -25,9 +25,7 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath) {
 }
 
 void AttachedDatabase::Initialize() {
-	// initialize the catalog
-	auto &config = DBConfig::GetConfig(db);
-	catalog->Initialize(config.options.initialize_default_database);
+	catalog->Initialize(false);
 	storage->Initialize();
 }
 

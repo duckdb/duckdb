@@ -419,7 +419,7 @@ struct UnregisterUdfTask : public Task {
 		auto &con = *connection.connection;
 		con.BeginTransaction();
 		auto &context = *con.context;
-		auto &catalog = duckdb::Catalog::GetCatalog(context);
+		auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 		duckdb::DropInfo info;
 		info.type = duckdb::CatalogType::SCALAR_FUNCTION_ENTRY;
 		info.name = name;

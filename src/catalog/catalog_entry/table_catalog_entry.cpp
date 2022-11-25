@@ -528,8 +528,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, 
 
 unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
 	if (info.target_type.id() == LogicalTypeId::USER) {
-		auto &catalog = Catalog::GetCatalog(context);
-		info.target_type = catalog.GetType(context, schema->name, UserType::GetTypeName(info.target_type));
+		info.target_type = catalog->GetType(context, schema->name, UserType::GetTypeName(info.target_type));
 	}
 	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);

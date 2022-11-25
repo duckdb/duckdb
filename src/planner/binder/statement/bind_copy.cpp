@@ -34,8 +34,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto select_node = Bind(*stmt.select_statement);
 
 	// lookup the format in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
+	auto copy_function = Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
 	if (!copy_function->function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
@@ -87,13 +86,13 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto &bound_insert = (LogicalInsert &)*insert_statement.plan;
 
 	// lookup the format in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
 	if (!copy_function->function.copy_from_bind) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	// lookup the table to copy into
-	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
+	auto table = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, stmt.info->schema, stmt.info->table);
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());

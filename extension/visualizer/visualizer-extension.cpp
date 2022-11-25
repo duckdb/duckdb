@@ -114,7 +114,7 @@ static void PragmaVisualizeDiffProfilingOutput(ClientContext &context, const Fun
 void VisualizerExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
-	auto &catalog = Catalog::GetCatalog(*con.context);
+	auto &catalog = Catalog::GetSystemCatalog(*con.context);
 
 	auto vis_last_profiler_out_func = PragmaFunction::PragmaCall(
 	    "visualize_last_profiling_output", PragmaVisualizeLastProfilingOutput, {LogicalType::VARCHAR});

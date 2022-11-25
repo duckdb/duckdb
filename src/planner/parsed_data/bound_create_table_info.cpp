@@ -39,7 +39,7 @@ unique_ptr<BoundCreateTableInfo> BoundCreateTableInfo::Deserialize(Deserializer 
 	auto schema_name = create_info->schema;
 	auto result = make_unique<BoundCreateTableInfo>(move(create_info));
 	auto &context = state.context;
-	result->schema = Catalog::GetCatalog(context).GetSchema(context, schema_name);
+	result->schema = Catalog::GetSchema(context, INVALID_CATALOG, schema_name);
 	result->base = source.ReadOptional<CreateInfo>();
 
 	source.ReadList<Constraint>(result->constraints);

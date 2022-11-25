@@ -413,8 +413,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, Fie
 	auto is_create_index = reader.ReadRequired<bool>();
 	auto result_ids = reader.ReadRequiredList<row_t>();
 
-	auto &catalog = Catalog::GetCatalog(context);
-	auto catalog_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema_name, table_name);
+	auto catalog_entry = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, schema_name, table_name);
 	if (!catalog_entry || catalog_entry->type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
 	}

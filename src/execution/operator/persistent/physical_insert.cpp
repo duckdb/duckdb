@@ -75,7 +75,7 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 		result->table = (TableCatalogEntry *)catalog.CreateTable(context, schema, info.get());
 	} else {
 		D_ASSERT(insert_table);

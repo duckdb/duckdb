@@ -35,6 +35,10 @@ namespace duckdb {
 
 void ReorderTableEntries(vector<TableCatalogEntry *> &tables);
 
+SingleFileCheckpointWriter::SingleFileCheckpointWriter(DatabaseInstance &db, BlockManager &block_manager)
+	: CheckpointWriter(db), partial_block_manager(block_manager) {
+}
+
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
 	auto &storage_manager = (SingleFileStorageManager &)db.GetStorageManager();
 	return *storage_manager.block_manager;
@@ -68,7 +72,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	vector<SchemaCatalogEntry *> schemas;
 	// we scan the set of committed schemas
-	auto &catalog = Catalog::GetCatalog(db);
 	catalog.schemas->Scan([&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas
@@ -243,8 +246,6 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema) {
 }
 
 void CheckpointReader::ReadSchema(ClientContext &context, MetaBlockReader &reader) {
-	auto &catalog = Catalog::GetCatalog(context);
-
 	// read the schema and create it in the catalog
 	auto info = SchemaCatalogEntry::Deserialize(reader);
 	// we set create conflict to ignore to ignore the failure of recreating the main schema
@@ -303,7 +304,6 @@ void CheckpointWriter::WriteView(ViewCatalogEntry &view) {
 void CheckpointReader::ReadView(ClientContext &context, MetaBlockReader &reader) {
 	auto info = ViewCatalogEntry::Deserialize(reader, context);
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateView(context, info.get());
 }
 
@@ -317,7 +317,6 @@ void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq) {
 void CheckpointReader::ReadSequence(ClientContext &context, MetaBlockReader &reader) {
 	auto info = SequenceCatalogEntry::Deserialize(reader);
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateSequence(context, info.get());
 }
 
@@ -341,7 +340,6 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	auto info = IndexCatalogEntry::Deserialize(reader, context);
 
 	// Create index in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
 	auto schema_catalog = catalog.GetSchema(context, info->schema);
 	auto table_catalog =
 	    (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name);
@@ -404,7 +402,6 @@ void CheckpointWriter::WriteType(TypeCatalogEntry &table) {
 void CheckpointReader::ReadType(ClientContext &context, MetaBlockReader &reader) {
 	auto info = TypeCatalogEntry::Deserialize(reader);
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateType(context, info.get());
 }
 
@@ -417,7 +414,6 @@ void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro) {
 
 void CheckpointReader::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
 	auto info = ScalarMacroCatalogEntry::Deserialize(reader, context);
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateFunction(context, info.get());
 }
 
@@ -427,7 +423,6 @@ void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro) {
 
 void CheckpointReader::ReadTableMacro(ClientContext &context, MetaBlockReader &reader) {
 	auto info = TableMacroCatalogEntry::Deserialize(reader, context);
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateFunction(context, info.get());
 }
 
@@ -454,7 +449,6 @@ void CheckpointReader::ReadTable(ClientContext &context, MetaBlockReader &reader
 	ReadTableData(context, reader, *bound_info);
 
 	// finally create the table in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateTable(context, bound_info.get());
 }
 

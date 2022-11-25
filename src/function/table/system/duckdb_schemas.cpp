@@ -37,8 +37,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBSchemasInit(ClientContext &context, T
 	auto result = make_unique<DuckDBSchemasData>();
 
 	// scan all the schemas and collect them
-	Catalog::GetCatalog(context).ScanSchemas(
-	    context, [&](CatalogEntry *entry) { result->entries.push_back((SchemaCatalogEntry *)entry); });
+	result->entries = Catalog::GetEntries<SchemaCatalogEntry>(context, INVALID_CATALOG);
+
 	// get the temp schema as well
 	result->entries.push_back(SchemaCatalogEntry::GetTemporaryObjects(context));
 

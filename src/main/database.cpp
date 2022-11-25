@@ -84,8 +84,12 @@ StorageManager &StorageManager::GetStorageManager(DatabaseInstance &db) {
 	return db.GetStorageManager();
 }
 
-Catalog &Catalog::GetCatalog(DatabaseInstance &db) {
-	return db.GetCatalog();
+DatabaseManager &DatabaseInstance::GetDatabaseManager() {
+	return *db_manager;
+}
+
+Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {
+	return db.Get
 }
 
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
@@ -174,6 +178,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	connection_manager = make_unique<ConnectionManager>();
 	db_manager->AddDatabase(database_path, move(attached_database));
 
+	// initialize the system catalog
+	db_manager->GetSystemCatalog().Initialize(true);
 	// initialize the database
 	initial_database->Initialize();
 
@@ -212,8 +218,8 @@ StorageManager &DatabaseInstance::GetStorageManager() {
 	return db_manager->GetDefaultDatabase().GetStorageManager();
 }
 
-Catalog &DatabaseInstance::GetCatalog() {
-	return db_manager->GetDefaultDatabase().GetCatalog();
+Catalog &DatabaseInstance::GetSystemCatalog() {
+	return db_manager->GetSystemCatalog();
 }
 
 TransactionManager &DatabaseInstance::GetTransactionManager() {

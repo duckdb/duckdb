@@ -73,7 +73,7 @@ Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	}
 
 	// create the actual transaction
-	auto &catalog = Catalog::GetCatalog(db);
+	auto &catalog = Catalog::GetCatalog(db, INVALID_CATALOG);
 	auto transaction =
 	    make_unique<Transaction>(context, start_time, transaction_id, start_timestamp, catalog.GetCatalogVersion());
 	auto transaction_ptr = transaction.get();

@@ -60,7 +60,7 @@ void duckdb::DBDeleter(DBWrapper *db) {
 	CreateTableFunctionInfo info(scan_fun);
 	Connection conn(*wrapper->db);
 	auto &context = *conn.context;
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
 	catalog.CreateTableFunction(context, &info);
 	context.transaction.Commit();

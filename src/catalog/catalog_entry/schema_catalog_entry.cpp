@@ -254,7 +254,7 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	// remove the foreign key constraint in main key table if main key table's name is valid
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
 		// alter primary key tablee
-		Catalog::GetCatalog(context).Alter(context, fk_arrays[i].get());
+		catalog->Alter(context, fk_arrays[i].get());
 	}
 }
 

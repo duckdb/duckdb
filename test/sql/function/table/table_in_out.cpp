@@ -68,7 +68,7 @@ struct ThrottlingSum {
 		// Create our test TableFunction
 		con.BeginTransaction();
 		auto &client_context = *con.context;
-		auto &catalog = Catalog::GetCatalog(client_context);
+		auto &catalog = Catalog::GetSystemCatalog(client_context);
 		TableFunction caching_table_in_out("throttling_sum", {LogicalType::TABLE}, nullptr, ThrottlingSum::Bind);
 		caching_table_in_out.in_out_function = ThrottlingSum::Function;
 		caching_table_in_out.in_out_function_final = ThrottlingSum::Finalize;

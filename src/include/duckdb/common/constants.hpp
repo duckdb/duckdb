@@ -46,6 +46,7 @@ using std::make_shared;
 #define DEFAULT_SCHEMA "main"
 #define TEMP_SCHEMA    "temp"
 #define INVALID_SCHEMA ""
+#define INVALID_CATALOG ""
 
 //! a saner size_t for loop indices etc
 typedef uint64_t idx_t;

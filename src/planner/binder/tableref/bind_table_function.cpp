@@ -180,9 +180,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	TableFunctionCatalogEntry *function = nullptr;
 
 	// fetch the function from the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-
-	auto func_catalog = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr->schema,
+	auto func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, INVALID_CATALOG, fexpr->schema,
 	                                     fexpr->function_name, false, error_context);
 
 	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY) {

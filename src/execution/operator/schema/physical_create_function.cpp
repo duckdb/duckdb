@@ -26,7 +26,8 @@ void PhysicalCreateFunction::GetData(ExecutionContext &context, DataChunk &chunk
 	if (state.finished) {
 		return;
 	}
-	Catalog::GetCatalog(context.client).CreateFunction(context.client, info.get());
+	auto &catalog = Catalog::GetCatalog(context.client, INVALID_CATALOG);
+	catalog.CreateFunction(context.client, info.get());
 	state.finished = true;
 }
 
