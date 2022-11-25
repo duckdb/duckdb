@@ -22,7 +22,7 @@ void JupyterProgressBar::Update(double progress) {
 }
 
 void JupyterProgressBar::Finish() {
-	Update(99);
+	Update(100);
 }
 
 } // namespace duckdb

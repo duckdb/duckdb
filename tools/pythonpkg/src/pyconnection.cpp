@@ -162,37 +162,34 @@ DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::obj
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
 	unique_ptr<JupyterProgressBar> progress_bar;
-	if (DuckDBPyConnection::IsJupyter()) {
+	{
+		//FIXME: only do this when we're in a Jupyter Notebook
+		// This is necessary for the progress bars to display/update properly
 		py::gil_scoped_acquire gil;
-		progress_bar = make_unique<JupyterProgressBar>();
-	}
-
-	do {
-		execution_result = pending_query.ExecuteTask();
-		{
-			py::gil_scoped_acquire gil;
-
+		if (DuckDBPyConnection::IsJupyter()) {
+			progress_bar = make_unique<JupyterProgressBar>();
+		}
+		do {
+			execution_result = pending_query.ExecuteTask();
 			if (PyErr_CheckSignals() != 0) {
 				throw std::runtime_error("Query interrupted");
 			}
 
-			if (DuckDBPyConnection::IsJupyter()) {
-				// Update the progress bar here
+			if (progress_bar) {
 				// FIXME: might need to grab a lock here?
 				auto &context = *connection->context;
 
 				// Assuming enable_progress is on
 				auto progress = context.GetProgress();
-				// printf("PROGRESS BAR: %f\n", progress);
 				progress_bar->Update(progress);
 			}
+		} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
+		if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
+			pending_query.ThrowError();
 		}
-	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
-	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
-		pending_query.ThrowError();
-	}
-	if (DuckDBPyConnection::IsJupyter()) {
-		progress_bar->Finish();
+		if (progress_bar) {
+			progress_bar->Finish();
+		}
 	}
 	return pending_query.Execute();
 }
@@ -746,7 +743,10 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 		// nasty hardcoded default value check
 		progress_bar_time_opt->set_local(context, Value(0));
 	}
-	progress_bar_print_opt->set_local(context, Value(false));
+	if (DuckDBPyConnection::IsJupyter()) {
+		// Don't render the regular progress bar on Jupyter Notebooks
+		progress_bar_print_opt->set_local(context, Value(false));
+	}
 }
 
 static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database, DBConfig &config) {
