@@ -16,7 +16,7 @@ SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='mini
 
 # Test should be a bit faster using the metadata cache
 statement ok
-PRAGMA enable_http_metadata_cache
+SET enable_http_metadata_cache=true;
 
 foreach urlstyle path vhost
 

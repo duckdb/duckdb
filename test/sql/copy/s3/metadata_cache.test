@@ -45,7 +45,7 @@ analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 2.*PUT\: 0.*\#POST\: 0.*
 
 # Now enable the global metadata cache to store the results of the head requests, saving 1 HEAD per file
 statement ok
-pragma enable_http_metadata_cache;
+SET enable_http_metadata_cache=true;
 
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';

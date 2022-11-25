@@ -141,9 +141,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_parallelism", PragmaEnableForceParallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_parallelism", PragmaDisableForceParallelism));
 
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_http_metadata_cache", PragmaEnableHTTPMetadataCache));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_http_metadata_cache", PragmaDisableHTTPMetadataCache));
-
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
 

@@ -128,7 +128,7 @@ EXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket/parquet_glob_s3/g*/*.parq
 analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 3.*GET\: 7.*PUT\: 0.*\#POST\: 0.*
 
 statement ok
-pragma enable_http_metadata_cache;
+SET enable_http_metadata_cache=true;
 
 # metadata cache was just enabled, its still cold
 query II
