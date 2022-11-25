@@ -95,6 +95,14 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
 	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"),
 	         py::arg("binary_as_string") = false)
+	    .def("from_parquet", &DuckDBPyConnection::FromParquetGlob,
+	         "Create a relation object from the Parquet files in glob_file", py::arg("glob_file"),
+	         py::arg("binary_as_string") = false, py::arg("file_row_number") = false, py::arg("filename") = false,
+	         py::arg("hive_partitioning") = false)
+	    .def("from_parquet", &DuckDBPyConnection::FromParquetGlobs,
+	         "Create a relation object from the Parquet files in glob_files", py::arg("glob_files"),
+	         py::arg("binary_as_string") = false, py::arg("file_row_number") = false, py::arg("filename") = false,
+	         py::arg("hive_partitioning") = false)
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
@@ -372,6 +380,44 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
 	return make_unique<DuckDBPyRelation>(
 	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquetGlob(const string &glob_file, bool binary_as_string,
+                                                                 bool file_row_number, bool filename,
+                                                                 bool hive_partitioning) {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	string name = "parquet_" + GenerateRandomName();
+	vector<Value> params;
+	params.emplace_back(glob_file);
+	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
+	                                        {"file_row_number", Value::BOOLEAN(file_row_number)},
+	                                        {"filename", Value::BOOLEAN(filename)},
+	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(name));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquetGlobs(const vector<string> &glob_files,
+                                                                  bool binary_as_string, bool file_row_number,
+                                                                  bool filename, bool hive_partitioning) {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	string name = "parquet_" + GenerateRandomName();
+	vector<Value> params;
+	auto glob_files_as_value = vector<Value>();
+	for (const auto &file : glob_files) {
+		glob_files_as_value.emplace_back(file);
+	}
+	params.emplace_back(Value::LIST(glob_files_as_value));
+	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
+	                                        {"file_row_number", Value::BOOLEAN(file_row_number)},
+	                                        {"filename", Value::BOOLEAN(filename)},
+	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_object) {

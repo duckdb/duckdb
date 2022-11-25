@@ -198,6 +198,24 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filenam
 	return conn->FromParquet(filename, binary_as_string);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetGlob(const string &glob_file, bool binary_as_string,
+                                                               bool file_row_number, bool filename,
+                                                               bool hive_partitioning, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromParquetGlob(glob_file, binary_as_string, file_row_number, filename, hive_partitioning);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetGlobs(const vector<string> &glob_files, bool binary_as_string,
+                                                                bool file_row_number, bool filename,
+                                                                bool hive_partitioning, DuckDBPyConnection *conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromParquetGlobs(glob_files, binary_as_string, file_row_number, filename, hive_partitioning);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetDefault(const string &filename, DuckDBPyConnection *conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();

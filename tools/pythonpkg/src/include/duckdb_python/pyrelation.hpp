@@ -66,6 +66,14 @@ public:
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation>
+	FromParquetGlob(const string &glob_file, bool binary_as_string, bool file_raw_number, bool filename,
+	                bool hive_partitioning, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	static unique_ptr<DuckDBPyRelation>
+	FromParquetGlobs(const vector<string> &glob_files, bool binary_as_string, bool file_raw_number, bool filename,
+	                 bool hive_partitioning, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	static unique_ptr<DuckDBPyRelation>
 	FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation>
