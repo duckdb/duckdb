@@ -1,6 +1,7 @@
 #include "duckdb/main/database.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -165,7 +166,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	const string dbPath = config.options.database_path;
 	storage = make_unique<SingleFileStorageManager>(*this, dbPath, config.options.access_mode == AccessMode::READ_ONLY);
 
-	catalog = make_unique<Catalog>(*this);
+	db_manager = make_unique<DatabaseManager>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
@@ -206,7 +207,7 @@ StorageManager &DatabaseInstance::GetStorageManager() {
 }
 
 Catalog &DatabaseInstance::GetCatalog() {
-	return *catalog;
+	return db_manager->GetSystemCatalog();
 }
 
 TransactionManager &DatabaseInstance::GetTransactionManager() {

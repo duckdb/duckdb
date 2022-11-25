@@ -29,6 +29,7 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/extension_functions.hpp"
 #include <algorithm>
+
 namespace duckdb {
 
 string SimilarCatalogEntry::GetQualifiedName() const {

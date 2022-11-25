@@ -14,6 +14,7 @@
 #include "duckdb/main/extension.hpp"
 
 namespace duckdb {
+class DatabaseManager;
 class StorageManager;
 class Catalog;
 class TransactionManager;
@@ -57,7 +58,7 @@ private:
 
 private:
 	unique_ptr<StorageManager> storage;
-	unique_ptr<Catalog> catalog;
+	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<TransactionManager> transaction_manager;
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
