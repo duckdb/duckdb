@@ -53,6 +53,8 @@ public:
 public:
 	bool HasGeneratedColumns() const;
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
+	void UndoAlter(ClientContext &context, AlterInfo *info) override;
+
 	//! Returns whether or not a column with the given name exists
 	DUCKDB_API bool ColumnExists(const string &name);
 	//! Returns a reference to the column of the specified name. Throws an

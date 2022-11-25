@@ -1,0 +1,28 @@
+# name: test/sql/aggregate/group/group_by_all_having.test
+# description: Test group by all with having
+# group: [group]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT * FROM (SELECT 1) t0(c0) GROUP BY c0 HAVING c0>0
+----
+1
+
+query I
+SELECT c0 FROM (SELECT 1) t0(c0) GROUP BY ALL HAVING c0>0
+----
+1
+
+query I
+SELECT c0 FROM (SELECT 1, 1 UNION ALL SELECT 1, 2) t0(c0, c1) GROUP BY ALL ORDER BY c0
+----
+1
+
+# new column "c1" referenced in HAVING - it is added to the set of grouping columns
+query I
+SELECT c0 FROM (SELECT 1, 1 UNION ALL SELECT 1, 2) t0(c0, c1) GROUP BY ALL HAVING c1>0 ORDER BY c0
+----
+1
+1

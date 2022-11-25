@@ -8,6 +8,7 @@ namespace duckdb {
 BoundStatement Binder::Bind(PrepareStatement &stmt) {
 	Planner prepared_planner(context);
 	auto prepared_data = prepared_planner.PrepareSQLStatement(move(stmt.statement));
+	this->bound_tables = prepared_planner.binder->bound_tables;
 
 	auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(prepared_planner.plan));
 	// we can prepare in read-only mode: prepared statements are not written to the catalog

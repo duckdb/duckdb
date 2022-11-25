@@ -112,8 +112,8 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	auto function_data =
 	    copy_function->function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
-	auto get = make_unique<LogicalGet>(0, copy_function->function.copy_from_function, move(function_data),
-	                                   bound_insert.expected_types, expected_names);
+	auto get = make_unique<LogicalGet>(GenerateTableIndex(), copy_function->function.copy_from_function,
+	                                   move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
 		get->column_ids.push_back(i);
 	}
