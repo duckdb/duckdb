@@ -38,7 +38,6 @@ void DuckDBPyConnection::DetectEnvironment() {
 	}
 	DuckDBPyConnection::environment = PythonEnvironmentType::INTERACTIVE;
 
-	printf("INTERACTIVE\n");
 	// Check to see if we are in a Jupyter Notebook
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	auto get_ipython = import_cache.IPython.get_ipython();
@@ -53,7 +52,6 @@ void DuckDBPyConnection::DetectEnvironment() {
 	py::dict ipython_config = ipython.attr("config");
 	if (ipython_config.contains("IPKernelApp")) {
 		DuckDBPyConnection::environment = PythonEnvironmentType::JUPYTER;
-		printf("JUPYTER\n");
 	}
 	return;
 }
