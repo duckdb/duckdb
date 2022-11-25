@@ -16,7 +16,20 @@
 
 namespace duckdb {
 
-static void InvertPercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions) {
+static Value ValidatePercentileFraction(const Value &element_val, const bool desc) {
+	if (element_val.IsNull()) {
+		return element_val;
+	}
+
+	const auto frac = element_val.GetValue<double>();
+	if (frac < 0 || frac > 1) {
+		throw BinderException("PERCENTILEs can only take parameters in the range [0, 1]");
+	}
+
+	return desc ? Value::DOUBLE(-frac) : element_val;
+}
+
+static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
 	D_ASSERT(fractions.get());
 	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = (BoundExpression &)*fractions;
@@ -29,17 +42,11 @@ static void InvertPercentileFractions(ClientContext &context, unique_ptr<ParsedE
 	if (value.type().id() == LogicalTypeId::LIST) {
 		vector<Value> values;
 		for (const auto &element_val : ListValue::GetChildren(value)) {
-			if (element_val.IsNull()) {
-				values.push_back(element_val);
-			} else {
-				values.push_back(Value::DOUBLE(1 - element_val.GetValue<double>()));
-			}
+			values.push_back(ValidatePercentileFraction(element_val, desc));
 		}
 		bound.expr = make_unique<BoundConstantExpression>(Value::LIST(values));
-	} else if (value.IsNull()) {
-		bound.expr = make_unique<BoundConstantExpression>(value);
 	} else {
-		bound.expr = make_unique<BoundConstantExpression>(Value::DOUBLE(1 - value.GetValue<double>()));
+		bound.expr = make_unique<BoundConstantExpression>(ValidatePercentileFraction(value, desc));
 	}
 }
 
@@ -58,7 +65,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// Handle ordered-set aggregates by moving the single ORDER BY expression to the front of the children.
 	//	https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE
 	bool ordered_set_agg = false;
-	bool invert_fractions = false;
+	bool negate_fractions = false;
 	if (aggr.order_bys && aggr.order_bys->orders.size() == 1) {
 		const auto &func_name = aggr.function_name;
 		ordered_set_agg = (func_name == "quantile_cont" || func_name == "quantile_disc" || func_name == "mode");
@@ -68,15 +75,15 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			const auto &order = aggr.order_bys->orders[0];
 			const auto sense =
 			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
-			invert_fractions = (sense == OrderType::DESCENDING);
+			negate_fractions = (sense == OrderType::DESCENDING);
 		}
 	}
 
 	for (auto &child : aggr.children) {
 		aggregate_binder.BindChild(child, 0, error);
-		// We have to invert the fractions for PERCENTILE_XXXX DESC
-		if (error.empty() && invert_fractions) {
-			InvertPercentileFractions(context, child);
+		// We have to negate the fractions for PERCENTILE_XXXX DESC
+		if (error.empty() && ordered_set_agg) {
+			NegatePercentileFractions(context, child, negate_fractions);
 		}
 	}
 
