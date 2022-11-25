@@ -68,7 +68,7 @@ public:
 		return true;
 	}
 
-	static bool IsSupported(const vector<JoinCondition> &conditions);
+	static bool IsSupported(const vector<JoinCondition> &conditions, JoinType join_type);
 
 public:
 	//! Returns a list of the types of the join conditions

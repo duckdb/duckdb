@@ -35,5 +35,16 @@ select * from t1 join t2 on (i=j), t3 join t4 on (k=l) order by 1, 2, 3, 4;
 1	1	2	2
 1	1	3	3
 
-statement error
+# lateral join
+query IIII rowsort
 select * from t1 join t2 on (i=j), t3 join t4 on (i+k=j+l)
+----
+1	1	2	2
+1	1	3	3
+
+# postgres syntax
+query IIII rowsort
+select * from t1 join t2 on (i=j), lateral (select * from t3 join t4 on (i+k=j+l)) t(x);
+----
+1	1	2	2
+1	1	3	3

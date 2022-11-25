@@ -1,0 +1,19 @@
+# name: test/sql/subquery/lateral/lateral_large_lists.test
+# description: Test LATERAL joins with large arrays (inspired by #3593 but with a lateral join)
+# group: [lateral]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT total_seats
+FROM (
+SELECT list(distinct {'key': gen_random_uuid(), 'val': 1 }) as l FROM range(0, 1600)
+) as m, (
+  select sum(a.val) as value
+  FROM (
+	SELECT UNNEST(l) a
+  ) x
+) as l(total_seats)
+----
+1600

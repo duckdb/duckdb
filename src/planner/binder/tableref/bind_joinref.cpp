@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 
 namespace duckdb {
 
@@ -124,7 +125,18 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 	result->type = ref.type;
 	result->left = left_binder.Bind(*ref.left);
-	result->right = right_binder.Bind(*ref.right);
+	{
+		LateralBinder binder(left_binder, context);
+		result->right = right_binder.Bind(*ref.right);
+		result->lateral = binder.HasCorrelatedColumns();
+		if (result->lateral) {
+			// lateral join: can only be an INNER or LEFT join
+			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
+				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
+			}
+		}
+		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
+	}
 
 	vector<unique_ptr<ParsedExpression>> extra_conditions;
 	vector<string> extra_using_columns;

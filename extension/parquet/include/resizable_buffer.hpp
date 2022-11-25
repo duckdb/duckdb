@@ -74,7 +74,7 @@ public:
 			return;
 		}
 		if (new_size > alloc_len) {
-			alloc_len = new_size;
+			alloc_len = NextPowerOfTwo(new_size);
 			allocated_data = allocator.Allocate(alloc_len);
 			ptr = (char *)allocated_data.get();
 		}

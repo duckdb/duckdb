@@ -10,7 +10,7 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -29,20 +29,22 @@ static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function)
 bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
                                          unique_ptr<BoundSubqueryRef> &subquery, string &error) {
 	auto binder = Binder::CreateBinder(this->context, this, true);
+	unique_ptr<QueryNode> subquery_node;
 	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
 		// general case: argument is a subquery, bind it as part of the node
 		auto &se = (SubqueryExpression &)*expressions[0];
-		auto node = binder->BindNode(*se.subquery->node);
-		subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
-		return true;
+		subquery_node = move(se.subquery->node);
+	} else {
+		// special case: non-subquery parameter to table-in table-out function
+		// generate a subquery and bind that (i.e. UNNEST([1,2,3]) becomes UNNEST((SELECT [1,2,3]))
+		auto select_node = make_unique<SelectNode>();
+		select_node->select_list = move(expressions);
+		select_node->from_table = make_unique<EmptyTableRef>();
+		subquery_node = move(select_node);
 	}
-	// special case: non-subquery parameter to table-in table-out function
-	// generate a subquery and bind that (i.e. UNNEST([1,2,3]) becomes UNNEST((SELECT [1,2,3]))
-	auto select_node = make_unique<SelectNode>();
-	select_node->select_list = move(expressions);
-	select_node->from_table = make_unique<EmptyTableRef>();
-	auto node = binder->BindNode(*select_node);
+	auto node = binder->BindNode(*subquery_node);
 	subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
+	MoveCorrelatedExpressions(*subquery->binder);
 	return true;
 }
 
@@ -86,7 +88,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			continue;
 		}
 
-		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
+		TableFunctionBinder binder(*this, context);
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		if (expr->HasParameter()) {

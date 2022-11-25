@@ -45,6 +45,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		prepared = prepared_planner.PrepareSQLStatement(entry->second->unbound_statement->Copy());
 		rebound_plan = move(prepared_planner.plan);
 		D_ASSERT(prepared->properties.bound_all_parameters);
+		this->bound_tables = prepared_planner.binder->bound_tables;
 	}
 	// copy the properties of the prepared statement into the planner
 	this->properties = prepared->properties;
