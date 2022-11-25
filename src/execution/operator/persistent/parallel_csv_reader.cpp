@@ -107,12 +107,16 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		start_buffer = position_buffer;
 		// We check if we can add this line
 		successfully_read_first_line = TryParseSimpleCSV(first_line_chunk, error_message, true);
-		start_buffer = position_set;
+
 		end_buffer = end_buffer_real;
-		position_buffer = position_set;
+		start_buffer = position_set;
 		if (position_buffer >= end_buffer) {
+			if (successfully_read_first_line) {
+				position_buffer = position_set;
+			}
 			break;
 		}
+		position_buffer = position_set;
 	}
 	verification_positions.beginning_of_first_line = position_buffer;
 	verification_positions.end_of_last_line = position_buffer;
@@ -173,7 +177,7 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	idx_t offset = 0;
 	bool has_quotes = false;
 	vector<idx_t> escape_positions;
-	if (start_buffer == buffer->buffer_start && !try_add_line) {
+	if ((start_buffer == buffer->buffer_start || start_buffer == buffer->buffer_end) && !try_add_line) {
 		// First time reading this buffer piece
 		if (!SetPosition(insert_chunk)) {
 			// This means the buffer size does not contain a new line
@@ -397,7 +401,8 @@ final_state : {
 	if (buffer->buffer->IsCSVFileLastBuffer() || (buffer->next_buffer->IsCSVFileLastBuffer())) {
 		if (column > 0 || try_add_line) {
 			// remaining values to be added to the chunk
-			AddValue(buffer->GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes);
+			auto str_value = buffer->GetValue(start_buffer, position_buffer, offset);
+			AddValue(str_value, column, escape_positions, has_quotes);
 			if (try_add_line) {
 				bool success = column == sql_types.size();
 				if (success) {
