@@ -50,6 +50,23 @@ private:
 // Modules
 //===--------------------------------------------------------------------===//
 
+struct IPythonCacheItem : public PythonImportCacheItem {
+public:
+	~IPythonCacheItem() override {
+	}
+	virtual void LoadSubtypes(PythonImportCache &cache) override {
+		get_ipython.LoadAttribute("get_ipython", cache, *this);
+	}
+
+public:
+	PythonImportCacheItem get_ipython;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
+};
+
 struct PandasLibsCacheItem : public PythonImportCacheItem {
 public:
 	~PandasLibsCacheItem() override {
@@ -204,6 +221,7 @@ public:
 		uuid.LoadModule("uuid", *this);
 		pandas.LoadModule("pandas", *this);
 		arrow.LoadModule("pyarrow", *this);
+		IPython.LoadModule("IPython", *this);
 	}
 	~PythonImportCache();
 
@@ -214,6 +232,7 @@ public:
 	UUIDCacheItem uuid;
 	PandasCacheItem pandas;
 	ArrowCacheItem arrow;
+	IPythonCacheItem IPython;
 
 public:
 	PyObject *AddCache(py::object item);

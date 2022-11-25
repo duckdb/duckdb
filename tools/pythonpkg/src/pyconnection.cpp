@@ -28,15 +28,43 @@ namespace duckdb {
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
-bool DuckDBPyConnection::interactive = false;
+PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
 
-bool DuckDBPyConnection::DetectEnvironment() {
-	//! If __main__ does not have a __file__ attribute, we are in interactive mode
+void DuckDBPyConnection::DetectEnvironment() {
+	// If __main__ does not have a __file__ attribute, we are in interactive mode
 	auto main_module = py::module_::import("__main__");
-	if (!py::hasattr(main_module, "__file__")) {
-		DuckDBPyConnection::interactive = true;
+	if (py::hasattr(main_module, "__file__")) {
+		return;
 	}
+	DuckDBPyConnection::environment = PythonEnvironmentType::INTERACTIVE;
+
+	printf("INTERACTIVE\n");
+	// Check to see if we are in a Jupyter Notebook
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto get_ipython = import_cache.IPython.get_ipython();
+	if (get_ipython.ptr() == nullptr) {
+		// Could either not load the IPython module, or it has no 'get_ipython' attribute
+		return;
+	}
+	auto ipython = get_ipython();
+	if (!py::hasattr(ipython, "config")) {
+		return;
+	}
+	py::dict ipython_config = ipython.attr("config");
+	if (ipython_config.contains("IPKernelApp")) {
+		DuckDBPyConnection::environment = PythonEnvironmentType::JUPYTER;
+		printf("JUPYTER\n");
+	}
+	return;
+}
+
+bool DuckDBPyConnection::DetectAndGetEnvironment() {
+	DuckDBPyConnection::DetectEnvironment();
 	return DuckDBPyConnection::IsInteractive();
+}
+
+bool DuckDBPyConnection::IsJupyter() {
+	return DuckDBPyConnection::environment == PythonEnvironmentType::JUPYTER;
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
@@ -748,7 +776,7 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 }
 
 bool DuckDBPyConnection::IsInteractive() {
-	return DuckDBPyConnection::interactive;
+	return DuckDBPyConnection::environment != PythonEnvironmentType::NORMAL;
 }
 
 DuckDBPyConnection *DuckDBPyConnection::Enter() {

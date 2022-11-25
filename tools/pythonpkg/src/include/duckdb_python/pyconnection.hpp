@@ -21,6 +21,8 @@
 
 namespace duckdb {
 
+enum class PythonEnvironmentType { NORMAL, INTERACTIVE, JUPYTER };
+
 struct DuckDBPyRelation;
 
 class RegisteredArrow : public RegisteredObject {
@@ -53,7 +55,8 @@ public:
 	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
 	                 const py::object &traceback);
 
-	static bool DetectEnvironment();
+	static bool DetectAndGetEnvironment();
+	static bool IsJupyter();
 	static DuckDBPyConnection *DefaultConnection();
 	static PythonImportCache *ImportCache();
 	static bool IsInteractive();
@@ -142,7 +145,8 @@ public:
 
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();
-	static bool interactive;
+	static PythonEnvironmentType environment;
+	static void DetectEnvironment();
 };
 
 } // namespace duckdb
