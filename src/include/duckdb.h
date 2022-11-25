@@ -520,6 +520,8 @@ DUCKDB_API const char *duckdb_result_error(duckdb_result *result);
 /*!
 Fetches a data chunk from the duckdb_result. This function should be called repeatedly until the result is exhausted.
 
+The result must be destroyed with `duckdb_destroy_data_chunk`.
+
 This function supersedes all `duckdb_value` functions, as well as the `duckdb_column_data` and `duckdb_nullmask_data`
 functions. It results in significantly better performance, and should be preferred in newer code-bases.
 

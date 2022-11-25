@@ -81,7 +81,9 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-
+	if (child_stats.empty() || !child_stats[0]) {
+		return nullptr;
+	}
 	auto &existing_struct_stats = (StructStatistics &)*child_stats[0];
 	auto new_struct_stats = make_unique<StructStatistics>(expr.return_type);
 

@@ -353,6 +353,10 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	return result;
 }
 
+vector<idx_t> LogicalOperator::GetTableIndex() const {
+	return vector<idx_t> {};
+}
+
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
 	BufferedSerializer logical_op_serializer;
 	try {

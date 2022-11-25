@@ -15,7 +15,12 @@ vector<ColumnBinding> LogicalSample::GetColumnBindings() {
 idx_t LogicalSample::EstimateCardinality(ClientContext &context) {
 	auto child_cardinality = children[0]->EstimateCardinality(context);
 	if (sample_options->is_percentage) {
-		return idx_t(child_cardinality * sample_options->sample_size.GetValue<double>());
+		double sample_cardinality =
+		    double(child_cardinality) * (sample_options->sample_size.GetValue<double>() / 100.0);
+		if (sample_cardinality > double(child_cardinality)) {
+			return child_cardinality;
+		}
+		return idx_t(sample_cardinality);
 	} else {
 		auto sample_size = sample_options->sample_size.GetValue<uint64_t>();
 		if (sample_size < child_cardinality) {

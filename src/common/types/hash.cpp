@@ -2,6 +2,7 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 #include <functional>
 #include <cmath>

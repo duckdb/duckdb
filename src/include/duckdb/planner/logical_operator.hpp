@@ -83,6 +83,9 @@ public:
 		return true;
 	}
 
+	//! Returns the set of table indexes of this operator
+	virtual vector<idx_t> GetTableIndex() const;
+
 protected:
 	//! Resolve types for this specific operator
 	virtual void ResolveTypes() = 0;
