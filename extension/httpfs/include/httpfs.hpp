@@ -25,8 +25,10 @@ public:
 
 struct HTTPParams {
 	static constexpr uint64_t DEFAULT_TIMEOUT = 30000; // 30 sec
+	static constexpr uint64_t DEFAULT_RETRIES = 1;
 
 	uint64_t timeout;
+	uint64_t retries;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
 };

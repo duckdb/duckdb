@@ -19,6 +19,12 @@ foreach url_style path vhost
 statement ok
 SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='minio_duckdb_user';SET s3_region='eu-west-1'; SET s3_endpoint='duckdb-minio.com:9000'; SET s3_use_ssl=false;
 
+statement ok
+SET http_retries=5;
+
+statement ok
+SET http_timeout=50000;
+
 # Test the vhost style urls (this is the default)
 statement ok
 SET s3_url_style='${url_style}';

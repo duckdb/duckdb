@@ -22,12 +22,19 @@ static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(Heade
 
 HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	uint64_t timeout;
+	uint64_t retries;
 	Value value;
 
 	if (opener->TryGetCurrentSetting("http_timeout", value)) {
 		timeout = value.GetValue<uint64_t>();
 	} else {
 		timeout = DEFAULT_TIMEOUT;
+	}
+
+	if (opener->TryGetCurrentSetting("http_retries", value)) {
+		retries = value.GetValue<uint64_t>();
+	} else {
+		retries = DEFAULT_RETRIES;
 	}
 
 	return {timeout};
@@ -121,11 +128,24 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
 
-	auto res = hfs.http_client->Head(path.c_str(), *headers);
-	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
+	idx_t out_offset = 0;
+	idx_t tries = 0;
+	idx_t max_retries = hfs.http_params.retries;
+
+	while (true) {
+		auto res = hfs.http_client->Head(path.c_str(), *headers);
+
+		if (res.error() == duckdb_httplib_openssl::Error::Success) {
+			return make_unique<ResponseWrapper>(res.value());
+		} else if (res.error() == duckdb_httplib_openssl::Error::Read && tries <= max_retries) {
+			// Retry mechanism for the keep-alive connection: sometimes the connection times out and the request will
+			// fail with a Read error. Refreshing the connection will solve this.
+			tries += 1;
+			hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
+		} else {
+			throw std::runtime_error("HTTP HEAD error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
+		}
 	}
-	return make_unique<ResponseWrapper>(res.value());
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
@@ -141,7 +161,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 
 	idx_t out_offset = 0;
 	idx_t tries = 0;
-	idx_t max_tries = 2;
+	idx_t max_retries = hfs.http_params.retries;
 
 	while (true) {
 		auto res = hfs.http_client->Get(
@@ -169,19 +189,13 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 
 		if (res.error() == duckdb_httplib_openssl::Error::Success) {
 			return make_unique<ResponseWrapper>(res.value());
-		} else {
+		} else if (res.error() == duckdb_httplib_openssl::Error::Read && tries <= max_retries) {
 			// Retry mechanism for the keep-alive connection: sometimes the connection times out and the request will
 			// fail with a Read error. Refreshing the connection will solve this.
-
-			if (res.error() == duckdb_httplib_openssl::Error::Read) {
-				tries += 1;
-				hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
-			}
-
-			if (tries >= max_tries) {
-				throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + to_string((int)res.error()) +
-				                         ")");
-			}
+			tries += 1;
+			hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
+		} else {
+			throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
 		}
 	}
 }
