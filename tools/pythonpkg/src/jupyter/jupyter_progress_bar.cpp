@@ -3,13 +3,16 @@
 
 namespace duckdb {
 
-// FIXME: Maybe this should be a ProgressBarDisplay, pluggable into ProgressBar
 JupyterProgressBar::JupyterProgressBar() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	auto float_progress_attr = import_cache.ipywidgets.FloatProgress();
 	D_ASSERT(float_progress_attr.ptr() != nullptr);
 	// Initialize the progress bar
-	progress_bar = float_progress_attr((py::arg("min") = py::cast(0), py::arg("max") = py::cast(100)));
+	py::dict style;
+	style["bar_color"] = "black";
+	progress_bar = float_progress_attr((py::arg("min") = 0, py::arg("max") = 100, py::arg("style") = style));
+
+	progress_bar.attr("layout").attr("width") = "100%";
 
 	// Display the progress bar
 	auto display_attr = import_cache.IPython.display.display();
