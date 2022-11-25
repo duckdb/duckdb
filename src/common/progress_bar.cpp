@@ -1,4 +1,4 @@
-#include "duckdb/common/progress_bar.hpp"
+#include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -19,8 +19,12 @@ void ProgressBar::Start() {
 	supported = true;
 }
 
+bool ProgressBar::PrintEnabled() const {
+	return print_progress;
+}
+
 bool ProgressBar::ShouldPrint(bool final) const {
-	if (!print_progress) {
+	if (!PrintEnabled()) {
 		// Don't print progress at all
 		return false;
 	}

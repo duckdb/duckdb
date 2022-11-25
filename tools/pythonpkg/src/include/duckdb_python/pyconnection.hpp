@@ -145,6 +145,7 @@ public:
 
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();
+	unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };

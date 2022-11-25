@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/python_object_container.hpp
+// duckdb_python/import_cache/modules/arrow_module.hpp
 //
 //
 //===----------------------------------------------------------------------===//

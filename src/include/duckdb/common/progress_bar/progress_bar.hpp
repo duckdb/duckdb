@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/progress_bar.hpp
+// duckdb/common/progress_bar/progress_bar.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -49,6 +49,7 @@ private:
 	void PrintProgress(int percentage);
 	void FinishProgressBarPrint();
 	bool ShouldPrint(bool final) const;
+	bool PrintEnabled() const;
 
 private:
 	//! The executor

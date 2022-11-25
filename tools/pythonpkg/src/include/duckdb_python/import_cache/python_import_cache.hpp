@@ -27,6 +27,7 @@ public:
 		pandas.LoadModule("pandas", *this);
 		arrow.LoadModule("pyarrow", *this);
 		IPython.LoadModule("IPython", *this);
+		ipywidgets.LoadModule("ipywidgets", *this);
 	}
 	~PythonImportCache();
 
@@ -38,6 +39,7 @@ public:
 	PandasCacheItem pandas;
 	ArrowCacheItem arrow;
 	IPythonCacheItem IPython;
+	IpywidgetsCacheItem ipywidgets;
 
 public:
 	PyObject *AddCache(py::object item);
