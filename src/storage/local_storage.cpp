@@ -246,12 +246,21 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 		                                       append_state.current_row);
 	}
 	if (constraint_violated) {
+		PreservedError error;
 		// need to revert the append
 		row_t current_row = append_state.row_start;
 		// remove the data from the indexes, if there are any indexes
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			table->RemoveFromIndexes(append_state, chunk, current_row);
+			try {
+				table->RemoveFromIndexes(append_state, chunk, current_row);
+			} catch (Exception &ex) {
+				error = PreservedError(ex);
+				return false;
+			} catch (std::exception &ex) {
+				error = PreservedError(ex);
+				return false;
+			}
 
 			current_row += chunk.size();
 			if (current_row >= append_state.current_row) {
@@ -262,6 +271,9 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 		});
 		if (append_to_table) {
 			table->RevertAppendInternal(append_state.row_start, append_count);
+		}
+		if (error) {
+			error.Throw();
 		}
 		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
 	}
@@ -394,7 +406,7 @@ void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable *table) {
 void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	// append to unique indices (if any)
 	auto storage = state.storage;
-	idx_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows();
+	idx_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows() + state.append_state.total_append_count;
 	if (!DataTable::AppendToIndexes(storage->indexes, chunk, base_id)) {
 		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
 	}

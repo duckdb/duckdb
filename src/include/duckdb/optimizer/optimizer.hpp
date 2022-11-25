@@ -30,6 +30,10 @@ public:
 
 private:
 	void RunOptimizer(OptimizerType type, const std::function<void()> &callback);
+	void Verify(LogicalOperator &op);
+
+private:
+	unique_ptr<LogicalOperator> plan;
 };
 
 } // namespace duckdb
