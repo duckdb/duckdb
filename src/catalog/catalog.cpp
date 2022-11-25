@@ -28,6 +28,9 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/extension_functions.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -44,6 +47,28 @@ Catalog::Catalog(DatabaseInstance &db)
 	catalog_version = 0;
 }
 Catalog::~Catalog() {
+}
+
+void Catalog::Initialize(bool load_builtin) {
+	// first initialize the base system catalogs
+	// these are never written to the WAL
+	Connection con(db);
+	con.BeginTransaction();
+
+	// create the default schema
+	CreateSchemaInfo info;
+	info.schema = DEFAULT_SCHEMA;
+	info.internal = true;
+	CreateSchema(*con.context, &info);
+
+	if (load_builtin) {
+		// initialize default functions
+		BuiltinFunctions builtin(*con.context, *this);
+		builtin.Initialize();
+	}
+
+	// commit transactions
+	con.Commit();
 }
 
 Catalog &Catalog::GetCatalog(ClientContext &context) {

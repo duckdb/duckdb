@@ -25,11 +25,18 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath) {
 }
 
 void AttachedDatabase::Initialize() {
+	// initialize the catalog
+	auto &config = DBConfig::GetConfig(db);
+	catalog->Initialize(config.options.initialize_default_database);
 	storage->Initialize();
 }
 
 StorageManager &AttachedDatabase::GetStorageManager() {
 	return *storage;
+}
+
+Catalog &AttachedDatabase::GetCatalog() {
+	return *catalog;
 }
 
 TransactionManager &AttachedDatabase::GetTransactionManager() {

@@ -213,7 +213,7 @@ StorageManager &DatabaseInstance::GetStorageManager() {
 }
 
 Catalog &DatabaseInstance::GetCatalog() {
-	return db_manager->GetSystemCatalog();
+	return db_manager->GetDefaultDatabase().GetCatalog();
 }
 
 TransactionManager &DatabaseInstance::GetTransactionManager() {

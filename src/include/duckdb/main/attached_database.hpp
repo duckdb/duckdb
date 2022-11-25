@@ -27,6 +27,7 @@ public:
 	void Initialize();
 
 	StorageManager &GetStorageManager();
+	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
 
 private:

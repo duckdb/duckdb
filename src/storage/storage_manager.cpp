@@ -7,10 +7,8 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/connection.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 
@@ -48,29 +46,6 @@ void StorageManager::Initialize() {
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
-
-	auto &config = DBConfig::GetConfig(db);
-	auto &catalog = Catalog::GetCatalog(db);
-
-	// first initialize the base system catalogs
-	// these are never written to the WAL
-	Connection con(db);
-	con.BeginTransaction();
-
-	// create the default schema
-	CreateSchemaInfo info;
-	info.schema = DEFAULT_SCHEMA;
-	info.internal = true;
-	catalog.CreateSchema(*con.context, &info);
-
-	if (config.options.initialize_default_database) {
-		// initialize default functions
-		BuiltinFunctions builtin(*con.context, catalog);
-		builtin.Initialize();
-	}
-
-	// commit transactions
-	con.Commit();
 
 	// create or load the database from disk, if not in-memory mode
 	LoadDatabase();

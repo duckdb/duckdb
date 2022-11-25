@@ -97,6 +97,8 @@ public:
 		return *dependency_manager;
 	}
 
+	void Initialize(bool load_builtin = true);
+
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	DUCKDB_API idx_t GetCatalogVersion();
 	//! Trigger a modification in the catalog, increasing the catalog version and returning the previous version
