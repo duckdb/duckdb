@@ -142,7 +142,7 @@ void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, cons
 	static char *evar;
 
 	if ((evar = std::getenv(env_var_name)) != NULL)
-		this->config.options.set_variables[key] = Value(evar);
+		this->config.SetOption(key, Value(evar));
 }
 
 void AWSEnvironmentCredentialsProvider::SetAll() {
