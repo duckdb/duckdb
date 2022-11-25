@@ -20,6 +20,10 @@ class Index;
 //! An index catalog entry
 class IndexCatalogEntry : public StandardEntry {
 public:
+	static constexpr const CatalogType Type = CatalogType::INDEX_ENTRY;
+	static constexpr const char *Name = "index";
+
+public:
 	//! Create an IndexCatalogEntry and initialize storage for it
 	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info);
 	~IndexCatalogEntry() override;

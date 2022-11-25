@@ -20,6 +20,10 @@ struct CreatePragmaFunctionInfo;
 //! A table function in the catalog
 class PragmaFunctionCatalogEntry : public StandardEntry {
 public:
+	static constexpr const CatalogType Type = CatalogType::PRAGMA_FUNCTION_ENTRY;
+	static constexpr const char *Name = "pragma function";
+
+public:
 	PragmaFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreatePragmaFunctionInfo *info);
 
 	//! The pragma functions

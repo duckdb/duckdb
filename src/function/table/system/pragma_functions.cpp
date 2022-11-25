@@ -44,8 +44,8 @@ static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, Tabl
 unique_ptr<GlobalTableFunctionState> PragmaFunctionsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<PragmaFunctionsData>();
 
-	auto schemas = Catalog::GetEntries<SchemaCatalogEntry>(context, INVALID_CATALOG);
-	for(auto schema : schemas) {
+	auto schemas = Catalog::GetSchemas(context, INVALID_CATALOG);
+	for (auto schema : schemas) {
 		schema->Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY,
 		             [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	}

@@ -18,6 +18,10 @@ namespace duckdb {
 //! An aggregate function in the catalog
 class AggregateFunctionCatalogEntry : public StandardEntry {
 public:
+	static constexpr const CatalogType Type = CatalogType::AGGREGATE_FUNCTION_ENTRY;
+	static constexpr const char *Name = "aggregate function";
+
+public:
 	AggregateFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateAggregateFunctionInfo *info)
 	    : StandardEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, schema, catalog, info->name),
 	      functions(info->functions) {

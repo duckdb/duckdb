@@ -44,6 +44,10 @@ class SchemaCatalogEntry : public CatalogEntry {
 	friend class Catalog;
 
 public:
+	static constexpr const CatalogType Type = CatalogType::SCHEMA_ENTRY;
+	static constexpr const char *Name = "schema";
+
+public:
 	SchemaCatalogEntry(Catalog *catalog, string name, bool is_internal);
 
 private:

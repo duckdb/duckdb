@@ -78,7 +78,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context,
 	auto result = make_unique<DuckDBFunctionsData>();
 
 	// scan all the schemas for tables and collect themand collect them
-	auto schemas = Catalog::GetEntries<SchemaCatalogEntry>(context, INVALID_CATALOG);
+	auto schemas = Catalog::GetSchemas(context, INVALID_CATALOG);
 	for (auto &schema : schemas) {
 		ExtractFunctionsFromSchema(context, *schema, *result);
 	};

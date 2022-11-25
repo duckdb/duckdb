@@ -98,7 +98,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 	auto result = make_unique<DuckDBConstraintsData>();
 
 	// scan all the schemas for tables and collect them
-	auto schemas = Catalog::GetEntries<SchemaCatalogEntry>(context, INVALID_CATALOG);
+	auto schemas = Catalog::GetSchemas(context, INVALID_CATALOG);
 
 	sort(schemas.begin(), schemas.end(), [&](CatalogEntry *x, CatalogEntry *y) { return (x->name < y->name); });
 
@@ -193,8 +193,8 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				const auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
 				const auto &info = bound_foreign_key.info;
 				// find the other table
-				auto table_entry = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, info.schema,
-				                                                         info.table, true);
+				auto table_entry =
+				    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, info.schema, info.table, true);
 				if (!table_entry) {
 					throw InternalException("dukdb_constraints: entry %s.%s referenced in foreign key not found",
 					                        info.schema, info.table);

@@ -51,7 +51,8 @@ protected:
 
 class CheckpointReader {
 public:
-	CheckpointReader(Catalog &catalog) : catalog(catalog) {}
+	CheckpointReader(Catalog &catalog) : catalog(catalog) {
+	}
 	virtual ~CheckpointReader() {
 	}
 
@@ -74,8 +75,8 @@ protected:
 
 class SingleFileCheckpointReader final : public CheckpointReader {
 public:
-	explicit SingleFileCheckpointReader(SingleFileStorageManager &storage) :
-	    CheckpointReader(Catalog::GetCatalog(storage.db, INVALID_CATALOG)), storage(storage) {
+	explicit SingleFileCheckpointReader(SingleFileStorageManager &storage)
+	    : CheckpointReader(Catalog::GetCatalog(storage.db, INVALID_CATALOG)), storage(storage) {
 	}
 
 	void LoadFromStorage();

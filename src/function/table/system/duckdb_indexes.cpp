@@ -57,7 +57,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, T
 	auto result = make_unique<DuckDBIndexesData>();
 
 	// scan all the schemas for tables and collect them and collect them
-	auto schemas = Catalog::GetEntries<SchemaCatalogEntry>(context, INVALID_CATALOG);
+	auto schemas = Catalog::GetSchemas(context, INVALID_CATALOG);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	};
@@ -95,7 +95,8 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		output.SetValue(4, count, Value(index.info->table));
 		// table_oid, BIGINT
 		// find the table in the catalog
-		auto table_entry = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, index.info->schema, index.info->table);
+		auto table_entry =
+		    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, index.info->schema, index.info->table);
 		output.SetValue(5, count, Value::BIGINT(table_entry->oid));
 		// is_unique, BOOLEAN
 		output.SetValue(6, count, Value::BOOLEAN(index.index->IsUnique()));

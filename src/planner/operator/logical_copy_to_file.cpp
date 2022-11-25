@@ -32,7 +32,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	auto has_bind_data = reader.ReadRequired<bool>();
 
 	auto &context = state.gstate.context;
-	auto copy_func_catalog_entry = Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, copy_func_name);
+	auto copy_func_catalog_entry =
+	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, copy_func_name);
 	if (!copy_func_catalog_entry) {
 		throw InternalException("Cant find catalog entry for function %s", copy_func_name);
 	}

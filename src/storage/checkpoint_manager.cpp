@@ -36,7 +36,7 @@ namespace duckdb {
 void ReorderTableEntries(vector<TableCatalogEntry *> &tables);
 
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(DatabaseInstance &db, BlockManager &block_manager)
-	: CheckpointWriter(db), partial_block_manager(block_manager) {
+    : CheckpointWriter(db), partial_block_manager(block_manager) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {

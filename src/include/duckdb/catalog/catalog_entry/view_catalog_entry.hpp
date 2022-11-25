@@ -21,6 +21,10 @@ struct CreateViewInfo;
 //! A view catalog entry
 class ViewCatalogEntry : public StandardEntry {
 public:
+	static constexpr const CatalogType Type = CatalogType::VIEW_ENTRY;
+	static constexpr const char *Name = "view";
+
+public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info);
 

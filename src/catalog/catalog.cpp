@@ -72,7 +72,11 @@ void Catalog::Initialize(bool load_builtin) {
 }
 
 Catalog &Catalog::GetSystemCatalog(ClientContext &context) {
-	return Catalog::GetSystemCatalog(context.db);
+	return Catalog::GetSystemCatalog(*context.db);
+}
+
+Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name) {
+	return Catalog::GetCatalog(*context.db, catalog_name);
 }
 
 CatalogEntry *Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
@@ -351,68 +355,61 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 	return LookupEntry(context, type, schema_name, name, if_exists, error_context).entry;
 }
 
-template <>
-TableCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                     bool if_exists, QueryErrorContext error_context) {
-	auto entry = GetEntry(context, CatalogType::TABLE_ENTRY, schema_name, name, if_exists);
-	if (!entry) {
-		return nullptr;
+vector<Catalog *> GetCatalogs(ClientContext &context, const string &catalog) {
+	vector<Catalog *> catalogs;
+	catalogs.push_back(&Catalog::GetCatalog(context, catalog));
+	if (catalog == INVALID_CATALOG) {
+		catalogs.push_back(&Catalog::GetSystemCatalog(context));
 	}
-	if (entry->type != CatalogType::TABLE_ENTRY) {
-		throw CatalogException(error_context.FormatError("%s is not a table", name));
+	return catalogs;
+}
+
+CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog, const string &schema,
+                                const string &name, bool if_exists_p, QueryErrorContext error_context) {
+	auto catalogs = GetCatalogs(context, catalog);
+	D_ASSERT(!catalogs.empty());
+	CatalogEntry *result = nullptr;
+	for (idx_t i = 0; i < catalogs.size(); i++) {
+		auto if_exists = i + 1 == catalogs.size() ? true : if_exists_p;
+		result = catalogs[i]->GetEntry(context, type, schema, name, if_exists, error_context);
 	}
-	return (TableCatalogEntry *)entry;
+	return result;
 }
 
-template <>
-SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                        bool if_exists, QueryErrorContext error_context) {
-	return (SequenceCatalogEntry *)GetEntry(context, CatalogType::SEQUENCE_ENTRY, schema_name, name, if_exists,
-	                                        error_context);
-}
-
-template <>
-TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                             bool if_exists, QueryErrorContext error_context) {
-	return (TableFunctionCatalogEntry *)GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, schema_name, name,
-	                                             if_exists, error_context);
-}
-
-template <>
-CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                            bool if_exists, QueryErrorContext error_context) {
-	return (CopyFunctionCatalogEntry *)GetEntry(context, CatalogType::COPY_FUNCTION_ENTRY, schema_name, name, if_exists,
-	                                            error_context);
-}
-
-template <>
-PragmaFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                              bool if_exists, QueryErrorContext error_context) {
-	return (PragmaFunctionCatalogEntry *)GetEntry(context, CatalogType::PRAGMA_FUNCTION_ENTRY, schema_name, name,
-	                                              if_exists, error_context);
-}
-
-template <>
-AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                                 bool if_exists, QueryErrorContext error_context) {
-	auto entry = GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, schema_name, name, if_exists, error_context);
-	if (entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
-		throw CatalogException(error_context.FormatError("%s is not an aggregate function", name));
+SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &catalog_name, const string &schema_name,
+                                       bool if_exists_p, QueryErrorContext error_context) {
+	auto catalogs = GetCatalogs(context, catalog_name);
+	D_ASSERT(!catalogs.empty());
+	SchemaCatalogEntry *result = nullptr;
+	for (idx_t i = 0; i < catalogs.size(); i++) {
+		auto if_exists = i + 1 == catalogs.size() ? true : if_exists_p;
+		result = catalogs[i]->GetSchema(context, schema_name, if_exists, error_context);
 	}
-	return (AggregateFunctionCatalogEntry *)entry;
+	return result;
 }
 
-template <>
-CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                       bool if_exists, QueryErrorContext error_context) {
-	return (CollateCatalogEntry *)GetEntry(context, CatalogType::COLLATION_ENTRY, schema_name, name, if_exists,
-	                                       error_context);
+LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
+                             const string &name) {
+	auto catalogs = GetCatalogs(context, catalog_name);
+	D_ASSERT(!catalogs.empty());
+	for (idx_t i = 0; i < catalogs.size(); i++) {
+		auto if_exists = i + 1 == catalogs.size() ? true : false;
+		auto entry = catalogs[i]->GetEntry<TypeCatalogEntry>(context, schema, name, if_exists);
+		if (entry) {
+			return catalogs[i]->GetType(context, schema, name);
+		}
+	}
+	throw InternalException("Catalog::GetType failed to find type or throw!?");
 }
 
-template <>
-TypeCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                    bool if_exists, QueryErrorContext error_context) {
-	return (TypeCatalogEntry *)GetEntry(context, CatalogType::TYPE_ENTRY, schema_name, name, if_exists, error_context);
+vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
+	auto catalogs = GetCatalogs(context, catalog_name);
+	vector<SchemaCatalogEntry *> result;
+	for (auto catalog : catalogs) {
+		auto schemas = catalog->schemas->GetEntries<SchemaCatalogEntry>(context);
+		result.insert(result.end(), schemas.begin(), schemas.end());
+	}
+	return result;
 }
 
 LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name) {

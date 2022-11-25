@@ -89,7 +89,19 @@ DatabaseManager &DatabaseInstance::GetDatabaseManager() {
 }
 
 Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {
-	return db.Get
+	return db.GetDatabaseManager().GetSystemCatalog();
+}
+
+Catalog &Catalog::GetCatalog(DatabaseInstance &db, const string &catalog_name) {
+	auto &db_manager = db.GetDatabaseManager();
+	if (catalog_name == INVALID_CATALOG) {
+		return db_manager.GetDefaultDatabase().GetCatalog();
+	}
+	auto entry = db_manager.GetDatabase(catalog_name);
+	if (!entry) {
+		throw BinderException("Catalog \"%s\" does not exist!", catalog_name);
+	}
+	return entry->GetCatalog();
 }
 
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
@@ -217,10 +229,10 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 StorageManager &DatabaseInstance::GetStorageManager() {
 	return db_manager->GetDefaultDatabase().GetStorageManager();
 }
-
-Catalog &DatabaseInstance::GetSystemCatalog() {
-	return db_manager->GetSystemCatalog();
-}
+//
+// Catalog &DatabaseInstance::GetSystemCatalog() {
+//	return db_manager->GetSystemCatalog();
+//}
 
 TransactionManager &DatabaseInstance::GetTransactionManager() {
 	return db_manager->GetDefaultDatabase().GetTransactionManager();

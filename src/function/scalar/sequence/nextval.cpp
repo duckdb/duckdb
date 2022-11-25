@@ -106,8 +106,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 		UnaryExecutor::Execute<string_t, int64_t>(input, result, args.size(), [&](string_t value) {
 			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
-			auto sequence =
-			    Catalog::GetEntry<SequenceCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
+			auto sequence = Catalog::GetEntry<SequenceCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
 			// finally get the next value from the sequence
 			return OP::Operation(transaction, sequence);
 		});

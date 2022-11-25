@@ -26,8 +26,8 @@ static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, TableF
 unique_ptr<GlobalTableFunctionState> PragmaCollateInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<PragmaCollateData>();
 
-	auto schemas = Catalog::GetEntries<SchemaCatalogEntry>(context, INVALID_CATALOG);
-	for(auto schema : schemas) {
+	auto schemas = Catalog::GetSchemas(context, INVALID_CATALOG);
+	for (auto schema : schemas) {
 		schema->Scan(context, CatalogType::COLLATION_ENTRY,
 		             [&](CatalogEntry *entry) { result->entries.push_back(entry->name); });
 	}

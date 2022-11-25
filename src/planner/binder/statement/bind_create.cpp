@@ -156,7 +156,8 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		type = Catalog::GetType(context, INVALID_CATALOG, schema, UserType::GetTypeName(type));
 	} else if (type.id() == LogicalTypeId::ENUM) {
 		auto &enum_type_name = EnumType::GetTypeName(type);
-		auto enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name, true);
+		auto enum_type_catalog =
+		    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name, true);
 		LogicalType::SetCatalog(type, enum_type_catalog);
 	}
 }
@@ -428,7 +429,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				CheckForeignKeyTypes(create_info.columns, create_info.columns, fk);
 			} else {
 				// have to resolve referenced table
-				auto pk_table_entry_ptr = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, fk.info.schema, fk.info.table);
+				auto pk_table_entry_ptr =
+				    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, fk.info.schema, fk.info.table);
 				fk_schemas.insert(pk_table_entry_ptr->schema);
 				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->columns, pk_table_entry_ptr->constraints, fk);
 				FindForeignKeyIndexes(pk_table_entry_ptr->columns, fk.pk_columns, fk.info.pk_keys);
