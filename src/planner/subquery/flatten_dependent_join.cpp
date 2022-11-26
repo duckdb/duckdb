@@ -79,9 +79,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
 		// now create the duplicate eliminated scan for this node
+		auto left_columns = plan->GetColumnBindings().size();
 		auto delim_index = binder.GenerateTableIndex();
 		this->base_binding = ColumnBinding(delim_index, 0);
-		this->delim_offset = 0;
+		this->delim_offset = left_columns;
 		this->data_offset = 0;
 		auto delim_scan = make_unique<LogicalDelimGet>(delim_index, delim_types);
 		return LogicalCrossProduct::Create(move(plan), move(delim_scan));
