@@ -215,7 +215,7 @@ SEXP ToRString(const string_t &input) {
 		has_null_byte += data[c] == 0;
 	}
 	if (has_null_byte) {
-		Rf_error("String contains null byte");
+		cpp11::stop("String contains null byte");
 	}
 	return Rf_mkCharLenCE(data, len, CE_UTF8);
 }
