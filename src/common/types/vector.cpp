@@ -548,10 +548,18 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
 	case LogicalTypeId::MAP: {
-		auto &child_entries = StructVector::GetEntries(*vector);
-		Value key = child_entries[0]->GetValue(index);
-		Value value = child_entries[1]->GetValue(index);
-		return Value::MAP(move(key), move(value));
+        auto offlen = ((list_entry_t *)data)[index];
+        auto &child_vec = ListVector::GetEntry(*vector);
+        std::vector<Value> children;
+        for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
+            children.push_back(child_vec.GetValue(i));
+        }
+        return Value::MAP(ListType::GetChildType(type), move(children));
+
+//        auto &child_entries = StructVector::GetEntries(*vector);
+//		Value key = child_entries[0]->GetValue(index);
+//		Value value = child_entries[1]->GetValue(index);
+//		return Value::MAP(move(key), move(value));
 	}
 	case LogicalTypeId::UNION: {
 		auto tag = UnionVector::GetTag(*vector, index);
@@ -1513,12 +1521,12 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 }
 
 Vector &MapVector::GetKeys(Vector &vector) {
-	auto &entries = StructVector::GetEntries(vector);
+	auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
 	D_ASSERT(entries.size() == 2);
 	return *entries[0];
 }
 Vector &MapVector::GetValues(Vector &vector) {
-	auto &entries = StructVector::GetEntries(vector);
+    auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
 	D_ASSERT(entries.size() == 2);
 	return *entries[1];
 }
@@ -1531,7 +1539,7 @@ const Vector &MapVector::GetValues(const Vector &vector) {
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP ||
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT ||
 	         vector.GetType().id() == LogicalTypeId::UNION);
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
@@ -1550,7 +1558,7 @@ const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 }
 
 const Vector &ListVector::GetEntry(const Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
 		return ListVector::GetEntry(child);
@@ -1568,7 +1576,7 @@ Vector &ListVector::GetEntry(Vector &vector) {
 }
 
 void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);

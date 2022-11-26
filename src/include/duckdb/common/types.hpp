@@ -409,6 +409,7 @@ public:
 	DUCKDB_API static LogicalType LIST( LogicalType child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT( child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
+	DUCKDB_API static LogicalType MAP(LogicalType child);				// NOLINT
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT

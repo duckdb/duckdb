@@ -131,7 +131,7 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 
 static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
-	child_list_t<LogicalType> child_types;
+	// child_list_t<LogicalType> child_types;
 
 	if (arguments.size() != 1) {
 		throw InvalidInputException("The input argument must be a list of structs.");
@@ -155,11 +155,10 @@ static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, Scala
 	if (children.size() != 2) {
 		throw InvalidInputException("The provided struct type should only contain 2 fields, a key and a value");
 	}
-	child_types.push_back(make_pair("key", LogicalType::LIST(children[0].second)));
-	child_types.push_back(make_pair("value", LogicalType::LIST(children[1].second)));
+	// child_types.push_back(make_pair("key", LogicalType::LIST(children[0].second)));
+	// child_types.push_back(make_pair("value", LogicalType::LIST(children[1].second)));
 
-	//! this is more for completeness reasons
-	bound_function.return_type = LogicalType::MAP(move(child_types));
+	bound_function.return_type = LogicalType::MAP(children[0].second, children[1].second);
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 

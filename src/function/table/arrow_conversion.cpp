@@ -619,6 +619,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		break;
 	}
 	case LogicalTypeId::MAP: {
+		// TODO fix for map restructure
 		//! Since this is a map we skip first child, because its a struct
 		auto &struct_arrow = *array.children[0];
 		auto &child_entries = StructVector::GetEntries(vector);

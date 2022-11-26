@@ -528,18 +528,36 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return result;
 }
 
+//TODO use the overload below
 Value Value::MAP(Value key, Value value) {
-	Value result;
+	Value struct_result;
 	child_list_t<LogicalType> child_types;
 	child_types.push_back({"key", key.type()});
 	child_types.push_back({"value", value.type()});
 
-	result.type_ = LogicalType::MAP(move(child_types));
+    struct_result.type_ = LogicalType::STRUCT(move(child_types));
 
-	result.struct_value.push_back(move(key));
-	result.struct_value.push_back(move(value));
+    struct_result.struct_value.push_back(move(key));
+    struct_result.struct_value.push_back(move(value));
+
+    Value result;
+    result.type_ = LogicalType::MAP(key.type(), value.type());
+
+    result.list_value.push_back(move(struct_result));
 	result.is_null = false;
 	return result;
+}
+
+Value Value::MAP(LogicalType child_type, vector<Value> values) {
+    Value result;
+
+    result.type_ = LogicalType::MAP(move(child_type));
+    result.is_null = false;
+    if (values.empty()){
+        return result;
+    }
+    result.list_value = move(values);
+    return result;
 }
 
 Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) {
