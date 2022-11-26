@@ -75,17 +75,18 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 			ConstantVector::Reference(state.input_chunk.data[col_idx], input.data[col_idx], state.row_index, 1);
 		}
-		// set up the output data in "chunk"
-		D_ASSERT(chunk.ColumnCount() > projected_input.size());
-		idx_t base_idx = chunk.ColumnCount() - projected_input.size();
-		for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
-			auto source_idx = projected_input[project_idx];
-			auto target_idx = base_idx + project_idx;
-			ConstantVector::Reference(chunk.data[target_idx], input.data[source_idx], state.row_index, 1);
-		}
 		state.input_chunk.SetCardinality(1);
 		state.row_index++;
 		state.new_row = false;
+	}
+	// set up the output data in "chunk"
+	D_ASSERT(chunk.ColumnCount() > projected_input.size());
+	D_ASSERT(state.row_index > 0);
+	idx_t base_idx = chunk.ColumnCount() - projected_input.size();
+	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
+		auto source_idx = projected_input[project_idx];
+		auto target_idx = base_idx + project_idx;
+		ConstantVector::Reference(chunk.data[target_idx], input.data[source_idx], state.row_index - 1, 1);
 	}
 	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
 	if (result == OperatorResultType::FINISHED) {
