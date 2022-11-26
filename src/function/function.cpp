@@ -130,31 +130,37 @@ BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog) : c
 void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable,
                                     bool not_required_for_equality) {
 	CreateCollationInfo info(move(name), move(function), combinable, not_required_for_equality);
+	info.internal = true;
 	catalog.CreateCollation(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {
 	CreateAggregateFunctionInfo info(move(set));
+	info.internal = true;
 	catalog.CreateFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunction function) {
 	CreateAggregateFunctionInfo info(move(function));
+	info.internal = true;
 	catalog.CreateFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(PragmaFunction function) {
 	CreatePragmaFunctionInfo info(move(function));
+	info.internal = true;
 	catalog.CreatePragmaFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(const string &name, PragmaFunctionSet functions) {
 	CreatePragmaFunctionInfo info(name, move(functions));
+	info.internal = true;
 	catalog.CreatePragmaFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(ScalarFunction function) {
 	CreateScalarFunctionInfo info(move(function));
+	info.internal = true;
 	catalog.CreateFunction(context, &info);
 }
 
@@ -167,21 +173,25 @@ void BuiltinFunctions::AddFunction(const vector<string> &names, ScalarFunction f
 
 void BuiltinFunctions::AddFunction(ScalarFunctionSet set) {
 	CreateScalarFunctionInfo info(move(set));
+	info.internal = true;
 	catalog.CreateFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(TableFunction function) {
 	CreateTableFunctionInfo info(move(function));
+	info.internal = true;
 	catalog.CreateTableFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(TableFunctionSet set) {
 	CreateTableFunctionInfo info(move(set));
+	info.internal = true;
 	catalog.CreateTableFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(CopyFunction function) {
 	CreateCopyFunctionInfo info(move(function));
+	info.internal = true;
 	catalog.CreateCopyFunction(context, &info);
 }
 

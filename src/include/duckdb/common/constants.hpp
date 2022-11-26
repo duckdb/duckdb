@@ -144,6 +144,6 @@ struct PhysicalIndex {
 	}
 };
 
-uint64_t NextPowerOfTwo(uint64_t v);
+DUCKDB_API uint64_t NextPowerOfTwo(uint64_t v);
 
 } // namespace duckdb

@@ -175,7 +175,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		CopyStatement copy_stmt;
 		copy_stmt.info = move(info);
 
-		auto copy_binder = Binder::CreateBinder(context);
+		auto copy_binder = Binder::CreateBinder(context, this);
 		auto bound_statement = copy_binder->Bind(copy_stmt);
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
