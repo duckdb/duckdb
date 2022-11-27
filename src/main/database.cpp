@@ -80,10 +80,6 @@ DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 	return *context.db;
 }
 
-StorageManager &StorageManager::GetStorageManager(DatabaseInstance &db) {
-	return db.GetStorageManager();
-}
-
 DatabaseManager &DatabaseInstance::GetDatabaseManager() {
 	return *db_manager;
 }
@@ -236,6 +232,14 @@ StorageManager &DatabaseInstance::GetStorageManager() {
 
 TransactionManager &DatabaseInstance::GetTransactionManager() {
 	return db_manager->GetDefaultDatabase().GetTransactionManager();
+}
+
+DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
+	return db.GetDatabaseManager();
+}
+
+DatabaseManager &DatabaseManager::Get(ClientContext &db) {
+	return DatabaseManager::Get(*db.db);
 }
 
 TaskScheduler &DatabaseInstance::GetScheduler() {

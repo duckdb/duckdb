@@ -20,13 +20,14 @@ AttachedDatabase *DatabaseManager::GetDatabase(const string &name) {
 	return nullptr;
 }
 
-void DatabaseManager::AddDatabase(string name, unique_ptr<AttachedDatabase> catalog) {
+void DatabaseManager::AddDatabase(unique_ptr<AttachedDatabase> db_instance) {
 	lock_guard<mutex> l(manager_lock);
+	auto &name = db_instance->GetName();
 	auto entry = databases.find(name);
 	if (entry != databases.end()) {
 		throw CatalogException("Catalog with name \"%s\" already exists", name);
 	}
-	databases[name] = move(catalog);
+	databases[name] = move(db_instance);
 }
 
 AttachedDatabase &DatabaseManager::GetDefaultDatabase() {
@@ -35,6 +36,15 @@ AttachedDatabase &DatabaseManager::GetDefaultDatabase() {
 		return *db.second;
 	}
 	throw InternalException("GetDefaultDatabase called but there are no databases");
+}
+
+vector<AttachedDatabase *> DatabaseManager::GetDatabases() {
+	lock_guard<mutex> l(manager_lock);
+	vector<AttachedDatabase *> result;
+	for (auto &entry : databases) {
+		result.push_back(entry.second.get());
+	}
+	return result;
 }
 
 Catalog &DatabaseManager::GetSystemCatalog() {

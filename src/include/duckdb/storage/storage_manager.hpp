@@ -53,8 +53,7 @@ public:
 	DatabaseInstance &db;
 
 public:
-	static StorageManager &GetStorageManager(ClientContext &context);
-	static StorageManager &GetStorageManager(DatabaseInstance &db);
+	static StorageManager &Get(Catalog &catalog);
 
 	//! Initialize a database or load an existing database from the given path
 	void Initialize();

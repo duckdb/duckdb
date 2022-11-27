@@ -21,8 +21,8 @@ StorageManager::StorageManager(DatabaseInstance &db, string path, bool read_only
 StorageManager::~StorageManager() {
 }
 
-StorageManager &StorageManager::GetStorageManager(ClientContext &context) {
-	return StorageManager::GetStorageManager(*context.db);
+StorageManager &StorageManager::Get(Catalog &catalog) {
+	throw InternalException("FIXME: get storage manager of catalog")
 }
 
 BufferManager &BufferManager::GetBufferManager(ClientContext &context) {

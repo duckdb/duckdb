@@ -15,6 +15,7 @@
 namespace duckdb {
 class AttachedDatabase;
 class Catalog;
+class ClientContext;
 class DatabaseInstance;
 
 //! The DatabaseManager is a class that sits at the root of all attached databases
@@ -24,13 +25,18 @@ public:
 	~DatabaseManager();
 
 public:
+	static DatabaseManager &Get(DatabaseInstance &db);
+	static DatabaseManager &Get(ClientContext &db);
+
 	//! Get an attached database with the given name
 	AttachedDatabase *GetDatabase(const string &name);
 	//! Add a new attached database to the database manager
-	void AddDatabase(string name, unique_ptr<AttachedDatabase> db);
+	void AddDatabase(unique_ptr<AttachedDatabase> db);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 	AttachedDatabase &GetDefaultDatabase();
+
+	vector<AttachedDatabase *> GetDatabases();
 
 private:
 	//! The lock controlling access to the databases

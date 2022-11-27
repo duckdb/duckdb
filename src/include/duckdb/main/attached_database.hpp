@@ -29,6 +29,9 @@ public:
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
+	const string &GetName() const {
+		return name;
+	}
 
 private:
 	static string ExtractDatabaseName(const string &dbpath);
