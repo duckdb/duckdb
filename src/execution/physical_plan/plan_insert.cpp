@@ -53,6 +53,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 
 	bool parallel_streaming_insert = !PreserveInsertionOrder(*plan);
 	bool use_batch_index = UseBatchIndex(*plan);
+	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	if (op.return_chunk) {
 		// not supported for RETURNING (yet?)
 		parallel_streaming_insert = false;
@@ -64,7 +65,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		                                          op.estimated_cardinality);
 	} else {
 		insert = make_unique<PhysicalInsert>(op.types, op.table, op.column_index_map, move(op.bound_defaults),
-		                                     op.estimated_cardinality, op.return_chunk, parallel_streaming_insert);
+		                                     op.estimated_cardinality, op.return_chunk, parallel_streaming_insert && num_threads > 1);
 	}
 	if (plan) {
 		insert->children.push_back(move(plan));
