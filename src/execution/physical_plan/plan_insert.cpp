@@ -65,7 +65,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		                                          op.estimated_cardinality);
 	} else {
 		insert = make_unique<PhysicalInsert>(op.types, op.table, op.column_index_map, move(op.bound_defaults),
-		                                     op.estimated_cardinality, op.return_chunk, parallel_streaming_insert && num_threads > 1);
+		                                     op.estimated_cardinality, op.return_chunk,
+		                                     parallel_streaming_insert && num_threads > 1);
 	}
 	if (plan) {
 		insert->children.push_back(move(plan));

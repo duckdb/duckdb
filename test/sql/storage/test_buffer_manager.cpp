@@ -10,23 +10,28 @@ using namespace std;
 
 TEST_CASE("Test leak check temp tables", "[api]") {
 	TestDeleteFile("temp.db");
-	DuckDB db("temp.db");
-//DuckDB db;
+	//	DuckDB db("temp.db");
+	DuckDB db;
 	{
 		Connection con(db);
-//				REQUIRE_NO_FAIL(con.Query("SET threads=1"));
-				REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
-//		REQUIRE_NO_FAIL(con.Query("create table t1 as select i, concat('thisisalongstring', i) s from range(1000000) t(i);"));
-//		REQUIRE_NO_FAIL(con.Query("copy (select i, concat('thisisalongstring', i) s from range(1000000) t(i)) to 'temp.parquet';"));
+		//				REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+		//				REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
+		//								REQUIRE_NO_FAIL(con.Query("SET temp_directory='/tmp'"));
 
-//		con.Query("create table t1 as select i, concat('thisisalongstring', i) s from range(1) t(i);");
+		REQUIRE_NO_FAIL(
+		    con.Query("create table t1 as select i, concat('thisisalongstring', i) s from range(1000000) t(i);"));
+		//		REQUIRE_NO_FAIL(con.Query("copy (select i, concat('thisisalongstring', i) s from range(1000000) t(i)) to
+		//'temp.parquet';"));
+
+		//		con.Query("create table t1 as select i, concat('thisisalongstring', i) s from range(1) t(i);");
 	}
-	while(true) {
+	while (true) {
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("BEGIN"));
-//		REQUIRE_NO_FAIL(con.Query("create temporary table t2 as select * from t1 limit 0;"));
-//		REQUIRE_NO_FAIL(con.Query("insert into t2 select * from t1 limit 0;"));
-		REQUIRE_NO_FAIL(con.Query("create temporary table t2 as select * from 'temp.parquet';"));
+		//		REQUIRE_NO_FAIL(con.Query("create temporary table t2 as select * from t1 limit 0;"));
+		//		REQUIRE_NO_FAIL(con.Query("insert into t2 select * from t1 limit 0;"));
+		REQUIRE_NO_FAIL(con.Query("create temporary table t2 as select * from t1;"));
+		//		REQUIRE_NO_FAIL(con.Query("create temporary table t2 as select * from 'temp.parquet';"));
 		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 	}
 }
