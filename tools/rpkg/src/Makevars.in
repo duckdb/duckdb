@@ -1,4 +1,4 @@
 CXX_STD = CXX11
 PKG_CPPFLAGS = -Iinclude -I../inst/include -DDUCKDB_DISABLE_PRINT {{ INCLUDES }}
-OBJECTS=database.o connection.o statement.o register.o relational.o scan.o transform.o utils.o altrep.o reltoaltrep.o types.o cpp11.o {{ SOURCES }}
+OBJECTS=database.o connection.o statement.o register.o relational.o scan.o transform.o utils.o reltoaltrep.o types.o cpp11.o {{ SOURCES }}
 PKG_LIBS={{ LINK_FLAGS }}
