@@ -164,11 +164,13 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 	lock_guard<mutex> guard(lock);
 
-	// find first non-inlined string
-	idx_t i;
 	auto &validity = FlatVector::Validity(result);
-	auto strings = FlatVector::GetData<string_t>(result) + v_offset;
-	for (i = 0; i < count; i++) {
+	auto strings = FlatVector::GetData<string_t>(result);
+
+	// find first non-inlined string
+	auto i = v_offset;
+	const auto end = v_offset + count;
+	for (; i < end; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;
 		}
@@ -177,8 +179,7 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 		}
 	}
 	// at least one string must be non-inlined, otherwise this function should not be called
-	D_ASSERT(i != count);
-	D_ASSERT(validity.RowIsValid(i));
+	D_ASSERT(i < end);
 
 	auto base_ptr = (char *)GetDataPointer(state, block_id, offset);
 	if (strings[i].GetDataUnsafe() == base_ptr) {
@@ -187,7 +188,7 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	}
 
 	// pointer mismatch! pointers are invalid, set them correctly
-	for (; i < count; i++) {
+	for (; i < end; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;
 		}
