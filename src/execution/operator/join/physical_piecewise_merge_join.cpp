@@ -187,7 +187,7 @@ public:
 	ClientContext &context;
 	Allocator &allocator;
 	const PhysicalPiecewiseMergeJoin &op;
-	BufferManager &buffer_manager;
+	VirtualBufferManager &buffer_manager;
 	bool force_external;
 
 	// Block sorting

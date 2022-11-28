@@ -12,10 +12,9 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/block_manager.hpp"
-#include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
+
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -28,7 +27,7 @@ struct EvictionQueue;
 //
 //! BlockIds are NOT unique within the context of a BufferManager. A buffer manager
 //! can be shared by many BlockManagers.
-class BufferManager {
+class BufferManager : public VirtualBufferManager {
 	friend class BufferHandle;
 	friend class BlockHandle;
 	friend class BlockManager;
@@ -51,27 +50,17 @@ public:
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
 	DUCKDB_API BufferHandle Allocate(idx_t block_size, bool can_destroy = true,
-	                                 shared_ptr<BlockHandle> *block = nullptr);
+	                                 shared_ptr<BlockHandle> *block = nullptr) final override;
 
 	//! Reallocate an in-memory buffer that is pinned.
-	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size);
+	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final override;
 
-	BufferHandle Pin(shared_ptr<BlockHandle> &handle);
-	void Unpin(shared_ptr<BlockHandle> &handle);
+	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final override;
+	void Unpin(shared_ptr<BlockHandle> &handle) final override;
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
 	void SetLimit(idx_t limit = (idx_t)-1);
-
-	static BufferManager &GetBufferManager(ClientContext &context);
-	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
-
-	idx_t GetUsedMemory() {
-		return current_memory;
-	}
-	idx_t GetMaxMemory() {
-		return maximum_memory;
-	}
 
 	const string &GetTemporaryDirectory() {
 		return temp_directory;
@@ -152,12 +141,6 @@ private:
 protected:
 	//! The database instance
 	DatabaseInstance &db;
-	//! The lock for changing the memory limit
-	mutex limit_lock;
-	//! The current amount of memory that is occupied by the buffer manager (in bytes)
-	atomic<idx_t> current_memory;
-	//! The maximum amount of memory that the buffer manager can keep (in bytes)
-	atomic<idx_t> maximum_memory;
 	//! The directory name where temporary files are stored
 	string temp_directory;
 	//! Lock for creating the temp handle

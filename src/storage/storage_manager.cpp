@@ -27,8 +27,8 @@ StorageManager &StorageManager::GetStorageManager(ClientContext &context) {
 	return StorageManager::GetStorageManager(*context.db);
 }
 
-BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
-	return BufferManager::GetBufferManager(*context.db);
+VirtualBufferManager &VirtualBufferManager::GetBufferManager(ClientContext &context) {
+	return VirtualBufferManager::GetBufferManager(*context.db);
 }
 
 ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
@@ -45,7 +45,7 @@ bool StorageManager::InMemory() {
 
 void StorageManager::CreateBufferManager() {
 	auto &config = DBConfig::GetConfig(db);
-	if (!config.virtual_buffer_manager_config) {
+	if (!config.virtual_buffer_manager) {
 		// Only create a buffer manager if a custom one wasn't provided at creation
 		buffer_manager =
 		    BufferManager::CreateBufferManager(db, config.options.temporary_directory, config.options.maximum_memory);

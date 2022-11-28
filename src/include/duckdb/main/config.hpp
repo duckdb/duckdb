@@ -35,7 +35,7 @@ class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
 class BufferManager;
-struct VirtualBufferManagerConfig;
+class VirtualBufferManager;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -169,10 +169,8 @@ public:
 	shared_ptr<Allocator> default_allocator;
 	//! Extensions made to binder
 	vector<OperatorExtension> operator_extensions;
-	//! The config to create the virtual buffer manager - if provided
-	unique_ptr<VirtualBufferManagerConfig> virtual_buffer_manager_config;
-	//! The VirtualBufferManager (if config was provided for it)
-	unique_ptr<BufferManager> virtual_buffer_manager;
+	//! The VirtualBufferManager (if provided)
+	unique_ptr<VirtualBufferManager> virtual_buffer_manager;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -183,7 +181,7 @@ public:
 	DUCKDB_API static idx_t GetOptionCount();
 	DUCKDB_API static vector<string> GetOptionNames();
 
-	DUCKDB_API void SetVirtualBufferManagerConfig(unique_ptr<VirtualBufferManagerConfig> config);
+	DUCKDB_API void SetVirtualBufferManager(unique_ptr<VirtualBufferManager> buffer_manager);
 
 	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
 	                                   set_option_callback_t function = nullptr);
