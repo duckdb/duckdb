@@ -136,6 +136,7 @@ void DestroyObject(T *ptr) {
 //! As such this class should be used primarily for larger allocations.
 struct BufferAllocator {
 	DUCKDB_API static Allocator &Get(ClientContext &context);
+	DUCKDB_API static Allocator &Get(DatabaseInstance &db);
 };
 
 } // namespace duckdb

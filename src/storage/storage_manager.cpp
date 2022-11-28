@@ -45,7 +45,8 @@ bool StorageManager::InMemory() {
 
 void StorageManager::CreateBufferManager() {
 	auto &config = DBConfig::GetConfig(db);
-	if (!config.virtual_buffer_manager) {
+	if (!config.virtual_buffer_manager_config) {
+		// Only create a buffer manager if a custom one wasn't provided at creation
 		buffer_manager =
 		    BufferManager::CreateBufferManager(db, config.options.temporary_directory, config.options.maximum_memory);
 	}

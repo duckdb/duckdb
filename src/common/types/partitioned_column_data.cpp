@@ -32,6 +32,12 @@ void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendSta
 	InitializeAppendStateInternal(state);
 }
 
+unique_ptr<DataChunk> PartitionedColumnData::CreatePartitionBuffer() const {
+	auto result = make_unique<DataChunk>();
+	result->Initialize(BufferManager::GetBufferManager(context).GetBufferAllocator(), types, BufferSize());
+	return result;
+}
+
 void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, DataChunk &input) {
 	// Compute partition indices and store them in state.partition_indices
 	ComputePartitionIndices(state, input);

@@ -13,6 +13,7 @@
 #include "duckdb/main/replacement_opens.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -72,9 +73,10 @@ DatabaseInstance::~DatabaseInstance() {
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	auto &config = DBConfig::GetConfig(db);
-	if (config.virtual_buffer_manager) {
-		return *config.virtual_buffer_manager;
+	if (config.virtual_buffer_manager_config) {
 		D_ASSERT(db.GetStorageManager().buffer_manager == nullptr);
+		config.virtual_buffer_manager =
+		    make_unique<VirtualBufferManager>(*config.virtual_buffer_manager_config, db, "");
 	}
 	return *db.GetStorageManager().buffer_manager;
 }
