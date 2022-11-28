@@ -2,6 +2,7 @@
 #include "catch.hpp"
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -35,7 +36,7 @@ int main(int argc, char *argv[]) {
 			test_force_storage = true;
 		} else if (string(argv[i]) == "--force-reload" || string(argv[i]) == "--force-restart") {
 			test_force_reload = true;
-		} else if (string(argv[i]) == "--memory-leak-tests") {
+		} else if (StringUtil::StartsWith(string(argv[i]), "--memory-leak") || StringUtil::StartsWith(string(argv[i]), "--test-memory-leak")) {
 			test_memory_leaks = true;
 		} else if (string(argv[i]) == "--test-dir") {
 			test_directory = string(argv[++i]);
