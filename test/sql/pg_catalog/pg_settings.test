@@ -1,4 +1,4 @@
-# name: test/pg_catalog/pg_settings.test
+# name: test/sql/pg_catalog/pg_settings.test
 # description: Test pg_settings function
 # group: [pg_catalog]
 
