@@ -36,8 +36,6 @@ public:
 	bool return_json_strings;
 };
 
-void SetJSONTableFunctionDefaults(TableFunction &table_function);
-
 struct JSONBufferHandle {
 public:
 	JSONBufferHandle(idx_t file_index, idx_t readers, AllocatedData &&buffer);
@@ -125,28 +123,45 @@ private:
 	void ReadNewlineDelimited(idx_t &count);
 };
 
-static double JSONScanProgress(ClientContext &context, const FunctionData *bind_data_p,
-                               const GlobalTableFunctionState *global_state) {
-	auto &gstate = (JSONScanGlobalState &)*global_state;
-	return gstate.json_reader->GetProgress();
-}
+struct JSONScan {
+public:
+	static double JSONScanProgress(ClientContext &context, const FunctionData *bind_data_p,
+	                               const GlobalTableFunctionState *global_state) {
+		auto &gstate = (JSONScanGlobalState &)*global_state;
+		return gstate.json_reader->GetProgress();
+	}
 
-static idx_t JSONScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                   LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-	auto &lstate = (JSONScanLocalState &)*local_state;
-	return lstate.GetBatchIndex();
-}
+	static idx_t JSONScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+	                                   LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
+		auto &lstate = (JSONScanLocalState &)*local_state;
+		return lstate.GetBatchIndex();
+	}
 
-static void JSONScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
-	auto &bind_data = (JSONScanData &)*bind_data_p;
-	bind_data.options.Serialize(writer);
-}
+	static void JSONScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
+		auto &bind_data = (JSONScanData &)*bind_data_p;
+		bind_data.options.Serialize(writer);
+	}
 
-static unique_ptr<FunctionData> JSONScanDeserialize(ClientContext &context, FieldReader &reader,
-                                                    TableFunction &function) {
-	BufferedJSONReaderOptions options;
-	options.Deserialize(reader);
-	return make_unique<JSONScanData>(options);
-}
+	static unique_ptr<FunctionData> JSONScanDeserialize(ClientContext &context, FieldReader &reader,
+	                                                    TableFunction &function) {
+		BufferedJSONReaderOptions options;
+		options.Deserialize(reader);
+		return make_unique<JSONScanData>(options);
+	}
+
+	static void TableFunctionDefaults(TableFunction &table_function) {
+		table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
+
+		table_function.table_scan_progress = JSONScanProgress;
+		table_function.get_batch_index = JSONScanGetBatchIndex;
+
+		table_function.serialize = JSONScanSerialize;
+		table_function.deserialize = JSONScanDeserialize;
+
+		table_function.projection_pushdown = false;
+		table_function.filter_pushdown = false;
+		table_function.filter_prune = false;
+	}
+};
 
 } // namespace duckdb

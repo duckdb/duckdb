@@ -34,7 +34,7 @@ TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JS
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
 	TableFunction table_function({parameter}, ReadJSONObjectsFunction, ReadJSONObjectsBind, JSONScanGlobalState::Init,
 	                             JSONScanLocalState::Init);
-	SetJSONTableFunctionDefaults(table_function);
+	JSONScan::TableFunctionDefaults(table_function);
 	table_function.function_info = move(function_info);
 	return table_function;
 }

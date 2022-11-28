@@ -59,20 +59,6 @@ void JSONScanData::InitializeFilePaths(ClientContext &context, const vector<stri
 	}
 }
 
-void SetJSONTableFunctionDefaults(TableFunction &table_function) {
-	table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
-
-	table_function.table_scan_progress = JSONScanProgress;
-	table_function.get_batch_index = JSONScanGetBatchIndex;
-
-	table_function.serialize = JSONScanSerialize;
-	table_function.deserialize = JSONScanDeserialize;
-
-	table_function.projection_pushdown = false;
-	table_function.filter_pushdown = false;
-	table_function.filter_prune = false;
-}
-
 JSONBufferHandle::JSONBufferHandle(idx_t file_index_p, idx_t readers_p, AllocatedData &&buffer_p)
     : file_index(file_index_p), readers(readers_p), buffer(move(buffer_p)) {
 }
@@ -170,9 +156,6 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 }
 
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read) {
-	idx_t prev_file_idx =
-	    current_buffer_handle != nullptr ? current_buffer_handle->file_index : DConstants::INVALID_INDEX;
-
 	auto &buffer_map = gstate.buffer_map;
 	AllocatedData buffer;
 	if (current_buffer_handle != nullptr && --current_buffer_handle->readers == 0) {
