@@ -35,12 +35,28 @@ struct VectorDataIndex {
 	}
 };
 
+struct SwizzleMetaData {
+	SwizzleMetaData(VectorDataIndex child_index_p, data_ptr_t heap_ptr_p, uint16_t offset_p, uint16_t count_p)
+	    : child_index(child_index_p), heap_ptr(heap_ptr_p), offset(offset_p), count(count_p) {
+	}
+	//! Index of block storing heap
+	VectorDataIndex child_index;
+	//! Pointer to the start of the string heap
+	data_ptr_t heap_ptr;
+	//! Offset into the string_t vector
+	uint16_t offset;
+	//! Number of strings starting at 'offset' that have the same base 'heap_ptr'
+	uint16_t count;
+};
+
 struct VectorMetaData {
 	//! Where the vector data lives
 	uint32_t block_id;
 	uint32_t offset;
 	//! The number of entries present in this vector
 	uint16_t count;
+	//! Meta data about string pointers
+	vector<SwizzleMetaData> swizzle_data;
 
 	//! Child data of this vector (used only for lists and structs)
 	//! Note: child indices are stored with one layer of indirection
@@ -94,9 +110,6 @@ public:
 	//! Allocate space for string data during append (BUFFER_MANAGER_ALLOCATOR only)
 	VectorDataIndex AllocateStringHeap(idx_t size, ChunkMetaData &chunk_meta, ColumnDataAppendState &append_state,
 	                                   VectorDataIndex prev_index = VectorDataIndex());
-	//! Add a callback to swizzle string pointers (BUFFER_MANAGER_ALLOCATOR only)
-	void AddSwizzleCallbacks(VectorDataIndex &parent_index, idx_t entry_offset, VectorDataIndex &child_index,
-	                         idx_t count);
 
 	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);
 	void ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk,

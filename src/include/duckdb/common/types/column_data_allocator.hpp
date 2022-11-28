@@ -52,8 +52,8 @@ public:
 	void Initialize(ColumnDataAllocator &other);
 	void InitializeChunkState(ChunkManagementState &state, ChunkMetaData &meta_data);
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
-	void AddSwizzleCallbacks(VectorMetaData &parent_vdata, idx_t entry_offset, VectorMetaData &child_vdata,
-	                         idx_t count);
+	void UnswizzlePointers(ChunkManagementState &state, Vector &result, uint16_t v_offset, uint16_t count,
+	                       uint32_t block_id, uint32_t offset);
 
 	//! Deletes the block with the given id
 	void DeleteBlock(uint32_t block_id);
@@ -66,24 +66,6 @@ private:
 	bool HasBlocks() const {
 		return !blocks.empty();
 	}
-
-private:
-	struct SwizzleCallback : public BlockHandleCallback {
-	public:
-		SwizzleCallback(ColumnDataAllocator *allcator, VectorMetaData &parent_vdata, idx_t entry_offset,
-		                VectorMetaData &child_vdata, idx_t count, bool swizzle);
-		void Operation(FileBuffer &file_buffer) override;
-
-	private:
-		ColumnDataAllocator *allocator;
-		uint32_t parent_block_id;
-		uint32_t parent_block_offset;
-		uint32_t child_block_id;
-		uint32_t child_block_offset;
-		idx_t entry_offset;
-		idx_t count;
-		bool swizzle;
-	};
 
 private:
 	void AllocateBuffer(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);

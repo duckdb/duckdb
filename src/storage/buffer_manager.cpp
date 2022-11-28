@@ -131,7 +131,6 @@ BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileB
 			handle->buffer = block_manager.buffer_manager.ReadTemporaryBuffer(handle->block_id, move(reusable_buffer));
 		}
 	}
-	handle->ExecuteLoadCallbacks(*handle->buffer);
 	handle->state = BlockState::BLOCK_LOADED;
 	return BufferHandle(handle, handle->buffer.get());
 }
@@ -143,7 +142,6 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 	}
 	D_ASSERT(!unswizzled);
 	D_ASSERT(CanUnload());
-	ExecuteUnloadCallbacks(*buffer);
 
 	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
 		// temporary block that cannot be destroyed: write to temporary file

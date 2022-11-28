@@ -92,15 +92,12 @@ public:
 		return GetString();
 	}
 
-	void Swizzle(char *base_ptr) {
+	void SetPointer(char *new_ptr) {
 		D_ASSERT(!IsInlined());
-		D_ASSERT(value.pointer.ptr >= base_ptr);
-		value.swizzled.offset = value.pointer.ptr - base_ptr;
-	}
-
-	void Unswizzle(char *base_ptr) {
-		D_ASSERT(!IsInlined());
-		value.pointer.ptr = base_ptr + value.swizzled.offset;
+		value.pointer.ptr = new_ptr;
+#ifdef DEBUG
+		Verify();
+#endif
 	}
 
 	void Finalize() {

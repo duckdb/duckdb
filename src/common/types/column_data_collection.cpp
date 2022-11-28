@@ -425,29 +425,30 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 	auto &segment = meta_data.segment;
 	auto &append_state = meta_data.state;
 
-	auto current_index = meta_data.vector_data_index;
 	VectorDataIndex child_index;
 	if (meta_data.GetVectorMetaData().child_index.IsValid()) {
 		// find the last child index
 		child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
-		auto next_index = segment.GetVectorData(child_index).next_data;
-		while (next_index.IsValid()) {
-			child_index = next_index;
-			next_index = segment.GetVectorData(child_index).next_data;
+		auto next_child_index = segment.GetVectorData(child_index).next_data;
+		while (next_child_index.IsValid()) {
+			child_index = next_child_index;
+			next_child_index = segment.GetVectorData(child_index).next_data;
 		}
 	}
 
+	auto current_index = meta_data.vector_data_index;
 	idx_t remaining = copy_count;
 	while (remaining > 0) {
-		idx_t append_count =
+		// how many values fit in the current string vector
+		idx_t vector_remaining =
 		    MinValue<idx_t>(STANDARD_VECTOR_SIZE - segment.GetVectorData(current_index).count, remaining);
 
-		// reduce 'append_count' if we cannot fit that amount of non-inlined strings on one buffer-managed block
-		idx_t append_i;
+		// 'append_count' is less if we cannot fit that amount of non-inlined strings on one buffer-managed block
+		idx_t append_count;
 		idx_t heap_size = 0;
 		const auto source_entries = (string_t *)source_data.data;
-		for (append_i = 0; append_i < append_count; append_i++) {
-			auto source_idx = source_data.sel->get_index(offset + append_i);
+		for (append_count = 0; append_count < vector_remaining; append_count++) {
+			auto source_idx = source_data.sel->get_index(offset + append_count);
 			if (!source_data.validity.RowIsValid(source_idx)) {
 				continue;
 			}
@@ -460,7 +461,6 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			}
 			heap_size += entry.GetSize();
 		}
-		append_count = append_i;
 
 		if (append_count == 0) {
 			throw NotImplementedException("longgggggggggggg strings");
@@ -514,15 +514,14 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		}
 
 		if (heap_size != 0) {
-			segment.AddSwizzleCallbacks(current_index, offset, child_index, append_count);
+			current_segment.swizzle_data.emplace_back(child_index, heap_ptr, current_segment.count, append_count);
 		}
 
 		current_segment.count += append_count;
 		offset += append_count;
 		remaining -= append_count;
 
-		idx_t parent_vector_remaining = STANDARD_VECTOR_SIZE - segment.GetVectorData(current_index).count;
-		if (remaining > parent_vector_remaining) {
+		if (vector_remaining - append_count > 0) {
 			// need to append more, check if we need to allocate a new vector or not
 			if (!current_segment.next_data.IsValid()) {
 				segment.AllocateVector(source.GetType(), meta_data.chunk_data, append_state, current_index);

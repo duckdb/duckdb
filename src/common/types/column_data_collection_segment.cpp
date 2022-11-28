@@ -85,14 +85,6 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateStringHeap(idx_t size, Chun
 	return index;
 }
 
-void ColumnDataCollectionSegment::AddSwizzleCallbacks(VectorDataIndex &parent_index, idx_t entry_offset,
-                                                      VectorDataIndex &child_index, idx_t count_p) {
-	D_ASSERT(allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
-	auto &parent_vdata = GetVectorData(parent_index);
-	auto &child_vdata = GetVectorData(child_index);
-	allocator->AddSwizzleCallbacks(parent_vdata, entry_offset, child_vdata, count_p);
-}
-
 void ColumnDataCollectionSegment::AllocateNewChunk() {
 	ChunkMetaData meta_data;
 	meta_data.count = 0;
@@ -195,7 +187,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	if (vdata.count == 0) {
 		return 0;
 	}
-	auto count = ReadVectorInternal(state, vector_index, result);
+	auto vcount = ReadVectorInternal(state, vector_index, result);
 	if (internal_type == PhysicalType::LIST) {
 		// list: copy child
 		auto &child_vector = ListVector::GetEntry(result);
@@ -206,12 +198,19 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
 			auto child_count =
 			    ReadVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
-			if (child_count != count) {
+			if (child_count != vcount) {
 				throw InternalException("Column Data Collection: mismatch in struct child sizes");
 			}
 		}
+	} else if (internal_type == PhysicalType::VARCHAR &&
+	           allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+		for (auto &swizzle_segment : vdata.swizzle_data) {
+			auto &string_heap_segment = GetVectorData(swizzle_segment.child_index);
+			allocator->UnswizzlePointers(state, result, swizzle_segment.offset, swizzle_segment.count,
+			                             string_heap_segment.block_id, string_heap_segment.offset);
+		}
 	}
-	return count;
+	return vcount;
 }
 
 void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk,

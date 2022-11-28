@@ -158,73 +158,33 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	return state.handles[block_id].Ptr() + offset;
 }
 
-ColumnDataAllocator::SwizzleCallback::SwizzleCallback(ColumnDataAllocator *allocator, VectorMetaData &parent_vdata,
-                                                      idx_t entry_offset, VectorMetaData &child_vdata, idx_t count,
-                                                      bool swizzle)
-    : allocator(allocator), parent_block_id(parent_vdata.block_id), parent_block_offset(parent_vdata.offset),
-      child_block_id(child_vdata.block_id), child_block_offset(child_vdata.offset), entry_offset(entry_offset),
-      count(count), swizzle(swizzle) {
-}
+void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result, uint16_t v_offset,
+                                            uint16_t count, uint32_t block_id, uint32_t offset) {
+	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
+	lock_guard<mutex> guard(lock);
 
-template <bool SWIZZLE>
-static void SwizzleLoop(string_t *entries, const ValidityMask &validity, const idx_t &entry_offset,
-                        char *const heap_ptr, const idx_t &count) {
-	for (idx_t i = 0; i < count; i++) {
-		if (!validity.RowIsValid(entry_offset + i)) {
-			continue;
-		}
-		auto &entry = entries[entry_offset + i];
-		if (entry.IsInlined()) {
-			continue;
-		}
-
-		if (SWIZZLE) {
-			entry.Swizzle(heap_ptr);
-		} else {
-			entry.Unswizzle(heap_ptr);
-#ifdef DEBUG
-			entry.Verify();
-#endif
+	// find first non-inlined string
+	idx_t i;
+	auto strings = FlatVector::GetData<string_t>(result) + v_offset;
+	for (i = 0; i < count; i++) {
+		if (!strings[i].IsInlined()) {
+			break;
 		}
 	}
-}
+	// at least one string must be non-inlined, otherwise this should not be called
+	D_ASSERT(i != count);
 
-void ColumnDataAllocator::SwizzleCallback::Operation(FileBuffer &file_buffer) {
-	// file_buffer is the StringHeap block
-	auto heap_ptr = file_buffer.buffer + child_block_offset;
-
-	data_ptr_t base_ptr;
-	ChunkManagementState state;
-	if (parent_block_id == child_block_id) {
-		base_ptr = file_buffer.buffer + parent_block_offset;
-	} else {
-		// lock of the BlockHandle is already held during the callback,
-		// so we have to make sure we don't Pin() the same block else we deadlock
-		state.handles[parent_block_id] = allocator->Pin(parent_block_id);
-		base_ptr = allocator->GetDataPointer(state, parent_block_id, parent_block_offset);
+	auto base_ptr = (char *)GetDataPointer(state, block_id, offset);
+	if (strings[i].GetDataUnsafe() == base_ptr) {
+		// pointers are still valid
+		return;
 	}
 
-	auto entries = (string_t *)base_ptr;
-	auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, sizeof(string_t));
-	ValidityMask validity(validity_data);
-
-	if (swizzle) {
-		SwizzleLoop<true>(entries, validity, entry_offset, (char *)heap_ptr, count);
-	} else {
-		SwizzleLoop<false>(entries, validity, entry_offset, (char *)heap_ptr, count);
+	// pointer mismatch! pointers are invalid, set them correctly
+	for (; i < count; i++) {
+		strings[i].SetPointer(base_ptr);
+		base_ptr += strings[i].GetSize();
 	}
-}
-
-void ColumnDataAllocator::AddSwizzleCallbacks(VectorMetaData &parent_vdata, idx_t entry_offset,
-                                              VectorMetaData &child_vdata, idx_t count) {
-	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
-	D_ASSERT(count != 0);
-	auto &heap_block = blocks[child_vdata.block_id];
-
-	heap_block.handle->AddUnloadCallback(
-	    make_unique<SwizzleCallback>(this, parent_vdata, entry_offset, child_vdata, count, true));
-	heap_block.handle->AddLoadCallback(
-	    make_unique<SwizzleCallback>(this, parent_vdata, entry_offset, child_vdata, count, false));
 }
 
 void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {

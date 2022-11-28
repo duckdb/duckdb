@@ -1048,8 +1048,8 @@ void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_pt
 	tuples_per_round = double(max_ht_size) / avg_tuple_size;
 
 	if (config.force_external) {
-		// For force_external we do three rounds to test all code paths
-		tuples_per_round = (total_count + 2) / 3;
+		// For force_external we do at least three rounds to test all code paths
+		tuples_per_round = MinValue<idx_t>((total_count + 2) / 3, tuples_per_round);
 	}
 
 	// Set the number of radix bits (minimum 4, maximum 8)

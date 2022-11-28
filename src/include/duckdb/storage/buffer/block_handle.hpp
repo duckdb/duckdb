@@ -50,14 +50,6 @@ struct TempBufferPoolReservation : BufferPoolReservation {
 	}
 };
 
-struct BlockHandleCallback {
-public:
-	virtual void Operation(FileBuffer &file_buffer) = 0;
-
-	virtual ~BlockHandleCallback() {
-	}
-};
-
 class BlockHandle {
 	friend class BlockManager;
 	friend struct BufferEvictionNode;
@@ -97,28 +89,6 @@ public:
 		can_destroy = can_destroy_p;
 	}
 
-	void AddLoadCallback(unique_ptr<BlockHandleCallback> callback) {
-		load_callbacks.push_back(move(callback));
-	}
-
-	void AddUnloadCallback(unique_ptr<BlockHandleCallback> callback) {
-		unload_callbacks.push_back(move(callback));
-	}
-
-	void ExecuteLoadCallbacks(FileBuffer &file_buffer) {
-		D_ASSERT(state == BlockState::BLOCK_UNLOADED);
-		for (auto &callback : load_callbacks) {
-			callback->Operation(file_buffer);
-		}
-	}
-
-	void ExecuteUnloadCallbacks(FileBuffer &file_buffer) {
-		D_ASSERT(state == BlockState::BLOCK_LOADED);
-		for (auto &callback : unload_callbacks) {
-			callback->Operation(file_buffer);
-		}
-	}
-
 private:
 	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock();
@@ -146,10 +116,6 @@ private:
 	BufferPoolReservation memory_charge;
 	//! Does the block contain any memory pointers?
 	const char *unswizzled;
-	//! Callbacks that are called after loading this block from disk
-	vector<unique_ptr<BlockHandleCallback>> load_callbacks;
-	//! Callbacks that are called before unloading this block to disk
-	vector<unique_ptr<BlockHandleCallback>> unload_callbacks;
 };
 
 } // namespace duckdb
