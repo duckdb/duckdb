@@ -65,6 +65,19 @@ class TestRAPIQuery(object):
         result = con.execute("select * from tbl").fetchall()
         assert result == [([1,2,3,4],)]
 
+    def test_query_non_select_fail(self):
+        con = duckdb.connect()
+        rel = con.query("select [1,2,3,4]")
+        con.execute("create table tbl as select range(10)")
+        # Table already exists
+        with pytest.raises(duckdb.CatalogException):
+            rel.query("relation", "create table tbl as select * from relation")
+
+        # View referenced does not exist
+        with pytest.raises(duckdb.CatalogException):
+            rel.query("relation", "create table tbl as select * from not_a_valid_view")
+
+
     def test_query_table_unrelated(self, tbl_table):
         con = duckdb.default_connection
         rel = con.table("tbl")

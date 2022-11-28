@@ -665,6 +665,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 		// Execute it anyways, for creation/altering statements
 		// We only care that it succeeds, we can't store the result
 		D_ASSERT(query_result);
+		if (query_result->HasError()) {
+			query_result->ThrowError();
+		}
 	}
 	return nullptr;
 }
