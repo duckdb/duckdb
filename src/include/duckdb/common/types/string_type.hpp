@@ -135,11 +135,6 @@ private:
 		} pointer;
 		struct {
 			uint32_t length;
-			char prefix[4];
-			idx_t offset;
-		} swizzled;
-		struct {
-			uint32_t length;
 			char inlined[12];
 		} inlined;
 	} value;

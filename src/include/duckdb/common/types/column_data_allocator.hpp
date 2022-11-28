@@ -60,7 +60,7 @@ public:
 
 private:
 	void AllocateEmptyBlock(idx_t size);
-	void AllocateBlock();
+	void AllocateBlock(idx_t size);
 	BufferHandle Pin(uint32_t block_id);
 
 	bool HasBlocks() const {

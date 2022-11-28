@@ -42,12 +42,13 @@ BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	return alloc.buffer_manager->Pin(handle);
 }
 
-void ColumnDataAllocator::AllocateBlock() {
+void ColumnDataAllocator::AllocateBlock(idx_t size) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	auto block_size = MaxValue<idx_t>(size, Storage::BLOCK_SIZE);
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = Storage::BLOCK_SIZE;
-	data.handle = alloc.buffer_manager->RegisterMemory(Storage::BLOCK_SIZE, false);
+	data.capacity = block_size;
+	data.handle = alloc.buffer_manager->RegisterMemory(block_size, false);
 	blocks.push_back(move(data));
 }
 
@@ -82,7 +83,7 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
                                          ChunkManagementState *chunk_state) {
 	D_ASSERT(allocated_data.empty());
 	if (blocks.empty() || blocks.back().Capacity() < size) {
-		AllocateBlock();
+		AllocateBlock(size);
 		if (chunk_state && !blocks.empty()) {
 			auto &last_block = blocks.back();
 			auto new_block_id = blocks.size() - 1;
@@ -165,14 +166,19 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 
 	// find first non-inlined string
 	idx_t i;
+	auto &validity = FlatVector::Validity(result);
 	auto strings = FlatVector::GetData<string_t>(result) + v_offset;
 	for (i = 0; i < count; i++) {
+		if (!validity.RowIsValid(i)) {
+			continue;
+		}
 		if (!strings[i].IsInlined()) {
 			break;
 		}
 	}
-	// at least one string must be non-inlined, otherwise this should not be called
+	// at least one string must be non-inlined, otherwise this function should not be called
 	D_ASSERT(i != count);
+	D_ASSERT(validity.RowIsValid(i));
 
 	auto base_ptr = (char *)GetDataPointer(state, block_id, offset);
 	if (strings[i].GetDataUnsafe() == base_ptr) {
@@ -182,6 +188,9 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 
 	// pointer mismatch! pointers are invalid, set them correctly
 	for (; i < count; i++) {
+		if (!validity.RowIsValid(i)) {
+			continue;
+		}
 		strings[i].SetPointer(base_ptr);
 		base_ptr += strings[i].GetSize();
 	}

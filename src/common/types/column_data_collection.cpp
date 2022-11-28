@@ -463,7 +463,14 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		}
 
 		if (append_count == 0) {
-			throw NotImplementedException("longgggggggggggg strings");
+			// single string is longer than Storage::BLOCK_SIZE
+			// we allocate one block at a time for long strings
+			auto source_idx = source_data.sel->get_index(offset + append_count);
+			D_ASSERT(source_data.validity.RowIsValid(source_idx));
+			D_ASSERT(!source_entries[source_idx].IsInlined());
+			D_ASSERT(source_entries[source_idx].GetSize() > Storage::BLOCK_SIZE);
+			heap_size += source_entries[source_idx].GetSize();
+			append_count++;
 		}
 
 		// allocate string heap for the next 'append_count' strings
@@ -514,14 +521,14 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		}
 
 		if (heap_size != 0) {
-			current_segment.swizzle_data.emplace_back(child_index, heap_ptr, current_segment.count, append_count);
+			current_segment.swizzle_data.emplace_back(child_index, current_segment.count, append_count);
 		}
 
 		current_segment.count += append_count;
 		offset += append_count;
 		remaining -= append_count;
 
-		if (vector_remaining - append_count > 0) {
+		if (vector_remaining - append_count == 0) {
 			// need to append more, check if we need to allocate a new vector or not
 			if (!current_segment.next_data.IsValid()) {
 				segment.AllocateVector(source.GetType(), meta_data.chunk_data, append_state, current_index);

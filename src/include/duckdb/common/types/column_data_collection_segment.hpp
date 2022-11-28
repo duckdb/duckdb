@@ -36,13 +36,11 @@ struct VectorDataIndex {
 };
 
 struct SwizzleMetaData {
-	SwizzleMetaData(VectorDataIndex child_index_p, data_ptr_t heap_ptr_p, uint16_t offset_p, uint16_t count_p)
-	    : child_index(child_index_p), heap_ptr(heap_ptr_p), offset(offset_p), count(count_p) {
+	SwizzleMetaData(VectorDataIndex child_index_p, uint16_t offset_p, uint16_t count_p)
+	    : child_index(child_index_p), offset(offset_p), count(count_p) {
 	}
 	//! Index of block storing heap
 	VectorDataIndex child_index;
-	//! Pointer to the start of the string heap
-	data_ptr_t heap_ptr;
 	//! Offset into the string_t vector
 	uint16_t offset;
 	//! Number of strings starting at 'offset' that have the same base 'heap_ptr'
