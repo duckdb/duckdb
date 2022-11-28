@@ -5,6 +5,9 @@ import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.logging.Logger;
 
@@ -28,6 +31,15 @@ public class DuckDBDriver implements java.sql.Driver {
 		if (info == null) {
 			info = new Properties();
 		}
+		// some JDBC clients insist on setting a user/password. Remove it.
+		Iterator<Entry<Object, Object>> info_iterator = info.entrySet().iterator();
+		while (info_iterator.hasNext()) {
+			Map.Entry<Object, Object> entry = info_iterator.next();
+			if (entry.getKey() != null || entry.getKey().toString().toLowerCase() == "user" || entry.getKey().toString().toLowerCase() == "password") {
+				info_iterator.remove();
+			}
+		}
+
 		String prop_val = (String) info.remove(DUCKDB_READONLY_PROPERTY);
 		if (prop_val != null) {
 			String prop_clean = prop_val.trim().toLowerCase();
