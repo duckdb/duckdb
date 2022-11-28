@@ -36,7 +36,8 @@ int main(int argc, char *argv[]) {
 			test_force_storage = true;
 		} else if (string(argv[i]) == "--force-reload" || string(argv[i]) == "--force-restart") {
 			test_force_reload = true;
-		} else if (StringUtil::StartsWith(string(argv[i]), "--memory-leak") || StringUtil::StartsWith(string(argv[i]), "--test-memory-leak")) {
+		} else if (StringUtil::StartsWith(string(argv[i]), "--memory-leak") ||
+		           StringUtil::StartsWith(string(argv[i]), "--test-memory-leak")) {
 			test_memory_leaks = true;
 		} else if (string(argv[i]) == "--test-dir") {
 			test_directory = string(argv[++i]);
