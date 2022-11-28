@@ -233,19 +233,45 @@ typedef struct {
 	void *internal_data;
 } duckdb_result;
 
-typedef void *duckdb_database;
-typedef void *duckdb_connection;
-typedef void *duckdb_prepared_statement;
-typedef void *duckdb_pending_result;
-typedef void *duckdb_appender;
-typedef void *duckdb_arrow;
-typedef void *duckdb_config;
-typedef void *duckdb_arrow_schema;
-typedef void *duckdb_arrow_array;
-typedef void *duckdb_logical_type;
-typedef void *duckdb_data_chunk;
-typedef void *duckdb_vector;
-typedef void *duckdb_value;
+typedef struct _duckdb_database {
+	void *__db;
+} * duckdb_database;
+typedef struct _duckdb_connection {
+	void *__conn;
+} * duckdb_connection;
+typedef struct _duckdb_prepared_statement {
+	void *__prep;
+} * duckdb_prepared_statement;
+typedef struct _duckdb_pending_result {
+	void *__pend;
+} * duckdb_pending_result;
+typedef struct _duckdb_appender {
+	void *__appn;
+} * duckdb_appender;
+typedef struct _duckdb_arrow {
+	void *__arrw;
+} * duckdb_arrow;
+typedef struct _duckdb_config {
+	void *__cnfg;
+} * duckdb_config;
+typedef struct _duckdb_arrow_schema {
+	void *__arrs;
+} * duckdb_arrow_schema;
+typedef struct _duckdb_arrow_array {
+	void *__arra;
+} * duckdb_arrow_array;
+typedef struct _duckdb_logical_type {
+	void *__lglt;
+} * duckdb_logical_type;
+typedef struct _duckdb_data_chunk {
+	void *__dtck;
+} * duckdb_data_chunk;
+typedef struct _duckdb_vector {
+	void *__vctr;
+} * duckdb_vector;
+typedef struct _duckdb_value {
+	void *__val;
+} * duckdb_value;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 typedef enum {
@@ -1154,6 +1180,17 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 DUCKDB_API duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type);
 
 /*!
+Creates a UNION type from the passed types array
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* types: The array of types that the union should consist of.
+* type_amount: The size of the types array.
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_union_type(duckdb_logical_type member_types, const char **member_names,
+                                                        idx_t member_count);
+
+/*!
 Creates a `duckdb_logical_type` of type decimal with the specified width and scale
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
@@ -1281,6 +1318,36 @@ The result must be freed with `duckdb_destroy_logical_type`
 * returns: The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`.
 */
 DUCKDB_API duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_t index);
+
+/*!
+Returns the number of members that the union type has.
+
+* type: The logical type (union) object
+* returns: The number of members of a union type.
+*/
+DUCKDB_API idx_t duckdb_union_type_member_count(duckdb_logical_type type);
+
+/*!
+Retrieves the name of the union member.
+
+The result must be freed with `duckdb_free`
+
+* type: The logical type object
+* index: The child index
+* returns: The name of the union member. Must be freed with `duckdb_free`.
+*/
+DUCKDB_API char *duckdb_union_type_member_name(duckdb_logical_type type, idx_t index);
+
+/*!
+Retrieves the child type of the given union member at the specified index.
+
+The result must be freed with `duckdb_destroy_logical_type`
+
+* type: The logical type object
+* index: The child index
+* returns: The child type of the union member. Must be destroyed with `duckdb_destroy_logical_type`.
+*/
+DUCKDB_API duckdb_logical_type duckdb_union_type_member_type(duckdb_logical_type type, idx_t index);
 
 /*!
 Destroys the logical type and de-allocates all memory allocated for that type.

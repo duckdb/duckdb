@@ -41,6 +41,7 @@ AddFunctionOverloadInfo::AddFunctionOverloadInfo(string schema_p, string name_p,
                                                  ScalarFunctionSet new_overloads_p)
     : AlterFunctionInfo(AlterFunctionType::ADD_FUNCTION_OVERLOADS, move(schema_p), move(name_p), if_exists_p),
       new_overloads(move(new_overloads_p)) {
+	this->allow_internal = true;
 }
 AddFunctionOverloadInfo::~AddFunctionOverloadInfo() {
 }

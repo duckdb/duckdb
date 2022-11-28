@@ -34,6 +34,8 @@ struct AlterInfo : public ParseInfo {
 	string schema;
 	//! Entry name to alter
 	string name;
+	//! Allow altering internal entries
+	bool allow_internal;
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;

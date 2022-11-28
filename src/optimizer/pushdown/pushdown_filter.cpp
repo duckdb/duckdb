@@ -9,6 +9,9 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_FILTER);
 	auto &filter = (LogicalFilter &)*op;
+	if (!filter.projection_map.empty()) {
+		return FinishPushdown(move(op));
+	}
 	// filter: gather the filters and remove the filter from the set of operations
 	for (auto &expression : filter.expressions) {
 		if (AddFilter(move(expression)) == FilterResult::UNSATISFIABLE) {

@@ -158,5 +158,7 @@ template <>
 bool Hugeint::TryConvert(double value, hugeint_t &result);
 template <>
 bool Hugeint::TryConvert(long double value, hugeint_t &result);
+template <>
+bool Hugeint::TryConvert(const char *value, hugeint_t &result);
 
 } // namespace duckdb

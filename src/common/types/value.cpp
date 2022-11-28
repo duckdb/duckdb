@@ -663,9 +663,6 @@ Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	case PhysicalType::UINT32:
 		result.value_.uinteger = value;
 		break;
-	case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
-		result.value_.ubigint = value;
-		break;
 	default:
 		throw InternalException("Incorrect Physical Type for ENUM");
 	}
