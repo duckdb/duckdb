@@ -321,8 +321,6 @@ public:
 
 	//! Swizzle the blocks in this HT (moves from block_collection and string_heap to swizzled_...)
 	void SwizzleBlocks();
-	//! Unswizzle the blocks in this HT (moves from swizzled_... to block_collection and string_heap)
-	void UnswizzleBlocks();
 
 	//! Computes partition sizes and number of radix bits (called before scheduling partition tasks)
 	void ComputePartitionSizes(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size);

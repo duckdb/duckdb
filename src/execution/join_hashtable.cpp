@@ -345,6 +345,7 @@ void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool pa
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.IsValid());
 
+	const auto unswizzle = external && !layout.AllConstant();
 	vector<BufferHandle> local_pinned_handles;
 
 	Vector hashes(LogicalType::HASH);
@@ -357,10 +358,24 @@ void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool pa
 		auto &block = block_collection->blocks[block_idx];
 		auto handle = buffer_manager.Pin(block->block);
 		data_ptr_t dataptr = handle.Ptr();
+
+		data_ptr_t heap_ptr = nullptr;
+		if (unswizzle) {
+			auto &heap_block = string_heap->blocks[block_idx];
+			auto heap_handle = buffer_manager.Pin(heap_block->block);
+			heap_ptr = heap_handle.Ptr();
+			local_pinned_handles.push_back(move(heap_handle));
+		}
+
 		idx_t entry = 0;
 		while (entry < block->count) {
-			// fetch the next vector of entries from the blocks
 			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block->count - entry);
+
+			if (unswizzle) {
+				RowOperations::UnswizzlePointers(layout, dataptr, heap_ptr, next);
+			}
+
+			// fetch the next vector of entries from the blocks
 			for (idx_t i = 0; i < next; i++) {
 				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + pointer_offset));
 				key_locations[i] = dataptr;
@@ -995,6 +1010,8 @@ void JoinHashTable::UnswizzleBlocks() {
 		D_ASSERT(swizzled_block_collection->count == swizzled_string_heap->count);
 	}
 #endif
+	block_collection->Merge(*swizzled_block_collection);
+	string_heap->Merge(*swizzled_string_heap);
 
 	for (idx_t block_idx = 0; block_idx < blocks.size(); block_idx++) {
 		auto &data_block = blocks[block_idx];
@@ -1134,7 +1151,9 @@ bool JoinHashTable::PrepareExternalFinalize() {
 
 	// Unswizzle them
 	D_ASSERT(Count() == 0);
-	UnswizzleBlocks(); // TODO: this in parallel
+	// Move swizzled data to regular data (will be unswizzled in 'Finalize()')
+	block_collection->Merge(*swizzled_block_collection);
+	string_heap->Merge(*swizzled_string_heap);
 	D_ASSERT(count == Count());
 
 	return true;
