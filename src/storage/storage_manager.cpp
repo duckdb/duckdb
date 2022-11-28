@@ -108,15 +108,19 @@ SingleFileStorageManager::SingleFileStorageManager(DatabaseInstance &db, string 
 }
 
 void SingleFileStorageManager::LoadDatabase() {
+	auto &config = db.config;
 	if (InMemory()) {
-		block_manager = make_unique<InMemoryBlockManager>(*buffer_manager);
+		if (config.virtual_buffer_manager) {
+			block_manager = nullptr;
+		} else {
+			block_manager = make_unique<InMemoryBlockManager>(*buffer_manager);
+		}
 		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
 
 	string wal_path = path + ".wal";
 	auto &fs = db.GetFileSystem();
-	auto &config = db.config;
 	bool truncate_wal = false;
 	// first check if the database exists
 	if (!fs.FileExists(path)) {
