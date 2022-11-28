@@ -338,6 +338,35 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool 
 	}
 }
 
+static inline const char *NextNewline(const char *ptr, idx_t size) {
+	auto first_n = (const char *)memchr(ptr, '\n', size);
+	auto first_r = (const char *)memchr(ptr, '\r', size);
+
+	// if either is nullptr we return the other
+	if (first_r == nullptr) {
+		return first_n;
+	} else if (first_n == nullptr) {
+		return first_r;
+	}
+
+	// if neither is nullptr we return the first
+	if (first_n - ptr < first_r - ptr) {
+		return first_n;
+	} else {
+		return first_r;
+	}
+}
+
+static inline const char *PreviousNewline(const char *ptr) {
+	for (ptr--; true; ptr++) {
+		const auto &c = *ptr;
+		if (c == '\n' || c == '\r') {
+			break;
+		}
+	}
+	return ptr;
+}
+
 void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	D_ASSERT(batch_index != 0);
 	D_ASSERT(gstate.json_reader->options.format == JSONFormat::NEWLINE_DELIMITED);
@@ -358,18 +387,15 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 
 	// First we find the newline in the previous block
 	auto &prev_buffer = previous_buffer_handle->buffer;
-	const auto prev_ptr = (const char *)prev_buffer.get() + prev_buffer.GetSize();
-	idx_t part1_size = 1;
-	while (*(prev_ptr - part1_size) != '\n') {
-		part1_size++;
-	}
-	part1_size--;
+	auto prev_buffer_ptr = (const char *)prev_buffer.get() + prev_buffer.GetSize();
+	auto part1_ptr = PreviousNewline(prev_buffer_ptr);
+	auto part1_size = prev_buffer_ptr - part1_ptr;
 
 	// Now copy the data to our reconstruct buffer
 	const auto reconstruct_ptr = reconstruct_buffer.get();
-	memcpy(reconstruct_ptr, prev_ptr - part1_size, part1_size);
+	memcpy(reconstruct_ptr, part1_ptr, part1_size);
 	// Now find the newline in the current block
-	auto line_end = (const char *)memchr(buffer_ptr, '\n', buffer_size);
+	auto line_end = NextNewline(buffer_ptr, buffer_size);
 	if (line_end == nullptr) {
 		throw InvalidInputException("maximum_object_size of %llu bytes exceeded (>%llu bytes), is the JSON valid?",
 		                            gstate.json_reader->options.maximum_object_size, buffer_size - buffer_offset);
@@ -449,7 +475,7 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count) {
 		idx_t remaining = buffer_size - buffer_offset;
 
 		// Search for newline
-		auto line_end = (const char *)memchr(line_start, '\n', remaining);
+		auto line_end = NextNewline(line_start, remaining);
 		if (line_end == nullptr) {
 			// We reached the end of the buffer
 			if (!is_last || remaining == 0) {
@@ -458,9 +484,6 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count) {
 				break;
 			}
 			line_end = line_start + remaining;
-		} else {
-			// Include the newline
-			line_end++;
 		}
 
 		idx_t line_size = line_end - line_start;
@@ -469,6 +492,7 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count) {
 		lines[count].pointer = line_start;
 		lines[count].size = line_size;
 		buffer_offset += line_size;
+		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 	}
 }
 

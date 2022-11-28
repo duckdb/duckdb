@@ -200,10 +200,11 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			}
 		case ConvertedType::INTERVAL:
 			return LogicalType::INTERVAL;
+		case ConvertedType::JSON:
+			return LogicalType::VARCHAR;
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
-		case ConvertedType::JSON:
 		case ConvertedType::BSON:
 		default:
 			throw IOException("Unsupported converted type");

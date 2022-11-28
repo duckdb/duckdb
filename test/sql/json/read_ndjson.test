@@ -4,8 +4,9 @@
 
 require json
 
+# example_n is with regular \n newlines
 query I
-SELECT * FROM read_json_objects('data/json/example.ndjson')
+SELECT * FROM read_json_objects('data/json/example_n.ndjson')
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -14,10 +15,70 @@ SELECT * FROM read_json_objects('data/json/example.ndjson')
 {"id":5,"name":"Raising Arizona"}
 
 query I
-SELECT * FROM read_ndjson_objects('data/json/example.ndjson')
+SELECT * FROM read_ndjson_objects('data/json/example_n.ndjson')
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
 {"id":3,"name":"The Firm"}
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}
+
+# example_r is with \r newlines
+query I
+SELECT * FROM read_json_objects('data/json/example_r.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+query I
+SELECT * FROM read_ndjson_objects('data/json/example_r.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# example_rn is with \r\n newlines
+query I
+SELECT * FROM read_json_objects('data/json/example_rn.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+query I
+SELECT * FROM read_ndjson_objects('data/json/example_rn.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# multi-file scan
+query I
+SELECT count(*) from read_json_objects(['data/json/example_n.ndjson', 'data/json/example_r.ndjson', 'data/json/example_rn.ndjson'])
+----
+15
+
+query I
+SELECT count(*) from read_ndjson_objects(['data/json/example_n.ndjson', 'data/json/example_r.ndjson', 'data/json/example_rn.ndjson'])
+----
+15
+
+# globbing
+query I
+SELECT count(*) from read_json_objects('data/json/example_*.ndjson')
+----
+15
+
+query I
+SELECT count(*) from read_ndjson_objects('data/json/example_*.ndjson')
+----
+15
