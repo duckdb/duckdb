@@ -66,6 +66,12 @@ SEXP StringsToSexp(vector<std::string> s);
 
 SEXP ToUtf8(SEXP string_sexp);
 
+static constexpr char R_STRING_TYPE_NAME[] = "r_string";
+
+struct RStringsType {
+	static LogicalType Get();
+};
+
 struct RProtector {
 	RProtector() : protect_count(0) {
 	}
@@ -113,6 +119,7 @@ struct RStrings {
 	SEXP ImportSchema_sym;
 	SEXP ImportRecordBatch_sym;
 	SEXP ImportRecordBatchReader_sym;
+	SEXP materialize_sym;
 
 	static const RStrings &get() {
 		// On demand
@@ -159,3 +166,8 @@ SEXP rapi_execute_arrow(duckdb::rqry_eptr_t, int);
 SEXP rapi_record_batch(duckdb::rqry_eptr_t, int);
 
 cpp11::r_string rapi_ptr_to_str(SEXP extptr);
+
+void duckdb_r_transform(duckdb::Vector &src_vec, SEXP &dest, duckdb::idx_t dest_offset, duckdb::idx_t n,
+                        bool integer64);
+SEXP duckdb_r_allocate(const duckdb::LogicalType &type, duckdb::RProtector &r_varvalue, duckdb::idx_t nrows);
+void duckdb_r_decorate(const duckdb::LogicalType &type, SEXP &dest, bool integer64);

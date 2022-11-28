@@ -35,6 +35,7 @@ struct PreparedStatementWrapper {
 
 struct ExtractStatementsWrapper {
 	vector<unique_ptr<SQLStatement>> statements;
+	string error;
 };
 
 struct PendingStatementWrapper {

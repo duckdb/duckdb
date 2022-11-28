@@ -1,0 +1,45 @@
+# name: test/sql/types/decimal/test_decimal_small_precision_behavior.test
+# group: [decimal]
+
+statement ok
+pragma enable_verification
+
+query I
+select '1.023450000001'::DECIMAL(5,4)
+----
+1.0235
+
+query I
+select '1.234499999'::DECIMAL(4,3)
+----
+1.234
+
+query I
+select '1.23499999'::DECIMAL(4,3)
+----
+1.235
+
+query I
+select '1.234499999'::DECIMAL(5,4)
+----
+1.2345
+
+query I
+select '-1.023450000001'::DECIMAL(5,4)
+----
+-1.0235
+
+query I
+select '-1.234499999'::DECIMAL(4,3)
+----
+-1.234
+
+query I
+select '-1.23499999'::DECIMAL(4,3)
+----
+-1.235
+
+query I
+select '-1.234499999'::DECIMAL(5,4)
+----
+-1.2345

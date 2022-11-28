@@ -1,0 +1,60 @@
+# name: test/fuzzer/pedro/create_index_error.test
+# description: Errors while inserting into indexes
+# group: [pedro]
+
+# create an index with an expression that leads to an error on insert
+statement ok
+CREATE TABLE t0 (c0 VARCHAR, c1 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES ('a');
+
+statement ok
+CREATE INDEX i1 ON t0 (c1, CAST('c' AS INT));
+
+statement error
+INSERT INTO t0(c0) VALUES ('b');
+----
+Could not convert
+
+statement ok
+CREATE INDEX i0 ON t0 (c0);
+
+statement ok
+DROP TABLE t0
+
+# create an index with an expression that leads to an error on insert, then delete from that table
+statement ok
+CREATE TABLE t0 (c1 INT, c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (1);
+
+statement ok
+CREATE INDEX i1 ON t0 ((decode('\x0C\xE4\x85\xF5'::BLOB)::VARCHAR), c1);
+
+statement ok
+DELETE FROM t0;
+
+statement ok
+DROP TABLE t0;
+
+statement ok
+CREATE TABLE t1 (c1 BOOLEAN);
+
+statement ok
+INSERT INTO t1 VALUES (0);
+
+statement ok
+DELETE FROM t1;
+
+statement ok
+CREATE INDEX i0 ON t1 (c1, (decode('\x81\x5C\xE5'::BLOB)::VARCHAR));
+
+statement error
+INSERT INTO t1 VALUES (1);
+----
+Failure in decode
+
+statement ok
+CREATE INDEX i1 ON t1 USING ART (c1);

@@ -1,0 +1,16 @@
+# name: test/fuzzer/pedro/recursive_cte_limit_percent.test
+# description: Recursive CTE error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+WITH RECURSIVE t1(c0) AS ((SELECT 1, 1 c1) UNION (SELECT 1, 1 FROM (SELECT 1) x(x) JOIN t1 ON FALSE LIMIT 1%)) SELECT 1 FROM t1 JOIN t1 t0 USING (c1);
+----
+1
+
+query I
+WITH RECURSIVE t1(c0) AS ((SELECT 1, 1 c1) UNION (SELECT 1, 1 FROM (SELECT 1) x(x) JOIN t1 ON FALSE LIMIT 1)) SELECT 1 FROM t1 JOIN t1 t0 USING (c1);
+----
+1

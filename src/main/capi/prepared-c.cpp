@@ -22,14 +22,18 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 	}
 	auto wrapper = new ExtractStatementsWrapper();
 	Connection *conn = (Connection *)connection;
-	wrapper->statements = conn->ExtractStatements(query);
-	*out_extracted_statements = (duckdb_extracted_statements)wrapper;
+	try {
+		wrapper->statements = conn->ExtractStatements(query);
+	} catch (const duckdb::ParserException &e) {
+		wrapper->error = e.what();
+	}
 
+	*out_extracted_statements = (duckdb_extracted_statements)wrapper;
 	return wrapper->statements.size();
 }
 
 duckdb_state duckdb_prepare_extracted_statement(duckdb_connection connection,
-                                                duckdb_extracted_statements extracted_statements, int index,
+                                                duckdb_extracted_statements extracted_statements, idx_t index,
                                                 duckdb_prepared_statement *out_prepared_statement) {
 	if (!connection || !out_prepared_statement) {
 		return DuckDBError;
@@ -42,6 +46,14 @@ duckdb_state duckdb_prepare_extracted_statement(duckdb_connection connection,
 
 	*out_prepared_statement = (duckdb_prepared_statement)wrapper;
 	return wrapper->statement->HasError() ? DuckDBError : DuckDBSuccess;
+}
+
+const char *duckdb_extract_statements_error(duckdb_extracted_statements extracted_statements) {
+	auto wrapper = (ExtractStatementsWrapper *)extracted_statements;
+	if (!wrapper || wrapper->error.empty()) {
+		return nullptr;
+	}
+	return wrapper->error.c_str();
 }
 
 duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
@@ -238,9 +250,9 @@ void duckdb_destroy(void **wrapper) {
 }
 
 void duckdb_destroy_extracted(duckdb_extracted_statements *extracted_statements) {
-	duckdb_destroy<ExtractStatementsWrapper>(extracted_statements);
+	duckdb_destroy<ExtractStatementsWrapper>(reinterpret_cast<void **>(extracted_statements));
 }
 
 void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {
-	duckdb_destroy<PreparedStatementWrapper>(prepared_statement);
+	duckdb_destroy<PreparedStatementWrapper>(reinterpret_cast<void **>(prepared_statement));
 }

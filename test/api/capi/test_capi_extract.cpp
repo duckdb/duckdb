@@ -8,6 +8,7 @@ TEST_CASE("Test extract statements in C API", "[capi]") {
 	duckdb_result res;
 	duckdb_extracted_statements stmts = nullptr;
 	duckdb_state status;
+	const char *error;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 
@@ -38,5 +39,19 @@ TEST_CASE("Test extract statements in C API", "[capi]") {
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 3);
 	duckdb_destroy_prepare(&stmt);
 	duckdb_destroy_result(&res);
+	duckdb_destroy_extracted(&stmts);
+
+	// test empty statement is not an error
+	size = duckdb_extract_statements(tester.connection, "", &stmts);
+	REQUIRE(size == 0);
+	error = duckdb_extract_statements_error(stmts);
+	REQUIRE(error == nullptr);
+	duckdb_destroy_extracted(&stmts);
+
+	// test incorrect statement cannot be extracted
+	size = duckdb_extract_statements(tester.connection, "This is not valid SQL", &stmts);
+	REQUIRE(size == 0);
+	error = duckdb_extract_statements_error(stmts);
+	REQUIRE(error != nullptr);
 	duckdb_destroy_extracted(&stmts);
 }
