@@ -40,7 +40,6 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 	case JoinType::LEFT:
 	case JoinType::ANTI:
 	case JoinType::SEMI: {
-		can_add_column = true;
 		return PullupFromLeft(move(op));
 	}
 	default:

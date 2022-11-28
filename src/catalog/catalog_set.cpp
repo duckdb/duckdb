@@ -184,8 +184,9 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	if (value->name != original_name) {
 		auto mapping_value = GetMapping(context, value->name);
 		if (mapping_value && !mapping_value->deleted) {
-			auto entry = GetEntryForTransaction(context, entries[mapping_value->index].get());
-			if (!entry->deleted) {
+			auto original_entry = GetEntryForTransaction(context, entries[mapping_value->index].get());
+			if (!original_entry->deleted) {
+				entry->UndoAlter(context, alter_info);
 				string rename_err_msg =
 				    "Could not rename \"%s\" to \"%s\": another entry with this name already exists!";
 				throw CatalogException(rename_err_msg, original_name, value->name);
@@ -274,6 +275,7 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
+	lock_guard<mutex> read_lock(catalog_lock);
 	DropEntryInternal(context, entry_index, *entry, cascade);
 	return true;
 }
