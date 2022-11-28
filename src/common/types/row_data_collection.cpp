@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size,
+RowDataCollection::RowDataCollection(VirtualBufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size,
                                      bool keep_pinned)
     : buffer_manager(buffer_manager), count(0), block_capacity(block_capacity), entry_size(entry_size),
       keep_pinned(keep_pinned) {

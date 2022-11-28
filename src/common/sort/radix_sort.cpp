@@ -6,8 +6,9 @@
 namespace duckdb {
 
 //! Calls std::sort on strings that are tied by their prefix after the radix sort
-static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &start, const idx_t &end,
-                          const idx_t &tie_col, bool *ties, const data_ptr_t blob_ptr, const SortLayout &sort_layout) {
+static void SortTiedBlobs(VirtualBufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &start,
+                          const idx_t &end, const idx_t &tie_col, bool *ties, const data_ptr_t blob_ptr,
+                          const SortLayout &sort_layout) {
 	const auto row_width = sort_layout.blob_layout.GetRowWidth();
 	// Locate the first blob row in question
 	data_ptr_t row_ptr = dataptr + start * sort_layout.entry_size;
@@ -61,7 +62,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 }
 
 //! Identifies sequences of rows that are tied by the prefix of a blob column, and sorts them
-static void SortTiedBlobs(BufferManager &buffer_manager, SortedBlock &sb, bool *ties, data_ptr_t dataptr,
+static void SortTiedBlobs(VirtualBufferManager &buffer_manager, SortedBlock &sb, bool *ties, data_ptr_t dataptr,
                           const idx_t &count, const idx_t &tie_col, const SortLayout &sort_layout) {
 	D_ASSERT(!ties[count - 1]);
 	auto &blob_block = *sb.blob_sorting_data->data_blocks.back();
@@ -107,8 +108,8 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 }
 
 //! Textbook LSD radix sort
-void RadixSortLSD(BufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count, const idx_t &col_offset,
-                  const idx_t &row_width, const idx_t &sorting_size) {
+void RadixSortLSD(VirtualBufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count,
+                  const idx_t &col_offset, const idx_t &row_width, const idx_t &sorting_size) {
 	auto temp_block = buffer_manager.GetBufferAllocator().Allocate(count * row_width);
 	bool swap = false;
 
@@ -236,8 +237,9 @@ void RadixSortMSD(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, const id
 }
 
 //! Calls different sort functions, depending on the count and sorting sizes
-void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count, const idx_t &col_offset,
-               const idx_t &sorting_size, const SortLayout &sort_layout, bool contains_string) {
+void RadixSort(VirtualBufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count,
+               const idx_t &col_offset, const idx_t &sorting_size, const SortLayout &sort_layout,
+               bool contains_string) {
 	if (contains_string) {
 		auto begin = duckdb_pdqsort::PDQIterator(dataptr, sort_layout.entry_size);
 		auto end = begin + count;
@@ -256,7 +258,7 @@ void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const i
 }
 
 //! Identifies sequences of rows that are tied, and calls radix sort on these
-static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &count,
+static void SubSortTiedTuples(VirtualBufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &count,
                               const idx_t &col_offset, const idx_t &sorting_size, bool ties[],
                               const SortLayout &sort_layout, bool contains_string) {
 	D_ASSERT(!ties[count - 1]);

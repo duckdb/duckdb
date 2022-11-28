@@ -7,7 +7,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 #include "duckdb/main/config.hpp"
 
 #include <algorithm>
@@ -85,7 +85,7 @@ T DeserializeHeaderStructure(data_ptr_t ptr) {
 
 SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path_p, bool read_only, bool create_new,
                                                bool use_direct_io)
-    : BlockManager(BufferManager::GetBufferManager(db)), db(db), path(move(path_p)),
+    : BlockManager(VirtualBufferManager::GetBufferManager(db)), db(db), path(move(path_p)),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
                     Storage::FILE_HEADER_SIZE - Storage::BLOCK_HEADER_SIZE),
       iteration_count(0), read_only(read_only), use_direct_io(use_direct_io) {

@@ -225,7 +225,7 @@ public:
 		current_width = 0;
 
 		// Reset the pointers into the current segment
-		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
+		auto &buffer_manager = VirtualBufferManager::GetBufferManager(current_segment->db);
 		current_handle = buffer_manager.Pin(current_segment->block);
 		current_dictionary = FSSTStorage::GetDictionary(*current_segment, current_handle);
 		current_end_ptr = current_handle.Ptr() + current_dictionary.end;
@@ -303,7 +303,7 @@ public:
 	}
 
 	idx_t Finalize() {
-		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
+		auto &buffer_manager = VirtualBufferManager::GetBufferManager(current_segment->db);
 		auto handle = buffer_manager.Pin(current_segment->block);
 		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
 
@@ -504,7 +504,7 @@ struct FSSTScanState : public StringScanState {
 
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
 	auto state = make_unique<FSSTScanState>();
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
 
@@ -626,7 +626,7 @@ void FSSTStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
 
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	auto base_ptr = handle.Ptr() + segment.GetBlockOffset();
 	auto base_data = (data_ptr_t)(base_ptr + sizeof(fsst_compression_header_t));

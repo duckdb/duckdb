@@ -22,7 +22,7 @@
 
 namespace duckdb {
 
-class BufferManager;
+class VirtualBufferManager;
 class BufferHandle;
 class ColumnDataCollection;
 struct ColumnDataAppendState;
@@ -128,7 +128,7 @@ public:
 	};
 
 public:
-	JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
+	JoinHashTable(VirtualBufferManager &buffer_manager, const vector<JoinCondition> &conditions,
 	              vector<LogicalType> build_types, JoinType type);
 	~JoinHashTable();
 
@@ -162,8 +162,8 @@ public:
 		return *block_collection;
 	}
 
-	//! BufferManager
-	BufferManager &buffer_manager;
+	//! VirtualBufferManager
+	VirtualBufferManager &buffer_manager;
 	//! The join conditions
 	const vector<JoinCondition> &conditions;
 	//! The types of the keys used in equality comparison

@@ -1,6 +1,6 @@
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 
 namespace duckdb {
 

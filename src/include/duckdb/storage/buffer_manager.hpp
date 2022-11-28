@@ -15,6 +15,7 @@
 #include "duckdb/storage/block_manager.hpp"
 
 #include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -32,10 +33,6 @@ class BufferManager : public VirtualBufferManager {
 	friend class BlockHandle;
 	friend class BlockManager;
 
-public:
-	static unique_ptr<BufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory,
-	                                                     idx_t maximum_memory);
-
 protected:
 	BufferManager(DatabaseInstance &db, string temp_directory, idx_t maximum_memory);
 
@@ -45,7 +42,7 @@ public:
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed
 	//! This buffer can be small (smaller than BLOCK_SIZE)
 	//! Unpin and pin are nops on this block of memory
-	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size);
+	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final override;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
@@ -60,22 +57,18 @@ public:
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
-	void SetLimit(idx_t limit = (idx_t)-1);
+	void SetLimit(idx_t limit = (idx_t)-1) final override;
 
-	const string &GetTemporaryDirectory() {
+	const string &GetTemporaryDirectory() final override {
 		return temp_directory;
 	}
 
-	void SetTemporaryDirectory(string new_dir);
+	void SetTemporaryDirectory(string new_dir) final override;
 
-	DUCKDB_API Allocator &GetBufferAllocator();
+	DUCKDB_API Allocator &GetBufferAllocator() final override;
 
-	DatabaseInstance &GetDatabase() {
+	DatabaseInstance &GetDatabase() final override {
 		return db;
-	}
-
-	static idx_t GetAllocSize(idx_t block_size) {
-		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::BLOCK_HEADER_SIZE);
 	}
 
 	//! Construct a managed buffer.
@@ -84,8 +77,9 @@ public:
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 
-	DUCKDB_API void ReserveMemory(idx_t size);
-	DUCKDB_API void FreeReservedMemory(idx_t size);
+	DUCKDB_API void ReserveMemory(idx_t size) final override;
+	DUCKDB_API void FreeReservedMemory(idx_t size) final override;
+	bool HasTemporaryDirectory() const final override;
 
 private:
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or

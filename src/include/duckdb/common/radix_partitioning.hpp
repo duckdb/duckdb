@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-class BufferManager;
+class VirtualBufferManager;
 class RowLayout;
 class RowDataCollection;
 class Vector;
@@ -51,7 +51,7 @@ public:
 	                    SelectionVector *true_sel, SelectionVector *false_sel);
 
 	//! Partition the data in block_collection/string_heap to multiple partitions
-	static void PartitionRowData(BufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
+	static void PartitionRowData(VirtualBufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
 	                             RowDataCollection &block_collection, RowDataCollection &string_heap,
 	                             vector<unique_ptr<RowDataCollection>> &partition_block_collections,
 	                             vector<unique_ptr<RowDataCollection>> &partition_string_heaps, idx_t radix_bits);

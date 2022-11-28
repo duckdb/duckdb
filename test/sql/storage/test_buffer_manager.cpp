@@ -1,7 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "test_helpers.hpp"
 
@@ -244,7 +244,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	const idx_t limit = 1000000000;
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 
-	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(*con.context);
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	idx_t requested_size = Storage::BLOCK_SIZE;
@@ -288,7 +288,7 @@ TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 
-	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(*con.context);
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	idx_t requested_size = 424242;
@@ -309,7 +309,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 
-	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(*con.context);
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	// Set memory limit to hold exactly 10 blocks
@@ -397,7 +397,7 @@ TEST_CASE("Test buffer allocator", "[storage][.]") {
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 
-	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(*con.context);
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	const idx_t limit = 1000000000;

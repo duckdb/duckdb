@@ -4,7 +4,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/chrono.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 #include "httpfs.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
@@ -120,7 +120,7 @@ protected:
 
 class S3FileSystem : public HTTPFileSystem {
 public:
-	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
+	explicit S3FileSystem(VirtualBufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 
 	constexpr static int MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS = 1000;
@@ -131,7 +131,7 @@ public:
 	atomic<uint16_t> buffers_available;
 	atomic<uint16_t> threads_waiting_for_memory = {0};
 
-	BufferManager &buffer_manager;
+	VirtualBufferManager &buffer_manager;
 
 public:
 	// HTTP Requests

@@ -12,7 +12,7 @@
 #include "duckdb/common/types/column_data_collection_iterators.hpp"
 
 namespace duckdb {
-class BufferManager;
+class VirtualBufferManager;
 class BlockHandle;
 class ClientContext;
 struct ColumnDataCopyFunction;
@@ -30,7 +30,7 @@ public:
 	//! Constructs an empty (but valid) in-memory column data collection from an allocator
 	DUCKDB_API ColumnDataCollection(Allocator &allocator);
 	//! Constructs a buffer-managed column data collection
-	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
+	DUCKDB_API ColumnDataCollection(VirtualBufferManager &buffer_manager, vector<LogicalType> types);
 	//! Constructs either an in-memory or a buffer-managed column data collection
 	DUCKDB_API ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
 	                                ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);

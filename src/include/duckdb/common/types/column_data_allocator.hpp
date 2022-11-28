@@ -27,7 +27,7 @@ struct BlockMetaData {
 class ColumnDataAllocator {
 public:
 	ColumnDataAllocator(Allocator &allocator);
-	ColumnDataAllocator(BufferManager &buffer_manager);
+	ColumnDataAllocator(VirtualBufferManager &buffer_manager);
 	ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type);
 
 	//! Returns an allocator object to allocate with. This returns the allocator in IN_MEMORY_ALLOCATOR, and a buffer
@@ -75,7 +75,7 @@ private:
 		//! The allocator object (if this is a IN_MEMORY_ALLOCATOR)
 		Allocator *allocator;
 		//! The buffer manager (if this is a BUFFER_MANAGER_ALLOCATOR)
-		BufferManager *buffer_manager;
+		VirtualBufferManager *buffer_manager;
 	} alloc;
 	//! The set of blocks used by the column data collection
 	vector<BlockMetaData> blocks;

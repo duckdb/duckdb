@@ -14,7 +14,7 @@
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 
 namespace duckdb {
-class BufferManager;
+class VirtualBufferManager;
 
 class BaseAggregateHashTable {
 public:
@@ -25,7 +25,7 @@ public:
 
 protected:
 	Allocator &allocator;
-	BufferManager &buffer_manager;
+	VirtualBufferManager &buffer_manager;
 	//! A helper for managing offsets into the data buffers
 	RowLayout layout;
 	//! The types of the payload columns stored in the hashtable

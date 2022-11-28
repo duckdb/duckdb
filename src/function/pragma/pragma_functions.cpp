@@ -7,7 +7,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
 #include <cctype>

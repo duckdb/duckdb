@@ -34,7 +34,7 @@ class ClientContext;
 class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
-class BufferManager;
+class VirtualBufferManager;
 class VirtualBufferManager;
 
 struct CompressionFunctionSet;

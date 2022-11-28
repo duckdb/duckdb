@@ -14,7 +14,7 @@
 #include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
 
 namespace duckdb {
-class BufferManager;
+class VirtualBufferManager;
 class Executor;
 class PhysicalHashAggregate;
 class Pipeline;

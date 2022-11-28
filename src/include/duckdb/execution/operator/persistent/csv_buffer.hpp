@@ -10,7 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 
 namespace duckdb {
 

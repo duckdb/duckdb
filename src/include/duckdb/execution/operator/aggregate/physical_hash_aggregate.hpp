@@ -18,7 +18,7 @@
 namespace duckdb {
 
 class ClientContext;
-class BufferManager;
+class VirtualBufferManager;
 
 struct HashAggregateGroupingData {
 public:

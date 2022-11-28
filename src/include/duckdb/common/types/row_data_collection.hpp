@@ -10,13 +10,14 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 struct RowDataBlock {
 public:
-	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
+	RowDataBlock(VirtualBufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
 		idx_t size = MaxValue<idx_t>(Storage::BLOCK_SIZE, capacity * entry_size);
 		buffer_manager.Allocate(size, false, &block);
@@ -58,14 +59,15 @@ struct BlockAppendEntry {
 
 class RowDataCollection {
 public:
-	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size, bool keep_pinned = false);
+	RowDataCollection(VirtualBufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size,
+	                  bool keep_pinned = false);
 
 	unique_ptr<RowDataCollection> CloneEmpty(bool keep_pinned = false) const {
 		return make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size, keep_pinned);
 	}
 
-	//! BufferManager
-	BufferManager &buffer_manager;
+	//! VirtualBufferManager
+	VirtualBufferManager &buffer_manager;
 	//! The total number of stored entries
 	idx_t count;
 	//! The number of entries per block

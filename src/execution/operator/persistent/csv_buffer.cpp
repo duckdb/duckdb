@@ -34,7 +34,7 @@ unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t set_buff
 }
 
 BufferHandle CSVBuffer::AllocateBuffer(idx_t buffer_size) {
-	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(context);
 	return buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, buffer_size));
 }
 

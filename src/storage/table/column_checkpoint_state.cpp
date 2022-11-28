@@ -100,7 +100,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 
 	// get the buffer of the segment and pin it
 	auto &db = column_data.GetDatabase();
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(db);
 	block_id_t block_id = INVALID_BLOCK;
 	uint32_t offset_in_block = 0;
 

@@ -92,11 +92,6 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 	this->temp_directory = move(new_dir);
 }
 
-unique_ptr<BufferManager> BufferManager::CreateBufferManager(DatabaseInstance &db, string temp_directory,
-                                                             idx_t maximum_memory) {
-	return make_unique<BufferManager>(db, temp_directory, maximum_memory);
-}
-
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : VirtualBufferManager(maximum_memory), db(db), temp_directory(move(tmp)), queue(make_unique<EvictionQueue>()),
       temporary_id(MAXIMUM_BLOCK), queue_insertions(0),
@@ -459,8 +454,8 @@ public:
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, idx_t block_index,
 	                                           unique_ptr<FileBuffer> reusable_buffer) {
 		auto buffer =
-		    ReadTemporaryBufferInternal(BufferManager::GetBufferManager(db), *handle, GetPositionInFile(block_index),
-		                                Storage::BLOCK_SIZE, id, move(reusable_buffer));
+		    ReadTemporaryBufferInternal(VirtualBufferManager::GetBufferManager(db), *handle,
+		                                GetPositionInFile(block_index), Storage::BLOCK_SIZE, id, move(reusable_buffer));
 		{
 			// remove the block (and potentially truncate the temp file)
 			TemporaryFileLock lock(file_lock);
@@ -788,16 +783,20 @@ data_ptr_t BufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_d
 }
 
 Allocator &BufferAllocator::Get(ClientContext &context) {
-	auto &manager = BufferManager::GetBufferManager(context);
+	auto &manager = VirtualBufferManager::GetBufferManager(context);
 	return manager.GetBufferAllocator();
 }
 
 Allocator &BufferAllocator::Get(DatabaseInstance &db) {
-	return BufferManager::GetBufferManager(db).GetBufferAllocator();
+	return VirtualBufferManager::GetBufferManager(db).GetBufferAllocator();
 }
 
 Allocator &BufferManager::GetBufferAllocator() {
 	return buffer_allocator;
+}
+
+bool BufferManager::HasTemporaryDirectory() const {
+	return !temp_directory.empty();
 }
 
 } // namespace duckdb

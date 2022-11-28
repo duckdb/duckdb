@@ -1,4 +1,4 @@
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
@@ -78,7 +78,7 @@ bool BlockHandle::CanUnload() {
 		// there are active readers
 		return false;
 	}
-	if (block_id >= MAXIMUM_BLOCK && !can_destroy && block_manager.buffer_manager.temp_directory.empty()) {
+	if (block_id >= MAXIMUM_BLOCK && !can_destroy && block_manager.buffer_manager.HasTemporaryDirectory()) {
 		// in order to unload this block we need to write it to a temporary buffer
 		// however, no temporary directory is specified!
 		// hence we cannot unload the block

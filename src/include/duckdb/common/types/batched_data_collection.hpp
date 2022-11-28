@@ -12,7 +12,7 @@
 #include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
-class BufferManager;
+class VirtualBufferManager;
 class ClientContext;
 
 struct BatchedChunkScanState {

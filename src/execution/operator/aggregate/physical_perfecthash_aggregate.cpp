@@ -3,7 +3,7 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {

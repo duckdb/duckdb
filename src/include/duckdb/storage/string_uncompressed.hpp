@@ -59,7 +59,7 @@ public:
 	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id);
 
 	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
 		return make_unique<CompressionAppendState>(move(handle));
 	}
@@ -71,7 +71,7 @@ public:
 
 	static idx_t StringAppendBase(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data,
 	                              idx_t offset, idx_t count) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
 		return StringAppendBase(handle, segment, stats, data, offset, count);
 	}

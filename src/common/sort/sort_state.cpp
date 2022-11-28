@@ -152,7 +152,7 @@ SortLayout SortLayout::GetPrefixComparisonLayout(idx_t num_prefix_cols) const {
 LocalSortState::LocalSortState() : initialized(false) {
 }
 
-void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManager &buffer_manager_p) {
+void LocalSortState::Initialize(GlobalSortState &global_sort_state, VirtualBufferManager &buffer_manager_p) {
 	sort_layout = &global_sort_state.sort_layout;
 	payload_layout = &global_sort_state.payload_layout;
 	buffer_manager = &buffer_manager_p;
@@ -350,7 +350,7 @@ void LocalSortState::ReOrder(GlobalSortState &gstate, bool reorder_heap) {
 	ReOrder(*sb.payload_data, sorting_ptr, *payload_heap, gstate, reorder_heap);
 }
 
-GlobalSortState::GlobalSortState(BufferManager &buffer_manager, const vector<BoundOrderByNode> &orders,
+GlobalSortState::GlobalSortState(VirtualBufferManager &buffer_manager, const vector<BoundOrderByNode> &orders,
                                  RowLayout &payload_layout)
     : buffer_manager(buffer_manager), sort_layout(SortLayout(orders)), payload_layout(payload_layout),
       block_capacity(0), external(false) {

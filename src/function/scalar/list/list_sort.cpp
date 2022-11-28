@@ -115,7 +115,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &info = (ListSortBindData &)*func_expr.bind_info;
 
 	// initialize the global and local sorting state
-	auto &buffer_manager = BufferManager::GetBufferManager(info.context);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(info.context);
 	info.global_sort_state = make_unique<GlobalSortState>(buffer_manager, info.orders, info.payload_layout);
 	auto &global_sort_state = *info.global_sort_state;
 	LocalSortState local_sort_state;

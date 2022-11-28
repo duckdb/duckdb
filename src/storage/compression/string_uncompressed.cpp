@@ -62,7 +62,7 @@ idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSegment &segment) {
 	auto result = make_unique<StringScanState>();
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
 	return move(result);
 }
@@ -106,7 +106,7 @@ BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
 	auto entry = handles.find(primary_id);
 	if (entry == handles.end()) {
 		// not pinned yet: pin it
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
 		auto entry = handles.insert(make_pair(primary_id, move(handle)));
 		return entry.first->second;
@@ -144,7 +144,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 
 unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment,
                                                                                 block_id_t block_id) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
 		StringDictionaryContainer dictionary;
@@ -156,7 +156,7 @@ unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(
 }
 
 idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	auto dict = GetDictionary(segment, handle);
 	D_ASSERT(dict.end == segment.SegmentSize());
@@ -239,7 +239,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	shared_ptr<BlockHandle> block;
 	BufferHandle handle;
 
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
 	auto &state = (UncompressedStringSegmentState &)*segment.GetSegmentState();
 	// check if the string fits in the current block
 	if (!state.head || state.head->offset + total_length >= state.head->size) {

@@ -32,7 +32,7 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 
-	WindowGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
+	WindowGlobalHashGroup(VirtualBufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
 	                      const Types &payload_types, idx_t max_mem, bool external)
 	    : memory_per_thread(max_mem), count(0) {
 
@@ -101,7 +101,7 @@ public:
 	using Types = vector<LogicalType>;
 
 	WindowGlobalSinkState(const PhysicalWindow &op_p, ClientContext &context)
-	    : op(op_p), context(context), buffer_manager(BufferManager::GetBufferManager(context)),
+	    : op(op_p), context(context), buffer_manager(VirtualBufferManager::GetBufferManager(context)),
 	      allocator(Allocator::Get(context)),
 	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()), next_sort(0),
 	      memory_per_thread(0), count(0), mode(DBConfig::GetConfig(context).options.window_mode) {
@@ -188,7 +188,7 @@ public:
 
 	const PhysicalWindow &op;
 	ClientContext &context;
-	BufferManager &buffer_manager;
+	VirtualBufferManager &buffer_manager;
 	Allocator &allocator;
 	size_t partition_cols;
 	const RadixPartitionInfo partition_info;

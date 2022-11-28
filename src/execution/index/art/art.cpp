@@ -58,7 +58,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 
 ART::~ART() {
 	if (estimated_art_size > 0) {
-		BufferManager::GetBufferManager(db).FreeReservedMemory(estimated_art_size);
+		VirtualBufferManager::GetBufferManager(db).FreeReservedMemory(estimated_art_size);
 		estimated_art_size = 0;
 	}
 	if (tree) {
@@ -362,7 +362,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(arena_allocator, input, keys);
 
 	idx_t extra_memory = estimated_key_size * input.size();
-	BufferManager::GetBufferManager(db).ReserveMemory(extra_memory);
+	VirtualBufferManager::GetBufferManager(db).ReserveMemory(extra_memory);
 	estimated_art_size += extra_memory;
 
 	// now insert the elements into the index
@@ -513,7 +513,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	ExecuteExpressions(input, expression);
 
 	idx_t released_memory = MinValue<idx_t>(estimated_art_size, estimated_key_size * input.size());
-	BufferManager::GetBufferManager(db).FreeReservedMemory(released_memory);
+	VirtualBufferManager::GetBufferManager(db).FreeReservedMemory(released_memory);
 	estimated_art_size -= released_memory;
 
 	// then generate the keys for the given input
