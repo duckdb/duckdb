@@ -50,7 +50,7 @@ jobs:
 
   rstats-linux:
     name: R Package Linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: r-test-extension
     env:
       LIBARROW_BINARY: 'false'
@@ -148,7 +148,7 @@ jobs:
 
   rstats-linux-debug:
     name: R Package Linux debug mode
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: rstats-linux
 
     env:

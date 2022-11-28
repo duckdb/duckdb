@@ -29,7 +29,7 @@ jobs:
 #  This is just a sanity check of Python 3.9 running with Arrow
    linux-python3-9:
     name: Python 3.9 Linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
@@ -141,7 +141,7 @@ jobs:
 
    linux-python3:
     name: Python 3 Linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         arch: [i686, x86_64]
@@ -327,7 +327,7 @@ jobs:
 
    linux-tarball:
       name: Python 3 Tarball
-      runs-on: ubuntu-20.04
+      runs-on: ubuntu-22.04
       needs: linux-python3-9
 
       steps:
@@ -429,7 +429,7 @@ jobs:
    linux-release-cleanup:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
       name: PyPi Release Cleanup
-      runs-on: ubuntu-20.04
+      runs-on: ubuntu-22.04
       needs: linux-python3-9
       env:
         PYPI_PASSWORD: ${{secrets.PYPI_PASSWORD}}

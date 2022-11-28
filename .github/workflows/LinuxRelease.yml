@@ -230,7 +230,7 @@ jobs:
 
  check-load-install-extensions:
     name: Checks extension functions
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-extensions-64
 
     env:
@@ -319,7 +319,7 @@ jobs:
 
  linux-rpi:
     name: Linux (Raspberry Pi)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-release-64
     steps:
     - uses: actions/checkout@v3
@@ -404,7 +404,7 @@ jobs:
 
  release-assert:
     name: Release Assertions
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-release-64
     env:
       CC: gcc-10
@@ -448,7 +448,7 @@ jobs:
 
  vector-sizes:
     name: Vector Sizes
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-release-64
     env:
       CC: gcc-10
@@ -474,7 +474,7 @@ jobs:
 
  linux-wasm-release:
     name: WebAssembly Release
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-release-64
     steps:
     - uses: actions/checkout@v3
@@ -520,7 +520,7 @@ jobs:
 
  symbol-leakage:
     name: Symbol Leakage
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-release-64
 
     steps:
@@ -547,7 +547,7 @@ jobs:
 
  linux-httpfs:
     name: Linux HTTPFS
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-release-64
     env:
       BUILD_VISUALIZER: 1
@@ -595,7 +595,7 @@ jobs:
  amalgamation-tests:
     name: Amalgamation Tests
     needs: linux-release-64
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CC: clang
       CXX: clang++
