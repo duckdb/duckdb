@@ -6,7 +6,7 @@
 #' @param shutdown Set to `TRUE` to shut down the DuckDB database instance that this connection refers to.
 #' @rdname duckdb
 #' @usage NULL
-dbDisconnect__duckdb_connection <- function(conn, ..., shutdown = FALSE) {
+dbDisconnect__duckdb_connection <- function(conn, ..., shutdown = TRUE) {
   if (!dbIsValid(conn)) {
     warning("Connection already closed.", call. = FALSE)
     invisible(FALSE)
