@@ -37,7 +37,11 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 	auto &config = DBConfig::GetConfig(context);
 	single_threaded = !config.options.experimental_parallel_csv_reader;
-	if (options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1) {
+	bool null_or_empty =
+	    options.delimiter.empty() || options.escape.empty() || options.quote.empty() || options.delimiter == "\0"
+			|| options.escape == "\0" || options.quote == "\0";
+	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
+	if (null_or_empty || complex_options || options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
 		single_threaded = true;
 	}
@@ -321,7 +325,7 @@ void ParallelCSVGlobalState::Verify() {
 			for (auto &start_line : tuple_start) {
 				error += to_string(start_line) + "\n";
 			}
-			D_ASSERT(false && error.c_str());
+			DuckDBAssertInternal(false, error.c_str(), "src/function/table/read_csv.cpp", 324);
 		}
 	}
 }

@@ -1,0 +1,18 @@
+# name: test/sql/copy/csv/parallel/csv_parallel_new_line.test_slow
+# description: Test parallel read CSV function with different settings of new lines
+# group: [parallel]
+
+# Test read_csv with user defined variable
+
+
+# Test read_csv auto with \n
+
+# Test read_csv auto with \r
+
+# Test read_csv auto with \r\n
+
+# Test read_csv auto with mix \r and \n
+
+# Test read_csv auto with mix \r, \n and \r\n (This must always run single threaded)
+
+# Test read_csv auto with null

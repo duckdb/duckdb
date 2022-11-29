@@ -17,11 +17,9 @@
 namespace duckdb {
 
 enum NewLineIdentifier {
-	N = 1,   // Only has \n
-	R = 2,   // Only has \r
-	RN = 3,  // Only has \rn
-	MIX = 4, // Hippie-land
-	INVALID = 5
+	SINGLE = 1,   // Only has either \n ,\r, \r\n or a mix of \r and \n
+	MIX = 2, // Hippie-land (i.e., mixes \n and \r\n, or \r and \r\n)
+	NOT_SET = 3
 };
 
 struct BufferedCSVReaderOptions {
@@ -36,7 +34,7 @@ struct BufferedCSVReaderOptions {
 	//! Whether or not a new_line was defined by the user
 	bool has_newline = false;
 	//! New Line separator
-	NewLineIdentifier new_line = NewLineIdentifier::INVALID;
+	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
 
 	bool has_quote = false;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
