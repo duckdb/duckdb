@@ -12,12 +12,13 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 
 namespace duckdb {
 
 //! Create a JoinCondition from a comparison
-static bool CreateJoinCondition(Expression &expr, unordered_set<idx_t> &left_bindings,
-                                unordered_set<idx_t> &right_bindings, vector<JoinCondition> &conditions) {
+static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &left_bindings,
+                                const unordered_set<idx_t> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
 	auto &comparison = (BoundComparisonExpression &)expr;
 	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
@@ -41,14 +42,13 @@ static bool CreateJoinCondition(Expression &expr, unordered_set<idx_t> &left_bin
 	return false;
 }
 
-unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
-                                                              unique_ptr<LogicalOperator> right_child,
-                                                              unordered_set<idx_t> &left_bindings,
-                                                              unordered_set<idx_t> &right_bindings,
-                                                              vector<unique_ptr<Expression>> &expressions) {
-	vector<JoinCondition> conditions;
-	vector<unique_ptr<Expression>> arbitrary_expressions;
-	// first check if we can create
+void LogicalComparisonJoin::ExtractJoinConditions(JoinType type, unique_ptr<LogicalOperator> &left_child,
+                                                  unique_ptr<LogicalOperator> &right_child,
+                                                  const unordered_set<idx_t> &left_bindings,
+                                                  const unordered_set<idx_t> &right_bindings,
+                                                  vector<unique_ptr<Expression>> &expressions,
+                                                  vector<JoinCondition> &conditions,
+                                                  vector<unique_ptr<Expression>> &arbitrary_expressions) {
 	for (auto &expr : expressions) {
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
@@ -78,6 +78,35 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 		}
 		arbitrary_expressions.push_back(move(expr));
 	}
+}
+
+void LogicalComparisonJoin::ExtractJoinConditions(JoinType type, unique_ptr<LogicalOperator> &left_child,
+                                                  unique_ptr<LogicalOperator> &right_child,
+                                                  vector<unique_ptr<Expression>> &expressions,
+                                                  vector<JoinCondition> &conditions,
+                                                  vector<unique_ptr<Expression>> &arbitrary_expressions) {
+	unordered_set<idx_t> left_bindings, right_bindings;
+	LogicalJoin::GetTableReferences(*left_child, left_bindings);
+	LogicalJoin::GetTableReferences(*right_child, right_bindings);
+	return ExtractJoinConditions(type, left_child, right_child, left_bindings, right_bindings, expressions, conditions,
+	                             arbitrary_expressions);
+}
+
+void LogicalComparisonJoin::ExtractJoinConditions(JoinType type, unique_ptr<LogicalOperator> &left_child,
+                                                  unique_ptr<LogicalOperator> &right_child,
+                                                  unique_ptr<Expression> condition, vector<JoinCondition> &conditions,
+                                                  vector<unique_ptr<Expression>> &arbitrary_expressions) {
+	// split the expressions by the AND clause
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(move(condition));
+	LogicalFilter::SplitPredicates(expressions);
+	return ExtractJoinConditions(type, left_child, right_child, expressions, conditions, arbitrary_expressions);
+}
+
+unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
+                                                              unique_ptr<LogicalOperator> right_child,
+                                                              vector<JoinCondition> conditions,
+                                                              vector<unique_ptr<Expression>> arbitrary_expressions) {
 	bool need_to_consider_arbitrary_expressions = true;
 	if (type == JoinType::INNER) {
 		// for inner joins we can push arbitrary expressions as a filter
@@ -149,14 +178,37 @@ static bool HasCorrelatedColumns(Expression &expression) {
 	return has_correlated_columns;
 }
 
+unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
+                                                              unique_ptr<LogicalOperator> right_child,
+                                                              unique_ptr<Expression> condition) {
+	vector<JoinCondition> conditions;
+	vector<unique_ptr<Expression>> arbitrary_expressions;
+	LogicalComparisonJoin::ExtractJoinConditions(type, left_child, right_child, move(condition), conditions,
+	                                             arbitrary_expressions);
+	return LogicalComparisonJoin::CreateJoin(type, move(left_child), move(right_child), move(conditions),
+	                                         move(arbitrary_expressions));
+}
+
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	auto left = CreatePlan(*ref.left);
 	auto right = CreatePlan(*ref.right);
+	if (!ref.lateral && !ref.correlated_columns.empty()) {
+		// non-lateral join with correlated columns
+		// this happens if there is a join (or cross product) in a correlated subquery
+		// due to the lateral binder the expression depth of all correlated columns in the "ref.correlated_columns" set
+		// is 1 too high
+		// we reduce expression depth of all columns in the "ref.correlated_columns" set by 1
+		LateralBinder::ReduceExpressionDepth(*right, ref.correlated_columns);
+	}
 	if (ref.type == JoinType::RIGHT && ClientConfig::GetConfig(context).enable_optimizer) {
 		// we turn any right outer joins into left outer joins for optimization purposes
 		// they are the same but with sides flipped, so treating them the same simplifies life
 		ref.type = JoinType::LEFT;
 		std::swap(left, right);
+	}
+	if (ref.lateral) {
+		// lateral join
+		return PlanLateralJoin(move(left), move(right), ref.correlated_columns, ref.type, move(ref.condition));
 	}
 	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition))) {
 		// inner join, generate a cross product + filter
@@ -172,18 +224,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		return move(filter);
 	}
 
-	// split the expressions by the AND clause
-	vector<unique_ptr<Expression>> expressions;
-	expressions.push_back(move(ref.condition));
-	LogicalFilter::SplitPredicates(expressions);
-
-	// find the table bindings on the LHS and RHS of the join
-	unordered_set<idx_t> left_bindings, right_bindings;
-	LogicalJoin::GetTableReferences(*left, left_bindings);
-	LogicalJoin::GetTableReferences(*right, right_bindings);
-	// now create the join operator from the set of join conditions
-	auto result = LogicalComparisonJoin::CreateJoin(ref.type, move(left), move(right), left_bindings, right_bindings,
-	                                                expressions);
+	// now create the join operator from the join condition
+	auto result = LogicalComparisonJoin::CreateJoin(ref.type, move(left), move(right), move(ref.condition));
 
 	LogicalOperator *join;
 	if (result->type == LogicalOperatorType::LOGICAL_FILTER) {

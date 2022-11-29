@@ -16,8 +16,8 @@ rapi_shutdown <- function(dbsexp) {
   invisible(.Call(`_duckdb_rapi_shutdown`, dbsexp))
 }
 
-rapi_register_df <- function(conn, name, value, integer64, overwrite) {
-  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value, integer64, overwrite))
+rapi_register_df <- function(conn, name, value, integer64, overwrite, experimental) {
+  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value, integer64, overwrite, experimental))
 }
 
 rapi_unregister_df <- function(conn, name) {

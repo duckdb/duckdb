@@ -72,6 +72,13 @@ FROM range(0,100) tbl(d)
 
 endloop
 
+# Negative quantiles (use descending intervals)
+query I
+SELECT quantile_disc(col, -0.5)
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+----
+2900
+
 #
 # VARCHAR. Remember, this is dictionary ordering, not numeric ordering!
 #
@@ -169,7 +176,7 @@ NULL
 
 # Invalid usage
 statement error
-SELECT quantile_disc(r, -0.1) FROM quantile
+SELECT quantile_disc(r, -1.1) FROM quantile
 
 statement error
 SELECT quantile_disc(r, 1.1) FROM quantile
