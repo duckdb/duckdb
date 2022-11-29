@@ -43,7 +43,7 @@ struct SwizzleMetaData {
 	VectorDataIndex child_index;
 	//! Offset into the string_t vector
 	uint16_t offset;
-	//! Number of strings starting at 'offset' that have the same base 'heap_ptr'
+	//! Number of strings starting at 'offset' that have strings stored in the block with index 'child_index'
 	uint16_t count;
 };
 
