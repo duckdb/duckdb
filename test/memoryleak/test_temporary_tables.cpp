@@ -61,19 +61,18 @@ TEST_CASE("DB temporary table insertion", "[memoryleak]") {
 	}
 }
 
-TEST_CASE("Insert and delete data repeatedly", "[memoryleak]") {
-	if (!TestMemoryLeaks()) {
-		return;
-	}
-	// FIXME: broken right now - we need to flush/merge deletes to fix this
-	return;
-	DBConfig config;
-	config.options.load_extensions = false;
-	DuckDB db(":memory:", &config);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INT);"));
-	while (true) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 SELECT * FROM range(100000)"));
-		REQUIRE_NO_FAIL(con.Query("DELETE FROM t1"));
-	}
-}
+// FIXME: broken right now - we need to flush/merge deletes to fix this
+//TEST_CASE("Insert and delete data repeatedly", "[memoryleak]") {
+//	if (!TestMemoryLeaks()) {
+//		return;
+//	}
+//	DBConfig config;
+//	config.options.load_extensions = false;
+//	DuckDB db(":memory:", &config);
+//	Connection con(db);
+//	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INT);"));
+//	while (true) {
+//		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 SELECT * FROM range(100000)"));
+//		REQUIRE_NO_FAIL(con.Query("DELETE FROM t1"));
+//	}
+//}
