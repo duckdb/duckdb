@@ -128,7 +128,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
 
-	idx_t out_offset = 0;
 	idx_t tries = 0;
 	idx_t max_retries = hfs.http_params.retries;
 
