@@ -492,7 +492,7 @@ void PasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Va
 }
 
 Value PasswordSetting::GetSetting(ClientContext &context) {
-	throw InvalidInputException("The password setting should not be read");
+	return Value();
 }
 
 //===--------------------------------------------------------------------===//
@@ -669,7 +669,7 @@ void UsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Va
 }
 
 Value UsernameSetting::GetSetting(ClientContext &context) {
-	throw InvalidInputException("The username setting should not be read");
+	return Value();
 }
 
 } // namespace duckdb
