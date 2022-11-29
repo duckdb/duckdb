@@ -44,10 +44,12 @@ def get_node_body(name, result, cardinality, timing, extra_info):
 	body = "<span class=\"tf-nc\">"
 	body += "<div class=\"node-body\">"
 	body += f"<p> {name} </p>"
-	body += f"<p> {result} </p>"
-	body += f"<p> {timing}s </p>"
+	body += f"<p> {result}s </p>"
+	if timing:
+		body += f"<p> {timing} </p>"
 	body += f"<p> cardinality = {cardinality} </p>"
-	body += f"<p> {extra_info} </p>"
+	if extra_info:
+		body += f"<p> {extra_info} </p>"
 	body += "</div>"
 	body += "</span>"
 	return body
@@ -128,6 +130,7 @@ def generate(input_file, output_file):
 			position: relative;
 			width: 250px;
 			text-align: center;
+			background-color: #fff100;
 		}
 	</style>
 </head>
