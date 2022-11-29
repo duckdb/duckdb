@@ -333,7 +333,7 @@ struct ThreadsSetting {
 };
 
 struct UsernameSetting {
-	static constexpr const char *Name = "user";
+	static constexpr const char *Name = "username";
 	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
