@@ -659,8 +659,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 		auto query = PragmaShow(*rel->context.GetContext(), parameters);
 		return Query(view_name, query);
 	}
-	throw InvalidInputException("'DuckDBPyRelation.query' does not accept statements of type %s",
-	                            StatementTypeToString(statement.type));
+	{
+		py::gil_scoped_release release;
+		auto query_result = rel->context.GetContext()->Query(move(parser.statements[0]), false);
+		// Execute it anyways, for creation/altering statements
+		// We only care that it succeeds, we can't store the result
+		D_ASSERT(query_result);
+		if (query_result->HasError()) {
+			query_result->ThrowError();
+		}
+	}
+	return nullptr;
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {

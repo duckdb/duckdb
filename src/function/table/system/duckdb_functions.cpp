@@ -61,6 +61,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("function_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
+
 	return nullptr;
 }
 
@@ -449,6 +452,10 @@ bool ExtractFunctionData(StandardEntry *entry, idx_t function_idx, DataChunk &ou
 
 	// internal, LogicalType::BOOLEAN
 	output.SetValue(10, output_offset, Value::BOOLEAN(entry->internal));
+
+	// function_oid, LogicalType::BIGINT
+	output.SetValue(11, output_offset, Value::BIGINT(entry->oid));
+
 
 	return function_idx + 1 == OP::FunctionCount(function);
 }

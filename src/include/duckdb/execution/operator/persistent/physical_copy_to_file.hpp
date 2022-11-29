@@ -24,6 +24,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
+	bool per_thread_output;
 
 public:
 	// Source interface
@@ -47,6 +48,10 @@ public:
 
 	bool IsOrderDependent() const override {
 		return true;
+	}
+
+	bool ParallelSink() const override {
+		return per_thread_output;
 	}
 };
 } // namespace duckdb
