@@ -39,7 +39,6 @@ public:
 	virtual idx_t GetUsedMemory() const = 0;
 	virtual idx_t GetMaxMemory() const = 0;
 	virtual atomic<idx_t> &GetMutableUsedMemory();
-	// virtual GetMutableMaxMemory() = 0;
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size);
 	virtual DUCKDB_API Allocator &GetBufferAllocator();
 	virtual DUCKDB_API void ReserveMemory(idx_t size);

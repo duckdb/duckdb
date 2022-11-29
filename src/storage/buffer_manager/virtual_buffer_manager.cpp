@@ -14,12 +14,6 @@ shared_ptr<BlockHandle> VirtualBufferManager::RegisterSmallMemory(idx_t block_si
 	throw NotImplementedException("This type of BufferManager can not create 'small-memory' blocks");
 }
 
-// unique_ptr<VirtualBufferManager> VirtualBufferManager::CreateBufferManager(DatabaseInstance &db, string
-// temp_directory,
-//                                                              idx_t maximum_memory) {
-//	return make_unique<BufferManager>(db, temp_directory, maximum_memory);
-// }
-
 Allocator &VirtualBufferManager::GetBufferAllocator() {
 	throw NotImplementedException("This type of BufferManager does not have an Allocator");
 }
