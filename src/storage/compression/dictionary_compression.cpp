@@ -186,7 +186,7 @@ public:
 	void Verify() override {
 		current_dictionary.Verify();
 		D_ASSERT(current_segment->count == selection_buffer.size());
-		D_ASSERT(DictionaryCompressionStorage::CalculateSpaceRequirements(
+		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(
 		    current_segment->count.load(), index_buffer.size(), current_dictionary.size, current_width));
 		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
 		D_ASSERT(index_buffer.size() == current_string_map.size() + 1); // +1 is for null value
