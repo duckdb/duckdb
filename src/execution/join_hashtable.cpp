@@ -1001,47 +1001,6 @@ void JoinHashTable::SwizzleBlocks() {
 	string_heap->Clear();
 }
 
-void JoinHashTable::UnswizzleBlocks() {
-	auto &blocks = swizzled_block_collection->blocks;
-	auto &heap_blocks = swizzled_string_heap->blocks;
-#ifdef DEBUG
-	if (!layout.AllConstant()) {
-		D_ASSERT(blocks.size() == heap_blocks.size());
-		D_ASSERT(swizzled_block_collection->count == swizzled_string_heap->count);
-	}
-#endif
-	block_collection->Merge(*swizzled_block_collection);
-	string_heap->Merge(*swizzled_string_heap);
-
-	for (idx_t block_idx = 0; block_idx < blocks.size(); block_idx++) {
-		auto &data_block = blocks[block_idx];
-
-		if (!layout.AllConstant()) {
-			auto block_handle = buffer_manager.Pin(data_block->block);
-
-			auto &heap_block = heap_blocks[block_idx];
-			D_ASSERT(data_block->count == heap_block->count);
-			auto heap_handle = buffer_manager.Pin(heap_block->block);
-
-			// Unswizzle and move
-			RowOperations::UnswizzlePointers(layout, block_handle.Ptr(), heap_handle.Ptr(), data_block->count);
-			string_heap->blocks.push_back(move(heap_block));
-			string_heap->pinned_blocks.push_back(move(heap_handle));
-		}
-
-		// Fixed size stuff can just be moved
-		block_collection->blocks.push_back(move(data_block));
-	}
-
-	// Update counts and clean up
-	block_collection->count = swizzled_block_collection->count;
-	string_heap->count = swizzled_string_heap->count;
-	swizzled_block_collection->Clear();
-	swizzled_string_heap->Clear();
-
-	D_ASSERT(SwizzledCount() == 0);
-}
-
 void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts,
                                           idx_t max_ht_size) {
 	external = true;
