@@ -62,7 +62,7 @@ TEST_CASE("DB temporary table insertion", "[memoryleak]") {
 }
 
 // FIXME: broken right now - we need to flush/merge deletes to fix this
-//TEST_CASE("Insert and delete data repeatedly", "[memoryleak]") {
+// TEST_CASE("Insert and delete data repeatedly", "[memoryleak]") {
 //	if (!TestMemoryLeaks()) {
 //		return;
 //	}
