@@ -6,7 +6,7 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"

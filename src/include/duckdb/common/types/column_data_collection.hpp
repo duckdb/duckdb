@@ -10,9 +10,9 @@
 
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/column_data_collection_iterators.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 
 namespace duckdb {
-class VirtualBufferManager;
 class BlockHandle;
 class ClientContext;
 struct ColumnDataCopyFunction;

@@ -18,6 +18,11 @@ struct BufferAllocatorData : PrivateAllocatorData {
 	BufferManager &manager;
 };
 
+// unique_ptr<BufferManager> BufferManager::CreateBufferManager(DatabaseInstance &db, string temp_directory,
+//                                                              idx_t maximum_memory) {
+//	return make_unique<BufferManager>(db, temp_directory, maximum_memory);
+// }
+
 unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
                                                              FileBufferType type) {
 	if (source) {
@@ -330,8 +335,9 @@ void BufferManager::SetLimit(idx_t limit) {
 //===--------------------------------------------------------------------===//
 // Temporary File Management
 //===--------------------------------------------------------------------===//
-unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle, idx_t position,
-                                                   idx_t size, block_id_t id, unique_ptr<FileBuffer> reusable_buffer) {
+unique_ptr<FileBuffer> ReadTemporaryBufferInternal(VirtualBufferManager &buffer_manager, FileHandle &handle,
+                                                   idx_t position, idx_t size, block_id_t id,
+                                                   unique_ptr<FileBuffer> reusable_buffer) {
 	auto buffer = buffer_manager.ConstructManagedBuffer(size, move(reusable_buffer));
 	buffer->Read(handle, position);
 	return buffer;

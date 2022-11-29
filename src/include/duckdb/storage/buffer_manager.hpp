@@ -14,8 +14,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/block_manager.hpp"
 
-#include "duckdb/storage/virtual_buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/virtual_buffer_manager.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -33,12 +33,13 @@ class BufferManager : public VirtualBufferManager {
 	friend class BlockHandle;
 	friend class BlockManager;
 
-protected:
+public:
 	BufferManager(DatabaseInstance &db, string temp_directory, idx_t maximum_memory);
 
 public:
 	virtual ~BufferManager();
-
+	static unique_ptr<BufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory,
+	                                                     idx_t maximum_memory);
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed
 	//! This buffer can be small (smaller than BLOCK_SIZE)
 	//! Unpin and pin are nops on this block of memory
@@ -74,14 +75,14 @@ public:
 	//! Construct a managed buffer.
 	//! The block_id is just used for internal tracking. It doesn't map to any actual
 	//! BlockManager.
-	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
-	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
+	unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
+	                                              FileBufferType type = FileBufferType::MANAGED_BUFFER) override;
 
 	DUCKDB_API void ReserveMemory(idx_t size) final override;
 	DUCKDB_API void FreeReservedMemory(idx_t size) final override;
 	bool HasTemporaryDirectory() const final override;
 
-private:
+protected:
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
 	//! not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so
 	//! it can be reloaded. The resulting buffer will already be allocated, but needs to be pinned in order to be used.
@@ -109,17 +110,17 @@ private:
 	void PurgeQueue();
 
 	//! Write a temporary buffer to disk
-	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer);
+	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) final override;
 	//! Read a temporary buffer from disk
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer = nullptr);
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer = nullptr) final override;
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
 
-	void DeleteTemporaryFile(block_id_t id);
+	void DeleteTemporaryFile(block_id_t id) final override;
 
 	void RequireTemporaryDirectory();
 
-	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
+	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle) final override;
 
 	string InMemoryWarning();
 
