@@ -25,9 +25,9 @@ public:
 
 struct HTTPParams {
 	static constexpr uint64_t DEFAULT_TIMEOUT = 30000; // 30 sec
-	static constexpr uint64_t DEFAULT_RETRIES = 1;
-	static constexpr uint64_t DEFAULT_RETRY_WAIT_MS = 25;
-	static constexpr float DEFAULT_RETRY_BACKOFF = 1;
+	static constexpr uint64_t DEFAULT_RETRIES = 3;
+	static constexpr uint64_t DEFAULT_RETRY_WAIT_MS = 100;
+	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
 
 	uint64_t timeout;
 	uint64_t retries;
