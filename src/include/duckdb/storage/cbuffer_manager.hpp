@@ -1,0 +1,54 @@
+// Should maybe be called ExternalBufferManager??
+
+#pragma once
+
+#include "duckdb/storage/virtual_buffer_manager.hpp"
+
+namespace duckdb {
+
+typedef void *duckdb_buffer;
+
+// Callbacks used by the CBufferManager
+typedef duckdb_buffer (*duckdb_allocate_buffer_t)(void *data, idx_t size);
+typedef duckdb_buffer (*duckdb_reallocate_buffer_t)(duckdb_buffer buffer, idx_t old_size, idx_t new_size);
+typedef void (*duckdb_destroy_buffer_t)(duckdb_buffer buffer);
+typedef void (*duckdb_pin_buffer_t)(duckdb_buffer buffer);
+typedef void (*duckdb_unpin_buffer_t)(duckdb_buffer buffer);
+typedef idx_t (*duckdb_max_memory_t)();
+typedef idx_t (*duckdb_used_memory_t)();
+
+// Contains the information that makes up the virtual buffer manager
+struct CBufferManagerConfig {
+	idx_t max_size; // Do we still need this??
+	duckdb_buffer buffer;
+	duckdb_allocate_buffer_t allocate_func;
+	duckdb_reallocate_buffer_t reallocate_func;
+	duckdb_destroy_buffer_t destroy_func;
+	duckdb_pin_buffer_t pin_func;
+	duckdb_unpin_buffer_t unpin_func;
+	duckdb_max_memory_t max_memory_func;
+	duckdb_used_memory_t used_memory_func;
+};
+
+class CBufferManager : public VirtualBufferManager {
+public:
+	// FIXME: take a config instead?
+	CBufferManager(CBufferManagerConfig config);
+	virtual ~CBufferManager() {
+	}
+
+public:
+	BufferHandle Allocate(idx_t block_size, bool can_destroy = true,
+	                      shared_ptr<BlockHandle> *block = nullptr) final override;
+	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final override;
+	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final override;
+	void Unpin(shared_ptr<BlockHandle> &handle) final override;
+	idx_t GetUsedMemory() const final override;
+	idx_t GetMaxMemory() const final override;
+
+private:
+private:
+	CBufferManagerConfig config;
+};
+
+} // namespace duckdb
