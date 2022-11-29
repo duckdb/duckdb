@@ -76,8 +76,9 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 
 // Retry the request performed by fun using the exponential backoff strategy defined in params. Before retry, the
 // retry callback is called
-unique_ptr<ResponseWrapper> RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)>& request, string& url, string method,
-                                                const HTTPParams& params, const std::function<void(void)>& retry_cb = {}) {
+static unique_ptr<ResponseWrapper>
+RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
+                    const HTTPParams &params, const std::function<void(void)> &retry_cb = {}) {
 	idx_t tries = 0;
 	while (true) {
 		auto res = request();
@@ -89,32 +90,32 @@ unique_ptr<ResponseWrapper> RunRequestWithRetry(const std::function<duckdb_httpl
 
 		if (res.error() == duckdb_httplib_openssl::Error::Success) {
 			switch (res->status) {
-				case 408: // Request Timeout
-				case 418: // Server is pretending to be a teapot
-				case 429: // Rate limiter hit
-				case 503: // Server has error
-				case 504: // Server has error
-				    should_retry = true;
-				    break;
-			    default:
-				    return make_unique<ResponseWrapper>(res.value());
+			case 408: // Request Timeout
+			case 418: // Server is pretending to be a teapot
+			case 429: // Rate limiter hit
+			case 503: // Server has error
+			case 504: // Server has error
+				should_retry = true;
+				break;
+			default:
+				return make_unique<ResponseWrapper>(res.value());
 			}
 		}
 
 		if (should_retry && tries <= params.retries) {
 			tries += 1;
 			if (tries > 1) {
-				uint64_t sleep_amount = (uint64_t)((float)params.retry_wait_ms * pow(params.retry_backoff, tries-2));
+				uint64_t sleep_amount = (uint64_t)((float)params.retry_wait_ms * pow(params.retry_backoff, tries - 2));
 				std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
 			}
 			if (retry_cb) {
 				retry_cb();
 			}
 		} else {
-			throw IOException("HTTP " + method + " error on '" + url + "' (Error code " + to_string((int)res.error()) + ")");
+			throw IOException("HTTP " + method + " error on '" + url + "' (Error code " + to_string((int)res.error()) +
+			                  ")");
 		}
 	}
-
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
@@ -126,7 +127,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	auto headers = initialize_http_headers(header_map);
 	idx_t out_offset = 0;
 
-	std::function<duckdb_httplib_openssl::Result(void)> request ([&](){
+	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
 		auto client = GetClient(hfs.http_params, proto_host_port.c_str());
 
 		// We use a custom Request method here, because there is no Post call with a contentreceiver in httplib
@@ -135,7 +136,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 		req.path = path;
 		req.headers = *headers;
 		req.headers.emplace("Content-Type", "application/octet-stream");
-		req.content_receiver = [&](const char *data, size_t data_length, uint64_t /*offset*/, uint64_t /*total_length*/) {
+		req.content_receiver = [&](const char *data, size_t data_length, uint64_t /*offset*/,
+		                           uint64_t /*total_length*/) {
 			if (out_offset + data_length > buffer_out_len) {
 				// Buffer too small, increase its size by at least 2x to fit the new value
 				auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len * 2);
@@ -174,7 +176,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
 
-	std::function<duckdb_httplib_openssl::Result(void)> request ([&](){
+	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
 		auto client = GetClient(hfs.http_params, proto_host_port.c_str());
 		return client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
 	});
@@ -188,13 +190,11 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
 
-	std::function<duckdb_httplib_openssl::Result(void)> request ([&](){
-		return hfs.http_client->Head(path.c_str(), *headers);
-	});
+	std::function<duckdb_httplib_openssl::Result(void)> request(
+	    [&]() { return hfs.http_client->Head(path.c_str(), *headers); });
 
-	std::function<void(void)> on_retry ([&](){
-		hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
-	});
+	std::function<void(void)> on_retry(
+	    [&]() { hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str()); });
 
 	return RunRequestWithRetry(request, url, "HEAD", hfs.http_params, on_retry);
 }
@@ -212,34 +212,32 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 
 	idx_t out_offset = 0;
 
-	std::function<duckdb_httplib_openssl::Result(void)> request ([&](){
+	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
 		return hfs.http_client->Get(
-		   path.c_str(), *headers,
-		   [&](const duckdb_httplib_openssl::Response &response) {
-			   if (response.status >= 400) {
-				   throw IOException("HTTP GET error on '" + url + "' (HTTP " + to_string(response.status) +
-									 ")");
-			   }
-			   if (response.status < 300) { // done redirecting
-				   out_offset = 0;
-				   auto content_length = stoll(response.get_header_value("Content-Length", 0));
-				   if ((idx_t)content_length != buffer_out_len) {
-					   throw IOException("HTTP GET error: Content-Length from server mismatches requested "
-										 "range, server may not support range requests.");
-				   }
-			   }
-			   return true;
-		   },
-		   [&](const char *data, size_t data_length) {
-			   memcpy(buffer_out + out_offset, data, data_length);
-			   out_offset += data_length;
-			   return true;
-		   });
+		    path.c_str(), *headers,
+		    [&](const duckdb_httplib_openssl::Response &response) {
+			    if (response.status >= 400) {
+				    throw IOException("HTTP GET error on '" + url + "' (HTTP " + to_string(response.status) + ")");
+			    }
+			    if (response.status < 300) { // done redirecting
+				    out_offset = 0;
+				    auto content_length = stoll(response.get_header_value("Content-Length", 0));
+				    if ((idx_t)content_length != buffer_out_len) {
+					    throw IOException("HTTP GET error: Content-Length from server mismatches requested "
+					                      "range, server may not support range requests.");
+				    }
+			    }
+			    return true;
+		    },
+		    [&](const char *data, size_t data_length) {
+			    memcpy(buffer_out + out_offset, data, data_length);
+			    out_offset += data_length;
+			    return true;
+		    });
 	});
 
-	std::function<void(void)> on_retry ([&](){
-		hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
-	});
+	std::function<void(void)> on_retry(
+	    [&]() { hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str()); });
 
 	return RunRequestWithRetry(request, url, "GET Range", hfs.http_params, on_retry);
 }
@@ -408,13 +406,13 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 		if ((flags & FileFlags::FILE_FLAGS_WRITE) && res->code == 404) {
 			if (!(flags & FileFlags::FILE_FLAGS_FILE_CREATE) && !(flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW)) {
 				throw IOException("Unable to open URL \"" + path +
-				                         "\" for writing: file does not exists and CREATE flag is not set");
+				                  "\" for writing: file does not exists and CREATE flag is not set");
 			}
 			length = 0;
 			return res;
 		} else {
-			throw IOException("Unable to connect to URL \"" + path + "\": " + to_string(res->code) + " (" +
-			                         res->error + ")");
+			throw IOException("Unable to connect to URL \"" + path + "\": " + to_string(res->code) + " (" + res->error +
+			                  ")");
 		}
 	}
 

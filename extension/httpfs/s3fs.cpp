@@ -265,11 +265,12 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 	                     S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
 	unique_ptr<ResponseWrapper> res;
 
-	res = s3fs.PutRequest(file_handle, file_handle.stripped_path + "?" + query_param, {},
-	                      (char *)write_buffer->Ptr(), write_buffer->idx);
+	res = s3fs.PutRequest(file_handle, file_handle.stripped_path + "?" + query_param, {}, (char *)write_buffer->Ptr(),
+	                      write_buffer->idx);
 
 	if (res->code != 200) {
-		throw IOException("Unable to connect to URL " + file_handle.path + " " + res->error + " (HTTP code " + to_string(res->code) + ")");
+		throw IOException("Unable to connect to URL " + file_handle.path + " " + res->error + " (HTTP code " +
+		                  to_string(res->code) + ")");
 	}
 
 	auto etag_lookup = res->headers.find("ETag");
@@ -479,9 +480,8 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 		query_params.erase(found_param);
 	}
 	if (!query_params.empty()) {
-		throw IOException(
-		    "Invalid query parameters found. Supported parameters are:\n's3_region', 's3_access_key_id', "
-		    "'s3_secret_access_key', 's3_session_token',\n's3_endpoint', 's3_url_style', 's3_use_ssl'");
+		throw IOException("Invalid query parameters found. Supported parameters are:\n's3_region', 's3_access_key_id', "
+		                  "'s3_secret_access_key', 's3_session_token',\n's3_endpoint', 's3_url_style', 's3_use_ssl'");
 	}
 }
 
@@ -904,7 +904,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 		    if (response.status >= 400) {
 			    std::cerr << response.reason << std::endl;
 			    throw IOException("HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
-			                             std::to_string(response.status) + ")");
+			                      std::to_string(response.status) + ")");
 		    }
 		    return true;
 	    },
@@ -913,8 +913,8 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 		    return true;
 	    });
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw IOException("HTTP GET error on '" + listobjectv2_url + "' (Error code " +
-		                         to_string((int)res.error()) + ")");
+		throw IOException("HTTP GET error on '" + listobjectv2_url + "' (Error code " + to_string((int)res.error()) +
+		                  ")");
 	}
 
 	return response.str();
