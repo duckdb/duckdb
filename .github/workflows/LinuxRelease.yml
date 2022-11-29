@@ -548,6 +548,7 @@ jobs:
  linux-memory-leaks:
     name: Linux Memory Leaks
     runs-on: ubuntu-20.04
+    needs: linux-release-64
     env:
       GEN: ninja
 
