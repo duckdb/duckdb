@@ -27,6 +27,14 @@ FROM range(0,100) tbl(d)
 
 endloop
 
+# Negative quantiles (use descending intervals)
+query I
+SELECT quantile_disc(col, [-.25, -.5, -.75])
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+----
+[3100, 2900, 2600]
+
+
 # VARCHAR. Remember, this is dictionary ordering, not numeric ordering!
 query I
 SELECT quantile_disc(d::VARCHAR, [0.1, 0.5, 0.9])

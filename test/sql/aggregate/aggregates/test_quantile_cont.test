@@ -117,6 +117,12 @@ SELECT quantile_cont(1, 0.1) FROM quantile
 ----
 1
 
+# Negative/Descending fractions
+query I
+SELECT quantile_cont(r, -0.1) FROM quantile
+----
+899910.0
+
 # empty input
 query R
 SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0
@@ -124,7 +130,7 @@ SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0
 NULL
 
 statement error
-SELECT quantile_cont(r, -0.1) FROM quantile
+SELECT quantile_cont(r, -1.1) FROM quantile
 
 statement error
 SELECT quantile_cont(r, 1.1) FROM quantile

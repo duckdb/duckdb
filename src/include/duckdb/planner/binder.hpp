@@ -20,6 +20,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -287,6 +288,10 @@ private:
 
 	void PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root);
 	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);
+	unique_ptr<LogicalOperator> PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
+	                                            vector<CorrelatedColumnInfo> &correlated_columns,
+	                                            JoinType join_type = JoinType::INNER,
+	                                            unique_ptr<Expression> condition = nullptr);
 
 	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
 	                                                       vector<LogicalType> &target_types,
