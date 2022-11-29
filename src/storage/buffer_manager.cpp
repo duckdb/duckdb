@@ -74,6 +74,7 @@ BlockHandle::~BlockHandle() {
 	} else {
 		D_ASSERT(memory_charge.size == 0);
 	}
+	buffer_manager.PurgeQueue();
 	block_manager.UnregisterBlock(block_id, can_destroy);
 }
 
@@ -235,7 +236,7 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
-      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK),
+      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK), queue_insertions(0),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_unique<BufferAllocatorData>(*this)) {
 	temp_block_manager = make_unique<InMemoryBlockManager>(*this);

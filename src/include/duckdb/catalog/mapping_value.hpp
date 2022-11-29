@@ -17,9 +17,9 @@ struct AlterInfo;
 class ClientContext;
 
 struct EntryIndex {
-	EntryIndex() : catalog(nullptr), index(DConstants::INVALID_INDEX) {}
-	EntryIndex(CatalogSet &catalog, idx_t index) :
-		catalog(&catalog), index(index) {
+	EntryIndex() : catalog(nullptr), index(DConstants::INVALID_INDEX) {
+	}
+	EntryIndex(CatalogSet &catalog, idx_t index) : catalog(&catalog), index(index) {
 		auto entry = catalog.entries.find(index);
 		if (entry == catalog.entries.end()) {
 			throw InternalException("EntryIndex - Catalog entry not found in constructor!?");

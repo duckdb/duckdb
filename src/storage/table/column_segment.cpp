@@ -31,7 +31,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 		block = block_manager.RegisterBlock(block_id);
 	}
 	auto segment_size = Storage::BLOCK_SIZE;
-	return make_unique<ColumnSegment>(db, block, type, ColumnSegmentType::PERSISTENT, start, count, function,
+	return make_unique<ColumnSegment>(db, move(block), type, ColumnSegmentType::PERSISTENT, start, count, function,
 	                                  move(statistics), block_id, offset, segment_size);
 }
 
@@ -47,7 +47,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	} else {
 		block = buffer_manager.RegisterMemory(segment_size, false);
 	}
-	return make_unique<ColumnSegment>(db, block, type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
+	return make_unique<ColumnSegment>(db, move(block), type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
 	                                  INVALID_BLOCK, 0, segment_size);
 }
 
